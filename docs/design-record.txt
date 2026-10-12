@@ -1,0 +1,105 @@
+CRUCIBLE — DESIGN PRINCIPLES AND DECISIONS
+
+Purpose
+
+Help cryptographic research produce better constructions, better parameters, and
+well-supported reasons to reject weak candidates. Shared scrutiny should leave
+inspectable knowledge that others can reproduce and extend. Participation and
+attention serve that purpose; activity alone is not evidence of security.
+
+Priorities
+
+- Keep the scope understandable: KEMs first, with small teaching examples before
+  admission of a genuine research candidate.
+- Respect attention. Present the useful next action and reveal detail when needed.
+- Support mathematical arguments and concrete experiments without collapsing their
+  different claims, assumptions, or evidence into one score.
+- Make automation possible through exact contracts, APIs, checks, and durable data.
+  More submissions must not require proportionally more unstructured review.
+- Require correctness evidence and preserve the distinction among specification,
+  executable conformance, observed outcomes, and confidentiality.
+- Preserve attribution, methods, revisions, follow-ups, and intermediate results.
+- Keep choices explicit, revisable, and proportional to the evidence available.
+
+Decisions and rationale
+
+1. Attack workflow before proposal workflow
+   A proposal is useful only if others can investigate it. Build the executable
+   challenge and research record first. Keep future admission requirements in the
+   data model, but do not accept arbitrary uploaded implementations for execution.
+
+2. Full shared-secret recovery for the initial numerical benchmark
+   A submitted encapsulated key has a crisp verifier and records one solved
+   instance. This is narrower than the weakest standard confidentiality break.
+   It does not require long-term private-key recovery and does not rule out useful
+   distinguishing attacks. A broader statistical track remains future work.
+
+3. Shared hourly deadlines, independent instances
+   Rounds follow UTC hours; joining late leaves less time. Independently generated
+   material per account/profile/release/round limits direct copying between accounts.
+   One well-formed answer is final. The server enforces receipt time, not external
+   compute. Hardware, runtime, memory, methods, and precomputation are reported.
+   Multiple-account participation and outages still need operational policies.
+
+4. Numerical records and deliberate findings are separate
+   Recoveries update the leaderboard without automatically filling the research
+   feed. Findings can capture theory, a method, partial progress, or a documented
+   unsuccessful investigation. An attached verified recovery supports only the
+   narrow instance claim. The finding remains unreviewed. This separation can be
+   revisited if it prevents useful work from receiving appropriate recognition.
+
+5. Schemes and underlying problems have linked records
+   Both can host theoretical and experimental findings. State the relationship
+   explicitly: an attack route is not an equivalence or a security reduction.
+   Compare results only when target, parameters, model, and claim are compatible.
+
+6. Correctness is an admission requirement, not a leaderboard score
+   Pin the specification, distribution, encodings, parameter profile, executable,
+   and evidence. A mathematical argument, implementation checks, and observed
+   failure counts support different statements. Never silently filter failures by
+   regenerating instances. Policies for probabilistic correctness remain open.
+
+7. Use a common instance-size selector with a scheme-specific meaning
+   An integer n selects exact registered parameters within a scheme and release.
+   Each scheme defines its size_parameter, supported integers, and parameter
+   mapping. Some KEMs may support only a subset of integers or map n to a parameter
+   vector. Equal n values across schemes are not comparable strength claims.
+   Manifests and public challenge contracts preserve n as instance_size alongside
+   the complete parameters, so the convenient selector never replaces the contract.
+
+   Teaching DH-KEM release 2 supports every integer n from 20 through 36. Here n
+   is the subgroup order's bit length; all sizes produce a 32-byte shared secret.
+   These small groups exercise generation, correctness, submission, and evidence
+   paths while keeping the mathematics inspectable. They are unsuitable for
+   protecting information and have no independent admission or security certification.
+
+8. Preserve exact releases and research history
+   Release 1 remains archived byte for byte. Release 2 retains its original five
+   profiles and KDF domain while adding intermediate sizes. Source hashes are pinned
+   to releases; prior challenges, receipts, and findings remain intact. The board
+   defaults to the current release, with historical records available through the
+   version-selecting API. Authors can revise findings about registered old releases.
+
+9. Share source before operating a public service
+   The repository is available for collaboration. The application currently serves
+   a local development workflow. Public hosting requires explicit operational and
+   security work: identity/recovery, moderation, resource limits, monitoring,
+   database validation, backups, incident handling, and independent review.
+
+Open decisions
+
+- Which genuine candidate and parameter family should enter first?
+- What evidence and review admit schemes with probabilistic correctness?
+- How should useful intermediate results, reproductions, and unsuccessful work
+  receive credit without rewarding volume or claiming exhaustive attack coverage?
+- Which comparisons justify a ranking, and which need an annotated research table?
+- What are the identity, moderation, correction, retention, and outage policies?
+- What distinguishing experiment and statistical guarantee would justify extending
+  the current recovery benchmark?
+
+Updating this record
+
+Record the selected choice, reason, trade-off, and condition for revisiting it.
+Separate implemented behavior from proposals. Preserve meaningful rationale when
+replacing a decision. Do not turn a brainstorm, unreviewed claim, or lack of
+observed attacks into an accepted design choice or security guarantee.

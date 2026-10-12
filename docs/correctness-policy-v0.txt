@@ -1,0 +1,108 @@
+CORRECTNESS BEFORE OFFICIAL CHALLENGES — PROPOSED POLICY 0.1
+
+Status
+    Correctness assurance is a design requirement for every admitted scheme and
+    must guide the parameter profiles that are tested.
+    The gate and evidence requirements below are recommendations for discussion,
+    not an already implemented certification system.
+
+Common requirement
+    For each exact scheme version and parameter profile, define the probability
+    delta that an honestly generated encapsulation fails to yield the same key
+    when decapsulated by the matching private key. This is over the declared
+    honest generation randomness. Honest rejection also counts as a failure.
+
+    (pk, sk) = KeyGen(parameters)
+    (ciphertext, K) = Encaps(parameters, pk)
+    K_prime = Decaps(parameters, sk, ciphertext)
+    correctness claim: Pr[K_prime != K or honest exchange fails] <= delta
+
+    Perfect correctness claims delta=0. Other schemes need an explicitly stated
+    bound or justified estimate with its assumptions. Label a rigorous bound,
+    a heuristic estimate, and an empirical observation differently. None of
+    these is a claim that an outsider cannot recover K.
+
+Evidence required for official admission
+    1. Defined object. Specification, exact parameter vector, distributions,
+       encodings, failure behavior, and implementation revision are pinned.
+    2. Mathematical support. Provide an argument supporting perfect correctness
+       or the claimed failure rate. Review the argument, not just the submitted
+       number. State assumptions and which parameter profiles it covers.
+    3. Implementation checks. Test against known vectors/reference behavior;
+       test honest round trips and relevant edge cases; preserve test counts,
+       failures, and artifacts. An independent implementation is useful where
+       available. These checks detect mistakes; they do not prove the theorem.
+    4. Explicit eligibility decision. Record which profile is admitted, by which
+       evidence review, and under which published admission policy version.
+
+    Formal proofs in Lean may strengthen evidence but are not required initially.
+    A million matching trials cannot establish a failure probability on the
+    order of 2^-160. Conversely, a proof about the abstract scheme does not
+    establish that the submitted executable implements it correctly.
+
+Parameter design
+    The common integer instance size n maps to exact registered parameters for
+    each scheme and release. State what n means, which integers are supported,
+    and the complete mapping, including a parameter vector where needed. A scheme
+    need not admit every integer. Every mapped profile needs correctness coverage;
+    unsupported sizes must not produce interpolated or unreviewed parameters.
+    Equal n values across schemes do not imply equal strength or attack cost.
+    Output-key length is a separate property of the scheme.
+
+    Every challenge profile needs coverage by the correctness argument. A single
+    argument may cover a family of profiles; do not demand redundant proofs.
+    Changing dimensions, modulus, noise, compression, or decoding thresholds can
+    invalidate the original argument. Recheck both correctness and how meaningful
+    the recovery task remains. This constrains how challenge ladders are built.
+
+    Record the purpose of a profile: deliberately reduced research parameters
+    or the proposal's intended operating parameters. A purpose label is not a
+    production-security endorsement. Do not set a universal failure threshold
+    by equating it to claimed security bits. Choose and publish the admission
+    criterion for the relevant profile class before issuing official challenges.
+    Exact numerical acceptance thresholds remain open; do not invent one here.
+
+Admission states and feedback
+    A proposal can be visible while correctness evidence is pending. It cannot
+    issue official ranked challenges until the required evidence and executable
+    checks pass review. A reproducible correctness counterexample is valuable
+    research and belongs in the scheme's record, separately from recovery wins.
+
+    Automate format checks, deterministic test vectors, randomized round trips,
+    artifact recording, and detection of changes to a reviewed version. Reserve
+    mathematical judgment for the argument and its assumptions. Reuse existing
+    reviewed evidence when it actually covers the new profile.
+
+Live challenge behavior
+    Use the exact admitted distribution and Encaps' K as the recovery target.
+    Record decapsulation disagreement diagnostically; do not silently resample
+    until it disappears. Such filtering would hide failures and alter the task.
+    Keep active-instance secrets and diagnostics private. Pause and investigate
+    unexpected implementation faults, while preserving the affected records.
+    A genuine mathematical correctness failure is distinct from such a bug and
+    must remain visible in the aggregate correctness evidence.
+
+Current teaching implementation
+    Teaching DH-KEM release 2 implements 17 instance sizes, every integer n from
+    20 through 36. Here n is the subgroup order's bit length; every size produces
+    a 32-byte shared secret. Each has a concrete group, canonical encodings,
+    specified KDF and randomness, executable operations, and a short algebraic
+    argument for perfect correctness of the specified construction. Known-answer,
+    boundary, validation, and round-trip tests check executable behavior. Each
+    issued instance undergoes a round-trip check; an unexpected fault pauses new
+    issuance for that profile without resampling.
+
+    These teaching checks do not constitute independent admission review or
+    certify confidentiality. Release 1 remains archived byte for byte, and its
+    five original profiles and KDF domain are unchanged in release 2. Admitting
+    a genuine candidate with probabilistic correctness remains future work and
+    must exercise the evidence and failure policy before general proposals open.
+
+Primary references
+    NIST SP 800-227, section 2.2: correctness; section 3.1: implementations;
+    section 4.4: key confirmation in surrounding protocols.
+    https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-227.pdf
+    FIPS 203, section 3.2, Table 1: ML-KEM's estimated failure rates under its
+    stated random-function heuristic. These illustrate why correctness and
+    security strength must not be collapsed into a single percentage/bit count.
+    https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf#page=24

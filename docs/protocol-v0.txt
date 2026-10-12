@@ -1,0 +1,172 @@
+HISTORICAL DRAFT: see implementation-v1.txt for the current implementation.
+The user selected global hourly deadlines; the personal-hour proposal below
+was not adopted.
+
+CRUCIBLE NUMERICAL PIPELINE — DISCUSSION DRAFT 0.1
+
+Status
+    Agreed: KEM scope; recover the complete encapsulated shared secret in one
+    hour; participants compute externally; pseudocode and estimated compute
+    accompany results; start small and build incrementally; local work only.
+    User direction: proposed schemes need executable definitions, challengers
+    need accounts and submission records, and results feed a leaderboard.
+    Proposed below: adapter details, start/retry rules, account design, ranking,
+    correctness handling, and build sequence. These details are not yet agreed.
+
+1. Make a proposed scheme runnable
+
+    A proposal needs both a human-readable specification and a pinned executable
+    implementation. A paper or pseudocode alone does not generate a challenge.
+    Register a scheme version with:
+      - stable scheme ID and version;
+      - specification/source reference and exact implementation revision;
+      - explicit parameter profiles, including key/ciphertext/secret encodings;
+      - claimed assumptions, security properties, and correctness analysis;
+      - test vectors and implementation test results.
+
+    Minimal conceptual adapter interface (return order is a local convention):
+      keygen(profile, private_randomness) -> public_key, private_key
+      encapsulate(profile, public_key, private_randomness) -> ciphertext, K
+      decapsulate(profile, private_key, ciphertext) -> K_prime or specified failure
+
+    Define canonical byte encodings, expected lengths, randomness requirements,
+    and exact failure behavior. Pin the adapter version to every challenge.
+    Deterministic test seeds can be published for test vectors. Live private
+    randomness must never be available to challengers or derived from public
+    identifiers, timestamps, or released audit seeds.
+
+    Only tested, reviewed adapter versions can issue official challenges.
+    Every admitted profile also needs correctness evidence covering its exact
+    parameters. See correctness-policy-v0.txt for the proposed admission gate.
+    A revision creates a new version; it does not rewrite earlier achievements.
+    This is a common interface, not a claim that every arbitrary proposal can
+    be admitted without review. Admission criteria remain to be discussed.
+
+2. Let a challenger inspect the target before the clock starts
+
+    Public scheme page: specification, implementation, parameter profiles,
+    relevant assumptions, correctness claim, and existing methods/results.
+    Provide a local example generator and sample files for preparation.
+
+    After sign-in, choose an exact scheme version and parameter profile. An
+    explicit Start challenge action issues a new independent instance for this
+    attempt. The user should be able to inspect the rules before pressing it.
+
+    Suggested public challenge record:
+      challenge ID; scheme/version/profile; public key; ciphertext;
+      output encoding/length; server release time; server deadline.
+
+    Show readable explanations and exact downloadable bytes. The public
+    "innards" are the algorithm, public inputs, and parameters. Keep the
+    private key, true K, and generation randomness in private service storage.
+    Do not supply a real/random candidate key for a recovery challenge.
+
+    Proposed timing: deadline = release time + 3600 seconds, measured by the
+    server. Reloading or downloading again does not restart the clock.
+    One active attempt per account/profile is a simple initial policy, but
+    retry limits and handling of outages still need discussion. Accounts do
+    not by themselves prevent someone creating multiple identities.
+
+3. Submit one recovery with its method and cost
+
+    Submit the challenge ID, the complete candidate shared secret, a method
+    version/pseudocode, and estimated resources. Attach pseudocode once per
+    method version and reuse it across attempts. Distinguish per-attempt work
+    from shared preparation and prior computation. Record hardware/count,
+    elapsed compute time, aggregate work where meaningful, and major memory use.
+    Estimates remain contributor-reported, even when the key is verified.
+
+    Proposal: the first well-formed accepted answer is irrevocable. Format
+    validation checks only the public encoding contract; it must not reveal
+    partial key correctness. Verify the account owns the attempt and use the
+    server's durable receipt timestamp to decide whether it was on time.
+    Repeated delivery of the same request must not create extra submissions.
+
+    Compare the submitted bytes to the complete K produced by Encaps. Record
+    correct/on-time, incorrect, or expired. Use a comparison that does not leak
+    matching prefixes. Store outcomes separately from the public leaderboard.
+    Numerical success is not a claim that the stated algorithm or compute cost
+    has been independently reproduced.
+
+    Key recovery needs no repeated distinguishing trials to verify this one
+    solution. It establishes a solved instance, not a future success rate.
+    Whether public recognition requires checking the method description, and
+    when solutions become public, remain open. Do not publish active secrets.
+
+4. Start with a small, scheme-specific leaderboard
+
+    Recommendation: one row per exact parameter profile, showing its first
+    solver and discovery date. Expand a row to the first ten distinct accounts
+    with verified recoveries on their own independent challenges. Link each
+    record to its pseudocode, response time, and reported compute.
+
+    "First" means earliest server receipt of a correct, on-time answer for
+    that scheme version/profile, not earliest manual review or fastest solve.
+    A fastest-response ranking would be a separate choice. Define ties using
+    the service's durable submission ordering.
+
+    Use parameter profiles rather than a generic "bits broken" axis. A shared
+    key's output length is not its security strength. Difficulty may depend on
+    dimension, modulus, noise, sample count, structure, and several other knobs.
+    Display a highest solved level only for a declared, meaningful profile
+    ladder within a scheme; retain the exact parameter vector in the record.
+    Do not infer that all lower levels are solved or all higher levels secure.
+
+5. Track correctness separately from confidentiality attacks
+
+    Correctness asks whether honest encapsulation and decapsulation agree:
+      (pk, sk) <- KeyGen; (c, K) <- Encaps(pk); K_prime <- Decaps(sk, c)
+      failure event: K_prime differs from K, or an honest exchange fails.
+    This is separate from an outsider recovering K. A constant public key
+    output could agree perfectly yet be completely insecure.
+
+    Record, per parameter profile:
+      claimed failure rate and supporting analysis/assumptions;
+      implementation revision and test methodology;
+      observed mismatches / honest trials, reported separately from the claim.
+    Passing ordinary tests does not establish an astronomically small failure
+    rate. Reduced challenge parameters need their own correctness analysis.
+
+    Real-world reference: FIPS 203 Table 1 reports estimated ML-KEM failure
+    probabilities 2^-138.8, 2^-164.8, and 2^-174.8 for its three parameter sets,
+    under its stated random-function heuristic. SP 800-227 describes correctness,
+    implementation validation, and key confirmation. A mismatch can be detected
+    by a surrounding protocol without turning failure details into an oracle.
+    Sources:
+    https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf#page=24
+    https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-227.pdf#page=14
+    https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-227.pdf#page=28
+
+    Proposed generator policy: use Encaps' K as the recovery target. Run Decaps
+    as a diagnostic and record genuine mathematical mismatches separately.
+    Do not silently regenerate until the keys agree: that changes the challenge
+    distribution and conceals failures. Keep live diagnostics private. An
+    implementation fault warrants a visible pause/investigation, not quietly
+    filtered challenge generation. An honest mismatch is correctness evidence;
+    by itself it is not a successful outside recovery. Admission of schemes
+    with significant correctness failures is a policy still to discuss.
+
+6. Build in small stages
+
+    A. One actual teaching KEM, one profile, canonical encodings, and tests.
+    B. One local end-to-end attempt: issue, receive key, check deadline and
+       equality, and attach pseudocode/compute. Do not call the static draft
+       an implemented verifier.
+    C. Persistence and one authentication method: account ownership and durable
+       challenge/submission records. Required before multiple public users.
+    D. First-solver display per profile, then an optional first-ten expansion.
+    E. Add a second scheme to test whether the adapter/interface generalizes.
+
+    First build decision to discuss: which executable reference KEM/profile
+    should anchor the end-to-end implementation. The current Toy DH-KEM is a
+    UI teaching example, not a selected production entry or runnable adapter.
+    Authentication provider, backend framework, database, deployment, admission
+    thresholds, retries, and reward/credit policy remain open.
+
+Priorities to preserve
+    Positive societal value; focused scope; low attention/reviewer burden;
+    meaningful reinforcement; inspectable evidence; mathematical and concrete
+    scrutiny; correctness/performance/size tradeoffs; cumulative knowledge and
+    attribution; human and model participation; deliberate local development;
+    automation throughout the pipeline. Simplicity means growing this working
+    path incrementally, not concealing the evidence behind a rank.

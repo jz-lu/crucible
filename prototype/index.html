@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A local interface draft for shared cryptographic research: results, methods, and computational cost.">
+  <title>Crucible — cryptography under scrutiny</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="header-inner">
+    <a class="brand" href="#main" aria-label="Crucible home"><svg viewBox="0 0 32 36" width="27" height="31" aria-hidden="true"><path d="M16 2 30 10v16l-14 8L2 26V10Z"/><path d="m9 14 7-4 7 4v8l-7 4-7-4Z"/><path d="M16 2v8m14 0-7 4M30 26l-7-4m-7 12v-8M2 26l7-4M2 10l7 4"/></svg><span>crucible</span></a>
+    <nav aria-label="Main navigation"><a href="#scheme" class="nav-active">The experiment</a><button type="button" class="nav-link" data-open-about>How it works <span aria-hidden="true">↗</span></button></nav>
+    <span class="draft-label"><span aria-hidden="true"></span>Local draft · 02</span>
+  </div></header>
+  <main id="main" class="page-shell">
+    <section class="page-intro" aria-labelledby="page-title">
+      <div class="eyebrow">Open cryptographic research</div><h1 id="page-title">Security claims.<br><em>Shared scrutiny.</em></h1>
+      <p>A place to test cryptographic proposals—and share<br class="desktop-break"> the results, methods, and effort behind each attack.</p>
+      <div class="intro-annotation" aria-hidden="true"><span class="annotation-line"></span><span>Evidence grows<br>when work is shared.</span></div>
+    </section>
+    <div class="preview-note"><svg width="16" height="16" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 9v5m0-8v.5"/></svg><span><strong>Interface preview.</strong> Illustrative data only. No attack has been evaluated.</span></div>
+    <section id="scheme" class="scheme-section" aria-labelledby="scheme-title">
+      <div class="section-marker"><span>01 / Reference example</span><span>Key encapsulation</span></div>
+      <div class="scheme-heading"><div><h2 id="scheme-title">Toy DH-KEM</h2><p>A small-group teaching example based on Diffie–Hellman.</p></div><button class="button button-primary" type="button" data-open-submission>Draft a contribution <span aria-hidden="true">↗</span></button></div>
+      <div class="scheme-facts"><div><span class="fact-label">Challenge</span><span>Recover the full shared key</span></div><div><span class="fact-label">Access</span><span>Public key + encapsulation</span></div><div><span class="fact-label">Time window</span><span>One hour from release</span></div></div>
+      <details class="scheme-detail"><summary>What is being tested? <span aria-hidden="true">+</span></summary><div><p>Given a fresh public key and encapsulation, recover the complete encapsulated shared secret. Submit it within one hour of the site releasing your challenge. The shared secret and generation randomness are kept private; no candidate key is supplied.</p><p>This teaching construction uses a deliberately small cyclic group. Its public key is <code>gˣ</code>; an encapsulation is <code>gʳ</code>; its shared key is <code>KDF(encode(gˣʳ))</code>, using a fixed, unambiguous encoding. There is no decapsulation oracle in this example. This is not a production scheme or a proposed security benchmark.</p></div></details>
+    </section>
+    <section class="evidence-section" aria-labelledby="evidence-title">
+      <div class="section-heading"><div><h2 id="evidence-title">Recovery leaderboard</h2><p>A recovered key, its method, and the effort behind it.</p></div><span class="entry-count">01 illustrative entry</span></div>
+      <article class="evidence-card" aria-labelledby="attack-title">
+        <div class="attack-header"><div class="attack-symbol" aria-hidden="true"><svg viewBox="0 0 30 30"><path d="M6 23V7m0 16h18M6 18h5v-5h6V7h7"/><circle cx="11" cy="18" r="2"/><circle cx="17" cy="13" r="2"/><circle cx="24" cy="7" r="2"/></svg></div><div class="attack-heading"><div class="attack-kicker">Example method <span>v1</span></div><h3 id="attack-title">Recover the encapsulated key</h3><p>Solve the discrete logarithm and return the complete shared key.</p></div><span class="sample-tag">Illustrative</span></div>
+        <div class="evidence-tabs" role="tablist" aria-label="Attack evidence"><button id="tab-results" role="tab" aria-selected="true" aria-controls="panel-results" tabindex="0" data-tab="results">Result <span>01</span></button><button id="tab-method" role="tab" aria-selected="false" aria-controls="panel-method" tabindex="-1" data-tab="method">Pseudocode</button><button id="tab-compute" role="tab" aria-selected="false" aria-controls="panel-compute" tabindex="-1" data-tab="compute">Compute estimate</button></div>
+        <section id="panel-results" class="tab-panel" role="tabpanel" aria-labelledby="tab-results" tabindex="0">
+          <div class="result-metrics"><div><span class="metric-label">Illustrative outcome</span><div class="metric-value recovery-value">Recovered <span>↗</span></div></div><div><span class="metric-label">Response time</span><div class="metric-value time-value">37m <span>12s</span></div></div><div class="metric-context"><span class="metric-label">Time limit</span><p>One hour from release.<br>One complete key submitted.</p></div></div>
+          <dl class="recovery-receipt"><div><dt>Example challenge</dt><dd>DEMO-001</dd></div><div><dt>Released</dt><dd>12:00:00</dd></div><div><dt>Key received</dt><dd>12:37:12</dd></div><div><dt>Deadline</dt><dd>13:00:00</dd></div></dl>
+          <div class="interpretation"><span class="interpretation-mark" aria-hidden="true">↳</span><p>Illustrative times only. A verified recovery establishes that this instance was solved within the deadline. It does not measure total compute or certify the security of other instances.</p></div>
+        </section>
+        <section id="panel-method" class="tab-panel" role="tabpanel" aria-labelledby="tab-method" tabindex="0" hidden>
+          <div class="panel-heading"><div><h4>The method behind the recovery</h4><p>Example pseudocode · version 1</p></div><button type="button" class="text-button" id="copy-code">Copy <span aria-hidden="true">⧉</span></button></div>
+          <div class="code-block"><ol aria-hidden="true"><li>01</li><li>02</li><li>03</li><li>04</li><li>05</li><li>06</li><li>07</li></ol><pre><code id="example-code">input: group G, generator g,
+       public key pk, encapsulation c
+
+x      ← baby_step_giant_step(G, g, pk)
+shared ← c ^ x
+
+return KDF(encode(shared))</code></pre></div>
+          <p class="panel-note">The small group makes recovering the secret exponent feasible. The group operation, encoding, and KDF must match the scheme. The returned key is the complete encapsulated shared secret. This example records one recovery attempt.</p><div class="source-note"><span class="tiny-dot" aria-hidden="true"></span>In a live submission, the method is contributor-reported. Independent reproduction provides additional evidence.</div>
+        </section>
+        <section id="panel-compute" class="tab-panel" role="tabpanel" aria-labelledby="tab-compute" tabindex="0" hidden>
+          <div class="panel-heading"><div><h4>The effort behind the result</h4><p>Resource declaration · no measurements in this example</p></div><span class="sample-tag">Self-reported</span></div>
+          <dl class="compute-table"><div><dt>Hardware</dt><dd>Model and number of CPUs / GPUs<span>Not supplied in this example</span></dd></div><div><dt>Challenge work</dt><dd>Elapsed time and total compute<span>Not measured</span></dd></div><div><dt>Preparation</dt><dd>Precomputation and reused data<span>Not measured · report separately</span></dd></div><div><dt>Memory</dt><dd>Significant memory requirements<span>Not measured</span></dd></div></dl>
+          <p class="panel-note">Estimates and ranges are welcome. State whether the estimate covers one challenge or several attempts, and which preparation costs are shared.</p><div class="source-note"><span class="tiny-dot" aria-hidden="true"></span>A response deadline does not measure compute spent. Resource estimates are not enforced by the site.</div>
+        </section>
+      </article>
+      <article class="saved-draft" id="saved-draft" hidden aria-labelledby="saved-draft-title"><div class="saved-draft-icon" aria-hidden="true">↗</div><div><div class="attack-kicker">Your local draft · not evaluated</div><h3 id="saved-draft-title"></h3><p id="saved-draft-description"></p></div><button type="button" class="text-button" data-open-submission>Continue editing <span aria-hidden="true">→</span></button></article>
+      <div class="contribution-prompt"><span class="prompt-symbol" aria-hidden="true">+</span><p><strong>Have a different approach?</strong> Share what you tried, how it works, and what it took.</p><button type="button" class="text-button" data-open-submission>Draft a contribution <span aria-hidden="true">→</span></button></div>
+    </section>
+    <footer class="site-footer"><span class="footer-name">crucible</span><span>Results. Methods. Computational cost.</span><button class="text-button" type="button" data-open-about>About this draft <span aria-hidden="true">↗</span></button></footer>
+  </main>
+  <dialog id="submission-dialog" aria-labelledby="submission-title">
+    <div class="dialog-top"><span class="eyebrow">Toy DH-KEM / Contribution</span><button class="icon-button" type="button" data-close aria-label="Close contribution form">×</button></div><h2 id="submission-title">Share the work.</h2><p class="dialog-description">The recovered key, the method behind it, and an estimate of the effort.</p><div class="form-notice">Try the submission format. This saves only in your browser; no live challenge is running.</div>
+    <form id="contribution-form">
+      <div class="form-field"><label for="method-name">Method name</label><input id="method-name" name="methodName" required maxlength="100" placeholder="Give your approach a short name" autocomplete="off"></div>
+      <div class="form-field"><div class="label-line"><label for="recovered-key">Recovered shared key</label><span class="field-hint">DEMO-001</span></div><input id="recovered-key" name="recoveredKey" class="code-input" required minlength="2" maxlength="4096" pattern="([0-9a-fA-F]{2})+" title="Enter the complete key as hexadecimal byte pairs, without spaces or a 0x prefix." placeholder="Complete key as hexadecimal bytes" autocomplete="off" spellcheck="false"><p class="field-hint">This preview checks the format only. It does not verify a recovered key.</p></div>
+      <div class="form-field"><div class="label-line"><label for="pseudocode">Pseudocode</label><button class="text-button" type="button" id="use-example">Use example</button></div><textarea id="pseudocode" name="pseudocode" class="code-input" required rows="6" maxlength="15000" placeholder="Describe the steps that recovered the key."></textarea><p class="field-hint">Include important parameters and any preprocessing.</p></div>
+      <div class="form-field"><label for="compute-estimate">Estimated compute</label><textarea id="compute-estimate" name="compute" required rows="3" maxlength="4000" placeholder="Hardware and count, time spent, and any substantial preparation or memory use."></textarea><p class="field-hint">Rough ranges are fine. Separate this attempt from any reusable preparation.</p></div>
+      <div class="form-actions"><button class="text-button" type="button" id="clear-draft" hidden>Delete saved draft</button><button class="button button-primary" type="submit">Save local draft <span aria-hidden="true">→</span></button></div><p class="form-footnote">Nothing is published or checked against a challenge.</p>
+    </form>
+  </dialog>
+  <dialog id="about-dialog" class="about-dialog" aria-labelledby="about-title"><div class="dialog-top"><span class="eyebrow">The idea</span><button class="icon-button" type="button" data-close aria-label="Close about dialog">×</button></div><h2 id="about-title">Make the evidence useful.</h2><p class="dialog-description">A shared research record for proposed key encapsulation mechanisms.</p><ol class="how-it-works"><li><span>01</span><div><h3>Receive a fresh challenge</h3><p>Receive a fresh public key and encapsulation specific to your attempt. The one-hour clock starts when the site releases them.</p></div></li><li><span>02</span><div><h3>Investigate on your own hardware</h3><p>Recover the complete shared secret using your tools and resources. One hour is the response window; it does not limit total compute.</p></div></li><li><span>03</span><div><h3>Share the result and the method</h3><p>Submit the complete key, pseudocode, and estimated compute. The site checks the key and deadline. One verified recovery records an instance solved.</p></div></li></ol><div class="about-boundary"><strong>This is a first interface draft.</strong><p>One teaching scheme, one illustrative entry, and a local contribution form. The challenge service and final scheme catalogue are still to be designed. This version records recovery; distinguishing attacks can be added later.</p></div></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

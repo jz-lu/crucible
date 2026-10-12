@@ -1,0 +1,155 @@
+CRUCIBLE ARCHITECTURE / API
+
+Run ./run.sh and open http://127.0.0.1:8000. The same server serves web/ and the API.
+A static file URL is not enough for the working application. The source is shared
+for collaboration; the hosted service has not been deployed or cleared for public
+operation.
+
+Persistence and boundaries
+
+SQLAlchemy tables store accounts, hashed sessions, immutable methods, challenges,
+one final submission per challenge, rate buckets, correctness incidents, and
+versioned findings. Alembic migrations version the schema. SQLite serializes write
+transactions with BEGIN IMMEDIATE; PostgreSQL uses account/challenge row locks.
+Database uniqueness backs both. The local concurrency tests exercise SQLite.
+
+The round is derived from UTC epochs; no hourly background job is needed. Unique
+instances are generated on demand within the shared hour. A future expensive KEM
+adapter may need a worker queue and atomic publication; do not execute arbitrary
+proposal code inside this server.
+
+KEM generation returns public inputs, private Encaps target, and private diagnostics
+separately. Public serializers explicitly select fields. Only a challenge-bound
+HMAC verifier of the target is retained, not the private exponent, encapsulation
+randomness, submitted answer, or raw shared key. The app secret is separate and
+persistent; protect it and backups. Python cannot guarantee temporary-memory erasure.
+
+The complete bounded request body receives a server timestamp before parsing.
+Acceptance requires received_at < ends_at. Malformed bodies do not consume the
+attempt. The answer and idempotency commitment are committed atomically. Exact
+retries return the same receipt; changed content with the same retry ID is rejected.
+No client timestamp is trusted. The server clock must be synchronized in deployment.
+
+Accounts use Argon2id hashes, random opaque cookies, one-way session-token storage,
+login rotation and logout invalidation. Cookies are HttpOnly/SameSite=Strict;
+production uses Secure and __Host-. Writes require the configured Origin, JSON,
+and session-bound X-CSRF-Token. Allowed hosts are explicit. Credentials and answers
+never go into browser storage. There is no email verification/reset service yet.
+
+Bodies are capped at 64 KiB with a 10-second receive timeout. Validation errors omit
+input values. Database rate buckets guard costly mutations and session issuance.
+IP limits use the ASGI peer; do not trust arbitrary forwarded-IP headers. Configure
+body, concurrency and proxy limits separately before public deployment.
+
+The browser renders untrusted content as text. External research links require
+HTTPS and are not fetched by the server. A restrictive content security policy
+blocks inline scripts. Pseudocode and complexity expressions are never evaluated.
+
+Automation
+
+GET /openapi.json describes request schemas. Use a cookie jar; GET /api/session,
+then send its csrf_token as X-CSRF-Token and the configured Origin on every POST.
+Login/register rotate both session and CSRF token. Keep credentials out of public
+logs, source control and shell command-line arguments.
+
+Core endpoints:
+  GET  /api/session
+  POST /api/auth/register         {handle,password}
+  POST /api/auth/login            {handle,password}
+  POST /api/auth/logout           {}
+  GET  /api/schemes
+  GET  /api/challenges?profile_id=dh-20
+  POST /api/challenges            {scheme_id,instance_size} OR {profile_id}
+  GET  /api/challenges/{id}/download   owner only
+  GET  /api/methods
+  POST /api/methods               {name,pseudocode}
+  POST /api/challenges/{id}/submit
+       {candidate,method_id,compute,idempotency_key}
+  GET  /api/leaderboard?profile_id=dh-20&scheme_version=2
+  GET  /api/me/submissions
+  GET  /api/protocol/source?version=2
+  GET  /api/protocol/example
+
+Instance selection
+
+The common selector is an integer instance_size n, scoped to a scheme and release.
+Scheme metadata describes its size_parameter. The registered mapping determines
+exact parameters; manifests and public challenge contracts retain instance_size
+alongside the full parameter vector, encodings, and release identity.
+
+POST /api/challenges accepts exactly one of these selection forms:
+  {"scheme_id":"teaching-dh-kem","instance_size":21}
+  {"profile_id":"dh-21"}
+Both resolve to the same profile, so switching forms cannot obtain an extra
+instance. The current registered release supplies the mapping for new issuance.
+
+Teaching DH-KEM supports every integer n from 20 through 36, where n is the
+subgroup order's bit length. Its output key is always 32 bytes, independently of
+n. Other KEMs may define different meanings, support only a subset of integers,
+or map n to a parameter vector. Equal n values across schemes do not establish
+comparable strength or attack cost. Accept only registered mappings; never invent
+new cryptographic parameters by interpolating unsupported sizes.
+
+compute includes hardware, workers (positive integer), wall_seconds, precomputation,
+peak_memory, and optional notes. Candidate encodes the complete shared secret as
+hexadecimal, with the exact byte length declared by shared_secret_bytes in that
+challenge's stored manifest. Teaching DH-KEM uses 32 bytes (64 hex characters);
+this is independent of instance size. Generate one UUID idempotency_key per logical
+submission and preserve it on retry. Methods are immutable; a change creates a new
+method ID.
+
+Research endpoints:
+  GET  /api/targets
+  GET  /api/contributions?target_id=...&limit=20&before=...
+  POST /api/contributions
+  GET  /api/contributions/{id}?limit=20&before_revision=...
+  POST /api/contributions/{id}/revisions   author only; expected_revision required
+
+Findings identify target/version, profiles, title, claim, conditions, body,
+computational model and evidence kind. Optional fields hold an HTTPS artifact,
+time/memory/success expressions, related record and supporting recovery. Append-only
+revisions preserve the original. A supporting recovery is server-checked; review
+of the finding is a separate fact. Numerical answers do not automatically create
+research findings. An unanswered challenge is not a documented investigation.
+History defaults to 20 revisions (maximum 50), with next_before_revision for older
+pages. The latest field always identifies the current revision, even on older pages.
+Source fingerprints are pinned per scheme version. When upgrading older databases,
+the first pin must agree with existing challenge manifests; changed or missing
+provenance stops issuance until the release is reviewed and versioned correctly.
+
+Release compatibility
+
+Teaching adapter release 2 registers every integer instance size from 20 through
+36; n maps to a subgroup order with n bits. Its original five profiles and KDF
+domain are unchanged. Release
+1 is archived byte for byte rather than reconstructed from the newer adapter.
+The example solver supports both releases. Existing challenges and answer receipts
+continue to use their recorded release, manifest, and target verifier.
+
+The leaderboard defaults to the current release. Set scheme_version=1 to inspect
+historical records for a release-1 profile; records from different releases are not
+silently combined. GET /api/protocol/source?version=1 returns the archived source.
+Research history retains the exact target release, and findings about registered
+older releases remain revisable. Historical source files must not be edited when
+updating the current adapter.
+
+Candidate admission
+
+No public admission/upload endpoint exists. A future candidate needs a pinned
+specification and adapter, encodings and exact profiles, correctness argument with
+scope/assumptions, independent review, conformance vectors and a failure policy.
+The current route admits only the explicit teaching lane. Nonzero honest failure
+distributions need their own reviewed policy; never silently condition sampling
+on agreement or generalize the toy adapter's fault rule to arbitrary KEMs.
+
+Before public release: test PostgreSQL/migrations/concurrency and profile-wide
+holds; configure proxy/body/concurrency limits; decide account recovery, identity,
+moderation and abuse controls; test backup/restore and secret custody; provide
+monitoring and incident resolution; archive each version's exact implementation;
+conduct independent application and cryptographic admission review.
+
+Sources informing implementation choices:
+https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
+https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
+https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html
+https://docs.sqlalchemy.org/en/20/dialects/sqlite.html

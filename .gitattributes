@@ -1,0 +1,2 @@
+# Source fingerprints must not change with checkout line-ending settings.
+* text=auto eol=lf

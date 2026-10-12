@@ -1,0 +1,88 @@
+CRUCIBLE — IMPLEMENTATION RECORD, 2026-10-12
+
+This file records the current application, including teaching adapter release 2.
+It supersedes the timing and infrastructure proposals in protocol-v0.txt, which
+is retained as a historical draft. Source is shared for collaboration; a hosted
+service has not been deployed and this is not a production-readiness claim.
+
+Priorities
+
+1. Positive societal value through cumulative, inspectable cryptographic research.
+2. Respect attention: clear next actions and progressive detail.
+3. Build the attack experience first while preserving a path for proposals.
+4. Support automation through structured contracts and APIs.
+5. Distinguish verified, reported, mathematically argued, and unreviewed evidence.
+6. Do not translate parameter size, key length, or inactivity into security claims.
+7. Require correctness evidence for every admitted release and profile.
+8. Preserve methods, attribution, revisions, and useful intermediate investigations.
+9. Prefer portable interfaces and durable constraints over browser-only state.
+10. Make consequential choices explicit and keep unresolved questions visible.
+
+Current behavior
+
+- The numerical objective is recovery of the complete encapsulated shared secret.
+  A matching key proves one instance was solved; it is not a full assessment of
+  confidentiality, an independently reproduced method, or a verified compute cost.
+- Shared UTC rounds open on the hour and close at the next hour. Late arrivals
+  receive only the remaining time. Participants compute externally and report
+  their pseudocode, hardware, runtime, memory, and reusable precomputation.
+- Each account receives an independent instance for each exact profile, release,
+  and round. One well-formed final answer is allowed. Identical network retries
+  return the original receipt. Multiple accounts remain a target-shopping limit.
+- The leaderboard lists the first ten successful accounts per exact profile and
+  release by server receipt time. Response elapsed time and reported compute are
+  separate quantities. Every submission remains in durable storage.
+- Routine numerical runs do not automatically create research findings. A finding
+  is an intentional claim, method, partial result, or documented investigation.
+  It can cite a verified recovery but remains unreviewed. An unanswered challenge
+  is not evidence of an unsuccessful investigation or of security.
+- Research targets include schemes and underlying mathematical problems. Findings
+  have conditions, evidence, authorship, immutable revisions, and follow-up links.
+  There is no universal ranking of theoretical findings or general security score.
+
+Implementation
+
+- FastAPI and plain browser HTML/CSS/JavaScript; SQLAlchemy and Alembic; SQLite for
+  local development. PostgreSQL integration and concurrency still need testing.
+- Handle/password accounts use Argon2id and server-side sessions. There is no email
+  verification, account-recovery service, or moderation system yet.
+- The common selector is an integer instance size n. Each scheme and release maps
+  supported n values to exact registered parameters. Future KEMs may support a
+  subset of integers or map n to a parameter vector. Equal n values do not imply
+  comparable strength or attack cost across schemes.
+- One executable teaching KEM precedes admission of a genuine research candidate.
+  Release 2 supports all 17 integer sizes from 20 through 36. For this KEM, n is
+  the subgroup order's bit length; the shared-secret output remains 32 bytes at
+  every size. Scheme metadata describes size_parameter, and manifests and public
+  challenge contracts retain instance_size alongside the full parameters.
+- POST /api/challenges accepts either a scheme_id with instance_size or the
+  existing profile_id. Exactly one selection form is required; both resolve to
+  the same registered profile and preserve per-profile challenge uniqueness.
+- The five release-1 profiles and KDF domain are unchanged. Release 1 is archived
+  byte for byte; source fingerprints are pinned by release. The supplied solver
+  accepts releases 1 and 2. Earlier challenges, receipts, and findings are retained.
+- The default board shows the current release; the leaderboard API accepts
+  scheme_version=1 for historical records. The source API accepts version=1 for
+  the archived adapter. Findings on earlier registered releases remain revisable.
+- A short algebraic argument establishes perfect correctness of the specified DH
+  construction. Executable tests and each instance's round-trip check have a
+  separate scope. An implementation fault pauses new issuance for that profile;
+  it is never silently retried until a successful instance appears.
+- The discrete-log target describes an attack route to the teaching KEM, not an
+  automatic equivalence between assumptions or a general security reduction.
+- Catalogue entries are curated in code. Uploaded code is never executed, research
+  links are not fetched server-side, and complexity expressions are not evaluated.
+
+Decisions to revisit
+
+- First genuine candidate KEM, exact parameters, and independent correctness review;
+  admission of schemes with nonzero honest failure probabilities.
+- Research admission, moderation, corrections, authorship, identity, and recovery.
+- Method families, independent reproduction, and credit for intermediate or
+  unsuccessful work that provides useful evidence.
+- Narrow theoretical comparisons that justify a table or ranking.
+- Outages, data retention, multiple accounts, and public views beyond the first ten.
+- A future distinguishing track: security game, statistical qualification, leakage
+  controls, and the scope of any resulting claim. It is not the current benchmark.
+- PostgreSQL validation, proxy limits, monitoring, backups, incident response,
+  independent application review, and public deployment.

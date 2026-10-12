@@ -1,0 +1,940 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Recover a shared key. Share the method and computational cost. A working experiment in open cryptographic research.">
+    <meta name="color-scheme" content="light">
+    <title>
+      Crucible — shared cryptographic scrutiny
+    </title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js" defer>
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#workspace">
+      Skip to workspace
+    </a>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="/" aria-label="Crucible home">
+          <svg viewBox="0 0 32 36" width="27" height="31" aria-hidden="true">
+            <path d="M16 2 30 10v16l-14 8L2 26V10Z"/>
+            <path d="m9 14 7-4 7 4v8l-7 4-7-4Z"/>
+            <path d="M16 2v8m14 0-7 4M30 26l-7-4m-7 12v-8M2 26l7-4M2 10l7 4"/>
+          </svg>
+          <span>
+            crucible
+          </span>
+        </a>
+        <nav class="primary-nav" aria-label="Main navigation">
+          <button id="nav-experiment" class="nav-button selected" type="button" aria-current="page">
+            Experiment
+          </button>
+          <button id="nav-research" class="nav-button" type="button">
+            Research
+          </button>
+        </nav>
+        <div class="account-actions">
+          <button id="history-button" class="text-button" type="button" hidden>
+            My submissions
+          </button>
+          <span id="account-handle" class="account-handle" hidden>
+          </span>
+          <button id="auth-button" class="button button-small button-quiet" type="button" disabled>
+            Sign in
+          </button>
+          <button id="logout-button" class="text-button" type="button" hidden>
+            Sign out
+          </button>
+        </div>
+      </div>
+    </header>
+    <main class="page-shell">
+      <section class="intro" aria-labelledby="page-title">
+        <div class="intro-copy">
+          <p class="eyebrow">
+            An experiment in open cryptographic research
+          </p>
+          <h1 id="page-title">
+            Security claims.
+            <br>
+            <em>
+              Shared scrutiny.
+            </em>
+          </h1>
+          <p class="intro-description">
+            Recover a shared key. Share how you did it,
+            <br class="desktop-break">
+            and what the work required.
+          </p>
+        </div>
+        <aside class="round-clock" aria-label="Current shared round">
+          <div class="eyebrow">
+            <span class="live-dot" aria-hidden="true">
+            </span>
+            Next round begins in
+          </div>
+          <p id="countdown" class="countdown" aria-label="Loading round time">
+            —:—
+          </p>
+          <p id="round-deadline">
+            Synchronizing with the server…
+          </p>
+          <p class="clock-note">
+            New rounds start on the hour, UTC.
+            <br>
+            Joining later leaves less time.
+          </p>
+        </aside>
+      </section>
+      <div id="global-message" class="notice notice-error" role="alert" hidden>
+        <span id="global-message-text">
+        </span>
+        <button id="retry-button" type="button" class="text-button">
+          Try again
+        </button>
+      </div>
+      <div class="educational-note">
+        <span class="outline-dot" aria-hidden="true">
+        </span>
+        <p>
+          <strong>
+            A teaching experiment.
+          </strong>
+          These deliberately small groups make attacks feasible. Results describe individual instances, not security guarantees.
+        </p>
+      </div>
+      <section id="workspace" class="workspace" aria-labelledby="scheme-title" tabindex="-1">
+        <div class="scheme-heading">
+          <div>
+            <p class="eyebrow">
+              01 / Active experiment
+            </p>
+            <h2 id="scheme-title">
+              Teaching DH-KEM
+            </h2>
+            <p id="scheme-summary">
+              Loading the challenge profiles…
+            </p>
+          </div>
+          <div class="profile-field">
+            <label id="profile-label" for="profile-select">
+              Instance size n
+            </label>
+            <select id="profile-select" disabled>
+              <option>
+                Loading profiles…
+              </option>
+            </select>
+            <p id="profile-note" class="field-hint">
+              Each scheme defines its own size mapping. Sizes are comparable only within that scheme and version.
+            </p>
+          </div>
+        </div>
+        <div class="workspace-tabs" role="tablist" aria-label="Experiment views">
+          <button id="tab-challenge" role="tab" aria-selected="true" aria-controls="panel-challenge" data-view="challenge" tabindex="0">
+            Your challenge
+          </button>
+          <button id="tab-leaderboard" role="tab" aria-selected="false" aria-controls="panel-leaderboard" data-view="leaderboard" tabindex="-1">
+            Leaderboard
+          </button>
+          <button id="tab-protocol" role="tab" aria-selected="false" aria-controls="panel-protocol" data-view="protocol" tabindex="-1">
+            Protocol
+          </button>
+        </div>
+        <section id="panel-challenge" class="view-panel" role="tabpanel" aria-labelledby="tab-challenge" tabindex="0">
+          <div id="challenge-loading" class="loading-state" role="status">
+            <span class="loader" aria-hidden="true">
+            </span>
+            Loading your workspace…
+          </div>
+          <div id="challenge-error" class="notice notice-error" role="alert" hidden>
+            <span id="challenge-error-text">
+            </span>
+            <button id="retry-challenge" class="text-button" type="button">
+              Try again
+            </button>
+          </div>
+          <div id="challenge-empty" class="challenge-empty" hidden>
+            <div class="empty-copy">
+              <span class="section-number" aria-hidden="true">
+                ↗
+              </span>
+              <div>
+                <h3 id="empty-title">
+                  A fresh instance, just for you.
+                </h3>
+                <p id="empty-description">
+                  Sign in to receive a public key and encapsulation unique to your account for this profile and round.
+                </p>
+                <p class="field-hint">
+                  One instance and one answer per account, profile, and round.
+                </p>
+              </div>
+            </div>
+            <button id="issue-button" class="button button-primary" type="button">
+              Sign in to begin
+              <span aria-hidden="true">
+                →
+              </span>
+            </button>
+          </div>
+          <div id="challenge-active" hidden>
+            <div class="challenge-top">
+              <div>
+                <p class="eyebrow" id="challenge-round">
+                </p>
+                <h3>
+                  Recover the full shared key.
+                </h3>
+                <p>
+                  Your instance is ready. Work on your own hardware, then submit the key, method, and compute used.
+                </p>
+              </div>
+              <span id="challenge-status" class="status-tag">
+                Open
+              </span>
+            </div>
+            <dl class="challenge-facts">
+              <div>
+                <dt>
+                  Issued at
+                </dt>
+                <dd id="challenge-issued">
+                </dd>
+              </div>
+              <div>
+                <dt>
+                  Deadline
+                </dt>
+                <dd id="challenge-ends">
+                </dd>
+              </div>
+              <div>
+                <dt>
+                  Required answer
+                </dt>
+                <dd id="target-key">
+                  Declared by the instance
+                </dd>
+              </div>
+            </dl>
+            <div id="challenge-result" class="notice" role="status" hidden>
+            </div>
+            <div class="challenge-actions">
+              <a id="download-button" class="button button-quiet" href="#" download>
+                Download instance
+                <span aria-hidden="true">
+                  ↓
+                </span>
+              </a>
+              <button id="copy-instance" class="text-button" type="button">
+                Copy public instance
+              </button>
+              <button id="open-submission" class="button button-primary" type="button">
+                Submit recovered key
+                <span aria-hidden="true">
+                  →
+                </span>
+              </button>
+            </div>
+            <details class="disclosure">
+              <summary>
+                Inspect your public instance
+                <span aria-hidden="true">
+                  +
+                </span>
+              </summary>
+              <p class="field-hint">
+                The download includes the full challenge contract. Generation randomness and the expected answer remain private.
+              </p>
+              <pre id="instance-json" class="code-block" tabindex="0">
+              </pre>
+            </details>
+          </div>
+          <ol class="workflow">
+            <li>
+              <span>
+                01
+              </span>
+              <div>
+                <strong>
+                  Receive an instance
+                </strong>
+                <p>
+                  Unique to your account and this profile.
+                </p>
+              </div>
+            </li>
+            <li>
+              <span>
+                02
+              </span>
+              <div>
+                <strong>
+                  Investigate locally
+                </strong>
+                <p>
+                  Use your own tools and resources.
+                </p>
+              </div>
+            </li>
+            <li>
+              <span>
+                03
+              </span>
+              <div>
+                <strong>
+                  Share the work
+                </strong>
+                <p>
+                  One answer, with method and compute.
+                </p>
+              </div>
+            </li>
+          </ol>
+        </section>
+        <section id="panel-leaderboard" class="view-panel" role="tabpanel" aria-labelledby="tab-leaderboard" tabindex="0" hidden>
+          <div class="panel-heading">
+            <div>
+              <h3>
+                First recoveries
+              </h3>
+              <p>
+                The first ten distinct accounts for this profile and version, across all rounds. Ordered by server receipt.
+              </p>
+            </div>
+            <button id="refresh-leaderboard" class="text-button" type="button">
+              Refresh
+              <span aria-hidden="true">
+                ↻
+              </span>
+            </button>
+          </div>
+          <div id="leaderboard-content" aria-live="polite">
+          </div>
+          <p class="panel-footnote">
+            Elapsed time runs from instance issue to answer receipt. Hardware, compute, and method are contributor-reported. Rank is not a security score.
+          </p>
+        </section>
+        <section id="panel-protocol" class="view-panel protocol-panel" role="tabpanel" aria-labelledby="tab-protocol" tabindex="0" hidden>
+          <div class="panel-heading">
+            <div>
+              <h3>
+                Exactly what is being tested
+              </h3>
+              <p id="protocol-version">
+                Teaching Diffie–Hellman key encapsulation
+              </p>
+            </div>
+            <span class="status-tag muted-tag">
+              Educational
+            </span>
+          </div>
+          <div class="protocol-overview">
+            <div>
+              <span class="eyebrow">
+                The task
+              </span>
+              <p>
+                Given a public key and an encapsulation, recover the complete shared key. No candidate key or decapsulation oracle is supplied.
+              </p>
+            </div>
+            <div>
+              <span class="eyebrow">
+                The clock
+              </span>
+              <p>
+                Everyone shares the same hourly round. Your answer must reach the server before the round ends. Requesting an instance later does not extend the deadline.
+              </p>
+            </div>
+          </div>
+          <details class="disclosure" open>
+            <summary>
+              Construction and parameters
+              <span aria-hidden="true">
+                +
+              </span>
+            </summary>
+            <p>
+              In a subgroup generated by
+              <code>
+                g
+              </code>
+              , the public key is
+              <code>
+                gˣ
+              </code>
+              and the encapsulation is
+              <code>
+                gʳ
+              </code>
+              . Both parties derive a key from
+              <code>
+                gˣʳ
+              </code>
+              . The downloaded contract specifies the exact encoding and key derivation.
+            </p>
+            <dl id="parameter-facts" class="detail-list">
+            </dl>
+            <p class="field-hint">
+              Shared-key output length is independent of instance size; it does not measure security strength.
+            </p>
+            <pre id="parameter-json" class="code-block" tabindex="0">
+            </pre>
+            <p>
+              <a href="/api/protocol/source" class="text-button">
+                Download the reference implementation ↓
+              </a>
+              ·
+              <a href="/api/protocol/example" class="text-button">
+                Download the teaching solver ↓
+              </a>
+            </p>
+            <p class="field-hint">
+              The example solver is provided for this deliberately weak teaching construction.
+            </p>
+          </details>
+          <details class="disclosure">
+            <summary>
+              Correctness
+              <span aria-hidden="true">
+                +
+              </span>
+            </summary>
+            <dl id="correctness-facts" class="detail-list">
+            </dl>
+            <p class="panel-footnote">
+              Correctness describes agreement between honest encapsulation and decapsulation. It does not establish resistance to an attack.
+            </p>
+          </details>
+          <details class="disclosure">
+            <summary>
+              What a result establishes
+              <span aria-hidden="true">
+                +
+              </span>
+            </summary>
+            <p>
+              A correct submission establishes that the submitted key matches this instance and was received within its round. The site checks the answer and records the accompanying method and resources. It does not independently verify the declared computation or reproduce the method.
+            </p>
+            <p>
+              An incorrect answer locks that instance. An expired instance without an accepted recovery is simply unsolved here; it is not evidence of a security bound. Subgroup order size is a construction parameter, not an estimate of security bits.
+            </p>
+            <p>
+              This experiment records practical recoveries. It does not yet accept or verify asymptotic attack proofs.
+            </p>
+          </details>
+          <details class="disclosure">
+            <summary>
+              Submission and ranking rules
+              <span aria-hidden="true">
+                +
+              </span>
+            </summary>
+            <p>
+              Each account gets one private instance per profile per round, and one well-formed answer for that instance. Submit a full 32-byte key, a reusable method version, and a compute declaration.
+            </p>
+            <p>
+              Method versions are immutable. Correct recoveries can appear on the public leaderboard with the account handle, method, pseudocode, and compute declaration. The earliest ten distinct accounts appear for each exact profile and version, across all rounds. Different profiles are not ranked against one another.
+            </p>
+          </details>
+        </section>
+      </section>
+      <section id="research-workspace" class="research-workspace" aria-labelledby="research-title" hidden>
+        <div class="research-intro">
+          <p class="eyebrow">
+            A durable research record
+          </p>
+          <h1 id="research-title">
+            Make the claim
+            <br>
+            <em>
+              inspectable.
+            </em>
+          </h1>
+          <p>
+            Share an argument, an experiment, or an unresolved observation.
+            <br class="desktop-break">
+            Keep its conditions, methods, and revisions with it.
+          </p>
+        </div>
+        <div class="workspace-tabs" role="tablist" aria-label="Research target type">
+          <button id="target-tab-scheme" role="tab" aria-selected="true" aria-controls="target-catalogue" tabindex="0" data-target-kind="scheme">
+            Schemes
+          </button>
+          <button id="target-tab-assumption" role="tab" aria-selected="false" aria-controls="target-catalogue" tabindex="-1" data-target-kind="assumption">
+            Assumptions
+          </button>
+        </div>
+        <div id="target-catalogue" class="target-catalogue" role="tabpanel" aria-labelledby="target-tab-scheme">
+        </div>
+        <div id="research-error" class="notice notice-error" role="alert" hidden>
+          <span id="research-error-text">
+          </span>
+          <button id="retry-research" class="text-button" type="button">
+            Try again
+          </button>
+        </div>
+        <article id="research-target" class="research-target" hidden>
+          <div class="target-heading">
+            <div>
+              <p id="target-meta" class="eyebrow">
+              </p>
+              <h2 id="target-title">
+              </h2>
+              <p id="target-summary">
+              </p>
+            </div>
+            <span class="status-tag muted-tag">
+              Teaching reference
+            </span>
+          </div>
+          <details class="disclosure">
+            <summary>
+              Definition and relationships
+              <span aria-hidden="true">
+                +
+              </span>
+            </summary>
+            <p id="target-definition" class="preserve-lines">
+            </p>
+            <div id="target-related" class="related-targets">
+            </div>
+            <p class="field-hint">
+              A relationship identifies context. A result does not automatically transfer to a related target or a different parameter profile.
+            </p>
+          </details>
+        </article>
+        <section id="findings-section" class="findings-section" aria-labelledby="findings-title" hidden>
+          <div class="panel-heading">
+            <div>
+              <h3 id="findings-title">
+                Findings and investigations
+              </h3>
+              <p>
+                Claims, conditions, and the work behind them. Revisions remain visible.
+              </p>
+            </div>
+            <button id="add-finding" class="button button-primary" type="button">
+              Add finding
+              <span aria-hidden="true">
+                +
+              </span>
+            </button>
+          </div>
+          <div id="findings-list" aria-live="polite">
+          </div>
+          <div class="findings-pagination">
+            <button id="more-findings" class="text-button" type="button" hidden>
+              Load earlier findings ↓
+            </button>
+          </div>
+          <p class="panel-footnote">
+            Recoveries update the numerical leaderboard. Findings are deliberate contributions: an argument, a method, useful intermediate work, or a documented investigation. Attached recovery evidence verifies only one instance; the finding remains unreviewed.
+          </p>
+        </section>
+      </section>
+      <footer class="site-footer">
+        <span class="footer-name">
+          crucible
+        </span>
+        <p>
+          Make the result inspectable.
+          <br>
+          Make the work useful.
+        </p>
+        <span>
+          Open cryptographic research
+        </span>
+      </footer>
+    </main>
+    <dialog id="auth-dialog" aria-labelledby="auth-title">
+      <div class="dialog-top">
+        <p class="eyebrow">
+          Your research workspace
+        </p>
+        <button class="icon-button" type="button" data-close aria-label="Close sign-in dialog">
+          ×
+        </button>
+      </div>
+      <h2 id="auth-title">
+        Welcome back.
+      </h2>
+      <p class="dialog-description" id="auth-description">
+        Sign in to receive your instance for the current round.
+      </p>
+      <div class="auth-switch" role="group" aria-label="Account action">
+        <button id="login-mode" type="button" class="selected" aria-pressed="true">
+          Sign in
+        </button>
+        <button id="register-mode" type="button" aria-pressed="false">
+          Create account
+        </button>
+      </div>
+      <form id="auth-form">
+        <div class="form-field">
+          <label for="auth-handle">
+            Public handle
+          </label>
+          <input id="auth-handle" name="handle" required autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" title="Use 3–32 letters, numbers, or underscores." autocapitalize="none" spellcheck="false">
+          <p class="field-hint">
+            Use 3–32 letters, numbers, or underscores. Your handle appears beside public recoveries.
+          </p>
+        </div>
+        <div class="form-field">
+          <label for="auth-password">
+            Password
+          </label>
+          <input id="auth-password" name="password" type="password" required autocomplete="current-password" minlength="12" maxlength="128">
+          <p class="field-hint">
+            Use 12–128 characters.
+          </p>
+        </div>
+        <p id="auth-error" class="form-error" role="alert" hidden>
+        </p>
+        <button id="auth-submit" class="button button-primary full-width" type="submit">
+          Sign in
+          <span aria-hidden="true">
+            →
+          </span>
+        </button>
+      </form>
+    </dialog>
+    <dialog id="submission-dialog" class="wide-dialog" aria-labelledby="submission-title">
+      <div class="dialog-top">
+        <p class="eyebrow" id="submission-context">
+          Your contribution
+        </p>
+        <button class="icon-button" type="button" data-close aria-label="Close submission form">
+          ×
+        </button>
+      </div>
+      <h2 id="submission-title">
+        Share the work.
+      </h2>
+      <p class="dialog-description">
+        The recovered key, the method behind it, and the computational cost.
+      </p>
+      <div class="notice submission-warning">
+        <strong>
+          One answer for this instance.
+        </strong>
+        A well-formed answer is locked when received, whether correct or incorrect. The round deadline still applies.
+      </div>
+      <form id="submission-form">
+        <div class="form-field">
+          <label for="candidate">
+            Recovered shared key
+          </label>
+          <input id="candidate" class="code-input" name="candidate" required minlength="64" maxlength="64" pattern="[0-9a-fA-F]{64}" title="Enter exactly 64 hexadecimal characters, without spaces or a 0x prefix." autocomplete="off" spellcheck="false" placeholder="64 hexadecimal characters">
+          <p id="candidate-hint" class="field-hint">
+            The complete shared key. No spaces or 0x prefix.
+          </p>
+        </div>
+        <fieldset class="form-section">
+          <legend>
+            Your method
+          </legend>
+          <div class="form-field">
+            <label for="method-select">
+              Method version
+            </label>
+            <select id="method-select" name="method_id">
+              <option value="new">
+                Create a new method
+              </option>
+            </select>
+            <p class="field-hint">
+              Saved methods can be reused. To change one, create a new version.
+            </p>
+          </div>
+          <div id="new-method-fields">
+            <div class="form-field">
+              <label for="method-name">
+                Method name
+              </label>
+              <input id="method-name" name="method_name" required maxlength="100" placeholder="A short name for your approach" autocomplete="off">
+            </div>
+            <div class="form-field">
+              <label for="method-pseudocode">
+                Pseudocode
+              </label>
+              <textarea id="method-pseudocode" class="code-input" name="pseudocode" required rows="6" maxlength="15000" placeholder="Describe the steps, including key derivation and any preparation.">
+              </textarea>
+            </div>
+          </div>
+          <details id="selected-method-preview" class="disclosure" hidden>
+            <summary>
+              View this method
+              <span aria-hidden="true">
+                +
+              </span>
+            </summary>
+            <pre id="selected-method-code" class="code-block">
+            </pre>
+          </details>
+        </fieldset>
+        <fieldset class="form-section">
+          <legend>
+            Compute used
+          </legend>
+          <p class="field-hint section-hint">
+            Report this attempt. Separate any preparation that can be reused.
+          </p>
+          <div class="form-field">
+            <label for="hardware">
+              Hardware
+            </label>
+            <input id="hardware" name="hardware" required maxlength="500" placeholder="CPU / GPU model and configuration">
+          </div>
+          <div class="field-row">
+            <div class="form-field">
+              <label for="workers">
+                Parallel workers
+              </label>
+              <input id="workers" name="workers" type="number" min="1" max="1000000" step="1" value="1" required>
+            </div>
+            <div class="form-field">
+              <label for="wall-seconds">
+                Attack time (seconds)
+              </label>
+              <input id="wall-seconds" name="wall_seconds" type="number" min="0" max="315576000" step="any" required placeholder="Elapsed time on your machine">
+            </div>
+          </div>
+          <div class="form-field">
+            <label for="precomputation">
+              Precomputation and reused data
+            </label>
+            <textarea id="precomputation" name="precomputation" required rows="2" maxlength="2000" placeholder="Describe preparation and its cost, or write None.">
+            </textarea>
+          </div>
+          <div class="form-field">
+            <label for="peak-memory">
+              Peak memory
+            </label>
+            <input id="peak-memory" name="peak_memory" required maxlength="300" placeholder="Estimate with units, or state Not measured">
+          </div>
+          <div class="form-field">
+            <label for="compute-notes">
+              Additional notes
+              <span class="optional">
+                Optional
+              </span>
+            </label>
+            <textarea id="compute-notes" name="notes" rows="2" maxlength="2000" placeholder="Measurements, uncertainty, or other details needed to understand the work.">
+            </textarea>
+          </div>
+        </fieldset>
+        <p class="form-footnote">
+          Correct recoveries may publish your handle, method, pseudocode, and compute declaration on the leaderboard.
+        </p>
+        <p id="submission-error" class="form-error" role="alert" hidden>
+        </p>
+        <div class="form-actions">
+          <span id="submission-time" class="field-hint">
+          </span>
+          <button id="submit-answer" class="button button-primary" type="submit">
+            Submit this answer
+            <span aria-hidden="true">
+              →
+            </span>
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="history-dialog" class="wide-dialog" aria-labelledby="history-title">
+      <div class="dialog-top">
+        <p class="eyebrow">
+          Your record
+        </p>
+        <button class="icon-button" type="button" data-close aria-label="Close submissions dialog">
+          ×
+        </button>
+      </div>
+      <h2 id="history-title">
+        My submissions
+      </h2>
+      <p class="dialog-description">
+        Answers received across your profiles and rounds.
+      </p>
+      <div id="history-content" class="history-content" aria-live="polite">
+      </div>
+    </dialog>
+    <dialog id="finding-dialog" class="wide-dialog" aria-labelledby="finding-title">
+      <div class="dialog-top">
+        <p class="eyebrow" id="finding-context">
+          Research contribution
+        </p>
+        <button class="icon-button" type="button" data-close aria-label="Close finding form">
+          ×
+        </button>
+      </div>
+      <h2 id="finding-title">
+        Record a finding.
+      </h2>
+      <p class="dialog-description" id="finding-description">
+        State the claim, where it applies, and enough of the work to inspect it.
+      </p>
+      <div id="finding-relationship" class="notice" hidden>
+      </div>
+      <form id="finding-form" class="finding-form">
+        <div class="form-field">
+          <label for="finding-target">
+            Target
+          </label>
+          <select id="finding-target" name="target_id" required>
+          </select>
+        </div>
+        <div class="form-field">
+          <label for="finding-name">
+            Title
+          </label>
+          <input id="finding-name" name="title" maxlength="200" required placeholder="A concise name for the finding">
+        </div>
+        <div class="form-field">
+          <label for="finding-claim">
+            Claim or observation
+          </label>
+          <textarea id="finding-claim" name="claim" rows="3" maxlength="5000" required placeholder="What did you establish, estimate, or observe?">
+          </textarea>
+        </div>
+        <div class="form-field">
+          <label for="finding-conditions">
+            Conditions and scope
+          </label>
+          <textarea id="finding-conditions" name="conditions" rows="3" maxlength="5000" required placeholder="Parameters, assumptions, distribution, access, and limits of the claim.">
+          </textarea>
+        </div>
+        <div class="form-field">
+          <label for="finding-body">
+            Write-up
+          </label>
+          <textarea id="finding-body" name="body" rows="7" maxlength="15000" required placeholder="Give the argument, method, experiment, or observations needed to inspect your claim.">
+          </textarea>
+        </div>
+        <div class="field-row">
+          <div class="form-field">
+            <label for="finding-model">
+              Computation model
+            </label>
+            <select id="finding-model" name="model">
+              <option value="not-applicable">
+                Not applicable
+              </option>
+              <option value="classical">
+                Classical
+              </option>
+              <option value="quantum">
+                Quantum
+              </option>
+              <option value="mixed">
+                Mixed
+              </option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="finding-kind">
+              Kind of evidence
+            </label>
+            <select id="finding-kind" name="evidence_kind">
+              <option value="argument">
+                Argument
+              </option>
+              <option value="heuristic">
+                Heuristic
+              </option>
+              <option value="experiment">
+                Experiment
+              </option>
+              <option value="mixed">
+                Mixed
+              </option>
+            </select>
+          </div>
+        </div>
+        <div class="form-field">
+          <label for="finding-artifact">
+            Artifact link
+            <span class="optional">
+              Optional · HTTPS
+            </span>
+          </label>
+          <input id="finding-artifact" name="artifact_url" type="url" pattern="https://.+" maxlength="2000" placeholder="https://…">
+          <p class="field-hint">
+            A paper, code repository, notebook, or supporting record.
+          </p>
+        </div>
+        <details class="disclosure finding-advanced">
+          <summary>
+            Profiles and quantitative claims
+            <span aria-hidden="true">
+              +
+            </span>
+          </summary>
+          <p>
+            Optional. State the model and units with each estimate. These fields do not create a numerical ranking.
+          </p>
+          <div id="finding-recovery-field" class="form-field">
+            <label for="finding-recovery">
+              Supporting recovery
+            </label>
+            <select id="finding-recovery" name="submission_id">
+              <option value="">
+                No recovery attached
+              </option>
+            </select>
+            <p id="finding-recovery-hint" class="field-hint">
+              Optionally connect one of your correct submissions. Its profile must be included below; the finding remains unreviewed.
+            </p>
+          </div>
+          <fieldset class="profile-checks">
+            <legend>
+              Applicable profiles
+            </legend>
+            <div id="finding-profiles">
+            </div>
+          </fieldset>
+          <div class="form-field">
+            <label for="finding-time-cost">
+              Time cost
+            </label>
+            <input id="finding-time-cost" name="time_cost" maxlength="1000" placeholder="Bound or estimate, with model and units">
+          </div>
+          <div class="form-field">
+            <label for="finding-memory-cost">
+              Memory cost
+            </label>
+            <input id="finding-memory-cost" name="memory_cost" maxlength="1000" placeholder="Bound or estimate, with units">
+          </div>
+          <div class="form-field">
+            <label for="finding-success">
+              Success probability
+            </label>
+            <input id="finding-success" name="success_probability" maxlength="1000" placeholder="Probability, conditions, and how it was established">
+          </div>
+        </details>
+        <p class="form-footnote">
+          This publishes your write-up and handle. It is recorded as unreviewed; attaching an artifact does not verify its proof or results.
+        </p>
+        <p id="finding-error" class="form-error" role="alert" hidden>
+        </p>
+        <div class="form-actions">
+          <span class="field-hint">
+            Earlier versions remain in the record.
+          </span>
+          <button id="save-finding" class="button button-primary" type="submit">
+            Publish finding
+            <span aria-hidden="true">
+              →
+            </span>
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden>
+    </div>
+  </body>
+</html>
