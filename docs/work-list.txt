@@ -1,0 +1,147 @@
+CRUCIBLE — RUNNING WORK LIST
+Updated 2026-10-12
+
+Status key
+Verified: implemented and checked for the stated scope in the local candidate.
+Local visual trial: implemented and checked; visual direction remains revisable.
+Pending: an operational step or decision has not yet been confirmed.
+Proposed: an idea for discussion, not adopted behavior.
+
+Working order
+
+Handle quick items first unless the user sets a different priority. Result-file
+upload was the explicit priority for this batch and has been implemented.
+
+Current batch — verified in the local candidate
+
+- Navigation: the top bar and main heading say Schemes. The KEM catalogue opens each scheme's Leaderboard first, with Challenge
+  and Protocol alongside it. Research remains hidden; its data/API are preserved.
+  About us opens an intentionally empty template at #about. Collaborators can add
+  content inside #about-workspace in web/index.html; no placeholder biographies
+  or mission claims are published.
+- Catalogue: largest recorded size and earliest recoverer at that exact displayed
+  size; the separate Next size column is removed. Sort by largest recovery ascending, then name;
+  unrecovered schemes come last. Equal sizes across KEMs are not comparable strength.
+- Recoveries: click a row or activate its keyboard button for a read-only view of
+  method, pseudocode, and reported compute. Time to submit includes all delay from
+  instance issue to receipt; reported attack time is a separate quantity.
+  The selected size says Unsolved after an empty successful response, or Broken by:
+  directly above its recovery table. Loading and errors make no unsolved claim.
+  Ranking and receipt notes sit below the table and stay hidden when it is empty.
+  Solvers receive derived credit on every smaller supported size in the same
+  release, with the explicit compatibility rules applied to the actual source
+  profile. Each account appears once, ordered by its earliest qualifying receipt.
+  Inherited entries say via size N and open that actual recovery's details.
+  This creates no submission rows or false exact-profile recovery metadata.
+- Size and clock: five slightly larger nearby size buttons, adjacent-size arrows,
+  a full-range slider, and exact Jump to input. Dragging previews the selected
+  number, nearby size buttons, and numeric input; release loads that size,
+  avoiding requests for each intermediate value. Cancellation restores the
+  actual selection. The slider follows
+  registered profiles, including sparse ranges. The dot marks the next unsolved size beyond the largest
+  record. All earlier sizes are light green as a progress cue, without creating
+  recovery records for unsubmitted sizes. The left-side button jumps to that next
+  unsolved size and hides while it is selected or no higher size is available,
+  retaining its layout space so surrounding controls do not move.
+  The Largest recovered shortcut beneath the picker is removed.
+  The label reads Instance size. The timer appears only inside the Challenge tab,
+  as a compact Challenge closes in label with the countdown immediately beside
+  it; there is no second clock time. The exact deadline remains in the contract.
+  Keep the next not-yet-recovered default and boxed UTC-round countdown. Joining
+  late still leaves less time. Desktop, 320px, and 390px layouts were checked.
+- Scheme information: shared compact Scheme specifics disclosure, initially
+  closed, with the complete contract in Protocol. Both KEMs use the same layout.
+  Construction, public inputs, parameter mappings, and correctness arguments
+  have explicitly marked math for local typesetting. Plain contract fields,
+  challenge JSON, and pinned adapter sources retain their original values.
+- Reduced chrome: opening pitch and raw public-input disclosure removed.
+  The footer contains only the red logo and name, no tagline. Complete public
+  inputs remain in the challenge download.
+- Result import: crucible-recovery-v1 JSON, exact challenge identity, 128 KiB limit,
+  full validation before filling editable fields; explicit final submit required.
+  Uploading alone sends no answer and runs no uploaded code.
+- Local visual trial — identity/readability: capitalized Crucible DIN wordmark, larger controls,
+  aligned table text and prominent records. KEM names, largest recoveries, and
+  first-recoverer names share the same 20px semibold display font as a visual
+  trial; usernames have no underline.
+  The red mark is an open tapered vessel with a floating diamond ember;
+  header/footer/favicon match. Curled heat strokes and flame shapes are retired.
+
+Adapters — implemented and verified in the local candidate
+
+- Finite-field Diffie–Hellman: teaching-dh-kem release 3, all integer sizes 20–128.
+  n is subgroup-order bit length. Release 2 remains unchanged at 20–36; current
+  boards/progress include v2 receipts only for that explicit compatible subset,
+  keeping the original receipt source/version. Release 1's five profiles remain
+  separately archived. Source hashes and earlier records are preserved.
+- RSA over an integer modulus: rsa-kem release 1, all integer sizes 20–128.
+  n is modulus bit length. Custom transcript-bound SHA-256 teaching construction;
+  no claim of standardized RSA-KEM conformance.
+- Both output 32-byte shared secrets. Exact registered arithmetic/encodings support
+  perfect honest agreement; that is not a confidentiality/security certificate.
+  Neither adapter is suitable for protecting information.
+- Separate public-only DH/RSA demonstration solvers intentionally stop above size
+  36 to bound naive algorithm costs. Larger challenges support participants' own
+  methods. Solvers print candidate keys and never submit them automatically.
+
+Verification record
+
+158 backend tests, 31 navigation regression groups, and 13 upload regression
+groups pass. Isolated real-Chrome checks passed for both protocols: solve the
+public inputs, import the result, review without a submission request, explicitly
+submit, and see an accepted recovery, first-recoverer attribution, and next size.
+The copied and downloaded challenge matched. Source links, direct/step controls
+across 20–128 and clickable recovery evidence were checked.
+At 320px and 390px there was no horizontal overflow, and there were no page errors.
+End-to-end test records were confined to an isolated test database.
+
+The latest full backend run passes 158 tests. Seven math-renderer groups also
+pass. Math was checked in real Chrome for both schemes at size 128 on desktop and
+320px layouts: local fonts, accessible MathML, no clipping/overflow, no CSP or
+browser errors, and readable fallback when the renderer is unavailable.
+Inherited-credit checks cover receipt order, ties, first ten accounts, exact
+source details, downward-only credit, compatible versions, and strict archives.
+
+The latest visual/size-picker pass used read-only Chrome checks: footer identity,
+red logos, exact record marking and persistent jump, valid/invalid arbitrary size
+jumps, retained keyboard focus, scheme-specific empty states, and 320px/390px
+layouts. Fixed a duplicate blur/change redraw that could drop keyboard focus.
+The updated footer, Schemes label, size rail, and matched typography are live.
+The recovery-metadata addition passed 25 focused backend tests. Ascending sorting,
+exact recovered-size membership, next-size navigation/boundaries, simplified
+timer text, and selected-recovery styling passed unit and read-only browser checks.
+
+Verified — Local serving update complete
+The updated application is live and healthy at http://127.0.0.1:8000/ with two
+protocols and 109 supported profiles each. Existing users,
+challenges, methods, and submission records are exactly unchanged. The original
+DH release-2 receipt retains its version, contributes to the compatible current
+size-36 record, and leaves size 37 as the current next-size default. This is a
+local update, not a public deployment.
+
+Continuing capabilities and proposals
+
+Available — Local HTTP API for accounts, challenge access, methods, and submissions.
+Proposed — Dedicated API-token authentication; not implemented.
+Proposed — First-success rewards with larger first-ten/new-size bonuses. No score
+formula is adopted. Decide scope, evidence, repetition caps, identity handling,
+and comparability. Keep personal progress, novelty, and reproduction distinct.
+Proposed — Security claims in the foreground. Claims need a model and justification;
+the current size selector retains a scheme-specific parameter meaning.
+
+Priorities
+
+- Positive societal value through inspectable cryptographic research.
+- Focused next actions, clear navigation, and supporting detail when needed.
+- Small understandable changes; discuss consequential choices explicitly.
+- Exact versioned contracts, parameter mappings, and correctness evidence.
+- Separate verified answers, reported resources, arguments, and reproductions.
+- Preserve useful methods, intermediate results, follow-ups, and attribution.
+- Automation through structured records/APIs with principled operational limits.
+- Shared UTC hourly deadlines enforced by complete server receipt time.
+
+Maintenance
+
+Update status after verification; keep rationale in docs/design-record.txt.
+Preserve proposals as proposals. Public deployment, account recovery, moderation,
+PostgreSQL concurrency testing, and independent admission/security review remain.

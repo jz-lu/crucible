@@ -21,12 +21,20 @@ class NewChallenge(Input):
     profile_id: str | None = Field(default=None, min_length=1, max_length=100)
     scheme_id: str | None = Field(default=None, min_length=1, max_length=100)
     instance_size: int | None = Field(default=None, gt=0, strict=True)
+    scheme_version: str | None = Field(default=None, min_length=1, max_length=32)
 
     @model_validator(mode="after")
     def one_selector(self):
-        if self.model_fields_set == {"profile_id"} and self.profile_id is not None:
+        supplied = self.model_fields_set
+        if "scheme_version" in supplied and (self.scheme_version is None or self.scheme_id is None):
+            raise ValueError("A version selector requires a scheme identifier.")
+        selector = supplied - {"scheme_version"}
+        if selector == {"profile_id"} and self.profile_id is not None:
             return self
-        if (self.model_fields_set == {"scheme_id", "instance_size"} and
+        if (selector == {"profile_id", "scheme_id"} and
+                self.profile_id is not None and self.scheme_id is not None):
+            return self
+        if (selector == {"scheme_id", "instance_size"} and
                 self.scheme_id is not None and self.instance_size is not None):
             return self
         raise ValueError("Choose a profile identifier or a scheme with an integer instance size.")

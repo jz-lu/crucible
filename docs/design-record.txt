@@ -67,24 +67,220 @@ Decisions and rationale
    Manifests and public challenge contracts preserve n as instance_size alongside
    the complete parameters, so the convenient selector never replaces the contract.
 
-   Teaching DH-KEM release 2 supports every integer n from 20 through 36. Here n
-   is the subgroup order's bit length; all sizes produce a 32-byte shared secret.
-   These small groups exercise generation, correctness, submission, and evidence
-   paths while keeping the mathematics inspectable. They are unsuitable for
-   protecting information and have no independent admission or security certification.
+   Current extension, 2026-10-12: teaching DH release 3 and RSA release 1 support
+   every integer from 20 through 128. DH n is subgroup-order bit length; RSA n is
+   modulus bit length. Both output 32-byte shared secrets. These are teaching
+   constructions, not security certifications; parameter size is not security bits.
+   The size chooser shows five nearby supported values, adjacent-size arrows,
+   a native range slider, and an exact Jump to input. The slider indexes registered
+   profiles, so sparse ranges remain valid; input previews the number, nearby
+   buttons, and numeric input, while change commits one navigation. Cancellation
+   restores the actual selection. Its default is the next not-yet-recovered size.
+   Following visual feedback, the dot marks the next supported size beyond the
+   largest recovery, and all earlier sizes are light green as a progress cue.
+   This shading does not add accepted-recovery evidence for earlier sizes. The
+   explicit recovery list and attribution remain unchanged. A left-side button
+   jumps to the next unsolved target, without issuing an instance, and hides when
+   that target is selected or the range is exhausted, retaining the same layout
+   space and becoming unavailable to keyboard/assistive navigation. The Largest recovered
+   shortcut is removed from beneath the picker. Keyboard arrows and Home/End navigate
+   supported values. The label reads Instance size. The timer lives only inside
+   Challenge, with Challenge closes in immediately beside the countdown. Omit the
+   duplicate UTC clock time; the full contract still contains the exact deadline.
 
 8. Preserve exact releases and research history
-   Release 1 remains archived byte for byte. Release 2 retains its original five
-   profiles and KDF domain while adding intermediate sizes. Source hashes are pinned
-   to releases; prior challenges, receipts, and findings remain intact. The board
-   defaults to the current release, with historical records available through the
-   version-selecting API. Authors can revise findings about registered old releases.
+   DH release 1 remains archived with its original five profiles. Release 2 remains
+   unchanged at sizes 20–36. Release 3 extends to 128 and preserves the same
+   construction for 20–36. Current-release progress and boards may include v2
+   recoveries only for that explicitly registered compatible subset. A displayed
+   compatible record retains its original source/version; v1 stays separate.
+   Source hashes, earlier challenges, receipts, and findings remain pinned.
+   No general cross-version or cross-scheme compatibility is inferred. Historical
+   sources/records remain available; older registered findings remain revisable.
 
 9. Share source before operating a public service
    The repository is available for collaboration. The application currently serves
    a local development workflow. Public hosting requires explicit operational and
    security work: identity/recovery, moderation, resource limits, monitoring,
    database validation, backups, incident handling, and independent review.
+
+10. Lead with a catalogue of KEMs, then a consistent detail view
+    Implemented and verified in the local candidate, 2026-10-12.
+    The homepage shows KEMs and their recorded numerical
+    progress. Selecting one opens Leaderboard first, followed by Challenge and
+    Protocol. The default size is the next not-yet-recovered supported size.
+    About us is a separate #about navigation destination with an empty content
+    template for collaborators. Keep it empty until they supply its contents.
+    The catalogue shows largest recovery and its earliest recoverer's handle;
+    the separate Next size column is removed. This is progress within a KEM/version,
+    not a universal rank.
+    A recovery at one size does not establish recoveries at smaller sizes.
+    The user has chosen to award leaderboard credit on smaller sizes. Derive this
+    credit from a qualifying actual receipt, label it via size N, and keep its
+    original size, release, timestamp, method, and compute details. One account
+    appears once per board, ranked by its earliest qualifying receipt, capped at
+    ten accounts. Source-profile compatibility is explicit; archived boards stay
+    within their own releases. Do not create extra submission rows or add false
+    entries to exact recovered-profile metadata. This is a credit rule, not a
+    claim that one solved random instance proves every smaller instance solved.
+    Following the user's corrected preference, sort by largest recorded size
+    ascending, ties by name, with schemes having no recoveries last.
+
+    Recovery entries open a read-only method/compute dialog by mouse or keyboard.
+    The selected size shows Unsolved only after a successful empty response, or
+    Broken by: with the table directly below. Ranking and receipt notes follow
+    the populated table; loading or failed requests never imply an unsolved size.
+    Time to submit means instance issue to server receipt, including delays;
+    reported attack time is separate. Use Challenge for the numerical workflow.
+    A closed Scheme specifics section gives the same compact summary structure
+    for both KEMs; Protocol retains the complete contract. The boxed timer appears
+    inside Challenge so its meaning is tied to the submission deadline.
+
+    Typeset explicitly marked protocol math with a locally vendored KaTeX build.
+    Human display fields are separate from the unchanged reproducible manifests
+    and pinned adapter source; each release keeps its own parameter mapping.
+    The renderer accepts explicit inline math delimiters, keeps prose as text,
+    and does not interpret user-submitted methods or raw JSON. Local assets avoid
+    a runtime CDN dependency; rendered MathML supports assistive technology.
+
+    Remove the opening pitch and raw public-input inspection disclosure.
+    The full public challenge still downloads as JSON. These reductions keep
+    immediate progress and actions visible without weakening the contract.
+
+11. Keep firmer typography readable and the identity simple
+    Local visual trial, 2026-10-12; checked in Chrome at desktop, 320px, and 390px.
+    The visual direction remains open to feedback.
+    The wordmark uses literal capitalization Crucible in local DIN Alternate with
+    fallbacks. Navigation/account controls are larger DIN-style text; section
+    headings retain condensed display type. Body/forms remain system sans, and
+    technical values remain monospace. KEM names are clickable without underlines;
+    recovery values are more prominent, with aligned readable table cells.
+
+    Iteration rationale: the original heavy condensed wordmark was too compressed;
+    Helvetica and uppercase DIN trials were replaced after feedback. The current
+    icon keeps a larger refractory-vessel silhouette around angular hot material,
+    an open diagonal channel, and two restrained heat strokes. It replaces the
+    disliked droplet/flame shapes. A further iteration replaces this with an open
+    tapered vessel and one floating diamond ember; curled heat strokes are gone.
+    Restore a minimal footer with only the logo and name, no tagline. Header,
+    footer, and favicon use the red vessel/ember mark; the wordmark retains its
+    existing color. KEM names, recovery sizes, and first-recoverer names share the
+    display typeface; usernames are not underlined. Top navigation reads Schemes.
+    No external
+    font or image service is required; the identity remains open to feedback.
+
+12. Keep a running list of changes and unresolved ideas
+    Confirmed, 2026-10-12. Maintain docs/work-list.txt as a compact current work
+    list, and this file as the rationale and decision history. Distinguish
+    proposed ideas, work in progress, and verified changes. This is a project
+    record, not another dashboard added to the user interface.
+
+13. Focus the first MVP on numerical results
+    Confirmed and verified locally, 2026-10-12. Temporarily hide the Research
+    interface and its navigation; old Research URLs return to the numerical catalogue. Preserve its implementation
+    and stored records for later. Keep accounts, hourly shared-secret challenges,
+    numerical leaderboards, method/compute declarations, and protocol details.
+
+14. Use explanatory protocol names in the catalogue
+    Confirmed and verified locally, 2026-10-12. Display "Finite-field
+    Diffie–Hellman" instead of the Teaching DH-KEM label. Remove the version/teaching subtitle from the homepage
+    entry. Exact identifiers, releases, and historical contracts remain intact
+    in protocol details and records.
+
+15. Work from quick changes toward slower work, with explicit priority overrides
+    Confirmed, 2026-10-12. Complete the fastest items first unless the user sets a
+    different order. The user prioritized numerical result-file upload in the
+    current batch. Keep the work list aligned with implementation and verification.
+
+16. Import a result file into the existing review-and-submit flow
+    Implemented and verified in the local candidate, 2026-10-12.
+    The versioned JSON format crucible-recovery-v1 carries the
+    exact challenge ID, recovered key, method name, pseudocode, and compute report.
+    It is a structured data file, not executable code. Validate the entire file
+    before replacing draft fields. Importing fills the form for review; the
+    participant must explicitly submit to send an answer to the server.
+
+    Limit files to 128 KiB and enforce the active challenge's shared-key length,
+    field limits, and types. Expired rounds, pending submissions, and uncertain
+    retries cannot be replaced by an import. Keep the same account and challenge
+    through asynchronous reads. Thirteen upload and fourteen navigation regression
+    groups pass. Isolated browser checks confirm import sends no submission,
+    preserves a review step, and supports successful final submission for both KEMs.
+
+17. Add a second protocol through the same presentation structure
+    Implemented and verified in the local candidate, 2026-10-12.
+    RSA over an integer modulus
+    (rsa-kem v1) joins Finite-field Diffie–Hellman (teaching-dh-kem v3), each with
+    its own exact parameters, source, example solver, and correctness argument.
+    Both support integer sizes 20–128, with different parameter meanings.
+    RSA uses custom transcript-bound SHA-256 derivation and is not presented as a
+    standardized RSA-KEM implementation. Neither teaching adapter is a claim of
+    confidentiality, chosen-ciphertext resistance, or production security.
+
+    DH's extended fixed groups have exact primality certificates. RSA factor
+    checks stay within the deterministic primality-test range. Honest agreement
+    is perfect under the stated arithmetic/encoding; that statement and executable
+    tests do not certify security. Public demonstration solvers for DH and RSA
+    intentionally refuse sizes above 36 to bound their basic algorithms' costs.
+    They print a key; they do not submit, execute uploaded code, or constrain
+    participants' own methods on larger challenges.
+
+18. Preserve an automation path through structured records and APIs
+    Current capability, 2026-10-12: the existing local HTTP API supports accounts,
+    challenge access, methods, and submissions. Result-file import complements
+    that API. A dedicated API-token workflow remains future work; it is not an
+    implemented authentication option.
+
+Verification and rollout, 2026-10-12
+
+The local candidate passes 158 backend tests, 31 navigation regression groups,
+and 13 upload regression groups. Isolated Chrome checks passed both protocols'
+solve/import/review/submit/recovery path, attribution, next-size selection, source
+links, matching copy/download contracts, and 320px/390px layouts with no overflow
+or page errors. Test records stayed in an isolated database. The verified build
+is now live and healthy on local port 8000 with two protocols and 109 profiles each.
+Existing users, challenges, methods, and submissions are exactly unchanged.
+The original DH v2 receipt retains its version and contributes to compatible
+current progress at size 36, with size 37 selected next. This is a local serving
+update; the verification is not public-release or crypto certification.
+
+Scoring proposal — not adopted or implemented
+
+User preference, recorded 2026-10-12:
+- Give profiles visible credit for successful, reproducible progress.
+- Reward first successes, with much larger bonuses for early recoveries, such as
+  the first ten, and for reaching previously unrecovered parameter sizes.
+- Keep the proposal open for discussion; no point values or formula are agreed.
+
+Design distinctions to preserve:
+- Personal progress: a participant completes a challenge they had not completed
+  before. This need not be a novel attack or a new community record.
+- Community progress: an exact KEM/version/profile has its first recorded recovery,
+  or a method improves an established resource/success benchmark. A larger size
+  alone does not establish a methodological advance or comparable cross-KEM work.
+- Reproducibility: another party can run a documented method and reproduce its
+  result under stated conditions. Checking a submitted key verifies the instance
+  answer, not the pseudocode, resource report, general success rate, or novelty.
+- Research contribution: a theoretical result, intermediate observation, or useful
+  investigation can merit credit independently of numerical leaderboard progress.
+
+Questions to resolve before adopting scoring:
+- Is a "first success" counted per participant, profile, method, or release, and
+  how are repeated hourly wins limited so they cannot create unlimited points?
+- Is an early bonus for the first ten accounts at each exact profile, the first
+  independent methods, or something else? What prevents multiple-account farming?
+- How much should timing and access to hardware count compared with methodological
+  improvement, independent reproduction, and durable documentation?
+- How do rewards remain meaningful across KEMs with different profile counts,
+  parameter meanings, and attack costs, without making easy targets dominate?
+- What constitutes a frontier, and how do revisions, corrected claims, and
+  independent replication affect credit? The next larger size is not a proof of
+  increased hardness, nor does solving it certify all preceding profiles.
+
+Recommendation for discussion, not an adopted decision: begin with explicit
+milestones or badges for personal progress, first recorded recoveries, and
+independently reproduced methods. If a numerical score is useful, agree on its
+scope, evidence requirements, caps, and bonus rules before implementing it.
 
 Open decisions
 

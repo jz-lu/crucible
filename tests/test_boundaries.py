@@ -222,7 +222,7 @@ def test_correctness_fault_pauses_profile_across_requests_rounds_and_restart(bou
         calls.append(profile_id)
         return failed
 
-    monkeypatch.setattr(app_module.kem, "generate", bad_generate)
+    monkeypatch.setattr(app_module.registry.adapter_for("teaching-dh-kem"), "generate", bad_generate)
     response = boundary.client.post("/api/challenges", headers=headers(boundary.csrf), json={"profile_id": "dh-20"})
     assert response.status_code == 503
     assert generated.target.hex() not in response.text
@@ -232,7 +232,7 @@ def test_correctness_fault_pauses_profile_across_requests_rounds_and_restart(bou
         incident = db.scalar(select(ProfileIncident))
         assert incident is not None and not incident.resolved
         assert generated.target.hex() not in json.dumps(incident.diagnostics)
-    monkeypatch.setattr(app_module.kem, "generate", real_generate)
+    monkeypatch.setattr(app_module.registry.adapter_for("teaching-dh-kem"), "generate", real_generate)
     boundary.now[0] += 3600
     restarted = create_app(boundary.settings, clock=lambda: boundary.now[0], initialize=False)
     with TestClient(restarted, base_url=ORIGIN) as client:

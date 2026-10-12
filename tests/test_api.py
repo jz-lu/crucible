@@ -181,7 +181,7 @@ def test_wrong_answer_is_recorded_but_not_ranked(system):
     assert history[0]["status"] == "incorrect"
 
 
-def test_leaderboard_first_accounts_exact_profile_and_receipt_order(system):
+def test_leaderboard_first_accounts_at_or_above_profile_and_receipt_order(system):
     app, clock, _ = system
     alice, bob = Actor(app), Actor(app)
     alice.register("alice")
@@ -201,14 +201,17 @@ def test_leaderboard_first_accounts_exact_profile_and_receipt_order(system):
 
 
 def test_profile_manifest_contains_correctness_and_no_security_bit_claim(system):
-    from crucible import kem
+    from crucible import dh_v3 as kem
     app, _, _ = system
     schemes = TestClient(app).get("/api/schemes").json()["schemes"]
     profiles = schemes[0]["profiles"]
-    assert schemes[0]["version"] == kem.SCHEME_VERSION == "2"
-    assert [profile["parameter_bits"] for profile in profiles] == list(range(20, 37))
-    assert [profile["instance_size"] for profile in profiles] == list(range(20, 37))
-    assert schemes[0]["size_parameter"] == kem.SIZE_PARAMETER
+    assert schemes[0]["version"] == kem.SCHEME_VERSION == "3"
+    assert [profile["parameter_bits"] for profile in profiles] == list(range(20, 129))
+    assert [profile["instance_size"] for profile in profiles] == list(range(20, 129))
+    size_parameter = schemes[0]["size_parameter"]
+    assert set(size_parameter) == set(kem.SIZE_PARAMETER) | {"mapping_math"}
+    assert {key: value for key, value in size_parameter.items() if key != "mapping_math"} == kem.SIZE_PARAMETER
+    assert r"\(" in size_parameter["mapping_math"]
     for profile in profiles:
         assert profile["correctness"]["failure_bound"] == "0"
         assert profile["correctness"]["argument"]
@@ -218,7 +221,7 @@ def test_profile_manifest_contains_correctness_and_no_security_bit_claim(system)
 
 
 def test_instance_size_selector_maps_to_the_same_pinned_profile_and_hourly_challenge(system):
-    from crucible import kem
+    from crucible import dh_v3 as kem
     app, _, _ = system
     actor = Actor(app)
     actor.register("alice")
@@ -242,7 +245,7 @@ def test_instance_size_selector_maps_to_the_same_pinned_profile_and_hourly_chall
 
 @pytest.mark.parametrize("body,status", [
     ({"scheme_id": "teaching-dh-kem", "instance_size": 19}, 404),
-    ({"scheme_id": "teaching-dh-kem", "instance_size": 37}, 404),
+    ({"scheme_id": "teaching-dh-kem", "instance_size": 129}, 404),
     ({"scheme_id": "unknown-scheme", "instance_size": 24}, 404),
     ({}, 422), ({"profile_id": None}, 422),
     ({"scheme_id": "teaching-dh-kem"}, 422), ({"instance_size": 24}, 422),
@@ -314,7 +317,7 @@ def test_invalid_stored_shared_secret_length_fails_closed_without_using_attempt(
 
 def test_adapter_declared_sixteen_byte_secret_can_be_verified(system, monkeypatch):
     from copy import deepcopy
-    from crucible import kem
+    from crucible import dh_v3 as kem
     app, _, _ = system
     original_manifest, original_generate = kem.get_manifest, kem.generate
 
@@ -350,13 +353,13 @@ def test_adapter_declared_sixteen_byte_secret_can_be_verified(system, monkeypatc
 
 def test_legacy_challenge_receipts_and_source_survive_version_two_restart(system, monkeypatch):
     import crucible.app as app_module
-    from crucible import kem
+    from crucible import dh_v3 as kem
     from crucible.legacy import teaching_dh_v1
     app, clock, settings = system
     actor = Actor(app)
     actor.register("alice")
     with monkeypatch.context() as previous_release:
-        previous_release.setattr(app_module, "kem", teaching_dh_v1)
+        previous_release.setitem(app_module.registry.CURRENT, teaching_dh_v1.SCHEME_ID, "1")
         old = actor.challenge("dh-24")
     assert old["public"]["version"] == "1"
     answer = actor.answer(old)
@@ -382,11 +385,11 @@ def test_legacy_challenge_receipts_and_source_survive_version_two_restart(system
         assert stored_hash == "d3cfc485212a60cefc9903b5410797c3942391e6280cfbd51c95559d59eb537c"
         source = actor.client.get("/api/protocol/source")
         assert hashlib.sha256(source.content).hexdigest() == kem.IMPLEMENTATION_SHA256
-        assert actor.client.get("/api/protocol/source?version=2").content == source.content
+        assert actor.client.get("/api/protocol/source?version=3").content == source.content
         assert actor.client.get("/api/protocol/source?version=unknown").status_code == 404
         assert actor.client.get("/api/me/submissions").json()["submissions"][0]["scheme_version"] == "1"
         current = actor.challenge("dh-24")
-        assert current["id"] != old["id"] and current["public"]["version"] == "2"
+        assert current["id"] != old["id"] and current["public"]["version"] == "3"
     finally:
         restarted.state.db.engine.dispose()
 
@@ -404,7 +407,7 @@ def test_progress_uses_only_current_successes_and_next_numeric_profile(system, m
     assert progress()["next_profile_id"] == "dh-20"
     assert progress()["largest_recovered_profile_id"] is None
     with monkeypatch.context() as previous_release:
-        previous_release.setattr(app_module, "kem", teaching_dh_v1)
+        previous_release.setitem(app_module.registry.CURRENT, teaching_dh_v1.SCHEME_ID, "1")
         old = actor.challenge("dh-32")
     assert actor.post(f'/api/challenges/{old["id"]}/submit', actor.answer(old)).status_code == 200
     assert progress()["next_profile_id"] == "dh-20"
@@ -420,12 +423,13 @@ def test_progress_uses_only_current_successes_and_next_numeric_profile(system, m
     maximum = actor.challenge("dh-36")
     assert actor.post(f'/api/challenges/{maximum["id"]}/submit', actor.answer(maximum)).status_code == 200
     assert progress()["largest_recovered_profile_id"] == "dh-36"
-    assert progress()["next_profile_id"] is None
-    assert actor.client.get("/api/leaderboard?profile_id=dh-20").json()["entries"] == []
+    assert progress()["next_profile_id"] == "dh-37"
+    inherited = actor.client.get("/api/leaderboard?profile_id=dh-20").json()["entries"]
+    assert [(entry["handle"], entry["profile_id"], entry["is_inherited"]) for entry in inherited] == [("alice", "dh-23", True)]
 
 
 def test_source_change_requires_new_scheme_version(system, monkeypatch):
-    from crucible import kem
+    from crucible import dh_v3 as kem
     app, clock, _ = system
     actor = Actor(app)
     actor.register("alice")
@@ -440,7 +444,7 @@ def test_source_change_requires_new_scheme_version(system, monkeypatch):
 
 
 def test_legacy_database_cannot_pin_new_code_over_old_instances(system, monkeypatch):
-    from crucible import kem
+    from crucible import dh_v3 as kem
     from crucible.db import AdapterVersion
     from sqlalchemy import delete
     app, clock, _ = system
@@ -479,7 +483,7 @@ def test_database_rate_limit_counts_failed_logins_and_recovers(system):
 
 
 def test_adapter_exception_persists_pause_without_leaking_exception(system, monkeypatch):
-    from crucible import kem
+    from crucible import dh_v3 as kem
     from crucible.db import ProfileIncident
     app, clock, _ = system
     actor = Actor(app)

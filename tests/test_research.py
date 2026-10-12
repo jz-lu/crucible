@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from crucible import kem
+from crucible import dh_v3 as kem
 from crucible.app import create_app
 from crucible.config import Settings
 from crucible.db import Challenge
@@ -78,11 +78,11 @@ def test_catalogue_separates_scheme_and_problem_without_hardness_claim(research_
     problem = targets["finite-field-dlog"]
     assert problem["kind"] == "assumption"
     assert "No hardness claim" in problem["definition"]
-    assert [item["parameter_bits"] for item in problem["profiles"]] == list(range(20, 37))
+    assert [item["parameter_bits"] for item in problem["profiles"]] == list(range(20, 129))
     assert problem["related_targets"][0]["id"] == "teaching-dh-kem"
     versions = targets["teaching-dh-kem"]["versions"]
-    assert [item["version"] for item in versions] == ["2", "1"]
-    assert [item["parameter_bits"] for item in versions[1]["profiles"]] == [20, 24, 28, 32, 36]
+    assert [item["version"] for item in versions] == ["3", "2", "1"]
+    assert [item["parameter_bits"] for item in versions[2]["profiles"]] == [20, 24, 28, 32, 36]
     assert [item["version"] for item in problem["versions"]] == ["1"]
 
 
@@ -314,7 +314,7 @@ def test_legacy_findings_keep_their_profiles_and_supporting_receipts_after_upgra
     app, clock = research_system
     actor = Actor(app, "alice")
     with monkeypatch.context() as previous_release:
-        previous_release.setattr(app_module, "kem", teaching_dh_v1)
+        previous_release.setitem(app_module.registry.CURRENT, teaching_dh_v1.SCHEME_ID, "1")
         previous_release.setattr(research_module, "kem", teaching_dh_v1)
         _, _, _, submission = solve(actor)
         original = publish(actor, finding(target_id="teaching-dh-kem", target_version="1",

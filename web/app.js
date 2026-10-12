@@ -1,12 +1,16 @@
 'use strict';
 
 const $ = selector => document.querySelector(selector);
+// Keep the research interface dormant while the first MVP focuses on numerical challenges.
+const RESEARCH_ENABLED = false;
 const state = {
   user: null, csrf: '', schemes: [], profile: null, challenge: null,
-  methods: [], view: 'challenge', authMode: 'login', round: null,
+  methods: [], view: 'leaderboard', authMode: 'login', round: null,
   timeOffset: 0, ready: false, challengeLoading: false, issueBusy: false,
   submitBusy: false, pendingAttempt: null, roundRefreshing: false,
-  challengeRequest: 0, leaderboardRequest: 0, submissionChallenge: null
+  challengeRequest: 0, leaderboardRequest: 0, submissionChallenge: null,
+  screen: 'catalogue', schemeId: null, schemeVersion: null,
+  importBusy: false, recoveryImportRequest: 0, submissionFormRevision: 0
 };
 let toastTimer;
 let roundRetryAt = 0;
@@ -19,6 +23,66 @@ const research = {
   visible: false, targets: [], target: null, kind: 'scheme', findings: [],
   nextBefore: null, request: 0, editing: null, followup: null, saving: false, recoveries: [], recoveriesRequest: 0
 };
+const RECOVERY_FILE_MAX_BYTES = 128 * 1024;
+
+// Versioned data contract: imports never execute code or submit an answer.
+function parseRecoveryFile(text, challenge) {
+  if (typeof text !== 'string' || new TextEncoder().encode(text).length > RECOVERY_FILE_MAX_BYTES) {
+    throw new Error('Choose a JSON file no larger than 128 KB.');
+  }
+  let value;
+  try { value = JSON.parse(text.replace(/^\uFEFF/, '')); }
+  catch { throw new Error('This file is not valid JSON. Use the downloadable template, without Markdown code fences.'); }
+  function object(input, name, allowed) {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error(`${name} must be a JSON object.`);
+    if (Object.keys(input).some(key => !allowed.includes(key))) throw new Error(`${name} contains an unrecognized field. Use the template's field names.`);
+  }
+  function string(input, name, max, required = true) {
+    if (typeof input !== 'string' || [...input].length > max || (required && !input.trim())) {
+      throw new Error(`${name} must be ${required ? 'nonblank text' : 'text'} of at most ${max} characters.`);
+    }
+    return input.trim();
+  }
+  object(value, 'The result', ['format', 'challenge_id', 'candidate', 'method', 'compute']);
+  if (value.format !== 'crucible-recovery-v1') throw new Error('Set format to "crucible-recovery-v1", as in the template.');
+  if (!challenge || value.challenge_id !== challenge.id) throw new Error('This file belongs to a different challenge. Use the template for this exact instance.');
+  const keyBytes = sharedKeyBytes(challenge);
+  if (keyBytes === null) throw new Error('This challenge does not declare a supported shared-key length.');
+  if (typeof value.candidate !== 'string' || !new RegExp(`^[0-9a-fA-F]{${keyBytes * 2}}$`).test(value.candidate)) {
+    throw new Error(`candidate must contain exactly ${keyBytes * 2} hexadecimal characters for this ${keyBytes}-byte key.`);
+  }
+  object(value.method, 'method', ['name', 'pseudocode']);
+  const method = {
+    name: string(value.method.name, 'method.name', 100),
+    pseudocode: string(value.method.pseudocode, 'method.pseudocode', 15000)
+  };
+  object(value.compute, 'compute', ['hardware', 'workers', 'wall_seconds', 'precomputation', 'peak_memory', 'notes']);
+  const compute = value.compute;
+  if (!Number.isInteger(compute.workers) || compute.workers < 1 || compute.workers > 1000000) {
+    throw new Error('compute.workers must be an integer from 1 to 1000000.');
+  }
+  if (typeof compute.wall_seconds !== 'number' || !Number.isFinite(compute.wall_seconds) || compute.wall_seconds < 0 || compute.wall_seconds > 315576000) {
+    throw new Error('compute.wall_seconds must be a number from 0 to 315576000, in seconds.');
+  }
+  return {
+    format: value.format, challenge_id: value.challenge_id, candidate: value.candidate.toLowerCase(), method,
+    compute: {
+      hardware: string(compute.hardware, 'compute.hardware', 500),
+      workers: compute.workers, wall_seconds: compute.wall_seconds,
+      precomputation: string(compute.precomputation, 'compute.precomputation', 2000),
+      peak_memory: string(compute.peak_memory, 'compute.peak_memory', 300),
+      notes: string(compute.notes === undefined ? '' : compute.notes, 'compute.notes', 2000, false)
+    }
+  };
+}
+
+function recoveryTemplate(challenge) {
+  return {
+    format: 'crucible-recovery-v1', challenge_id: challenge.id, candidate: '',
+    method: {name: '', pseudocode: ''},
+    compute: {hardware: '', workers: 1, wall_seconds: null, precomputation: '', peak_memory: '', notes: ''}
+  };
+}
 
 function node(tag, text, className) {
   const element = document.createElement(tag);
@@ -56,6 +120,79 @@ function duration(seconds) {
 function now() { return (Date.now() + state.timeOffset) / 1000; }
 function profileId(profile = state.profile) { return profile?.profile_id || profile?.id || ''; }
 function instanceSize(profile) { return profile?.instance_size ?? profile?.parameter_bits; }
+function availableReleases() { return state.schemes.flatMap(scheme => [scheme, ...(scheme.previous_releases || [])]); }
+function selectedScheme() {
+  return availableReleases().find(scheme => scheme.id === state.schemeId && String(scheme.version) === state.schemeVersion);
+}
+function selectionKey() { return JSON.stringify([state.schemeId, state.schemeVersion, profileId()]); }
+function schemeRoute(scheme, profile, view = 'leaderboard') {
+  const query = new URLSearchParams({profile: profileId(profile), view});
+  return '#challenge/' + encodeURIComponent(scheme.id) + '/' + encodeURIComponent(scheme.version) + '?' + query;
+}
+function navigate(hash) {
+  if (window.location.hash === hash) applyRoute();
+  else window.location.hash = hash;
+}
+function workspaceSelector(screen) {
+  return {scheme: '#workspace', research: '#research-workspace', about: '#about-workspace'}[screen] || '#catalogue-workspace';
+}
+function applyRoute(focus = false) {
+  if (!state.ready) return;
+  const previous = selectionKey();
+  const previousScreen = state.screen;
+  const previousView = state.view;
+  let hash = window.location.hash || '#challenge';
+  if (!RESEARCH_ENABLED && hash.split('?')[0] === '#research') {
+    hash = '#challenge';
+    window.history.replaceState(null, '', hash);
+  }
+  const [path, query = ''] = hash.split('?');
+  let scheme, profile, view = 'leaderboard';
+  let screen = path === '#about' ? 'about' : path === '#research' ? 'research' : 'catalogue';
+  let invalid = !['#challenge', '#research', '#about'].includes(path);
+  const match = path.match(/^#challenge\/([^/]+)\/([^/]+)$/);
+  if (match) {
+    try {
+      const id = decodeURIComponent(match[1]);
+      const version = decodeURIComponent(match[2]);
+      scheme = availableReleases().find(item => item.id === id && String(item.version) === version);
+      const params = new URLSearchParams(query);
+      profile = scheme?.profiles?.find(item => profileId(item) === params.get('profile'));
+      if (!params.has('profile')) profile = scheme?.profiles?.find(item => profileId(item) === scheme.next_profile_id) || scheme?.profiles?.[0];
+      if (scheme && profile) {
+        screen = 'scheme';
+        invalid = false;
+        view = ['challenge', 'leaderboard', 'protocol'].includes(params.get('view')) ? params.get('view') : 'leaderboard';
+        if (!params.has('profile')) window.history.replaceState(null, '', schemeRoute(scheme, profile, view));
+      }
+    } catch { /* A malformed link must never select a different protocol. */ }
+  }
+  state.screen = screen;
+  state.schemeId = screen === 'scheme' ? scheme.id : null;
+  state.schemeVersion = screen === 'scheme' ? String(scheme.version) : null;
+  state.profile = screen === 'scheme' ? profile : null;
+  const changed = previous !== selectionKey();
+  if (changed) {
+    state.challengeRequest++;
+    state.leaderboardRequest++;
+    state.challenge = null;
+    state.challengeLoading = false;
+    $('#challenge-error').hidden = true;
+    $('#leaderboard-content').replaceChildren();
+  }
+  showWorkspace(screen);
+  const routeError = 'That KEM, version, or profile is unavailable. Choose a published KEM below.';
+  if (invalid) globalError(routeError);
+  else if ($('#global-message-text').textContent === routeError) globalError('');
+  if (screen === 'scheme') {
+    renderProfiles();
+    renderView(view);
+    if (changed || previousScreen !== 'scheme') loadChallenge();
+    if (view === 'leaderboard' && (changed || previousView !== view || previousScreen !== 'scheme')) loadLeaderboard();
+  }
+  document.title = screen === 'scheme' ? scheme.name + ' — Crucible' : screen === 'research' ? 'Research — Crucible' : screen === 'about' ? 'About us — Crucible' : 'Schemes — Crucible';
+  if (focus && previousScreen !== screen) $(workspaceSelector(screen)).focus();
+}
 function sharedKeyBytes(challenge) {
   const bytes = challenge?.public?.encoding?.shared_secret_bytes;
   return Number.isInteger(bytes) && bytes > 0 && bytes <= 4096 ? bytes : null;
@@ -105,10 +242,17 @@ function setSession(data) {
   if (previousId !== state.user?.id) {
     state.challenge = null;
     state.challengeRequest++;
+    state.leaderboardRequest++;
     state.methods = [];
     state.pendingAttempt = null;
     state.submissionChallenge = null;
+    state.recoveryImportRequest++;
+    state.importBusy = false;
+    state.submissionFormRevision++;
     $('#submission-form').reset();
+    lockSubmissionFields(false);
+    setError('#recovery-file-error', '');
+    $('#recovery-file-status').hidden = true;
     if (submissionDialog.open) submissionDialog.close();
     if (historyDialog.open) historyDialog.close();
     if (findingDialog.open) findingDialog.close();
@@ -152,12 +296,12 @@ function updateClock() {
   if (remaining === null) return;
   const clock = String(Math.floor(remaining / 60)).padStart(2, '0') + ':' + String(remaining % 60).padStart(2, '0');
   setText('#countdown', clock);
-  $('#countdown').setAttribute('aria-label', `${Math.floor(remaining / 60)} minutes and ${remaining % 60} seconds until the next round`);
+  $('#countdown').setAttribute('aria-label', `${Math.floor(remaining / 60)} minutes and ${remaining % 60} seconds until this challenge closes`);
   $('#countdown').classList.toggle('urgent', remaining < 60);
-  setText('#round-deadline', utcTime(state.round.ends_at, false) + ' · shared deadline');
   setText('#submission-time', remaining ? clock + ' until the round ends' : 'This round has ended.');
   const formExpired = state.submissionChallenge && now() >= state.submissionChallenge.ends_at;
-  $('#submit-answer').disabled = state.submitBusy || Boolean(formExpired && !state.pendingAttempt) || sharedKeyBytes(state.submissionChallenge) === null;
+  $('#submit-answer').disabled = state.submitBusy || state.importBusy || Boolean(formExpired && !state.pendingAttempt) || sharedKeyBytes(state.submissionChallenge) === null;
+  updateRecoveryControls();
   if (formExpired && submissionDialog.open && !state.submitBusy && !state.pendingAttempt) {
     setError('#submission-error', 'This round has ended. Close this form to receive an instance for the new round.');
   }
@@ -206,41 +350,183 @@ async function synchronizeSession() {
 async function refreshProfiles() {
   const data = await api('/api/schemes');
   state.schemes = data.schemes || [];
-  state.profile = state.schemes.flatMap(scheme => scheme.profiles || []).find(profile => profileId(profile) === profileId()) || state.profile;
-  renderProfiles();
+  renderCatalogue();
+  applyRoute();
 }
 
-function renderProfiles() {
-  const select = $('#profile-select');
-  select.replaceChildren();
-  for (const scheme of state.schemes) {
-    for (const profile of scheme.profiles || []) {
-      const option = node('option', `Size ${instanceSize(profile)}${scheme.next_profile_id === profileId(profile) ? " · Next step" : ""}`);
-      option.value = profileId(profile);
-      select.append(option);
-    }
+function renderCatalogue() {
+  const target = $('#kem-catalogue');
+  if (!state.schemes.length) return showEmpty(target, 'No KEMs have been published yet.');
+  const wrap = node('div', undefined, 'kem-table-wrap');
+  const table = node('table', undefined, 'kem-table');
+  const head = node('thead');
+  const headings = node('tr');
+  for (const label of ['KEM', 'Largest recovery', 'First recovery']) {
+    const th = node('th', label);
+    th.scope = 'col';
+    if (label === 'Largest recovery') th.setAttribute('aria-sort', 'ascending');
+    headings.append(th);
   }
-  select.disabled = select.options.length === 0;
-  if (state.profile) select.value = profileId();
-  if (!select.options.length) {
-    select.append(node('option', 'No profiles available'));
-    setText('#scheme-summary', 'No challenge profiles have been published yet.');
+  head.append(headings);
+  const body = node('tbody');
+  const ranked = state.schemes.map(scheme => {
+    const largest = (scheme.profiles || []).find(profile => profileId(profile) === scheme.largest_recovered_profile_id);
+    return {scheme, size: largest ? instanceSize(largest) : null};
+  }).sort((a, b) => {
+    if (a.size === null && b.size !== null) return 1;
+    if (b.size === null && a.size !== null) return -1;
+    return (a.size ?? 0) - (b.size ?? 0) ||
+      a.scheme.name.localeCompare(b.scheme.name) || a.scheme.id.localeCompare(b.scheme.id);
+  });
+  for (const {scheme} of ranked) {
+    const profiles = scheme.profiles || [];
+    const largest = profiles.find(profile => profileId(profile) === scheme.largest_recovered_profile_id);
+    const next = profiles.find(profile => profileId(profile) === scheme.next_profile_id);
+    const entry = next || profiles[0];
+    const row = node('tr');
+    const name = node('td');
+    const link = node(entry ? 'a' : 'span', scheme.name, 'kem-name');
+    if (entry) link.href = schemeRoute(scheme, entry);
+    name.append(link);
+    const progress = node('td');
+    progress.dataset.label = 'Largest recovery';
+    if (largest) {
+      const record = node('a', 'Size ' + instanceSize(largest), 'kem-progress');
+      record.href = schemeRoute(scheme, largest, 'leaderboard');
+      progress.append(record);
+    } else progress.append(node('span', 'No recoveries yet', 'kem-record-empty'));
+    const firstCell = node('td');
+    firstCell.dataset.label = 'First recovery';
+    if (largest && scheme.first_recovery?.profile_id === profileId(largest)) {
+      const first = node('a', scheme.first_recovery.handle, 'kem-first-handle');
+      const release = availableReleases().find(item => item.id === scheme.id && String(item.version) === String(scheme.first_recovery.scheme_version)) || scheme;
+      first.href = schemeRoute(release, largest, 'leaderboard');
+      first.title = 'First to recover this size · ' + utcDate(scheme.first_recovery.received_at);
+      firstCell.append(first);
+    } else firstCell.append(node('span', '—', 'kem-meta'));
+    row.append(name, progress, firstCell);
+    body.append(row);
   }
-  renderProtocol();
+  table.append(head, body);
+  wrap.append(table);
+  target.replaceChildren(wrap);
 }
-function addFact(list, label, value) {
+function renderProfiles(previewProfile = null) {
+  const input = $('#profile-select');
+  const scheme = selectedScheme();
+  const profiles = [...(scheme?.profiles || [])].sort((a, b) => instanceSize(a) - instanceSize(b));
+  const current = previewProfile || state.profile;
+  const index = profiles.findIndex(profile => profileId(profile) === profileId(current));
+  const options = $('#size-options');
+  const restoreFocus = [...options.querySelectorAll('button')].includes(document.activeElement);
+  const largest = profiles.find(profile => profileId(profile) === scheme?.largest_recovered_profile_id);
+  const frontier = profiles.find(profile => profileId(profile) === scheme?.next_profile_id);
+  const recovered = new Set(scheme?.recovered_profile_ids || (largest ? [profileId(largest)] : []));
+  input.disabled = !profiles.length;
+  input.min = String(instanceSize(profiles[0]) || 1);
+  input.max = String(instanceSize(profiles.at(-1)) || 1);
+  input.value = current ? String(instanceSize(current)) : '';
+  const slider = $('#size-slider');
+  slider.min = '0';
+  slider.max = String(Math.max(0, profiles.length - 1));
+  slider.value = String(Math.max(0, index));
+  slider.disabled = profiles.length < 2;
+  slider.setAttribute('aria-valuetext', current ? `Instance size ${instanceSize(current)}` : 'No sizes available');
+  setText('#size-slider-value', current ? String(instanceSize(current)) : '—');
+  $('#jump-size').disabled = !profiles.length;
+  setText('#size-range', profiles.length ? `${input.min}–${input.max}` : '');
+  $('#previous-size').disabled = index <= 0;
+  $('#next-size').disabled = index < 0 || index >= profiles.length - 1;
+  const advanceLabel = 'Go to next unsolved instance';
+  const advanceNumber = frontier ? instanceSize(frontier) : '—';
+  const concealAdvance = !frontier || profileId(frontier) === profileId(current);
+  $('#advance-size').disabled = concealAdvance;
+  $('#advance-size').classList.toggle('is-concealed', concealAdvance);
+  $('#advance-size').setAttribute('aria-hidden', String(concealAdvance));
+  setText('#advance-size-label', advanceLabel);
+  setText('#advance-size-value', String(advanceNumber));
+  $('#advance-size').setAttribute('aria-label', `${advanceLabel} ${advanceNumber}`);
+  const start = Math.max(0, Math.min(index - 2, profiles.length - 5));
+  const choices = profiles.slice(start, start + 5).map(profile => {
+    const selected = profileId(profile) === profileId(current);
+    const record = Boolean(largest && profileId(profile) === profileId(largest));
+    const solved = recovered.has(profileId(profile));
+    const nextUnsolved = Boolean(frontier && profileId(profile) === profileId(frontier));
+    const prior = Boolean(largest && instanceSize(profile) <= instanceSize(largest));
+    const button = node('button', String(instanceSize(profile)), 'size-option');
+    button.type = 'button';
+    button.setAttribute('aria-pressed', String(selected));
+    const status = nextUnsolved ? ', next unsolved size' : record ? ', largest recovered' : solved ? ', recovered' : prior ? ', earlier size' : '';
+    button.setAttribute('aria-label', `Size ${instanceSize(profile)}` + status);
+    button.title = `Size ${instanceSize(profile)}` + status;
+    button.classList.toggle('is-next-unsolved', nextUnsolved);
+    button.classList.toggle('is-prior', prior);
+    button.tabIndex = selected ? 0 : -1;
+    button.addEventListener('click', () => navigate(schemeRoute(scheme, profile, state.view)));
+    button.addEventListener('keydown', event => {
+      let target;
+      if (event.key === 'ArrowLeft') target = profiles[Math.max(0, index - 1)];
+      else if (event.key === 'ArrowRight') target = profiles[Math.min(profiles.length - 1, index + 1)];
+      else if (event.key === 'Home') target = profiles[0];
+      else if (event.key === 'End') target = profiles.at(-1);
+      else return;
+      event.preventDefault();
+      if (target) navigate(schemeRoute(scheme, target, state.view));
+    });
+    return button;
+  });
+  options.replaceChildren(...choices);
+  if (restoreFocus) choices.find(button => button.getAttribute('aria-pressed') === 'true')?.focus();
+  setError('#profile-error', '');
+  if (!previewProfile) renderProtocol();
+}
+function mathText(element, value) {
+  if (window.CrucibleMath) window.CrucibleMath.render(element, value);
+  else element.textContent = value;
+}
+function addFact(list, label, value, typeset = false) {
   const row = node('div');
-  row.append(node('dt', label), node('dd', value === null || value === undefined ? 'Not specified' :
-    typeof value === 'object' ? JSON.stringify(value) : value));
+  const description = node('dd');
+  const text = value === null || value === undefined ? 'Not specified' :
+    typeof value === 'object' ? JSON.stringify(value) : value;
+  if (typeset) mathText(description, text);
+  else description.textContent = text;
+  row.append(node('dt', label), description);
   list.append(row);
 }
 function renderProtocol() {
   const profile = state.profile;
-  const scheme = state.schemes.find(item => (item.profiles || []).some(p => profileId(p) === profileId(profile)));
+  const scheme = selectedScheme();
   if (scheme) {
     setText('#scheme-title', scheme.name);
     setText('#scheme-summary', scheme.summary);
     setText('#protocol-version', scheme.version ? `${scheme.name} · version ${scheme.version}` : scheme.name);
+    $('#scheme-education-note').hidden = !scheme.educational;
+    $('#protocol-status').hidden = !scheme.educational;
+    const protocol = scheme.protocol || {};
+    mathText($('#protocol-construction'), protocol.construction_math || protocol.construction || 'The parameter contract below defines this KEM. Consult its registered specification for the full construction.');
+    mathText($('#scheme-construction-short'), protocol.construction_math || protocol.construction || scheme.summary);
+    const specifics = $('#scheme-specific-facts');
+    specifics.replaceChildren();
+    addFact(specifics, 'Underlying problem', protocol.assumption || 'See the registered protocol.');
+    addFact(specifics, 'Instance size', scheme.size_parameter?.meaning);
+    addFact(specifics, 'Public inputs', protocol.public_input_math || protocol.public_input, true);
+    addFact(specifics, 'Required answer', protocol.shared_secret || 'The complete shared key declared by the instance.');
+    addFact(specifics, 'Correctness', protocol.correctness || profile?.correctness?.argument);
+    const downloads = $('#protocol-downloads');
+    downloads.replaceChildren();
+    for (const [url, label] of [[protocol.source_url, 'Download the reference implementation ↓'], [protocol.example_url, 'Download the example solver ↓']]) {
+      if (!url) continue;
+      let parsed;
+      try { parsed = new URL(url, window.location.href); } catch { continue; }
+      if (!['http:', 'https:'].includes(parsed.protocol)) continue;
+      const link = node('a', label, 'text-button');
+      link.href = url;
+      if (downloads.childElementCount) downloads.append(' · ');
+      downloads.append(link);
+    }
+    downloads.hidden = !downloads.childElementCount;
+    $('#protocol-solver-note').hidden = !scheme.educational || !protocol.example_url;
   }
   const facts = $('#parameter-facts');
   const correctness = $('#correctness-facts');
@@ -252,19 +538,19 @@ function renderProtocol() {
   const meaning = descriptor?.meaning;
   const explanation = meaning ? `For this KEM, size ${symbol} is the ${meaning.charAt(0).toLowerCase() + meaning.slice(1)}.` :
     `Size ${symbol} follows this scheme's parameter mapping.`;
-  setText('#profile-label', `${descriptor?.name || 'Instance size'} ${symbol}`);
+  setText('#profile-label', 'Instance size');
   setText('#profile-note', `${explanation} Sizes are comparable only within this scheme and version.`);
-  addFact(facts, descriptor?.name || 'Instance size', `${symbol} = ${instanceSize(profile)}`);
+  addFact(facts, descriptor?.name || 'Instance size', `\\(${symbol} = ${instanceSize(profile)}\\)`, true);
   addFact(facts, 'Profile', profile.name || profileId());
-  if (descriptor?.mapping) addFact(facts, 'Size mapping', descriptor.mapping);
+  if (descriptor?.mapping) addFact(facts, 'Size mapping', descriptor.mapping_math || descriptor.mapping, true);
   if (profile.parameter_label === 'subgroup-order bits') addFact(facts, 'Subgroup order size', `${profile.parameter_bits} bits`);
   if (profile.modulus_bits != null) addFact(facts, 'Modulus size', `${profile.modulus_bits} bits`);
   addFact(facts, 'Shared-key output', profile.shared_secret_bytes == null ? null : `${profile.shared_secret_bytes} bytes`);
-  setText('#parameter-json', JSON.stringify({parameters: profile.parameters, encoding: profile.encoding, kdf: profile.kdf}, null, 2));
+  setText('#parameter-json', JSON.stringify({algorithms: profile.algorithms, parameters: profile.parameters, encoding: profile.encoding, kdf: profile.kdf}, null, 2));
   const claim = profile.correctness || {};
   addFact(correctness, 'Claim type', claim.kind);
   addFact(correctness, 'Failure bound', claim.failure_bound);
-  addFact(correctness, 'Argument', claim.argument);
+  addFact(correctness, 'Argument', scheme?.protocol?.correctness_argument_math || claim.argument, true);
   addFact(correctness, 'Scope', claim.scope);
   addFact(correctness, 'Evidence status', claim.evidence_status);
 }
@@ -274,6 +560,13 @@ function renderChallenge() {
   $('#challenge-active').hidden = state.challengeLoading || !state.challenge;
   $('#issue-button').disabled = !state.ready || !state.profile || state.issueBusy || roundRemaining() === 0;
   if (!state.challenge) {
+    const current = state.schemes.find(scheme => scheme.id === state.schemeId);
+    if (current && String(current.version) !== state.schemeVersion) {
+      setText('#empty-title', 'Archived release');
+      setText('#empty-description', 'Existing recoveries remain available here. New instances use the current release.');
+      setText('#issue-button', 'Open current challenges →');
+      return;
+    }
     setText('#empty-title', state.user ? 'Ready for this round?' : 'A fresh instance, just for you.');
     setText('#empty-description', state.user ? 'Receive a public key and encapsulation unique to your account and selected profile. Your answer is due at the shared deadline.' :
       'Sign in to receive a public key and encapsulation unique to your account for this profile and round.');
@@ -291,7 +584,6 @@ function renderChallenge() {
   setText('#challenge-ends', utcTime(challenge.ends_at));
   const keyBytes = sharedKeyBytes(challenge);
   setText('#target-key', keyBytes === null ? 'Output length not specified' : `${keyBytes}-byte key · ${keyBytes * 2} hex characters`);
-  setText('#instance-json', JSON.stringify(challenge.public, null, 2));
   $('#download-button').href = '/api/challenges/' + encodeURIComponent(challenge.id) + '/download';
   $('#download-button').download = 'crucible-' + challenge.profile_id + '-' + challenge.round_id + '.json';
   const resultNode = $('#challenge-result');
@@ -309,7 +601,7 @@ async function loadChallenge() {
   const selected = profileId();
   $('#challenge-error').hidden = true;
   state.challenge = null;
-  if (!state.user || !selected) {
+  if (state.screen !== 'scheme' || !state.user || !selected) {
     state.challengeLoading = false;
     renderChallenge();
     return;
@@ -317,7 +609,7 @@ async function loadChallenge() {
   state.challengeLoading = true;
   renderChallenge();
   try {
-    const data = await api('/api/challenges?profile_id=' + encodeURIComponent(selected));
+    const data = await api('/api/challenges?' + new URLSearchParams({profile_id: selected, scheme_id: state.schemeId, scheme_version: state.schemeVersion}));
     if (request !== state.challengeRequest) return;
     state.challenge = data.challenge;
   } catch (error) {
@@ -333,19 +625,28 @@ async function loadChallenge() {
   }
 }
 async function issueChallenge() {
+  const current = state.schemes.find(scheme => scheme.id === state.schemeId);
+  if (current && String(current.version) !== state.schemeVersion) {
+    const profile = current.profiles.find(item => profileId(item) === current.next_profile_id) || current.profiles[0];
+    return navigate(schemeRoute(current, profile, 'challenge'));
+  }
   if (!state.user) return openAuth($('#issue-button'));
   if (state.issueBusy || !state.profile) return;
   state.issueBusy = true;
   const selected = profileId();
+  const selection = selectionKey();
   const accountId = state.user.id;
+  state.challengeRequest++;
+  state.challengeLoading = false;
   $('#challenge-error').hidden = true;
   renderChallenge();
   try {
-    const data = await api('/api/challenges', {profile_id: selected});
-    if (state.user?.id !== accountId) return;
-    if (profileId() === selected) state.challenge = data.challenge;
+    const data = await api('/api/challenges', {profile_id: selected, scheme_id: state.schemeId, scheme_version: state.schemeVersion});
+    if (state.user?.id !== accountId || selectionKey() !== selection) return;
+    state.challenge = data.challenge;
     toast('Your instance is ready. The shared round deadline applies.');
   } catch (error) {
+    if (state.user?.id !== accountId || selectionKey() !== selection) return;
     setText('#challenge-error-text', error.message);
     $('#challenge-error').hidden = false;
     if (error.status === 401) await synchronizeSession();
@@ -354,56 +655,81 @@ async function issueChallenge() {
 
 async function loadLeaderboard() {
   const target = $('#leaderboard-content');
+  const scope = 'The first ten distinct accounts to recover this size or a larger one, across all rounds. Ordered by server receipt.';
+  setText('#leaderboard-title', 'Recoveries');
+  $('#leaderboard-scope').hidden = true;
+  $('#leaderboard-footnote').hidden = true;
+  setText('#leaderboard-scope', scope);
   const request = ++state.leaderboardRequest;
   const selected = profileId();
-  if (!selected) return showEmpty(target, 'Choose an available profile to see its recoveries.');
+  if (state.screen !== 'scheme' || !selected) return showEmpty(target, 'Choose an available profile to see its recoveries.');
   setLoading(target, 'Loading the first recoveries…');
   $('#refresh-leaderboard').disabled = true;
   try {
-    const data = await api('/api/leaderboard?profile_id=' + encodeURIComponent(selected));
+    const data = await api('/api/leaderboard?' + new URLSearchParams({profile_id: selected, scheme_id: state.schemeId, scheme_version: state.schemeVersion}));
     if (request !== state.leaderboardRequest) return;
-    if (!data.entries?.length) return showEmpty(target, 'No accepted recoveries have been recorded for this profile and version.');
+    if (data.includes_compatible_versions?.length) setText('#leaderboard-scope', scope + ' Includes identical parameters from version ' + data.includes_compatible_versions.join(', ') + '; each record keeps its original release.');
+    if (!data.entries?.length) {
+      setText('#leaderboard-title', 'Unsolved');
+      return showEmpty(target, 'No accepted recoveries have been recorded for this profile and version.');
+    }
+    setText('#leaderboard-title', 'Broken by:');
+    $('#leaderboard-scope').hidden = false;
+    $('#leaderboard-footnote').hidden = false;
     const wrap = node('div', undefined, 'leaderboard-wrap');
     const table = node('table', undefined, 'leaderboard-table');
     const caption = node('caption', 'First recoveries for ' + selected, 'skip-link');
     table.append(caption);
     const head = node('thead');
     const headings = node('tr');
-    for (const title of ['Rank', 'Researcher / method', 'Elapsed', 'Received (UTC)']) {
+    for (const title of ['Rank', 'Researcher / method', 'Time to submit', 'Received (UTC)']) {
       const th = node('th', title); th.scope = 'col'; headings.append(th);
     }
     head.append(headings); table.append(head);
     const body = node('tbody');
     for (const entry of data.entries) {
-      const row = node('tr');
+      const row = node('tr', undefined, 'recovery-entry-row');
       row.append(node('td', String(entry.rank).padStart(2, '0')));
       const researcher = node('td');
-      researcher.append(node('div', entry.handle, 'leaderboard-handle'), node('div', entry.method?.name || 'Method', 'leaderboard-method'));
+      const button = node('button', undefined, 'recovery-entry-button');
+      button.type = 'button';
+      button.setAttribute('aria-label', 'View recovery by ' + entry.handle);
+      button.setAttribute('aria-haspopup', 'dialog');
+      button.append(node('span', entry.handle, 'leaderboard-handle'));
+      if (entry.is_inherited) button.append(node('span', 'via size ' + entry.instance_size, 'leaderboard-credit'));
+      button.append(node('span', entry.method?.name || 'Method', 'leaderboard-method'));
+      const recoveredSize = entry.instance_size ?? instanceSize(state.profile);
+      const context = `${selectedScheme().name} · Size ${recoveredSize} · version ${entry.scheme_version || state.schemeVersion}`;
+      button.addEventListener('click', event => { event.stopPropagation?.(); openRecovery(entry, context, button); });
+      row.addEventListener('click', () => openRecovery(entry, context, button));
+      researcher.append(button);
       row.append(researcher, node('td', duration(entry.elapsed_seconds), 'mono'), node('td', utcDate(entry.received_at), 'mono receipt-cell'));
       body.append(row);
-      const detailsRow = node('tr', undefined, 'result-detail-row');
-      const cell = node('td'); cell.colSpan = 4;
-      const details = node('details');
-      details.append(node('summary', 'Inspect method and compute'));
-      details.append(node('pre', entry.method?.pseudocode || 'No pseudocode recorded.', 'code-block'));
-      const facts = node('dl', undefined, 'detail-list');
-      const compute = entry.compute || {};
-      addFact(facts, 'Answer received', utcDate(entry.received_at));
-      addFact(facts, 'Hardware', compute.hardware);
-      addFact(facts, 'Parallel workers', compute.workers);
-      addFact(facts, 'Attack time', compute.wall_seconds == null ? null : duration(compute.wall_seconds));
-      addFact(facts, 'Precomputation', compute.precomputation);
-      addFact(facts, 'Peak memory', compute.peak_memory);
-      if (compute.notes) addFact(facts, 'Notes', compute.notes);
-      details.append(facts, node('p', 'Method and resources are contributor-reported. An accepted key does not independently validate this account of the work.', 'panel-footnote'));
-      cell.append(details); detailsRow.append(cell); body.append(detailsRow);
     }
     table.append(body); wrap.append(table); target.replaceChildren(wrap);
   } catch (error) {
     if (request === state.leaderboardRequest) showInlineError(target, error.message, loadLeaderboard);
   } finally { if (request === state.leaderboardRequest) $('#refresh-leaderboard').disabled = false; }
 }
-function activateView(view, focus = false) {
+function openRecovery(entry, context, trigger) {
+  setText('#recovery-title', entry.method?.name || 'Recovery details');
+  setText('#recovery-context', entry.handle + ' · ' + context);
+  const content = $('#recovery-content');
+  const facts = node('dl', undefined, 'detail-list');
+  const compute = entry.compute || {};
+  addFact(facts, 'Answer received', utcDate(entry.received_at));
+  addFact(facts, 'Time to submit', duration(entry.elapsed_seconds) + ' from issue to receipt, including delays');
+  addFact(facts, 'Reported attack time', compute.wall_seconds == null ? null : duration(compute.wall_seconds));
+  addFact(facts, 'Hardware', compute.hardware);
+  addFact(facts, 'Parallel workers', compute.workers);
+  addFact(facts, 'Precomputation', compute.precomputation);
+  addFact(facts, 'Peak memory', compute.peak_memory);
+  if (compute.notes) addFact(facts, 'Notes', compute.notes);
+  content.replaceChildren(node('pre', entry.method?.pseudocode || 'No pseudocode recorded.', 'code-block'), facts,
+    node('p', 'Method and resources are contributor-reported. An accepted key does not independently validate this account of the work.', 'panel-footnote'));
+  openDialog($('#recovery-dialog'), trigger);
+}
+function renderView(view, focus = false) {
   state.view = view;
   for (const tab of document.querySelectorAll('[data-view]')) {
     const selected = tab.dataset.view === view;
@@ -412,7 +738,12 @@ function activateView(view, focus = false) {
     $('#panel-' + tab.dataset.view).hidden = !selected;
     if (selected && focus) tab.focus();
   }
-  if (view === 'leaderboard') loadLeaderboard();
+}
+function activateView(view, focus = false) {
+  const scheme = selectedScheme();
+  if (!scheme || !state.profile) return;
+  navigate(schemeRoute(scheme, state.profile, view));
+  if (focus) $('#tab-' + view).focus();
 }
 const tabs = [...document.querySelectorAll('[data-view]')];
 tabs.forEach((tab, index) => {
@@ -441,6 +772,12 @@ for (const dialog of document.querySelectorAll('dialog')) {
     if (trigger?.isConnected && !trigger.hidden) trigger.focus();
     if (dialog === authDialog) $('#auth-password').value = '';
     if (dialog === submissionDialog && !state.pendingAttempt && !state.submitBusy) $('#candidate').value = '';
+    if (dialog === submissionDialog) {
+      state.recoveryImportRequest++;
+      state.importBusy = false;
+      lockSubmissionFields(Boolean(state.pendingAttempt || state.submitBusy));
+      updateRecoveryControls();
+    }
   });
 }
 function setAuthMode(mode) {
@@ -449,7 +786,7 @@ function setAuthMode(mode) {
   $('#register-mode').classList.toggle('selected', mode === 'register');
   $('#login-mode').setAttribute('aria-pressed', String(mode === 'login'));
   $('#register-mode').setAttribute('aria-pressed', String(mode === 'register'));
-  setText('#auth-title', mode === 'login' ? 'Welcome back.' : 'Join the experiment.');
+  setText('#auth-title', mode === 'login' ? 'Welcome back.' : 'Join the challenge.');
   setText('#auth-description', mode === 'login' ? 'Sign in to receive your instance for the current round.' : 'Create an account to investigate challenges and share your results.');
   setText('#auth-submit', mode === 'login' ? 'Sign in →' : 'Create account →');
   $('#auth-password').autocomplete = mode === 'login' ? 'current-password' : 'new-password';
@@ -471,6 +808,7 @@ $('#auth-form').addEventListener('submit', async event => {
     $('#auth-form').reset();
     authDialog.close();
     await loadChallenge();
+    if (state.screen === 'scheme' && state.view === 'leaderboard') await loadLeaderboard();
     toast('Signed in as ' + state.user.handle + '.');
   } catch (error) { setError('#auth-error', error.message); }
   finally {
@@ -486,6 +824,7 @@ async function logout() {
     const data = await api('/api/auth/logout', {});
     setSession(data);
     renderChallenge();
+    if (state.screen === 'scheme' && state.view === 'leaderboard') loadLeaderboard();
     toast('You are signed out.');
   } catch (error) { globalError(error.message); }
   finally { $('#logout-button').disabled = false; }
@@ -510,6 +849,70 @@ function updateMethodFields() {
   const method = state.methods.find(item => String(item.id) === $('#method-select').value);
   setText('#selected-method-code', method?.pseudocode || '');
 }
+function updateRecoveryControls() {
+  const expired = !state.submissionChallenge || now() >= state.submissionChallenge.ends_at;
+  const disabled = !submissionDialog.open || expired || state.importBusy || state.submitBusy || Boolean(state.pendingAttempt);
+  $('#upload-recovery').disabled = disabled;
+  $('#recovery-file').disabled = disabled;
+  $('#download-recovery-template').disabled = disabled;
+  setText('#upload-recovery', state.importBusy ? 'Reading file…' : 'Upload result file');
+}
+async function importRecoveryFile(file) {
+  if (!submissionDialog.open || !state.submissionChallenge) return;
+  if (state.submitBusy || state.importBusy || state.pendingAttempt) {
+    return setError('#recovery-file-error', 'Finish the pending submission before importing another result.');
+  }
+  if (now() >= state.submissionChallenge.ends_at) return setError('#recovery-file-error', 'This round has ended. A file cannot extend its deadline.');
+  setError('#recovery-file-error', '');
+  if (!file || file.size > RECOVERY_FILE_MAX_BYTES) return setError('#recovery-file-error', 'Choose a JSON file no larger than 128 KB.');
+  const challenge = state.submissionChallenge;
+  const accountId = state.user?.id;
+  const request = ++state.recoveryImportRequest;
+  const current = () => request === state.recoveryImportRequest && submissionDialog.open && state.user?.id === accountId && state.submissionChallenge?.id === challenge.id;
+  state.importBusy = true;
+  lockSubmissionFields(true);
+  updateClock();
+  try {
+    const text = await file.text();
+    if (!current()) return;
+    if (state.pendingAttempt || state.submitBusy || now() >= challenge.ends_at) throw new Error('This result can no longer be imported for the current round.');
+    const result = parseRecoveryFile(text, challenge);
+    // Validate everything before replacing any draft fields.
+    renderMethodOptions('new');
+    const fields = {
+      '#candidate': result.candidate, '#method-name': result.method.name,
+      '#method-pseudocode': result.method.pseudocode, '#hardware': result.compute.hardware,
+      '#workers': result.compute.workers, '#wall-seconds': result.compute.wall_seconds,
+      '#precomputation': result.compute.precomputation, '#peak-memory': result.compute.peak_memory,
+      '#compute-notes': result.compute.notes
+    };
+    for (const [selector, value] of Object.entries(fields)) $(selector).value = String(value);
+    state.submissionFormRevision++;
+    setError('#submission-error', '');
+    setText('#recovery-file-status', `Imported ${file.name || 'result file'}. Review the filled fields, then submit your answer.`);
+    $('#recovery-file-status').hidden = false;
+  } catch (error) {
+    if (current()) setError('#recovery-file-error', error.message || 'The file could not be read. Try downloading and completing the template.');
+  } finally {
+    if (request === state.recoveryImportRequest) {
+      state.importBusy = false;
+      lockSubmissionFields(Boolean(state.pendingAttempt || state.submitBusy));
+      updateClock();
+    }
+  }
+}
+function downloadRecoveryTemplate() {
+  if (!state.submissionChallenge) return;
+  const blob = new Blob([JSON.stringify(recoveryTemplate(state.submissionChallenge), null, 2) + '\n'], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const link = node('a');
+  link.href = url;
+  link.download = 'crucible-result-' + state.submissionChallenge.id + '.json';
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 function lockSubmissionFields(lock) {
   for (const field of $('#submission-form').querySelectorAll('input, textarea, select')) field.disabled = lock;
 }
@@ -531,6 +934,9 @@ async function openSubmission() {
     $('#submission-form').reset();
     state.pendingAttempt = null;
     lockSubmissionFields(false);
+    state.submissionFormRevision++;
+    setError('#recovery-file-error', '');
+    $('#recovery-file-status').hidden = true;
   }
   state.submissionChallenge = challenge;
   setText('#submission-context', `${challenge.profile_id} / Round ${challenge.round_id}`);
@@ -538,17 +944,23 @@ async function openSubmission() {
   setText('#submit-answer', state.pendingAttempt ? 'Retry the same answer →' : 'Submit this answer →');
   openDialog(submissionDialog, $('#open-submission'));
   updateClock();
+  const formRevision = state.submissionFormRevision;
   try {
     const data = await api('/api/methods');
     if (state.user?.id !== accountId || state.submissionChallenge?.id !== challenge.id) return;
     state.methods = data.methods || [];
+    if (state.submissionFormRevision !== formRevision) return;
     const selected = $('#method-select').value;
     renderMethodOptions(selected);
-  } catch (error) { setError('#submission-error', 'Saved methods could not be loaded. ' + error.message); }
+  } catch (error) {
+    if (state.user?.id === accountId && state.submissionChallenge?.id === challenge.id && state.submissionFormRevision === formRevision) {
+      setError('#submission-error', 'Saved methods could not be loaded. ' + error.message);
+    }
+  }
 }
 $('#submission-form').addEventListener('submit', async event => {
   event.preventDefault();
-  if (state.submitBusy || !state.submissionChallenge || (now() >= state.submissionChallenge.ends_at && !state.pendingAttempt)) return;
+  if (state.submitBusy || state.importBusy || !state.submissionChallenge || (now() >= state.submissionChallenge.ends_at && !state.pendingAttempt)) return;
   state.submitBusy = true;
   updateClock();
   setError('#submission-error', '');
@@ -636,22 +1048,72 @@ async function showHistory() {
 }
 async function copyInstance() {
   if (!state.challenge) return;
-  const payload = JSON.stringify(state.challenge.public, null, 2);
-  try { await navigator.clipboard.writeText(payload); toast('Public instance copied. Download the full challenge contract for exact protocol details.'); }
-  catch {
-    const details = $('#instance-json').parentElement;
-    details.open = true;
-    const range = document.createRange(); range.selectNodeContents($('#instance-json'));
-    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
-    toast('Public instance selected. Use your usual copy shortcut.');
-  }
+  const id = state.challenge.id;
+  const accountId = state.user?.id;
+  $('#copy-instance').disabled = true;
+  try {
+    // Copy and Download must use the same authoritative challenge contract.
+    const contract = await api('/api/challenges/' + encodeURIComponent(id) + '/download');
+    if (state.challenge?.id !== id || state.user?.id !== accountId) return;
+    const payload = JSON.stringify(contract, null, 2);
+    try { await navigator.clipboard.writeText(payload); toast('Challenge JSON copied. It contains the same information as the download.'); }
+    catch {
+      toast('Clipboard access is unavailable. Use Download challenge JSON to save the same information.');
+    }
+  } catch (error) { toast('The challenge could not be copied. ' + error.message); }
+  finally { $('#copy-instance').disabled = false; }
 }
 
-$('#profile-select').addEventListener('change', () => {
-  state.profile = state.schemes.flatMap(scheme => scheme.profiles || []).find(profile => profileId(profile) === $('#profile-select').value) || null;
-  renderProtocol();
-  loadChallenge();
-  if (state.view === 'leaderboard') loadLeaderboard();
+function chooseInstanceSize() {
+  const scheme = selectedScheme();
+  const size = Number($('#profile-select').value);
+  const profile = Number.isInteger(size) && scheme?.profiles?.find(item => instanceSize(item) === size);
+  if (profile) {
+    setError('#profile-error', '');
+    // A blur after Enter can emit change again. Keep the current buttons in
+    // place so that a pointer or keyboard focus moving to the rail is retained.
+    if (profileId(profile) === profileId()) {
+      $('#profile-select').value = String(instanceSize(profile));
+      return;
+    }
+    navigate(schemeRoute(scheme, profile, state.view));
+  }
+  else setError('#profile-error', `Choose a published integer size from ${$('#profile-select').min} to ${$('#profile-select').max}.`);
+}
+function stepInstanceSize(direction) {
+  const scheme = selectedScheme();
+  const profiles = [...(scheme?.profiles || [])].sort((a, b) => instanceSize(a) - instanceSize(b));
+  const index = profiles.findIndex(profile => profileId(profile) === profileId());
+  const profile = profiles[index + direction];
+  if (profile) navigate(schemeRoute(scheme, profile, state.view));
+}
+function sliderProfile() {
+  const profiles = [...(selectedScheme()?.profiles || [])].sort((a, b) => instanceSize(a) - instanceSize(b));
+  const index = Number($('#size-slider').value);
+  return Number.isInteger(index) ? profiles[index] : null;
+}
+$('#size-slider').addEventListener('input', () => {
+  const profile = sliderProfile();
+  if (!profile) return;
+  renderProfiles(profile);
+});
+$('#size-slider').addEventListener('pointercancel', () => renderProfiles());
+$('#size-slider').addEventListener('change', () => {
+  const profile = sliderProfile();
+  if (!profile) return renderProfiles();
+  navigate(schemeRoute(selectedScheme(), profile, state.view));
+});
+$('#profile-select').addEventListener('change', chooseInstanceSize);
+$('#profile-select').addEventListener('keydown', event => {
+  if (event.key === 'Enter') { event.preventDefault(); chooseInstanceSize(); }
+});
+$('#jump-size').addEventListener('click', chooseInstanceSize);
+$('#previous-size').addEventListener('click', () => stepInstanceSize(-1));
+$('#next-size').addEventListener('click', () => stepInstanceSize(1));
+$('#advance-size').addEventListener('click', () => {
+  const scheme = selectedScheme();
+  const frontier = scheme?.profiles?.find(profile => profileId(profile) === scheme.next_profile_id);
+  if (frontier) navigate(schemeRoute(scheme, frontier, state.view));
 });
 $('#issue-button').addEventListener('click', issueChallenge);
 $('#retry-challenge').addEventListener('click', loadChallenge);
@@ -660,32 +1122,54 @@ $('#login-mode').addEventListener('click', () => setAuthMode('login'));
 $('#register-mode').addEventListener('click', () => setAuthMode('register'));
 $('#logout-button').addEventListener('click', logout);
 $('#open-submission').addEventListener('click', openSubmission);
+$('#upload-recovery').addEventListener('click', () => $('#recovery-file').click());
+$('#download-recovery-template').addEventListener('click', downloadRecoveryTemplate);
+$('#recovery-file').addEventListener('change', async () => {
+  const file = $('#recovery-file').files?.[0];
+  $('#recovery-file').value = '';
+  if (file) await importRecoveryFile(file);
+});
 $('#copy-instance').addEventListener('click', copyInstance);
 $('#method-select').addEventListener('change', updateMethodFields);
 $('#refresh-leaderboard').addEventListener('click', loadLeaderboard);
 $('#history-button').addEventListener('click', showHistory);
 $('#retry-button').addEventListener('click', () => state.ready ? synchronizeSession() : initialize());
+$('#refresh-catalogue').addEventListener('click', async () => {
+  $('#refresh-catalogue').disabled = true;
+  try { await refreshProfiles(); globalError(''); }
+  catch (error) { globalError(error.message); }
+  finally { $('#refresh-catalogue').disabled = false; }
+});
+$('.skip-link').addEventListener('click', event => {
+  event.preventDefault();
+  const target = $(workspaceSelector(state.screen));
+  target.focus();
+  target.scrollIntoView();
+});
 document.addEventListener('visibilitychange', () => { if (!document.hidden) synchronizeSession(); });
 window.addEventListener('online', synchronizeSession);
+window.addEventListener('hashchange', () => applyRoute(true));
 
 
 // Research records keep claims and their conditions separate from hourly ranking.
 function showWorkspace(name) {
+  if (!RESEARCH_ENABLED && name === 'research') name = 'catalogue';
+  const enteringResearch = !research.visible && name === 'research';
   research.visible = name === 'research';
-  $('.intro').hidden = research.visible;
-  $('.educational-note').hidden = research.visible;
-  $('#workspace').hidden = research.visible;
+  $('#catalogue-workspace').hidden = name !== 'catalogue';
+  $('#workspace').hidden = name !== 'scheme';
   $('#research-workspace').hidden = !research.visible;
-  for (const kind of ['experiment', 'research']) {
+  $('#about-workspace').hidden = name !== 'about';
+  for (const kind of ['challenge', 'research', 'about']) {
     const button = $('#nav-' + kind);
-    const selected = kind === name;
+    const selected = kind === 'challenge' ? ['catalogue', 'scheme'].includes(name) : kind === name;
     button.classList.toggle('selected', selected);
     if (selected) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
   }
-  $('.skip-link').href = research.visible ? '#research-workspace' : '#workspace';
-  if (research.visible && !research.targets.length) loadResearch();
-  else if (research.visible && research.target) loadFindings();
+  $('.skip-link').href = workspaceSelector(name);
+  if (enteringResearch && !research.targets.length) loadResearch();
+  else if (enteringResearch && research.target) loadFindings();
 }
 function researchError(message) {
   setText('#research-error-text', message);
@@ -794,7 +1278,7 @@ function friendlyModel(value) {
   return {'classical': 'Classical', 'quantum': 'Quantum', 'mixed': 'Mixed model', 'not-applicable': 'Model not applicable'}[value] || value;
 }
 function friendlyKind(value) {
-  return {'argument': 'Argument', 'heuristic': 'Heuristic', 'experiment': 'Experiment', 'mixed': 'Mixed evidence'}[value] || value;
+  return {'argument': 'Argument', 'heuristic': 'Heuristic', 'experiment': 'Empirical result', 'mixed': 'Mixed evidence'}[value] || value;
 }
 function safeArtifactLink(value) {
   if (!value) return null;
@@ -1085,8 +1569,10 @@ $('#finding-form').addEventListener('submit', async event => {
     setText('#save-finding', editing ? 'Publish revision →' : 'Publish finding →');
   }
 });
-$('#nav-experiment').addEventListener('click', () => showWorkspace('experiment'));
-$('#nav-research').addEventListener('click', () => showWorkspace('research'));
+$('#nav-challenge').addEventListener('click', () => navigate('#challenge'));
+$('#nav-about').addEventListener('click', () => navigate('#about'));
+$('#nav-research').hidden = !RESEARCH_ENABLED;
+$('#nav-research').addEventListener('click', () => { if (RESEARCH_ENABLED) navigate('#research'); });
 $('#retry-research').addEventListener('click', loadResearch);
 $('#add-finding').addEventListener('click', () => openFinding());
 $('#more-findings').addEventListener('click', () => loadFindings(true));
@@ -1115,19 +1601,19 @@ async function initialize() {
   globalError('');
   $('#retry-button').disabled = true;
   $('#challenge-loading').hidden = false;
-  try {
-    const [session, catalogue] = await Promise.all([api('/api/session'), api('/api/schemes')]);
-    setSession(session);
-    state.schemes = catalogue.schemes || [];
-    state.profile = state.schemes.flatMap(scheme => scheme.profiles || [])[0] || null;
+  const [session, catalogue] = await Promise.allSettled([api('/api/session'), api('/api/schemes')]);
+  if (session.status === 'fulfilled') setSession(session.value);
+  if (catalogue.status === 'fulfilled') {
+    state.schemes = catalogue.value.schemes || [];
     state.ready = true;
-    renderProfiles();
-    await loadChallenge();
-  } catch (error) {
-    globalError(error.message);
+    renderCatalogue();
+    applyRoute();
+  } else {
+    showInlineError($('#kem-catalogue'), catalogue.reason.message, initialize);
     $('#challenge-loading').hidden = true;
-    setText('#scheme-summary', 'The workspace could not be loaded. Use Try again above to reconnect.');
-  } finally { $('#retry-button').disabled = false; }
+  }
+  if (session.status === 'rejected') globalError('Sign-in could not be loaded. ' + session.reason.message);
+  $('#retry-button').disabled = false;
 }
 setInterval(updateClock, 1000);
 setInterval(() => { if (!document.hidden) synchronizeSession(); }, 60000);

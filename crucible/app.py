@@ -10,14 +10,14 @@ from uuid import uuid4
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
-from sqlalchemy import delete, func, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.staticfiles import StaticFiles
 
-from . import kem, research
+from . import kem, registry, research
 from .config import ROOT, Settings, load_settings
 from .db import AdapterVersion, Base, Challenge, Database, LoginSession, Method, ProfileIncident, RateBucket, Submission, User
-from .legacy import teaching_dh_v1
 from .schemas import Credentials, NewChallenge, NewMethod, NewSubmission
 from .security import mac, passwords, payload_mac, target_mac, token_hash, verify_password
 
@@ -92,6 +92,7 @@ class RequestBoundary:
 
 
 def create_app(settings: Settings | None = None, *, clock=time.time, initialize=False):
+    registry.validate_registry()
     settings = settings or load_settings()
     db = Database(settings.database_url)
     if initialize:  # Explicit test fixture only. Normal startup uses Alembic.
@@ -168,29 +169,29 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         if count > limit:
             raise HTTPException(429, "Too many requests. Please try again later.", headers={"Retry-After": str(max(1, int((bucket + 1) * seconds - now)))})
 
-    def adapter_for(scheme_version=None):
-        version = kem.SCHEME_VERSION if scheme_version is None else scheme_version
-        if version == kem.SCHEME_VERSION:
-            return kem
-        if version == teaching_dh_v1.SCHEME_VERSION:
-            return teaching_dh_v1
-        raise HTTPException(404, "Unknown scheme version.")
-
-    def manifest_for(profile_id, scheme_version=None):
-        adapter = adapter_for(scheme_version)
+    def adapter_for(scheme_version=None, scheme_id=kem.SCHEME_ID):
         try:
-            return adapter.get_manifest(profile_id)
-        except (ValueError, KeyError):
-            raise HTTPException(404, "Unknown parameter profile.")
+            return registry.adapter_for(scheme_id, scheme_version)
+        except ValueError:
+            raise HTTPException(404, "Unknown scheme or version.") from None
+
+    def manifest_for(profile_id, scheme_version=None, scheme_id=None):
+        try:
+            return registry.manifest_for(profile_id, scheme_id, scheme_version)
+        except ValueError:
+            raise HTTPException(404, "Unknown parameter profile for this scheme and version.") from None
 
     def challenge_manifest(body):
         if body.profile_id is not None:
-            return manifest_for(body.profile_id)
-        if body.scheme_id != kem.SCHEME_ID:
-            raise HTTPException(404, "Unknown scheme.")
-        manifest = next((item for item in kem.manifests() if item["instance_size"] == body.instance_size), None)
-        if manifest is None:
-            raise HTTPException(404, "Unknown instance size for this scheme.")
+            manifest = manifest_for(body.profile_id, body.scheme_version, body.scheme_id)
+        else:
+            adapter = adapter_for(body.scheme_version, body.scheme_id)
+            manifest = next((item for item in adapter.manifests()
+                             if item.get("instance_size", item["parameter_bits"]) == body.instance_size), None)
+            if manifest is None:
+                raise HTTPException(404, "Unknown instance size for this scheme.")
+        if manifest["version"] != registry.CURRENT[manifest["scheme_id"]]:
+            raise HTTPException(409, "New challenges use the current registered scheme version.")
         return manifest
 
     def pin_adapter(session, manifest):
@@ -235,6 +236,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         if submission:
             status = "solved" if submission.correct else "incorrect"
         return {"id": challenge.id, "profile_id": challenge.profile_id, "round_id": challenge.round_id,
+                "scheme_id": challenge.scheme_id, "scheme_version": challenge.scheme_version,
                 "issued_at": challenge.issued_at, "starts_at": challenge.starts_at, "ends_at": challenge.ends_at,
                 "public": challenge.public_data, "status": status,
                 "submission": submission_data(submission) if submission else None,
@@ -311,24 +313,57 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
 
     @app.get("/api/schemes")
     def schemes():
-        profiles = sorted(kem.manifests(), key=lambda item: item["instance_size"])
+        catalogue = registry.catalogue()
+        releases = [release for scheme in catalogue for release in [scheme, *scheme["previous_releases"]]]
+        # One bounded-result query for the whole catalogue: first successful
+        # receipt per exact scheme/version/profile, using the leaderboard's tie
+        # rule. Do not mistake a first recovery at a smaller size for the solver
+        # who first reached the largest displayed size.
+        current_releases = [and_(Challenge.scheme_id == scheme["id"],
+                                 Challenge.scheme_version == scheme["version"]) for scheme in releases]
+        first_receipts = select(
+            Challenge.scheme_id.label("scheme_id"), Challenge.scheme_version.label("scheme_version"),
+            Submission.profile_id.label("profile_id"), Submission.user_id.label("user_id"),
+            Submission.received_at.label("received_at"), Submission.id.label("receipt_id"),
+            func.row_number().over(
+                partition_by=(Challenge.scheme_id, Challenge.scheme_version, Submission.profile_id),
+                order_by=(Submission.received_at, Submission.id)).label("position"),
+        ).join(Challenge, Challenge.id == Submission.challenge_id).where(
+            Submission.correct.is_(True), Submission.profile_id == Challenge.profile_id,
+            Submission.scheme_version == Challenge.scheme_version,
+            Submission.user_id == Challenge.user_id, or_(*current_releases)).subquery()
         with db.transaction() as session:
-            recovered = set(session.scalars(select(Submission.profile_id).where(
-                Submission.correct.is_(True), Submission.scheme_version == kem.SCHEME_VERSION).distinct()))
-        largest = max((index for index, profile in enumerate(profiles) if profile["id"] in recovered), default=-1)
-        return envelope(schemes=[{"id": kem.SCHEME_ID, "name": "Teaching DH-KEM", "version": kem.SCHEME_VERSION,
-             "summary": "A deliberately small Diffie–Hellman KEM for learning and testing this experiment.",
-             "educational": True, "profiles": profiles, "size_parameter": kem.SIZE_PARAMETER.copy(),
-             "largest_recovered_profile_id": profiles[largest]["id"] if largest >= 0 else None,
-             "next_profile_id": profiles[largest + 1]["id"] if largest + 1 < len(profiles) else None}])
+            records = session.execute(select(first_receipts, User.handle)
+                .join(User, User.id == first_receipts.c.user_id).where(first_receipts.c.position == 1)).all()
+        recovered = {(row.scheme_id, row.scheme_version, row.profile_id): row for row in records}
+        for scheme in releases:
+            profiles = scheme["profiles"]
+            first_by_profile = {}
+            for profile in profiles:
+                receipts = [recovered[(scheme["id"], version, profile["id"])]
+                    for version in registry.comparison_versions(scheme["id"], scheme["version"], profile["id"])
+                    if (scheme["id"], version, profile["id"]) in recovered]
+                if receipts:
+                    first_by_profile[profile["id"]] = min(receipts, key=lambda row: (row.received_at, row.receipt_id))
+            scheme["recovered_profile_ids"] = [profile["id"] for profile in profiles if profile["id"] in first_by_profile]
+            largest = max((index for index, profile in enumerate(profiles) if profile["id"] in first_by_profile), default=-1)
+            largest_id = profiles[largest]["id"] if largest >= 0 else None
+            scheme["largest_recovered_profile_id"] = largest_id
+            scheme["next_profile_id"] = profiles[largest + 1]["id"] if largest + 1 < len(profiles) else None
+            first = first_by_profile.get(largest_id)
+            scheme["first_recovery"] = {"handle": first.handle, "received_at": first.received_at,
+                "profile_id": first.profile_id, "scheme_version": first.scheme_version} if first else None
+        return envelope(schemes=catalogue)
 
     @app.get("/api/challenges")
-    def current_challenge(profile_id: str, request: Request):
-        manifest = manifest_for(profile_id)
+    def current_challenge(profile_id: str, request: Request, scheme_id: str | None = None,
+                          scheme_version: str | None = None):
+        manifest = manifest_for(profile_id, scheme_version, scheme_id)
         with db.transaction() as session:
             user = user_for(request, session)
             challenge = session.scalar(select(Challenge).where(Challenge.user_id == user.id, Challenge.profile_id == profile_id,
-                      Challenge.scheme_version == manifest["version"], Challenge.round_id == current_round(clock())["id"]))
+                      Challenge.scheme_id == manifest["scheme_id"], Challenge.scheme_version == manifest["version"],
+                      Challenge.round_id == current_round(clock())["id"]))
             return envelope(challenge=challenge_data(session, challenge) if challenge else None)
 
     @app.post("/api/challenges")
@@ -336,6 +371,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         throttle(request, "issue", 30, 60)
         manifest = challenge_manifest(body)
         profile_id = manifest["id"]
+        adapter = adapter_for(manifest["version"], manifest["scheme_id"])
         # Adapters are an explicit code registry; proposals never execute uploads.
         if not manifest.get("educational"):
             raise HTTPException(409, "This profile has not been admitted to this challenge track.")
@@ -346,6 +382,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             now = clock()
             round_ = current_round(now)
             existing = session.scalar(select(Challenge).where(Challenge.user_id == user.id, Challenge.profile_id == profile_id,
+                      Challenge.scheme_id == manifest["scheme_id"],
                       Challenge.scheme_version == manifest["version"], Challenge.round_id == round_["id"]))
             if existing:
                 return envelope(challenge=challenge_data(session, existing))
@@ -354,7 +391,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             if held:
                 raise HTTPException(503, "This profile is paused for an implementation review.")
             try:
-                generated = kem.generate(profile_id)
+                generated = adapter.generate(profile_id)
             except Exception:
                 # Adapter exceptions may contain private values. Persist a fixed
                 # diagnostic code, not exception text or an automatic new draw.
@@ -450,32 +487,57 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             return envelope(submission=submission_data(record), challenge=challenge_data(session, challenge))
 
     @app.get("/api/leaderboard")
-    def leaderboard(profile_id: str, scheme_version: str | None = None):
-        manifest = manifest_for(profile_id, scheme_version)
+    def leaderboard(profile_id: str, scheme_version: str | None = None, scheme_id: str | None = None):
+        manifest = manifest_for(profile_id, scheme_version, scheme_id)
+        target_size = manifest.get("instance_size", manifest["parameter_bits"])
+        source_profiles, source_sizes = {}, {}
+        adapter = adapter_for(manifest["version"], manifest["scheme_id"])
+        # Credit is derived from actual registered sizes, never lexical profile
+        # order or synthetic submissions. Compatibility belongs to each source
+        # profile: an archived release cannot acquire unsupported larger sizes.
+        for profile in adapter.manifests():
+            if profile.get("instance_size", profile["parameter_bits"]) < target_size:
+                continue
+            for version in registry.comparison_versions(manifest["scheme_id"], manifest["version"], profile["id"]):
+                source = registry.manifest_for(profile["id"], manifest["scheme_id"], version)
+                size = source.get("instance_size", source["parameter_bits"])
+                if size >= target_size:
+                    source_profiles.setdefault(version, []).append(source["id"])
+                    source_sizes[(version, source["id"])] = size
+        eligible_sources = [and_(Challenge.scheme_version == version, Challenge.profile_id.in_(profiles))
+                            for version, profiles in source_profiles.items()]
         with db.transaction() as session:
             # Window ranking avoids fetching every historical solve into memory.
             first = select(Submission.id.label("id"), func.row_number().over(partition_by=Submission.user_id,
-                     order_by=(Submission.received_at, Submission.id)).label("position")).where(
-                     Submission.correct.is_(True), Submission.profile_id == profile_id,
-                     Submission.scheme_version == manifest["version"]).subquery()
+                     order_by=(Submission.received_at, Submission.id)).label("position")).join(
+                     Challenge, Challenge.id == Submission.challenge_id).where(
+                     Submission.correct.is_(True), Submission.profile_id == Challenge.profile_id,
+                     Submission.user_id == Challenge.user_id, Challenge.scheme_id == manifest["scheme_id"],
+                     Submission.scheme_version == Challenge.scheme_version, or_(*eligible_sources)).subquery()
             records = session.execute(select(Submission, User, Method).join(first, first.c.id == Submission.id)
                 .join(User, Submission.user_id == User.id).join(Method, Submission.method_id == Method.id)
                 .where(first.c.position == 1).order_by(Submission.received_at, Submission.id).limit(10)).all()
             entries = [{"rank": index + 1, "handle": user.handle, "profile_id": result.profile_id,
-                "scheme_version": result.scheme_version,
+                "scheme_id": manifest["scheme_id"], "scheme_version": result.scheme_version,
+                "instance_size": source_sizes[(result.scheme_version, result.profile_id)],
+                "is_inherited": result.profile_id != profile_id,
                 "received_at": result.received_at, "elapsed_seconds": result.elapsed_seconds,
                 "method": {"id": method.id, "name": method.name, "pseudocode": method.pseudocode},
                 "compute": result.compute, "challenge_id": result.challenge_id} for index, (result, user, method) in enumerate(records)]
-            return envelope(entries=entries, scheme_id=manifest["scheme_id"], scheme_version=manifest["version"], profile_id=profile_id)
+            return envelope(entries=entries, scheme_id=manifest["scheme_id"], scheme_version=manifest["version"],
+                            includes_compatible_versions=[version for version in source_profiles if version != manifest["version"]],
+                            profile_id=profile_id)
 
     @app.get("/api/me/submissions")
     def history(request: Request):
         with db.transaction() as session:
             user = user_for(request, session)
-            records = session.execute(select(Submission, Method.name).join(Method, Submission.method_id == Method.id)
+            records = session.execute(select(Submission, Method.name, Challenge.scheme_id).join(Method, Submission.method_id == Method.id)
+                      .join(Challenge, Submission.challenge_id == Challenge.id)
                       .where(Submission.user_id == user.id).order_by(Submission.received_at.desc()).limit(50)).all()
             return {"submissions": [{**submission_data(record), "profile_id": record.profile_id,
-                    "scheme_version": record.scheme_version, "round_id": record.round_id, "method_name": name} for record, name in records]}
+                    "scheme_id": scheme_id, "scheme_version": record.scheme_version, "round_id": record.round_id, "method_name": name}
+                    for record, name, scheme_id in records]}
 
     @app.get("/health")
     def health():
@@ -495,15 +557,27 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     def javascript():
         return FileResponse(ROOT / "web" / "app.js", headers={"Cache-Control": "no-cache"})
 
+    @app.get("/math.js")
+    def math_javascript():
+        return FileResponse(ROOT / "web" / "math.js", headers={"Cache-Control": "no-cache"})
+
+    # Only the vendored math distribution is mounted, never the repository or
+    # general web directory. Real-path containment also rejects escaping symlinks.
+    app.mount("/vendor/katex", StaticFiles(directory=ROOT / "web" / "vendor" / "katex",
+                                          follow_symlink=False), name="katex")
+
     @app.get("/api/protocol/source")
-    def protocol_source(version: str | None = None):
-        adapter = adapter_for(version)
-        source = ROOT / "crucible" / "legacy" / "teaching_dh_v1.py" if adapter.SCHEME_VERSION == "1" else ROOT / "crucible" / "kem.py"
-        return FileResponse(source, media_type="text/plain", filename=f"teaching-dh-kem-v{adapter.SCHEME_VERSION}.py")
+    def protocol_source(version: str | None = None, scheme_id: str = kem.SCHEME_ID):
+        adapter = adapter_for(version, scheme_id)
+        # Paths come exclusively from the trusted registry, never request text.
+        source = adapter.__file__
+        return FileResponse(source, media_type="text/plain", filename=f"{scheme_id}-v{adapter.SCHEME_VERSION}.py")
 
     @app.get("/api/protocol/example")
-    def example_solver():
-        return FileResponse(ROOT / "scripts" / "solve_teaching.py", media_type="text/plain", filename="solve_teaching.py")
+    def example_solver(scheme_id: str = kem.SCHEME_ID, version: str | None = None):
+        adapter_for(version, scheme_id)
+        source = ROOT / registry.DETAILS[scheme_id]["example"]
+        return FileResponse(source, media_type="text/plain", filename=source.name)
 
     research.register_routes(app, db, settings, clock, user_for, throttle)
     return app

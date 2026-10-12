@@ -1,0 +1,23 @@
+KaTeX 0.19.0 — local browser distribution
+
+Source release: https://github.com/KaTeX/KaTeX/releases/tag/v0.19.0
+Archive: https://github.com/KaTeX/KaTeX/releases/download/v0.19.0/katex.tar.gz
+Archive SHA256: 966d9c85655081cca9a57e8a1d667f13f96b1c85c3f93655a8acef74c4ce3875
+
+Unmodified katex.min.js, katex.min.css, and all 60 distributed fonts.
+No auto-render extension or runtime CDN is used. The fixed directory is served
+at /vendor/katex; CSS-relative font paths must be preserved.
+
+Code license: LICENSE (MIT), copied from the matching source tag.
+Fonts: FONT-NOTICES.txt (embedded family notices) and OFL.txt (full SIL OFL 1.1).
+OFL source: https://openfontlicense.org/documents/OFL.txt
+
+JS/CSS integrity matches the official 0.19.0 browser installation documentation:
+katex.min.js SHA384 QFFtAGzvvj+bfgCGxXJlNZZR1nXEZgvG8tDLCCY1F19xl20WlfTYgguB4VcNdxYk
+katex.min.css SHA384 3rdsX6e5mueWyoweR9NIVmtEsUkokpBT/0ALqKKIBMr9j4qhHkaIkAcGgsE6uVlp
+
+Documentation:
+https://katex.org/docs/browser.html
+https://katex.org/docs/api.html
+https://katex.org/docs/options.html
+https://katex.org/docs/security.html

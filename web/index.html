@@ -3,36 +3,43 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Recover a shared key. Share the method and computational cost. A working experiment in open cryptographic research.">
+    <meta name="description" content="Recover a shared key. Share the method and computational cost. Timed challenges and documented progress in open cryptographic research.">
     <meta name="color-scheme" content="light">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2040%2040%22%3E%3Cpath%20fill%3D%22%239b352e%22%20fill-rule%3D%22evenodd%22%20d%3D%22M4%2018c0-3%207.2-5.5%2016-5.5S36%2015%2036%2018l-4.2%2013.5C30.7%2035.2%2026%2037%2020%2037S9.3%2035.2%208.2%2031.5ZM8%2018c0-1.5%205.4-2.8%2012-2.8s12%201.3%2012%202.8-5.4%202.8-12%202.8S8%2019.5%208%2018Z%22%2F%3E%3Cpath%20fill%3D%22%23df5a38%22%20d%3D%22M20%201.5%2024.2%206.2%2020%2011l-4.2-4.8Z%22%2F%3E%3C%2Fsvg%3E">
     <title>
       Crucible — shared cryptographic scrutiny
     </title>
+    <link rel="stylesheet" href="/vendor/katex/katex.min.css">
     <link rel="stylesheet" href="/styles.css">
+    <script src="/vendor/katex/katex.min.js" defer></script>
+    <script src="/math.js" defer></script>
     <script src="/app.js" defer>
     </script>
   </head>
   <body>
-    <a class="skip-link" href="#workspace">
-      Skip to workspace
+    <a class="skip-link" href="#catalogue-workspace">
+      Skip to main content
     </a>
     <header class="site-header">
       <div class="header-inner">
         <a class="brand" href="/" aria-label="Crucible home">
-          <svg viewBox="0 0 32 36" width="27" height="31" aria-hidden="true">
-            <path d="M16 2 30 10v16l-14 8L2 26V10Z"/>
-            <path d="m9 14 7-4 7 4v8l-7 4-7-4Z"/>
-            <path d="M16 2v8m14 0-7 4M30 26l-7-4m-7 12v-8M2 26l7-4M2 10l7 4"/>
+          <svg class="brand-mark" viewBox="0 0 40 40" width="42" height="42" aria-hidden="true">
+            <path class="crucible-vessel" fill-rule="evenodd" d="M4 18c0-3 7.2-5.5 16-5.5S36 15 36 18l-4.2 13.5C30.7 35.2 26 37 20 37S9.3 35.2 8.2 31.5ZM8 18c0-1.5 5.4-2.8 12-2.8s12 1.3 12 2.8-5.4 2.8-12 2.8S8 19.5 8 18Z"/>
+            <path class="crucible-charge" d="M20 1.5 24.2 6.2 20 11l-4.2-4.8Z"/>
           </svg>
           <span>
-            crucible
+            Crucible
           </span>
         </a>
         <nav class="primary-nav" aria-label="Main navigation">
-          <button id="nav-experiment" class="nav-button selected" type="button" aria-current="page">
-            Experiment
+          <button id="nav-challenge" class="nav-button selected" type="button" aria-current="page">
+            Schemes
           </button>
-          <button id="nav-research" class="nav-button" type="button">
+          <button id="nav-about" class="nav-button" type="button">
+            About us
+          </button>
+          <!-- Research is temporarily hidden for the numerical MVP; see RESEARCH_ENABLED. -->
+          <button id="nav-research" class="nav-button" type="button" hidden>
             Research
           </button>
         </nav>
@@ -52,43 +59,6 @@
       </div>
     </header>
     <main class="page-shell">
-      <section class="intro" aria-labelledby="page-title">
-        <div class="intro-copy">
-          <p class="eyebrow">
-            An experiment in open cryptographic research
-          </p>
-          <h1 id="page-title">
-            Security claims.
-            <br>
-            <em>
-              Shared scrutiny.
-            </em>
-          </h1>
-          <p class="intro-description">
-            Recover a shared key. Share how you did it,
-            <br class="desktop-break">
-            and what the work required.
-          </p>
-        </div>
-        <aside class="round-clock" aria-label="Current shared round">
-          <div class="eyebrow">
-            <span class="live-dot" aria-hidden="true">
-            </span>
-            Next round begins in
-          </div>
-          <p id="countdown" class="countdown" aria-label="Loading round time">
-            —:—
-          </p>
-          <p id="round-deadline">
-            Synchronizing with the server…
-          </p>
-          <p class="clock-note">
-            New rounds start on the hour, UTC.
-            <br>
-            Joining later leaves less time.
-          </p>
-        </aside>
-      </section>
       <div id="global-message" class="notice notice-error" role="alert" hidden>
         <span id="global-message-text">
         </span>
@@ -96,55 +66,116 @@
           Try again
         </button>
       </div>
-      <div class="educational-note">
-        <span class="outline-dot" aria-hidden="true">
-        </span>
-        <p>
-          <strong>
-            A teaching experiment.
-          </strong>
-          These deliberately small groups make attacks feasible. Results describe individual instances, not security guarantees.
-        </p>
-      </div>
-      <section id="workspace" class="workspace" aria-labelledby="scheme-title" tabindex="-1">
+      <section id="catalogue-workspace" class="catalogue-workspace" aria-labelledby="catalogue-title" tabindex="-1">
+        <div class="catalogue-heading">
+          <div>
+            <h1 id="catalogue-title">Schemes</h1>
+            <p>Recorded progress for each scheme. Sizes are specific to each KEM and version.</p>
+          </div>
+          <button id="refresh-catalogue" class="text-button" type="button">
+            Refresh <span aria-hidden="true">↻</span>
+          </button>
+        </div>
+        <div id="kem-catalogue" aria-live="polite">
+          <div class="loading-state" role="status">
+            <span class="loader" aria-hidden="true"></span>
+            Loading KEMs…
+          </div>
+        </div>
+        <p class="panel-footnote">Select a KEM to get a challenge, see its recoveries, and inspect the protocol. A recorded recovery describes one instance; it is not a security estimate.</p>
+      </section>
+      <section id="workspace" class="workspace" aria-labelledby="scheme-title" tabindex="-1" hidden>
+        <a id="scheme-back" class="text-button scheme-back" href="#challenge">← All KEMs</a>
         <div class="scheme-heading">
           <div>
             <p class="eyebrow">
-              01 / Active experiment
+              KEM challenge
             </p>
-            <h2 id="scheme-title">
-              Teaching DH-KEM
-            </h2>
+            <h1 id="scheme-title">
+              Loading KEM…
+            </h1>
             <p id="scheme-summary">
               Loading the challenge profiles…
             </p>
+            <button id="advance-size" class="next-instance-button is-concealed" type="button" disabled aria-hidden="true">
+              <span id="advance-size-label">Go to next unsolved instance</span>
+              <strong id="advance-size-value">—</strong>
+              <span aria-hidden="true">→</span>
+            </button>
           </div>
-          <div class="profile-field">
-            <label id="profile-label" for="profile-select">
-              Instance size n
-            </label>
-            <select id="profile-select" disabled>
-              <option>
-                Loading profiles…
-              </option>
-            </select>
-            <p id="profile-note" class="field-hint">
-              Each scheme defines its own size mapping. Sizes are comparable only within that scheme and version.
-            </p>
+          <div class="scheme-controls">
+            <div class="profile-field">
+              <div class="size-heading">
+                <span id="profile-label">Instance size</span>
+                <span id="size-range">20–128</span>
+              </div>
+              <div class="size-rail">
+                <button id="previous-size" class="size-step" type="button" aria-label="Previous supported size" disabled>‹</button>
+                <div id="size-options" role="group" aria-label="Choose instance size"></div>
+                <button id="next-size" class="size-step" type="button" aria-label="Next supported size" disabled>›</button>
+              </div>
+              <div class="size-slider-control">
+                <input id="size-slider" type="range" min="0" max="1" step="1" value="0" aria-label="Browse instance sizes" disabled>
+                <output id="size-slider-value" for="size-slider" aria-hidden="true">—</output>
+              </div>
+              <div class="size-jump">
+                <label for="profile-select">Jump to</label>
+                <input id="profile-select" type="number" step="1" inputmode="numeric" autocomplete="off" aria-describedby="profile-note profile-error" disabled>
+                <button id="jump-size" class="text-button" type="button" aria-label="Go to entered size" disabled>Go <span aria-hidden="true">→</span></button>
+              </div>
+              <p id="profile-error" class="size-error" role="alert" hidden></p>
+              <p id="profile-note" class="field-hint">Each scheme defines its own size mapping. Sizes are comparable only within that scheme and version.</p>
+            </div>
           </div>
         </div>
-        <div class="workspace-tabs" role="tablist" aria-label="Experiment views">
-          <button id="tab-challenge" role="tab" aria-selected="true" aria-controls="panel-challenge" data-view="challenge" tabindex="0">
-            Your challenge
-          </button>
-          <button id="tab-leaderboard" role="tab" aria-selected="false" aria-controls="panel-leaderboard" data-view="leaderboard" tabindex="-1">
+        <div id="scheme-education-note" class="educational-note">
+          <span class="outline-dot" aria-hidden="true"></span>
+          <p><strong>Teaching challenge.</strong> Deliberately small parameters make attacks feasible.</p>
+        </div>
+        <details id="scheme-specifics" class="scheme-specifics">
+          <summary>Scheme specifics</summary>
+          <p id="scheme-construction-short"></p>
+          <dl id="scheme-specific-facts" class="detail-list"></dl>
+        </details>
+        <div class="workspace-tabs" role="tablist" aria-label="Challenge views">
+          <button id="tab-leaderboard" role="tab" aria-selected="true" aria-controls="panel-leaderboard" data-view="leaderboard" tabindex="0">
             Leaderboard
+          </button>
+          <button id="tab-challenge" role="tab" aria-selected="false" aria-controls="panel-challenge" data-view="challenge" tabindex="-1">
+            Challenge
           </button>
           <button id="tab-protocol" role="tab" aria-selected="false" aria-controls="panel-protocol" data-view="protocol" tabindex="-1">
             Protocol
           </button>
         </div>
-        <section id="panel-challenge" class="view-panel" role="tabpanel" aria-labelledby="tab-challenge" tabindex="0">
+        <section id="panel-leaderboard" class="view-panel" role="tabpanel" aria-labelledby="tab-leaderboard" tabindex="0">
+          <div class="panel-heading">
+            <div>
+              <h3 id="leaderboard-title">
+                Recoveries
+              </h3>
+            </div>
+            <button id="refresh-leaderboard" class="text-button" type="button">
+              Refresh
+              <span aria-hidden="true">
+                ↻
+              </span>
+            </button>
+          </div>
+          <div id="leaderboard-content" aria-live="polite">
+          </div>
+          <p id="leaderboard-scope" class="panel-footnote" hidden>
+            The first ten distinct accounts to recover this size or a larger one, across all rounds. Ordered by server receipt.
+          </p>
+          <p id="leaderboard-footnote" class="panel-footnote" hidden>
+            Entries marked “via size” credit a larger recovery; their details describe that actual instance. Time to submit runs from instance issue to answer receipt, including delays; attack time is reported separately. Hardware, compute, and method are contributor-reported. Rank is not a security score.
+          </p>
+        </section>
+        <section id="panel-challenge" class="view-panel" role="tabpanel" aria-labelledby="tab-challenge" tabindex="0" hidden>
+          <aside id="scheme-clock" class="round-clock challenge-clock" aria-label="Current challenge round deadline">
+            <span class="round-time">Challenge closes in</span>
+            <p id="countdown" class="countdown" aria-label="Loading round time">—:—</p>
+          </aside>
           <div id="challenge-loading" class="loading-state" role="status">
             <span class="loader" aria-hidden="true">
             </span>
@@ -225,13 +256,13 @@
             </div>
             <div class="challenge-actions">
               <a id="download-button" class="button button-quiet" href="#" download>
-                Download instance
+                Download challenge JSON
                 <span aria-hidden="true">
                   ↓
                 </span>
               </a>
               <button id="copy-instance" class="text-button" type="button">
-                Copy public instance
+                Copy challenge JSON
               </button>
               <button id="open-submission" class="button button-primary" type="button">
                 Submit recovered key
@@ -240,19 +271,6 @@
                 </span>
               </button>
             </div>
-            <details class="disclosure">
-              <summary>
-                Inspect your public instance
-                <span aria-hidden="true">
-                  +
-                </span>
-              </summary>
-              <p class="field-hint">
-                The download includes the full challenge contract. Generation randomness and the expected answer remain private.
-              </p>
-              <pre id="instance-json" class="code-block" tabindex="0">
-              </pre>
-            </details>
           </div>
           <ol class="workflow">
             <li>
@@ -296,29 +314,6 @@
             </li>
           </ol>
         </section>
-        <section id="panel-leaderboard" class="view-panel" role="tabpanel" aria-labelledby="tab-leaderboard" tabindex="0" hidden>
-          <div class="panel-heading">
-            <div>
-              <h3>
-                First recoveries
-              </h3>
-              <p>
-                The first ten distinct accounts for this profile and version, across all rounds. Ordered by server receipt.
-              </p>
-            </div>
-            <button id="refresh-leaderboard" class="text-button" type="button">
-              Refresh
-              <span aria-hidden="true">
-                ↻
-              </span>
-            </button>
-          </div>
-          <div id="leaderboard-content" aria-live="polite">
-          </div>
-          <p class="panel-footnote">
-            Elapsed time runs from instance issue to answer receipt. Hardware, compute, and method are contributor-reported. Rank is not a security score.
-          </p>
-        </section>
         <section id="panel-protocol" class="view-panel protocol-panel" role="tabpanel" aria-labelledby="tab-protocol" tabindex="0" hidden>
           <div class="panel-heading">
             <div>
@@ -326,11 +321,11 @@
                 Exactly what is being tested
               </h3>
               <p id="protocol-version">
-                Teaching Diffie–Hellman key encapsulation
+                Loading the selected protocol…
               </p>
             </div>
-            <span class="status-tag muted-tag">
-              Educational
+            <span id="protocol-status" class="status-tag muted-tag">
+              Teaching
             </span>
           </div>
           <div class="protocol-overview">
@@ -358,25 +353,7 @@
                 +
               </span>
             </summary>
-            <p>
-              In a subgroup generated by
-              <code>
-                g
-              </code>
-              , the public key is
-              <code>
-                gˣ
-              </code>
-              and the encapsulation is
-              <code>
-                gʳ
-              </code>
-              . Both parties derive a key from
-              <code>
-                gˣʳ
-              </code>
-              . The downloaded contract specifies the exact encoding and key derivation.
-            </p>
+            <p id="protocol-construction">The selected protocol defines its key generation, encapsulation, and decapsulation algorithms.</p>
             <dl id="parameter-facts" class="detail-list">
             </dl>
             <p class="field-hint">
@@ -384,7 +361,7 @@
             </p>
             <pre id="parameter-json" class="code-block" tabindex="0">
             </pre>
-            <p>
+            <p id="protocol-downloads">
               <a href="/api/protocol/source" class="text-button">
                 Download the reference implementation ↓
               </a>
@@ -393,7 +370,7 @@
                 Download the teaching solver ↓
               </a>
             </p>
-            <p class="field-hint">
+            <p id="protocol-solver-note" class="field-hint">
               The example solver is provided for this deliberately weak teaching construction.
             </p>
           </details>
@@ -420,11 +397,11 @@
             <p>
               A correct submission establishes that the submitted key matches this instance and was received within its round. The site checks the answer and records the accompanying method and resources. It does not independently verify the declared computation or reproduce the method.
             </p>
-            <p>
-              An incorrect answer locks that instance. An expired instance without an accepted recovery is simply unsolved here; it is not evidence of a security bound. Subgroup order size is a construction parameter, not an estimate of security bits.
+            <p id="protocol-size-caveat">
+              An incorrect answer locks that instance. An expired instance without an accepted recovery is simply unsolved here; it is not evidence of a security bound. Instance size selects a scheme-specific parameter set, not an estimate of security bits.
             </p>
             <p>
-              This experiment records practical recoveries. It does not yet accept or verify asymptotic attack proofs.
+              This challenge records practical recoveries. It does not yet accept or verify asymptotic attack proofs.
             </p>
           </details>
           <details class="disclosure">
@@ -434,8 +411,8 @@
                 +
               </span>
             </summary>
-            <p>
-              Each account gets one private instance per profile per round, and one well-formed answer for that instance. Submit a full 32-byte key, a reusable method version, and a compute declaration.
+            <p id="protocol-key-requirement">
+              Each account gets one private instance per profile per round, and one well-formed answer for that instance. Submit the complete shared key, a reusable method version, and a compute declaration.
             </p>
             <p>
               Method versions are immutable. Correct recoveries can appear on the public leaderboard with the account handle, method, pseudocode, and compute declaration. The earliest ten distinct accounts appear for each exact profile and version, across all rounds. Different profiles are not ranked against one another.
@@ -443,7 +420,7 @@
           </details>
         </section>
       </section>
-      <section id="research-workspace" class="research-workspace" aria-labelledby="research-title" hidden>
+      <section id="research-workspace" class="research-workspace" aria-labelledby="research-title" tabindex="-1" hidden>
         <div class="research-intro">
           <p class="eyebrow">
             A durable research record
@@ -456,7 +433,7 @@
             </em>
           </h1>
           <p>
-            Share an argument, an experiment, or an unresolved observation.
+            Share an argument, an empirical result, or an unresolved observation.
             <br class="desktop-break">
             Keep its conditions, methods, and revisions with it.
           </p>
@@ -537,24 +514,24 @@
           </p>
         </section>
       </section>
+      <section id="about-workspace" class="about-workspace" aria-labelledby="about-title" tabindex="-1" hidden>
+        <h1 id="about-title">About us</h1>
+        <!-- Collaborators: add mission, team, and contact content here. -->
+      </section>
       <footer class="site-footer">
-        <span class="footer-name">
-          crucible
-        </span>
-        <p>
-          Make the result inspectable.
-          <br>
-          Make the work useful.
-        </p>
-        <span>
-          Open cryptographic research
-        </span>
+        <a class="brand footer-brand" href="/" aria-label="Crucible home">
+          <svg class="brand-mark" viewBox="0 0 40 40" width="30" height="30" aria-hidden="true">
+            <path class="crucible-vessel" fill-rule="evenodd" d="M4 18c0-3 7.2-5.5 16-5.5S36 15 36 18l-4.2 13.5C30.7 35.2 26 37 20 37S9.3 35.2 8.2 31.5ZM8 18c0-1.5 5.4-2.8 12-2.8s12 1.3 12 2.8-5.4 2.8-12 2.8S8 19.5 8 18Z"/>
+            <path class="crucible-charge" d="M20 1.5 24.2 6.2 20 11l-4.2-4.8Z"/>
+          </svg>
+          <span>Crucible</span>
+        </a>
       </footer>
     </main>
     <dialog id="auth-dialog" aria-labelledby="auth-title">
       <div class="dialog-top">
         <p class="eyebrow">
-          Your research workspace
+          Your challenge workspace
         </p>
         <button class="icon-button" type="button" data-close aria-label="Close sign-in dialog">
           ×
@@ -625,6 +602,16 @@
         A well-formed answer is locked when received, whether correct or incorrect. The round deadline still applies.
       </div>
       <form id="submission-form">
+        <div class="recovery-import">
+          <div class="recovery-import-actions">
+            <button id="upload-recovery" class="button button-quiet" type="button" aria-describedby="recovery-file-hint">Upload result file</button>
+            <input id="recovery-file" type="file" accept=".json,application/json" hidden>
+            <button id="download-recovery-template" class="text-button" type="button">Download template</button>
+          </div>
+          <p id="recovery-file-hint" class="field-hint">JSON · up to 128 KB. Import fills the form for review.</p>
+          <p id="recovery-file-error" class="form-error" role="alert" hidden></p>
+          <p id="recovery-file-status" class="recovery-import-status" role="status" hidden></p>
+        </div>
         <div class="form-field">
           <label for="candidate">
             Recovered shared key
@@ -763,6 +750,15 @@
       <div id="history-content" class="history-content" aria-live="polite">
       </div>
     </dialog>
+    <dialog id="recovery-dialog" class="wide-dialog" aria-labelledby="recovery-title">
+      <div class="dialog-top">
+        <p class="eyebrow">Recorded recovery</p>
+        <button class="icon-button" type="button" data-close aria-label="Close recovery details">×</button>
+      </div>
+      <h2 id="recovery-title">Recovery details</h2>
+      <p id="recovery-context" class="dialog-description"></p>
+      <div id="recovery-content"></div>
+    </dialog>
     <dialog id="finding-dialog" class="wide-dialog" aria-labelledby="finding-title">
       <div class="dialog-top">
         <p class="eyebrow" id="finding-context">
@@ -812,7 +808,7 @@
           <label for="finding-body">
             Write-up
           </label>
-          <textarea id="finding-body" name="body" rows="7" maxlength="15000" required placeholder="Give the argument, method, experiment, or observations needed to inspect your claim.">
+          <textarea id="finding-body" name="body" rows="7" maxlength="15000" required placeholder="Give the argument, method, measurements, or observations needed to inspect your claim.">
           </textarea>
         </div>
         <div class="field-row">
@@ -847,7 +843,7 @@
                 Heuristic
               </option>
               <option value="experiment">
-                Experiment
+                Empirical result
               </option>
               <option value="mixed">
                 Mixed
