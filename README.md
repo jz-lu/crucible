@@ -33,7 +33,7 @@ The launcher makes local files private to the current OS user.
 1. Choose a KEM from the catalogue. Its leaderboard opens first, at the next
    not-yet-recovered size. Click a nearby size, drag the slider, or use Jump to for any supported
    integer. A dot marks the next unsolved target; the return button takes you
-   there and hides while it is selected. Earlier sizes are shaded light green.
+   there and hides while it is selected. Earlier sizes are shaded light blue.
 2. Open Challenge and request your instance. The boxed timer shows the next UTC
    round boundary; requesting an instance later leaves less time.
 3. Download the JSON contract: public key, encapsulation, exact parameters,
