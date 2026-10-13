@@ -3,7 +3,7 @@
 
 Usage: python3 scripts/solve_rsa.py downloaded-challenge.json
 Prints a candidate key using public inputs only. Does not submit or execute code
-from the JSON file. Limited to the registered 20..36-bit toy modulus sizes.
+from the JSON file. Limited to the 20..36-bit modulus sizes (early tiers only).
 """
 import hashlib
 import json
@@ -13,8 +13,8 @@ import sys
 
 def recover(document):
     public = document["challenge"]["public"] if "challenge" in document else document
-    if public["scheme_id"] != "rsa-kem" or public["version"] != "1":
-        raise ValueError("This example implements only Crucible RSA release 1.")
+    if public["scheme_id"] != "rsa-kem" or public["version"] not in {"1", "2"}:
+        raise ValueError("This example implements Crucible RSA releases 1 and 2.")
     modulus, exponent = (int(public["parameters"][name], 16) for name in ("N", "e"))
     if not 20 <= modulus.bit_length() <= 36 or exponent != 65537:
         raise ValueError("Parameters exceed this example's resource limit.")

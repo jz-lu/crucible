@@ -1,9 +1,11 @@
 """Configuration. Local convenience must not silently become production defaults."""
 from dataclasses import dataclass
 import base64
+import json
 import os
 from pathlib import Path
 from urllib.parse import urlparse
+from uuid import UUID
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -16,6 +18,7 @@ class Settings:
     production: bool = False
     rate_limits: bool = True
     session_seconds: int = 86400
+    reviewer_ids: tuple[str, ...] = ()
 
     @property
     def cookie_name(self):
@@ -63,4 +66,20 @@ def load_settings() -> Settings:
             raise RuntimeError("CRUCIBLE_ORIGIN must be an origin such as https://crucible.example.")
     if database_url.startswith("postgresql://"):
         database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
-    return Settings(database_url=database_url, secret=secret, origins=origins, production=production)
+    try:
+        if "CRUCIBLE_REVIEWER_IDS" in os.environ:
+            identifiers = [item.strip() for item in os.environ["CRUCIBLE_REVIEWER_IDS"].split(",") if item.strip()]
+        elif not production and (data_dir / "reviewers.json").exists():
+            document = json.loads((data_dir / "reviewers.json").read_text())
+            if not isinstance(document, dict) or set(document) != {"reviewer_ids"} or not isinstance(document["reviewer_ids"], list):
+                raise ValueError("Invalid reviewer configuration.")
+            identifiers = document["reviewer_ids"]
+        else:
+            identifiers = []
+        if any(not isinstance(value, str) for value in identifiers):
+            raise ValueError("Invalid reviewer identifier.")
+        reviewers = tuple(dict.fromkeys(str(UUID(value)) for value in identifiers))
+    except (ValueError, OSError, TypeError, AttributeError):
+        raise RuntimeError("Reviewer configuration must contain explicit account UUIDs.") from None
+    return Settings(database_url=database_url, secret=secret, origins=origins, production=production,
+                    reviewer_ids=reviewers)

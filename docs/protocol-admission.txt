@@ -1,0 +1,99 @@
+CRUCIBLE — PROTOCOL REVIEW AND ADMISSION
+
+This first workflow accepts specifications and records manual review. It never
+executes uploaded algorithms, downloads an implementation URL, or automatically
+adds an approved proposal to the live challenge registry.
+
+1. Describe the scheme
+
+Use crucible-kem-spec-v1. The website supplies an annotated template, JSON Schema,
+and descriptions of each exact registered DH/RSA release. Specify algorithms,
+parameter/tier mappings, random distributions, encodings, correctness, security
+claims, and what setup is reused. Shared public parameters are legitimate when
+they are part of the specified construction. DH group reuse is retained.
+
+Specification-only proposals are allowed. A reference implementation and exact
+SHA-256 fingerprint are required for approval. Format validation checks structural
+completeness and consistency, not mathematical truth or executable conformance.
+
+2. Submit and preserve a revision
+
+The signed-in author explicitly submits the checked document. It is visible to
+its author and configured reviewers. Each revision is immutable and has a stable
+content hash. Retries with the same request identifier return the same receipt.
+Revising requires the current revision and hash; a new revision returns to review
+and cannot inherit an earlier approval. Earlier revisions and decisions remain
+part of the record. These submissions do not affect numerical leaderboards.
+
+3. Review the exact artifact
+
+A configured reviewer, different from the author account, may request changes or
+approve the current revision. Approval requires all five review checks, notes,
+supporting evidence, and the implementation hash from the specification:
+
+- Specification completeness: algorithms, distributions, encoding, tier mapping,
+  reusable setup, invalid-input handling, and the precise challenge objective.
+- Correctness: argument and scope for perfect agreement, or an explicit failure
+  bound and probability model. Review each admitted parameter family; repeated
+  successful tests alone cannot establish a negligible failure probability.
+- Implementation conformance: inspect the pinned source and compare behavior to
+  the specification. Record deterministic known-answer and honest round-trip tests.
+- Input and resource safety: malformed inputs, public/private data separation,
+  output bounds, generation time, isolation requirements, and failure behavior.
+- Reproduction: record exact commands, source/dependency versions, test inputs,
+  results, and any limitations. Include reproducible evidence, not just a checkmark.
+
+These are recorded manual assessments. Approval does not certify security or
+prove that an implementation is free of defects. The API rejects stale decisions,
+self-review, incomplete approval checks, missing evidence, unknown correctness,
+or mismatched implementation hashes.
+
+4. Integrate reviewed code explicitly
+
+A maintainer integrates the reviewed implementation and its tests in the trusted
+repository. Source files for existing releases remain frozen. New executable code
+is never imported from a proposal URL. Register the new adapter in ADAPTERS before
+enabling it in CURRENT; review any dependencies and adapter integration separately.
+
+Run the read-only binding check:
+
+  .venv/bin/python -m crucible.manage check-proposal \
+    --proposal-id PROPOSAL_UUID --scheme-id SCHEME_ID --version RELEASE
+
+It requires the latest approved revision, independent review and evidence,
+matching specification hashes, the exact registered source fingerprint, matching
+release/tier coverage, unique consistent profile IDs, and valid per-profile
+shared-secret lengths (matching the fixed length where declared).
+It reads only trusted registered code; it does not generate challenges, run
+submitted attacks, fetch URLs, grant approval, or change CURRENT.
+
+Passing this check is one integration gate. It cannot verify that prose describes
+the implementation correctly or that the test evidence is truthful. The trusted
+code change enabling CURRENT is the final manual activation step, after review
+of integration tests, failure handling, resource limits, and source provenance.
+Keep the check report with that change. Changed code needs a new reviewed artifact.
+
+5. Configure reviewers explicitly
+
+Local administration resolves an existing handle to its stable account UUID:
+
+  .venv/bin/python -m crucible.manage grant-reviewer --handle HANDLE
+  .venv/bin/python -m crucible.manage revoke-reviewer --handle HANDLE
+
+Restart the local server after changing access. The private data directory stores
+reviewers.json with restricted permissions; it must not be committed. The file
+contains stable user IDs, never passwords or session credentials. An unregistered
+name cannot reserve reviewer rights for whoever signs up later.
+Local macOS/Linux commands lock the read-modify-write operation and reload the
+latest policy under that lock, so concurrent grants and revocations are preserved.
+
+Production uses CRUCIBLE_REVIEWER_IDS explicitly. An environment setting overrides
+local configuration. No account is made a reviewer merely for registering, and
+existing challenge records are not retroactively marked reviewed by this workflow.
+
+Reference guidance
+
+NIST's submission guidance distinguishes specifications, implementation, known-
+answer tests, and security analysis. Crucible's initial intake is intentionally
+smaller and makes no claim of NIST compliance or endorsement:
+https://csrc.nist.gov/Projects/Post-Quantum-Cryptography/Post-Quantum-Cryptography-Standardization/Submission-Requirements/Algo-Specs-%28PQC%29

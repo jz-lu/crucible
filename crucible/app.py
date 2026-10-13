@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.staticfiles import StaticFiles
 
-from . import kem, registry, research
+from . import kem, protocol_proposals, registry, research
 from .config import ROOT, Settings, load_settings
 from .db import AdapterVersion, Base, Challenge, Database, LoginSession, Method, ProfileIncident, RateBucket, Submission, User
 from .schemas import Credentials, NewChallenge, NewMethod, NewSubmission
@@ -104,6 +104,8 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
 
     @app.exception_handler(RequestValidationError)
     async def safe_validation_error(request, error):
+        if request.url.path.startswith("/api/protocol/proposals"):
+            return protocol_proposals.validation_error_response(error)
         # Pydantic's default errors echo input values, which can include secrets.
         fields = sorted({str(part) for issue in error.errors() for part in issue["loc"] if part not in {"body", "query"}})
         detail = "Check the format and required values for: " + ", ".join(fields) + "." if fields else "Check the request format and required values."
@@ -148,6 +150,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
 
     def session_payload(user, raw):
         return envelope(user={"id": user.id, "handle": user.handle} if user else None,
+                        capabilities={"review_protocol_proposals": protocol_proposals.is_reviewer(settings, user)},
                         csrf_token=mac(settings.secret, "csrf-v1", raw.encode("ascii")))
 
     def throttle(request, name, limit, seconds, extra=""):
@@ -335,8 +338,10 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         with db.transaction() as session:
             records = session.execute(select(first_receipts, User.handle)
                 .join(User, User.id == first_receipts.c.user_id).where(first_receipts.c.position == 1)).all()
+            participants = registry.participant_counts(session, releases)
         recovered = {(row.scheme_id, row.scheme_version, row.profile_id): row for row in records}
         for scheme in releases:
+            scheme["participant_count"] = participants.get((scheme["id"], scheme["version"]), 0)
             profiles = scheme["profiles"]
             first_by_profile = {}
             for profile in profiles:
@@ -352,7 +357,8 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             scheme["next_profile_id"] = profiles[largest + 1]["id"] if largest + 1 < len(profiles) else None
             first = first_by_profile.get(largest_id)
             scheme["first_recovery"] = {"handle": first.handle, "received_at": first.received_at,
-                "profile_id": first.profile_id, "scheme_version": first.scheme_version} if first else None
+                "profile_id": first.profile_id, "scheme_version": first.scheme_version,
+                "submission_id": first.receipt_id} if first else None
         return envelope(schemes=catalogue)
 
     @app.get("/api/challenges")
@@ -361,10 +367,20 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         manifest = manifest_for(profile_id, scheme_version, scheme_id)
         with db.transaction() as session:
             user = user_for(request, session)
+            observed_at = clock()
+            round_ = current_round(observed_at)
             challenge = session.scalar(select(Challenge).where(Challenge.user_id == user.id, Challenge.profile_id == profile_id,
                       Challenge.scheme_id == manifest["scheme_id"], Challenge.scheme_version == manifest["version"],
-                      Challenge.round_id == current_round(clock())["id"]))
-            return envelope(challenge=challenge_data(session, challenge) if challenge else None)
+                      Challenge.round_id == round_["id"]))
+            started = manifest["version"] == registry.CURRENT[manifest["scheme_id"]] and session.scalar(
+                select(Challenge.id).where(Challenge.user_id == user.id,
+                    Challenge.scheme_id == manifest["scheme_id"], Challenge.scheme_version == manifest["version"],
+                    Challenge.round_id == round_["id"]).limit(1)) is not None
+            # Describe the exact queried round, even if the hour turns while
+            # reading. A later guarded POST must still match the server's round.
+            return {"challenge": challenge_data(session, challenge) if challenge else None,
+                    "round_started": started, "round_started_round_id": round_["id"],
+                    "server_time": observed_at, "round": round_}
 
     @app.post("/api/challenges")
     def start_challenge(body: NewChallenge, request: Request):
@@ -375,52 +391,92 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         # Adapters are an explicit code registry; proposals never execute uploads.
         if not manifest.get("educational"):
             raise HTTPException(409, "This profile has not been admitted to this challenge track.")
-        with db.transaction(write=True) as session:
+
+        def preflight(session, *, expected_user=None, expected_round=None):
             user = user_for(request, session, mutation=True)
+            if expected_user is not None and user.id != expected_user:
+                raise HTTPException(403, "Your session changed. Refresh and try again.")
+            # This short lock serializes final insertion for one account on
+            # PostgreSQL. SQLite serializes only these brief write phases.
             session.execute(select(User.id).where(User.id == user.id).with_for_update())
+            round_ = current_round(clock())
+            if expected_round is not None and round_["id"] != expected_round:
+                raise HTTPException(409, "The round just changed. Request the new round.")
+            # Generation may have outlived a release/configuration change. Do
+            # not attach its result to a replacement source or parameter set.
+            if challenge_manifest(body) != manifest:
+                raise HTTPException(409, "The registered challenge changed. Refresh and try again.")
+            if body.active_round_id is not None:
+                if body.active_round_id != round_["id"]:
+                    raise HTTPException(409, "The active round changed. Request the new round manually.")
+                started = session.scalar(select(Challenge.id).where(Challenge.user_id == user.id,
+                    Challenge.scheme_id == manifest["scheme_id"], Challenge.scheme_version == manifest["version"],
+                    Challenge.round_id == round_["id"]).limit(1))
+                if started is None:
+                    raise HTTPException(409, "Request this scheme's current round before opening another tier automatically.")
             pin_adapter(session, manifest)
-            now = clock()
-            round_ = current_round(now)
             existing = session.scalar(select(Challenge).where(Challenge.user_id == user.id, Challenge.profile_id == profile_id,
                       Challenge.scheme_id == manifest["scheme_id"],
                       Challenge.scheme_version == manifest["version"], Challenge.round_id == round_["id"]))
             if existing:
-                return envelope(challenge=challenge_data(session, existing))
+                return user.id, round_, existing
             held = session.scalar(select(ProfileIncident.id).where(ProfileIncident.profile_id == profile_id,
                  ProfileIncident.scheme_version == manifest["version"], ProfileIncident.resolved.is_(False)).limit(1))
             if held:
                 raise HTTPException(503, "This profile is paused for an implementation review.")
-            try:
-                generated = adapter.generate(profile_id)
-            except Exception:
-                # Adapter exceptions may contain private values. Persist a fixed
-                # diagnostic code, not exception text or an automatic new draw.
+            return user.id, round_, None
+
+        def existing_response(session, existing, round_):
+            return envelope(challenge=challenge_data(session, existing), round_started=True,
+                            round_started_round_id=round_["id"])
+
+        with db.transaction(write=True) as session:
+            user_id, round_, existing = preflight(session)
+            if existing:
+                return existing_response(session, existing, round_)
+
+        def record_incident(diagnostics):
+            # A real adapter failure remains a fault even if the request's
+            # session or round expires meanwhile. Persist fixed diagnostics,
+            # never exception text or generated private values.
+            with db.transaction(write=True) as session:
                 session.add(ProfileIncident(id=str(uuid4()), profile_id=profile_id,
                     scheme_version=manifest["version"], created_at=clock(), diagnostics={
-                        "reason": "adapter_execution_failed", "implementation_sha256": manifest["implementation"]["source_sha256"]}))
-                session.commit()
-                raise HTTPException(503, "This profile encountered an implementation fault and is paused for review.") from None
-            if not generated.diagnostics.get("shared_secret_matches", False):
-                # Never hide a failed round trip by resampling. This perfectly
-                # correct teaching adapter must halt. Probabilistic KEMs need
-                # an explicit reviewed policy before being registered here.
-                session.add(ProfileIncident(id=str(uuid4()), profile_id=profile_id,
-                    scheme_version=manifest["version"], created_at=clock(), diagnostics={
-                      "shared_secret_matches": False, "implementation_sha256": generated.public["implementation_sha256"]}))
-                session.commit()  # The pause must survive this rejected request.
-                raise HTTPException(503, "This profile failed its implementation check and is paused for review.")
+                        **diagnostics, "implementation_sha256": manifest["implementation"]["source_sha256"]}))
+
+        # Expensive fresh-key generation holds no DB session, transaction, or
+        # account lock. Concurrent duplicate requests may compute candidates;
+        # the final phase returns the one durable instance to every caller.
+        try:
+            generated = adapter.generate(profile_id)
+        except Exception as error:
+            limit_type = getattr(adapter, "PrimeGenerationLimit", None)
+            if isinstance(limit_type, type) and isinstance(error, limit_type):
+                raise HTTPException(503, "Parameter generation exhausted its bounded search. Please try again.") from None
+            record_incident({"reason": "adapter_execution_failed"})
+            raise HTTPException(503, "This profile encountered an implementation fault and is paused for review.") from None
+        if not generated.diagnostics.get("shared_secret_matches", False):
+            # Never hide a failed round trip by resampling.
+            record_incident({"shared_secret_matches": False})
+            raise HTTPException(503, "This profile failed its implementation check and is paused for review.")
+
+        with db.transaction(write=True) as session:
+            _, final_round, existing = preflight(session, expected_user=user_id, expected_round=round_["id"])
+            if existing:
+                return existing_response(session, existing, final_round)
             issued = clock()
             if issued >= round_["ends_at"]:
                 raise HTTPException(409, "The round just changed. Request the new round.")
             challenge_id = str(uuid4())
-            challenge = Challenge(id=challenge_id, user_id=user.id, scheme_id=manifest["scheme_id"],
+            challenge = Challenge(id=challenge_id, user_id=user_id, scheme_id=manifest["scheme_id"],
                 scheme_version=manifest["version"], profile_id=profile_id, round_id=round_["id"],
                 issued_at=issued, starts_at=round_["starts_at"], ends_at=round_["ends_at"],
                 public_data=generated.public, manifest=manifest,
                 target_mac=target_mac(settings.secret, challenge_id, generated.target), correctness_passed=True)
             session.add(challenge)
             session.flush()
-            return envelope(challenge=challenge_data(session, challenge))
+            return envelope(challenge=challenge_data(session, challenge), round_started=True,
+                            round_started_round_id=round_["id"])
 
     @app.get("/api/challenges/{challenge_id}/download")
     def download(challenge_id: str, request: Request):
@@ -528,6 +584,42 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                             includes_compatible_versions=[version for version in source_profiles if version != manifest["version"]],
                             profile_id=profile_id)
 
+    @app.get("/api/submissions/{submission_id}")
+    def submission_detail(submission_id: str, request: Request):
+        with db.transaction() as session:
+            record = session.execute(select(Submission, Challenge, User, Method)
+                .join(Challenge, Challenge.id == Submission.challenge_id)
+                .join(User, User.id == Submission.user_id)
+                .join(Method, Method.id == Submission.method_id)
+                .where(Submission.id == submission_id,
+                       Submission.user_id == Challenge.user_id,
+                       Submission.user_id == Method.user_id,
+                       Submission.profile_id == Challenge.profile_id,
+                       Submission.scheme_version == Challenge.scheme_version)).first()
+            if record is None:
+                raise HTTPException(404, "Submission not found.")
+            result, challenge, user, method = record
+            if not result.correct:
+                login = session_for(request, session)
+                if login is None or login.user_id != result.user_id:
+                    raise HTTPException(404, "Submission not found.")
+            # Receipt details always describe their original frozen instance,
+            # independent of compatible-release or inherited leaderboard credit.
+            manifest = challenge.manifest if isinstance(challenge.manifest, dict) else {}
+            size = manifest.get("instance_size", manifest.get("parameter_bits"))
+            size = size if type(size) is int and size > 0 else None
+            compute = result.compute if isinstance(result.compute, dict) else {}
+            return envelope(submission={
+                "id": result.id, "challenge_id": challenge.id, "handle": user.handle,
+                "status": "correct" if result.correct else "incorrect",
+                "scheme_id": challenge.scheme_id, "scheme_version": challenge.scheme_version,
+                "profile_id": challenge.profile_id, "instance_size": size,
+                "received_at": result.received_at, "elapsed_seconds": result.elapsed_seconds,
+                "method": {"id": method.id, "name": method.name, "pseudocode": method.pseudocode},
+                "compute": {key: compute[key] for key in ("hardware", "workers", "wall_seconds",
+                    "precomputation", "peak_memory", "notes") if key in compute},
+            })
+
     @app.get("/api/me/submissions")
     def history(request: Request):
         with db.transaction() as session:
@@ -585,4 +677,5 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         return FileResponse(source, media_type="text/plain", filename=source.name)
 
     research.register_routes(app, db, settings, clock, user_for, throttle)
+    protocol_proposals.register_routes(app, db, settings, clock, user_for, throttle)
     return app

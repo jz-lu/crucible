@@ -4,11 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from crucible import dh_v3, kem, registry, rsa
+from crucible import dh_v3, dh_v4, kem, registry, rsa
 from crucible.legacy import teaching_dh_v1
 
 
-@pytest.mark.parametrize("adapter", [teaching_dh_v1, kem, dh_v3, rsa])
+@pytest.mark.parametrize("adapter", [teaching_dh_v1, kem, dh_v3, dh_v4, rsa])
 def test_math_descriptor_preserves_pinned_manifests_and_plain_fields(adapter):
     raw_profiles = adapter.manifests()
     size_parameter = dict(adapter.SIZE_PARAMETER) if hasattr(adapter, "SIZE_PARAMETER") else None
@@ -33,11 +33,13 @@ def test_math_descriptor_preserves_pinned_manifests_and_plain_fields(adapter):
 
 
 def test_mapping_math_keeps_archive_ranges_and_current_certificates_separate():
-    current = registry.descriptor(dh_v3)["size_parameter"]["mapping_math"]
+    current = registry.descriptor(dh_v4)["size_parameter"]["mapping_math"]
+    release_three = registry.descriptor(dh_v3)["size_parameter"]["mapping_math"]
     previous = registry.descriptor(kem)["size_parameter"]["mapping_math"]
     assert "20 through 36" in previous
     assert "128" not in previous and "Pocklington" not in previous
-    assert "37..128" in current and "Pocklington" in current
+    assert "37..128" in release_three and "300" not in release_three
+    assert "37..300" in current and "Pocklington" in current
     assert r"2^{n-1}+1" in current and r"2^{n-1}+1" in previous
     assert r"q=r\,2^{\left\lceil\frac{n}{2}\right\rceil}+1" in current
     assert r"r \ge 2^{n-\left\lceil\frac{n}{2}\right\rceil-1}+1" in current

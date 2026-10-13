@@ -22,13 +22,16 @@ class NewChallenge(Input):
     scheme_id: str | None = Field(default=None, min_length=1, max_length=100)
     instance_size: int | None = Field(default=None, gt=0, strict=True)
     scheme_version: str | None = Field(default=None, min_length=1, max_length=32)
+    active_round_id: int | None = Field(default=None, ge=0, strict=True)
 
     @model_validator(mode="after")
     def one_selector(self):
         supplied = self.model_fields_set
         if "scheme_version" in supplied and (self.scheme_version is None or self.scheme_id is None):
             raise ValueError("A version selector requires a scheme identifier.")
-        selector = supplied - {"scheme_version"}
+        if "active_round_id" in supplied and self.active_round_id is None:
+            raise ValueError("An automatic request requires an integer active round identifier.")
+        selector = supplied - {"scheme_version", "active_round_id"}
         if selector == {"profile_id"} and self.profile_id is not None:
             return self
         if (selector == {"profile_id", "scheme_id"} and

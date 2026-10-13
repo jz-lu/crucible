@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from crucible import dh_v3 as kem
+from crucible import dh_v4 as kem
 from crucible import registry, rsa
 from crucible.db import Challenge, Submission
 from scripts.solve_rsa import recover
@@ -24,9 +24,9 @@ def test_catalogue_has_two_real_adapters_with_common_protocol_contract(system):
     app, _, _ = system
     entries = TestClient(app).get("/api/schemes").json()["schemes"]
     assert [item["id"] for item in entries] == [kem.SCHEME_ID, rsa.SCHEME_ID]
-    assert len({profile["id"] for item in entries for profile in item["profiles"]}) == 218
+    assert len({profile["id"] for item in entries for profile in item["profiles"]}) == 390
     for item in entries:
-        assert [profile["instance_size"] for profile in item["profiles"]] == list(range(20, 129))
+        assert [profile["instance_size"] for profile in item["profiles"]] == list(range(20, 301 if item["id"] == kem.SCHEME_ID else 129))
         assert item["largest_recovered_profile_id"] is None
         assert item["first_recovery"] is None
         assert item["recovered_profile_ids"] == []
@@ -81,7 +81,7 @@ def test_rsa_full_download_recovery_and_owned_round(system):
     assert catalogue[1]["next_profile_id"] == "rsa-24"
     assert catalogue[1]["recovered_profile_ids"] == ["rsa-23"]
     assert catalogue[0]["recovered_profile_ids"] == []
-    assert catalogue[1]["first_recovery"] == {"handle": "alice", "received_at": clock[0], "profile_id": "rsa-23", "scheme_version": "1"}
+    assert catalogue[1]["first_recovery"] == {"handle": "alice", "received_at": clock[0], "profile_id": "rsa-23", "scheme_version": "1", "submission_id": receipt.json()["submission"]["id"]}
     assert catalogue[0]["first_recovery"] is None
     assert alice.client.get("/api/me/submissions").json()["submissions"][0]["scheme_id"] == rsa.SCHEME_ID
 
@@ -91,7 +91,7 @@ def test_rsa_full_download_recovery_and_owned_round(system):
     "/api/leaderboard?profile_id=rsa-20&scheme_id=teaching-dh-kem&scheme_version=1",
     "/api/leaderboard?profile_id=rsa-20&scheme_id=rsa-kem&scheme_version=2",
     "/api/protocol/source?scheme_id=unknown&version=1",
-    "/api/protocol/example?scheme_id=rsa-kem&version=2",
+    "/api/protocol/example?scheme_id=rsa-kem&version=999",
 ])
 def test_crossed_scheme_or_version_is_rejected(system, path):
     app, _, _ = system
@@ -183,26 +183,26 @@ def test_first_recovery_tracks_first_solver_of_largest_size(system, monkeypatch)
     assert catalogue()[kem.SCHEME_ID]["first_recovery"] is None
 
     clock[0] += 1
-    solve(alice, "dh-20")
-    first_low = {"handle": "alice", "received_at": clock[0], "profile_id": "dh-20", "scheme_version": "3"}
+    low = solve(alice, "dh-20")
+    first_low = {"handle": "alice", "received_at": clock[0], "profile_id": "dh-20", "scheme_version": "4", "submission_id": low["id"]}
     assert catalogue()[kem.SCHEME_ID]["first_recovery"] == first_low
 
     clock[0] += 1
-    solve(bob, "dh-24")
-    first_high = {"handle": "bob", "received_at": clock[0], "profile_id": "dh-24", "scheme_version": "3"}
+    high = solve(bob, "dh-24")
+    first_high = {"handle": "bob", "received_at": clock[0], "profile_id": "dh-24", "scheme_version": "4", "submission_id": high["id"]}
     assert catalogue()[kem.SCHEME_ID]["first_recovery"] == first_high
 
     clock[0] += 1
     solve(alice, "dh-24")
     solve(carol, "dh-36", correct=False)
-    solve(carol, "rsa-25")
+    rsa_receipt = solve(carol, "rsa-25")
     progress = catalogue()
     assert progress[kem.SCHEME_ID]["largest_recovered_profile_id"] == "dh-24"
     assert progress[kem.SCHEME_ID]["first_recovery"] == first_high
     assert progress[kem.SCHEME_ID]["recovered_profile_ids"] == ["dh-20", "dh-24"]
     assert progress[rsa.SCHEME_ID]["recovered_profile_ids"] == ["rsa-25"]
     assert progress[rsa.SCHEME_ID]["first_recovery"] == {
-        "handle": "carol", "received_at": clock[0], "profile_id": "rsa-25", "scheme_version": "1"}
+        "handle": "carol", "received_at": clock[0], "profile_id": "rsa-25", "scheme_version": "1", "submission_id": rsa_receipt["id"]}
 
 
 def test_first_recovery_breaks_receipt_ties_like_profile_leaderboard(system):
@@ -218,6 +218,6 @@ def test_first_recovery_breaks_receipt_ties_like_profile_leaderboard(system):
     winner = receipts[min(receipts)]
     client = actors[0][0].client
     scheme = next(item for item in client.get("/api/schemes").json()["schemes"] if item["id"] == rsa.SCHEME_ID)
-    assert scheme["first_recovery"] == {"handle": winner, "received_at": clock[0], "profile_id": "rsa-22", "scheme_version": "1"}
+    assert scheme["first_recovery"] == {"handle": winner, "received_at": clock[0], "profile_id": "rsa-22", "scheme_version": "1", "submission_id": min(receipts)}
     board = client.get("/api/leaderboard?profile_id=rsa-22&scheme_id=rsa-kem").json()["entries"]
     assert board[0]["handle"] == winner

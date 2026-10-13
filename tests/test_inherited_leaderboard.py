@@ -58,7 +58,7 @@ def test_inherited_names_are_downward_only_and_keep_earliest_qualifying_evidence
         ("bob", "dh-22", False), ("alice", "dh-24", True)]
     inherited = middle[1]
     assert inherited["challenge_id"] == high["id"]
-    assert inherited["scheme_version"] == "3"
+    assert inherited["scheme_version"] == registry.CURRENT[dh_v3.SCHEME_ID]
     assert inherited["instance_size"] == 24
     assert inherited["received_at"] == receipt["received_at"]
     assert inherited["method"]["id"] == evidence["method_id"]
@@ -92,6 +92,7 @@ def test_receipt_ties_and_top_ten_are_consistent_for_inherited_credit(system):
 
 
 def test_compatibility_is_source_profile_specific_and_archives_stay_strict(system, monkeypatch):
+    monkeypatch.setitem(registry.CURRENT, dh_v3.SCHEME_ID, "3")
     app, clock, _ = system
     old, new, ancient = (Actor(app) for _ in range(3))
     for actor, handle in ((old, "old"), (new, "new"), (ancient, "ancient")):

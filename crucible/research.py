@@ -17,8 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, and_, func, or_, select
 from sqlalchemy.orm import Mapped, mapped_column
 
-from . import dh_v3 as kem
-from . import registry
+from . import kem, registry
 from .db import Base, Challenge, Submission, User
 from .legacy import teaching_dh_v1
 
@@ -59,18 +58,22 @@ class ContributionRevision(Base):
 
 def targets():
     """An explicit, extensible catalogue; no uploads become executable targets."""
+    current = registry.adapter_for(kem.SCHEME_ID)
     profiles = [{**{key: item[key] for key in ("id", "name", "parameter_bits", "parameter_label")},
                  "instance_size": item.get("instance_size", item["parameter_bits"])}
-                for item in kem.manifests()]
-    scheme_versions = [{"version": kem.SCHEME_VERSION, "profiles": profiles}]
-    for (scheme_id, version), adapter in registry.ADAPTERS.items():
-        if scheme_id == kem.SCHEME_ID and version != kem.SCHEME_VERSION:
-            previous_profiles = [{**{key: item[key] for key in ("id", "name", "parameter_bits", "parameter_label")},
-                                  "instance_size": item.get("instance_size", item["parameter_bits"])}
-                                 for item in adapter.manifests()]
-            scheme_versions.append({"version": version, "profiles": previous_profiles})
+                for item in current.manifests()]
+    scheme_versions = [{"version": current.SCHEME_VERSION, "profiles": profiles}]
+    # Registered DH releases have integer version identifiers.
+    archived = sorted(((version, adapter) for (scheme_id, version), adapter in registry.ADAPTERS.items()
+                       if scheme_id == kem.SCHEME_ID and version != current.SCHEME_VERSION),
+                      key=lambda item: int(item[0]), reverse=True)
+    for version, adapter in archived:
+        previous_profiles = [{**{key: item[key] for key in ("id", "name", "parameter_bits", "parameter_label")},
+                              "instance_size": item.get("instance_size", item["parameter_bits"])}
+                             for item in adapter.manifests()]
+        scheme_versions.append({"version": version, "profiles": previous_profiles})
     return [
-        {"id": kem.SCHEME_ID, "name": "Teaching DH-KEM", "kind": "scheme", "version": kem.SCHEME_VERSION,
+        {"id": kem.SCHEME_ID, "name": "Teaching DH-KEM", "kind": "scheme", "version": current.SCHEME_VERSION,
          "summary": "An executable, deliberately weak KEM for studying recovery methods and the research workflow.",
          "definition": "Key generation publishes g^x; encapsulation publishes g^r and derives a shared secret from g^(xr) and the transcript. See the pinned reference specification for the full encoding and distribution. This teaching construction claims no security guarantee.",
          "related_targets": [{"id": "finite-field-dlog", "relationship": "A discrete-log solution supplies an attack on this KEM. No converse or formal security reduction is claimed."}],
@@ -143,7 +146,7 @@ def _validated_values(body, session, user_id, contribution_id=None):
     allowed_profiles = {item["id"] for item in version["profiles"]}
     if len(set(body.profile_ids)) != len(body.profile_ids) or any(item not in allowed_profiles for item in body.profile_ids):
         raise HTTPException(422, "Choose distinct profiles belonging to this target.")
-    adapter = registry.adapter_for(kem.SCHEME_ID, body.target_version) if body.target_id == kem.SCHEME_ID else kem
+    adapter = registry.adapter_for(kem.SCHEME_ID, body.target_version) if body.target_id == kem.SCHEME_ID else registry.adapter_for(kem.SCHEME_ID)
     for profile_id in body.profile_ids:
         adapter.get_manifest(profile_id)
     related = str(body.related_contribution_id) if body.related_contribution_id else None

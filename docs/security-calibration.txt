@@ -1,0 +1,115 @@
+CRUCIBLE — INITIAL CLASSICAL CALIBRATION
+Model: classical-baseline-v1
+Status: restricted heuristic reference, not a security certificate
+
+Purpose and interpretation
+
+The new calibrated ladder contains tiers 1 through 50. Tier 50 targets a rough
+128-bit classical reference. This common starting convention makes the initial
+parameter choices inspectable; it does not establish equal real attack costs,
+equal security of the complete KEMs, or an hour of work on any given hardware.
+
+The original estimate remains fixed after successful attacks. Observed receipts,
+reported resources, future attack estimates, and revised models are separate
+evidence. A new mapping/model requires a new release; old challenge identities,
+source hashes, parameters and claims must not be rewritten.
+
+Tier targets
+
+For integer t in 1..25, target(t) = t + 7 reference bits.
+For integer t in 26..50, target(t) = 32 + 96(t - 25)/25 reference bits.
+
+Thus the first 25 tiers advance by one reference bit, from 8 to 32. Later tiers
+advance by 3.84 reference bits, reaching 128 at tier 50. This spacing is an
+explicit product choice, not a mathematical property of cryptographic security.
+
+Parameter selection
+
+Let n be the bit length of the RSA modulus or DH field modulus, and use natural
+logarithms in:
+
+  F(n) = (n ln 2)^(1/3) [ln(n ln 2)]^(2/3)
+  G(n) = 128 F(n) / F(3072)
+  B(n) = min(n/4, G(n))
+
+Select the smallest integer n in 32..3072 for which B(n) >= target(t). This gives
+the immutable modulus-bit table, listed in tier order:
+
+  32, 36, 40, 44, 48, 52, 56, 60, 64, 68,
+  72, 76, 80, 84, 88, 92, 96, 100, 104, 108,
+  112, 116, 120, 128, 137, 173, 215, 263, 316, 374,
+  439, 511, 588, 673, 764, 862, 967, 1080, 1201, 1329,
+  1465, 1609, 1762, 1922, 2092, 2270, 2457, 2653, 2858, 3072.
+
+The RSA profile reference is B(n). Its n/4 term approximates Pollard-rho work
+for balanced factors from bit lengths, ignoring constants and the variation in
+actual factor magnitudes. G(n) is a normalized leading-term NFS shape.
+
+The DH profile reference is min(log2(q)/2, G(n)), using the actual registered
+prime subgroup order q. The first term models generic subgroup discrete-log
+work. The adapter must independently establish prime p and q, q | p-1, and a
+generator of order q. Using q of ceil(n/2)+1 bits ensures the generic reference
+is at least n/4; certificates must also verify any claimed q^2 > p condition.
+Using only subgroup size and ignoring finite-field NFS would overstate this
+reference for large parameters.
+
+The recorded target and the parameter-derived reference are distinct fields.
+For example, tier 25 targets 32 but n=137 gives RSA reference 32.081191. The
+metadata rounds the displayed reference to six decimal places; the parameter
+search uses unrounded values. Such decimals record the formula faithfully;
+they are not an assertion of that much accuracy in real attack costs.
+
+Provenance and limits
+
+1. NIST SP 800-57 Part 1 Rev. 5, Table 2, provides the conventional 128-bit
+   comparison point at a 3072-bit RSA modulus, or finite-field parameters
+   L=3072 and subgroup order length N=256. This motivates the common anchor;
+   it does not endorse this interpolation, these tiny tiers, or these custom
+   KEM implementations.
+   https://nvlpubs.nist.gov/nistpubs/specialpublications/nist.sp.800-57pt1r5.pdf
+
+2. RFC 7919, Appendix A.2, estimates its ffdhe3072 group at 125 bits and notes
+   differences between estimation sources. Therefore the 128-bit anchor is a
+   rough convention, not a precise or universally accepted estimate.
+   https://www.rfc-editor.org/rfc/rfc7919.html#appendix-A.2
+
+3. NFS has a heuristic asymptotic L-form; our G(n) retains its leading shape
+   and normalizes at the chosen anchor. The ignored lower-order terms and
+   algorithm-specific constants matter, especially at small sizes. This is a
+   project formula, not the NIST FIPS implementation-guidance formula.
+   Joux et al., The Number Field Sieve in the Medium Prime Case:
+   https://iacr.org/archive/crypto2006/41170323/41170323.pdf
+
+4. Pollard's factoring method depends on the square root of the smallest
+   factor. Its n/4 approximation presumes balanced factors and does not account
+   for each generated factor's exact magnitude, arithmetic cost, or constants.
+   https://pages.cs.wisc.edu/~cs812-1/pollardrho.pdf
+
+5. This is a restricted rho/NFS reference. It does not model ECM, quadratic
+   sieve, all special-purpose methods, or exceptional weak instances. ECM is
+   an established factoring method whose cost depends on the smallest factor;
+   omitting it prevents calling this an exhaustive best-known-attack estimate.
+   https://annals.math.princeton.edu/1987/126-3/p09
+
+6. DH reuses the registered public group. Prime-specific preparation can be
+   shared across accounts and rounds. The reference includes setup work for a
+   target group and must not be read as an online-only cost once preparation
+   has already been performed. Participants must document preparation as well
+   as work after receiving an instance.
+   https://weakdh.org/logjam.html
+
+The certified-prime samplers have explicit distributions, not an automatic
+equivalence to uniform prime sampling. Certificates prove arithmetic facts;
+they do not prove that generated parameters resist special attacks. Neither
+the model nor a recovery challenge establishes IND-CPA/IND-CCA security of the
+custom transcript KDFs, implementation safety, or quantum resistance. No
+conversion to seconds, hardware budgets or hourly success probability is made.
+
+Implementation contract
+
+crucible/calibration.py exports MODEL, target_bits(t), modulus_bits_for_tier(t),
+estimate_bits(n), and profile_estimate(t,n,subgroup_order=None). The last returns
+{model_id,bits,target_bits}; DH supplies its actual q. A below-target parameter
+returns a below-target reference rather than being silently raised to target.
+Frozen adapters embed their own table and declarations; catalogue presentation
+does not regenerate parameters or mutate source-pinned implementations.

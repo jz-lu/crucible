@@ -8,12 +8,13 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from crucible import dh_v3 as kem
+from crucible import dh_v4 as kem
 from crucible.app import create_app
 from crucible.config import Settings
 from crucible.db import Challenge
 from crucible.research import Contribution, ContributionRevision
 from scripts.solve_teaching import recover
+from test_api import pin_legacy_releases
 
 
 class Actor:
@@ -31,7 +32,8 @@ class Actor:
 
 
 @pytest.fixture
-def research_system(tmp_path):
+def research_system(tmp_path, monkeypatch):
+    pin_legacy_releases(monkeypatch)
     clock = [3600600.0]
     settings = Settings(f"sqlite:///{tmp_path / 'research.db'}", b"r" * 32,
                         origins=("http://testserver",), rate_limits=False)
@@ -78,11 +80,12 @@ def test_catalogue_separates_scheme_and_problem_without_hardness_claim(research_
     problem = targets["finite-field-dlog"]
     assert problem["kind"] == "assumption"
     assert "No hardness claim" in problem["definition"]
-    assert [item["parameter_bits"] for item in problem["profiles"]] == list(range(20, 129))
+    assert [item["parameter_bits"] for item in problem["profiles"]] == list(range(20, 301))
     assert problem["related_targets"][0]["id"] == "teaching-dh-kem"
     versions = targets["teaching-dh-kem"]["versions"]
-    assert [item["version"] for item in versions] == ["3", "2", "1"]
-    assert [item["parameter_bits"] for item in versions[2]["profiles"]] == [20, 24, 28, 32, 36]
+    assert [item["version"] for item in versions] == ["4", "5", "3", "2", "1"]
+    legacy_one = next(item for item in versions if item["version"] == "1")
+    assert [item["parameter_bits"] for item in legacy_one["profiles"]] == [20, 24, 28, 32, 36]
     assert [item["version"] for item in problem["versions"]] == ["1"]
 
 

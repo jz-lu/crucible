@@ -7,6 +7,7 @@ from alembic import context
 from crucible.config import load_settings
 from crucible.db import Base
 from crucible import research  # Register versioned research tables in metadata.
+from crucible import protocol_proposals  # Register private intake records in metadata.
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

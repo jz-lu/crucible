@@ -70,25 +70,49 @@ Core endpoints:
   GET  /api/protocol/source?version=2
   GET  /api/protocol/example
 
-Instance selection
+Challenge tier selection
 
-The common selector is an integer instance_size n, scoped to a scheme and release.
+The visible selector is Challenge tier; the compatible API field remains the
+integer instance_size, scoped to a scheme and release.
 Scheme metadata describes its size_parameter. The registered mapping determines
 exact parameters; manifests and public challenge contracts retain instance_size
 alongside the full parameter vector, encodings, and release identity.
 
 POST /api/challenges accepts exactly one of these selection forms:
   {"scheme_id":"teaching-dh-kem","instance_size":21}
-  {"profile_id":"dh-21"}
+  {"profile_id":"dh-v5-tier-21"}
 Both resolve to the same profile, so switching forms cannot obtain an extra
 instance. The current registered release supplies the mapping for new issuance.
 
-Teaching DH-KEM supports every integer n from 20 through 36, where n is the
-subgroup order's bit length. Its output key is always 32 bytes, independently of
-n. Other KEMs may define different meanings, support only a subset of integers,
-or map n to a parameter vector. Equal n values across schemes do not establish
-comparable strength or attack cost. Accept only registered mappings; never invent
-new cryptographic parameters by interpolating unsupported sizes.
+DH5 and RSA2 each register tiers 1–50 under the frozen classical-baseline-v1
+reference. Tiers 1–25 target 8–32 reference bits, then reach128 at Tier 50. Tier and
+actual field/modulus/subgroup sizes are separate. Estimates are limited rho/NFS
+references rather than security guarantees or measured costs. Both still output
+32-byte shared secrets. New profile IDs and source releases isolate old ladders.
+See security-calibration.txt for exact mappings and model limitations. Accept
+only registered parameters; never derive an unsupported profile from a tier.
+
+Round access
+
+GET /api/challenges is read-only. Its round_started flag and
+round_started_round_id report whether this account has any issued instance for
+this exact scheme/release/current UTC hour, using one clock snapshot. A manual
+POST starts the round by issuing the selected tier. Subsequent tiers are issued
+on demand when opened in Challenge; no bulk generation occurs. The browser does
+not issue challenges while viewing Leaderboard or Protocol, or previewing a slider.
+
+Automatic POSTs include active_round_id. Before pinning or generation, the server
+requires it to match the current hour and an existing challenge for this account,
+scheme, and exact release. Stale or unstarted automatic requests return 409. Manual
+requests omit this guard. Successful responses identify their issued round;
+repeat requests reuse the same instance. Account, scheme, release, and hour
+boundaries require a new explicit start. Generation failures never activate access.
+
+Scheme descriptors expose profile_metrics and profile_metrics_basis separately
+from frozen manifests. Public-key/ciphertext lengths count canonical binary bytes;
+unknown lengths remain null. Encodings exclude JSON/hex wrappers and registered
+shared parameters. The catalogue's selected metric changes display/sort order;
+it never changes which actual recovery supplies attribution or its source link.
 
 compute includes hardware, workers (positive integer), wall_seconds, precomputation,
 peak_memory, and optional notes. Candidate encodes the complete shared secret as
@@ -153,3 +177,16 @@ https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
 https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
 https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html
 https://docs.sqlalchemy.org/en/20/dialects/sqlite.html
+
+Calibrated generation and graph evidence
+
+DH5 public groups and exact primality certificates are embedded in its pinned
+source; no live prime search. RSA2 creates fresh balanced certified-prime factors
+with candidate, pair, and five-second monotonic generation limits. Exhaustion
+returns no instance and is retryable; arithmetic agreement failures still pause
+the profile. Expensive generation runs outside database transactions. Before
+persisting, a short final transaction rechecks session/account, hour, source,
+registered manifest, active-round permission, duplicate issuance and holds.
+Overview graphs plot exact profile values and the frozen initial estimate.
+A thin red line marks the largest recorded recovery for that release; faint
+left shading is a progress cue, not evidence of individual smaller recoveries.

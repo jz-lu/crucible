@@ -46,24 +46,27 @@ Implementation
   local development. PostgreSQL integration and concurrency still need testing.
 - Handle/password accounts use Argon2id and server-side sessions. There is no email
   verification, account-recovery service, or moderation system yet.
-- The common selector is an integer instance size n. Each scheme and release maps
-  supported n values to exact registered parameters. Future KEMs may support a
-  subset of integers or map n to a parameter vector. Equal n values do not imply
-  comparable strength or attack cost across schemes.
-- One executable teaching KEM precedes admission of a genuine research candidate.
-  Release 2 supports all 17 integer sizes from 20 through 36. For this KEM, n is
-  the subgroup order's bit length; the shared-secret output remains 32 bytes at
-  every size. Scheme metadata describes size_parameter, and manifests and public
-  challenge contracts retain instance_size alongside the full parameters.
-- POST /api/challenges accepts either a scheme_id with instance_size or the
-  existing profile_id. Exactly one selection form is required; both resolve to
-  the same registered profile and preserve per-profile challenge uniqueness.
-- The five release-1 profiles and KDF domain are unchanged. Release 1 is archived
-  byte for byte; source fingerprints are pinned by release. The supplied solver
-  accepts releases 1 and 2. Earlier challenges, receipts, and findings are retained.
-- The default board shows the current release; the leaderboard API accepts
-  scheme_version=1 for historical records. The source API accepts version=1 for
-  the archived adapter. Findings on earlier registered releases remain revisable.
+- DH5 and RSA2 use 50 registered Challenge tiers, numbered1–50. Their frozen
+  classical rho/NFS reference targets 8–32 bits across the first 25 tiers, then
+  reaches 128 at Tier 50. Actual modulus/field/subgroup sizes remain separate.
+  Estimates are explicitly limited references, not a security guarantee or
+  a one-hour attack-time prediction. See security-calibration.txt.
+- Both output 32-byte shared secrets. Tier 50 uses a 3072-bit field/modulus.
+  The catalogue shows recovered tier, attribution and participant count; scheme
+  overviews show exact size curves, initial reference curves and red recovery
+  markers. Timing and quantum-estimate cards remain empty templates.
+- POST /api/challenges accepts either scheme_id plus instance_size or profile_id.
+  A first explicit request starts access for this account/scheme/release/hour.
+  Later opened Challenge tiers load on demand with an active_round_id guard.
+  New hours require a fresh start. GETs and slider previews never issue instances.
+- Frozen DH releases 1–4 and RSA 1 remain archived with their source fingerprints.
+  The calibrated releases have new profile IDs and inherit no old-tier credit.
+  The DH example accepts releases 1–5 up to 36 subgroup bits; the RSA example
+  accepts releases 1–2 up to 36 modulus bits. These are deliberately bounded
+  entry-level public-input solvers.
+- Leaderboard and source APIs accept an exact historical version. Newer receipts
+  never flow backwards into archived versions. Findings on earlier registered
+  releases remain revisable.
 - A short algebraic argument establishes perfect correctness of the specified DH
   construction. Executable tests and each instance's round-trip check have a
   separate scope. An implementation fault pauses new issuance for that profile;

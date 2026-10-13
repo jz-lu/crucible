@@ -1,0 +1,238 @@
+CRUCIBLE KEM SPECIFICATION, VERSION 1
+
+Purpose and limits
+
+The JSON format identifier is "crucible-kem-spec-v1". This is a common,
+human-readable description of a proposed KEM. It is not executable code, a
+machine-checked cryptographic proof, or an automatically admitted challenge
+adapter. Validation checks types, required sections, internal labels, document
+size and link syntax. It cannot establish that the algorithms implement the
+description or that an author's correctness/security claim is true.
+
+An implementation is optional for initial submission. Activation requires a
+reviewed reference artifact with an exact SHA-256 fingerprint, explicit human
+review, and a separately admitted adapter. An author's name/version or URL
+never gives authority to replace a registered scheme or bind to its identity.
+The reviewer-controlled decision and adapter binding belong outside this JSON.
+Passing JSON validation, entering review, and activation are distinct events.
+
+Files are UTF-8 JSON and must fit 48 KiB (49152 bytes). The compact input and
+normalized document also have a 48 KiB ceiling. The existing API request limit
+is 64 KiB for the complete wrapper; a caller must fit both limits. No NaN,
+infinity or unpaired Unicode surrogates are accepted. No extra properties or
+type coercions are accepted. Integers cannot be booleans or quoted numbers.
+Required prose is trimmed and must remain nonblank. All counts below are
+character limits unless explicitly measured in bytes.
+
+Common structure
+
+Required top-level fields:
+
+  format: exactly "crucible-kem-spec-v1"
+  name: nonblank string, at most 100 characters
+  version: nonblank string, at most 32 characters
+  summary: nonblank string, at most 1000 characters
+  algorithms: object described below
+  parameters: object described below
+  encoding: object described below
+  correctness: object described below
+  security: object described below
+  references: array described below (may be empty)
+
+Optional top-level fields:
+
+  implementation: artifact object described below, or null; defaults to null
+  _instructions: object of nonblank string keys and values, at most 32 entries;
+                 keys at most 100 characters, values at most 4000 characters
+
+If _instructions is supplied it must be an object, not null. This is template
+guidance only. It is validated and then removed from the stored normalized
+document and content hash. The remaining optional/default null fields are
+retained. Existing documents without _instructions are accepted.
+
+algorithms
+
+All four fields are required nonblank strings, at most 6000 characters each:
+
+  setup: public setup, parameter validation and setup trust assumptions
+  keygen: inputs, outputs, secret/public state, randomness and checks
+  encapsulate: inputs, outputs, randomness, public-key checks and derivation
+  decapsulate: inputs, outputs, validation and invalid-input behavior
+
+Specify whether invalid public keys/ciphertexts cause explicit rejection,
+return a replacement/rejection key, or have some other specified result.
+Describe all relevant checks, byte framing and KDF domains. These are prose or
+pseudocode, never evaluated expressions. The validator requires a nonblank
+description but cannot determine whether it is complete or mathematically
+correct; the reviewer must assess that.
+
+parameters
+
+All fields are required:
+
+  tier_meaning: string, at most 1000 characters
+  supported_tiers: one of the two exact objects below
+  mapping: string, at most 6000 characters
+  distribution: string, at most 6000 characters
+  reuse: string, at most 3000 characters
+
+The two supported_tiers representations are:
+
+  {"kind":"range","min":20,"max":40,"step":1}
+  {"kind":"list","values":[20,24,28]}
+
+A range includes both endpoints, has positive step, max >= min, and max lies
+on a step from min. A list has 1..1024 unique integers in increasing order.
+Every tier and step is a strict integer from 1 through 1000000000. Parsing a
+range does not expand it or make the listed tiers available as challenges.
+
+Explain exactly how a tier selects parameters or a generation procedure.
+Specify the complete distributions, randomness source, rejection sampling and
+conditioning. Identify what is public or secret and what is reused across
+setup, keys, instances, accounts and rounds. A common tier selector does not
+establish equal security or equal attack cost between different constructions.
+
+encoding
+
+All fields are required:
+
+  public_key: string, at most 3000 characters
+  ciphertext: string, at most 3000 characters
+  shared_secret: string, at most 3000 characters
+  shared_secret_bytes: strict integer 1..4096, or null
+
+Describe canonical binary encodings, field widths, endianness, padding, framing
+and JSON/hex transport separately. shared_secret describes the derivation/KDF,
+domain separation and exact output encoding. shared_secret_bytes states a
+fixed byte length; use null when it depends on the tier or another parameter,
+and specify the length mapping in shared_secret. Null never means 32 bytes.
+No length expression is evaluated by intake. An executable adapter must later
+provide exact, machine-usable limits for every admitted parameter profile.
+
+correctness
+
+Required fields:
+
+  kind: "perfect", "statistical", or "unknown"
+  failure_bound: nonblank string of at most 1000 characters, or null
+  argument: nonblank string, at most 6000 characters
+  scope: nonblank string, at most 3000 characters
+
+Optional field:
+
+  evidence: nonblank string of at most 3000 characters, or null; defaults null
+
+Perfect requires the literal bound "0". Statistical requires a stated bound
+string. Unknown requires null. These label-consistency checks do not verify the
+bound. State what is unknown rather than supplying a fabricated argument.
+
+The scope must identify admitted parameters, honest keys/ciphertexts, the
+probability space and any conditioning, and mathematical/implementation
+assumptions. Honest encapsulation/decapsulation agreement is distinct from
+security against an adversary. Evidence may describe proofs, test vectors,
+tests or review status, but intake never treats the description as proof that
+those tests ran or that the implementation is certified.
+
+security
+
+All four fields are required nonblank strings:
+
+  notion: at most 1000 characters
+  model: at most 1000 characters
+  claim: at most 4000 characters
+  assumptions: at most 4000 characters
+
+State the objective/game, adversarial/oracle access, classical or quantum model,
+setup/precomputation and cost assumptions, the actual claim and supporting
+assumptions. Explicitly say when no claim or reduction is provided. Free text
+is an author's statement, never an executable admission policy or a verified
+security category. Recovering a challenge secret is evidence of that recovery;
+it is not a lower bound on a scheme's security.
+
+implementation and references
+
+implementation, when non-null, has:
+
+  url: required nonblank URL, at most 2048 characters
+  sha256: 64 lowercase hexadecimal characters, or null; defaults null
+  runtime: nonblank string up to 1000 characters, or null; defaults null
+  entrypoint: nonblank string up to 1000 characters, or null; defaults null
+
+references is an array of at most 16 objects, each with exactly:
+
+  title: nonblank string, at most 200 characters
+  url: nonblank URL, at most 2048 characters
+
+URLs must use HTTPS, without credentials, whitespace, control characters or
+backslashes, or must exactly match an existing registered source endpoint:
+
+  /api/protocol/source?scheme_id=teaching-dh-kem&version=4
+
+The latter exception identifies a known immutable source artifact; arbitrary
+relative URLs, unknown releases, query extras and duplicate parameters are
+not accepted. Nothing is fetched, installed, imported or executed during
+validation or submission. A linked artifact must later be retrieved and
+reviewed through a separate deliberate process. Links do not imply endorsement.
+
+Canonical content and Python entry points
+
+  ProtocolSpec.model_validate(input_document)
+  canonical_spec(validated_specification) -> dict
+  ProtocolSpec.model_json_schema() -> dict
+  template_spec() -> dict
+  builtin_spec(scheme_id, version=None) -> dict
+
+The blank template contains required empty placeholders and is intentionally
+invalid until completed. Built-in examples are valid documents in this same
+format. Their exact version may be specified; omitted version uses the current
+registered release. Unknown schemes/releases raise ValueError. No instance or
+key is generated to produce an example.
+
+Canonical content is the normalized model dump with defaults/nulls retained
+and _instructions omitted. For the stored content hash, serialize that dict
+with sorted keys, separators (",", ":"), ensure_ascii=False and allow_nan=False;
+encode as UTF-8 and compute SHA-256. This project-specific normalization is
+not a claim of RFC 8785 compliance. canonical_spec raises ValueError for a
+nonvalidated argument, invalid Unicode or an oversized document; Pydantic
+reports model-validation failures as ValidationError.
+
+Registered examples
+
+The finite-field Diffie-Hellman examples retain each release's actual ladder:
+release 1 has the five tiers 20,24,28,32,36; release 2 has every tier 20..36;
+release 3 has every tier 20..128; release 4 has every tier 20..300. The public
+safe-prime group is fixed per tier and reused across keys/accounts/rounds;
+secret key and encapsulation exponents are independently fresh per new issued
+instance. The complete KDF domain, framing and field list come from the exact
+release manifest. A public key and ciphertext each encode one group element;
+registered p,q,g are separate shared parameters.
+
+The RSA example is release 1 with every tier 20..128. The public exponent is
+fixed, while every new issued instance draws new primes and modulus, then a
+fresh encapsulated integer. Independently sampled values can coincide. N and
+e are each padded to ceil(n/8) bytes in the public key, including the exponent;
+the ciphertext is one such integer. This is a custom reference construction
+with a transcript-bound KDF, not a standardized RSA-KEM implementation.
+
+Both examples output 32 bytes and preserve the original correctness scope,
+argument, implementation evidence caveats, security caveats and exact source
+SHA-256. They provide explicit invalid-input rejection behavior. Source hashes
+identify the frozen executable release, not certification of its claims.
+
+Admission and the future executable adapter
+
+Intake does not yet encode arbitrary KEMs into runnable challenges. Activation
+requires an explicit reviewed bridge from a specification/artifact to a trusted
+adapter with stable scheme, release and profile identities. A textual entrypoint
+is never dynamically imported. The existing adapter pattern has keygen,
+encapsulate, decapsulate, exact manifests and public serialization; a future
+general plugin API requires its own deliberate interface and isolation review.
+
+Before activation, the reviewer must assess at least the complete algorithms
+and distributions; public/secret/reused state; parameter validity and bounded
+generation cost; correctness scope, evidence and known-answer/invalid-input
+tests; exact canonical encodings and per-profile output sizes; source/runtime
+fingerprints; separation of public challenge data from secret answers; and
+version/provenance handling. Admission does not turn a security claim into a
+proof. No decision may silently change frozen adapters, relabel prior recovery
+receipts, or grant cross-release compatibility without explicit justification.

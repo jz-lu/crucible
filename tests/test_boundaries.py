@@ -25,6 +25,7 @@ from crucible.config import Settings, load_settings
 from crucible.db import Challenge, LoginSession, ProfileIncident, Submission, User
 from crucible.security import target_mac, token_hash
 from scripts.solve_teaching import recover
+from test_api import pin_legacy_releases
 
 
 ORIGIN = "http://testserver"
@@ -44,7 +45,8 @@ def headers(csrf):
 
 
 @pytest.fixture
-def boundary(tmp_path):
+def boundary(tmp_path, monkeypatch):
+    pin_legacy_releases(monkeypatch)
     now = [3_600_000.0 + 600]
     settings = Settings(
         database_url=f"sqlite:///{tmp_path / 'boundary.db'}",

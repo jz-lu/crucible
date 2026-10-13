@@ -1,5 +1,5 @@
 CRUCIBLE — RUNNING WORK LIST
-Updated 2026-10-12
+Updated 2026-10-13
 
 Status key
 Verified: implemented and checked for the stated scope in the local candidate.
@@ -7,12 +7,280 @@ Local visual trial: implemented and checked; visual direction remains revisable.
 Pending: an operational step or decision has not yet been confirmed.
 Proposed: an idea for discussion, not adopted behavior.
 
+Current batch — verified and live locally
+
+- The user authorized DH release 5 and RSA release 2 with tiers 1–50. Tiers 1–25
+  target 8–32 classical reference bits in one-bit steps; tiers 26–50 target
+  35.84–128 in 3.84-bit steps. The frozen physical-size table runs from 32 to
+  3072 bits. Tier and parameter_bits are separate; Tier 50 uses 3072-bit fields/
+  moduli, not 50-bit groups or keys.
+- classical-baseline-v1 is a restricted rho/NFS reference with a 3072 → 128 anchor.
+  It omits ECM, other attacks and cost constants; it is not a best-known attack
+  estimate, security guarantee, quantum estimate or hourly success prediction.
+  See docs/security-calibration.txt for the model, frozen sources and limitations.
+- DH 5 uses embedded, offline-generated parameters with exact recursive prime
+  certificates and an exact-order subgroup. Its public groups are reused, with
+  fresh private exponents for each instance. RSA 2 uses fresh balanced factors,
+  exact private prime certificates and a stated structured, nonuniform sampler.
+  Successful honest key generation supports perfect agreement, including RSA
+  nonunits; this does not certify confidentiality. RSA sampling has shared
+  candidate/pair limits and a five-second monotonic deadline between bounded
+  operations; exhaustion returns no key, separate from correctness failure.
+- Existing adapter files remain unchanged. New profile IDs and KDF domains keep
+  the new calibrated records separate; old parameter-bit tiers are not relabelled.
+  Old source downloads and release descriptions remain exact.
+- Every graph emphasizes the largest actual recovery with a vertical marker when
+  a record exists; the line does not claim all lower tiers were actually solved.
+  The classical card now has a declared reference curve for calibrated releases.
+  Computation and quantum cards remain empty until supported evidence exists.
+- The first page is titled KEM Schemes. Remove the Participants paragraph while
+  retaining its count definition in the header tooltip. Temporarily hide overview
+  notes; keep protocol/source facts available. Activity-based ordering is unchanged.
+- Completed the explicitly requested local activity reset after a private SQLite
+  backup under .local/backups/. All existing accounts and sign-in sessions were
+  compared before/after and preserved exactly, as were reviewer policy, server
+  secrets, adapter pins and frozen sources. This was separate from tier remapping.
+- Verified: 508 backend tests and 118 frontend groups; isolated Chrome exercises
+  include independent early-tier recoveries, graph markers and calibrated curves.
+  Live desktop/mobile checks confirm the 1–50 ladders and empty recovery history.
+- User authorized commit/push of this source update. Local databases, credentials,
+  session records and backups remain ignored and are not part of the source change.
+- Scoring remains unimplemented and no formula is adopted.
+
+Previous verified checkpoint — catalogue participation and tier entry
+
+- Schemes have no security ranking while meaningful cross-scheme comparison is
+  unresolved. The user's latest instruction orders by participant_count descending,
+  alphabetically on ties. This activity ordering supersedes the initial alphabetical
+  choice as well as older recovered-tier or selected-byte ordering.
+  The catalogue now shows Tier N; size comparisons live in the scheme overview.
+  Per-scheme recovery leaderboards and exact attribution remain available.
+- Rename First recovery to Recovered by. The entry still identifies the earliest
+  successful account at the displayed largest recovered tier and opens its exact
+  receipt; the new wording does not change attribution or evidence.
+- Add Participants: distinct accounts with at least one recorded correct or
+  incorrect recovery submission. Deduplicate across profiles and rounds; include
+  only the exact release and explicitly compatible source profiles/releases.
+  Challenge issuance/downloads, imported drafts, rejected requests and derived
+  smaller-tier credit do not create additional participation. An account count
+  is not a claim of unique humans or independent attacks.
+- Jump to is an empty destination field by default. Show the current selection
+  on the rail and slider; do not fill the field with the selected tier. Blank
+  input is a no-op, preserving the selection and issuing no request.
+- Participant counts, empty Jump, descending participation order and Recovered by
+  are deployed and browser-verified. The overview changes passed 392 backend
+  tests, 115 frontend groups, isolated browser checks, and read-only live checks
+  at desktop, tablet and mobile widths, with no page errors or API writes.
+- Scoring is not implemented or finalized. Recorded recovery evidence, explicit
+  release provenance and scheme review support future design work; they do not
+  settle a points formula. Accepted new schemes, personal progress and novelty
+  are foundational goals, with detailed incentive analysis still deferred.
+
+Previous verified checkpoint — scheme overview, graph templates, and identity merge
+
+- Clicking a scheme opens a dedicated overview with a 2x2 graph grid. The first
+  cards show exact public-key/ciphertext size by Challenge tier; both can switch
+  to either encoding or shared-secret bytes. Published values are also in
+  accessible expandable tables. Sparse archives use their own exact profiles.
+- Computation selectors cover key generation, encapsulation and decapsulation;
+  security selectors cover classical and quantum models. At that checkpoint
+  both were empty templates. The staged calibrated batch now adds the explicit
+  classical reference above; no timing or quantum data have been invented.
+- Strengths, limitations, correctness and security scope follow the graphs.
+  These overview notes are hidden in the new staged batch. View challenges
+  enters the next unsolved tier; a round trip from an exact
+  challenge preserves its profile/release. Overview browsing issues no challenge.
+- Largest recovery displays only Tier N. Removed the catalogue size toggles and
+  the subtitle below Schemes. The tier question mark now sits in the Largest
+  recovery heading and remains accessible at mobile widths.
+- Pulled/merged origin/main through acefcb9, including efda2b5's new PNG logo and
+  the blue/navy palette. Preserved all 46 local modified/new files. Mechanical
+  README/CSS overlaps were reconciled, keeping new challenge behavior and a dark
+  selected tier. A backup stash and filesystem snapshot remain available.
+- Isolated Chrome verified exact curves, selector focus, zero fabricated
+  estimates, archived releases, navigation and layouts at 1440/768/320 pixels.
+  Source pins, reviewer policy and private account/recovery data are preserved.
+- Deployed to the detached local server on port 8000. Live verification confirmed
+  the subtitle removal, relocated help, exact graph values, metric switching,
+  tier-preserving navigation, blank Jump and logo at 1440/768/320 pixels.
+- Center the Largest recovery label and its question mark in one aligned row.
+- Remove the Participants explanatory paragraph below the catalogue. The count
+  definition remains documented and available in the Participants header tooltip.
+
+Selected initial security reference
+
+The earlier proposal is superseded by the staged, frozen model above. The chosen
+anchor is a useful shared convention, not measured equivalent attack work. Future
+attack estimates may change without rewriting an instance's launch reference.
+
+Verified and live — specification intake and manual review
+
+- Implemented, verified and serving locally at http://127.0.0.1:8000/#propose.
+  A read-only browser check confirmed the live proposal page and existing recovery
+  details at desktop and 320px widths, without page errors or overflow.
+- One bounded crucible-kem-spec-v1 format describes algorithms, parameter/tier
+  mappings, distributions and reuse, encodings, correctness scope/evidence,
+  security claims, references, and an optional implementation artifact. Standard
+  schema/template downloads and exact registered-spec downloads accompany the
+  existing pinned-source download. The blank template must be completed.
+- Anonymous same-origin format validation returns normalized content and its
+  SHA-256; it creates no proposal or login session. Explicit signed-in intake
+  creates a private proposal and immutable revision. Format checks do not establish
+  correctness, security, novelty, or executable conformance; nothing is fetched or run.
+- Authors can submit immutable revisions with current-revision/hash guards and
+  safe retry identifiers. A new revision resets the current status to submitted;
+  previous specifications and review decisions remain inspectable in bounded,
+  paginated history. Owner lists and the reviewer queue are bounded.
+- Explicit reviewers can request changes or approve an exact current revision.
+  Approval requires its implementation SHA-256, an actual correctness claim,
+  all five manual checks, notes, and supporting evidence. Review checks cover
+  completeness, correctness, implementation conformance, input/resource safety,
+  and reproduction. Self-review, stale decisions, incomplete approval, and
+  conflicting retry identifiers are rejected.
+- Approval permits trusted integration review only. The read-only check-proposal
+  CLI binds the latest approved revision/review to a deliberately registered
+  adapter's source hash, release, tier coverage, unique profile IDs, and exact
+  per-profile key lengths (including consistency with a declared fixed length).
+  Activation still requires a reviewed code change; uploads and URLs are never
+  automatically executed, fetched, imported, or added to the catalogue.
+- Reviewer permissions use stable account UUIDs and default to none. Local
+  grant-reviewer/revoke-reviewer commands resolve an existing handle, write
+  private reviewers.json, and require a restart. CRUCIBLE_REVIEWER_IDS overrides
+  local configuration; production uses the explicit environment setting only.
+  countableclouds is configured as the first reviewer, using its existing account
+  UUID. The restarted server loaded that configuration. Local administration
+  reloads policy under a file lock to preserve concurrent permission changes.
+- Shared DH groups remain fixed per tier, as specified; fresh exponents are drawn
+  for new instances. This legitimate reuse is documented, not removed. Existing
+  frozen sources, exact contracts, current scheme catalogue and receipts are unchanged.
+- Verification: 372 backend tests and 118 frontend groups passed. Isolated
+  Chrome verified the complete proposal/change-request/revision/approval flow,
+  exact artifact binding, unchanged catalogue, privacy, and desktop/mobile layouts.
+  Local rollout backed up the database and applied migration 0003, preserving
+  every existing row in ten application tables. Alembic schema comparison passes;
+  frozen source hashes and the catalogue remain unchanged. No public-operational
+  readiness or independent cryptographic certification follows from these checks.
+- References: docs/protocol-specification.txt and docs/protocol-admission.txt.
+
+Scoring remains pending. Proposal admission does not award points. Credits for
+accepted new cryptographic schemes, personal maximum tiers, and first-breakthrough
+bonuses remain discussion proposals; no formula or cross-scheme score is adopted.
+
+Previous parameter-bit tier update — verified locally and deployed
+
+- Challenge tier replaces visible Instance size. Raw contract/API field names are
+  retained for compatibility; equal tiers do not imply equal security.
+- Catalogue shows only Tier N at the highest recovered profile. Encoding
+  comparisons now live in the scheme overview graphs; the old catalogue byte
+  toggles and byte-based ordering are superseded. Protocol retains selected-tier
+  sizes and the exact encoding/counting convention.
+- Shared benchmark timings deferred by user preference: sizes first, timings next.
+- Ready? replaces Ready for this round? Starting explicitly enables automatic
+  access to later opened tiers in that scheme/release/hour. Instances are generated
+  on demand, guarded against rollover; no eager batch or new-round auto-start.
+- Diffie–Hellman extends through 300 in independent release 4. All 109 prior v3
+  profiles retain identical inputs/KDF; archived source hashes stay unchanged.
+  All 172 new safe-prime pairs have checked exact certificates. No live prime search.
+- Teaching banner and teaching status badge removed from the visible page.
+  Source/admission/correctness facts are retained. Empty leaderboard says Unsolved,
+  with neither exclamation mark nor parentheses, per latest preference.
+- My submissions identifies each entry by scheme name followed by its tier in
+  parentheses as Tier N, with method and receipt time underneath. Internal round numbers
+  are omitted. Display verified for current DH, archived DH, and RSA records.
+
+Upload and header update — verified and live
+
+- Submit recovered key now sits below the scheme description, with the next
+  unsolved-tier shortcut to its right. The shortcut keeps its previous conditions
+  and reserved space. At narrow widths the action row stacks without overflow.
+- A file may select another exact owned open instance. A read-only contract lookup
+  establishes ownership, status, source release and key encoding before changing
+  the draft or selected tier. Import still requires explicit final submission;
+  it never issues an instance or submits an answer automatically.
+- Submit can open before the displayed tier has an instance, showing file import
+  first. Manual fields appear after an open target is resolved. Unknown outcomes
+  retain their original answer/target/retry identifier and block replacement.
+- Downloaded templates now include removable _instructions with all fields,
+  limits, units, encoding, ownership, deadlines and final-submission requirements.
+- A small accessible ? beside Largest recovery on the front page explains
+  that equal tiers across schemes do not imply equal security or attack cost.
+- The selected tier stays dark in the theme color even when already recovered;
+  the merged blue/navy theme uses lighter blue for earlier tiers.
+
 Working order
 
 Handle quick items first unless the user sets a different priority. Result-file
 upload was the explicit priority for this batch and has been implemented.
 
-Current batch — verified in the local candidate
+Submission details — verified and live
+
+- My submissions entries and the catalogue's Recovered by name open the exact
+  receipt, with method/pseudocode, result, original scheme release/tier, receipt
+  time, and reported compute. They do not substitute a current leaderboard record.
+- Correct receipts are public; unsuccessful attempts remain owner-only. Responses
+  exclude submitted keys, verifiers, and account/session internals and are no-store.
+- Closing or switching accounts invalidates pending reads and clears private
+  details. Nested history/detail dialogs retain scroll locking and return focus.
+- All 211 backend tests pass, including exact provenance and access control.
+- Nine submission-detail regression groups pass, along with 33 navigation,
+  34 upload, and 11 round-access groups. The shared DOM double now reflects the
+  native hidden attribute so modal focus checks match browser behavior.
+- Isolated Chrome passes at 1440px and 320px: exact correct/incorrect history
+  details, public first recovery, nested dialogs, keyboard focus, private 404s,
+  and no page errors or horizontal overflow. Detail navigation issues only GETs.
+  Test records stayed in an isolated database and its server was stopped.
+- Applied the explicit files to the live repo and restarted its detached local
+  server. Health and existing catalogue records were preserved. A read-only
+  browser check opened the actual public receipt with its exact original version,
+  restored focus, and passed mobile overflow checks without mutating requests.
+
+Earlier comparison discussion — followed by the calibrated reference decision above
+
+The user asked for a careful recommendation on comparison across instances and
+schemes, and a candid assessment of the current website. Evaluate what tiers,
+byte sizes, attack costs, reference algorithms, and evidence can actually establish.
+Do not introduce a universal security ranking or resume paused scoring merely
+to supply a common number. Consequential choices remain for discussion.
+
+Earlier comparison assessment — rationale retained; calibration choice superseded above
+
+- Keep tiers as local navigation. Public-key/ciphertext bytes measure encoding
+  and bandwidth, not difficulty; demote them from the headline recovery metric.
+  The adapters make no confidentiality claim. The later selected classical
+  reference has its own named source/model and remains distinct from a best-known
+  attack estimate or measured cost.
+- Compare known attacks under a common goal, success target, resource profile,
+  parameter distribution, and preprocessing policy. A reference benchmark should
+  retain failures/timeouts and fresh independent instances, with pinned code.
+  Measured attack cost, attributed estimates, and answer verification are distinct.
+- DH uses a fixed group per tier while RSA generates fresh moduli. Separate
+  preparation from online work and state any amortization across targets. An
+  hourly deadline is not a cap on compute or prior preparation.
+- A reproduced attack gives an achieved cost at a measured success rate, not a
+  proof against all cheaper attacks. Unsolved alone provides no security bound.
+  Shared-secret recovery covers a narrower goal than general IND-CCA KEM security.
+  Classical empirical results and quantum resource estimates need separate labels.
+- Revisit inherited smaller-tier displays: progress credit is useful, but a
+  higher-tier receipt is not an actual recovery of every smaller random instance.
+  Existing records preserve provenance; proposed wording should preserve that
+  distinction just as clearly in green states and Broken by labels.
+- UX proposals: promote Download challenge beside the primary action; compact
+  mobile tier controls; give clickable attribution a subtle consistent affordance.
+  Preserve uncluttered layout and avoid expanding global scoring at this stage.
+- First proposed implementation step: one reference attack per existing scheme,
+  replayed on an explicit common setup, before adopting a cross-scheme score.
+
+Primary references for this assessment:
+- NIST evaluation criteria: attack goal, resource models, broad strength categories.
+  https://csrc.nist.gov/projects/post-quantum-cryptography/post-quantum-cryptography-standardization/evaluation-criteria/security-(evaluation-criteria)
+- Logjam: group-specific preparation and individual discrete logarithm work.
+  https://weakdh.org/imperfect-forward-secrecy.pdf
+- SUPERCOP KEM measurements: operation timings and explicit byte measurements.
+  https://bench.cr.yp.to/results-kem.html
+- LWE Challenge: multidimensional parameter grid and method/resource declarations.
+  https://latticechallenge.org/lwe_challenge/
+
+Previous interface batch — verified in the local candidate
 
 - Navigation: the top bar and main heading say Schemes. The KEM catalogue opens each scheme's Leaderboard first, with Challenge
   and Protocol alongside it. Research remains hidden; its data/API are preserved.
@@ -25,17 +293,18 @@ Current batch — verified in the local candidate
 - Recoveries: click a row or activate its keyboard button for a read-only view of
   method, pseudocode, and reported compute. Time to submit includes all delay from
   instance issue to receipt; reported attack time is a separate quantity.
-  The selected size says Unsolved after an empty successful response, or Broken by:
+  The selected tier says Unsolved after an empty successful response, or Broken by:
   directly above its recovery table. Loading and errors make no unsolved claim.
   Ranking and receipt notes sit below the table and stay hidden when it is empty.
   Solvers receive derived credit on every smaller supported size in the same
   release, with the explicit compatibility rules applied to the actual source
   profile. Each account appears once, ordered by its earliest qualifying receipt.
-  Inherited entries say via size N and open that actual recovery's details.
+  Inherited entries say via tier N and open that actual recovery's details.
   This creates no submission rows or false exact-profile recovery metadata.
 - Size and clock: five slightly larger nearby size buttons, adjacent-size arrows,
-  a full-range slider, and exact Jump to input. Dragging previews the selected
-  number, nearby size buttons, and numeric input; release loads that size,
+  a full-range slider, and exact Jump to input. The verified update leaves Jump to
+  empty by default; the rail/slider show selection and blank input does nothing.
+  Dragging previews the selected number and nearby size buttons; release loads that size,
   avoiding requests for each intermediate value. Cancellation restores the
   actual selection. The slider follows
   registered profiles, including sparse ranges. The dot marks the next unsolved size beyond the largest
@@ -44,7 +313,7 @@ Current batch — verified in the local candidate
   unsolved size and hides while it is selected or no higher size is available,
   retaining its layout space so surrounding controls do not move.
   The Largest recovered shortcut beneath the picker is removed.
-  The label reads Instance size. The timer appears only inside the Challenge tab,
+  The label reads Challenge tier. The timer appears only inside the Challenge tab,
   as a compact Challenge closes in label with the countdown immediately beside
   it; there is no second clock time. The exact deadline remains in the contract.
   Keep the next not-yet-recovered default and boxed UTC-round countdown. Joining
@@ -67,11 +336,11 @@ Current batch — verified in the local candidate
   The red mark is an open tapered vessel with a floating diamond ember;
   header/footer/favicon match. Curled heat strokes and flame shapes are retired.
 
-Adapters — implemented and verified in the local candidate
+Previous adapter releases — implemented and verified before calibration
 
-- Finite-field Diffie–Hellman: teaching-dh-kem release 3, all integer sizes 20–128.
-  n is subgroup-order bit length. Release 2 remains unchanged at 20–36; current
-  boards/progress include v2 receipts only for that explicit compatible subset,
+- Finite-field Diffie–Hellman: teaching-dh-kem release 4, all integer tiers 20–300.
+  Each tier maps to subgroup-order bit length. Frozen release 3 remains 20–128 and
+  release 2 remains 20–36; release 4 boards include their explicitly compatible receipts,
   keeping the original receipt source/version. Release 1's five profiles remain
   separately archived. Source hashes and earlier records are preserved.
 - RSA over an integer modulus: rsa-kem release 1, all integer sizes 20–128.
@@ -86,8 +355,22 @@ Adapters — implemented and verified in the local candidate
 
 Verification record
 
+Historical verification — tier and round-access update: 206 backend tests, 33 navigation regression groups,
+34 upload regression groups, 7 math-renderer groups, and 11 round-access groups
+pass. Real Chrome confirmed explicit start at DH tier 20, automatic access to
+tiers 21 and 300 within the activated round, reuse of existing instances,
+read-only access outside the Challenge tab, and a separate explicit start for
+RSA. The automatic-access flow also passed at 320px.
+
+Read-only live Chrome checks passed for DH release 4 through tier 300, the
+public-key/ciphertext byte views and their actual-tier links, and mobile layouts.
+The range remains 20–128 in the DH v3 archive and in RSA. DH tier 300 uses 38-byte
+public keys and ciphertexts; changing the catalogue measure neither issues a
+challenge nor changes the underlying tier or receipt provenance.
+
+Historical verification — preceding interface and protocol batch:
 158 backend tests, 31 navigation regression groups, and 13 upload regression
-groups pass. Isolated real-Chrome checks passed for both protocols: solve the
+groups passed. Isolated real-Chrome checks passed for both protocols: solve the
 public inputs, import the result, review without a submission request, explicitly
 submit, and see an accepted recovery, first-recoverer attribution, and next size.
 The copied and downloaded challenge matched. Source links, direct/step controls
@@ -95,39 +378,43 @@ across 20–128 and clickable recovery evidence were checked.
 At 320px and 390px there was no horizontal overflow, and there were no page errors.
 End-to-end test records were confined to an isolated test database.
 
-The latest full backend run passes 158 tests. Seven math-renderer groups also
-pass. Math was checked in real Chrome for both schemes at size 128 on desktop and
+That earlier full backend run passed 158 tests and seven math-renderer groups.
+Math was checked in real Chrome for both schemes at size 128 on desktop and
 320px layouts: local fonts, accessible MathML, no clipping/overflow, no CSP or
 browser errors, and readable fallback when the renderer is unavailable.
 Inherited-credit checks cover receipt order, ties, first ten accounts, exact
 source details, downward-only credit, compatible versions, and strict archives.
 
-The latest visual/size-picker pass used read-only Chrome checks: footer identity,
+An earlier visual/size-picker pass used read-only Chrome checks: footer identity,
 red logos, exact record marking and persistent jump, valid/invalid arbitrary size
 jumps, retained keyboard focus, scheme-specific empty states, and 320px/390px
 layouts. Fixed a duplicate blur/change redraw that could drop keyboard focus.
 The updated footer, Schemes label, size rail, and matched typography are live.
-The recovery-metadata addition passed 25 focused backend tests. Ascending sorting,
+The recovery-metadata addition passed 25 focused backend tests. The then-current
+ascending sort (superseded by the activity ordering),
 exact recovered-size membership, next-size navigation/boundaries, simplified
 timer text, and selected-recovery styling passed unit and read-only browser checks.
 
-Verified — Local serving update complete
+Previously verified — Local serving update complete
 The updated application is live and healthy at http://127.0.0.1:8000/ with two
-protocols and 109 supported profiles each. Existing users,
-challenges, methods, and submission records are exactly unchanged. The original
-DH release-2 receipt retains its version, contributes to the compatible current
-size-36 record, and leaves size 37 as the current next-size default. This is a
-local update, not a public deployment.
+protocols: 281 supported DH profiles (tiers 20–300) and 109 RSA profiles
+(tiers 20–128). Existing users, challenges, methods, and submission records are
+retained. Archived DH receipts keep their original source/version and contribute
+only through the explicit compatibility rules. The next-tier default follows
+the current recorded progress. This is a local update, not a public deployment.
 
 Continuing capabilities and proposals
 
 Available — Local HTTP API for accounts, challenge access, methods, and submissions.
+Available — Common specification, private proposal/revision API, manual review
+and read-only admission gate; verified and serving locally.
 Proposed — Dedicated API-token authentication; not implemented.
 Proposed — First-success rewards with larger first-ten/new-size bonuses. No score
 formula is adopted. Decide scope, evidence, repetition caps, identity handling,
 and comparability. Keep personal progress, novelty, and reproduction distinct.
 Proposed — Security claims in the foreground. Claims need a model and justification;
-the current size selector retains a scheme-specific parameter meaning.
+the then-current size selector retained a scheme-specific parameter meaning.
+The calibrated release decision at the top supersedes that selector mapping.
 
 Priorities
 
@@ -145,3 +432,51 @@ Maintenance
 Update status after verification; keep rationale in docs/design-record.txt.
 Preserve proposals as proposals. Public deployment, account recovery, moderation,
 PostgreSQL concurrency testing, and independent admission/security review remain.
+
+The upload/header checkpoint passed 34 upload regression groups, 33 navigation
+groups and 11 round-access groups. Isolated Chrome verified a correctly solved
+cross-tier upload through explicit final submission, file-first review, retained
+template instructions, keyboard tier help, and reserved action-row space at
+1440px and 320px without page errors or horizontal overflow. Test accounts and
+receipts stayed in the isolated database.
+
+Earlier pause — 2026-10-12; subsequent work resumed for protocol admission
+
+Deferred task: detailed scoring/incentive analysis, then agree on the first version.
+The user clarified that an accepted proposal means a new cryptographic scheme.
+Their hypothesis: points for accepted schemes, a participant’s highest achieved
+level per problem, and an extra first-breakthrough reward increasing with tier.
+This is a hypothesis for analysis, not an approved scoring formula. Scoring is
+not implemented or active. Preserve the earlier preference to reward reproduction
+while weighting novelty strongly, potentially involving the first ten recoverers.
+
+Questions to examine when resumed:
+- Scheme-specific tiers are not security bits or comparable attack costs.
+- Separate personal progress, frontier credit and reviewed scheme admission.
+- Repeating a round or stepping through every intermediate tier must not inflate
+  the reward compared with reaching the same final tier directly.
+- Inherited smaller-tier credit is derived display credit, not extra submissions.
+- Tie score scope to reviewed problem families and explicit release compatibility;
+  aliases, new versions or trivial schemes must not manufacture fresh ladders.
+- Current receipts prove an exact key was accepted before a deadline, not unique
+  human identity, actual compute, general attack novelty or independent reproduction.
+- Accepted new schemes need recorded author/reviewer/admission decisions; current
+  manual proposal review now records those assessments separately, but activation
+  remains explicit and there is no admission-credit or points event.
+- Consider auditable versioned scoring with explanations before introducing a
+  public total. No points, coefficients, retroactivity or review policy is adopted.
+
+Primary references collected for the next scoring discussion (not policy):
+- Chrome VRP: first actionable report and materially helpful follow-ups.
+  https://bughunters.google.com/about/rules/chrome-friends/chrome-vulnerability-reward-program-rules
+- Google OSS VRP: root-cause grouping and related reports.
+  https://bughunters.google.com/about/rules/open-source/google-open-source-software-vulnerability-reward-program-rules
+- Anderson et al., Steering User Behavior with Badges (WWW2013): incentives can
+  change which activities participants pursue.
+  https://cs.stanford.edu/people/jure/pubs/badges-www13.pdf
+- CTFd dynamic scoring; Douceur, The Sybil Attack: solve counts and account counts
+  should not be assumed to measure independent research or intrinsic difficulty.
+  https://docs.ctfd.io/docs/custom-challenges/dynamic-value/
+  https://www.microsoft.com/en-us/research/publication/the-sybil-attack/
+- LWE Challenge submission fields: distinguish exact results from resource reports.
+  https://www.latticechallenge.org/lwe_challenge/submission.php

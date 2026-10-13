@@ -31,6 +31,10 @@ class Element extends Events {
   get id() { return this.getAttribute('id') || ''; } set id(value) { this.setAttribute('id', value); }
   get className() { return this.getAttribute('class') || ''; } set className(value) { this.setAttribute('class', value); }
   get href() { return this.getAttribute('href') || ''; } set href(value) { this.setAttribute('href', value); }
+  // Native hidden property writes are reflected in the content attribute.
+  // Focus restoration checks ancestors with closest('[hidden]').
+  get hidden() { return this.attributes.has('hidden'); }
+  set hidden(value) { if (value) this.attributes.set('hidden', ''); else this.attributes.delete('hidden'); }
   get children() { return this.childNodes.filter(child => child instanceof Element); }
   get isConnected() { for (let node = this; node; node = node.parentElement) if (node === this.ownerDocument) return true; return false; }
   get firstChild() { return this.childNodes[0] || null; }
@@ -60,6 +64,7 @@ class Element extends Events {
 }
 function parseHTML(source) {
   const document = new Element('document', null); document.ownerDocument = document; document.createElement = tag => new Element(tag, document); document.hidden = false;
+  document.createElementNS = (namespace, tag) => { const element = document.createElement(tag); element.namespaceURI = namespace; return element; };
   const stack = [document];
   for (const token of source.match(/<!--[\s\S]*?-->|<![^>]*>|<[^>]+>|[^<]+/g)) {
     if (token.startsWith('<!')) continue;
