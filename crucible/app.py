@@ -561,6 +561,11 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     def math_javascript():
         return FileResponse(ROOT / "web" / "math.js", headers={"Cache-Control": "no-cache"})
 
+    @app.get("/assets/crucible-logo.png")
+    def logo():
+        return FileResponse(ROOT / "web" / "assets" / "crucible-logo.png", media_type="image/png",
+                            headers={"Cache-Control": "no-cache"})
+
     # Only the vendored math distribution is mounted, never the repository or
     # general web directory. Real-path containment also rejects escaping symlinks.
     app.mount("/vendor/katex", StaticFiles(directory=ROOT / "web" / "vendor" / "katex",

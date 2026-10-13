@@ -66,7 +66,7 @@ ranking. Within a profile, Time to submit measures instance issue to answer rece
 including delays; the participant's attack-time estimate is reported separately.
 Scheme specifics gives a compact construction/parameter summary. Protocol retains
 the full contract. Public inputs remain in the download; the page omits the raw
-input disclosure and opening pitch. The footer contains only the red vessel logo
+input disclosure and opening pitch. The footer contains only the blue flame-and-key logo
 and Crucible name.
 
 The About us navigation link opens an empty page template. Add project copy inside

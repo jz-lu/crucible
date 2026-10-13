@@ -9,8 +9,6 @@
   --light: #eef2e5;
   --error: #8a3b2e;
   --error-bg: #fcf0e9;
-  --logo-vessel: #9b352e;
-  --logo-charge: #df5a38;
   --display: 'Avenir Next Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif;
   --wordmark: 'DIN Alternate','DIN 2014','Arial Narrow',Arial,sans-serif;
   --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
@@ -116,16 +114,11 @@ button {
 .brand-mark {
   flex-shrink: 0;
   display: block;
+  width: 38px;
+  height: 54px;
+  /* Fill the logo's tall frame while trimming only the PNG's transparent sides. */
+  object-fit: cover;
 }
-
-.crucible-vessel {
-  fill: var(--logo-vessel);
-}
-
-.crucible-charge {
-  fill: var(--logo-charge);
-}
-
 
 .brand>span {
   font: 700 32px/1 var(--wordmark);
@@ -1326,7 +1319,7 @@ input::placeholder,textarea::placeholder {
 
 .footer-brand .brand-mark {
   width: 30px;
-  height: 30px;
+  height: 42px;
 }
 
 dialog {
@@ -1616,7 +1609,7 @@ dialog h2 {
   }
   .brand-mark {
     width: 32px;
-    height: 32px;
+    height: 46px;
   }
   .account-actions {
     gap: 12px;
