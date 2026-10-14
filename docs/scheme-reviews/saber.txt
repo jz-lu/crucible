@@ -1,0 +1,44 @@
+Saber — selection review
+Reviewed 2026-10-14. Recommendation: DEFER from the initial small roster; retain as a documented expansion candidate.
+
+Identity and marginal value
+
+If admitted later, use the team's “SABER: Mod-LWR based KEM (Round 3 Submission)” specification, not the older homepage summary or an unlabeled variant. Begin with Saber-KEM; nest LightSaber and FireSaber profiles. Uniform-secret uSaber, the 90s symmetric-primitive variant and throughput-oriented SaberX4 are not extra independent catalogue foundations. The reviewed PDF has no date on its cover; freeze its content hash and the matching submission/code revision before admission. No immutable implementation pin has been established here. [S1,S2]
+
+Saber has real experimental merit: Module-LWR uses deterministic rounding, power-of-two moduli and different arithmetic/noise trade-offs from ML-KEM. It is not simply another parameter set of ML-KEM. Nevertheless, with a maximum of ten schemes, ML-KEM already covers the efficient module-lattice position. FrodoKEM adds an unstructured comparison and sntrup adds a different NTRU-style construction with deployed relevance. Saber is the first lattice expansion I would consider when there is a concrete rounding-versus-noise experiment or a reviewer maintaining its adapter. This is a prioritization judgment, not a finding that Saber is broken.
+
+Security and correctness scope
+
+The specification gives nonzero decryption-failure estimates (2^-120, 2^-136, 2^-165 for the three baseline profiles), ROM/QROM security arguments, and analytical scripts. It also discusses failure-search attacks; successful ordinary test cases cannot validate the tiny advertised probabilities. [S1]
+
+D'Anvers and Batsleer study multitarget failure boosting for Saber and Kyber; this is a different adversarial setting from recovering one fixed honest encapsulation. Their result must not be relabeled as an observed one-hour break. [S3] NIST's 2022 assessment describes shared cryptanalytic techniques between relevant MLWR and MLWE instances, less-developed MLWR reductions, and model-dependent reductions in estimated security from improved dual attacks. That is evidence against counting these as wholly independent bets, not a proof of equivalence. [S4]
+
+In Crucible's current game there is no chosen-ciphertext timing/oracle access. A real full-secret recovery counts for its exact instance, while inability to recover does not establish IND-CCA security or side-channel resistance. Review the recent asymptotic preprint listed in lattice-coverage.txt before publishing future security estimates.
+
+Implementation and vector candidate
+
+KULeuven-COSIC/SABER provides reference C, optimized implementations, and a KAT directory distinguishing the variants. Start with baseline reference C and matching request/response vectors; the parameter selection is a compile-time choice. [S2] Do not inherit the website's broad “constant-time” language as assurance for our compiler/host. KATs, cross-implementation equality, malformed inputs, rejection behavior and secret-dependent execution each need separate review. No builds or vectors were run here.
+
+Tier feasibility and remaining gates
+
+Three prescribed module ranks over the fixed ring do not justify 1–50 standard tiers. A smaller polynomial degree, altered compression or secret distribution can change correctness and the relative effectiveness of attacks. Any playable derivative needs a separate identity, analytical failure calculation, fresh finite-cost model and demonstrated sampler/serialization correctness. Its recovery history must not be displayed as a break of standard Saber.
+
+Revisit admission when someone supplies a distinct research question and reviewer, a frozen spec/code/vector bundle, successful conformance and differential tests, current failure/attack analysis and explicit evidence for every altered profile. Until then, leave the scarce catalogue slot for a more different construction.
+
+Primary evidence
+
+[S1] Team round-three specification, sections 3 and 6, inspected 2026-10-14; publication revision/date and digest still to be resolved:
+https://www.esat.kuleuven.be/cosic/pqcrypto/saber/files/saberspecround3.pdf
+Original construction: D'Anvers et al., AFRICACRYPT 2018 / ePrint 2018/230, linked by the authors:
+https://www.esat.kuleuven.be/cosic/pqcrypto/saber/resources.html
+https://eprint.iacr.org/2018/230
+[S2] Team source and KAT provenance, inspected 2026-10-14:
+https://github.com/KULeuven-COSIC/SABER
+https://github.com/KULeuven-COSIC/SABER/tree/master/KAT
+[S3] D'Anvers and Batsleer, PKC 2022 / ePrint 2021/193: multitarget decryption-failure attack analysis.
+https://eprint.iacr.org/2021/193
+https://doi.org/10.1007/978-3-030-97121-2_1
+[S4] NIST IR 8413-upd1, July 2022 with September update, section 4.3.4: independent selection assessment, not a current implementation audit.
+https://nvlpubs.nist.gov/nistpubs/ir/2022/NIST.IR.8413-upd1.pdf
+
+This is a bounded selection review, not a security audit or an exhaustive cryptanalysis survey.

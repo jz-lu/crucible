@@ -146,7 +146,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(row.querySelector('.kem-name').href, '#scheme/fixture-alpha/7');
     assert.equal(row.querySelector('.kem-progress').textContent, 'Tier 3');
     assert.equal(row.querySelector('.kem-progress').href, route(current, 'alpha-3'));
-    assert.equal(row.querySelector('.kem-first-handle').getAttribute('aria-haspopup'), 'dialog');
+    assert.equal(row.querySelector('.kem-first-handle').href, '#person/first-alpha');
     row.querySelector('.kem-progress').click(); await flush();
     assertSelectedTier(app, 3);
     assert.equal(app.$('#panel-leaderboard').hidden, false);
@@ -183,7 +183,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     }
     assert.equal(app.requests.some(request => request.options.method === 'POST'), false);
   });
-  await test('overview encoding graphs use exact sparse tiers, preserve missing values, and switch independently without requests', async () => {
+  await test('fixed encoding graphs and switchable cost/security graphs preserve sparse tiers without requests', async () => {
     const fixture = {...schemes[0], profiles: [20, 21, 50, 90].map(tier => profile('alpha-' + tier, tier)),
       largest_recovered_profile_id: 'alpha-50', next_profile_id: 'alpha-90',
       profile_metrics: {'alpha-20': {public_key_bytes: 0, ciphertext_bytes: 8}, 'alpha-21': {public_key_bytes: null, ciphertext_bytes: 9},
@@ -192,7 +192,6 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     fixture.profiles[2].shared_secret_bytes = 16;
     const app = await createApp({schemes: [fixture], user: {id: 'active-account', handle: 'active'}, hash: '#scheme/fixture-alpha/7'});
     const chart = id => app.$('#overview-chart-' + id);
-    const select = (id, metric) => chart(id).closest('.overview-card').querySelector('[data-overview-metric="' + metric + '"]');
     const points = id => chart(id).querySelectorAll('.chart-point');
     assert.equal(app.$('#overview-graphs').querySelectorAll('.overview-card').length, 4);
     assert.deepEqual(points('public').map(point => [point.dataset.tier, point.dataset.value]), [['20', '0'], ['50', '6'], ['90', '8']]);
@@ -208,23 +207,25 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.$('#overview-strengths').querySelectorAll('script').length, 0);
     assert.match(app.$('#overview-strengths').textContent, /<script>not HTML<\/script>/);
     const requestCount = app.requests.length, originalHash = app.location.hash;
-    select('public', 'shared_secret_bytes').focus();
-    select('public', 'shared_secret_bytes').click(); await flush();
-    assert.deepEqual(points('public').map(point => point.dataset.value), ['32', '32', '16', '32']);
+    assert.equal(chart('public').closest('.overview-card').querySelectorAll('[data-overview-metric]').length, 0);
+    assert.equal(chart('cipher').closest('.overview-card').querySelectorAll('[data-overview-metric]').length, 0);
+    assert.equal(app.$('#overview-graphs').querySelectorAll('[data-overview-metric]').length, 5);
+    assert.deepEqual(app.$('#overview-graphs').querySelectorAll('h2').map(e=>e.textContent), ['Public-key size', 'Ciphertext size', 'Key generation', 'Initial classical reference']);
     assert.deepEqual(points('cipher').map(point => point.dataset.value), ['8', '9', '10', '12']);
-    assert.equal(select('public', 'shared_secret_bytes').getAttribute('aria-pressed'), 'true');
-    assert.equal(app.document.activeElement, select('public', 'shared_secret_bytes'));
-    assert.match(chart('public').textContent, /Key length is not a security estimate/);
-    select('cipher', 'public_key_bytes').click(); await flush();
-    assert.deepEqual(points('cipher').map(point => point.dataset.value), ['0', '6', '8']);
-    assert.deepEqual(points('public').map(point => point.dataset.value), ['32', '32', '16', '32']);
-    for (const [id, metric] of [['computation', 'encapsulate'], ['computation', 'decapsulate'], ['security', 'quantum']]) {
-      select(id, metric).click(); await flush();
+    for (const id of ['computation', 'security']) {
       assert.equal(chart(id).querySelector('.chart-series'), null);
       assert.equal(points(id).length, 0);
       assert.deepEqual(chart(id).querySelectorAll('.chart-tick').map(label => label.textContent), ['20', '21', '90']);
       assert.match(chart(id).textContent, /No (timings|estimates) published/);
-      assert.equal(select(id, metric).getAttribute('aria-pressed'), 'true');
+    }
+    assert.match(chart('computation').textContent, /Key generation, encapsulation, and decapsulation await a shared benchmark/);
+    for (const [id, metric] of [['computation', 'encapsulate'], ['computation', 'decapsulate'], ['security', 'quantum']]) {
+      const button = chart(id).closest('.overview-card').querySelector('[data-overview-metric="' + metric + '"]');
+      button.focus(); button.click(); await flush();
+      assert.equal(points(id).length, 0);
+      assert.equal(button.getAttribute('aria-pressed'), 'true');
+      assert.equal(app.document.activeElement, button);
+      assert.match(chart(id).textContent, /No (timings|estimates) published/);
     }
     assert.equal(app.requests.length, requestCount);
     assert.equal(app.location.hash, originalHash);
@@ -240,10 +241,9 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     const app = await createApp({schemes: [fixture, single, empty], hash: '#scheme/fixture-alpha/7'});
     assert.equal(app.$('#overview-chart-public').querySelectorAll('.chart-point').length, 0);
     assert.match(app.$('#overview-chart-public').textContent, /No values published/);
-    app.$('#overview-chart-public').closest('.overview-card').querySelector('[data-overview-metric="shared_secret_bytes"]').click(); await flush();
     assert.equal(app.$('#overview-chart-public').querySelectorAll('.chart-point').length, 0);
     await app.navigate('#scheme/fixture-beta/2');
-    assert.deepEqual(app.$('#overview-chart-public').querySelectorAll('.chart-point').map(point => point.dataset.value), ['32']);
+    assert.deepEqual(app.$('#overview-chart-public').querySelectorAll('.chart-point').map(point => point.dataset.value), ['0']);
     assert.doesNotMatch(app.$('#overview-chart-public').querySelector('.chart-series').getAttribute('d'), /NaN|Infinity/);
     assert.deepEqual(app.$('#overview-chart-cipher').querySelectorAll('.chart-point').map(point => point.dataset.value), ['0']);
     await app.navigate('#scheme/empty/2');
@@ -305,7 +305,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.$('.overview-notes').hidden, true);
     assert.equal(app.requests.some(request => request.options.method === 'POST'), false);
   });
-  await test('calibrated tiers plot frozen initial estimates while mapped parameters and quantum estimates stay separate', async () => {
+  await test('calibrated fixed graphs plot actual frozen estimates while mapped parameters remain separate', async () => {
     const calibrated = {...schemes[0], version: '5', profiles: [[1, 20, 8.13], [2, 22, 9.05], [50, 300, 128.2]].map(([tier, parameterBits, bits]) => ({
       ...profile('calibrated-' + tier, tier), parameter_bits: parameterBits, parameter_label: 'subgroup-order bits',
       initial_security_estimate: {model_id: 'classical-baseline-v1', bits, target_bits: tier === 50 ? 128 : tier + 7}})),
@@ -316,14 +316,16 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     const app = await createApp({schemes: [calibrated], hash: '#scheme/fixture-alpha/5'});
     const chart = app.$('#overview-chart-security');
     assert.deepEqual(chart.querySelectorAll('.chart-point').map(point => [point.dataset.tier, point.dataset.value]), [['1', '8.13'], ['2', '9.05'], ['50', '128.2']]);
-    assert.equal(app.$('#overview-title-security').textContent, 'Initial classical estimate');
+    assert.equal(app.$('#overview-title-security').textContent, 'Initial classical reference');
     assert.equal(app.$('#overview-badge-security').textContent, 'Initial model');
     assert.match(chart.textContent, /Frozen classical reference; not a measured security guarantee/);
     assert.match(chart.querySelector('table').textContent, /18.13.*29.05.*50128.2/);
     assert.equal(chart.querySelectorAll('.chart-recovery-line').length, 0);
+    assert.equal(chart.closest('.overview-card').querySelectorAll('button').length, 2);
     chart.closest('.overview-card').querySelector('[data-overview-metric="quantum"]').click(); await flush();
     assert.equal(chart.querySelectorAll('.chart-point').length, 0);
-    assert.match(chart.textContent, /No estimates published/);
+    chart.closest('.overview-card').querySelector('[data-overview-metric="classical"]').click(); await flush();
+    assert.equal(chart.querySelectorAll('.chart-point').length, 3);
     await app.navigate(route(calibrated, 'calibrated-1', 'protocol'));
     assertSelectedTier(app, 1);
     assert.equal(app.$('#profile-note').textContent, 'Initial classical estimate: ≈8.1 bits.');
@@ -346,7 +348,6 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(fact('Initial classical estimate'), undefined);
     assert.match(app.$('#protocol-size-caveat').textContent, /not an estimate of security bits/);
     await app.navigate('#scheme/fixture-alpha/4');
-    chart.closest('.overview-card').querySelector('[data-overview-metric="classical"]').click(); await flush();
     assert.equal(chart.querySelectorAll('.chart-point').length, 0);
     assert.match(chart.textContent, /No initial classical estimate is published for this release/);
     assert.equal(app.requests.some(request => request.options.method === 'POST'), false);
@@ -411,7 +412,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
       method: {name: 'Fixture recovery', pseudocode: '<script>untrusted_method()</script>'},
       compute: {hardware: 'Fixture CPU', workers: 4, wall_seconds: 2, precomputation: 'None', peak_memory: '2 KiB', notes: 'Reported by fixture'}};
     const app = await createApp({schemes, hash: route(schemes[0], 'alpha-3'), responder: url => url.pathname === '/api/leaderboard' ? {entries: [entry]} : undefined});
-    const button = app.$('#leaderboard-content').querySelector('.recovery-entry-button');
+    const button = app.$('#leaderboard-content').querySelector('.tier-record-result');
     assert.ok(button);
     assert.equal(button.getAttribute('aria-haspopup'), 'dialog');
     button.focus(); button.click(); await flush();
@@ -427,9 +428,63 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     app.$('#recovery-dialog').querySelector('[data-close]').click(); await flush();
     assert.equal(app.$('#recovery-dialog').open, false);
     assert.equal(app.document.activeElement, button);
-    app.$('#leaderboard-content').querySelector('.recovery-entry-row').click(); await flush();
-    assert.equal(app.$('#recovery-dialog').open, true);
+    assert.equal(app.$('.tier-winner-name').href, '#person/fixture-solver');
+    assert.equal(app.$('#recovery-dialog').open, false);
     assert.equal(app.requests.some(request => request.options.method === 'POST'), false);
+  });
+  await test('only the first winner is prominent; its profile and exact source receipt have separate actions', async () => {
+    const winner = {rank: 1, handle: '<winner>/name', profile_id: 'alpha-3', instance_size: 3, scheme_version: '7', received_at: 100,
+      submission_id: 'receipt-winner', method: {name: 'Original method'}, compute: {}};
+    const second = {...winner, rank: 2, handle: 'second-account', submission_id: 'receipt-second'};
+    const receipt = {...winner, id: winner.submission_id, scheme_id: 'fixture-alpha', status: 'correct',
+      elapsed_seconds: 3, method: {name: 'Full method', pseudocode: 'Recorded source evidence', source: {download_url: '/api/methods/source/bundle'}}};
+    const app = await createApp({schemes, hash: route(schemes[0], 'alpha-3'), responder: (url, options, envelope) => {
+      if (url.pathname === '/api/leaderboard') return envelope({entries: [winner, second]});
+      if (url.pathname === '/api/submissions/receipt-winner') return envelope({submission: receipt});
+      if (url.pathname.startsWith('/api/people/')) return envelope({person: {handle: winner.handle, points: 150, records: [], recent_recoveries: []}});
+    }});
+    assert.equal(app.$('#tier-record').getAttribute('data-state'), 'solved');
+    assert.equal(app.$('#tab-leaderboard').textContent.trim(), 'Record');
+    assert.equal(app.$('#nav-people').textContent.trim(), 'Leaderboard');
+    assert.equal(app.$('#tier-record-notes').open, false);
+    assert.equal(app.$('#leaderboard-content').querySelectorAll('table').length, 0);
+    assert.equal(app.$('#leaderboard-content').querySelectorAll('.tier-winner-name').length, 1);
+    assert.doesNotMatch(app.$('#leaderboard-content').textContent, /second-account/);
+    assert.equal(app.$('.tier-winner-name').children.length, 0);
+    assert.equal(app.$('.tier-winner-name').href, '#person/' + encodeURIComponent(winner.handle));
+    assert.equal(app.requests.some(r => r.url.pathname.startsWith('/api/submissions/')), false);
+    app.$('.tier-record-result').click(); await flush();
+    assert.match(app.$('#recovery-title').textContent, /Full method/);
+    assert.match(app.$('#recovery-content').textContent, /Recorded source evidence|Download code bundle/);
+    assert.equal(app.requests.filter(r => r.url.pathname.startsWith('/api/submissions/')).length, 1);
+    app.$('#recovery-dialog').close();
+    app.$('.tier-winner-name').click(); await flush();
+    assert.equal(app.$('#person-title').textContent, winner.handle);
+    assert.equal(app.$('#recovery-dialog').open, false);
+    assert.equal(app.requests.some(r => r.options.method === 'POST'), false);
+  });
+  await test('unsolved record opens the selected tier challenge without issuing or submitting it', async () => {
+    const app = await createApp({schemes, hash: route(schemes[0], 'alpha-4')});
+    assertLeaderboardState(app, 'Unsolved');
+    assert.equal(app.$('#tier-record').getAttribute('data-state'), 'unsolved');
+    assert.match(app.$('.tier-record-invitation').textContent, /Tier 4/);
+    assert.equal(app.$('#tier-record-notes').hidden, true);
+    app.$('.tier-record-challenge').click(); await flush();
+    assert.match(app.location.hash, /profile=alpha-4.*view=challenge/);
+    assert.equal(app.$('#panel-challenge').hidden, false);
+    assert.equal(app.requests.some(r => r.options.method === 'POST'), false);
+  });
+  await test('malformed or mismatched winner responses stay errors, never unsolved records', async () => {
+    for (const data of [{}, {entries: null}, {entries: [{rank: 2, handle: 'wrong', received_at: 100}]},
+        {entries: [], profile_id: 'alpha-4'}, {entries: [], scheme_id: 'other'}, {entries: [], scheme_version: '99'}]) {
+      const app = await createApp({schemes, hash: route(schemes[0], 'alpha-3'), responder: (url, options, envelope) =>
+        url.pathname === '/api/leaderboard' ? envelope(data) : undefined});
+      assertLeaderboardState(app, 'Recovery record');
+      assert.equal(app.$('#tier-record').getAttribute('data-state'), 'error');
+      assert.match(app.$('#leaderboard-content').textContent, /could not be loaded/);
+      assert.equal(app.$('#tier-record-notes').hidden, true);
+      assert.equal(app.$('#leaderboard-content').querySelector('.tier-winner-name'), null);
+    }
   });
   await test('inherited leaderboard credit names the actual larger recovery and opens its original size and release', async () => {
     const current = {...schemes[0], profiles: [20, 36].map(size => profile('alpha-' + size, size)),
@@ -442,15 +497,15 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
       if (url.pathname !== '/api/leaderboard') return undefined;
       return envelope({entries: [{...entry, is_inherited: url.searchParams.get('profile_id') === 'alpha-20'}], includes_compatible_versions: ['6']});
     }});
-    assertLeaderboardState(app, 'Broken by:', true);
+    assertLeaderboardState(app, 'Broken by', true);
     const board = app.$('#leaderboard-content');
-    assert.equal(board.querySelectorAll('.recovery-entry-row').length, 1);
-    assert.deepEqual(board.querySelectorAll('.leaderboard-credit').map(credit => credit.textContent), ['via tier 36']);
-    assert.match(app.$('#leaderboard-scope').textContent, /recover this tier or a higher one/);
+    assert.equal(board.querySelectorAll('.tier-winner').length, 1);
+    assert.deepEqual(board.querySelectorAll('.leaderboard-credit').map(credit => credit.textContent), ['Via Tier 36']);
+    assert.match(app.$('#leaderboard-scope').textContent, /recovery at this tier or higher/);
     assert.match(app.$('#leaderboard-scope').textContent, /version 6/);
-    assert.match(app.$('#leaderboard-footnote').textContent, /via tier.*recovery at a higher tier.*actual instance/);
+    assert.match(app.$('#leaderboard-footnote').textContent, /Via Tier.*recovery at a higher tier.*actual instance/);
     assert.equal(app.requests.filter(request => request.url.pathname === '/api/leaderboard').at(-1).url.searchParams.get('profile_id'), 'alpha-20');
-    board.querySelector('.recovery-entry-button').click(); await flush();
+    board.querySelector('.tier-record-result').click(); await flush();
     assert.equal(app.$('#recovery-dialog').open, true);
     assert.match(app.$('#recovery-context').textContent, /larger-size-solver.*Alpha <KEM>.*Tier 36.*version 6/);
     assert.doesNotMatch(app.$('#recovery-context').textContent, /Tier 20|version 7/);
@@ -460,10 +515,10 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assertSelectedTier(app, 20);
     app.$('#recovery-dialog').querySelector('[data-close]').click(); await flush();
     await app.navigate(route(current, 'alpha-36'));
-    assertLeaderboardState(app, 'Broken by:', true);
-    assert.equal(board.querySelectorAll('.recovery-entry-row').length, 1);
+    assertLeaderboardState(app, 'Broken by', true);
+    assert.equal(board.querySelectorAll('.tier-winner').length, 1);
     assert.equal(board.querySelectorAll('.leaderboard-credit').length, 0);
-    board.querySelector('.recovery-entry-button').click(); await flush();
+    board.querySelector('.tier-record-result').click(); await flush();
     assert.match(app.$('#recovery-context').textContent, /Tier 36.*version 6/);
     assert.equal(app.requests.some(request => request.options.method === 'POST'), false);
   });
@@ -476,13 +531,13 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
       if (url.pathname !== '/api/leaderboard') return undefined;
       return url.searchParams.get('profile_id') === 'alpha-3' ? empty : envelope({entries: [entry]});
     }});
-    assertLeaderboardState(app, 'Recoveries');
+    assertLeaderboardState(app, 'Recovery record');
     assert.match(app.$('#leaderboard-content').textContent, /Loading/);
     resolveEmpty(app.envelope({entries: []})); await flush();
     assertLeaderboardState(app, 'Unsolved');
     assert.equal(app.$('#scheme-title').textContent, 'Alpha <KEM>');
     await app.navigate(route(schemes[0], 'alpha-4'));
-    assertLeaderboardState(app, 'Broken by:', true);
+    assertLeaderboardState(app, 'Broken by', true);
     assert.equal(app.$('#scheme-title').textContent, 'Alpha <KEM>');
     assertSelectedTier(app, 4);
     assert.match(app.$('#leaderboard-content').textContent, /size-four-solver/);
@@ -502,16 +557,16 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
       if (url.pathname !== '/api/leaderboard') return undefined;
       return ++requestCount === 1 ? envelope({entries: [entry]}) : failed;
     }});
-    assertLeaderboardState(app, 'Broken by:', true);
+    assertLeaderboardState(app, 'Broken by', true);
     app.$('#refresh-leaderboard').click(); await flush();
-    assertLeaderboardState(app, 'Recoveries');
+    assertLeaderboardState(app, 'Recovery record');
     failRefresh(new Error('Fixture outage')); await flush();
-    assertLeaderboardState(app, 'Recoveries');
+    assertLeaderboardState(app, 'Recovery record');
     assert.match(app.$('#leaderboard-content').textContent, /could not be reached/);
     assert.equal(app.$('#refresh-leaderboard').disabled, false);
     await app.navigate('#challenge');
     await app.sandbox.loadLeaderboard();
-    assertLeaderboardState(app, 'Recoveries');
+    assertLeaderboardState(app, 'Recovery record');
     assert.match(app.$('#leaderboard-content').textContent, /Choose an available tier/);
   });
   await test('the adjacent-size rail centers the selected profile and clamps to the published endpoints', async () => {
@@ -968,14 +1023,19 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     const app = await createApp({schemes: [current], responder: (url, options, envelope) => {
       if (url.pathname === '/api/leaderboard') return envelope({entries: [entry]});
       if (url.pathname === '/api/submissions/receipt-alpha') return envelope({submission: entry});
+      if (url.pathname === '/api/people/first-alpha') return envelope({person: {handle: 'first-alpha', points: 0, schemes_recovered: 1, correct_submission_count: 1,
+        records: [], recent_recoveries: [{scheme_id: entry.scheme_id, scheme_name: 'Alpha <KEM>', scheme_version: '6', tier: 3, submission_id: entry.id, received_at: entry.received_at, is_current: false}]}});
     }});
     const firstButton = app.$('#kem-catalogue').querySelector('.kem-first-handle');
-    assert.equal(firstButton.tagName, 'BUTTON');
+    assert.equal(firstButton.tagName, 'A');
     firstButton.click(); await flush();
+    assert.equal(app.$('#person-workspace').hidden, false);
+    assert.equal(app.$('#recovery-dialog').open, false);
+    app.$('#person-content').querySelector('.history-item').click(); await flush();
     assert.equal(app.$('#recovery-dialog').open, true);
     assert.match(app.$('#recovery-context').textContent, /Tier 3.*version 6/);
     assert.match(app.$('#recovery-content').textContent, /Archived instructions/);
-    assert.equal(app.$('#catalogue-workspace').hidden, false);
+    assert.equal(app.$('#person-workspace').hidden, false);
     app.$('#recovery-dialog').close();
     await app.navigate(route(previous, 'alpha-3'));
     assert.equal(app.$('#profile-select').max, '3');
@@ -990,7 +1050,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.match(app.location.hash, /profile=alpha-4/);
     assert.equal(app.$('#panel-challenge').hidden, false);
     await app.navigate(route(current, 'alpha-3'));
-    app.$('#leaderboard-content').querySelector('.recovery-entry-button').click(); await flush();
+    app.$('#leaderboard-content').querySelector('.tier-record-result').click(); await flush();
     assert.match(app.$('#recovery-context').textContent, /version 6/);
     assert.equal(app.requests.some(request => request.options.method === 'POST'), false);
   });
@@ -1020,7 +1080,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
       if (url.pathname !== '/api/leaderboard') return undefined;
       return url.searchParams.get('profile_id') === 'alpha-3' ? alpha : envelope({entries: []});
     }});
-    assertLeaderboardState(app, 'Recoveries');
+    assertLeaderboardState(app, 'Recovery record');
     await app.navigate(route(schemes[1], 'beta-5', 'leaderboard'));
     assertLeaderboardState(app, 'Unsolved');
     assert.match(app.$('#leaderboard-content').textContent, /No accepted recoveries/);
@@ -1039,13 +1099,13 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
         if (url.pathname !== '/api/leaderboard') return undefined;
         return url.searchParams.get('profile_id') === 'alpha-3' ? old : envelope({entries: [entry]});
       }});
-      assertLeaderboardState(app, 'Recoveries');
+      assertLeaderboardState(app, 'Recovery record');
       await app.navigate(route(schemes[0], 'alpha-4'));
-      assertLeaderboardState(app, 'Broken by:', true);
+      assertLeaderboardState(app, 'Broken by', true);
       if (lateResult === 'empty') resolveOld(app.envelope({entries: []}));
       else rejectOld(new Error('Stale fixture failure'));
       await flush();
-      assertLeaderboardState(app, 'Broken by:', true);
+      assertLeaderboardState(app, 'Broken by', true);
       assertSelectedTier(app, 4);
       assert.match(app.$('#leaderboard-content').textContent, /current-size-solver/);
       assert.doesNotMatch(app.$('#leaderboard-content').textContent, /could not be reached|No accepted recoveries/);

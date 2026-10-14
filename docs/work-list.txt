@@ -1,5 +1,5 @@
 CRUCIBLE — RUNNING WORK LIST
-Updated 2026-10-13
+Updated 2026-10-14
 
 Status key
 Verified: implemented and checked for the stated scope in the local candidate.
@@ -7,7 +7,255 @@ Local visual trial: implemented and checked; visual direction remains revisable.
 Pending: an operational step or decision has not yet been confirmed.
 Proposed: an idea for discussion, not adopted behavior.
 
-Current batch — verified and live locally
+Current UI batch — verified and live locally
+
+
+Two-scheme checkpoint and expansion clarification — 2026-10-14
+
+- User requested a committed/pushed checkpoint of the current DH/RSA site before
+  adding more schemes to the main version. Preserve all accounts and history.
+- Six new adapters were developed in an isolated workspace against sixteen
+  published parameter sets; they have NOT been copied into this live checkout.
+- User clarified that new schemes should retain the challenge-tier experience.
+  Named published configurations are useful references, but do not replace the
+  intended tier ladders. Hold the expansion off main until its parameter mapping,
+  correctness scope and treatment of fixed-parameter constructions are resolved.
+- Main site remains the two existing schemes; the prior static trial is optional
+  historical work, not a separate product to maintain.
+- Checkpoint backend validation: 750 tests passed. Database files, passwords,
+  server key and session credentials remain ignored and outside the commit.
+
+KEM selection reviews and guideline audit — 2026-10-14
+
+- Naming refinement: replace the vague Classical browsing heading with
+  Diffie–Hellman & RSA. Classical/Quantum attack-model selectors retain their
+  technical meaning.
+- User authorized sourced selection reviews and an updated isolated trial first;
+  new executable challenges remain a later pass. Vet the established proposal,
+  correctness and admission rules alongside the candidate schemes.
+- Selected eight: existing custom finite-field DH and RSA, RFC X25519 DHKEM,
+  ML-KEM, current FrodoKEM, Streamlined NTRU Prime, HQC and Classic McEliece.
+  Defer Saber, with documented comparison/exclusion reasons for other candidates.
+- Completed individual reviews, coverage arguments, exact identity/version scope,
+  dated primary sources, correctness/implementation gates and a source index in
+  docs/scheme-reviews/. Selection is not security certification or admission.
+- Audited 14 established requirements against actual code enforcement; clarified
+  current correctness/admission/architecture docs without changing runtime policy.
+  The service still needs a reviewed statistical-failure policy, complete outcome
+  accounting and broader artifact binding before relevant new adapters go live.
+- Preserve all-visible shallow groups, one-click scheme pages and the four graph
+  cards. New references have no invented tiers, measurements or progress. Added an
+  optional Selection reviews page and exact review/source links within Protocol.
+- Trial: http://127.0.0.1:8001/ and outputs/classification-trial/index.html in the
+  workspace. Existing site, accounts, submissions, scores and challenge snapshots
+  are preserved. No new reviewer approval, award, adapter, commit or push.
+- Bounded verification: existing DH6/RSA3 focused tests passed (65 cases). Trial
+  browser and document checks are recorded in docs/scheme-reviews/verification.txt.
+
+Earlier catalogue design (superseded by the eight-entry review above)
+
+KEM scheme catalogue trial — earlier user refinement 2026-10-14
+
+- Explicit review requirement: the visual shortlist is provisional. Review
+  deployment relevance, distinct cryptanalytic value, exact specification and
+  version, challenge feasibility, correctness and implementation before adopting
+  or activating additions. A layout choice is not scheme admission.
+- Initial coverage review identifies X25519-based DHKEM and Streamlined NTRU
+  Prime as candidates to examine. No additions or replacements authorized by
+  this assessment alone; the current trial stays unchanged. Hybrid deployments
+  need separate composition analysis, not inferred component-break transfer.
+- Standard parameter sets and reduced experimental tiers must be distinguished;
+  preserve distributions and review correctness at every admitted parameter.
+- Focus on KEM schemes, defer a standalone assumptions catalogue.
+- Preserve the original scheme-by-scheme table and overview/challenge/protocol
+  layout. Avoid navigation barriers: show all seven schemes immediately, under
+  shallow family headings; no folders or collapsing required.
+- Keep the existing DH/RSA entries and their saved public progress; add five
+  reference candidates from the classification PDF only: ML-KEM, FrodoKEM,
+  Saber, Classic McEliece, HQC. New candidates have no invented tiers or metrics.
+- Trial URL remains http://127.0.0.1:8001/; workspace artifact remains
+  outputs/classification-trial/index.html. The current app/data are unchanged.
+
+Assumption catalogue trial — revised scope 2026-10-14
+
+- User clarified: only cryptographic_assumptions_classification.pdf is relevant.
+  Earlier extra research drafts and the five-scheme shortlist are not the basis
+  for this trial.
+- New standalone candidate: outputs/classification-trial/index.html in the
+  workspace, locally served at http://127.0.0.1:8001/.
+- Nine family folders follow the PDF, with nested problem formulations, search,
+  and Known assumptions / Crucible discoveries views. PKE/KEM scope retained.
+  This is a visual trial; no new adapters, challenges or data are admitted.
+
+Assumption expansion — requirements recorded 2026-10-14; design proposed
+
+- Keep attention cost low and avoid combinatorial related-assumption entries.
+- Origin distinction means discovered through Crucible versus previously
+  identified, including prior unpublished work; it does not mean recently added.
+  Distinguish the origin of an assumption from that of a construction using it.
+- Reviewed the latest classification PDF and related LPN/LSN drafts. Prepared
+  docs/assumption-catalogue-proposal.txt with a bounded reference shortlist,
+  admission gates, exact metadata, origin review and current-code implications.
+- A shallow family catalogue and explicit variants are proposed for review.
+  No new assumptions, adapters, awards or research endpoints are activated.
+- Completed an isolated interactive preview at the workspace path
+  outputs/assumption-catalogue-preview/index.html, with origin filters, four
+  family groups, related constructions and explicit reference-only candidates.
+  Desktop/tablet/mobile checks passed at 1440/768/320 pixels with no overflow,
+  browser errors or API/network requests. This is not a live navigation change.
+
+First-only records — approved 2026-10-14; verified and live locally
+
+- Points policy v2: 10 × personal-best tier plus 40 × highest tier reached first,
+  once per enrolled family. Places 2–10 keep recognition but no record bonus.
+  Existing receipts, accounts, admissions and First 10 history are preserved.
+- A prominent single Broken by card replaces the tier recovery table. The name
+  opens the winner's profile; View result fetches the original receipt and code.
+  Higher-tier credit and original release remain visible when applicable.
+- Matching Unsolved card opens the selected challenge. The internal tab is
+  Record; the main participant Leaderboard remains the second navigation tab.
+- Ranking queries filter internally inconsistent, invalid-generation and
+  out-of-window receipts before choosing winners. Catalogue and tier records
+  agree; the compatible ten-entry API remains available.
+- Verified 140 focused backend tests and 65 frontend groups. Isolated Chrome
+  checked the earliest winner, profile/result links, inherited and archived
+  receipts, unsolved navigation, and long usernames at 1440px and 320px without
+  overflow or browser errors. Browsing sent no submissions or issue requests.
+- Local deployment verified policy v2, served assets and original receipt links.
+  Every pre-existing database row was preserved; no migration was required.
+
+Latest approved refinement — verified and live locally
+
+- My submissions hover/focus rows now have inset padding, consistent rounded
+  borders and gaps. Scoped to the dialog; desktop/mobile visual checks passed,
+  including wrapped long titles, status badges and keyboard focus outlines.
+- First 10 milestones candidate: compact standout cards, expandable paginated
+  history and exact receipt links. Actual new personal
+  bests only; no extra points per milestone, no backfill/repeat badges and no raw
+  badge count. Archived releases stay separate. See design-record.txt.
+- Removed Current bonus badges and the milestone scoring explanation at the
+  user's request. Milestones now show achievements without identifying which
+  contribute to points; the scoring policy and general breakdown are unchanged.
+- Candidate verification: 46 milestone/people/admission backend tests and 22
+  milestone/profile/receipt frontend groups passed. Isolated Chrome checked
+  populated and empty profiles at 1440px and 320px, all 35 synthetic history
+  records, original receipts, bonus markers and stale-page responses. No live
+  fixture data was added; scoring and existing data are unchanged.
+- Compact Copy prompt handoff includes exact retrieval plus a visible natural-
+  language example for requesting the newest selected scheme/tier in future.
+- Profile and participant leaderboard show Points and Accepted proposals.
+  Removed raw solve counts and Schemes recovered from these headline metrics;
+  retained exact per-scheme personal bests and recent result details.
+- Accepted proposals counts immutable admission-credit rows, not review approvals
+  or points divided by an award. Scoring is unchanged; no history is removed.
+- Recent solves rows now have padding, readable titles and consistent dates.
+- Verification: 35 people/admission backend tests passed; existing frontend
+  checks cover agent handoff, profile routes, receipt details and manual uploads.
+- Next-unsolved action is left-aligned and keeps its space when concealed.
+  Manual tools sits directly below the agent action, before challenge details.
+- Unavailable buttons no longer show a waiting cursor. Download template has a
+  contextual explanation when no open unanswered challenge is selected.
+- Follow-up verification: 96 existing frontend checks passed; isolated Chrome
+  checked desktop/mobile layout, browser approval and manual result-file upload.
+- Clarified the already-supported agent-first path: init with scheme and tier
+  fetches the current round without Ready or a website handoff. Proposed next
+  work: persistent attack projects and easier discovery of client instructions.
+- Use with an agent is the primary issued-challenge action and opens a compact
+  instruction panel with Copy prompt inside it.
+- JSON download/copy, manual submission and result-file upload entry are in
+  collapsed Manual tools. The file-first fallback remains available before Ready.
+- Preserve challenge facts, status, hourly deadline, API/CLI JSON and all existing
+  validation. This batch changes the interface, not the challenge protocol.
+- Verified 143 frontend checks plus real Chrome at 1440/320px: opening/copying
+  instructions sends no answer, manual tools stay collapsed initially, and a
+  different-scheme result file still imports and submits to its exact instance.
+  Only static assets, tests and documentation were deployed; no server restart,
+  database changes, commit or push were needed.
+
+Previously completed UI work
+
+- The tier slider track is green through the largest recovered tier and neutral
+  above it. Its boundary stays fixed while browsing other tiers. Graph recovery
+  lines use a brighter red and a thicker stroke; the subtle left shading remains.
+- Top navigation uses slightly larger type: 18px on desktop and 17px on mobile.
+- New DH6/RSA3 releases use the approved linear tier calibration and are live.
+- Leaderboard is live as the second top navigation tab, after Schemes.
+  Recovered by links navigate a user profile; profile results retain links
+  to exact submission details. The account Profile entry uses that page.
+- User selected first-ten recovery bonuses with declining weights. User approved the provisional policy: 10 points per personal-best tier per eligible scheme, plus only the
+  highest early-finish bonus 4*tier*(11-rank), rank1..10, and 1000 for an explicitly
+  admitted new scheme family. The accepted policy is crucible-points-v1; approval of a proposal for
+  integration is not itself admission or a points award. See docs/scoring.txt.
+- Revised GitHub recommendation after checking Yukon/qLDPC: shared challenge
+  templates, agent-created local attack workspaces, one-command artifact/result
+  submission to Crucible. Participant-owned repositories are optional. The
+  website application repository stays separate from participant code. Curated
+  programs can later be explicitly shared; no PR is required per hourly result.
+  API/CLI/workspace implementation is now in the verification batch below.
+  Approved beta participants can read evidence; user's privacy concern is private
+  GitHub repositories. Publishing code later must be an explicit choice.
+
+- Latest graph refinement is live: the first two cards fix public-key and
+  ciphertext sizes, while the lower cards switch computation costs and classical/
+  quantum estimates. Unmeasured values remain empty. Shared-secret output length stays in protocol details;
+  fixed 32-byte outputs and both published constructions are unchanged.
+- At the user's later explicit request, removed their one DH5 submission only,
+  after a private backup at .local/backups/remove-old-recovery-20261013-163143.
+  Existing accounts, sessions, challenges, methods and protocol records unchanged.
+- Scoring/profile verification: 633 backend cases passed in the full run; the
+  subsequently added admission-to-people integration passed in its focused suite.
+  132 frontend groups passed. Chrome checked real disposable score100 at DHtier2,
+  profile/result links, four fixed graphs and 1440/768/320 layouts without errors.
+- Additive migration0004 records explicit scheme admission credits; no seeded
+  points or demo-admission awards. Local scoring rollout is complete, with all
+  existing accounts, sessions and activity preserved.
+
+Agent workflow — verified and live locally
+
+- Downloadable stdlib Python client: browser-approved login, scheme list, init/get
+  an exact challenge workspace, run an explicitly chosen local solver, and submit.
+- UI handoff after Ready copies instructions with the exact challenge ID. Own
+  profiles manage connected agents; no tokens are exposed in copied instructions.
+- Scoped credentials expire after 30 days and can be revoked. Machine requests
+  cannot manage accounts, approve proposals or grant scheme-admission points.
+- A submission freezes its retry identifier, method, source snapshot, candidate
+  and compute report locally before final answer transmission. Retries do not
+  reinterpret the result against a newer challenge or method.
+- Source snapshots are bounded text, stored without execution and downloadable
+  alongside a successful receipt. Only selected attack files and method.md are
+  packaged; full repositories, credentials and result files are not bundled.
+- Migrations0005/0006 are additive. No history reset or credential replacement.
+- Verification: 732 backend/CLI tests and 143 frontend checks passed. A disposable
+  Chrome session covered browser approval, exact-instance instructions, source
+  downloads, mobile layout and credential revocation. Actual CLI execution against
+  a disposable server recovered RSA tier1 and stored its source plus receipt;
+  subsequent browser revocation caused the real CLI to reject further access.
+- Local rollout applied migrations0005/0006 and preserved every existing row,
+  including 1 account, 46 sign-in sessions, 41 challenges and the empty submission
+  history. Frozen sources, server secret and reviewer settings stayed unchanged.
+  Backup: .local/backups/agent-workflow-20261013-201046. Read-only live checks
+  passed at 1440/320px, with no browser errors or write requests. No commit/push.
+- The public catalogue currently embeds all release manifests. The CLI allows a
+  separate bounded 8 MiB catalogue response; other responses stay capped at 2 MiB.
+  A lean catalogue endpoint is a follow-up as the scheme collection grows.
+- Still separate future work: GitHub proposal integration, optional publication
+  of curated code, independently measured benchmarks, and hosted beta access.
+
+Linear calibration — verified and live locally
+
+- New DH6/RSA3 tiers 1–50 target 8+120(t-1)/49 bits. Tier25≈66.8; Tier50=128.
+  The user rejected dense easy tiers. Physical parameters and actual estimates
+  remain separately specified. No changes to the restricted rho/NFS work model.
+- Archived DH5/RSA2 retain the original baseline-v1 mapping and exact source.
+  No history deletion or relabelling; old receipts remain on their original release.
+- Current and archived graph/spec metadata resolve the exact declared model ID.
+- Verified 599 backend cases (one archive-list expectation updated, affected suite
+  rerun), 40 frontend groups and isolated desktop/mobile browser checks. Live
+  rollout preserved every existing row, including 1 account, 46 sessions,
+  1 successful submission and 28 challenges; source pins and secrets unchanged.
+  Private backup: .local/backups/linear-tiers-20261013-162032. No reset or push.
+
+Previous calibration checkpoint — verified and live before linear replacement
 
 - The user authorized DH release 5 and RSA release 2 with tiers 1–50. Tiers 1–25
   target 8–32 classical reference bits in one-bit steps; tiers 26–50 target
@@ -45,7 +293,7 @@ Current batch — verified and live locally
   Live desktop/mobile checks confirm the 1–50 ladders and empty recovery history.
 - User authorized commit/push of this source update. Local databases, credentials,
   session records and backups remain ignored and are not part of the source change.
-- Scoring remains unimplemented and no formula is adopted.
+- Historical status: scoring was unimplemented at this checkpoint; superseded above.
 
 Previous verified checkpoint — catalogue participation and tier entry
 

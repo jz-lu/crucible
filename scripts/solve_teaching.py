@@ -13,8 +13,8 @@ import sys
 
 def recover(document):
     public = document["challenge"]["public"] if "challenge" in document else document
-    if public["scheme_id"] != "teaching-dh-kem" or public["version"] not in {"1", "2", "3", "4", "5"}:
-        raise ValueError("This example only implements finite-field Diffie–Hellman versions 1 through 5 (subgroup orders up to 36 bits).")
+    if public["scheme_id"] != "teaching-dh-kem" or public["version"] not in {"1", "2", "3", "4", "5", "6"}:
+        raise ValueError("This example only implements finite-field Diffie–Hellman versions 1 through 6 (subgroup orders up to 36 bits).")
     p, q, g = (int(public["parameters"][name], 16) for name in ("p", "q", "g"))
     if q.bit_length() > 36:
         raise ValueError("Parameter exceeds this teaching example's resource limit.")

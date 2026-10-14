@@ -319,7 +319,8 @@ def test_oversized_body_is_rejected_before_application_parses(advertised, tmp_pa
         raise AssertionError("Oversized body reached application parser")
 
     settings = Settings(database_url="sqlite://", secret=b"x" * 32, origins=(ORIGIN,))
-    boundary = RequestBoundary(should_never_parse, settings, lambda: 100)
+    # This anonymous, oversized request must not reach authentication or a DB.
+    boundary = RequestBoundary(should_never_parse, settings, lambda: 100, db=None)
     request_headers = [(b"origin", ORIGIN.encode()), (b"content-type", b"application/json")]
     if advertised:
         request_headers.append((b"content-length", b"65537"))

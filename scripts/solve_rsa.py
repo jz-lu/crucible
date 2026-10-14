@@ -13,8 +13,8 @@ import sys
 
 def recover(document):
     public = document["challenge"]["public"] if "challenge" in document else document
-    if public["scheme_id"] != "rsa-kem" or public["version"] not in {"1", "2"}:
-        raise ValueError("This example implements Crucible RSA releases 1 and 2.")
+    if public["scheme_id"] != "rsa-kem" or public["version"] not in {"1", "2", "3"}:
+        raise ValueError("This example implements Crucible RSA releases 1 through 3.")
     modulus, exponent = (int(public["parameters"][name], 16) for name in ("N", "e"))
     if not 20 <= modulus.bit_length() <= 36 or exponent != 65537:
         raise ValueError("Parameters exceed this example's resource limit.")

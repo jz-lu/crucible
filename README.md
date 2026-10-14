@@ -10,16 +10,37 @@ The app also includes versioned KEM specifications, private proposal intake,
 immutable revisions, and manual review before trusted integration.
 The hosted service has not been deployed and is not ready for public operation.
 
-DH release 5 and RSA release 2 are verified and running locally with tiers 1–50.
-Tier 50 corresponds to approximately 128 bits in a frozen, restricted classical
-rho/NFS reference model. This is not a best-known attack estimate or a security
-guarantee. At the user's request, local activity was cleared after a private
-backup, preserving accounts, sign-ins, reviewer access and server secrets.
+DH release 6 and RSA release 3 provide tiers 1–50. Their frozen classical
+reference targets rise evenly from 8 bits at Tier 1 to 128 at Tier 50:
+`8 + 120(t - 1)/49`. Actual parameter-derived references are plotted, including
+rounding. This restricted rho/NFS model is not a best-known attack estimate or a
+security guarantee. Existing releases, records, accounts and sign-ins remain
+unchanged; old recoveries do not automatically qualify for the new ladder.
 
 The KEM Schemes catalogue orders schemes by participant count, not security.
-Each scheme opens a graph overview before its challenge boards. Classical
-reference estimates accompany exact byte sizes; timings and quantum estimates
-remain empty until supported evidence and methods are available.
+Each scheme opens four graphs. Public-key and ciphertext sizes are fixed; the
+lower cards switch among computation costs and classical/quantum estimates.
+Timing and quantum estimates remain empty until supported evidence exists.
+The second tab is a participant Leaderboard; usernames link to
+profiles with score breakdowns and original recovery receipts. See
+the **First 10 milestones** candidate on profiles for standout early results and
+expandable history; it adds recognition without changing points. See
+[the provisional scoring policy](docs/scoring.txt) for the accepted formula and
+reviewed scheme-admission awards. Policy v2 gives record bonuses to first place
+only, while preserving everyone's personal-progress points. Each tier features
+one **Broken by** record with links to the participant and original evidence;
+unsolved tiers offer a direct path to the challenge. Shared-secret length remains
+a protocol fact.
+
+An issued challenge makes **Use with an agent** the main action. It opens a
+compact panel with **Copy prompt**. **Manual tools** holds the optional
+JSON download/copy and recovered-key submission controls. The downloadable
+Python client connects through explicit browser approval, gets the exact challenge,
+creates a local attack workspace, and submits a result with selected source files
+and a compute report. No participant repository or per-result pull request is
+required. See [the agent workflow](docs/agent-workflow.txt). Code is stored as
+evidence and never executed by the server; reported compute is not independently
+verified. The browser profile lets participants revoke connected agents.
 
 ## Run locally
 
@@ -48,15 +69,21 @@ The launcher makes local files private to the current OS user.
    Click a nearby tier, drag the slider, or use Jump to for any supported
    integer. Jump to starts empty; the rail and slider show the selected tier.
    Leaving the field blank does nothing. A dot marks the next unsolved target; the return button takes you
-   there and hides while it is selected. Earlier tiers are shaded light blue.
+   there and hides while it is selected. Earlier tiers are shaded light green.
 2. Open Challenge and request your first instance. Other tiers in this scheme’s
    current round load automatically when opened in Challenge. Reloading reuses the
    same instance; a new hourly round requires a fresh explicit start. The timer
    shows the shared UTC round boundary; joining later leaves less time.
-3. Download the JSON contract: public key, encapsulation, exact parameters,
-   encoding, KDF, release, correctness argument, and deadline.
-4. Investigate with your own tools. The small teaching examples can be solved with
-   the matching public-input demonstration script:
+3. Choose **Use with an agent**, then **Copy prompt**, and give the prompt
+   to your agent. Approve its connection in your browser. The CLI retrieves the
+   exact instance and creates a local workspace; no manual copying of inputs is
+   required. See [the agent workflow](docs/agent-workflow.txt).
+4. Develop the attack locally. The CLI records the chosen command's wall time,
+   packages selected source with your method and compute declaration, and submits
+   on an explicit command. The server's receipt deadline remains authoritative.
+5. For a manual workflow, expand **Manual tools** in Challenge. Download or copy
+   the JSON contract there, or open **Upload a result or enter a key** to upload a result
+   file or fill the form. The small examples also have public-input solvers:
 
    ```sh
    python3 scripts/solve_teaching.py /path/to/dh-challenge.json
@@ -68,9 +95,9 @@ The launcher makes local files private to the current OS user.
    to 36 bits. These are physical parameter limits, not challenge-tier limits.
    Larger inputs are available for participants' own methods. The examples print
    a candidate key and do not submit it.
-5. Submit the full 32-byte key, method/pseudocode, and compute declaration. You can
+   Submit the full 32-byte key, method/pseudocode, and compute declaration. You can
    enter these manually or import a `crucible-recovery-v1` JSON result file of at
-   most 128 KiB from the button below the scheme description. The template includes
+   most 128 KiB through **Manual tools**. The template includes
    complete instructions. A file for another tier selects its exact owned, open
    instance automatically. Import fills editable fields for review; it never
    submits an answer.
@@ -273,8 +300,8 @@ adapter fault records an incident and pauses issuance, without retrying until
 an agreement succeeds. Independent admission review remains pending.
 
 Each scheme overview has a two-by-two graph grid with Challenge tier on each
-horizontal axis. The first cards default to public-key and ciphertext bytes;
-either can switch to public-key, ciphertext, or shared-secret bytes. Values come
+horizontal axis. The first two cards show public-key and ciphertext bytes.
+Values come
 from exact release metadata and are also in expandable keyboard-accessible tables.
 Counts use canonical binary encodings, excluding JSON/hex wrappers and registered
 shared domain parameters. DH counts one field element for each public key and
@@ -314,6 +341,11 @@ node tests/test_submission_details.cjs
 .venv/bin/alembic check
 .venv/bin/python -m crucible.manage cleanup
 ```
+
+The latest agent-workflow checkpoint passes 732 backend/CLI cases and 143 frontend
+checks, including device authorization, revocation, immutable source snapshots,
+retry behavior, and additive migrations. Isolated Chrome and a real CLI run
+exercise approval through an accepted RSA recovery and downloadable evidence.
 
 Tests cover recovery, auth and ownership, CSRF, input privacy, concurrent
 issue/submit, idempotency, completed-body receipt timing, exact hourly boundaries,

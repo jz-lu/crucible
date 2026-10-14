@@ -1,4 +1,4 @@
-"""Small explicit administration entry point; no public admin or code-upload API."""
+"""Small explicit administration entry point; no public admin or code-execution API."""
 import argparse
 import fcntl
 import json
@@ -9,7 +9,7 @@ import time
 from uuid import UUID
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import delete, select
+from sqlalchemy import case, delete, select
 from .config import ROOT, load_settings
 from .db import Database, LoginSession, RateBucket, User
 
@@ -78,6 +78,18 @@ def configure_reviewer(settings, handle, *, grant):
     return actual_handle
 
 
+def cleanup_expired(database, now=None):
+    """Remove transient expired state while retaining accounts and credentials."""
+    from .machine_auth import DeviceConnection, EXCHANGE_SECONDS
+    now = time.time() if now is None else now
+    device_deadline = case((DeviceConnection.approved_at.is_(None), DeviceConnection.expires_at),
+                           else_=DeviceConnection.approved_at + EXCHANGE_SECONDS)
+    with database.transaction(write=True) as session:
+        session.execute(delete(LoginSession).where(LoginSession.expires_at <= now))
+        session.execute(delete(RateBucket).where(RateBucket.expires_at <= now))
+        session.execute(delete(DeviceConnection).where(device_deadline <= now))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=["migrate", "cleanup", "check-proposal", "grant-reviewer", "revoke-reviewer"])
@@ -114,10 +126,11 @@ def main():
             database.engine.dispose()
     else:
         database = Database(settings.database_url)
-        with database.transaction(write=True) as session:
-            session.execute(delete(LoginSession).where(LoginSession.expires_at <= time.time()))
-            session.execute(delete(RateBucket).where(RateBucket.expires_at <= time.time()))
-        print("Expired sessions and rate counters removed. Research records were retained.")
+        try:
+            cleanup_expired(database)
+        finally:
+            database.engine.dispose()
+        print("Expired sessions, rate counters and connection requests removed. Accounts, agent credentials and research records were retained.")
 
 
 if __name__ == "__main__":

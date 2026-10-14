@@ -1,5 +1,5 @@
 CRUCIBLE — INITIAL CLASSICAL CALIBRATION
-Model: classical-baseline-v1
+Model: classical-baseline-v2
 Status: restricted heuristic reference, not a security certificate
 
 Purpose and interpretation
@@ -16,12 +16,20 @@ source hashes, parameters and claims must not be rewritten.
 
 Tier targets
 
-For integer t in 1..25, target(t) = t + 7 reference bits.
-For integer t in 26..50, target(t) = 32 + 96(t - 25)/25 reference bits.
+For integer t in 1..50, target(t) = 8 + 120(t - 1)/49 reference bits.
 
-Thus the first 25 tiers advance by one reference bit, from 8 to 32. Later tiers
-advance by 3.84 reference bits, reaching 128 at tier 50. This spacing is an
-explicit product choice, not a mathematical property of cryptographic security.
+Targets advance evenly by 120/49 (approximately 2.449) reference bits per tier,
+from 8 at Tier 1 to 128 at Tier 50. Tier 25 targets approximately 66.776 bits.
+This supersedes the dense early steps in DH5/RSA2: the user preferred a scale
+that does not visually overstate progress through many inexpensive levels.
+The original piecewise model and registered profiles remain archived unchanged
+in calibration.py, dh_v5.py, rsa_v2.py and security-calibration-v1.txt.
+The new model is calibration_v2.py; the current adapters are DH6 and RSA3.
+No old receipt is relabelled, deleted, or inherited by the new ladder.
+
+Linearity is in logarithmic reference bits, not seconds or linear attack work.
+The original curve stays fixed as new results arrive; an individual recovery
+or a percentage of completed tiers is not a revised security-bit estimate.
 
 Parameter selection
 
@@ -35,11 +43,11 @@ logarithms in:
 Select the smallest integer n in 32..3072 for which B(n) >= target(t). This gives
 the immutable modulus-bit table, listed in tier order:
 
-  32, 36, 40, 44, 48, 52, 56, 60, 64, 68,
-  72, 76, 80, 84, 88, 92, 96, 100, 104, 108,
-  112, 116, 120, 128, 137, 173, 215, 263, 316, 374,
-  439, 511, 588, 673, 764, 862, 967, 1080, 1201, 1329,
-  1465, 1609, 1762, 1922, 2092, 2270, 2457, 2653, 2858, 3072.
+  32, 42, 52, 62, 72, 81, 91, 101, 111, 121,
+  141, 164, 190, 217, 247, 279, 313, 350, 389, 430,
+  474, 521, 571, 623, 678, 735, 796, 859, 925, 994,
+  1067, 1142, 1221, 1302, 1387, 1475, 1566, 1661, 1759, 1861,
+  1966, 2074, 2186, 2302, 2421, 2544, 2670, 2801, 2935, 3072.
 
 The RSA profile reference is B(n). Its n/4 term approximates Pollard-rho work
 for balanced factors from bit lengths, ignoring constants and the variation in
@@ -54,7 +62,7 @@ Using only subgroup size and ignoring finite-field NFS would overstate this
 reference for large parameters.
 
 The recorded target and the parameter-derived reference are distinct fields.
-For example, tier 25 targets 32 but n=137 gives RSA reference 32.081191. The
+For example, Tier 25 targets 66.775510 but n=678 gives RSA reference 66.818913. The
 metadata rounds the displayed reference to six decimal places; the parameter
 search uses unrounded values. Such decimals record the formula faithfully;
 they are not an assertion of that much accuracy in real attack costs.

@@ -1,0 +1,137 @@
+PRIMARY SOURCE INDEX — 2026-10-14
+
+Generated from the dated reviews. Each review gives claim scope, dates,
+provenance and acquisition limitations. Listed does not mean built, tested,
+proof-verified or live-approved. This is not an exhaustive bibliography.
+
+README.txt
+  https://www.ietf.org/ietf-ftp/rfc/rfc10024.html
+  https://www.openssh.org/pq.html
+
+admission-and-coverage-challenge.txt
+  https://www.rfc-editor.org/rfc/rfc9180
+  https://csrc.nist.gov/pubs/fips/203/final
+  https://csrc.nist.gov/CSRC/media/Presentations/ntruprime-round-3-presentation/images-media/session-6-ntruprime-bernstein.pdf
+  https://ntru.org/f/ntru-20190330.pdf
+  https://www.ntru.org/software.shtml
+  https://www.rfc-editor.org/rfc/rfc9794.html
+  https://csrc.nist.gov/pubs/sp/800/227/final
+  https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf
+  https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-227.pdf
+
+classic-mceliece.txt
+  https://classic.mceliece.org/mceliece-spec-20221023.pdf
+  https://nvlpubs.nist.gov/nistpubs/ir/2025/NIST.IR.8545.pdf
+  https://classic.mceliece.org/iso.html
+  https://www.bsi.bund.de/SharedDocs/Downloads/EN/BSI/Crypto/Notes_Classic_McEliece.pdf?__blob=publicationFile&v=2
+  https://classic.mceliece.org/impl.html
+  https://classic.mceliece.org/mceliece-security-20221023.pdf
+  https://classic.mceliece.org/mceliece-20240816.txt
+  https://classic.mceliece.org/nist.html
+  https://eprint.iacr.org/2026/1630
+  https://eprint.iacr.org/2026/1984
+  https://eprint.iacr.org/2026/1986
+  https://github.com/mjosaarinen/tii254-artifact
+  https://lib.mceliece.org/download.html
+  https://lib.mceliece.org/libmceliece-20260622.tar.gz
+  https://lib.mceliece.org/test.html
+  https://classic.mceliece.org/spec.html
+  https://classic.mceliece.org/mceliece-sage-20221023.tar.gz
+  https://classic.mceliece.org/nist/mceliece-kat-20221023.tar.gz
+
+code-coverage.txt
+  https://bikesuite.org/
+  https://bikesuite.org/files/v5.2/BIKE_Spec.2024.10.10.1.pdf
+  https://nvlpubs.nist.gov/nistpubs/ir/2025/NIST.IR.8545.pdf
+  https://github.com/awslabs/bike-kem
+  https://eprint.iacr.org/2024/1736
+  https://www.nist.gov/publications/graph-theoretic-approach-analyzing-decoding-failures-bike
+  https://pqc-rqc.org/
+  https://pqc-rollo.org/
+  https://arxiv.org/abs/2002.08322
+  https://eprint.iacr.org/2023/1875
+  https://nvlpubs.nist.gov/nistpubs/ir/2020/NIST.IR.8309.pdf
+
+dhkem-x25519.txt
+  https://www.rfc-editor.org/rfc/rfc9180.html
+  https://github.com/cfrg/draft-irtf-cfrg-hpke/blob/5f503c564da00b0687b3de75f1dfbdfc4079ad31/test-vectors.json
+  https://www.rfc-editor.org/rfc/rfc7748.html
+  https://www.ietf.org/ietf-ftp/rfc/rfc10024.html
+  https://blog.cloudflare.com/automatic-key-exchange-for-origins/
+
+finite-field-dh.txt
+  https://www.rfc-editor.org/rfc/rfc7919.html
+  https://weakdh.org/
+  https://www.rfc-editor.org/rfc/rfc8446.html
+
+frodokem.txt
+  https://frodokem.org/
+  https://www.iso.org/standard/86890.html
+  https://datatracker.ietf.org/doc/draft-longa-cfrg-frodokem/03/
+  https://cic.iacr.org/p/2/3/25
+  https://cic.iacr.org/p/2/3/25/pdf
+  https://github.com/microsoft/PQCrypto-LWEKE/tree/master/FrodoKEM
+  https://eprint.iacr.org/2016/659
+
+hqc.txt
+  https://gitlab.com/pqc-hqc/hqc/
+  https://pqc-hqc.org/doc/hqc_specifications_2026_10_12.pdf
+  https://pqc-hqc.org/resources.html
+  https://arxiv.org/abs/1612.05572
+  https://nvlpubs.nist.gov/nistpubs/ir/2025/NIST.IR.8545.pdf
+  https://arxiv.org/abs/2501.02626
+  https://eprint.iacr.org/2026/795
+  https://eprint.iacr.org/2025/2259
+  https://eprint.iacr.org/2026/1498
+  https://eprint.iacr.org/2026/693
+  https://github.com/ot-pca/cache-timing
+  https://groups.google.com/a/list.nist.gov/g/pqc-forum/c/9CFqM7dvf4g
+  https://gitlab.com/pqc-hqc/hqc/-/tree/f46e54222ffb76706678a9ec8a43cd2188a12ab1
+  https://gitlab.com/pqc-hqc/hqc/-/tags
+  https://gitlab.com/pqc-hqc/hqc/-/blob/f46e54222ffb76706678a9ec8a43cd2188a12ab1/README.md
+
+lattice-coverage.txt
+  https://arxiv.org/abs/2610.11254v1
+  https://arxiv.org/html/2610.11254v1
+
+ml-kem.txt
+  https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf
+  https://csrc.nist.gov/pubs/fips/203/final
+  https://eprint.iacr.org/2017/634
+  https://github.com/pq-code-package/mlkem-native/releases/tag/v2.0.0
+  https://github.com/pq-code-package/mlkem-native/tree/d1b2fe782888bdb761a50336012923180be7f502
+  https://github.com/usnistgov/ACVP-Server/tree/master/gen-val/json-files
+  https://doi.org/10.46586/tches.v2025.i2.209-234
+  https://kyberslash.cr.yp.to/papers.html
+  https://csrc.nist.gov/files/pubs/fips/203/final/docs/fips-203-potential-updates.xlsx
+
+rsa.txt
+  https://www.rfc-editor.org/rfc/rfc9690.html
+  https://crocs.fi.muni.cz/public/papers/rsa_ccs17
+  https://factorable.net/
+  https://www.rfc-editor.org/rfc/rfc8446.html
+
+saber.txt
+  https://www.esat.kuleuven.be/cosic/pqcrypto/saber/files/saberspecround3.pdf
+  https://www.esat.kuleuven.be/cosic/pqcrypto/saber/resources.html
+  https://eprint.iacr.org/2018/230
+  https://github.com/KULeuven-COSIC/SABER
+  https://github.com/KULeuven-COSIC/SABER/tree/master/KAT
+  https://eprint.iacr.org/2021/193
+  https://doi.org/10.1007/978-3-030-97121-2_1
+  https://nvlpubs.nist.gov/nistpubs/ir/2022/NIST.IR.8413-upd1.pdf
+
+sntrup.txt
+  https://ntruprime.cr.yp.to/nist/ntruprime-20201007.pdf
+  https://ntruprime.cr.yp.to/nist.html
+  https://eprint.iacr.org/2016/461
+  https://www.openssh.org/pq.html
+  https://nvlpubs.nist.gov/nistpubs/ir/2022/NIST.IR.8413-upd1.pdf
+  https://ntruprime.cr.yp.to/security.html
+  https://ntruprime.cr.yp.to/faq.html
+  https://libntruprime.cr.yp.to/
+  https://libntruprime.cr.yp.to/internals.html
+  https://libntruprime.cr.yp.to/verification.html
+  https://ntruprime.cr.yp.to/ntruprime-20200930.sage
+  https://ntruprime.cr.yp.to/nist/ntruprime-20201007/Reference_Implementation/kem/sntrup761/README.html
+  https://ntruprime.cr.yp.to/nist/ntruprime-20201007/Reference_Implementation/kem/sntrup761/run.html

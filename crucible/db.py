@@ -61,7 +61,7 @@ class Submission(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     challenge_id: Mapped[str] = mapped_column(ForeignKey("challenges.id"))
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
-    method_id: Mapped[str] = mapped_column(ForeignKey("methods.id"))
+    method_id: Mapped[str] = mapped_column(ForeignKey("methods.id"), index=True)
     profile_id: Mapped[str] = mapped_column(String(100))
     scheme_version: Mapped[str] = mapped_column(String(32))
     round_id: Mapped[int] = mapped_column(Integer)

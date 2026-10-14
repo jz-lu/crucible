@@ -10,8 +10,14 @@ const state = {
   submitBusy: false, pendingAttempt: null, roundRefreshing: false,
   challengeRequest: 0, leaderboardRequest: 0, submissionChallenge: null,
   historyRequest: 0, recoveryRequest: 0,
+  peopleRequest: 0, personRequest: 0, personHandle: null,
+  people: [], peoplePagination: null,
+  connectCode: null, connectRequest: 0, connection: null, connectBusy: false,
+  agentTokenRequest: 0,
+  agentTokens: [], agentTokenPagination: null,
+  agentInstructionsKey: null,
   screen: 'catalogue', schemeId: null, schemeVersion: null,
-  overviewMetrics: {public: 'public_key_bytes', cipher: 'ciphertext_bytes', computation: 'keygen', security: 'classical'},
+  overviewMetrics: {computation: 'keygen', security: 'classical'},
   importBusy: false, recoveryImportRequest: 0, submissionFormRevision: 0,
   autoIssueAttempts: new Set(), autoIssuePaused: new Map()
 };
@@ -196,8 +202,14 @@ function navigate(hash) {
   if (window.location.hash === hash) applyRoute();
   else window.location.hash = hash;
 }
+function personRoute(handle) { return '#person/' + encodeURIComponent(handle); }
+function siteOrigin() { return new URL(window.location.href).origin; }
+function connectionCode(value) {
+  const code = String(value || '').trim().toUpperCase().replace(/-/g, '');
+  return /^[A-Z0-9]{8}$/.test(code) ? code.slice(0, 4) + '-' + code.slice(4) : null;
+}
 function workspaceSelector(screen) {
-  return {scheme: '#workspace', overview: '#overview-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace'}[screen] || '#catalogue-workspace';
+  return {scheme: '#workspace', overview: '#overview-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
 }
 function applyRoute(focus = false) {
   if (!state.ready) return;
@@ -210,9 +222,16 @@ function applyRoute(focus = false) {
     window.history.replaceState(null, '', hash);
   }
   const [path, query = ''] = hash.split('?');
-  let scheme, profile, view = 'leaderboard';
-  let screen = path === '#propose' ? 'propose' : path === '#about' ? 'about' : path === '#research' ? 'research' : 'catalogue';
-  let invalid = !['#challenge', '#research', '#about', '#propose'].includes(path);
+  let scheme, profile, handle, view = 'leaderboard';
+  let screen = path === '#connect' ? 'connect' : path === '#people' ? 'people' : path === '#propose' ? 'propose' : path === '#about' ? 'about' : path === '#research' ? 'research' : 'catalogue';
+  let invalid = !['#challenge', '#research', '#about', '#propose', '#people', '#connect'].includes(path);
+  const personMatch = path.match(/^#person\/([^/]+)$/);
+  if (personMatch) {
+    try {
+      handle = decodeURIComponent(personMatch[1]);
+      if (handle && handle.length <= 100) { screen = 'person'; invalid = false; }
+    } catch { /* Malformed handles do not select another profile. */ }
+  }
   const match = path.match(/^#challenge\/([^/]+)\/([^/]+)$/);
   if (match) {
     try {
@@ -242,10 +261,19 @@ function applyRoute(focus = false) {
     } catch { /* Unknown or malformed releases fail closed to the catalogue. */ }
   }
   state.screen = screen;
+  state.personHandle = screen === 'person' ? handle : null;
+  state.peopleRequest++;
+  state.personRequest++;
+  state.connectRequest++;
+  state.connection = null;
+  state.connectBusy = false;
+  state.connectCode = screen === 'connect' ? connectionCode(new URLSearchParams(query).get('code')) : null;
+  resetAgentSettings();
   state.schemeId = ['scheme', 'overview'].includes(screen) ? scheme.id : null;
   state.schemeVersion = ['scheme', 'overview'].includes(screen) ? String(scheme.version) : null;
   state.profile = screen === 'scheme' ? profile : null;
   const changed = previous !== selectionKey();
+  if (screen !== 'scheme' || changed) resetAgentInstructions();
   if (changed) {
     state.challengeRequest++;
     state.leaderboardRequest++;
@@ -268,7 +296,11 @@ function applyRoute(focus = false) {
     if (view === 'leaderboard' && (changed || previousView !== view || previousScreen !== 'scheme')) loadLeaderboard();
   }
   if (screen === 'overview') renderOverview(scheme, profile);
-  document.title = ['scheme', 'overview'].includes(screen) ? scheme.name + (screen === 'overview' ? ' overview' : '') + ' — Crucible' : screen === 'research' ? 'Research — Crucible' : screen === 'about' ? 'About us — Crucible' : screen === 'propose' ? 'Propose a scheme — Crucible' : 'Schemes — Crucible';
+  if (screen === 'people') loadPeople();
+  if (screen === 'person') loadPerson(handle);
+  if (screen === 'connect') loadConnection();
+  document.title = ['scheme', 'overview'].includes(screen) ? scheme.name + (screen === 'overview' ? ' overview' : '') + ' — Crucible' : screen === 'person' ? handle + ' — Crucible' : screen === 'people' ? 'Leaderboard — Crucible' : screen === 'research' ? 'Research — Crucible' : screen === 'about' ? 'About us — Crucible' : screen === 'propose' ? 'Propose a scheme — Crucible' : 'Schemes — Crucible';
+  if (screen === 'connect') document.title = 'Connect an agent — Crucible';
   if (focus && previousScreen !== screen) $(workspaceSelector(screen)).focus();
 }
 function sharedKeyBytes(challenge) {
@@ -329,6 +361,11 @@ function setSession(data) {
   state.csrf = data.csrf_token || '';
   state.canReviewProposals = Boolean(state.user && data.capabilities?.review_protocol_proposals);
   if (previousId !== state.user?.id) {
+    state.connectRequest++;
+    state.connection = null;
+    state.connectBusy = false;
+    resetAgentSettings();
+    resetAgentInstructions();
     resetProposalAccount(previousId);
     state.historyRequest++;
     state.recoveryRequest++;
@@ -362,9 +399,14 @@ function setSession(data) {
   $('#auth-button').disabled = false;
   $('#account-handle').hidden = !state.user;
   setText('#account-handle', state.user?.handle || '');
+  $('#account-handle').href = state.user ? personRoute(state.user.handle) : '#people';
   $('#logout-button').hidden = !state.user;
   $('#history-button').hidden = !state.user;
   absorbClock(data);
+  if (previousId !== state.user?.id && state.ready) {
+    if (state.screen === 'connect') loadConnection();
+    if (state.screen === 'person') renderAgentSettings();
+  }
 }
 function globalError(message) {
   setText('#global-message-text', message);
@@ -392,6 +434,7 @@ function showInlineError(target, message, retry) {
 function showEmpty(target, message) { target.replaceChildren(node('div', message, 'empty-state')); }
 
 function updateClock() {
+  updateConnectionExpiry();
   const remaining = roundRemaining();
   if (remaining === null) return;
   const clock = String(Math.floor(remaining / 60)).padStart(2, '0') + ':' + String(remaining % 60).padStart(2, '0');
@@ -470,7 +513,7 @@ function renderCatalogue() {
   const target = $('#kem-catalogue');
   const commonReference = state.schemes.length && state.schemes.every(scheme => {
     const profile = scheme.profiles?.find(item => instanceSize(item) === 50);
-    return scheme.initial_security_model?.id === 'classical-baseline-v1' && initialSecurityEstimate(scheme, profile) !== null && profile.initial_security_estimate.target_bits === 128;
+    return ['classical-baseline-v1', 'classical-baseline-v2'].includes(scheme.initial_security_model?.id) && initialSecurityEstimate(scheme, profile) !== null && profile.initial_security_estimate.target_bits === 128;
   });
   setText('#tier-help', commonReference ? 'Tiers share an initial classical reference: Tier 50 ≈128 bits. Actual security and attack costs may differ.' :
     'Tiers are specific to each scheme. Equal tiers across schemes do not imply equal security or attack cost.');
@@ -525,13 +568,9 @@ function renderCatalogue() {
     const firstCell = node('td');
     firstCell.dataset.label = 'Recovered by';
     if (largest && scheme.first_recovery?.profile_id === profileId(largest)) {
-      const first = node('button', scheme.first_recovery.handle, 'kem-first-handle');
-      first.type = 'button';
-      first.disabled = !scheme.first_recovery.submission_id;
-      first.setAttribute('aria-haspopup', 'dialog');
-      first.setAttribute('aria-label', `View first recovery by ${scheme.first_recovery.handle} for ${scheme.name}, Tier ${instanceSize(largest)}`);
-      first.title = 'View recovery details · ' + utcDate(scheme.first_recovery.received_at);
-      first.addEventListener('click', () => openSubmissionDetails(scheme.first_recovery.submission_id, first));
+      const first = node('a', scheme.first_recovery.handle, 'kem-first-handle');
+      first.href = personRoute(scheme.first_recovery.handle);
+      first.setAttribute('aria-label', `View ${scheme.first_recovery.handle}’s profile`);
       firstCell.append(first);
     } else firstCell.append(node('span', '—', 'kem-meta'));
     const participants = node('td');
@@ -545,19 +584,484 @@ function renderCatalogue() {
   wrap.append(table);
   target.replaceChildren(wrap);
 }
+const AGENT_SCOPE_LABELS = {
+  'challenges:read': 'Read your challenge instances',
+  'challenges:write': 'Request challenge instances for your account',
+  'methods:read': 'Read your saved attack methods and source',
+  'methods:write': 'Create attack methods and upload source files',
+  'submissions:read': 'Read your submission receipts',
+  'submissions:write': 'Submit recovered keys on your behalf'
+};
+function agentScopeList(scopes) {
+  const list = node('ul', undefined, 'agent-scope-list');
+  for (const scope of scopes || []) list.append(node('li', AGENT_SCOPE_LABELS[scope] || scope));
+  return list;
+}
+function renderConnection() {
+  const target = $('#connect-content');
+  setText('#connect-origin', siteOrigin());
+  $('#connect-code-form').hidden = Boolean(state.connectCode);
+  if (!state.connectCode) return showEmpty(target, 'Enter the code shown by the agent you want to connect.');
+  const code = node('p', state.connectCode, 'connect-code');
+  code.setAttribute('aria-label', 'Connection code ' + state.connectCode);
+  target.replaceChildren(code);
+  if (!state.user) {
+    target.append(node('p', 'Sign in to review this connection. Signing in will not connect the agent.', 'connect-copy'));
+    const signIn = node('button', 'Sign in', 'button button-primary'); signIn.type = 'button';
+    signIn.addEventListener('click', () => openAuth(signIn)); target.append(signIn);
+    return;
+  }
+  const connection = state.connection;
+  if (!connection) return;
+  const status = connection.status === 'pending' && connection.expires_at <= now() ? 'expired' : connection.status;
+  if (status !== 'pending') {
+    const messages = {approved: 'Connection approved. Return to your agent to finish connecting.', denied: 'Connection cancelled. This agent has not been connected.', expired: 'This code has expired. Ask your agent to start a new connection.'};
+    target.append(node('p', messages[status] || 'This connection is unavailable.', 'connect-result'));
+    if (status === 'approved') {
+      const link = node('a', 'Manage connected agents →', 'text-button'); link.href = personRoute(state.user.handle); target.append(link);
+    }
+    return;
+  }
+  target.append(node('h2', connection.label, 'connect-agent-name'));
+  target.append(node('p', 'Check that this code matches your agent. Connect only an agent you started.', 'connect-copy'));
+  const account = node('p', 'Connect to ', 'connect-copy'); account.append(node('strong', state.user.handle), '.'); target.append(account);
+  target.append(agentScopeList(connection.scopes));
+  target.append(node('p', 'This code expires at ' + utcTime(connection.expires_at) + '.', 'field-hint'));
+  const actions = node('div', undefined, 'connect-actions');
+  for (const [action, label, className] of [['approve', 'Connect agent', 'button button-primary'], ['deny', 'Cancel connection', 'text-button']]) {
+    const button = node('button', state.connectBusy && action === 'approve' ? 'Connecting…' : label, className);
+    button.type = 'button'; button.disabled = state.connectBusy; button.dataset.agentDecision = action;
+    button.addEventListener('click', () => decideConnection(action)); actions.append(button);
+  }
+  target.append(actions);
+}
+function updateConnectionExpiry() {
+  if (state.screen === 'connect' && state.connection?.status === 'pending' && !state.connectBusy && state.connection.expires_at <= now()) {
+    state.connection = {...state.connection, status: 'expired'};
+    renderConnection();
+  }
+}
+async function loadConnection() {
+  if (state.screen !== 'connect') return;
+  const request = ++state.connectRequest;
+  const code = state.connectCode, account = state.user?.id;
+  const current = () => state.screen === 'connect' && state.connectCode === code && state.user?.id === account && request === state.connectRequest;
+  state.connection = null;
+  renderConnection();
+  if (!code || !state.user) return;
+  setLoading($('#connect-content'), 'Loading connection details…');
+  try {
+    const data = await api('/api/agent/connect/' + encodeURIComponent(code));
+    if (!current()) return;
+    const connection = data.connection;
+    if (!connection || connectionCode(connection.user_code) !== code || typeof connection.label !== 'string' ||
+        !Array.isArray(connection.scopes) || connection.scopes.some(scope => typeof scope !== 'string') ||
+        !Number.isFinite(connection.expires_at) || !['pending', 'approved', 'expired', 'denied'].includes(connection.status)) throw new Error('The agent connection details could not be verified.');
+    state.connection = connection;
+    renderConnection();
+  } catch (error) {
+    if (current()) showInlineError($('#connect-content'), error.message, loadConnection);
+  }
+}
+async function decideConnection(action) {
+  if (!['approve', 'deny'].includes(action) || state.screen !== 'connect' || !state.user || state.connectBusy ||
+      state.connection?.status !== 'pending' || state.connection.expires_at <= now()) return updateConnectionExpiry();
+  const code = state.connectCode, account = state.user.id;
+  const request = ++state.connectRequest;
+  const current = () => state.screen === 'connect' && state.connectCode === code && state.user?.id === account && request === state.connectRequest;
+  state.connectBusy = true; renderConnection();
+  try {
+    const data = await api('/api/agent/connect/' + encodeURIComponent(code) + '/' + action, {});
+    if (!current()) return;
+    if (connectionCode(data.connection?.user_code) !== code || !['approved', 'denied', 'expired'].includes(data.connection?.status)) throw new Error('The connection outcome could not be confirmed. Refresh its status before trying again.');
+    state.connection = data.connection;
+    state.connectBusy = false; renderConnection();
+  } catch (error) {
+    if (current()) {
+      state.connection = null;
+      showInlineError($('#connect-content'), error.message, loadConnection);
+    }
+  } finally { if (current()) state.connectBusy = false; }
+}
+function resetAgentSettings() {
+  state.agentTokenRequest++;
+  state.agentTokens = []; state.agentTokenPagination = null;
+  $('#agent-connections').hidden = true;
+  $('#agent-connections').open = false;
+  $('#agent-token-list').replaceChildren();
+}
+function ownsViewedProfile() {
+  return state.screen === 'person' && state.user && state.personHandle?.toLowerCase() === state.user.handle.toLowerCase();
+}
+function renderAgentSettings() {
+  if (!ownsViewedProfile()) return resetAgentSettings();
+  $('#agent-connections').hidden = false;
+}
+async function loadAgentTokens(more = false) {
+  if (!ownsViewedProfile() || !$('#agent-connections').open) return;
+  const request = ++state.agentTokenRequest, account = state.user.id;
+  const current = () => request === state.agentTokenRequest && state.user?.id === account && ownsViewedProfile() && $('#agent-connections').open;
+  const target = $('#agent-token-list');
+  const offset = more === true && state.agentTokenPagination ? state.agentTokenPagination.offset + state.agentTokenPagination.limit : 0;
+  if (!offset) { state.agentTokens = []; state.agentTokenPagination = null; }
+  setLoading(target, 'Loading connected agents…');
+  $('#refresh-agent-tokens').disabled = true;
+  try {
+    const data = await api('/api/agent/tokens?' + new URLSearchParams({limit: '100', offset: String(offset)}));
+    if (!current()) return;
+    if (!Array.isArray(data.tokens)) throw new Error('Connected agents could not be loaded.');
+    state.agentTokens = offset ? [...state.agentTokens, ...data.tokens.filter(token => !state.agentTokens.some(previous => previous.id === token.id))] : data.tokens;
+    state.agentTokenPagination = data.pagination || null;
+    if (!state.agentTokens.length) return showEmpty(target, 'No agents connected.');
+    const rows = state.agentTokens.map(token => {
+      const row = node('div', undefined, 'agent-token-row');
+      const copy = node('div', undefined, 'agent-token-copy');
+      copy.append(node('strong', token.label));
+      copy.append(node('p', token.active ? 'Expires ' + utcDate(token.expires_at) : token.revoked_at ? 'Disconnected' : 'Expired', 'field-hint'));
+      const permissions = node('details'); permissions.append(node('summary', 'Permissions'), agentScopeList(token.scopes)); copy.append(permissions);
+      row.append(copy);
+      if (token.active) {
+        const revoke = node('button', 'Disconnect', 'text-button'); revoke.type = 'button';
+        revoke.setAttribute('aria-label', 'Disconnect ' + token.label);
+        revoke.addEventListener('click', async () => {
+          if (!current()) return;
+          revoke.disabled = true;
+          try {
+            await api('/api/agent/tokens/' + encodeURIComponent(token.id) + '/revoke', {});
+            if (current()) await loadAgentTokens();
+          } catch (error) {
+            if (current()) { row.append(node('p', error.message, 'field-error')); revoke.disabled = false; }
+          }
+        });
+        row.append(revoke);
+      }
+      return row;
+    });
+    target.replaceChildren(...rows);
+    if (data.pagination?.has_more) {
+      const next = node('button', 'Show more agents', 'text-button'); next.type = 'button';
+      next.addEventListener('click', () => loadAgentTokens(true)); target.append(next);
+    }
+  } catch (error) {
+    if (current()) showInlineError(target, error.message, loadAgentTokens);
+  } finally { if (current()) $('#refresh-agent-tokens').disabled = false; }
+}
+function agentFollowupRequest() {
+  return `Retrieve the newest ${selectedScheme()?.name || state.schemeId} challenge at Tier ${instanceSize(state.profile)}.`;
+}
+function agentInstructions(challenge) {
+  const origin = siteOrigin();
+  const quote = value => "'" + String(value).replace(/'/g, "'\\''") + "'";
+  const client = 'python3 ./crucible_cli.py --server ' + quote(origin);
+  const folder = './crucible-attack-' + challenge.id.slice(0, 8);
+  const schemeId = challenge.public?.scheme_id || state.schemeId;
+  return `Retrieve my selected ${selectedScheme()?.name || schemeId} challenge at Tier ${instanceSize(state.profile)}.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running. If login is needed, run ${client} login and let me approve in my browser.\n\nFetch this exact instance into a fresh folder:\n${client} get --challenge-id ${quote(challenge.id)} --path ${quote(folder)}\nDeadline: ${utcDate(challenge.ends_at)}. Follow the workspace README for the attack and submission workflow.\n\nNext time I can just ask: “${agentFollowupRequest()}”\nFor those future requests, use ${client} init ${quote(schemeId)} --tier ${instanceSize(state.profile)} --path NEW_EMPTY_FOLDER. No website visit needed while connected.`;
+}
+function agentInstructionsKey() {
+  return state.user && state.challenge ? JSON.stringify([state.user.id, state.challenge.id]) : null;
+}
+function resetAgentInstructions() {
+  state.agentInstructionsKey = null;
+  $('#agent-instructions').hidden = true;
+  $('#use-agent').setAttribute('aria-expanded', 'false');
+  setText('#agent-instructions-text', '');
+  setText('#agent-followup-request', '');
+}
+function showAgentInstructions() {
+  const key = agentInstructionsKey();
+  if (!key) return;
+  state.agentInstructionsKey = key;
+  setText('#agent-instructions-text', agentInstructions(state.challenge));
+  setText('#agent-followup-request', '“' + agentFollowupRequest() + '”');
+  $('#agent-instructions').hidden = false;
+  $('#use-agent').setAttribute('aria-expanded', 'true');
+}
+function toggleAgentInstructions() {
+  if (!$('#agent-instructions').hidden) resetAgentInstructions();
+  else showAgentInstructions();
+}
+async function copyAgentInstructions() {
+  if (!state.challenge || !state.user) return;
+  const challenge = state.challenge, account = state.user.id;
+  const instructions = agentInstructions(challenge);
+  $('#copy-agent-instructions').disabled = true;
+  try {
+    await navigator.clipboard.writeText(instructions);
+    if (state.challenge?.id === challenge.id && state.user?.id === account) toast('Agent instructions copied. Give them to your agent.');
+  } catch {
+    if (state.challenge?.id === challenge.id && state.user?.id === account) {
+      showAgentInstructions();
+      toast('Copy the agent instructions shown below.');
+    }
+  } finally { $('#copy-agent-instructions').disabled = false; }
+}
+$('#connect-code-form').addEventListener('submit', event => {
+  event.preventDefault();
+  const code = connectionCode($('#connect-code-input').value);
+  if (!code) return showInlineError($('#connect-content'), 'Enter the eight-character code from your agent.');
+  navigate('#connect?' + new URLSearchParams({code}));
+});
+$('#agent-connections').addEventListener('toggle', () => {
+  if ($('#agent-connections').open) loadAgentTokens();
+  else { state.agentTokenRequest++; $('#agent-token-list').replaceChildren(); }
+});
+$('#refresh-agent-tokens').addEventListener('click', () => loadAgentTokens());
+function peopleNumber(value, fallback = '—') {
+  return Number.isFinite(value) && value >= 0 ? value.toLocaleString('en-US', {maximumFractionDigits: 2}) : fallback;
+}
+function peopleTable(headings, rows) {
+  const wrap = node('div', undefined, 'people-table-wrap');
+  const table = node('table', undefined, 'people-table');
+  const head = node('thead');
+  const titles = node('tr');
+  for (const title of headings) { const cell = node('th', title); cell.scope = 'col'; titles.append(cell); }
+  head.append(titles);
+  const body = node('tbody');
+  for (const cells of rows) {
+    const row = node('tr');
+    cells.forEach((content, index) => {
+      const cell = node('td'); cell.dataset.label = headings[index]; cell.append(content); row.append(cell);
+    });
+    body.append(row);
+  }
+  table.append(head, body); wrap.append(table); return wrap;
+}
+function personLink(handle) {
+  const link = node('a', handle, 'person-link');
+  link.href = personRoute(handle);
+  return link;
+}
+function renderPeople(scoring) {
+  const target = $('#people-content');
+  const scored = state.people.some(person => Number.isFinite(person.points));
+  setText('#people-score-note', scored ? '' : 'Points are being finalized. Participants are listed alphabetically.');
+  $('#people-score-note').hidden = scored;
+  if (!state.people.length) return showEmpty(target, 'No participants yet.');
+  const ranked = scored && state.people.every(person => Number.isInteger(person.rank) && person.rank > 0);
+  const headings = [...(ranked ? ['Rank'] : []), 'Participant', 'Points', 'Accepted proposals'];
+  const rows = state.people.map(person => [
+    ...(ranked ? [node('span', peopleNumber(person.rank), 'person-rank')] : []),
+    personLink(person.handle), node('span', peopleNumber(person.points, 'Pending'), 'person-points'),
+    node('span', peopleNumber(person.accepted_proposal_count))
+  ]);
+  target.replaceChildren(peopleTable(headings, rows));
+}
+async function loadPeople(more = false) {
+  if (state.screen !== 'people') return;
+  const request = ++state.peopleRequest;
+  const current = () => state.screen === 'people' && request === state.peopleRequest;
+  const target = $('#people-content');
+  const offset = more && state.peoplePagination ? state.peoplePagination.offset + state.peoplePagination.limit : 0;
+  $('#refresh-people').disabled = true;
+  $('#more-people').disabled = true;
+  if (!more) {
+    state.people = [];
+    state.peoplePagination = null;
+    $('#more-people').hidden = true;
+    $('#people-score-note').hidden = true;
+    setLoading(target, 'Loading participants…');
+  }
+  try {
+    const data = await api('/api/people?' + new URLSearchParams({limit: '50', offset: String(offset)}));
+    if (!current()) return;
+    if (!Array.isArray(data.people) || data.people.some(person => typeof person.handle !== 'string' || !person.handle)) throw new Error('The participant list could not be loaded.');
+    state.people = more ? [...state.people, ...data.people.filter(person => !state.people.some(existing => existing.handle === person.handle))] : data.people;
+    state.peoplePagination = data.pagination || null;
+    renderPeople(data.scoring);
+    $('#more-people').hidden = !data.pagination?.has_more;
+  } catch (error) {
+    if (current()) showInlineError(target, error.message, () => loadPeople());
+  } finally {
+    if (current()) { $('#refresh-people').disabled = false; $('#more-people').disabled = false; }
+  }
+}
+function recoveryRecordLabel(record) {
+  return `${record.scheme_name || record.scheme_id} · Tier ${record.tier}`;
+}
+function personalRecordTable(records) {
+  return peopleTable(['Scheme', 'Personal best', 'Points', 'Solved'], records.map(record => {
+    const name = node('span', undefined, 'person-record-scheme');
+    const link = node('a', record.scheme_name || record.scheme_id, 'person-scheme-link');
+    link.href = overviewRoute({id: record.scheme_id, version: record.scheme_version});
+    name.append(link);
+    if (!record.is_current) name.append(node('span', 'Archived · release ' + record.scheme_version, 'person-record-release'));
+    const result = node('button', 'Tier ' + record.tier, 'person-record-result');
+    result.type = 'button'; result.disabled = !record.submission_id;
+    result.setAttribute('aria-label', 'View result for ' + recoveryRecordLabel(record));
+    result.setAttribute('aria-haspopup', 'dialog');
+    result.addEventListener('click', () => openSubmissionDetails(record.submission_id, result));
+    const points = node('span', record.scoring_eligible ? peopleNumber(record.score?.total) : 'Not scored', 'person-record-points');
+    return [name, result, points, node('span', utcDate(record.received_at), 'person-record-date')];
+  }));
+}
+function milestoneLabel(record) {
+  const suffix = {1: 'st', 2: 'nd', 3: 'rd'}[record.place] || 'th';
+  return `${record.place}${suffix} to reach Tier ${record.tier}`;
+}
+function validMilestone(record) {
+  return record && Number.isInteger(record.tier) && record.tier > 0 &&
+    Number.isInteger(record.place) && record.place >= 1 && record.place <= 10 &&
+    Number.isFinite(record.received_at) &&
+    ['scheme_id', 'scheme_version', 'profile_id', 'submission_id'].every(key => typeof record[key] === 'string' && record[key]);
+}
+function milestoneResult(record, className, text) {
+  const button = node('button', text, className);
+  button.type = 'button';
+  button.setAttribute('aria-haspopup', 'dialog');
+  button.setAttribute('aria-label', `${record.scheme_name || record.scheme_id}: ${milestoneLabel(record)}. View result.`);
+  button.addEventListener('click', () => openSubmissionDetails(record.submission_id, button));
+  return button;
+}
+function milestoneHistoryTable(records) {
+  return peopleTable(['Scheme', 'Milestone', 'Reached'], records.map(record => {
+    const name = node('span', record.scheme_name || record.scheme_id, 'person-record-scheme');
+    if (!record.is_current) name.append(node('span', 'Archived · release ' + record.scheme_version, 'person-record-release'));
+    const result = milestoneResult(record, 'milestone-result', milestoneLabel(record));
+    const date = node('span', utcDate(record.received_at), 'person-record-date');
+    return [name, result, date];
+  }));
+}
+function renderMilestones(person) {
+  if (!person.first_ten) return null;
+  const section = node('section', undefined, 'person-section person-milestones');
+  section.id = 'first-ten-milestones';
+  section.append(node('h2', 'First 10 milestones'));
+  const highlights = (person.first_ten.highlights || []).filter(validMilestone);
+  let history = (person.first_ten.history || []).filter(validMilestone);
+  if (!highlights.length && !history.length) {
+    section.append(node('div', 'No First 10 milestones yet.', 'empty-state'));
+    return section;
+  }
+  section.append(node('p', 'Standout early results.', 'milestone-intro'));
+  const cards = node('div', undefined, 'milestone-highlights');
+  for (const record of highlights) {
+    const card = milestoneResult(record, 'milestone-card');
+    card.append(node('span', record.scheme_name || record.scheme_id, 'milestone-scheme'));
+    card.append(node('strong', milestoneLabel(record), 'milestone-achievement'));
+    const meta = node('span', undefined, 'milestone-meta');
+    if (!record.is_current) meta.append(node('span', 'Archived · release ' + record.scheme_version));
+    meta.append(node('span', utcDate(record.received_at)));
+    card.append(meta);
+    cards.append(card);
+  }
+  section.append(cards);
+  const disclosure = node('details', undefined, 'milestone-history');
+  disclosure.append(node('summary', 'View milestone history'));
+  disclosure.append(node('p', 'New personal bests among the first ten accounts to reach that tier or higher. Repeats and backfilled lower tiers add no milestones.', 'milestone-intro'));
+  const list = node('div', undefined, 'milestone-history-list');
+  list.append(milestoneHistoryTable(history));
+  const more = node('button', 'Show more', 'button button-quiet milestone-more');
+  more.type = 'button';
+  const error = node('p', undefined, 'field-error');
+  error.hidden = true; error.setAttribute('role', 'alert');
+  let pagination = person.first_ten.pagination;
+  more.hidden = !pagination?.has_more;
+  const profileRequest = state.personRequest;
+  const current = () => state.screen === 'person' && state.personRequest === profileRequest &&
+    state.personHandle?.toLowerCase() === person.handle.toLowerCase() && section.isConnected;
+  more.addEventListener('click', async () => {
+    if (more.disabled || !pagination?.has_more || !current()) return;
+    const offset = pagination.offset + pagination.limit;
+    more.disabled = true; more.textContent = 'Loading…'; error.hidden = true;
+    try {
+      const data = await api('/api/people/' + encodeURIComponent(person.handle) + '/milestones?' +
+        new URLSearchParams({limit: '20', offset: String(offset)}));
+      if (!current()) return;
+      if (!Array.isArray(data.milestones) || data.milestones.some(record => !validMilestone(record)) ||
+          data.pagination?.offset !== offset || data.pagination?.limit !== 20 || typeof data.pagination?.has_more !== 'boolean') {
+        throw new Error('Milestone history could not be loaded. Please try again.');
+      }
+      history = [...history, ...data.milestones.filter(record => !history.some(existing => existing.submission_id === record.submission_id))];
+      pagination = data.pagination;
+      list.replaceChildren(milestoneHistoryTable(history));
+      more.hidden = !pagination.has_more;
+    } catch (failure) {
+      if (current()) { error.textContent = failure.message; error.hidden = false; }
+    } finally {
+      if (current()) { more.disabled = false; more.textContent = 'Show more'; }
+    }
+  });
+  disclosure.append(list, more, error);
+  section.append(disclosure);
+  return section;
+}
+function renderPerson(person) {
+  const target = $('#person-content');
+  setText('#person-title', person.handle);
+  const stats = node('dl', undefined, 'person-stats');
+  for (const [label, value] of [['Points', peopleNumber(person.points, 'Pending')], ['Accepted proposals', peopleNumber(person.accepted_proposal_count)]]) {
+    const stat = node('div'); stat.append(node('dt', label), node('dd', value)); stats.append(stat);
+  }
+  target.replaceChildren(stats);
+  if (!Number.isFinite(person.points)) target.append(node('p', 'Scoring is being finalized. Verified results are recorded below.', 'people-score-note'));
+  if (person.score_breakdown) {
+    const breakdown = node('details', undefined, 'person-score-breakdown');
+    breakdown.append(node('summary', 'Points breakdown'));
+    const values = node('dl', undefined, 'person-score-parts');
+    for (const [label, key] of [['Personal progress', 'progress'], ['First-record bonus', 'early_recovery'], ['Accepted proposals', 'scheme_contributions']]) {
+      const part = node('div'); part.append(node('dt', label), node('dd', peopleNumber(person.score_breakdown[key]))); values.append(part);
+    }
+    breakdown.append(values);
+    breakdown.append(node('p', 'For each eligible scheme: 10 × your highest solved tier, plus 40 × the highest tier you were first to reach. Each explicitly admitted new scheme earns 1,000 points.'));
+    breakdown.append(node('p', 'Intermediate tiers and repeated solves do not accumulate extra points. Archived releases keep their records and are labelled when they are not scored. This is the provisional points policy.'));
+    target.append(breakdown);
+  }
+  const milestones = renderMilestones(person);
+  if (milestones) target.append(milestones);
+  const records = node('section', undefined, 'person-section');
+  records.append(node('h2', 'Personal bests'));
+  if (person.records?.length) records.append(personalRecordTable(person.records));
+  else records.append(node('div', 'No solved challenges yet.', 'empty-state'));
+  target.append(records);
+  const recent = node('section', undefined, 'person-section');
+  recent.append(node('h2', 'Recent solves'));
+  if (person.recent_recoveries?.length) {
+    const list = node('div', undefined, 'person-recoveries');
+    for (const record of person.recent_recoveries) {
+      const item = node('button', undefined, 'history-item');
+      item.type = 'button'; item.disabled = !record.submission_id;
+      item.setAttribute('aria-haspopup', 'dialog');
+      item.setAttribute('aria-label', 'View result for ' + recoveryRecordLabel(record));
+      const copy = node('span', undefined, 'history-item-copy');
+      copy.append(node('span', recoveryRecordLabel(record), 'history-item-title'));
+      const meta = (!record.is_current ? 'Archived release ' + record.scheme_version + ' · ' : '') + utcDate(record.received_at);
+      copy.append(node('span', meta, 'history-item-meta'));
+      item.append(copy, node('span', 'View result →', 'person-result-action'));
+      item.addEventListener('click', () => openSubmissionDetails(record.submission_id, item));
+      list.append(item);
+    }
+    recent.append(list);
+  } else recent.append(node('div', 'No solved challenges yet.', 'empty-state'));
+  target.append(recent);
+  renderAgentSettings();
+}
+async function loadPerson(handle) {
+  const request = ++state.personRequest;
+  const current = () => state.screen === 'person' && state.personHandle === handle && request === state.personRequest;
+  setText('#person-title', handle);
+  const target = $('#person-content');
+  setLoading(target, 'Loading profile…');
+  try {
+    const data = await api('/api/people/' + encodeURIComponent(handle));
+    if (!current()) return;
+    if (!data.person || typeof data.person.handle !== 'string' || data.person.handle.toLowerCase() !== handle.toLowerCase()) throw new Error('That profile could not be loaded.');
+    renderPerson(data.person);
+  } catch (error) {
+    if (current()) showInlineError(target, error.message, () => loadPerson(handle));
+  }
+}
 const OVERVIEW_METRICS = {
   public_key_bytes: {label: 'Public key', title: 'Public-key size', unit: 'Bytes', kind: 'encoding'},
   ciphertext_bytes: {label: 'Ciphertext', title: 'Ciphertext size', unit: 'Bytes', kind: 'encoding'},
-  shared_secret_bytes: {label: 'Shared secret', title: 'Shared-secret size', unit: 'Bytes', kind: 'encoding'},
   keygen: {label: 'Key generation', title: 'Key generation', unit: 'Seconds', kind: 'timing'},
   encapsulate: {label: 'Encapsulation', title: 'Encapsulation', unit: 'Seconds', kind: 'timing'},
   decapsulate: {label: 'Decapsulation', title: 'Decapsulation', unit: 'Seconds', kind: 'timing'},
-  classical: {label: 'Initial estimate', title: 'Initial classical estimate', unit: 'Reference work (bits)', kind: 'baseline'},
+  classical: {label: 'Initial estimate', title: 'Initial classical reference', unit: 'Reference work (bits)', kind: 'baseline'},
   quantum: {label: 'Quantum', title: 'Quantum security estimate', unit: 'Estimated security (bits)', kind: 'security'}
 };
 const OVERVIEW_CARDS = {
-  public: ['public_key_bytes', 'ciphertext_bytes', 'shared_secret_bytes'],
-  cipher: ['public_key_bytes', 'ciphertext_bytes', 'shared_secret_bytes'],
+  public: ['public_key_bytes'],
+  cipher: ['ciphertext_bytes'],
   computation: ['keygen', 'encapsulate', 'decapsulate'],
   security: ['classical', 'quantum']
 };
@@ -567,10 +1071,6 @@ function overviewProfiles(scheme) {
 }
 function overviewValue(scheme, profile, metric) {
   if (metric === 'classical') return initialSecurityEstimate(scheme, profile);
-  if (metric === 'shared_secret_bytes') {
-    const value = profile.shared_secret_bytes;
-    return Number.isSafeInteger(value) && value > 0 ? value : null;
-  }
   return ['public_key_bytes', 'ciphertext_bytes'].includes(metric) ? profileBytes(scheme, profile, metric) : null;
 }
 function svgNode(tag, attributes = {}, text) {
@@ -580,7 +1080,7 @@ function svgNode(tag, attributes = {}, text) {
   return element;
 }
 function renderOverviewChart(scheme, cardId) {
-  const metric = state.overviewMetrics[cardId];
+  const metric = state.overviewMetrics[cardId] || OVERVIEW_CARDS[cardId][0];
   const descriptor = OVERVIEW_METRICS[metric];
   const target = $('#overview-chart-' + cardId);
   const card = target.closest('.overview-card');
@@ -647,10 +1147,9 @@ function renderOverviewChart(scheme, cardId) {
     const label = node('p', recoveredLabel, 'overview-recovery-note');
     target.append(label);
   }
-  const note = descriptor.kind === 'timing' ? 'A timing series needs a reproducible benchmark, hardware, and measurement method.' :
+  const note = descriptor.kind === 'timing' ? 'Key generation, encapsulation, and decapsulation await a shared benchmark and measurement method.' :
     descriptor.kind === 'baseline' ? (measured.length ? 'Frozen classical reference; not a measured security guarantee.' : 'No initial classical estimate is published for this release.') :
     descriptor.kind === 'security' ? 'An estimate needs a stated security game, attack model, and source. Recovery records are not estimates.' :
-    metric === 'shared_secret_bytes' ? 'Declared output length at each tier. Key length is not a security estimate.' :
     'Canonical encoded bytes. Excludes JSON and shared domain parameters. Dots mark published tiers.';
   target.append(node('p', note, 'overview-chart-note'));
   const badge = $('#overview-badge-' + cardId);
@@ -693,27 +1192,32 @@ function renderOverview(scheme, contextProfile = null) {
   setText('#overview-progress', record ? `Largest recovery · Tier ${instanceSize(record)}` : 'No recoveries yet');
   const grid = $('#overview-graphs');
   if (!grid.childElementCount) {
-    for (const [id, metrics] of Object.entries(OVERVIEW_CARDS)) {
+    for (const id of Object.keys(OVERVIEW_CARDS)) {
       const card = node('article', undefined, 'overview-card');
       card.setAttribute('aria-labelledby', 'overview-title-' + id);
       const heading = node('div', undefined, 'overview-card-heading');
       const title = node('h2'); title.id = 'overview-title-' + id;
       const badge = node('span', undefined, 'overview-badge'); badge.id = 'overview-badge-' + id;
       heading.append(title, badge);
-      const options = node('div', undefined, 'overview-metric-options');
-      options.setAttribute('role', 'group'); options.setAttribute('aria-label', 'Choose metric for ' + (id === 'public' ? 'first encoding chart' : id === 'cipher' ? 'second encoding chart' : id + ' chart'));
-      for (const metric of metrics) {
-        const button = node('button', OVERVIEW_METRICS[metric].label);
-        button.type = 'button'; button.dataset.overviewMetric = metric;
-        button.addEventListener('click', () => {
-          if (state.screen !== 'overview' || !selectedScheme()) return;
-          state.overviewMetrics[id] = metric;
-          renderOverviewChart(selectedScheme(), id);
-        });
-        options.append(button);
+      card.append(heading);
+      const metrics = OVERVIEW_CARDS[id];
+      if (metrics.length > 1) {
+        const options = node('div', undefined, 'overview-metric-options');
+        options.setAttribute('role', 'group'); options.setAttribute('aria-label', 'Choose metric for ' + id + ' chart');
+        for (const metric of metrics) {
+          const button = node('button', OVERVIEW_METRICS[metric].label);
+          button.type = 'button'; button.dataset.overviewMetric = metric;
+          button.addEventListener('click', () => {
+            if (state.screen !== 'overview' || !selectedScheme()) return;
+            state.overviewMetrics[id] = metric;
+            renderOverviewChart(selectedScheme(), id);
+          });
+          options.append(button);
+        }
+        card.append(options);
       }
       const chart = node('div'); chart.id = 'overview-chart-' + id;
-      card.append(heading, options, chart); grid.append(card);
+      card.append(chart); grid.append(card);
     }
   }
   for (const id of Object.keys(OVERVIEW_CARDS)) renderOverviewChart(scheme, id);
@@ -752,6 +1256,10 @@ function renderProfiles(previewProfile = null) {
   slider.max = String(Math.max(0, profiles.length - 1));
   slider.value = String(Math.max(0, index));
   slider.disabled = profiles.length < 2;
+  const recoveredIndex = largest ? profiles.indexOf(largest) : -1;
+  const recoveredThrough = recoveredIndex < 0 ? '0%' : profiles.length < 2 || recoveredIndex === profiles.length - 1
+    ? '100%' : `calc(7px + (100% - 14px) * ${recoveredIndex / (profiles.length - 1)})`;
+  slider.style.cssText = `--recovered-through: ${recoveredThrough}`;
   slider.setAttribute('aria-valuetext', current ? `Challenge tier ${instanceSize(current)}` : 'No tiers available');
   setText('#size-slider-value', current ? String(instanceSize(current)) : '—');
   $('#jump-size').disabled = !profiles.length;
@@ -894,11 +1402,15 @@ function renderProtocol() {
   addFact(correctness, 'Evidence status', claim.evidence_status);
 }
 function renderChallenge() {
+  if (state.agentInstructionsKey !== agentInstructionsKey()) resetAgentInstructions();
+  $('#use-agent').disabled = !state.user || !state.challenge;
+  $('#manual-instance-tools').hidden = !state.challenge || state.challengeLoading;
   $('#open-submission').hidden = false;
   $('#open-submission').disabled = !state.ready || state.submitBusy || state.importBusy;
   $('#challenge-loading').hidden = !state.challengeLoading;
   $('#challenge-empty').hidden = state.challengeLoading || Boolean(state.challenge);
   $('#challenge-active').hidden = state.challengeLoading || !state.challenge;
+  $('#challenge-details').hidden = state.challengeLoading || !state.challenge;
   $('#issue-button').disabled = !state.ready || !state.profile || state.issueBusy || roundRemaining() === 0;
   if (!state.challenge) {
     const current = state.schemes.find(scheme => scheme.id === state.schemeId);
@@ -1057,60 +1569,83 @@ async function issueChallenge({activeRoundId} = {}) {
 
 async function loadLeaderboard() {
   const target = $('#leaderboard-content');
-  const scope = 'The first ten distinct accounts to recover this tier or a higher one, across all rounds. Ordered by server receipt.';
-  setText('#leaderboard-title', 'Recoveries');
+  const card = $('#tier-record');
+  const scope = 'The earliest accepted recovery at this tier or higher, across all rounds. Ties use the server receipt identifier.';
+  setText('#leaderboard-title', 'Recovery record');
+  card.setAttribute('data-state', 'loading');
+  $('#tier-record-notes').hidden = true;
+  $('#tier-record-notes').open = false;
   $('#leaderboard-scope').hidden = true;
   $('#leaderboard-footnote').hidden = true;
   setText('#leaderboard-scope', scope);
   const request = ++state.leaderboardRequest;
   const selected = profileId();
-  if (state.screen !== 'scheme' || !selected) return showEmpty(target, 'Choose an available tier to see its recoveries.');
-  setLoading(target, 'Loading the first recoveries…');
+  const schemeId = state.schemeId, schemeVersion = state.schemeVersion;
+  if (state.screen !== 'scheme' || !selected) return showEmpty(target, 'Choose an available tier to see its record.');
+  setLoading(target, 'Loading the recovery record…');
   $('#refresh-leaderboard').disabled = true;
   try {
-    const data = await api('/api/leaderboard?' + new URLSearchParams({profile_id: selected, scheme_id: state.schemeId, scheme_version: state.schemeVersion}));
+    const data = await api('/api/leaderboard?' + new URLSearchParams({profile_id: selected, scheme_id: schemeId, scheme_version: schemeVersion}));
     if (request !== state.leaderboardRequest) return;
-    if (data.includes_compatible_versions?.length) setText('#leaderboard-scope', scope + ' Includes identical parameters from version ' + data.includes_compatible_versions.join(', ') + '; each record keeps its original release.');
-    if (!data.entries?.length) {
-      setText('#leaderboard-title', 'Unsolved');
-      return showEmpty(target, 'No accepted recoveries have been recorded for this tier and version.');
+    if (!Array.isArray(data.entries) || (data.profile_id != null && data.profile_id !== selected) ||
+        (data.scheme_id != null && data.scheme_id !== schemeId) ||
+        (data.scheme_version != null && data.scheme_version !== schemeVersion)) {
+      throw new Error('The recovery record could not be loaded. Please try again.');
     }
-    setText('#leaderboard-title', 'Broken by:');
+    if (!data.entries.length) {
+      setText('#leaderboard-title', 'Unsolved');
+      card.setAttribute('data-state', 'unsolved');
+      const empty = node('div', undefined, 'tier-record-open');
+      empty.append(node('p', 'No accepted recoveries yet. Set the first record for Tier ' + instanceSize(state.profile) + '.', 'tier-record-invitation'));
+      const challenge = node('a', 'Take on this tier →', 'button button-primary tier-record-challenge');
+      challenge.href = schemeRoute(selectedScheme(), state.profile, 'challenge');
+      empty.append(challenge);
+      target.replaceChildren(empty);
+      return;
+    }
+    const entry = data.entries[0];
+    if (entry.rank !== 1 || typeof entry.handle !== 'string' || !entry.handle || !Number.isFinite(entry.received_at)) {
+      throw new Error('The recovery record could not be loaded. Please try again.');
+    }
+    setText('#leaderboard-title', 'Broken by');
+    card.setAttribute('data-state', 'solved');
+    $('#tier-record-notes').hidden = false;
     $('#leaderboard-scope').hidden = false;
     $('#leaderboard-footnote').hidden = false;
-    const wrap = node('div', undefined, 'leaderboard-wrap');
-    const table = node('table', undefined, 'leaderboard-table');
-    const caption = node('caption', 'First recoveries for Tier ' + instanceSize(state.profile), 'skip-link');
-    table.append(caption);
-    const head = node('thead');
-    const headings = node('tr');
-    for (const title of ['Rank', 'Researcher / method', 'Time to submit', 'Received (UTC)']) {
-      const th = node('th', title); th.scope = 'col'; headings.append(th);
-    }
-    head.append(headings); table.append(head);
-    const body = node('tbody');
-    for (const entry of data.entries) {
-      const row = node('tr', undefined, 'recovery-entry-row');
-      row.append(node('td', String(entry.rank).padStart(2, '0')));
-      const researcher = node('td');
-      const button = node('button', undefined, 'recovery-entry-button');
-      button.type = 'button';
-      button.setAttribute('aria-label', 'View recovery by ' + entry.handle);
-      button.setAttribute('aria-haspopup', 'dialog');
-      button.append(node('span', entry.handle, 'leaderboard-handle'));
-      if (entry.is_inherited) button.append(node('span', 'via tier ' + entry.instance_size, 'leaderboard-credit'));
-      button.append(node('span', entry.method?.name || 'Method', 'leaderboard-method'));
-      const recoveredSize = entry.instance_size ?? instanceSize(state.profile);
-      const context = `${selectedScheme().name} · Tier ${recoveredSize} · version ${entry.scheme_version || state.schemeVersion}`;
-      button.addEventListener('click', event => { event.stopPropagation?.(); openRecovery(entry, context, button); });
-      row.addEventListener('click', () => openRecovery(entry, context, button));
-      researcher.append(button);
-      row.append(researcher, node('td', duration(entry.elapsed_seconds), 'mono'), node('td', utcDate(entry.received_at), 'mono receipt-cell'));
-      body.append(row);
-    }
-    table.append(body); wrap.append(table); target.replaceChildren(wrap);
+    if (data.includes_compatible_versions?.length) setText('#leaderboard-scope', scope + ' Includes identical parameters from version ' + data.includes_compatible_versions.join(', ') + '; each record keeps its original release.');
+    const winner = node('div', undefined, 'tier-winner');
+    const name = node('a', entry.handle, 'tier-winner-name');
+    name.href = '#person/' + encodeURIComponent(entry.handle);
+    name.setAttribute('aria-label', 'View ' + entry.handle + '’s profile');
+    winner.append(name);
+    const meta = node('div', undefined, 'tier-record-meta');
+    meta.append(node('span', 'First recovery · ' + utcDate(entry.received_at)));
+    if (entry.is_inherited) meta.append(node('span', 'Via Tier ' + entry.instance_size, 'leaderboard-credit'));
+    if (entry.scheme_version && entry.scheme_version !== state.schemeVersion) meta.append(node('span', 'Release ' + entry.scheme_version, 'tier-record-release'));
+    winner.append(meta);
+    const evidence = node('div', undefined, 'tier-record-evidence');
+    evidence.append(node('span', entry.method?.name || 'Recovery method', 'tier-record-method'));
+    const result = node('button', 'View result →', 'text-button tier-record-result');
+    result.type = 'button';
+    result.setAttribute('aria-label', 'View recovery by ' + entry.handle);
+    result.setAttribute('aria-haspopup', 'dialog');
+    const recoveredSize = entry.instance_size ?? instanceSize(state.profile);
+    const context = `${selectedScheme().name} · Tier ${recoveredSize} · version ${entry.scheme_version || state.schemeVersion}`;
+    result.addEventListener('click', () => entry.submission_id
+      ? openSubmissionDetails(entry.submission_id, result)
+      : openRecovery(entry, context, result));
+    evidence.append(result);
+    winner.append(evidence);
+    target.replaceChildren(winner);
   } catch (error) {
-    if (request === state.leaderboardRequest) showInlineError(target, error.message, loadLeaderboard);
+    if (request === state.leaderboardRequest) {
+      setText('#leaderboard-title', 'Recovery record');
+      card.setAttribute('data-state', 'error');
+      $('#tier-record-notes').hidden = true;
+      $('#leaderboard-scope').hidden = true;
+      $('#leaderboard-footnote').hidden = true;
+      showInlineError(target, error.message, loadLeaderboard);
+    }
   } finally { if (request === state.leaderboardRequest) $('#refresh-leaderboard').disabled = false; }
 }
 function renderRecovery(entry, context) {
@@ -1132,6 +1667,15 @@ function renderRecovery(entry, context) {
   if (compute.notes) addFact(facts, 'Notes', compute.notes);
   content.replaceChildren(node('pre', entry.method?.pseudocode || 'No pseudocode recorded.', 'code-block'), facts,
     node('p', 'Method and resources are contributor-reported. The server checks the submitted key, not the accuracy of these claims.', 'panel-footnote'));
+  if (typeof entry.method?.source?.download_url === 'string') {
+    try {
+      const source = new URL(entry.method.source.download_url, siteOrigin());
+      if (source.origin === siteOrigin() && !source.username && !source.password && source.pathname.startsWith('/api/')) {
+        const link = node('a', 'Download code bundle ↓', 'button button-quiet');
+        link.href = source.href; link.setAttribute('download', ''); content.append(link);
+      }
+    } catch { /* Invalid artifact locations are not links. */ }
+  }
 }
 function openRecovery(entry, context, trigger) {
   state.recoveryRequest++;
@@ -1304,6 +1848,11 @@ function updateRecoveryControls() {
   $('#upload-recovery').disabled = disabled;
   $('#recovery-file').disabled = disabled;
   $('#download-recovery-template').disabled = disabled || !canSubmitChallenge(state.submissionChallenge);
+  $('#download-recovery-template').title = !state.user ? 'Sign in to download a result template.' :
+    state.importBusy || state.submitBusy ? 'Wait for the current operation to finish.' :
+      state.pendingAttempt ? 'Finish the pending submission before downloading another template.' :
+        !canSubmitChallenge(state.submissionChallenge) ? 'Choose an open, unanswered challenge to download its template.' :
+          'Download a JSON template for this exact challenge.';
   setText('#upload-recovery', state.importBusy ? 'Reading file…' : 'Upload result file');
 }
 async function importRecoveryFile(file) {
@@ -1634,6 +2183,8 @@ $('#recovery-file').addEventListener('change', async () => {
   if (file) await importRecoveryFile(file);
 });
 $('#copy-instance').addEventListener('click', copyInstance);
+$('#copy-agent-instructions').addEventListener('click', copyAgentInstructions);
+$('#use-agent').addEventListener('click', toggleAgentInstructions);
 $('#method-select').addEventListener('change', updateMethodFields);
 $('#refresh-leaderboard').addEventListener('click', loadLeaderboard);
 $('#history-button').addEventListener('click', showHistory);
@@ -2156,9 +2707,12 @@ function showWorkspace(name) {
   $('#research-workspace').hidden = !research.visible;
   $('#about-workspace').hidden = name !== 'about';
   $('#proposal-workspace').hidden = name !== 'propose';
-  for (const kind of ['challenge', 'research', 'about']) {
+  $('#people-workspace').hidden = name !== 'people';
+  $('#person-workspace').hidden = name !== 'person';
+  $('#connect-workspace').hidden = name !== 'connect';
+  for (const kind of ['challenge', 'people', 'research', 'about']) {
     const button = $('#nav-' + kind);
-    const selected = kind === 'challenge' ? ['catalogue', 'scheme', 'overview', 'propose'].includes(name) : kind === name;
+    const selected = kind === 'challenge' ? ['catalogue', 'scheme', 'overview', 'propose'].includes(name) : kind === 'people' ? ['people', 'person'].includes(name) : kind === name;
     button.classList.toggle('selected', selected);
     if (selected) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
@@ -2566,6 +3120,9 @@ $('#finding-form').addEventListener('submit', async event => {
   }
 });
 $('#nav-challenge').addEventListener('click', () => navigate('#challenge'));
+$('#nav-people').addEventListener('click', () => navigate('#people'));
+$('#refresh-people').addEventListener('click', () => loadPeople());
+$('#more-people').addEventListener('click', () => loadPeople(true));
 $('#nav-about').addEventListener('click', () => navigate('#about'));
 $('#nav-research').hidden = !RESEARCH_ENABLED;
 $('#nav-research').addEventListener('click', () => { if (RESEARCH_ENABLED) navigate('#research'); });

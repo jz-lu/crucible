@@ -24,10 +24,16 @@ async function boot({user=owner, hook, history=[summary(privateReceipt),summary(
       const overridden=await hook(url,options,envelope);
       if (overridden!==undefined) return overridden;
     }
+    if (url.pathname==='/api/people/archived-solver') return envelope({person:{handle:'archived-solver',points:0,schemes_recovered:1,correct_submission_count:1,records:[],recent_recoveries:[{scheme_id:scheme.id,scheme_name:'Original Alpha',scheme_version:'3',tier:30,submission_id:'public-first',received_at:100,is_current:false}]}});
     if (url.pathname==='/api/me/submissions') return envelope({submissions:history});
     if (url.pathname==='/api/submissions/public-first') return envelope({submission:receipt()});
     if (url.pathname==='/api/submissions/owner-incorrect') return envelope({submission:receipt(privateReceipt)});
   }});
+}
+async function publicButton(app) {
+  app.$('#kem-catalogue').querySelector('.kem-first-handle').click(); await flush();
+  assert.equal(app.$('#person-workspace').hidden,false);
+  return app.$('#person-content').querySelector('.history-item');
 }
 const detailCalls = app => app.requests.filter(r=>r.url.pathname.startsWith('/api/submissions/'));
 const closeDetails = app => app.$('#recovery-dialog').querySelector('[data-close]').click();
@@ -36,9 +42,9 @@ const assertReadOnly = app => assert.equal(app.requests.some(request=>request.op
 let passed=0;
 async function test(name,run) {await run();console.log('PASS '+name);passed++;}
 (async()=>{
-  await test('catalogue First recovery fetches the exact public receipt and preserves original release and tier',async()=>{
+  await test('catalogue profile links lead to an exact public receipt preserving original release and tier',async()=>{
     const app=await boot({user:null});
-    const button=app.$('#kem-catalogue').querySelector('.kem-first-handle');
+    const button=await publicButton(app);
     assert.equal(button.tagName,'BUTTON');
     assert.equal(button.type,'button');
     assert.equal(button.getAttribute('aria-haspopup'),'dialog');
@@ -64,7 +70,7 @@ async function test(name,run) {await run();console.log('PASS '+name);passed++;}
     assert.match(app.$('#recovery-content').querySelector('pre').textContent,/literal_method_text/);
     assert.equal(app.$('#recovery-content').querySelectorAll('script').length,0);
     closeDetails(app);await flush();
-    assert.equal(app.document.activeElement===button,true,'Focus returns to the catalogue trigger');
+    assert.equal(app.document.activeElement===button,true,'Focus returns to the profile recovery');
     assertReadOnly(app);
   });
   await test('history entries are whole keyboard buttons and owner-only incorrect details keep history beneath',async()=>{
@@ -104,7 +110,7 @@ async function test(name,run) {await run();console.log('PASS '+name);passed++;}
     for (const response of bad) {
       let failed=false;
       const app=await boot({hook:(url,options,envelope)=>url.pathname==='/api/submissions/public-first' && failed ? envelope(response) : undefined});
-      const button=app.$('#kem-catalogue').querySelector('.kem-first-handle');
+      const button=await publicButton(app);
       button.click();await flush();
       assert.match(app.$('#recovery-content').textContent,/literal_method_text/);
       closeDetails(app);failed=true;
@@ -122,7 +128,7 @@ async function test(name,run) {await run();console.log('PASS '+name);passed++;}
   await test('network failures clear stale detail data and retry only after an explicit click',async()=>{
     let failing=true;
     const app=await boot({hook:url=>{if(url.pathname==='/api/submissions/public-first' && failing)throw new Error('Simulated network outage');}});
-    app.$('#kem-catalogue').querySelector('.kem-first-handle').click();await flush();
+    (await publicButton(app)).click();await flush();
     assert.match(app.$('#recovery-content').textContent,/could not be reached/i);
     assert.equal(detailCalls(app).length,1);
     assert.equal(app.$('#recovery-content').querySelector('pre'),null);
@@ -135,7 +141,7 @@ async function test(name,run) {await run();console.log('PASS '+name);passed++;}
   await test('closing a loading detail prevents a late response from reopening or restoring its contents',async()=>{
     const pending=deferred();
     const app=await boot({hook:(url,options,envelope)=>url.pathname==='/api/submissions/public-first' ? pending.promise.then(()=>envelope({submission:receipt()})) : undefined});
-    app.$('#kem-catalogue').querySelector('.kem-first-handle').click();await flush();
+    (await publicButton(app)).click();await flush();
     assert.equal(app.$('#recovery-dialog').open,true);
     closeDetails(app);await flush();
     pending.resolve();await flush();
@@ -147,7 +153,7 @@ async function test(name,run) {await run();console.log('PASS '+name);passed++;}
   await test('a reopened dialog cannot be overwritten by an earlier receipt response',async()=>{
     const pending=deferred();
     const app=await boot({hook:(url,options,envelope)=>url.pathname==='/api/submissions/public-first' ? pending.promise.then(()=>envelope({submission:receipt()})) : undefined});
-    app.$('#kem-catalogue').querySelector('.kem-first-handle').click();await flush();
+    (await publicButton(app)).click();await flush();
     closeDetails(app);
     app.$('#history-button').click();await flush();
     app.$('#history-content').querySelector('.history-item').click();await flush();

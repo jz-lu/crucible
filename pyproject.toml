@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "A local foundation for reproducible KEM recovery challenges"
 requires-python = ">=3.11"
 dependencies = [
-  "fastapi>=0.115,<1", "uvicorn>=0.30,<1", "SQLAlchemy>=2.0,<2.1",
+  "fastapi>=0.115,<1", "uvicorn>=0.30,<1", "SQLAlchemy>=2.0.42,<2.1",
   "argon2-cffi>=23.1,<26", "alembic>=1.13,<2", "psycopg[binary]>=3.2,<4",
 ]
 

@@ -275,7 +275,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(vm.runInContext('state.submissionChallenge.scheme_version', app.sandbox), '1');
     assert.equal(mutations(app).length, 0);
   });
-  await test('header supports file-first import without a selected challenge', async () => {
+  await test('manual tools supports file-first import without a selected challenge', async () => {
     for (const view of ['leaderboard', 'protocol']) {
       const app = await fixtureApp({hash: route('fixture-20', '2', 'fixture-kem', view), challengeResponder: (_, __, envelope) => envelope({challenge: null})});
       assert.equal(targetId(app), null);

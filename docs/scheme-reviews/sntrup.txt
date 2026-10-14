@@ -1,0 +1,55 @@
+Streamlined NTRU Prime — selection review
+Reviewed 2026-10-14. Recommendation: INCLUDE as a catalogue candidate, initially sntrup761; live admission remains pending.
+
+Identity and marginal value
+
+Proposed algorithm authority: NTRU Prime round-three specification, 2020-10-07, exact sntrup761 parameter set p=761, q=4591, w=286. This is the post-April-2019 KEM, not the obsolete sntrup4591761 encoding/hash wrapper. Keep the other five sntrup sizes as profiles. NTRU LPRime is a different construction and should not be silently offered as a parameter variant of Streamlined NTRU Prime. [N1]
+
+This earns a slot for its quotient-NTRU construction and non-cyclotomic ring, a meaningful contrast to the module-LWE baseline. OpenSSH documents deployment of the sntrup761/X25519 hybrid, default since version 9.0 in April 2022; ML-KEM/X25519 became its default in 10.0. That supports practical relevance, not a claim that standalone sntrup761 is currently the default Internet KEM. [N2]
+
+Do not say NTRU Prime is proven safer than conventional NTRU or ML-KEM. NIST's 2022 assessment explicitly questioned the demonstrated benefit of its unusual ring and noted less analysis of that ring. [N3] Inclusion serves comparative evidence and deployed-construction coverage. It does not establish independent security from other lattice schemes.
+
+Security and correctness scope
+
+The design eliminates random honest decryption failures for its admissible parameters. Section 2.3.1 requires prime p and q, positive w, 2p >= 3w, q >= 16w+1, and irreducibility of x^p-x-1 modulo q. Theorem 4 proves core decryption correctness for honestly generated keys; sections 2.3.5–2.3.8 specify the KEM encoding and confirmation layer. These portions of the retrieved specification were inspected, not independently formalized. Each condition still needs checking against the exact adapter. This is not immunity to coding errors, invalid inputs, faults or side channels. [N1] The project's security material supplies several attack-cost models and cautions against treating a Core-SVP estimate as a guaranteed lower bound. [N4]
+
+Our passive shared-secret challenge measures a specific honest encapsulation. It does not recreate SSH's hybrid composition, authenticated transport, decapsulation oracles, or implementation leakage. An sntrup recovery would not by itself recover a hybrid key. Conversely, retaining an unrecovered challenge is not a proof of full IND-CCA security.
+
+Implementation and vectors
+
+Candidate implementation: libntruprime release 20260717, which the producer lists as current. Its wire API follows the sntrup specification; the project describes full verification as ongoing, not complete. [N5] Freeze its archive digest and the selected build configuration before use. Cross-check against the dated Sage reference ntruprime-20200930.sage and the 2020-10-07 submission's sntrup761 KAT generation/results. The submission's reference C README itself warns that its rewrite had not yet been reviewed for correctness or constant-time behavior. [N6] A current library plus independent reference comparison is preferable to treating that old reference C as audited production code.
+
+The full 2020-10-07 specification PDF was subsequently retrieved, its digest checked and the parameter/correctness/KEM sections inspected. This closes the earlier acquisition gap. No implementation archive was acquired, built or tested in this review. Complete cryptographic review and adapter conformance remain outstanding.
+
+Tier feasibility and conventional NTRU
+
+The six published sizes do not make a continuous standard ladder. A reduced family would need admissible polynomial/modulus choices, the required invertibility/irreducibility checks, weight and correctness inequalities, encoding tests and new attack estimates. Each accepted profile must have a reproducible parameter certificate. The ability to vary degree is a research opportunity, not permission to extrapolate a production claim.
+
+Defer conventional NTRU-HPS/HRSS for the initial roster: it would offer a useful cyclotomic quotient-NTRU comparison, but sntrup fills the initial NTRU-style slot and has the stronger deployment-based reason for this site. Do not call HPS/HRSS equivalent to sntrup. Reconsider a second slot when a concrete structure-comparison experiment justifies the additional review and maintenance. NTRU LPRime is likewise a documented deferral rather than an invisible option.
+
+Primary evidence
+
+[N1] Team specification and parameter definitions, 2020-10-07; complete PDF acquired 2026-10-14, with sections 2.3.1–2.3.8 inspected:
+https://ntruprime.cr.yp.to/nist/ntruprime-20201007.pdf
+https://ntruprime.cr.yp.to/nist.html
+Retrieved PDF SHA-256:
+48c4487d9ea78d884660a9f8d0198b0f8826ed25a8831d3394a0130dfe8e171d
+Original design: Bernstein et al., SAC 2017 / ePrint 2016/461:
+https://eprint.iacr.org/2016/461
+[N2] OpenSSH deployment chronology, inspected 2026-10-14:
+https://www.openssh.org/pq.html
+[N3] NIST IR 8413-upd1, July/September 2022, sections 4.3.2–4.3.3: conventional NTRU and NTRU Prime assessment.
+https://nvlpubs.nist.gov/nistpubs/ir/2022/NIST.IR.8413-upd1.pdf
+[N4] Team security/FAQ material, estimator version 20200927; designer claims require independent assessment:
+https://ntruprime.cr.yp.to/security.html
+https://ntruprime.cr.yp.to/faq.html
+[N5] Producer release 20260717 and implementation/verification scope:
+https://libntruprime.cr.yp.to/
+https://libntruprime.cr.yp.to/internals.html
+https://libntruprime.cr.yp.to/verification.html
+[N6] Dated reference implementation and KAT provenance:
+https://ntruprime.cr.yp.to/ntruprime-20200930.sage
+https://ntruprime.cr.yp.to/nist/ntruprime-20201007/Reference_Implementation/kem/sntrup761/README.html
+https://ntruprime.cr.yp.to/nist/ntruprime-20201007/Reference_Implementation/kem/sntrup761/run.html
+
+This is a bounded selection review, not a security audit or an exhaustive cryptanalysis survey.

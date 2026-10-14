@@ -1,0 +1,640 @@
+CRUCIBLE — ADMISSION AND COVERAGE CHALLENGE
+Editorial recommendation, 14 October 2026. Read-only review; no admissions made.
+
+Decision
+
+The selected eight form a defensible bounded comparison set, not eight independent
+security foundations or eight ready live challenge ladders. Saber is explicitly
+deferred from the immediate review and trial, as examined in section 9.
+Name the NTRU Prime entry Streamlined NTRU Prime, pin an exact specification,
+and separate standardized parameter sets from reduced challenge parameters.
+Do not add a ninth or tenth merely to fill a quota. NTRU-HPS/HRSS is a strong next
+coverage candidate; it is not represented exactly by NTRU Prime. Deferring Saber
+sacrifices the explicit rounding comparison and must be stated.
+
+A useful bounded claim is: "A small KEM comparison set covering selected
+traditional, lattice-based and code-based constructions, with exact challenge
+implementations admitted separately." Avoid "all important crypto", "all major
+assumptions", "independent alternatives", or a percentage of cryptography covered.
+The site's common purpose is recovering an encapsulated shared secret from
+public inputs. Common purpose does not establish equivalent security notions,
+attack costs, mathematical independence, or transferred attack evidence.
+
+1. What the existing repository actually enforces
+
+Reviewed files in /Users/aksharramkumar/git/towards-new-crypto:
+  crucible/protocol_specs.py
+  crucible/protocol_proposals.py
+  crucible/registry.py
+  crucible/scoring_awards.py
+Supporting reads: crucible/scoring.py, crucible/app.py,
+crucible/machine_auth.py, docs/scoring.txt.
+
+The specification records Setup/KeyGen/Encaps/Decaps, distribution and reuse,
+exact tier mapping and encodings, correctness scope, security claim/model,
+references and an optional implementation hash. Shape validation checks none of
+the scientific claims and executes no submitted code. Correctness may be perfect,
+statistical or unknown at intake. This is a good separation to preserve.
+
+Proposals and immutable revisions are private to the author and configured
+reviewers. Existing statuses are submitted, changes_requested and approved.
+Approval requires a different reviewer, the current revision/content hash,
+matching implementation SHA-256, a non-unknown correctness claim, all five
+review checks, and recorded evidence. Those checks are specification_complete,
+correctness, implementation_conformance, input_resource_safety and reproduction.
+Approval does not itself publish a proposal, register an adapter or prove security.
+
+The trusted registry imports explicit local releases, enforces namespaced profile
+IDs, and preserves old releases. Compatibility is explicit, with a stated basis
+covering parameters, distributions, encodings and KDF; it is not inferred from a
+shared name. That exact-release treatment should survive catalogue expansion.
+
+A distinct operator action awards 1,000 admission points, only after the exact
+approved release is active and all source/revision/reviewer checks match. The
+ledger rejects duplicate family, scheme, proposal, review or source awards.
+Semantic novelty remains manual. Recovery scoring is separately enrolled: current
+policy v2 names only DH release 6 and RSA release 3. It does not automatically
+score every registry entry. Its use of scheme_id as the scoring-family key is
+sufficient for those two, but not a general identity policy.
+
+Agent credentials currently allow challenge, method and submission operations;
+proposal/reviewer routes are outside that allowlist. Future agent proposal intake
+should receive an explicit, narrow scope. Never add reviewer/activation/credit
+powers as an incidental extension of submission access. An agent may assemble a
+review packet and reproduce tests; it must not mark itself as a human reviewer,
+borrow reviewer credentials, attest that a human reviewed something, or cast a
+review vote on the human's behalf without that person's explicit review action.
+
+2. Four identities, with concrete split rules
+
+Keep separate IDs for (a) a browsing family, (b) a canonical construction/page,
+(c) an immutable implemented release and parameter profile, and (d) an incentive
+lineage. An assumption record also needs its exact problem/game, distribution,
+parameters, model and relationships; it is not identified just by "lattice".
+
+SAME PAGE / VARIANT
+- Parameter sets that the named specification defines within one construction;
+  for example, ML-KEM-512/768/1024 are profiles of ML-KEM, not three inventions.
+- Alternative supported hash instantiations or optimized implementations whose
+  differences can be stated clearly inside the existing construction page.
+- A conforming implementation port or bug fix: new pinned implementation/release
+  where necessary, not a new scientific scheme or fresh award by default.
+Even on one page, incompatible bytes, sampling, rejection or KDF behavior retain
+separate release/profile identities and separate receipts.
+
+NEW CANONICAL PAGE
+- A materially distinct, fully specified construction with an identifiable target
+  and useful standalone explanation: distinct transforms, assumptions, algebra,
+  key/ciphertext distribution or rejection behavior can justify one.
+- A materially modified experimental construction may have its own linked page,
+  explicitly marked as a derivative, without inheriting the original's standard
+  name, security claim or correctness bound.
+- A composition/hybrid gets a separate exact construction when its combiner,
+  encodings and game are specified. It links components rather than replacing
+  them or claiming new foundational independence.
+Page splitting is editorial, not a theorem and not automatic permission to score.
+
+NEW SCORING LINEAGE
+Require a written human decision about material new challenge work and duplication
+risk. A new page, source hash, implementation language, KDF label, tier count,
+standard revision or fresh setup seed is insufficient. If the same recovered
+witness and inexpensive conversion solve both targets, default to one incentive
+lineage, or leave the new track unscored until the duplication policy is reviewed.
+A shared broad family alone is also insufficient to merge lineages: solving an
+instance of ML-KEM does not solve a given FrodoKEM instance merely because both
+have LWE connections. The test is practical transfer of the precise achievement,
+not absence of all common mathematical techniques.
+
+Examples:
+- ML-KEM parameter sets: one page/lineage; exact profiles and distributions.
+- FrodoKEM versus ML-KEM: separate pages; lattice browsing relationship; possible
+  separate admitted lineages, with no claim of independent security.
+- Custom Crucible RSA versus an exact standardized RSA-KEM: distinct construction
+  identity; preserve existing custom receipts. Do not mint duplicate invention or
+  recovery awards simply by wrapping the same RSA inversion target differently.
+- DHKEM(X25519, HKDF-SHA256) versus DHKEM(P-256, HKDF-SHA256): related RFC 9180
+  construction, exact groups/encodings/validation remain distinct. A parent
+  DHKEM page may contain those concrete targets. Adding P-256 need not add a
+  top-level catalogue row or automatic new scoring lineage.
+- Streamlined NTRU Prime and NTRU LPRime are distinct KEMs, not parameter sizes of
+  one unspecified "NTRU Prime" game. A parent browsing label may contain both.
+
+Do not transfer receipts across releases unless an explicit compatibility record
+establishes the relevant experiment is unchanged. Never remap archived tier
+numbers into a new ladder. Current lower-tier backfill is an incentive convention
+for a registered ordered ladder, not proof that each smaller instance was solved.
+A new multi-parameter or non-monotone ladder must opt into any backfill only after
+review; a single ranked integer is not enough to establish such an ordering.
+
+3. Origin and credit are independent of readiness
+
+Record construction_origin and assumption_origin separately, with values such as
+previously_identified, crucible_discovery, and unresolved. Store evidence, author
+attribution, earliest identifiable publication/submission, a prior-art assessment,
+a reviewer and date. A known assumption supporting an original Crucible KEM is a
+new construction on a known assumption. A first upload of a published paper is
+an import, not a Crucible discovery. Recent admission and discovery are different.
+
+"Crucible discovery" is a reviewed provenance claim, not proof of security or a
+proof that exhaustive prior-art search is possible. Disputed origin should remain
+unresolved with an explanation. Agent assistance can be credited accurately;
+it must not replace accountable author attribution or fabricate independence.
+
+The current admission ledger's "new family" needs a documented semantic rule
+before more awards. Recommended interpretation: a newly admitted, non-alias
+construction/incentive lineage, with a stated contribution role. Catalogue
+curation alone earns no 1,000-point admission award. If a substantial implementation
+and validation contribution for a previously known construction is to qualify,
+record that role explicitly and obtain a policy decision; do not describe the
+recipient as its inventor. An original construction may qualify without inventing
+a new mathematical assumption. Existing DH/RSA seed entries receive no retroactive
+credit. None of these decisions should follow automatically from the origin tab.
+
+4. Admission gates and evidence packet
+
+Maintain three separate public readiness states, with revision-specific evidence:
+
+CATALOGUED
+  A human checks identity, provenance, a primary specification/reference, KEM
+  scope and truthful summary. Publication consent is explicit for private
+  proposals. Record known limitations/attacks and whether the entry is a standard,
+  research construction or historical example. A catalogue record can have no
+  runnable adapter and unknown correctness; display those facts, no challenge
+  button, fabricated curve or invented tier. Intake format-valid is an internal
+  fact, not a public scientific validation badge.
+
+VALIDATED IMPLEMENTATION (prefer this full label over bare "validated")
+  The exact source and specification are pinned; a reviewer has reproduced
+  conformance and correctness checks for an enumerated parameter domain. The
+  record specifies all external dependencies and build/runtime versions, not
+  merely a Python wrapper's hash. Preserve commands, test-vector versions and
+  results, invalid-input behavior, randomness and distribution checks, failure/
+  abort analysis, and resource limits. No implication of independent audit or
+  proven confidentiality unless separately supported and scoped. Do not silently
+  promote existing built-ins whose own metadata says independent review pending.
+
+LIVE CHALLENGE
+  A configured human approves the exact current revision and evidence. A trusted
+  operator binds the reviewed artifact to a registry release and admitted profiles,
+  and explicitly enables issuance. Validate challenge target, server verification,
+  serialization, deadlines, secrecy of generated values, failure handling, profile
+  suspension and resource bounds in the service. Specify any oracle access (the
+  present challenge has none), key/setup reuse, and preparation versus online
+  work. A scheme can be live but unscored. Scoring enrollment and admission credit
+  remain later explicit decisions. Paused/withdrawn is an operational overlay;
+  retain the page, reason and historical receipts rather than erase evidence.
+
+Minimum explicit gate fields for each released review packet:
+  canonical_scheme_id, parent/related identities, specification URL/version/hash;
+  artifact digest plus dependencies/build recipe, adapter release, reviewer IDs;
+  admitted parameter/profile list, exact distributions, encodings/KDF/rejection;
+  correctness kind, bound, probability space, argument, tests and excluded domain;
+  claimed security notion/model, assumption links, reduction scope and limitations;
+  challenge objective/model, setup reuse, issue policy, verification and incidents;
+  evidence artifacts, reproducibility commands, manual decision/time;
+  catalogue publication consent; readiness state; optional score policy/lineage;
+  separate construction/assumption origin and admission-credit decision.
+
+These fields are a proposed review envelope. The existing strict specification
+forbids extra fields; do not start inserting this envelope into spec-v1 uploads
+without a versioned schema/API change. Current approved status means integration
+review is allowed, not that all future readiness states already exist.
+
+Automation should validate structure, pin artifacts, run isolated conformance
+checks, generate comparative diffs and assemble reports. Reproduction occurs in
+an explicitly isolated test/build environment, never by importing submitted code
+into the live web process. A failed automatic check should prevent advancement;
+a passed check should not cast the manual approval. Keep the present non-self-
+review rule and exact-hash/revision binding. Material changes invalidate the
+corresponding review scope rather than inheriting a prior checked box.
+
+5. Correctness and tiering are admission issues, not later polish
+
+The current specification can represent statistical correctness, but app.py pauses
+an entire profile on any shared_secret_matches=false result, calling it an
+implementation fault. That is conservative for the present perfect-correctness
+adapters. Before statistically correct KEMs go live, distinguish a legitimate
+honest decapsulation failure, a malformed input, a bounded setup/keygen abort,
+and an implementation discrepancy. The submitter's declared bound does not by
+itself prove that an observed mismatch is legitimate.
+
+For the first extension, retaining fail-closed suspension on any mismatch is a
+reasonable conservative operating rule. Call the incident "agreement failure
+under review", not automatically "implementation bug". Record no challenge for
+that draw, preserve nonsecret diagnostics, and let a reviewer classify it before
+resumption. Do not silently reroll until agreement: that conditions the challenge
+distribution and hides evidence. If success-conditioned issuance is deliberately
+chosen later, specify it as part of the benchmark, quantify/report the excluded
+mass and failures, and do not present its results as draws from the unconditioned
+standard KEM experiment. Recovering the encapsulator's secret from one honest
+public instance does not establish a general KEM correctness guarantee.
+
+At each admitted profile, give a mathematical correctness argument or justified
+bound plus implementation evidence. A finite test campaign cannot empirically
+establish a failure probability such as 2^-128. Bounds must apply to the actual
+samplers, all conditioning and the precise parameters; errors across many uses
+also need an explicit model. Perfect correctness does not establish security.
+
+No universal 1–50 ladder exists automatically. X25519 is a fixed curve and FIPS
+203 defines three ML-KEM parameter sets, not fifty scaled versions [S1, S2].
+Reducing secret entropy, changing noise/rank/modulus, substituting small curves,
+or shortening outputs changes an experiment and may invalidate correctness and
+security arguments. Such a challenge needs a named reduced-parameter track,
+separate manifests and an explanation of what carries over. A reference entry
+with only standard profiles is useful even if no grindable ladder is ready.
+
+The one-hour cutoff is a submission window; the service does not bound total
+compute, hardware, parallelism or reusable preparation. Label reported costs as
+self-reported unless independently measured. One exact-secret recovery records
+that instance's success. It is not a distinguishing-advantage lower bound, a
+security-level measurement, a proof every lower tier falls, or evidence that a
+standard parameter set was broken by attacking a modified toy variant.
+
+6. Roster objections and a practical order
+
+Selected eight-entry roster:
+  1. Existing Crucible finite-field DH construction (custom reference).
+  2. Existing Crucible RSA construction (custom reference).
+  3. DHKEM(X25519, HKDF-SHA256), exact RFC 9180 KEM.
+  4. ML-KEM, exact FIPS 203 version and errata disposition.
+  5. FrodoKEM, pinned construction/variant specification.
+  6. Streamlined NTRU Prime, pinned specification and exact profiles.
+  7. HQC, pinned KEM specification/version.
+  8. Classic McEliece, pinned KEM specification/version.
+
+Why this is useful: two working small-parameter references, a concrete elliptic-
+curve KEM, several deliberately different lattice design choices, and two code-
+based constructions. This is editorial breadth, not quantified coverage or proof
+that failure modes are independent. Our lattice/code reviews must establish each
+exact entry's details; names alone do not establish their security properties.
+
+The principal objections are substantial:
+- The existing DH/RSA are custom KDF/distribution/encoding constructions. Their
+  byte sizes, correctness claims and observations do not automatically describe
+  standardized DH/RSA protocols. Preserve their names and implementation scope.
+- "Classical" as a family heading lumps RSA inversion, finite-field CDH and
+  elliptic-curve CDH together. Use it only as a broad traditional-cryptography
+  tag, not an assumption family. Exact assumption tags should be visible on each
+  page without adding another navigation layer.
+- Three lattice entries still require explicit comparison questions, not treating
+  every paper as another basis for security. Adding Saber would make four and
+  nearly half of a nine-entry roster. Its deferral sacrifices a deliberate
+  rounding comparison; retain that objection rather than implying redundancy.
+- NTRU Prime is ambiguous and is not all of NTRU. The primary submission discusses
+  Streamlined NTRU Prime and NTRU LPRime separately; NTRU-HPS/HRSS have their own
+  construction and sampling choices [S3, S4]. If a ninth or tenth is justified,
+  add the exact NTRU construction with its HPS/HRSS variants; do not pretend the
+  Prime entry already stands in for it.
+- P-256 and other RFC 9180 DHKEM suites remain outside the initial concrete target.
+  They can be explicit sibling variants in the DHKEM page rather than every
+  curve becoming a new headline row or new points award [S1].
+- No exact post-quantum/traditional hybrid is represented. Adding two component
+  pages is not testing their combiner. A future hybrid needs its own interface,
+  composition assumptions and challenge target [S5]. The word "hybrid" in HPKE
+  must not be mistaken for automatic post-quantum/traditional composition.
+- Research on other foundations remains outside this starting slice. A complete,
+  attributable KEM proposal from an unfamiliar foundation may enter catalogue
+  review without standardization, fame, a tier ladder or a tenth-slot vacancy.
+  Require clear claims and a safe reviewed implementation before live activation;
+  do not require "independent of all existing assumptions" as an impossible gate.
+- A full eight-entry live launch would be a worse scientific result than two live
+  entries plus carefully labeled references if six correctness/parameter reviews
+  are missing. Order implementation by review readiness and scientific value,
+  not a desire to remove every empty chart at once.
+
+The <=10 target is an attention and initial-maintenance budget, not a permanent
+admission rule. Keep novel research proposals eligible, review private drafts,
+and change catalogue presentation/pagination as real reviewed work accumulates.
+Do not manufacture a discovery or lower standards to populate the origin tab.
+
+7. Source quality and bounded use of evidence
+
+Keep distinct evidence classes rather than one "verified" badge:
+- Normative/primary construction: exact published standard or author specification,
+  with edition, errata disposition, parameter set and artifact hash where relevant.
+- Mathematical claim: primary proof/paper, precise theorem/game, assumptions and
+  parameter domain; identify author claim versus independent review.
+- Implementation conformance: pinned code, known-answer/negative tests, cross-
+  implementation comparison, build metadata and reproducible commands.
+- Empirical attack/cost evidence: exact instance/release, target, receipt, method,
+  source, hardware and measured versus reported resources. Empirical evidence does
+  not turn into a security lower bound through catalogue admission.
+- Editorial context: classification PDF or survey, useful for navigation and
+  candidates but insufficient to certify current specification, implementation,
+  novelty, standard status or correctness. Search snippets are discovery aids;
+  do not use a recent claim of a spectacular attack without reading and review.
+
+Primary sources consulted for the external boundaries above (accessed 2026-10-14):
+[S1] RFC 9180, sections 4.1, 7.1 and appendix A. Defines exact DHKEM suites,
+     including X25519 and P-256, serialization, validation and test vectors.
+     https://www.rfc-editor.org/rfc/rfc9180
+[S2] NIST FIPS 203 publication record. Three ML-KEM parameter sets; the record
+     also flags prospective corrections, so admission must state its errata basis.
+     https://csrc.nist.gov/pubs/fips/203/final
+[S3] NTRU Prime authors, round-3 presentation, distinguishing Streamlined NTRU
+     Prime and NTRU LPRime. Used for identity, not adopting comparative claims.
+     https://csrc.nist.gov/CSRC/media/Presentations/ntruprime-round-3-presentation/images-media/session-6-ntruprime-bernstein.pdf
+[S4] NTRU author specification, 30 March 2019, HPS and HRSS parameter families.
+     Historical primary source supporting the distinction, not asserted to be
+     the latest release to implement.
+     https://ntru.org/f/ntru-20190330.pdf
+     Author software page also documents an incompatible hash instantiation:
+     https://www.ntru.org/software.shtml
+[S5] RFC 9794, especially section 5. Hybrid properties depend on the component
+     schemes, combiner and attacker model, not just component catalogue presence.
+     https://www.rfc-editor.org/rfc/rfc9794.html
+[S6] NIST SP 800-227, Recommendations for Key-Encapsulation Mechanisms (2025).
+     Primary implementation/use guidance to include in future reviewer packets;
+     this memo does not claim complete conformance with that document.
+     https://csrc.nist.gov/pubs/sp/800/227/final
+
+No new scheme has been approved, registered, scored, published from private
+proposal data, or represented as independently audited by this editorial review.
+
+8. Established-guideline audit and requirements crosswalk
+
+Audit scope: live repository and staged work/recovery-upload were compared on
+2026-10-14. The following were byte-identical in both copies: correctness-policy-
+v0.txt, protocol-admission.txt, protocol-specification.txt, architecture.txt,
+scoring.txt; protocol_specs.py, protocol_proposals.py, protocol_admission.py,
+registry.py, scoring.py, scoring_awards.py, app.py, machine_auth.py and manage.py.
+The inspected admission/proposal/boundary/calibrated-API test files also matched.
+This was source and test inspection, not a new execution of the test suite.
+Line references below describe that audited snapshot and may move after edits.
+After this comparison, documentation-only clarifications were authorized and
+staged in correctness-policy-v0.txt and protocol-admission.txt. They correct the
+historical/current wording and point to this crosswalk; the audited code was not
+changed and no statistical-failure policy or numeric threshold was activated.
+
+The established guidelines are substantially sound. The proposed correctness
+policy already distinguishes argument from testing, requires exact profile
+coverage, forbids hidden resampling, and anticipates statistical failures. The
+manual admission procedure implements important parts of those intentions.
+The task now is to retain those requirements while resolving the specific gaps
+below, not to replace them with a vague new checklist.
+
+R1 — Define the honest failure event, not a generic percentage.
+Existing rule/location: correctness-policy-v0.txt:9–23; protocol-specification.txt
+"correctness"; protocol_specs.py:112–126.
+Enforcement: the schema requires kind, bound text, argument and scope; it checks
+label consistency only. It cannot establish that the probability space is right.
+Judgment: KEEP; CLARIFY the exact event for each adapter.
+Proposed policy: every review states F = honest Encaps/Decaps disagreement or
+honest rejection, the setup/key/encapsulation random choices, conditioning, and
+whether the claim averages over fresh keys or also bounds reused-key behavior.
+Invalid adversarial input rejection is not automatically an honest correctness
+failure. A malformed honest output is an implementation/conformance incident.
+Always distinguish returned but unequal keys from an explicit error: a scheme
+with implicit rejection can fail agreement without returning an error at all.
+
+R2 — A nonblank failure bound is not evidence of a quantified guarantee.
+Existing rule/location: correctness-policy-v0.txt:20–36,58–63;
+protocol_specs.py:112–126; tests/test_protocol_specs.py:190–191.
+Enforcement: "unproved expression" is intentionally accepted as statistical bound
+text at format-validation time. Approval rejects unknown correctness, but no
+numeric threshold or proof/heuristic distinction is machine-enforced.
+Judgment: KEEP permissive intake; CLARIFY and strengthen the review packet.
+Proposed policy: reviewer records evidence_kind = mathematical bound / heuristic
+estimate / empirical result, exact formula or number, domain, assumptions, primary
+argument location, known limitations, and the profile class's acceptance rationale.
+Do not label an estimate a bound without qualification. Unknown or empirical-only
+claims may remain catalogued/private research, but do not pass the proposed live
+correctness gate merely because their JSON kind is changed to statistical.
+Keep the established rule that no universal delta = 2^(-security bits) threshold
+is invented. Publish a purpose-specific admission criterion before issuing a new
+class of official challenges; do not silently choose one while coding.
+
+R3 — Conformance tests support a proof; they do not replace one.
+Existing rule/location: correctness-policy-v0.txt:25–41;
+protocol-admission.txt:35–43; ReviewChecks in protocol_proposals.py:96–103.
+Enforcement: booleans and nonempty evidence are checked; commands, outcomes and
+mathematical reasoning remain manual. The service only checks one generated
+round trip through adapter-provided diagnostics.
+Judgment: KEEP; make review evidence inspectable.
+Proposed policy: attach reproducible known-answer vectors, invalid-input and
+boundary cases, deterministic reference comparisons, and honest trial counts/
+failures/seeds where safe. Separately identify the correctness argument covering
+all admitted parameters. A million successful trials cannot substantiate a
+cryptographic-scale failure rate. A proof about pseudocode cannot establish the
+compiled adapter's conformance. An independently written implementation helps
+find shared-code mistakes but is not a required blanket substitute for judgment.
+
+R4 — No correctness-conditioned retries or target substitution.
+Existing rule/location: correctness-policy-v0.txt:76–83;
+dh_v6.py:763–781; rsa_v3.py:327–333; app.py:479–492.
+Enforcement: current generators draw once, preserve Encaps' K, compare Decaps' K,
+and report one honest trial. The API records a hold and returns no instance on
+mismatch. Tests test_kem.py, test_rsa_v3.py and test_boundaries.py explicitly cover
+no retry/unchanged target and persistent profile holds.
+Judgment: KEEP as a non-negotiable experiment rule.
+Proposed policy: never replace K with Decaps' output and never rerun Encaps until
+agreement. Any rejection sampling required by the published algorithm itself
+must remain fully specified and must not be confused with an added service-side
+filter. Report service omission/abort behavior, since a catalogue of only issued
+successful-agreement instances is not an unbiased sample of all generated draws.
+
+R5 — Mathematical failures and bugs need separate classifications.
+Existing rule/location: correctness-policy-v0.txt:80–83 and architecture.txt:161–168
+explicitly require this distinction. app.py:479–492 currently maps unexpected
+exceptions and failed agreement to profile incidents/503s. db.py:84–91 stores a
+small diagnostics object and resolved flag, not a classified correctness ledger.
+Judgment: CHANGE before general statistical-correctness activation.
+Proposed policy: preserve the current fail-closed behavior for existing DH/RSA.
+For a new statistical KEM, review a versioned failure policy before live admission.
+Use categories at least agreement_failure_under_review, confirmed_mathematical_
+failure, implementation_fault and generation_abort. Classify with an independent
+reference/reproducer; the author cannot label every mismatch "expected". Record
+safe aggregate counts and review outcome, with private witness custody where
+reproduction requires it. Never expose live secrets or a decapsulation oracle.
+
+Two coherent future designs exist, and the present code implements neither as a
+general statistical-KEM policy: (a) record and hold every mismatch for review,
+with all omitted draws disclosed and experiment scope explicit; or (b) issue
+reviewed valid honest draws even when Decaps disagrees, using Encaps' K as target
+and recording agreement as a separate outcome. Design (b) preserves the natural
+recovery distribution but requires separating generation_valid from agreement_
+passed throughout issuance, ranking and scoring. The current correctness_passed
+flag is a ranking eligibility filter, so simply allowing a mismatch through
+issuance would still not implement (b). Do not make that change implicitly.
+Recommendation for this review/trial: catalogue the statistical candidates and
+leave them non-live until one policy is explicitly adopted and exercised.
+
+R6 — Bounded key-generation aborts are neither hidden nor mislabelled.
+Existing rule/location: architecture.txt:182–190; RSA3 correctness scope;
+app.py:482–488; test_calibrated_api.py:test_bounded_rsa_generation_exhaustion...
+Enforcement: PrimeGenerationLimit produces a retryable 503 with no challenge and
+no correctness incident. Successful RSA generation has a separately conditioned
+perfect-agreement claim. Other unexpected exceptions pause the profile.
+Judgment: KEEP; CLARIFY the old broad "honest exchange fails" formulation.
+Proposed policy: report generation availability separately from conditional
+agreement. If alpha is the probability generation aborts and delta bounds failure
+given successful generation, the complete exchange failure probability is at
+most alpha + (1-alpha)*delta; this is not a claim that alpha is zero. State whether
+encapsulation aborts are included in alpha or F, without double counting. Do not
+advertise unconditional perfect exchange when only conditional agreement is
+proved. Allow explicit retries of a documented generation abort; distinguish them
+from repeated attempts to erase an agreement failure.
+
+R7 — Counts need a denominator matching the claimed experiment.
+Existing rule/location: correctness-policy-v0.txt:31–34,82–83 requires counts and
+visible aggregate evidence; generated diagnostics say honest_trials=1.
+Enforcement: issuance stores correctness_passed=True for accepted instances;
+incidents record faults, but no comprehensive population-level trial/failure/
+abort ledger is implemented. Concurrent duplicate requests can generate extra
+draws while only one issued instance persists.
+Judgment: CHANGE before displaying correctness rates.
+Proposed policy: identify and count distinct generation draws, outcomes, withheld
+draws and aborts per exact release/profile; do not use request count, issued
+instances or successful receipts as interchangeable denominators. Publish only
+safe aggregate observations with the sampling/stopping policy. Do not infer a
+failure-rate estimate from the current sparse incident table. Reused-key and
+independent-key campaigns must be distinguishable.
+
+R8 — Tiers identify exact admitted profiles; unsupported interpolation is banned.
+Existing rule/location: correctness-policy-v0.txt:43–63;
+protocol_specs.py:64–101; protocol_admission.py:66–99.
+Enforcement: lists/ranges are bounded and ordered; binding check requires the
+same tier set, exact release/profile identities and bounded output lengths. It
+does not prove the parameter mapping, distributions or coverage theorem match
+that set. registry.py permits only explicitly declared compatibility overlaps.
+Judgment: KEEP; CLARIFY names and comparison semantics.
+Proposed policy: call the common integer "challenge tier"; preserve sparse sets.
+Attach exact parameter vectors plus purpose (standard / reduced research) and
+review coverage for every profile. One argument can cover many profiles, but a
+review must identify the domain rather than infer it from endpoints. No slider
+interpolation, automatic fifty-tier expansion or inherited low-tier correctness
+claim. Separate ordering/points/backfill policy from security estimates and exact
+standardized parameter names. Fixed output bytes are not instance security bits.
+
+R9 — Approval needs an accountable independent reviewer, not a checked form.
+Existing rule/location: protocol-admission.txt:28–49,76–92;
+protocol_proposals.py:234–238,367–414; machine_auth.py:required_scope.
+Enforcement: stable configured reviewer account, CSRF for browser mutations,
+non-self-review, exact revision/hash, implementation digest, all five checks and
+minimum evidence length. Agent tokens cannot call review routes. Distinct
+accounts are enforced; distinct people or absence of conflicts are not proven.
+Judgment: KEEP; CLARIFY the human attestation and limits of "independent".
+Proposed policy: the named reviewer explicitly records that they inspected the
+concrete argument/artifact/evidence and lists conflicts or dependence on author
+supplied work. Automation may prepare or reproduce evidence, never invent that
+attestation or cast the vote autonomously. Require a subject-qualified reviewer
+for correctness and a responsible integration reviewer; one person may fulfill
+both when qualified, with the roles recorded. Do not imply a two-person audit
+when only account separation and one review occurred.
+
+R10 — A revision invalidates approval of changed content.
+Existing rule/location: protocol-admission.txt:20–26;
+protocol_proposals.py:336–365,389–405; protocol_admission.py:34–57.
+Enforcement: immutable revisions/content hashes, stale-write rejection,
+idempotency, new revision resets to submitted, review binds current snapshot.
+Inspected tests include revision_after_approval_resets_approval and
+incomplete_or_stale_approval_cannot_pass.
+Judgment: KEEP.
+Proposed policy: carry forward evidence by explicit coverage reference, never the
+old approval bit. Changes to distribution, parameters, rejection, KDF, encoding,
+correctness argument, implementation or dependency lock require renewed review
+of affected scope. Minor editorial changes can receive a small scoped review;
+they still do not silently rewrite approved or archived artifacts.
+
+R11 — Uploaded algorithms remain inert; trusted integration is deliberate.
+Existing rule/location: protocol-specification.txt:222–237;
+protocol-admission.txt:3–5,51–74; protocol_specs.py:_safe_url and Algorithms;
+protocol_admission.py:58–66.
+Enforcement: bounded text and safe URL format, no URL fetching/import at intake;
+only registered trusted modules are inspected. Binding check calls manifests()
+of an already imported local adapter. Therefore it is not a sandbox for arbitrary
+plugins, even though it performs no challenge generation or submitted attack.
+Judgment: KEEP; CLARIFY the trust boundary before broader adapters.
+Proposed policy: never run a submitted module inside the web process or treat a
+passing hash check as a safety review. Reproduce/build in a disposable environment
+with bounded resources and no service credentials. Audit top-level import behavior,
+FFI/dependencies, entropy, public/secret separation, malformed inputs and bounds.
+Only reviewed code enters ADAPTERS. Do not call an arbitrary candidate's manifest
+function on the production server to find out whether it is safe.
+
+R12 — Binding check, activation and artifact scope are separate gates.
+Existing rule/location: protocol-admission.txt:51–74;
+protocol_admission.py:32–103; registry.py:ADAPTERS/CURRENT;
+app.py:225–246 pins source identity at issuance.
+Enforcement: check-proposal verifies approval/revision, local adapter-file digest,
+profile identities, exact tier coverage and secret lengths, and does not change
+CURRENT. Runtime issuance trusts CURRENT; it does not consult the approval ledger.
+The source pin covers the adapter file, not every imported dependency or binary.
+Judgment: KEEP separation; CHANGE release evidence for multi-file implementations.
+Proposed policy: require the binding report and a separate activation approval in
+the integration change record. A future release manifest must bind the artifact
+closure: sources, generated constants, dependency versions/binaries and build
+recipe affecting behavior. Before adding native-library adapters, either extend
+the digest contract or publish an explicit reviewed dependency lock; a wrapper
+hash alone is insufficient. Do not portray the current check as an automatic,
+unbypassable admission certificate. Preserve old release sources and receipts.
+
+R13 — Publication, origin and scoring are not implicit approval side effects.
+Existing rule/location: protocol-admission.txt:20–26;
+protocol_proposals.py:accessible; scoring.py:FAMILY_RELEASES;
+scoring_awards.py:award_scheme_credit; docs/scoring.txt:49–65.
+Enforcement: proposals are private; review does not register or award points;
+credits need a separate operator decision and matching live artifact. Only
+explicitly enrolled releases score. No structured construction/assumption-origin
+review or catalogue publication state is currently enforced.
+Judgment: KEEP current boundaries; CLARIFY future metadata and credit semantics.
+Proposed policy: require publication consent for private proposal material, exact
+source attribution for imported work, separate origin review and the lineage
+rationale from sections 2–3. Catalogue inclusion grants neither active challenges
+nor points. A renamed or repackaged known construction is not a discovery. A new
+construction on a known assumption can receive distinct provenance without
+claiming a new hardness foundation. Leave uncertain origin unresolved.
+
+R14 — Reconcile stale descriptive docs without changing substantive policy.
+Existing rule/location: correctness-policy-v0.txt:85–99 still describes DH2;
+architecture.txt:163 says no public admission/upload endpoint;
+design-record.txt has historical pre-scoring entries; README now describes private
+proposal intake and DH6/RSA3. All are identical between stage and live.
+Enforcement: current code and current scoring.txt reflect later decisions.
+Judgment: CLARIFY documentation; the two guideline files and architecture's stale
+admission paragraph and DH1/DH2 example were corrected in this authorized
+documentation-only follow-up. The design record remains a dated historical record.
+Proposed policy: mark the DH2 paragraph as historical, link the current release
+record, distinguish authenticated private specification intake from executable
+admission, and keep historical design decisions explicitly dated/superseded.
+Do not treat a proposed-policy heading as a currently implemented certification
+system. Preserve the still-valid substantive correctness requirements above.
+
+External-guideline verification
+
+The established correctness framing agrees with SP 800-227 section 2.2: correctness
+is an honest algorithm experiment for a parameter set, distinct from security.
+Its implementation/application sections are about additional requirements, not a
+claim that source review proves confidentiality. Crucible should cite this as
+conceptual guidance, not claim NIST validation [S6, full PDF below].
+
+FIPS 203 section 3.2 and Table 1 explicitly describe ML-KEM disagreement under
+honest generation, conditioned on no randomness-generation failures, with stated
+random-function heuristics. This supports keeping bound/estimate, probability
+scope and operational aborts separate; a returned key alone does not prove honest
+agreement. Standard parameters do not automatically justify a reduced ladder.
+https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf
+https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-227.pdf
+
+9. Result for the immediate eight-entry trial
+
+Eight is the stronger immediate editorial choice if it lets us make every page
+accurate: custom finite-field DH, custom RSA, exact X25519 DHKEM, ML-KEM,
+FrodoKEM, Streamlined NTRU Prime, HQC and Classic McEliece. Defer Saber explicitly,
+not because it is equivalent to ML-KEM, but because another structured-lattice
+comparison is lower priority than documenting these eight well. The loss is a
+separate rounding-based comparison. Keep Saber on a reasoned deferred list.
+
+Pressure test: this still uses three traditional examples and three lattice
+examples, includes two custom rather than standardized references, and has no
+hybrid, P-256-specific target, NTRU-HPS/HRSS target or new-foundation research KEM.
+Those omissions rule out comprehensive-coverage claims. A reviewed research
+proposal may outrank any deferred known scheme: eight is an initial content
+budget, not a closed whitelist. NTRU-HPS/HRSS and Saber remain candidates for
+slots nine/ten if they answer a concrete comparison question and can be reviewed.
+
+The trial can proceed now with reference states and honest empty charts. Before
+any new official statistical-KEM challenge, resolve R2/R5/R6/R7, pin the parameter
+and artifact scope under R8/R12, obtain R9/R10 signoff, and separately decide any
+scoring enrollment. No new failure threshold, public proposal state, privileged
+agent action or live adapter is adopted by this review document.

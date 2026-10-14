@@ -44,7 +44,7 @@ def test_correct_detail_is_exact_public_and_available_when_not_on_leaderboard(sy
     expected = {"id": receipt["id"], "challenge_id": second["id"], "handle": "alice", "status": "correct",
                 "scheme_id": second["scheme_id"], "scheme_version": second["scheme_version"],
                 "profile_id": "dh-20", "instance_size": 20, "received_at": clock[0], "elapsed_seconds": 17,
-                "method": {key: method[key] for key in ("id", "name", "pseudocode")}, "compute": answer["compute"]}
+                "method": {**{key: method[key] for key in ("id", "name", "pseudocode")}, "source": None}, "compute": answer["compute"]}
     url = f'/api/submissions/{receipt["id"]}'
     anonymous = TestClient(app)
     with app.state.db.transaction() as session:
@@ -149,7 +149,8 @@ def test_detail_whitelist_excludes_private_fields_and_unrecognized_compute_metad
     assert response.status_code == 200
     detail = response.json()["submission"]
     assert set(detail) == DETAIL_FIELDS
-    assert set(detail["method"]) == {"id", "name", "pseudocode"}
+    assert set(detail["method"]) == {"id", "name", "pseudocode", "source"}
+    assert detail["method"]["source"] is None
     assert set(detail["compute"]) == COMPUTE_FIELDS
     for value in private_values:
         assert value not in response.text

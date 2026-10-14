@@ -327,7 +327,12 @@ def test_additive_migration_preserves_existing_account_challenge_and_receipt(tmp
                     "precomputation": "None", "peak_memory": "1 KiB"}})
     assert response.status_code == 200, response.text
     receipt_id = response.json()["submission"]["id"]
-    before = alice.client.get(f"/api/submissions/{receipt_id}").json()["submission"]
+    # The old schema predates source artifacts. Reproduce its absent descriptor
+    # only while reading the pre-migration receipt; the upgraded path is real.
+    from crucible import method_sources
+    with monkeypatch.context() as old_schema:
+        old_schema.setattr(method_sources, "source_descriptor", lambda *_: None)
+        before = alice.client.get(f"/api/submissions/{receipt_id}").json()["submission"]
     contract = alice.client.get(challenge["download_url"]).json()
     old.state.db.engine.dispose()
     command.upgrade(config, "head")

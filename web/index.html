@@ -32,6 +32,9 @@
           <button id="nav-challenge" class="nav-button selected" type="button" aria-current="page">
             Schemes
           </button>
+          <button id="nav-people" class="nav-button" type="button">
+            Leaderboard
+          </button>
           <button id="nav-about" class="nav-button" type="button">
             About us
           </button>
@@ -44,8 +47,8 @@
           <button id="history-button" class="text-button" type="button" hidden>
             My submissions
           </button>
-          <span id="account-handle" class="account-handle" hidden>
-          </span>
+          <a id="account-handle" class="account-handle" href="#people" hidden>
+          </a>
           <button id="auth-button" class="button button-small button-quiet" type="button" disabled>
             Sign in
           </button>
@@ -83,6 +86,34 @@
           </div>
         </div>
       </section>
+      <section id="people-workspace" class="people-workspace" aria-labelledby="people-title" tabindex="-1" hidden>
+        <div class="catalogue-heading">
+          <h1 id="people-title">Leaderboard</h1>
+          <button id="refresh-people" class="text-button" type="button">Refresh <span aria-hidden="true">↻</span></button>
+        </div>
+        <p id="people-score-note" class="people-score-note" hidden></p>
+        <div id="people-content" aria-live="polite"></div>
+        <button id="more-people" class="button button-quiet people-more" type="button" hidden>Load more</button>
+      </section>
+      <section id="person-workspace" class="person-workspace" aria-labelledby="person-title" tabindex="-1" hidden>
+        <a class="text-button scheme-back" href="#people">← Leaderboard</a>
+        <div class="catalogue-heading"><h1 id="person-title">Profile</h1></div>
+        <div id="person-content" aria-live="polite"></div>
+        <details id="agent-connections" class="agent-connections" hidden>
+          <summary>Connected agents</summary>
+          <div class="agent-connections-heading"><p>Manage agents connected to your account.</p><button id="refresh-agent-tokens" class="text-button" type="button">Refresh</button></div>
+          <div id="agent-token-list" aria-live="polite"></div>
+        </details>
+      </section>
+      <section id="connect-workspace" class="connect-workspace" aria-labelledby="connect-title" tabindex="-1" hidden>
+        <div class="catalogue-heading"><h1 id="connect-title">Connect an agent</h1></div>
+        <p class="connect-origin">Crucible at <strong id="connect-origin"></strong></p>
+        <form id="connect-code-form" class="connect-code-form" hidden>
+          <label for="connect-code-input">Code from your agent</label>
+          <div><input id="connect-code-input" type="text" autocomplete="off" autocapitalize="characters" maxlength="12" placeholder="ABCD-EFGH" required><button class="button button-primary" type="submit">Continue</button></div>
+        </form>
+        <div id="connect-content" aria-live="polite"></div>
+      </section>
       <section id="overview-workspace" class="overview-workspace" aria-labelledby="overview-title" tabindex="-1" hidden>
         <a class="text-button scheme-back" href="#challenge">← All schemes</a>
         <div class="overview-heading">
@@ -118,10 +149,6 @@
               Loading the challenge profiles…
             </p>
             <div class="scheme-actions">
-              <button id="open-submission" class="button button-primary" type="button">
-                Submit recovered key
-                <span aria-hidden="true">→</span>
-              </button>
               <button id="advance-size" class="next-instance-button is-concealed" type="button" disabled aria-hidden="true">
                 <span id="advance-size-label">Go to next unsolved tier</span>
                 <strong id="advance-size-value">—</strong>
@@ -135,7 +162,7 @@
                 <span class="tier-label">
                   <span id="profile-label">Challenge tier</span>
                 </span>
-                <span id="size-range">20–128</span>
+                <span id="size-range">1–50</span>
               </div>
               <div class="size-rail">
                 <button id="previous-size" class="size-step" type="button" aria-label="Previous supported tier" disabled>‹</button>
@@ -167,7 +194,7 @@
         </details>
         <div class="workspace-tabs" role="tablist" aria-label="Challenge views">
           <button id="tab-leaderboard" role="tab" aria-selected="true" aria-controls="panel-leaderboard" data-view="leaderboard" tabindex="0">
-            Leaderboard
+            Record
           </button>
           <button id="tab-challenge" role="tab" aria-selected="false" aria-controls="panel-challenge" data-view="challenge" tabindex="-1">
             Challenge
@@ -177,27 +204,26 @@
           </button>
         </div>
         <section id="panel-leaderboard" class="view-panel" role="tabpanel" aria-labelledby="tab-leaderboard" tabindex="0">
-          <div class="panel-heading">
-            <div>
-              <h3 id="leaderboard-title">
-                Recoveries
-              </h3>
+          <div id="tier-record" class="tier-record" data-state="loading">
+            <div class="panel-heading tier-record-heading">
+              <div>
+                <h3 id="leaderboard-title">Recovery record</h3>
+              </div>
+              <button id="refresh-leaderboard" class="text-button" type="button">
+                Refresh <span aria-hidden="true">↻</span>
+              </button>
             </div>
-            <button id="refresh-leaderboard" class="text-button" type="button">
-              Refresh
-              <span aria-hidden="true">
-                ↻
-              </span>
-            </button>
+            <div id="leaderboard-content" aria-live="polite"></div>
           </div>
-          <div id="leaderboard-content" aria-live="polite">
-          </div>
-          <p id="leaderboard-scope" class="panel-footnote" hidden>
-            The first ten distinct accounts to recover this tier or a higher one, across all rounds. Ordered by server receipt.
-          </p>
-          <p id="leaderboard-footnote" class="panel-footnote" hidden>
-            Entries marked “via tier” credit a recovery at a higher tier; their details describe that actual instance. Time to submit runs from instance issue to answer receipt, including delays; attack time is reported separately. Hardware, compute, and method are contributor-reported. Rank is not a security score.
-          </p>
+          <details id="tier-record-notes" class="tier-record-notes" hidden>
+            <summary>About this record</summary>
+            <p id="leaderboard-scope" class="panel-footnote" hidden>
+              The earliest accepted recovery at this tier or higher, across all rounds. Ties use the server receipt identifier.
+            </p>
+            <p id="leaderboard-footnote" class="panel-footnote" hidden>
+              “Via Tier” credits a recovery at a higher tier; the result describes that actual instance. A recovery verifies one challenge answer. It does not establish a new attack method or a general break of the scheme. Method and compute details are contributor-reported.
+            </p>
+          </details>
         </section>
         <section id="panel-challenge" class="view-panel" role="tabpanel" aria-labelledby="tab-challenge" tabindex="0" hidden>
           <aside id="scheme-clock" class="round-clock challenge-clock" aria-label="Current challenge round deadline">
@@ -249,13 +275,39 @@
                   Recover the full shared key.
                 </h3>
                 <p>
-                  Your instance is ready. Work on your own hardware, then submit the key, method, and compute used.
+                  Your instance is ready. Give it to your agent to investigate locally and record the result.
                 </p>
               </div>
               <span id="challenge-status" class="status-tag">
                 Open
               </span>
             </div>
+            <div class="agent-handoff-action">
+              <button id="use-agent" class="button button-primary" type="button" aria-controls="agent-instructions" aria-expanded="false">Use with an agent <span aria-hidden="true">→</span></button>
+              <p class="field-hint">Approve a browser connection once. Your agent can fetch the challenge and submit its work.</p>
+            </div>
+          </div>
+          <details id="manual-tools" class="manual-tools">
+            <summary>Manual tools</summary>
+            <div class="manual-tools-content">
+              <div id="manual-instance-tools" class="challenge-actions" hidden>
+                <a id="download-button" class="button button-quiet" href="#" download>Download challenge JSON <span aria-hidden="true">↓</span></a>
+                <button id="copy-instance" class="text-button" type="button">Copy challenge JSON</button>
+              </div>
+              <button id="open-submission" class="button button-quiet" type="button">Upload a result or enter a key <span aria-hidden="true">→</span></button>
+              <p class="field-hint">Review a result file or enter the key, method, and compute yourself.</p>
+            </div>
+          </details>
+          <div id="challenge-details" hidden>
+            <section id="agent-instructions" class="agent-instructions" aria-labelledby="agent-instructions-title" hidden>
+              <div class="agent-instructions-heading">
+                <h4 id="agent-instructions-title">Give this to your agent</h4>
+                <button id="copy-agent-instructions" class="button button-quiet" type="button">Copy prompt</button>
+              </div>
+              <p class="field-hint">Paste this prompt to get started. Approve the connection if asked.</p>
+              <p class="agent-followup">Next time, just ask your agent: <strong id="agent-followup-request"></strong></p>
+              <pre id="agent-instructions-text" class="code-block" tabindex="0" aria-label="Instructions to give your agent"></pre>
+            </section>
             <dl class="challenge-facts">
               <div>
                 <dt>
@@ -281,17 +333,6 @@
               </div>
             </dl>
             <div id="challenge-result" class="notice" role="status" hidden>
-            </div>
-            <div class="challenge-actions">
-              <a id="download-button" class="button button-quiet" href="#" download>
-                Download challenge JSON
-                <span aria-hidden="true">
-                  ↓
-                </span>
-              </a>
-              <button id="copy-instance" class="text-button" type="button">
-                Copy challenge JSON
-              </button>
             </div>
           </div>
           <ol class="workflow">
@@ -438,7 +479,7 @@
               Each account gets one private instance per profile per round, and one well-formed answer for that instance. Submit the complete shared key, a reusable method version, and a compute declaration.
             </p>
             <p>
-              Method versions are immutable. Correct recoveries can appear on the public leaderboard with the account handle, method, pseudocode, and compute declaration. The earliest ten distinct accounts appear for each exact profile and version, across all rounds. Different profiles are not ranked against one another.
+              Method versions are immutable. Correct recoveries can appear publicly with the account handle, method, pseudocode, and compute declaration. Each tier highlights the earliest accepted recovery at that tier or higher, across all rounds. Other results remain on participant profiles. Different profiles are not ranked against one another.
             </p>
           </details>
         </section>

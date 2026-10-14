@@ -244,7 +244,8 @@ def builtin_spec(scheme_id, version=None) -> dict:
         f'{profile["parameter_bits"]}: p=0x{profile["parameters"]["p"]}, q=0x{profile["parameters"]["q"]}, g=0x{profile["parameters"]["g"]}'
         for profile in profiles)
     algorithms = dict(first["algorithms"])
-    calibrated = first.get("initial_security_estimate", {}).get("model_id") == "classical-baseline-v1"
+    model = registry.INITIAL_SECURITY_MODELS.get(first.get("initial_security_estimate", {}).get("model_id"))
+    calibrated = model is not None
     if scheme_id == "teaching-dh-kem":
         algorithms["setup"] = "Select the registered p,q,g for the chosen profile; p=2q+1 and q are prime, and g has order q. Validate the profile using the checks in this release's pinned source. Setup uses fixed public parameters; it does not sample fresh primes."
         if calibrated:
@@ -271,9 +272,8 @@ def builtin_spec(scheme_id, version=None) -> dict:
     refs = [{"title": "Exact registered reference source artifact", "url": source_url}]
     refs.extend({"title": ref["title"], "url": ref["url"]} for ref in first["references"] if "url" in ref)
     if calibrated:
-        from .calibration import MODEL
         existing = {ref["url"] for ref in refs}
-        refs.extend(ref for ref in MODEL["references"] if ref["url"] not in existing)
+        refs.extend(ref for ref in model["references"] if ref["url"] not in existing)
     details = registry.DETAILS[scheme_id]
     result = {
         "format": SPEC_FORMAT, "name": details["name"], "version": adapter.SCHEME_VERSION,
@@ -297,6 +297,6 @@ def builtin_spec(scheme_id, version=None) -> dict:
         "references": refs,
     }
     if calibrated:
-        result["security"]["model"] = MODEL["scope"]
-        result["security"]["claim"] = first["security_claim"] + " " + MODEL["formula"] + " " + " ".join(MODEL["limitations"])
+        result["security"]["model"] = model["scope"]
+        result["security"]["claim"] = first["security_claim"] + " " + model["formula"] + " " + " ".join(model["limitations"])
     return canonical_spec(ProtocolSpec.model_validate(result))

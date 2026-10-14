@@ -1,6 +1,7 @@
 """Same-origin API. Clients submit answers; the server owns time and verification."""
 import asyncio
 from datetime import datetime, timezone
+import hashlib
 import hmac
 import json
 import secrets
@@ -14,8 +15,9 @@ from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
-from . import kem, protocol_proposals, registry, research
+from . import kem, machine_auth, method_sources, people, protocol_proposals, registry, research
 from .config import ROOT, Settings, load_settings
 from .db import AdapterVersion, Base, Challenge, Database, LoginSession, Method, ProfileIncident, RateBucket, Submission, User
 from .schemas import Credentials, NewChallenge, NewMethod, NewSubmission
@@ -33,23 +35,41 @@ class RequestBoundary:
     In production also configure proxy body limits/timeouts; do not log bodies.
     No forwarded IP is trusted here. The ASGI server must trust only its proxy.
     """
-    def __init__(self, app, settings, clock):
-        self.app, self.settings, self.clock = app, settings, clock
+    def __init__(self, app, settings, clock, db):
+        self.app, self.settings, self.clock, self.db = app, settings, clock, db
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
         headers = {key.lower(): value for key, value in scope["headers"]}
+        authorization = [value for key, value in scope["headers"] if key.lower() == b"authorization"]
+        machine = False
+        if authorization:
+            if len(authorization) != 1:
+                return await JSONResponse({"detail": "Invalid or expired agent credential."}, 401,
+                                          headers={"Cache-Control": "no-store"})(scope, receive, send)
+            def authenticate_machine():
+                with self.db.transaction() as session:
+                    machine_auth.authorize(authorization[0].decode("latin1"), scope["method"], scope["path"],
+                                           session, self.settings, self.clock)
+            try:
+                await run_in_threadpool(authenticate_machine)
+            except HTTPException as error:
+                return await JSONResponse({"detail": error.detail}, error.status_code,
+                                          headers={"Cache-Control": "no-store"})(scope, receive, send)
+            machine = True
         unsafe = scope["method"] not in {"GET", "HEAD", "OPTIONS"}
         body = b""
         if unsafe:
             origin = headers.get(b"origin", b"").decode("latin1")
-            if origin not in self.settings.origins:
+            device_request = scope["method"] == "POST" and scope["path"] in machine_auth.ANONYMOUS_POST_PATHS
+            if not machine and not device_request and origin not in self.settings.origins:
                 return await JSONResponse({"detail": "A same-origin request is required."}, 403)(scope, receive, send)
             if headers.get(b"content-type", b"").split(b";")[0].strip().lower() != b"application/json":
                 return await JSONResponse({"detail": "Send an application/json request."}, 415)(scope, receive, send)
             try:
-                if int(headers.get(b"content-length", b"0")) > 65536:
+                limit = 2097152 if scope["method"] == "POST" and machine_auth.source_upload_path(scope["path"]) else 65536
+                if int(headers.get(b"content-length", b"0")) > limit:
                     return await JSONResponse({"detail": "Request is too large."}, 413)(scope, receive, send)
                 async with asyncio.timeout(10):
                     while True:
@@ -57,7 +77,7 @@ class RequestBoundary:
                         if message["type"] == "http.disconnect":
                             return
                         body += message.get("body", b"")
-                        if len(body) > 65536:
+                        if len(body) > limit:
                             return await JSONResponse({"detail": "Request is too large."}, 413)(scope, receive, send)
                         if not message.get("more_body", False):
                             break
@@ -99,7 +119,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         Base.metadata.create_all(db.engine)
     app = FastAPI(title="Crucible recovery API", version="0.1.0", docs_url=None, redoc_url=None)
     app.state.db, app.state.settings, app.state.clock = db, settings, clock
-    app.add_middleware(RequestBoundary, settings=settings, clock=clock)
+    app.add_middleware(RequestBoundary, settings=settings, clock=clock, db=db)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.hosts)
 
     @app.exception_handler(RequestValidationError)
@@ -116,6 +136,8 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         return {**values, "server_time": now, "round": current_round(now)}
 
     def session_for(request, session, required=False):
+        if "authorization" in request.headers:
+            return machine_auth.request_identity(request, session, settings, clock)
         raw = request.cookies.get(settings.cookie_name, "")
         record = None
         if raw and raw.isascii() and len(raw) <= 128:
@@ -127,6 +149,8 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         return record
 
     def identity(request, session, *, mutation=False):
+        if "authorization" in request.headers:
+            raise HTTPException(403, "Agent credentials cannot manage browser accounts.")
         record = session_for(request, session, required=True)
         if mutation:
             supplied = request.headers.get("x-csrf-token", "")
@@ -136,7 +160,8 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         return record
 
     def user_for(request, session, *, mutation=False):
-        record = identity(request, session, mutation=mutation)
+        record = (machine_auth.request_identity(request, session, settings, clock, mutation=mutation)
+                  if "authorization" in request.headers else identity(request, session, mutation=mutation))
         if not record.user_id:
             raise HTTPException(401, "Sign in to continue.")
         return session.get(User, record.user_id)
@@ -331,10 +356,16 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             func.row_number().over(
                 partition_by=(Challenge.scheme_id, Challenge.scheme_version, Submission.profile_id),
                 order_by=(Submission.received_at, Submission.id)).label("position"),
-        ).join(Challenge, Challenge.id == Submission.challenge_id).where(
-            Submission.correct.is_(True), Submission.profile_id == Challenge.profile_id,
+        ).join(Challenge, Challenge.id == Submission.challenge_id).join(
+            Method, Method.id == Submission.method_id).where(
+            Submission.correct.is_(True), Challenge.correctness_passed.is_(True),
+            Submission.profile_id == Challenge.profile_id,
             Submission.scheme_version == Challenge.scheme_version,
-            Submission.user_id == Challenge.user_id, or_(*current_releases)).subquery()
+            Submission.user_id == Challenge.user_id, Submission.user_id == Method.user_id,
+            Submission.round_id == Challenge.round_id,
+            Submission.received_at >= Challenge.issued_at,
+            Submission.received_at < Challenge.ends_at,
+            or_(*current_releases)).subquery()
         with db.transaction() as session:
             records = session.execute(select(first_receipts, User.handle)
                 .join(User, User.id == first_receipts.c.user_id).where(first_receipts.c.position == 1)).all()
@@ -566,14 +597,22 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             # Window ranking avoids fetching every historical solve into memory.
             first = select(Submission.id.label("id"), func.row_number().over(partition_by=Submission.user_id,
                      order_by=(Submission.received_at, Submission.id)).label("position")).join(
-                     Challenge, Challenge.id == Submission.challenge_id).where(
-                     Submission.correct.is_(True), Submission.profile_id == Challenge.profile_id,
+                     Challenge, Challenge.id == Submission.challenge_id).join(
+                     Method, Method.id == Submission.method_id).where(
+                     Submission.correct.is_(True), Challenge.correctness_passed.is_(True),
+                     Submission.profile_id == Challenge.profile_id,
                      Submission.user_id == Challenge.user_id, Challenge.scheme_id == manifest["scheme_id"],
-                     Submission.scheme_version == Challenge.scheme_version, or_(*eligible_sources)).subquery()
+                     Submission.user_id == Method.user_id,
+                     Submission.scheme_version == Challenge.scheme_version,
+                     Submission.round_id == Challenge.round_id,
+                     Submission.received_at >= Challenge.issued_at,
+                     Submission.received_at < Challenge.ends_at,
+                     or_(*eligible_sources)).subquery()
             records = session.execute(select(Submission, User, Method).join(first, first.c.id == Submission.id)
                 .join(User, Submission.user_id == User.id).join(Method, Submission.method_id == Method.id)
                 .where(first.c.position == 1).order_by(Submission.received_at, Submission.id).limit(10)).all()
-            entries = [{"rank": index + 1, "handle": user.handle, "profile_id": result.profile_id,
+            entries = [{"rank": index + 1, "submission_id": result.id,
+                "handle": user.handle, "profile_id": result.profile_id,
                 "scheme_id": manifest["scheme_id"], "scheme_version": result.scheme_version,
                 "instance_size": source_sizes[(result.scheme_version, result.profile_id)],
                 "is_inherited": result.profile_id != profile_id,
@@ -615,7 +654,8 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                 "scheme_id": challenge.scheme_id, "scheme_version": challenge.scheme_version,
                 "profile_id": challenge.profile_id, "instance_size": size,
                 "received_at": result.received_at, "elapsed_seconds": result.elapsed_seconds,
-                "method": {"id": method.id, "name": method.name, "pseudocode": method.pseudocode},
+                "method": {"id": method.id, "name": method.name, "pseudocode": method.pseudocode,
+                           "source": method_sources.source_descriptor(session, method.id)},
                 "compute": {key: compute[key] for key in ("hardware", "workers", "wall_seconds",
                     "precomputation", "peak_memory", "notes") if key in compute},
             })
@@ -676,6 +716,15 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         source = ROOT / registry.DETAILS[scheme_id]["example"]
         return FileResponse(source, media_type="text/plain", filename=source.name)
 
+    @app.get("/api/agent/client")
+    def agent_client():
+        source = ROOT / "scripts" / "crucible_cli.py"
+        return FileResponse(source, media_type="text/plain", filename="crucible_cli.py",
+                            headers={"X-Content-SHA256": hashlib.sha256(source.read_bytes()).hexdigest()})
+
+    machine_auth.register_routes(app, db, settings, clock, user_for, throttle)
+    method_sources.register_routes(app, db, user_for, clock, throttle)
+    people.register_routes(app, db, envelope)
     research.register_routes(app, db, settings, clock, user_for, throttle)
     protocol_proposals.register_routes(app, db, settings, clock, user_for, throttle)
     return app

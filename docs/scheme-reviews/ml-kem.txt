@@ -1,0 +1,49 @@
+ML-KEM — selection review
+Reviewed 2026-10-14. Recommendation: INCLUDE as a catalogue candidate; live admission remains pending.
+
+Identity and marginal value
+
+Use ML-KEM as specified by FIPS 203, final publication 2024-08-13, with an explicit record of applicable errata. Begin implementation review with ML-KEM-768; keep ML-KEM-512 and ML-KEM-1024 as named parameter profiles under the same scheme. “Kyber” is its construction lineage, not an interchangeable wire-format identifier. Do not mix the older Kyber v3.02 vectors into ML-KEM conformance testing.
+
+This is the essential structured-lattice baseline for a small catalogue. Its closest candidate here is Saber: both offer efficient module-lattice constructions, but ML-KEM gives the site a current standard to reproduce. FrodoKEM supplies a more useful initial structural contrast than a second module construction. These are selection judgments, not a claim that Module-LWE, Module-LWR and plain LWE are equivalent or independent security assumptions.
+
+Security and correctness scope
+
+FIPS 203 specifies three parameter sets and relates security to Module-LWE. Honest decapsulation has a small nonzero failure probability; Table 1 gives 2^-138.8, 2^-164.8 and 2^-174.8 respectively, with the standard's stated randomness/hash assumptions. A successful test batch cannot validate probabilities this small. Require an analytical correctness reference as well as executable tests. [M1]
+
+The retrieved potential-updates spreadsheet lists two explanatory corrections: clarify why Appendix A includes the i=0 zeta entry, and change Algorithm 15's line-7 comment to refer to polynomial w instead of v. The sheet explicitly introduces no new technical requirements and is not an official amendment. Its contents were inspected; this closes the earlier acquisition gap, not the adapter's conformance review. [M5]
+
+KyberSlash demonstrated secret-dependent division timing attacks against particular Kyber implementations, including reference-derived code. It is implementation evidence, not a passive mathematical break of every conforming ML-KEM instance. [M4] The current Crucible game gives a public key and honestly generated ciphertext and asks for its entire shared secret. It does not provide the decapsulation queries, timing measurements or partial-information scoring needed to capture every IND-CCA or implementation attack. A recorded recovery should therefore name the exact instance, algorithm and resource report, rather than certify the full security definition.
+
+Implementation and vector candidate
+
+Candidate: mlkem-native v2.0.0, commit d1b2fe782888bdb761a50336012923180be7f502; prefer the portable C configuration for the first reproducible adapter. The project documents ACVP and Wycheproof testing and scoped formal verification. Those upstream claims are useful evidence, not proof that our wrapper, compiler, randomness or host is safe. [M3] Acquire and freeze NIST ACVP ML-KEM prompt/expected-result files, plus negative-test provenance. No build, vector run or adapter audit was performed in this selection review.
+
+Tier feasibility and admission gates
+
+The standard has three profiles, not a 1–50 difficulty dial. A smaller ring, different noise or reduced message entropy defines a separate experimental construction; using fewer standard module ranks is not a reviewed 50-step family. Keep standard profiles recognizable and require a separately named release for any playable derivative. It needs its own correctness calculation, estimator revision, parameter-generation rules and exhaustive checks where feasible.
+
+Before live admission: freeze the reviewed FIPS edition and potential-correction record alongside source and vector hashes; execute vectors and independent differential tests; check key/ciphertext validation and implicit rejection; audit secret isolation and RNG; record an explicit failure policy; review the recent asymptotic preprint noted in lattice-coverage.txt without converting it into an unsupported finite-cost estimate.
+
+Primary evidence
+
+[M1] NIST, FIPS 203, 2024-08-13, Table 1 and algorithms:
+https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf
+Publication and 2025-11-17 correction notice:
+https://csrc.nist.gov/pubs/fips/203/final
+[M2] Bos et al., CRYSTALS–Kyber, EuroS&P 2018 / ePrint 2017/634: original construction lineage, not current ML-KEM conformance authority.
+https://eprint.iacr.org/2017/634
+[M3] mlkem-native v2.0.0 release and exact commit; project documentation inspected 2026-10-14:
+https://github.com/pq-code-package/mlkem-native/releases/tag/v2.0.0
+https://github.com/pq-code-package/mlkem-native/tree/d1b2fe782888bdb761a50336012923180be7f502
+NIST vector producer:
+https://github.com/usnistgov/ACVP-Server/tree/master/gen-val/json-files
+[M4] Bernstein et al., KyberSlash, TCHES 2025(2), 2025-01-15: exploitable timing vulnerabilities and platform-specific experiments.
+https://doi.org/10.46586/tches.v2025.i2.209-234
+https://kyberslash.cr.yp.to/papers.html
+[M5] NIST FIPS 203 potential updates, retrieved and inspected 2026-10-14; explanatory corrections, not a normative amendment:
+https://csrc.nist.gov/files/pubs/fips/203/final/docs/fips-203-potential-updates.xlsx
+Retrieved spreadsheet SHA-256:
+edf899c89762449f43d7713883caeefc2e4ae9ae98d5a76b339547db22cb3ac7
+
+This is a bounded selection review, not a security audit or an exhaustive cryptanalysis survey.

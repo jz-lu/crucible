@@ -46,9 +46,9 @@ Implementation
   local development. PostgreSQL integration and concurrency still need testing.
 - Handle/password accounts use Argon2id and server-side sessions. There is no email
   verification, account-recovery service, or moderation system yet.
-- DH5 and RSA2 use 50 registered Challenge tiers, numbered1–50. Their frozen
-  classical rho/NFS reference targets 8–32 bits across the first 25 tiers, then
-  reaches 128 at Tier 50. Actual modulus/field/subgroup sizes remain separate.
+- DH6 and RSA3 use 50 registered Challenge tiers, numbered1–50. Their frozen
+  classical rho/NFS reference targets 8+120(t-1)/49 bits, evenly spaced from
+  8 at Tier 1 to 128 at Tier 50. Actual modulus/field/subgroup sizes remain separate.
   Estimates are explicitly limited references, not a security guarantee or
   a one-hour attack-time prediction. See security-calibration.txt.
 - Both output 32-byte shared secrets. Tier 50 uses a 3072-bit field/modulus.
@@ -59,10 +59,10 @@ Implementation
   A first explicit request starts access for this account/scheme/release/hour.
   Later opened Challenge tiers load on demand with an active_round_id guard.
   New hours require a fresh start. GETs and slider previews never issue instances.
-- Frozen DH releases 1–4 and RSA 1 remain archived with their source fingerprints.
+- Frozen DH releases 1–5 and RSA 1–2 remain archived with their source fingerprints.
   The calibrated releases have new profile IDs and inherit no old-tier credit.
-  The DH example accepts releases 1–5 up to 36 subgroup bits; the RSA example
-  accepts releases 1–2 up to 36 modulus bits. These are deliberately bounded
+  The DH example accepts releases 1–6 up to 36 subgroup bits; the RSA example
+  accepts releases 1–3 up to 36 modulus bits. These are deliberately bounded
   entry-level public-input solvers.
 - Leaderboard and source APIs accept an exact historical version. Newer receipts
   never flow backwards into archived versions. Findings on earlier registered

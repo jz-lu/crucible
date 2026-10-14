@@ -1,0 +1,230 @@
+Classic McEliece — selection and admission review
+Assessment date: 2026-10-14
+Decision: KEEP as a research and cryptanalysis reference, with a visible dated
+security assessment. Do not present this inclusion as a deployment recommendation.
+Live challenge admission: NOT YET APPROVED.
+
+This review examines primary-source specifications and recent attack claims.
+It does not independently verify the attack proofs, reproduce recovered keys,
+audit an implementation, or run its KATs.
+
+1. Why keep it despite changed security assessments?
+
+Classic McEliece offers a substantially different experiment from HQC: decoding a
+public binary Goppa code while the efficient decoding structure is secret. Its
+large public keys, small ciphertexts, and exact honest decoding also expose
+tradeoffs that HQC and lattice KEMs do not cover in the same way. The official
+specification defines a Niederreiter-style KEM with implicit rejection. [M1]
+
+The recent structural cryptanalysis makes this particularly relevant to
+Crucible's mission. It is a case where an established security narrative, concrete
+cost estimates, small-instance experiments, and implementation reproducibility
+can be compared without assuming that a large nominal number is settled fact.
+Removing the construction solely because its security assessment is changing
+would remove an unusually informative research target.
+
+NIST's March 2025 nonselection considered anticipated use, large public keys,
+the concurrent ISO process, and the burden of another standard. It did not mean
+that a practical break had been found. [M2] Conversely, those dated conclusions
+must not be used as a current blanket security endorsement.
+
+The team reports ISO standardization in June 2026, including mceliece4*, 6*, and
+8* profiles and their listed variants, not mceliece348864. [M3] BSI's subsequent
+note dated 2026-09-29 recommends against Classic McEliece for new developments,
+while expressly stating that the discussed results do not give a practical
+attack against its recommended parameter sets. It also emphasizes incomplete
+peer review and unresolved realistic cost analysis. [M4]
+
+These statements can coexist: standardized; under intensified cryptanalysis;
+not demonstrated practically broken at those full sizes; unsuitable for a
+generic "safe deployment" badge on Crucible. A research catalogue is not a list
+of schemes we advise people to deploy.
+
+2. Exact release and compact profile organization
+
+The official specification linked on the review date is 2022-10-23. [M1]
+Downloaded PDF SHA-256:
+dcc6878852ef8a00a7bedd859da661770cf85d2c3d9239e06d25e4a0d365fd12
+
+Use the non-pc, non-f construction as the initial presentation baseline:
+
+Profile             m     n     t      public key bytes   ciphertext bytes
+mceliece348864      12   3488    64         261120                 96
+mceliece460896      13   4608    96         524160                156
+mceliece6688128     13   6688   128        1044992                208
+mceliece6960119     13   6960   119        1047319                194
+mceliece8192128     13   8192   128        1357824                208
+
+Shared keys are 32 bytes. The f variants change key generation; pc adds plaintext
+confirmation and 32 ciphertext bytes. Keep these as explicit nested variants,
+not independent front-page KEMs. [M1, M5]
+
+Default the overview to one representative profile, with the remaining profiles
+accessible in the same card. Do not sort these by n alone or invent a monotonic
+security ladder from their names: length, Goppa degree, field, and attack model
+all matter. The mceliece6960119 versus mceliece6688128 contrast is a useful
+reminder that a larger length need not mean a larger ciphertext.
+
+3. Assumptions and the meaning of a break
+
+The immediate mathematical target is one-way decoding for the specified
+distribution of binary Goppa codes and fixed-weight errors. It is not the
+worst-case NP-hardness of arbitrary syndrome decoding. Nor does identifying a
+public key as a Goppa code automatically recover a plaintext or shared key.
+
+The team's security analysis explicitly distinguishes one-wayness from a
+stronger pseudorandom-code interpretation. Its August 2024 response explains
+that a public-code distinguisher alone does not break its stated security
+claim. [M6] That logical distinction still matters; that older response is not
+a rebuttal of the later 2026 key-recovery papers.
+
+Crucible should preserve three evidence types: public-code distinguishing;
+equivalent-secret-key recovery; and recovery of the encapsulated shared key.
+Only the last, verified for the issued instance and deadline, directly wins
+the current numerical challenge. A recovered equivalent decoding key can
+produce that answer; it need not reproduce the generator's exact secret bytes.
+No automatic transfer from a family-level result to every registered profile.
+
+4. The 2026 results change the review, with precise qualifications
+
+GIJS, ePrint 2026/1630, received 7 August and revised 27 August: the authors give
+a provable quasipolynomial public-code distinguisher in the regime
+m=Theta(log n), t=Theta(n/log n), k=Theta(n). They extend it to heuristic
+decryption and equivalent-key recovery. Their abstract describes improved
+but impractical concrete estimates. The proved distinguisher and heuristic
+recovery extensions are different claims. [M7]
+
+Weis, ePrint 2026/1984, version 0.5 revised 6 October: reports a sparse-linear-
+algebra run costing 2^89–2^98 bit operations, or 2^107–2^117 under the author's
+preferred memory-charging model. An alternative full-memory charging model
+gives 2^117–2^128. Two recovery approaches require respectively 100–1400 runs
+or one run. The full-size estimates depend on four heuristic assumptions;
+full-size runs are not feasible to test. The demonstrated recovered TII-253
+instance has m=8, t=9, n=214. [M8]
+
+Saarinen, ePrint 2026/1986, revised 24 September: reports recovery of TII-254,
+m=8, t=12, n=223, with an artifact, independent key verifier, and Lean proofs
+of reusable linear-algebra steps. Two final Krylov sequences consumed 27.2
+GH200 GPU-hours, excluding other processing. These are neither a one-hour
+attack nor end-to-end formally verified security claims. [M9]
+
+Assessment: material research advances with concrete small-instance evidence;
+not a demonstrated recovery of a named full-size Classic McEliece profile.
+The old TII brute-force labels "253" and "254" are not comparable security-bit
+certificates. They cannot be copied onto Crucible's tiers or used to say that
+256-bit KEM security was practically broken. Message recovery and structural
+key recovery also have different baseline attack costs.
+
+The BSI note predates Weis's 6 October revision. Its quoted numerical estimates
+therefore must not be silently mixed with the current paper's cost table. [M4,
+M8] Store author, revision, success assumptions, memory, preprocessing, target
+count, and cost unit alongside every estimate. The different memory models
+alone make a single security-bit line misleading.
+
+I checked the official team statement index and its linked earlier responses.
+I did not locate there a response adjudicating the October Weis revision.
+This is not a claim that no response exists elsewhere. Before admission or a
+new public security estimate, a reviewer should reconcile any subsequent
+author/team responses and the precise attack version being reproduced.
+
+5. Correctness and implementation evidence
+
+The specified Goppa decoding contract gives perfect honest correctness under
+valid generation and exact implementation. [M1] This says nothing about the
+hardness of recovering the secret, side-channel resistance, or a buggy parser.
+Generation retries caused by the systematic-form requirements must be modeled
+as part of key generation, separately from decryption failures and timeouts.
+
+Official implementation choices include portable ref/vec and SIMD variants.
+The official integration is libmceliece; the latest listed release on review is
+20260622. The project documents compiled-binary timing-flow tests as well as
+compiler-induced hazards. [M5, M10] Prefer a pinned official release to an
+arbitrary wrapper whose mathematical or encoding version is unclear.
+
+The 2022 round-4 KAT archive and executable Sage specification provide explicit
+provenance for conformance work. Sage is intended for readable input/output
+testing and is not constant-time. [M11] Admission needs byte-for-byte KAT
+reproduction for the selected non-pc profile, agreement across implementations,
+padding and malformed-input tests, and the chosen library's own full tests on
+the deployment compiler/CPU. These have not been performed here.
+
+The key-size outlier is an infrastructure test, too. Review upload/download
+limits, storage, serialization, and hourly generation latency for >1 MB public
+keys. Do not solve a deadline problem by silently reusing a secret key across
+rounds. Public-domain upstream code does not eliminate our responsibility for
+resource isolation and exact adapter provenance.
+
+6. Reduced instances and a useful initial experiment
+
+The mathematical specification permits a principled small-instance study, but
+a toy generator is not one of the named deployment profiles. Pin a separate
+research release with valid (m,n,t), irreducible Goppa polynomials, distinct
+support, full-rank systematic matrices, fixed-weight errors, and unchanged or
+explicitly replaced KEM encoding/transform. Test actual agreement rather than
+assuming arbitrary shrinking preserves the contract.
+
+First proposed experiment: reproduce a small publicly documented structural
+key recovery with its independent verifier, then use the recovered structure to
+recover a freshly encapsulated key under our exact reduced KEM contract. This
+tests mathematical provenance, method reuse, and the limits of claimed compute
+accounting in one coherent exercise. It is a better admission precursor than
+drawing fifty points from an untested security estimator.
+
+After that, compare generic message-decoding and structural key-recovery costs
+at a small number of reviewed points. Do not guarantee that the same attack
+dominates everywhere, that increasing a displayed tier makes every attack
+harder, or that the toy-to-full-size extrapolation has been experimentally
+established. Historical snapshots should keep the initial reference model and
+newer attack estimates separately.
+
+7. Remaining decision and credit gates
+
+Keep one Classic McEliece catalogue slot because its research contribution is
+distinct from HQC. Make the recent cryptanalysis visible before offering a
+challenge; keep the front card concise and the evidence timeline expandable.
+Defer activation until the selected implementation, exact profiles, KATs,
+resource costs, and attack-model labels have manual sign-off. Do not present
+the 1978 origin of the underlying construction as forty-eight years of
+unchanged evidence for today's parameter claims.
+
+Both construction and assumptions are previously identified. Reproducing an
+attack or importing a library is valuable attributed work, but neither becomes
+a newly discovered scheme nor automatically receives new-family admission
+points. Any genuinely changed construction should state its difference from
+this baseline and enter the normal private review pipeline.
+
+Primary sources (all accessed 2026-10-14)
+
+[M1] Official specification, 2022-10-23, Sections 3–7.
+https://classic.mceliece.org/mceliece-spec-20221023.pdf
+[M2] NIST IR 8545, March 2025, Sections 2.3 and 3.3.
+https://nvlpubs.nist.gov/nistpubs/ir/2025/NIST.IR.8545.pdf
+[M3] Official ISO account, page dated 2026-06-15.
+https://classic.mceliece.org/iso.html
+[M4] BSI, Notes on recent developments concerning Classic McEliece,
+dated 2026-09-29, announced 2026-10-01.
+https://www.bsi.bund.de/SharedDocs/Downloads/EN/BSI/Crypto/Notes_Classic_McEliece.pdf?__blob=publicationFile&v=2
+Retrieved PDF SHA-256:
+2cde870a80059ca747391fec90e26be97c3ce81f23e16d15c60bdd349bc9ef89
+[M5] Official implementation and sizes page.
+https://classic.mceliece.org/impl.html
+[M6] Official security guide and dated team response to an earlier distinguisher.
+https://classic.mceliece.org/mceliece-security-20221023.pdf
+https://classic.mceliece.org/mceliece-20240816.txt
+Statement index checked: https://classic.mceliece.org/nist.html
+[M7] Ghoshal–Ishai–Jain–Sun, Quasipolynomial Cryptanalysis of the McEliece
+Cryptosystem (or: PIR Meets McEliece), revision 2026-08-27.
+https://eprint.iacr.org/2026/1630
+[M8] Weis, Improving GIJS Key Recovery for Classic McEliece, v0.5, 2026-10-06.
+https://eprint.iacr.org/2026/1984
+[M9] Saarinen, Two-Anchor Holdout/Hermite: Solving the TII-254 McEliece Key
+Recovery Challenge, revision 2026-09-24. https://eprint.iacr.org/2026/1986
+https://github.com/mjosaarinen/tii254-artifact
+[M10] Official libmceliece release archive and testing instructions.
+https://lib.mceliece.org/download.html
+https://lib.mceliece.org/libmceliece-20260622.tar.gz
+https://lib.mceliece.org/test.html
+[M11] Official executable specification and round-4 KAT archive.
+https://classic.mceliece.org/spec.html
+https://classic.mceliece.org/mceliece-sage-20221023.tar.gz
+https://classic.mceliece.org/nist/mceliece-kat-20221023.tar.gz

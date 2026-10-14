@@ -1,0 +1,176 @@
+Code-based KEM coverage and exclusions
+Assessment date: 2026-10-14
+Purpose: justify the code-based portion of a <=10-construction initial catalogue.
+This is a research-portfolio decision, not a production cryptography recommendation.
+
+Recommended allocation: two initial construction slots, HQC and Classic McEliece.
+BIKE is the strongest deferred addition. Rank-metric schemes remain an explicit
+coverage gap and a priority for a future reviewed proposal; do not pretend that
+two Hamming-metric constructions cover all code-based cryptography.
+
+1. What the two selected constructions actually cover
+
+HQC: sparse-error problems on quasi-cyclic public structure, a public auxiliary
+decoder, statistical correctness, and evolving transform/parameter versions.
+Classic McEliece: hidden binary Goppa decoding structure, exact honest decoding,
+large-public-key/small-ciphertext tradeoffs, and current structural cryptanalysis.
+
+These are distinct research questions even though both belong in a "Codes"
+browsing folder. Their separate reviews give pinned specification dates,
+implementation provenance, current cryptanalysis, and admission gates. Neither
+is approved for live registration by this selection decision.
+
+Avoid one generic "syndrome decoding" record standing in for all assumptions.
+Use separate exact formulations and reviewed relationships. A Goppa distinguisher
+does not automatically transfer to HQC; a better information-set decoder may be
+relevant to several distributions, but its parameters and success analysis must
+be checked for each one. Family membership transfers neither points nor breaks.
+
+2. BIKE: serious merit, deferred because of marginal value and review cost
+
+BIKE is a QC-MDPC KEM, and its official index identifies specification v5.2 dated
+2024-10-10. [C1] It contributes a sparse parity-check secret and iterative
+decoding: meaningful differences from HQC's public concatenated decoder, not
+merely another name for the same system.
+
+Its compact communication makes it attractive. NIST's 2025 comparison found
+smaller keys/ciphertexts than HQC but preferred HQC's more mature and stable
+security analysis. Decoder failures, weak-key populations, and proposed decoder
+changes were central considerations. Nonselection is not proof of a practical
+break. [C2]
+
+Our reason to defer: with a small roster, HQC already establishes the first
+quasi-cyclic Hamming-metric track, while Classic supplies a different structural
+target and an unusually timely research case. BIKE would require another careful
+decoder/failure-analysis admission before its main distinction could be measured
+honestly. That work can be worthwhile, but it should displace another entry only
+when we explicitly choose to study failure/reaction behavior.
+
+There is a concrete provenance trap. The well-known awslabs/bike-kem README
+identifies its implementation as v5.1, includes optional flags that change
+sampling and other behavior, and contains KAT utilities. It is not automatically
+a v5.2 implementation. [C3] A convenient wrapper plus passing bundled KATs proves
+neither version identity nor an acceptably small DFR.
+
+A NIST-authored study of reduced BIKE profiles observes decoder fixed points and
+absorbing-set behavior. It is evidence that reduced-profile experiments can be
+scientifically useful; it is not a validated extrapolation to cryptographic
+tails. [C4] To promote BIKE, require an exact decoder revision, thresholds,
+iteration count, weak-key policy, supported distribution, new-versus-old DFR
+evidence, and source/KAT matching. No generic slider that shrinks r while leaving
+all those choices implicit. A reaction-oracle experiment also needs a distinct
+challenge contract from the current public-input-only key-recovery game.
+
+3. RQC and ROLLO: distinct mathematics, not dismissed by family shorthand
+
+Rank-metric decoding changes the meaning of error weight and introduces different
+algebraic attack machinery. RQC uses ideal and Gabidulin codes; ROLLO's lineage
+uses LRPC codes. The official sites expose updated 2020 submissions. [C5, C6]
+These are genuine candidates for future diversity, not variants of HQC that can
+be collapsed by changing a label.
+
+Bardet et al.'s 2020 attack work substantially reduced the estimated complexity
+of then-proposed ROLLO/RQC parameters and supplied replacement parameter
+examples. That is a version-specific result, not a theorem that all rank-based
+cryptography is broken. [C7] More recent blockwise/multi-syndrome work proposes
+new generalized RQC/LRPC constructions and revisits attacks and parameters. [C8]
+Therefore "rank-based schemes failed NIST" is an inadequate exclusion argument.
+
+Defer the construction slot until we select a specific contemporary formulation
+and reproducible implementation. The newest paper title, an old submission zip,
+and an unrelated library implementation cannot be assembled into one candidate.
+Admission needs an exact KEM rather than a PKE or CPA-only intermediate; the
+field and rank metric; distribution and support sampling; decoder success
+contract; current algebraic as well as combinatorial estimates; and reviewed
+conversion/encoding. Determine separately whether that exact construction has
+perfect or statistical correctness. Neither property transfers from the word
+"rank" or from the older RQC paper.
+
+This is the most important uncovered code-based direction. If the broader roster
+has room after its strongest candidates are reviewed, investigate one such
+construction before adding several slight variations of a selected scheme.
+
+4. Other code candidates considered
+
+NTS-KEM: do not spend another slot on it. It merged into the Classic McEliece
+submission; its historical construction can be linked within that lineage. [C9]
+Preserve historical version differences instead of calling old receipts current.
+
+LEDAcrypt: defer. NIST's round-two account describes additional product structure
+that enabled weak-key attacks, followed by a proposed countermeasure making the
+structure closer to BIKE. [C9] An up-to-date independently reviewed proposal may
+offer merit; the historic candidate alone does not justify a third related
+Hamming-metric slot. Reassess a concrete revised construction on its own evidence,
+not on an inherited "broken" or "safe" family label.
+
+QC-MDPC/McEliece descendants in general: the use of another decoder, hash,
+implementation language, or parameter set is not automatically a separate KEM
+construction. Require a stated change in assumptions, security/correctness,
+operational tradeoff, or research opportunity before promotion. Related papers
+can be recorded without creating live challenge entries for every combination.
+
+Historical weakened or intentionally broken code schemes can be valuable
+reproducibility examples, but they should live in an explicitly labeled research
+or historical collection. They should not inflate an initial shortlist intended
+to teach the current landscape.
+
+5. Rules this comparison contributes to future proposal review
+
+a. Ask "What does this add relative to our closest existing construction?"
+   A submission should name that neighbor and the measurable or mathematical
+   distinction, rather than promise only a higher estimated bit number.
+
+b. Preserve four independent judgments: mathematical specification complete;
+   evidence/reduction reviewed within its stated model; executable adapter
+   conforms and is safe to operate; publication/admission authorized. Inclusion
+   for research does not assert deployability or certify claimed hardness.
+
+c. Register actual named full-size profiles first. Add reduced ladders only
+   after their distribution, correctness, and estimated attack costs are reviewed.
+   Keep toy successes separate from standard-profile recovery and distinguish
+   public-input attacks from side-channel or chosen-ciphertext access.
+
+d. Canonical references, exact source revision, vector provenance, and compiler
+   configuration are required before implementation activation. Prior KATs remain
+   historical evidence when the construction changes. A frozen release cannot
+   silently inherit an upstream main-branch update.
+
+e. Origin is independent: these candidates are previously identified. A new
+   Crucible discovery requires attributable evidence of that discovery, not a
+   first catalogue entry, port, renamed variant, or newly noticed old paper.
+   Review any genuinely new construction separately from its assumptions.
+
+f. Scores do not follow automatically from this roster. New catalogue rows,
+   imports, and formal variants must not multiply the existing 1000-point
+   admitted-scheme award. Recovery results remain pinned to their actual profile
+   and release; evidence transfer requires an explicit reviewed justification.
+
+Primary sources (all accessed 2026-10-14)
+
+[C1] Official BIKE index and v5.2 specification reference.
+https://bikesuite.org/
+https://bikesuite.org/files/v5.2/BIKE_Spec.2024.10.10.1.pdf
+The index was available through the web service; direct site retrieval had an
+expired-certificate error. This review does not claim a fresh v5.2 source audit.
+[C2] NIST IR 8545, March 2025, Section 3.2.
+https://nvlpubs.nist.gov/nistpubs/ir/2025/NIST.IR.8545.pdf
+[C3] DGK team's additional implementation, README version/flags/KAT description.
+https://github.com/awslabs/bike-kem
+[C4] Arpin et al., A graph-theoretic approach to analyzing decoding failures of
+BIKE, 2024. https://eprint.iacr.org/2024/1736
+https://www.nist.gov/publications/graph-theoretic-approach-analyzing-decoding-failures-bike
+[C5] Official RQC project. https://pqc-rqc.org/
+[C6] Official ROLLO project. https://pqc-rollo.org/
+[C7] Bardet et al., Improvements of Algebraic Attacks for solving the Rank
+Decoding and MinRank problems, ASIACRYPT 2020.
+https://arxiv.org/abs/2002.08322
+[C8] Aragon et al., The Blockwise Rank Syndrome Learning problem and its
+applications to cryptography, revised 2025-03-18.
+https://eprint.iacr.org/2023/1875
+[C9] NIST IR 8309, July 2020, Sections 3.11, 3.13, 3.14 and 3.18.
+https://nvlpubs.nist.gov/nistpubs/ir/2020/NIST.IR.8309.pdf
+
+Scope limitation: this is a deliberate representative-candidate comparison, not
+an exhaustive literature review of every code KEM or a completed cryptographic
+implementation audit. The companion reviews identify material 2026 developments
+and outstanding gates rather than freezing a 2025 standardization narrative.

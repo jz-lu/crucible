@@ -1,0 +1,42 @@
+Lattice coverage and common admission rules
+Selection review dated 2026-10-14; read alongside the four individual reviews.
+
+Recommended initial lattice allocation: THREE schemes
+
+1. ML-KEM — current standardized structured/module-LWE baseline.
+2. FrodoKEM — current salted plain-LWE construction for the structure-versus-cost comparison.
+3. Streamlined NTRU Prime — initially sntrup761, for a quotient-NTRU construction with a different ring and deployed relevance.
+
+Defer Saber, conventional NTRU-HPS/HRSS and NTRU LPRime. These are worthwhile schemes, not rejected security claims. Saber is the most natural next addition for an explicit Module-LWR comparison. HPS/HRSS would make sense for a specifically funded cyclotomic-versus-NTRU-Prime comparison. Adding every construction now would consume most of a <=10-scheme catalogue before non-lattice families are represented.
+
+The basis for this choice is marginal experimental value and maintainability, not counting acronyms as independent assumptions. Distinct distributions, algebraic structures, correctness properties and transforms can yield different attack evidence while sharing lattice-reduction machinery. A successful attack needs a documented transfer argument before its record can be carried across schemes or releases. NIST's 2022 comparative assessment is useful historical context, not the last word on security in 2026. The individual files cite the relevant current specifications and original constructions.
+
+Variants should be nested but never erased
+
+Keep standard parameter sets, AES/SHAKE choices and implementation backends under one visible family where appropriate. Every receipt must still bind to an exact algorithm version, parameter set, encoding and source artifact. A changed KEM transform is a new release, not a cosmetic alias. A genuinely different construction such as NTRU LPRime must not inherit Streamlined NTRU Prime's correctness statement or receipts merely because the project name overlaps.
+
+Fresh research requiring follow-up
+
+Gao, Han and Hu posted arXiv:2610.11254v1 on 2026-10-08. The preprint claims asymptotic secret-recovery algorithms for growing parameter families related to the lattice candidates, and explicitly does not establish lower concrete security for currently specified parameter sets. Its NTRU Prime treatment names NTRU LPRime; do not silently extend that result to Streamlined NTRU Prime. This review inspected its abstract and relevant scope/conclusion sections, not a complete proof. Independent mathematical validation, the exact parameter regime and finite implementation costs remain open review tasks. It changes the research watchlist, not the catalogue's recovery results or plotted bit estimates.
+https://arxiv.org/abs/2610.11254v1
+https://arxiv.org/html/2610.11254v1
+
+What the hourly game establishes
+
+A timely exact shared-secret recovery demonstrates recoverability of that public instance under the reported resources. The hour is a submission window, not an enforced one-hour compute budget. Precomputation, parallel machines, public constants and reuse must be reported. Other users learning from a published recovery is a leaderboard policy question, not independent cryptanalytic replication. A recovery does not automatically characterize the distribution's typical hardness; no recoveries do not prove a lower bound. The current game does not measure all distinguishing, chosen-ciphertext, leakage, fault or hybrid-composition attacks.
+
+Authentic standards and playable tiers need separate identities
+
+None of these standards/specifications supplies a native 1–50 ladder. Preserve genuine standard profiles even if all are difficult. Reduced variants may be useful, but they must be visibly experimental and independently reviewed. Never restrict RNG entropy or truncate secrets simply to make easy instances while continuing to claim the standard KEM's security: that can turn the experiment into a seed-search game. Linear target bits can guide a published parameter-selection model; they do not become measured security or guaranteed monotonic attack cost.
+
+One admission checklist for built-ins and future proposals
+
+- Exact specification edition, source commit/archive hash, license, parameter manifest, test-vector origin and reviewer decision.
+- Fully specified KeyGen/Encaps/Decaps and public serialization; secret data remains off the downloadable instance. Hash/KDF domains and rejection behavior are part of the algorithm.
+- Evidence for honest correctness: mathematical argument or supported failure bound, its sampling assumptions and parameter scope; KATs, independent differential tests, malformed-input tests and resource bounds.
+- For nonzero failure probability, a documented handling policy. Silently resampling until decapsulation agrees conditions the challenge distribution; report and review that change rather than pretending it is the original sampler. Ordinary test success cannot substantiate a 2^-100 failure claim.
+- Security evidence labelled by game, single/multiple target, classical/quantum resources, model, success probability and analysis date. Published attack estimates and actual receipts remain separate.
+- A separate review of every reduced parameter family, including generator termination, distribution, correctness, estimator applicability and practical attack baselines. Freeze releases; do not reinterpret earlier receipts.
+- Adapter isolation, RNG, error handling, ownership/authentication, bounded generation and platform timing properties reviewed before activation. A producer's KATs or partial formal proof do not audit our service.
+
+All four individual reviews are selection decisions only. No new algorithm implementation, vector execution, full security audit or live admission was performed. The full sntrup specification and FIPS 203 potential-updates spreadsheet have now been acquired, hashed and inspected in the relevant sections; see their individual reviews. The two FIPS entries are explanatory potential corrections, not new technical requirements. These acquisition gaps are closed. Missing implementation pins, conformance tests, independent cryptographic review and live admission remain explicit gates.

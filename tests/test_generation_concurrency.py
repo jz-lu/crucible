@@ -7,13 +7,13 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import delete, func, select
 
-from crucible import dh_v5, registry
+from crucible import dh_v6, registry
 from crucible.app import create_app, current_round
 from crucible.config import Settings
 from crucible.db import AdapterVersion, Challenge, Method, ProfileIncident
 from test_api import Actor
 
-ISSUE = {"scheme_id": "teaching-dh-kem", "scheme_version": "5", "profile_id": "dh-v5-tier-1"}
+ISSUE = {"scheme_id": "teaching-dh-kem", "scheme_version": "6", "profile_id": "dh-v6-tier-1"}
 
 
 @pytest.fixture
@@ -36,12 +36,12 @@ def count(system, model):
 
 def block_generator(monkeypatch):
     entered, release = Event(), Event()
-    actual = dh_v5.generate
+    actual = dh_v6.generate
     def blocked(profile_id):
         entered.set()
         assert release.wait(8), "Test did not release the generator"
         return actual(profile_id)
-    monkeypatch.setattr(dh_v5, "generate", blocked)
+    monkeypatch.setattr(dh_v6, "generate", blocked)
     return entered, release
 
 
@@ -65,11 +65,11 @@ def test_unrelated_sqlite_write_completes_while_generation_is_blocked(generation
 
 def test_duplicate_generations_converge_on_one_durable_instance(generation, monkeypatch):
     barrier = Barrier(3)
-    actual = dh_v5.generate
+    actual = dh_v6.generate
     def simultaneous(profile_id):
         barrier.wait(timeout=5)
         return actual(profile_id)
-    monkeypatch.setattr(dh_v5, "generate", simultaneous)
+    monkeypatch.setattr(dh_v6, "generate", simultaneous)
     with ThreadPoolExecutor(max_workers=3) as pool:
         futures = [pool.submit(generation.actor.post, "/api/challenges", ISSUE) for _ in range(3)]
         responses = [future.result(timeout=8) for future in futures]
@@ -107,10 +107,10 @@ def test_generation_rechecks_authority_release_pin_and_hold_before_persisting(ge
             else:
                 with generation.app.state.db.transaction(write=True) as session:
                     if change == "source_pin":
-                        session.get(AdapterVersion, ("teaching-dh-kem", "5")).source_sha256 = "0" * 64
+                        session.get(AdapterVersion, ("teaching-dh-kem", "6")).source_sha256 = "0" * 64
                     else:
                         session.add(ProfileIncident(id=str(uuid4()), profile_id=ISSUE["profile_id"],
-                            scheme_version="5", created_at=generation.now[0], diagnostics={"reason": "concurrent_hold"}))
+                            scheme_version="6", created_at=generation.now[0], diagnostics={"reason": "concurrent_hold"}))
         finally:
             release.set()
         response = future.result(timeout=3)
@@ -124,7 +124,7 @@ def test_automatic_generation_rechecks_round_activation_after_preflight(generati
     assert initial.status_code == 200
     round_id = initial.json()["challenge"]["round_id"]
     entered, release = block_generator(monkeypatch)
-    body = {**ISSUE, "profile_id": "dh-v5-tier-2", "active_round_id": round_id}
+    body = {**ISSUE, "profile_id": "dh-v6-tier-2", "active_round_id": round_id}
     with ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(generation.actor.post, "/api/challenges", body)
         assert entered.wait(3)

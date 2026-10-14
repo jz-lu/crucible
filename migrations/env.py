@@ -8,6 +8,9 @@ from crucible.config import load_settings
 from crucible.db import Base
 from crucible import research  # Register versioned research tables in metadata.
 from crucible import protocol_proposals  # Register private intake records in metadata.
+from crucible import scoring_awards  # Register explicit scheme admission credits.
+from crucible import machine_auth  # Register scoped agent credentials and browser handoff.
+from crucible import method_sources  # Register immutable uploaded method source bundles.
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

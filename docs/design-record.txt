@@ -21,7 +21,126 @@ Priorities
 - Preserve attribution, methods, revisions, follow-ups, and intermediate results.
 - Keep choices explicit, revisable, and proportional to the evidence available.
 
-Current selected batch — 2026-10-13; verified and live locally
+First-only record bonuses and tier winner presentation — 2026-10-14
+
+User approved first-only numerical record bonuses. Using published code or more
+compute is legitimate progress; arrival order does not establish a new method.
+Policy crucible-points-v2 awards 10 × highest personal tier plus 40 × highest
+tier reached first per enrolled family. Places 2–10 receive no record bonus.
+Retain maximum-only scoring, the existing frozen eligible releases and the
+1,000-point reviewed scheme-admission award. Recalculate derived scores from
+the existing evidence; preserve accounts, sessions and all submissions.
+First 10 profile milestones remain recognition, without scoring badges.
+
+Replace the tier recovery table with one prominent Broken by winner card.
+Username links to the profile; View result fetches the original receipt, method,
+compute and source bundle. Via Tier identifies inherited credit; compatible
+source releases remain explicit. Do not claim a general or novel attack from
+one accepted secret. A matching Unsolved card offers the selected challenge.
+The main participant Leaderboard remains; the internal tier tab becomes Record.
+The first ten API entries are retained for compatibility and historical uses.
+Both catalogue and tier ranking queries apply correctness, ownership, round and
+receipt-window checks before rank selection. Failed/mismatched requests show
+an error rather than claiming a tier is unsolved.
+
+Earlier selected batch — 2026-10-13; linear targets
+
+Latest interaction refinements: the copied agent prompt is compact and retains
+the exact selected instance and deadline. A visible, scheme/tier-specific
+"Retrieve the newest ... challenge" example teaches the subsequent direct CLI
+workflow. Manual tools stays immediately below Use with an agent.
+
+User-authorized candidate: First 10 milestones on profiles.
+Recognize actual successful new personal-best submissions among the first ten
+accounts reaching that tier or higher, using existing exact-release standings.
+Repeated hourly solves and implied lower-tier backfill do not create badges.
+The compact display retains milestones where no other achievement has both an
+equal/higher tier and an equal/better arrival place, with at least one strictly
+better. Keep full history accessible without displaying an additive badge count.
+For example, Tier 8 / first and Tier 20 / third both tell useful stories;
+Tier 8 / fourth is superseded in the compact view by Tier 20 / third.
+Keep points unchanged. First-ten placement verifies early success, not independent discovery or
+algorithmic novelty. This is an incentive hypothesis to evaluate in beta.
+The profile shows the compact highlights before Personal bests. View milestone
+history expands the actual records, with twenty per page and exact receipt links.
+After user review, remove Current bonus badges and the scoring explanation from
+the milestone section. Do not identify which achievement supplies the bonus in
+this section; retain the existing score calculation and general points breakdown.
+The profile API includes first_ten; a separate read endpoint pages the
+history. No migration, account change or historical relabelling is required.
+SQL filters registered exact-release profiles before computing records and
+standings. The trusted metadata relation uses VALUES.cte(), requiring SQLAlchemy
+2.0.42 or later; the existing requirements lock already specifies 2.0.54.
+
+Participant summaries now show Points and Accepted proposals. Raw successful
+submission counts and "Schemes recovered" are removed from headline metrics:
+quantity should not encourage stepping through every lower tier or repeating
+hourly instances. Personal bests already show the highest tier per scheme.
+The points policy is unchanged: maximum personal progress and one best early
+bonus per eligible family. Recent solves remain inspectable evidence, with
+readable full-width rows instead of compact dropdown styling.
+
+Accepted proposals counts immutable new-family admission credits directly. A
+draft, review approval without integration/admission, or repeated award request
+does not add to the count. No admission details become public through this metric.
+
+The user explicitly rejected dense easy tiers because a large count of recovered
+levels could misleadingly suggest extensive progress. DH6/RSA3 therefore use
+50 uniformly spaced initial targets: 8+120(t-1)/49 bits. Tier 25 is about66.8,
+Tier 50 stays128. Actual parameter-derived estimates may differ slightly because
+physical parameters are discrete. This changes the mapping, not the attack model.
+The frozen original reference remains fixed when attacks are recorded; measured
+cost and later estimates must be separate evidence. Do not turn a single recovery
+or the fraction of tiers completed into a quantified security reduction.
+
+Earlier adapters and baseline-v1 metadata remain archived; no history reset is
+part of this change. New identifiers and source pins preserve pending downloads,
+receipts, and sessions under their actual version. See security-calibration.txt.
+
+The user leaderboard and profiles are live locally. The user accepted the
+provisional v1 formula in docs/scoring.txt: personal 10t, best declining first-ten
+bonus 4t(11-r), and explicit new-family admission 1000. Admission remains manual.
+
+The agent workflow is verified and live locally. A shared first-party
+Python client creates a local attack workspace, downloads an exact challenge,
+runs a participant's own command locally, and submits an answer plus selected
+source and a compute declaration. Researching Yukon/qLDPC changed the earlier
+recommendation: participant-owned repositories are optional; no PR per hourly
+result. The application repository stays separate from participant projects.
+No GitHub App or automatic public code publication is introduced in this slice.
+
+The user approved making this workflow primary in the interface. After Ready,
+Use with an agent opens a compact instruction panel with a Copy prompt
+button. JSON download/copy and the manual submission/file-upload entry move into
+a collapsed Manual tools disclosure. Keep that fallback reachable before Ready
+so an existing result file can select its exact owned instance. Retain machine
+JSON contracts and the CLI's JSON output; this is a presentation change only.
+
+Manual tools sits immediately beneath the agent action. The next-unsolved action
+is left-aligned and retains its space when concealed. Unavailable buttons use a
+normal cursor rather than implying a background operation; the result-template
+button explains why it is unavailable.
+
+The website handoff is optional: a connected client can use init with a scheme
+and tier to request the current hourly instance directly. It does not require
+Ready or repeated copy/paste. Proposed next ergonomic work: discoverable agent
+instructions and reusable attack projects with separate frozen instance folders.
+These project commands are not yet implemented.
+
+Browser approval grants a scoped, expiring, revocable machine credential. The
+human must explicitly approve the displayed connection; copied instructions
+contain no credential. The server stores token hashes. Machine access covers
+challenges, methods and results, not account or proposal-review actions. Source
+uploads are bounded text snapshots attached before the final answer, immutable,
+and never executed. They follow the existing successful-evidence read policy.
+Local command wall time is measured; external compute, workers and precomputation
+remain declared. A correct answer alone does not validate code or compute.
+
+Graph refinement: public-key and ciphertext sizes stay fixed. The third card
+switches key generation/encapsulation/decapsulation; the fourth switches classical
+and quantum. Missing measurements and quantum estimates remain empty templates.
+
+Previous calibration batch — 2026-10-13; superseded for current releases
 
 The user authorized calibrated tiers 1–50 in new DH release 5 and RSA release 2.
 The first 25 tiers target 8–32 classical reference bits; the next 25 target

@@ -1,0 +1,227 @@
+CRUCIBLE — ASSUMPTION CATALOGUE AND ADMISSION PROPOSAL
+2026-10-14 | Design candidate, not an activated registry or scoring policy
+
+Purpose
+
+Expand the useful attack surface without turning the site into an encyclopedia.
+A visible entry should offer a distinct investigation, not merely a new label.
+The precise scientific registry can be richer than the default browsing view.
+
+User requirements recorded
+
+- Attention is scarce: poorly organized assumptions hurt participation.
+- Coarse security comparisons do not justify a combinatorial catalogue of variants.
+- Distinguish assumptions discovered through Crucible from previously identified
+  assumptions. This means origin, not recency or first import into the database.
+- Retain the current KEM numerical challenge scope and manual review before activation.
+- Preserve exact definitions, attribution, correctness, and automation interfaces.
+
+Recommendation: shallow browsing, exact evidence underneath
+
+Use one visible canonical entry for each curated research target or problem
+cluster. Organize those entries under shallow family headings. Expand exact
+variants and related KEM constructions inside the entry; avoid another sequence
+of nested folder pages. A scheme-focused view may reuse the same metadata.
+No empty family headings on the live site. No automatic Cartesian product of
+ring, secret distribution, noise, sample count, attack model, or parameter size.
+
+Do not equate browsing groups with mathematical equivalence or independence.
+Plain LWE and module-LWE can share an LWE entry while retaining distinct formal
+specifications and distinct KEM constructions. RSA inversion and factoring are
+related targets, not synonyms. CDH, DLP and DDH remain different games.
+A shared folder never transfers a recovery, a red graph marker, or a score.
+
+A visible variant must answer: What useful experiment or participant decision
+would we lose if this variant were omitted? Examples include a meaningful change
+in algebraic structure, a materially different input distribution or attack
+interface, or a documented scientific comparison. An extra name, encoding, or
+routine parameter choice alone does not earn another card or prize lineage.
+Important distinctions still belong in the exact specification even when they
+are hidden from the default view.
+
+Origin categories
+
+Proposed visible filters: All | Crucible discoveries | Previously identified.
+These filter the same canonical records; they do not create duplicate registries.
+
+- Crucible discovery: reviewed evidence that this specified assumption originated
+  through Crucible. Retain credited contributors, dated submission/revision,
+  precise claimed novelty, closest prior work, and the review decision.
+- Previously identified: identified before the Crucible contribution, whether in
+  a publication, preprint, unpublished manuscript, or another documented source.
+- Not established: provenance remains unresolved. Do not infer discovery merely
+  because a search or the catalogue contains no matching name.
+
+Treat discovery as a revisable, attributed provenance claim. Review cannot prove
+that every earlier idea has been found. A later correction changes the provenance
+record through an audit trail, not the original challenge receipts.
+
+Store assumption origin and construction origin separately. A new KEM using a
+known assumption can be a Crucible construction without being a new assumption.
+A novel exact variant does not automatically establish a new mathematical family.
+Importing a supplied paper is not itself evidence of a platform discovery;
+authorship by Crucible contributors alone does not establish platform origin.
+
+Keep origin separate from:
+- scientific maturity / literature and standardization status;
+- review state and catalogue publication;
+- executable challenge availability;
+- security assessment and exact accepted attack results;
+- contribution awards and scoring enrollment.
+Known does not mean secure; discovered here does not mean reviewed or runnable.
+No automatic 1,000-point award for importing an assumption, changing a label,
+creating a variant, or being placed in the discovery filter. Existing reviewed
+new-KEM admission awards retain their current separate policy.
+
+A deliberately small expansion
+
+Retain the two current live KEM controls and prepare three reference candidates:
+
+1. Finite-field Diffie–Hellman: retain the actual hashed shared-secret target,
+   group distribution, reuse policy and pinned release. Do not relabel it as a
+   generic test of every DLP/CDH/DDH formulation.
+2. RSA inversion: retain the current RSA-based KEM. Factorization is an attack
+   route; unrestricted equivalence is not asserted.
+3. ML-KEM: module-LWE anchor; pin the exact standard, implementation and official
+   parameter set. Do not invent fifty standardized ML-KEM parameter sets.
+4. FrodoKEM: an intentional contrast with plain/unstructured LWE. Start with one
+   selected variant. AES/SHAKE choices and ordinary parameter levels are not
+   separate mathematical families or front-page cards.
+5. HQC: a code-based KEM contrast; pin the actual quasi-cyclic distributions,
+   construction, decoder, specification revision and decoding-failure analysis.
+
+This is five scheme pages across four broad browsing families, not five claims
+of independent hardness. Two are live today; the three references are not yet
+admitted challenges. Reference-only entries belong in a clearly marked catalogue
+view rather than masquerading as available attacks.
+
+Implementation order should be one lattice representative and HQC, then the second
+lattice representative when the structured/unstructured comparison is explicitly
+supported. The ordering between ML-KEM and FrodoKEM depends on whether the next
+step prioritizes a standardized anchor or an easily inspected tunable benchmark.
+Do not decide it by the number of variants an implementation library exposes.
+
+Keep low-noise LPN and symplectic-LPN/LSN constructions as a focused research
+comparison in the private admission backlog. Avoid an indiscriminate menu of all
+noise regimes. Keep NTRU/LWR, more code distributions, isogenies, multivariate
+constructions and signature-only targets deferred until a concrete proposal earns
+its place. This is a launch scope decision, not a claim that they are unimportant.
+
+The tier constraint
+
+A standard with three named parameter sets cannot honestly become fifty standard
+variants just by relabelling them. Small solvable derivatives require separate,
+explicit experimental construction/release identities and their own correctness
+and attack-cost analysis. Evidence from them does not mark the standard broken.
+Do not force every future scheme to have a dense 1–50 ladder if the sampler,
+correctness conditions or meaningful parameters do not support one.
+
+Tier comparisons remain approximate reference choices. Preserve model, estimator
+version, calibration date and actual parameters; do not infer an ordering between
+assumptions from tier labels. Compare measured bytes directly under named encoding
+conventions. Timing needs a common benchmark. Reported attack compute is evidence
+with declared limitations, not a directly enforced common budget.
+
+Paper-specific review findings
+
+Classification brief, pp.3–8 and 13–16:
+- Adopt the distinction between family, formal distribution/game and scheme.
+- Adopt directed, parameter-qualified relationships and separate review states.
+- Decline its p.16 broad launch list and p.15 three simultaneous attack tracks for
+  this MVP. Preserve those as possible future extensions.
+
+Symplectic LPN between two noise regimes of LPN, pp.1–2:
+- The draft relates different noise regimes. Its stated reductions do not give
+  matched-parameter equivalence or directly comparable concrete attack costs.
+- Represent exact endpoints, direction, parameter map, success loss, runtime
+  overhead and model. These are supplied draft claims, not independently checked
+  proofs or automatic evidence propagation rules.
+
+Post-Quantum Cryptography from Quantum Stabilizer Decoding, Construction 5.1 p.23:
+- The displayed construction encrypts one bit. A KEM adaptation still needs a
+  full-secret distribution, ciphertext format, KDF, decoding/rejection behavior
+  and exact security claim. Hashing one bit to a long string does not add entropy.
+- Whole-secret correctness must cover the chosen finite parameters, all repetitions
+  and exceptional keys. A base one-bit success probability is not that bound.
+- Repetition changes the attacker-visible sample count; freeze it in the contract.
+- Reconcile overlapping claims across draft versions during review rather than
+  silently choosing a claim from whichever PDF was imported most recently.
+
+Proposed pipeline
+
+1. Extract a candidate from a paper or submission.
+   Record source, exact page/definition, author-stated claim and unresolved fields.
+   Automated extraction is a draft. Missing definitions are not guessed.
+2. Match it against existing canonical records.
+   Suggest aliases, existing variants and related constructions. Show the closest
+   entries and a concise 'what changes / why it matters' explanation. Human review
+   decides equivalence and placement; similarity alone must not merge definitions.
+3. Review the formal specification and origin claim privately.
+   Decide: reference to existing record, new formal variant, new construction,
+   or a genuinely new assumption proposal. Pin immutable revisions and decisions.
+4. Publish a reviewed catalogue entry if useful.
+   Catalogue publication may precede a live challenge. Display availability
+   explicitly; keep unresolved drafts out of the active challenge list.
+5. Review and integrate an executable KEM challenge separately.
+   Pin KeyGen/Encaps/Decaps, sampler and validation, public/secret encoding, setup
+   and reuse, correctness scope/bound, allowed parameters, answer verifier,
+   reference attack and initial estimates. Use trusted code integration; do not
+   execute uploaded implementations in the web service.
+6. Activate the reviewed exact release/profile.
+   Catalogue origin does not activate a challenge or enroll a scoring lineage.
+   Reviewer records the activation and any separate, authorized admission credit.
+
+Minimum structured concepts
+
+- BrowsingFamily: a navigation label, aliases and cross-links; not a score family.
+- AssumptionDefinitionRevision: stable ID/version, exact problem and goal,
+  distribution/conditioning, parameter family, secret and noise distributions,
+  public auxiliary input, oracle access, adversary model, success condition,
+  source definition and claimed hardness. Unknowns remain explicit.
+- AssumptionRelationship: endpoints, typed direction, parameter transformation,
+  cost/success loss, assumptions/model, citation, review and disputed status.
+- SchemeRelease: existing immutable KEM contract plus version-pinned reviewed
+  links to the assumptions used by a particular security claim.
+- ChallengeProfile: existing executable parameter contract and exact release.
+- OriginReview: object type/revision, origin claim, dated evidence, attribution,
+  closest prior work, decision, reviewer and later corrections.
+- CataloguePublication: curated parent, visibility and availability; independent
+  of implementation registry and existing scored KEM lineage.
+
+Existing-code implications
+
+protocol_specs.Security.assumptions is currently free text. Add structured links
+through a new specification version or separately reviewed link records; do not
+change canonical hashes of approved v1 specifications.
+protocol_proposals already supplies private intake, immutable revisions and
+reviewer decisions. Reuse those mechanics; add a distinct assumption-only review
+contract rather than forcing mathematical assumptions into a fake KEM schema.
+registry.py's explicit trusted adapters remain the only execution path.
+scoring_awards.family_id means an admitted KEM scoring lineage, not a taxonomy
+family. Keep these separate to avoid creating rewards by adding categories.
+
+Do not enable the dormant Research implementation as the assumptions pipeline.
+Its hardcoded DH/DLog mappings and public unreviewed contribution endpoints do
+not provide the version-pinned private admission workflow required here. A hidden
+navigation tab is not an access-control mechanism. Review that subsystem before
+reuse; the current proposal here does not activate it.
+
+Sources reviewed
+
+Supplied local PDFs (not copied into the repository):
+- cryptographic_assumptions_classification.pdf, 13 October 2026, especially
+  pp.3–8, 13–16; broader launch recommendations intentionally not adopted.
+- symplectic-lpn-reductions.pdf, 5 October 2026, especially pp.1–2.
+- Crypto_from_LSN__Copy_for_Akshar_-3.pdf, 5 October 2026, Construction 5.1 p.23.
+
+Primary public references checked 2026-10-14:
+- ML-KEM / FIPS 203: https://csrc.nist.gov/pubs/fips/203/final
+- FrodoKEM project and current specification: https://frodokem.org/
+- HQC project and current resources: https://pqc-hqc.org/
+
+Next design decision
+
+Use the small standalone catalogue preview to agree what belongs at the top
+level and how discovery origin appears. Then implement versioned assumption
+metadata and proposal review before adding executable schemes. The preview is
+an organizational candidate, not a claim that reference entries are live.

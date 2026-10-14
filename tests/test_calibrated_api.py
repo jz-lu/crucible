@@ -1,4 +1,4 @@
-"""Current DH5/RSA2 integration, independent of archived release fixtures."""
+"""Current DH6/RSA3 integration, independent of archived release fixtures."""
 import hashlib
 from pathlib import Path
 from unittest.mock import patch
@@ -8,7 +8,8 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from crucible import calibration, registry
+from crucible import calibration_v2 as calibration
+from crucible import registry
 from crucible.app import create_app
 from crucible.config import Settings
 from crucible.db import Challenge, ProfileIncident, Submission
@@ -18,14 +19,14 @@ from scripts.solve_teaching import recover as recover_dh
 from test_api import Actor
 
 
-IDENTITIES = (("teaching-dh-kem", "5", "dh-v5-tier-1", recover_dh),
-              ("rsa-kem", "2", "rsa-v2-tier-1", recover_rsa))
+IDENTITIES = (("teaching-dh-kem", "6", "dh-v6-tier-1", recover_dh),
+              ("rsa-kem", "3", "rsa-v3-tier-1", recover_rsa))
 
 
 @pytest.fixture
 def current_system(tmp_path):
     # Deliberately do not import/use the archive-pinning system fixture.
-    assert registry.CURRENT == {"teaching-dh-kem": "5", "rsa-kem": "2"}
+    assert registry.CURRENT == {"teaching-dh-kem": "6", "rsa-kem": "3"}
     clock = [3_600_600.0]
     settings = Settings(f"sqlite:///{tmp_path / 'calibrated.db'}", b"c" * 32,
                         origins=("http://testserver",), rate_limits=False)
@@ -84,10 +85,15 @@ def test_actual_current_catalogue_has_one_hundred_calibrated_profiles_and_unmodi
             assert profile["shared_secret_bytes"] == 32
         last = scheme["profiles"][-1]
         assert last["modulus_bits"] == 3072
-        assert last["initial_security_estimate"] == {"model_id": "classical-baseline-v1", "bits": 128.0, "target_bits": 128.0}
+        assert last["initial_security_estimate"] == {"model_id": "classical-baseline-v2", "bits": 128.0, "target_bits": 128.0}
         for archive in scheme["previous_releases"]:
             assert archive["profiles"] == registry.adapter_for(scheme_id, archive["version"]).manifests()
-            assert all("initial_security_estimate" not in item for item in archive["profiles"])
+            old_calibrated = (scheme_id, archive["version"]) in {("teaching-dh-kem", "5"), ("rsa-kem", "2")}
+            if old_calibrated:
+                assert archive["initial_security_model"]["id"] == "classical-baseline-v1"
+                assert archive["profiles"][24]["initial_security_estimate"]["target_bits"] == 32
+            else:
+                assert all("initial_security_estimate" not in item for item in archive["profiles"])
     assert count(app, Challenge) == count(app, Submission) == 0
 
 
@@ -192,7 +198,7 @@ def test_legacy_receipts_do_not_become_calibrated_progress_or_round_activation(c
     app, _, _ = current_system
     actor = Actor(app)
     actor.register("archive_alice")
-    old_version, old_profile = ("4", "dh-20") if scheme_id == "teaching-dh-kem" else ("1", "rsa-20")
+    old_version, old_profile = ("5", "dh-v5-tier-1") if scheme_id == "teaching-dh-kem" else ("2", "rsa-v2-tier-1")
     with monkeypatch.context() as historical:
         historical.setitem(registry.CURRENT, scheme_id, old_version)
         old = actor.challenge(old_profile)
@@ -237,7 +243,7 @@ def test_bounded_rsa_generation_exhaustion_is_private_retryable_and_not_a_correc
     assert response.status_code == 503
     assert "PRIVATE_GENERATOR_STATE_17" not in response.text
     assert count(app, Challenge) == count(app, ProfileIncident) == 0
-    state = actor.client.get("/api/challenges", params={"scheme_id": "rsa-kem", "scheme_version": "2", "profile_id": "rsa-v2-tier-1"}).json()
+    state = actor.client.get("/api/challenges", params={"scheme_id": "rsa-kem", "scheme_version": "3", "profile_id": "rsa-v3-tier-1"}).json()
     assert state["challenge"] is None and state["round_started"] is False
     monkeypatch.setattr(adapter, "generate", original)
     retry = actor.post("/api/challenges", {"scheme_id": "rsa-kem", "instance_size": 1})

@@ -1,0 +1,77 @@
+DHKEM (X25519) — SELECTION REVIEW
+Review date: 2026-10-14. Decision: ADD to reference catalogue; NOT LIVE.
+
+WHY IT EARNS A PLACE
+
+The old list had finite-field DH but omitted an elliptic-curve construction.
+That was a material coverage gap. This entry gives a precise KEM around the
+widely used X25519 primitive, with public specification and vectors. It is a
+different attack setting from finite-field DH, while retaining an understandable
+connection to it. This is a stronger use of one catalogue slot than additional
+parameter variants of an already represented lattice construction.
+
+The deployment claim must be narrow: a deployment of X25519 or of a hybrid
+TLS key exchange does not establish use of this exact standalone DHKEM.
+RFC 9180 gives us the KEM definition; deployment sources motivate studying its
+underlying primitive. The page is a named construction, not an entry for all
+elliptic-curve cryptography, and not the entire HPKE encryption stack.
+
+EXACT SPECIFICATION AND NESTED VARIANTS
+
+Initial object: RFC 9180, DHKEM(X25519, HKDF-SHA256), KEM ID 0x0020, base
+Encap/Decap. The encapsulation is an ephemeral public key; labeled HKDF binds
+the DH result and context. Public key, encapsulation and shared secret each
+have 32-byte lengths. Follow its input checks and RFC 7748's X25519 rules,
+including the required handling of an all-zero DH result. Do not substitute
+plain hash(DH), raw X25519 output, or HPKE's later exported application secret.
+
+Other RFC DHKEM choices can be related profiles in the browsing model, but
+each retains its own algorithm ID and security context. P-256 and X448 are
+not alternate sizes of X25519, and results cannot backfill across them.
+Authenticated DHKEM and the HPKE AEAD modes are not needed for the initial
+passive shared-secret recovery challenge.
+
+CORRECTNESS, SECURITY AND TIERS
+
+For valid honestly generated keys, agreement follows from the DH operation
+and identical context/KDF processing. Implemented encodings, clamping and
+validation still need independent checking. Invalid-ciphertext handling is
+separate from honest correctness and must not accidentally become a public
+oracle. The precise RFC security discussion matters; do not infer whole-HPKE
+properties from the shared-secret recovery game.
+
+X25519 is a fixed curve. There is no standardized 1–50 sequence of smaller
+X25519s. Reducing scalar entropy, disclosing scalar bits or changing curves
+defines a different experimental problem and distribution. Such a track needs
+its own name, review and result context, and cannot be displayed as a break
+of standard X25519. A standard-profile reference page is useful even without
+easy playable levels. Leave tier graphs empty until this is resolved honestly.
+
+IMPLEMENTATION AND ADMISSION GATES
+
+No new adapter, dependency or hourly challenge is introduced in this pass.
+Before admission: pin a maintained implementation and license; run RFC vectors,
+cross-implementation agreement and malformed-input cases; review randomness,
+constant-time behavior, serialization and private-state isolation; specify
+whether the standard profile alone or a separate experimental track is offered.
+Freeze the accepted implementation/profile hashes and obtain named manual
+review. Catalogue selection is not that approval.
+
+PRIMARY SOURCES AND WHAT THEY SUPPORT
+
+1. https://www.rfc-editor.org/rfc/rfc9180.html (February 2022), sections 4.1,
+   7.1, 9 and appendix A: construction, identifiers, validation, security scope
+   and vectors. It is a CFRG consensus Informational RFC, not an IETF Standards
+   Track RFC. Test vectors pinned by the RFC:
+   https://github.com/cfrg/draft-irtf-cfrg-hpke/blob/5f503c564da00b0687b3de75f1dfbdfc4079ad31/test-vectors.json
+2. https://www.rfc-editor.org/rfc/rfc7748.html (January 2016): X25519 primitive,
+   encodings, operations, test vectors and security considerations.
+3. https://www.ietf.org/ietf-ftp/rfc/rfc10024.html (August 2026): TLS 1.3 hybrid
+   groups including X25519MLKEM768. This supports deployment-context relevance,
+   not a claim that its combiner is identical to standalone RFC 9180 DHKEM.
+4. https://blog.cloudflare.com/automatic-key-exchange-for-origins/ (8 September
+   2026): operator account of classical and hybrid origin key exchange. Again,
+   this is primitive/application context, not this exact KEM's usage count.
+
+All source URLs checked 2026-10-14. The experimental-track decision and all
+new implementation verification remain outstanding.

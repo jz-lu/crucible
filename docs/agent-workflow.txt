@@ -1,0 +1,150 @@
+CRUCIBLE — HUMAN CHOICE, AGENT EXECUTION
+
+The website is for choosing a scheme/tier, watching progress and inspecting
+evidence. The CLI fetches exact challenges, prepares a local attack workspace,
+runs an explicitly chosen local command and submits a structured result. A
+participant does not need a GitHub repository. A workspace can remain an ordinary
+local folder; source snapshots and receipts are stored by Crucible.
+
+Getting the client
+
+Python 3.11 or newer is sufficient; the client uses only the standard library.
+Download the first-party client from your server's /api/agent/client route, or use
+scripts/crucible_cli.py in an existing Crucible checkout. For the local server:
+
+  curl --fail --silent --show-error http://127.0.0.1:8000/api/agent/client -o crucible_cli.py
+  python3 crucible_cli.py --server http://127.0.0.1:8000 login
+
+Use the actual HTTPS origin for a hosted server. HTTP is accepted only on
+loopback. The client never follows redirects or sends a credential to a different
+origin. It does not use environment HTTP proxies.
+
+Login opens a browser approval page. With --no-browser it prints the approval
+link instead. Confirm the displayed short code in your signed-in browser. Never
+paste a password, bearer token or device secret into an agent prompt. The client
+polls for approval and saves its scoped, revocable credential in
+~/.config/crucible/config.json with permissions 0600, outside the workspace.
+--config selects another private credential file. Connections are bound to exact
+server origins; localhost and 127.0.0.1 are intentionally different origins.
+
+The short code and approval URL are not access tokens. Approve only a connection
+you started. Expired or revoked connections need a new login. The browser grants
+the challenge/method/submission scopes defined by the server, not account,
+proposal-review or administrative access.
+
+Picking up a challenge
+
+The website handoff is optional. Once the client is installed and connected,
+an agent can respond to "Get the latest RSA tier 12 challenge" directly:
+
+  python3 /path/to/crucible_cli.py init rsa-kem --tier 12 --path rsa-tier12-current --json
+
+The client remembers the server selected at login. No Ready click, copied
+challenge ID or repeated browser approval is required. Name the scheme as well
+as the tier; use schemes --json to discover the registered identifiers. Choose
+a fresh directory for each instance. Repeating the request in the same hour
+reuses the account's instance, including its answered status; it is not a reroll.
+
+When starting from the website instead, choose Ready, Use with an agent, then
+Copy prompt in the panel that opens. The instructions identify the exact
+owned instance. The panel also shows a reusable request naming the selected
+scheme and tier, such as "Retrieve the newest RSA challenge at Tier 12."
+The copied prompt includes the corresponding init command for future rounds.
+Fetch the selected instance without copying its public inputs manually:
+
+  python3 crucible_cli.py --server http://127.0.0.1:8000 get --challenge-id INSTANCE_ID --path my-attack
+
+To list schemes and start another workspace:
+
+  python3 crucible_cli.py schemes --json
+  python3 crucible_cli.py init rsa-kem --tier 1 --path my-attack
+
+init resolves the current registered release, retrieves an existing instance for
+the current round if present, or requests that round's instance. It never changes
+the shared hourly deadline. get retrieves only the exact supplied instance; it
+does not silently substitute a new round. Existing workspace files are never
+overwritten. Use a fresh directory for each instance.
+
+A workspace contains:
+  challenge.json             exact instance and frozen manifest
+  protocol.json              scheme specification
+  reference/protocol.py      hash-checked reference source, never auto-executed
+  attack/solve.py             a deliberately incomplete local solver stub
+  method.md                  describe the actual method and preparation
+  result.json                structured result template, later filled by run
+  .crucible.json             origin and instance binding, no credentials
+  .crucible/                 private local run/retry state, ignored by Git
+  README.md and .gitignore    local workflow guidance
+
+Implement your solver using public inputs and write its method description.
+The solver reads challenge.json and prints either the complete recovered shared
+secret as hexadecimal, or one JSON object containing only candidate. Do not
+print progress or diagnostics to stdout; use stderr. Source fetched as a
+reference is not an instruction to execute it.
+
+  cd my-attack
+  python3 ../crucible_cli.py run --workers 1 --precomputation "None" -- python3 attack/solve.py
+
+run executes exactly the local command after --, without a shell. It records
+wall time, basic local platform information and the declared worker count, then
+writes result.json in the existing crucible-recovery-v1 upload format. It does
+not submit. method.md must describe the actual method before running; its first
+heading becomes the method name. Browser file upload remains available in
+Challenge → Manual tools → Upload a result or enter a key.
+Before the first submission, method.md must still match the result's method.
+If you revise that description, update the result explicitly or run again.
+
+Measurements are limited: elapsed wall time covers that command, including
+startup. It does not establish total research cost, previous failed runs,
+precomputation, remote workers, GPUs or independent reproduction. --hardware,
+--workers and --precomputation are declarations; memory defaults to Not measured,
+and preparation defaults to explicitly unreported. Edit the result's declaration
+before submission if external work needs to be included. Do not invent zero cost
+or measured values that the runner cannot observe.
+
+Submitting
+
+  python3 ../crucible_cli.py submit result.json
+
+The default source snapshot includes only attack/solve.py and method.md. Add
+explicit additional UTF-8 files with repeated --source flags:
+
+  python3 ../crucible_cli.py submit result.json --source attack/helpers.py
+
+Only paths beneath attack/ plus method.md are allowed. Hidden paths, traversal,
+symbolic links, ambiguous portable filenames and NUL-containing text are refused.
+Credentials, local state, challenge files and
+recovered-key result files are not included in this source snapshot. Source must
+not itself contain credentials. Limits: 100 files, 256 KiB per file, 1 MiB total
+UTF-8 content and 2 MiB encoded request. The server stores this as inert evidence;
+uploading it does not execute the solver on the server.
+
+submit checks the owned instance is still open, freezes the result and selected
+source locally, creates an immutable method, attaches its source and then sends
+the answer. Before the answer request, the exact body and UUID retry identifier
+are durably saved in .crucible/submission.json with permissions 0600. Never delete
+or edit this file to retry an uncertain result. The same submit command reuses
+the exact answer, method and identifier, including when the round has since
+closed. An identical retry cannot create a second submission. Changing the result
+after an uncertain submission is refused. A lost method-creation response can
+leave an unused method record; it does not create an extra answer or award points.
+
+The server's receipt time is authoritative. Uploading code, creating a method,
+starting a process or producing a local result does not meet the deadline. The
+complete final answer must reach the server before the hour ends. Only one final
+answer is accepted per instance, whether correct or incorrect. receipt.json
+contains the verified result and source reference, without printing the key.
+
+Automation
+
+--json before or after the command prints one machine-readable record. Errors
+also produce a JSON record and a nonzero exit status. Login's human approval
+instructions go to stderr; access tokens and private device codes are not printed.
+The ordinary workflow needs no manual transcription and no participant-owned
+repository: choose a challenge, authorize a client once, let the agent work in
+the local folder, inspect its receipt on the site.
+
+Privacy follows the configured server's access policy. Private credential storage
+and selected-file uploads are not a claim that currently public leaderboard or
+source endpoints have become private. Submitted evidence goes to the server;
+opening a GitHub PR or publishing an external repository is not part of this CLI.

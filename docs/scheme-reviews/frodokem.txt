@@ -1,0 +1,42 @@
+FrodoKEM — selection review
+Reviewed 2026-10-14. Recommendation: INCLUDE current standard FrodoKEM as a catalogue candidate; defer eFrodoKEM as a separate entry.
+
+Identity and marginal value
+
+Proposed reproducible public specification: draft-longa-cfrg-frodokem-03, dated 2026-06-22, standard FrodoKEM-640-SHAKE initially. Keep 976/1344 and AES/SHAKE choices nested as parameter/implementation variants. The draft is work in progress, not an RFC. ISO/IEC 18033-2:2006/Amd 2:2026 was published in June 2026; the project identifies it as the FrodoKEM standard, but its full purchased text was not reviewed here. Reconcile the chosen public draft with that standard before claiming ISO conformance. [F1,F2]
+
+FrodoKEM earns a slot because its plain-LWE construction avoids the polynomial/module structure of ML-KEM and Saber. This gives a concrete cost-versus-structure comparison. It remains lattice based: it is not an independent hedge against every advance in lattice reduction. Its larger public data is useful for honest graphs rather than a reason to hide it. Nearest competitor is ML-KEM; the purpose of including both is to test a meaningful design difference, not multiply brands.
+
+Security and correctness scope
+
+Use the current salted construction. The 2025 construction paper develops the salted Fujisaki–Okamoto treatment of multiple targets/ciphertexts, while the repository separates standard FrodoKEM from an ephemeral-use variant. The older NIST-round-three KEM must not silently supply current wire data or assurances. [F3,F4]
+
+The 2025 paper gives honest-failure bounds near 2^-138.7, 2^-199.6 and 2^-252.5, derived from the noise distribution and a union bound. They are not empirically measured guarantees and do not excuse implementation failures. [F3] For Crucible, recovering the entire shared secret of one honest encapsulation is decisive evidence for that sample. It does not exercise the multi-ciphertext or decapsulation-oracle settings motivating the full security treatment. Record key reuse and number of public ciphertexts explicitly; a hourly schedule alone does not describe that exposure.
+
+Implementation and vector candidate
+
+Use the team's Microsoft/PQCrypto-LWEKE standard FrodoKEM directory, portable C reference mode with SHAKE matrix generation, and its matching KAT files. The separate Python implementation is useful for differential testing but explicitly unsuitable for production side-channel protection. [F4] The exact repository commit and KAT hashes have NOT been pinned here; branch URLs are discovery references only. No compiler run, KAT execution or source audit was performed.
+
+Tier feasibility and admission gates
+
+Three prescribed dimensions do not create fifty standard difficulty levels. Among these candidates, the matrix-based construction is relatively approachable for studying a deliberately reduced research family, but changing dimension, modulus, distribution, message encoding or entropy changes both hardness and correctness. That is an implementation/research judgment, not a standard-supported parameter extension. Do not interpolate tables of bytes or “bits of security” and call the result FrodoKEM-640.
+
+Before admission: pin a dated specification plus exact code/vectors; resolve standard-versus-ephemeral identity; execute all chosen KATs and an independent implementation cross-check; reproduce correctness calculations and serialization; document key-reuse policy, fresh randomness and any failed-round handling; independently review each reduced profile if proposed. Review new asymptotic work under lattice-coverage.txt separately from finite-parameter claims.
+
+Primary evidence
+
+[F1] FrodoKEM project, current specification/status page, inspected 2026-10-14:
+https://frodokem.org/
+ISO publication record, June 2026; publication status only checked:
+https://www.iso.org/standard/86890.html
+[F2] Longa et al., draft-longa-cfrg-frodokem-03, 2026-06-22: versioned public algorithms and parameter definitions.
+https://datatracker.ietf.org/doc/draft-longa-cfrg-frodokem/03/
+[F3] Glabush et al., FrodoKEM: A CCA-Secure Learning With Errors Key Encapsulation Mechanism, CIC, 2025-10-06, sections 4 and 6: current transform and correctness analysis.
+https://cic.iacr.org/p/2/3/25
+https://cic.iacr.org/p/2/3/25/pdf
+[F4] Team implementation, reference/KAT/Python directories, inspected 2026-10-14:
+https://github.com/microsoft/PQCrypto-LWEKE/tree/master/FrodoKEM
+[F5] Bos et al., Frodo: Take off the ring!, CCS 2016: original plain-LWE construction lineage, not the present KEM specification.
+https://eprint.iacr.org/2016/659
+
+This is a bounded selection review, not a security audit or an exhaustive cryptanalysis survey.

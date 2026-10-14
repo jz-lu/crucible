@@ -1,10 +1,11 @@
 """Lower leaderboard credit preserves the actual source receipt and evidence."""
 from uuid import uuid4
 
+import pytest
 from sqlalchemy import func, select
 
 from crucible import dh_v3, registry
-from crucible.db import Submission
+from crucible.db import Challenge, Submission
 from scripts.solve_rsa import recover as recover_rsa
 from scripts.solve_teaching import recover as recover_dh
 from test_api import Actor, system
@@ -57,12 +58,17 @@ def test_inherited_names_are_downward_only_and_keep_earliest_qualifying_evidence
     assert [(row["handle"], row["profile_id"], row["is_inherited"]) for row in middle] == [
         ("bob", "dh-22", False), ("alice", "dh-24", True)]
     inherited = middle[1]
+    assert inherited["submission_id"] == receipt["id"]
     assert inherited["challenge_id"] == high["id"]
     assert inherited["scheme_version"] == registry.CURRENT[dh_v3.SCHEME_ID]
     assert inherited["instance_size"] == 24
     assert inherited["received_at"] == receipt["received_at"]
     assert inherited["method"]["id"] == evidence["method_id"]
     assert inherited["compute"] == evidence["compute"]
+    original = alice.client.get('/api/submissions/' + inherited["submission_id"])
+    assert original.status_code == 200
+    assert original.json()["submission"]["challenge_id"] == high["id"]
+    assert original.json()["submission"]["instance_size"] == 24
     assert [row["handle"] for row in board(alice, "dh-24")["entries"]] == ["alice"]
     assert board(alice, "dh-25")["entries"] == []
     assert [row["handle"] for row in board(alice, "rsa-20")["entries"]] == ["carol"]
@@ -87,8 +93,39 @@ def test_receipt_ties_and_top_ten_are_consistent_for_inherited_credit(system):
     entries = board(viewer, "dh-20")["entries"]
     assert len(entries) == 10
     assert [entry["handle"] for entry in entries] == [receipts[key] for key in sorted(receipts)[:10]]
+    assert [entry["submission_id"] for entry in entries] == sorted(receipts)[:10]
     assert [entry["rank"] for entry in entries] == list(range(1, 11))
     assert all(entry["is_inherited"] for entry in entries)
+
+
+@pytest.mark.parametrize("fault", ["incorrect-generation", "wrong-round", "before-issue", "at-deadline", "foreign-method"])
+def test_invalid_receipts_cannot_occupy_places_or_hide_a_later_valid_receipt(system, fault):
+    app, clock, _ = system
+    alice, bob = Actor(app), Actor(app)
+    alice.register("alice")
+    bob.register("bob")
+    bad_challenge, bad_receipt, _ = submit(alice, "dh-24")
+    clock[0] += 1
+    _, first_valid, other_body = submit(bob, "dh-24")
+    clock[0] += 1
+    _, later_valid, _ = submit(alice, "dh-23")
+    with app.state.db.transaction(write=True) as session:
+        challenge = session.get(Challenge, bad_challenge["id"])
+        receipt = session.get(Submission, bad_receipt["id"])
+        if fault == "incorrect-generation": challenge.correctness_passed = False
+        elif fault == "wrong-round": receipt.round_id = challenge.round_id + 1
+        elif fault == "before-issue": receipt.received_at = challenge.issued_at - 1
+        elif fault == "at-deadline": receipt.received_at = challenge.ends_at
+        else: receipt.method_id = other_body["method_id"]
+    entries = board(alice, "dh-20")["entries"]
+    assert [(row["handle"], row["submission_id"]) for row in entries] == [
+        ("bob", first_valid["id"]), ("alice", later_valid["id"])]
+    assert [row["submission_id"] for row in board(alice, "dh-24")["entries"]] == [first_valid["id"]]
+    scheme = next(item for item in alice.client.get("/api/schemes").json()["schemes"]
+                  if item["id"] == dh_v3.SCHEME_ID)
+    assert scheme["largest_recovered_profile_id"] == "dh-24"
+    assert scheme["first_recovery"]["handle"] == "bob"
+    assert scheme["first_recovery"]["submission_id"] == first_valid["id"]
 
 
 def test_compatibility_is_source_profile_specific_and_archives_stay_strict(system, monkeypatch):

@@ -1,0 +1,85 @@
+RSA ENCAPSULATION — SELECTION REVIEW
+Review date: 2026-10-14. Decision: KEEP as a local recovery benchmark.
+Scope: catalogue selection and bounded code review; not deployment approval.
+
+WHY IT EARNS A PLACE
+
+RSA supplies the factoring/inversion comparison that DH cannot. It also exposes
+the distinction between attacks on a fresh modulus and reusable preparation
+for fixed DH groups. A compact, reproducible classical baseline remains useful
+even though it is not the newest internet key-exchange design. This is a reason
+to include one RSA construction, not separate entries for every key length,
+padding mechanism, signature application or wire format.
+
+The current adapter is custom. Calling it an implementation of RFC 9690 would
+be incorrect. Keep it as an explicitly described research baseline and use the
+RFC to define a possible future interoperable profile. That change would need
+new evidence and an immutable release boundary.
+
+EXACT OBJECT UNDER REVIEW
+
+Local scheme ID rsa-kem; release 3; crucible/rsa_v3.py.
+SHA256: 679b213ee8d2e873aea2ad01a983d126e48941a8fe9c96d11209b7dde6727ba0
+
+The code generates fresh balanced prime factors with private recursive
+Pocklington certificates, checks exponent 65537 and modulus conditions, and
+samples the encapsulated integer from the full residue interval [0,N).
+Its transcript-bound SHA-256 KDF and encoding are custom. The source explicitly
+declares structured prime sampling, variable-time arithmetic and the absence
+of an IND-CPA/IND-CCA claim. Certificates/factors must never enter public
+serialization or correctness diagnostics.
+
+The correctness argument covers non-units too: exponentiation is invertible
+modulo each valid prime factor, and CRT gives equality modulo N. Both parties
+then use the same KDF transcript. Condition this argument on successful valid
+key generation. A bounded generation timeout is a resource/availability event,
+not a decryption-failure probability and not a valid challenge.
+
+TIERS AND PROTOCOL BOUNDARIES
+
+The 50 modulus profiles use a frozen nominal rho/NFS reference ladder. That
+restricted model omits attacks including ECM and is not a rigorous security
+estimate for all the generated moduli. Independent sampling across rounds
+does not imply uniform sampling over all primes or a security reduction for
+this sampler. Parameter-generation structure requires review on its own.
+
+An implementation of standardized RSA-KEM can share this browsing page only
+if its identity, key generation, KDF, encodings and independent results remain
+explicit. It must not inherit old custom-adapter receipts as standard results.
+RSA-OAEP and PKCS#1 v1.5 are not aliases of RSA-KEM. RSA signatures are outside
+this catalogue's KEM scope.
+
+VERIFICATION AND REMAINING GATES
+
+The combined DH-v6/RSA-v3 test run passed 65 cases on 2026-10-14. RSA cases
+include prime certificates, boundary tiers, a fixed vector, non-unit inputs,
+exact encodings, bounded generation and honest agreement. These tests do not
+prove the sampler is cryptanalytically safe. Before broader use, independently
+review the generator/distribution and custom KDF, retain fail-closed handling
+for unexpected honest mismatches, and disclose the restricted calibration.
+
+The reference implementation is versioned locally. No claim is made that an
+external RSA-KEM known-answer suite was executed against this custom adapter.
+If a standard profile is added, require published vectors and independent
+interoperability tests for that exact profile rather than repurposing ours.
+
+PRIMARY SOURCES AND WHAT THEY SUPPORT
+
+1. Local source and tests/test_rsa_v3.py: exact current construction and checked
+   behavior. See verification.txt for command, date and hashes.
+2. https://www.rfc-editor.org/rfc/rfc9690.html (February 2025), appendix A and D:
+   standardized RSA-KEM description and example; the RFC obsoletes RFC 5990.
+   It describes random-integer RSA encapsulation and KDF-based secret derivation
+   as well as CMS use. CMS wrapping is not our hourly recovery game.
+3. https://crocs.fi.muni.cz/public/papers/rsa_ccs17 (ROCA, 2017): a concrete
+   example of why prime generation matters. Its affected generator is not the
+   same as this adapter; citing it is a review rationale, not a claimed break.
+4. https://factorable.net/ (2012): authors' research on weak key generation and
+   shared-factor failures. Mathematical construction and implementation quality
+   require separate evidence.
+5. https://www.rfc-editor.org/rfc/rfc8446.html section 1.2 (2018): static RSA
+   key exchange was removed in TLS 1.3. RSA's broad historical role does not
+   establish current deployment of this particular local KEM.
+
+All source URLs checked 2026-10-14. Inclusion is for research coverage and does
+not certify this variable-time benchmark for protecting real communications.

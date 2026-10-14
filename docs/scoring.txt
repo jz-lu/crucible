@@ -1,0 +1,95 @@
+CRUCIBLE — PROVISIONAL POINTS POLICY v2
+
+Policy ID: crucible-points-v2. Accepted by the user on 2026-10-14.
+
+For each explicitly enrolled scheme family:
+  Personal progress = 10 * highest recovered tier.
+  First recovery = 40 * highest tier the participant was first to reach.
+  Family total = personal progress + that single largest first-recovery bonus.
+  If the participant was never first, the first-recovery bonus is zero.
+
+For example, the first person reaching Tier20 earns 200+800=1,000 points.
+Someone reaching Tier20 second, with no earlier first, earns 200 progress points.
+Someone first at Tier19 and then second at Tier20 earns 200+760=960 points.
+Places two through ten earn no recovery bonus, but keep their First 10 milestone
+recognition. An unchanged personal best and repeated hourly runs do not
+accumulate points. Reaching every intermediate tier before Tier20 earns the same
+total as reaching Tier20 directly. An earlier first-recovery bonus remains when
+a later personal best is not first.
+
+This policy replaces v1's bonuses for places two through ten. Scores are derived
+again from the existing evidence under v2; there are no grandfathered v1 bonuses.
+All receipts, account history, admission credits and First 10 milestones remain.
+The API retains its early_recovery field names for compatibility; under v2 these
+fields describe only the selected first-place bonus. Without a positive bonus,
+its tier, rank and submission identifier are null.
+
+Place is determined by each distinct account's earliest verified receipt at
+that tier OR HIGHER, ordered by server receipt time then receipt identifier.
+Higher-tier solves reserve lower-tier places, matching the existing challenge
+leaderboards. Taking the maximum bonus avoids rewarding artificial intermediate
+steps. At identical server receipt times, the lower receipt identifier wins.
+Only successful, internally consistent receipts within their server deadline
+qualify. Computation estimates do not change points and remain self-reported.
+
+This policy retains DH release6 and RSA release3 enrollment, each with tiers1..50.
+The eligible source releases/profile identifiers are explicitly frozen in
+crucible/scoring.py. Registry changes never automatically multiply or reinterpret
+points. Archived records retain their actual original tier/release and can be
+inspected on profiles, but receive no v2 recovery points. Adding or replacing an
+eligible release requires an explicit comparison and policy decision.
+
+Overall ranking sorts the sum of all component points, descending. Equal totals
+share a competition rank; handles break display-order ties. Zero-score accounts
+are included. Scores are an incentive convention, not security estimates or a
+ranking of scientific merit. Account identity, moderation and independent-method
+recognition remain future work. First ten distinct accounts do not mean ten
+independent attacks.
+
+New scheme contribution: 1,000 points once for an explicitly admitted new family.
+Submission, format validation, or proposal approval alone awards nothing.
+Trusted integration must first register the exact approved source as an active
+scheme. Then a configured approving reviewer (not the proposer) records a
+separate new-family admission decision using scripts/award_scheme_credit.py.
+The command requires the exact proposal/review, active source/version, matching
+source hashes and frozen revision, written evidence and --confirm-new-family.
+Use --dry-run to inspect before recording. There is no HTTP write endpoint.
+The ledger's unique family, scheme, proposal, review and source constraints
+prevent duplicate retries and obvious aliases from earning more credit. Whether
+a family is genuinely new remains an explicit manual review responsibility.
+The proposal author receives the fixed award; existing DH/RSA examples receive
+no seeded awards. Shared-author credit allocation is not implemented yet.
+
+The ledger is additive migration0004. It does not modify accounts, sessions or
+past submissions. The operator command does not execute uploaded code, activate
+schemes, publish private proposals, or grant repository access.
+
+Human interface
+
+The headline metrics are Points and Accepted proposals. The latter counts actual
+new-family admission credits, not drafts or review approvals awaiting admission.
+Raw receipt counts remain in the API for compatibility but are not displayed as
+achievements. Personal bests show progress per scheme; Recent solves shows the
+underlying verified instances without awarding points for their quantity.
+
+First 10 milestones are recognition, with no additional points. An actual,
+valid, on-time correct submission must improve that person's highest tier in
+the exact registered scheme release, and place among the first ten accounts to
+reach its tier or higher. Order is receipt time then receipt identifier, as in
+the existing score policy. Repeats and implied lower-tier standings are not
+separate milestones. The compact view keeps records not superseded by an
+equal/higher tier with an equal/better place (one comparison strictly better).
+Full milestone history remains accessible in pages of twenty, with original
+receipt links. Comparisons never cross scheme releases. The milestone API's
+counts_toward_bonus flag identifies only the first-place result supplying the
+selected bonus; other First 10 milestones keep their recognition without points.
+The feature records early account success; it does not certify independent
+algorithms, novel attacks, independently measured compute or distinct people.
+
+Leaderboard is the second navigation tab after Schemes. Recovered by usernames
+open participant profiles. A profile shows total and component points, personal
+bests with original versions, and recent verified recoveries. Individual results
+open their original method/compute receipt. Incorrect answers, account IDs,
+password hashes, tokens and private approval evidence are not exposed by these
+participant endpoints. This uses the prototype's existing catalogue read access;
+private hosting/access controls remain a separate deployment decision.

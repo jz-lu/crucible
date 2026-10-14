@@ -84,8 +84,9 @@ POST /api/challenges accepts exactly one of these selection forms:
 Both resolve to the same profile, so switching forms cannot obtain an extra
 instance. The current registered release supplies the mapping for new issuance.
 
-DH5 and RSA2 each register tiers 1–50 under the frozen classical-baseline-v1
-reference. Tiers 1–25 target 8–32 reference bits, then reach128 at Tier 50. Tier and
+DH6 and RSA3 each register tiers 1–50 under frozen classical-baseline-v2.
+Targets rise linearly as 8+120(t-1)/49, from 8 to128 bits. DH5/RSA2 retain the
+archived piecewise v1 model; no records are relabelled or inherited. Tier and
 actual field/modulus/subgroup sizes are separate. Estimates are limited rho/NFS
 references rather than security guarantees or measured costs. Both still output
 32-byte shared secrets. New profile IDs and source releases isolate old ladders.
@@ -141,30 +142,39 @@ Source fingerprints are pinned per scheme version. When upgrading older database
 the first pin must agree with existing challenge manifests; changed or missing
 provenance stops issuance until the release is reviewed and versioned correctly.
 
-Release compatibility
+Release compatibility — historical DH1/DH2 example
 
-Teaching adapter release 2 registers every integer instance size from 20 through
+Teaching adapter release 2 registered every integer instance size from 20 through
 36; n maps to a subgroup order with n bits. Its original five profiles and KDF
 domain are unchanged. Release
 1 is archived byte for byte rather than reconstructed from the newer adapter.
 The example solver supports both releases. Existing challenges and answer receipts
 continue to use their recorded release, manifest, and target verifier.
 
-The leaderboard defaults to the current release. Set scheme_version=1 to inspect
+The leaderboard defaults to the current release (DH6/RSA3 as of 14 October 2026).
+Set scheme_version=1 to inspect
 historical records for a release-1 profile; records from different releases are not
 silently combined. GET /api/protocol/source?version=1 returns the archived source.
 Research history retains the exact target release, and findings about registered
 older releases remain revisable. Historical source files must not be edited when
 updating the current adapter.
 
-Candidate admission
+Candidate admission — reviewed 14 October 2026
 
-No public admission/upload endpoint exists. A future candidate needs a pinned
-specification and adapter, encodings and exact profiles, correctness argument with
-scope/assumptions, independent review, conformance vectors and a failure policy.
-The current route admits only the explicit teaching lane. Nonzero honest failure
-distributions need their own reviewed policy; never silently condition sampling
-on agreement or generalize the toy adapter's fault rule to arbitrary KEMs.
+Authenticated private specification intake and revision-bound manual review are
+implemented. See protocol-admission.txt for the exact workflow. Submitted code
+is never executed by intake; approval does not automatically register or activate
+an adapter. Trusted integration and the read-only check-proposal binding report
+precede the separate manual CURRENT change. Runtime issuance trusts CURRENT;
+it does not independently consult the proposal approval ledger.
+
+A candidate needs a pinned specification and adapter, encodings and exact profiles,
+correctness argument with scope/assumptions, independent review, conformance
+vectors and a failure policy. Current active references are custom DH6/RSA3.
+Nonzero honest failure distributions need their own reviewed policy; never silently
+condition sampling on agreement or generalize the current fault rule to all KEMs.
+See scheme-reviews/admission-and-coverage-challenge.txt for the audited rules,
+enforcement limits and remaining gates. Catalogue selection grants no admission.
 
 Before public release: test PostgreSQL/migrations/concurrency and profile-wide
 holds; configure proxy/body/concurrency limits; decide account recovery, identity,
@@ -180,8 +190,8 @@ https://docs.sqlalchemy.org/en/20/dialects/sqlite.html
 
 Calibrated generation and graph evidence
 
-DH5 public groups and exact primality certificates are embedded in its pinned
-source; no live prime search. RSA2 creates fresh balanced certified-prime factors
+DH6 public groups and exact primality certificates are embedded in its pinned
+source; no live prime search. RSA3 creates fresh balanced certified-prime factors
 with candidate, pair, and five-second monotonic generation limits. Exhaustion
 returns no instance and is retryable; arithmetic agreement failures still pause
 the profile. Expensive generation runs outside database transactions. Before

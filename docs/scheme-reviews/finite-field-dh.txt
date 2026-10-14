@@ -1,0 +1,85 @@
+FINITE-FIELD DIFFIE–HELLMAN — SELECTION REVIEW
+Review date: 2026-10-14. Decision: KEEP as a local recovery benchmark.
+Scope: catalogue selection and bounded source/code review, not a security audit.
+
+WHY IT EARNS A PLACE
+
+This is the clearest baseline for studying discrete-log attacks with shared
+public parameters. It gives participants a small, inspectable construction and
+lets the site distinguish preparation for a fixed group from per-instance work.
+The elliptic-curve entry does not replace this experiment: finite-field and
+elliptic-curve attack costs have importantly different structure. Conversely,
+this entry alone would give a misleading picture of modern DH deployment.
+
+The selection is conditional on honest naming. The present adapter is Crucible's
+custom finite-field DH construction, not a claim to implement a standardized
+FFDHE KEM. Its merit is an explicit research comparison, not internet market
+share, a new assumption, or a new-scheme contribution award.
+
+EXACT OBJECT UNDER REVIEW
+
+Local scheme ID teaching-dh-kem; release 6; crucible/dh_v6.py.
+SHA256: 8701162e1415ca5892308a463385bc9428c2fb06b7ad66087c6e2ca0e80fe9d3
+The user-facing name need not expose the historical internal ID.
+
+The local source specifies 50 immutable profiles with public certified primes
+p, prime subgroup order q > sqrt(p), and a generator of that subgroup. Public
+SHAKE-derived seeds make setup reproducible. Fresh secret exponents x and r
+are independently sampled from 1..q-1. A custom SHA-256 construction binds the
+profile, public parameters, public key, encapsulation and shared group value
+using length framing. This is not the safe-prime distribution of RFC 7919.
+
+Correctness follows from (g^x)^r = (g^r)^x and identical encoding/KDF inputs,
+conditional on valid parameters and faithful implementation. Exact prime
+certificates and subgroup checks address that condition; they do not prove
+hardness. No IND-CPA or IND-CCA claim is made for the custom construction.
+Variable-time Python is unsuitable as evidence of side-channel resistance.
+
+TIERS, COMPARISONS AND FAILURE POLICY
+
+The current tier targets run linearly from 8 to 128 nominal reference bits.
+Their restricted rho/NFS model is a calibration convention, not a measured
+cost or best-known-attack bound. Structured public-prime generation and shared
+precomputation belong in every result's interpretation. Reusing legitimate
+public parameters is permitted; hiding its cost or reusing private randomness
+is not. Account for one-time preparation, amortization count, online time,
+parallel hardware and total compute separately.
+
+The standard/reference distinction must remain visible in Protocol and review
+details. If a future adapter uses RFC 7919 groups and a specified standard KDF,
+it is a separately pinned release/profile contract; old receipts cannot silently
+become evidence about that construction. Higher-tier credit is participation
+recognition, not proof that every smaller independently sampled instance fell.
+
+VERIFICATION AND REMAINING GATES
+
+On 2026-10-14 the existing DH-v6 and RSA-v3 focused suite passed 65 tests in
+6.47 seconds. DH checks include all 50 honest round trips, parameter validation,
+public setup reproduction, public-only recovery and malformed inputs. This
+bounded check supports implementation regression confidence. It does not
+replace independent review of generation, the KDF, randomness isolation or
+the restricted cost model. See verification.txt for exact command and hashes.
+
+Before expanding this release, require a human reviewer to record the exact
+distribution, correctness argument, known limitations and any proposed mapping
+change. Preserve fail-closed behavior for an unexpected honest mismatch in this
+perfect-correctness construction. Do not retry away an implementation defect.
+
+PRIMARY SOURCES AND WHAT THEY SUPPORT
+
+1. Local source above and scripts/generate_dh_v6_parameters.py: exact object,
+   distribution and explicit non-standard status. These take precedence over
+   a general description of DH when describing existing challenge receipts.
+2. https://www.rfc-editor.org/rfc/rfc7919.html (2016), especially section 5 and
+   appendix A: named finite-field groups and their safe-prime setup. It is a
+   contrast/reference, not this adapter's specification.
+3. https://weakdh.org/ and the authors' linked paper, Imperfect Forward Secrecy:
+   How Diffie-Hellman Fails in Practice (2015): practical relevance of group
+   reuse and precomputation. Their TLS findings do not establish an attack on
+   every profile of this local construction.
+4. https://www.rfc-editor.org/rfc/rfc8446.html section 1.2 (2018): TLS 1.3's
+   removal of static RSA and static DH key exchange. This baseline should not
+   be marketed as the dominant modern TLS construction.
+
+All source URLs checked 2026-10-14. New attacks trigger reassessment, not silent
+rewriting of frozen profiles or deletion of historical evidence.

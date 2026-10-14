@@ -1,0 +1,51 @@
+BOUNDED VERIFICATION RECORD — 2026-10-14
+
+Selection/source reviews are complete only within their stated scope. They
+are not independent implementation audits, formal proof verification, named
+reviewer approval, or permission to activate new challenges.
+
+Existing local DH/RSA regression check:
+Working directory: /Users/aksharramkumar/git/towards-new-crypto
+Command:
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider tests/test_dh_v6.py tests/test_rsa_v3.py
+Result: 65 passed in 6.47 seconds.
+
+SHA-256 at review:
+8701162e1415ca5892308a463385bc9428c2fb06b7ad66087c6e2ca0e80fe9d3  crucible/dh_v6.py
+679b213ee8d2e873aea2ad01a983d126e48941a8fe9c96d11209b7dde6727ba0  crucible/rsa_v3.py
+0a7a01722fce1cf09cda42a178d8b15c2fefd9008cee263e8c411302b72aea95  tests/test_dh_v6.py
+56ec90922799e3c94cdd977c45758e9d3ada428615c83681d22ab545ecc2858d  tests/test_rsa_v3.py
+
+No new KEM implementation, upstream KAT execution, benchmark, tier calibration
+or correctness experiment was completed for the new reference entries. Sources
+identify where those artifacts come from; a URL alone is not verification.
+
+The trial uses only a saved public catalogue snapshot for existing DH/RSA.
+No account, session, private key, result or score was changed by this pass.
+
+Trial verification completed 2026-10-14:
+- Isolated headless Chrome, Playwright, 1440px and 320px viewports.
+- Eight immediately visible rows; three shallow groups; two saved DH/RSA
+  snapshot objects exactly unchanged; six new references with empty graphs.
+- All overview/challenge/protocol tabs, metric switches, search, empty discovery
+  state, browser Back, exact review anchors and downloadable full reviews.
+- Eight review cards, seven policy rows, deferred Saber, 36 local companion links,
+  keyboard navigation and scheme return links.
+- No horizontal overflow, browser errors, console errors or HTTP requests during
+  the file-based interaction checks. Existing live challenge URLs were inspected
+  without issuing challenges or submissions.
+- Root visually inspected the desktop catalogue/review page and mobile protocol
+  screenshot; verified the HQC parameter tables against the rendered source PDF.
+- Local HTTP smoke check: /, /reviews.html, /reviews/README.txt and
+  /reviews/selection.json returned 200 on port 8001.
+
+Reproduction harness in the workspace:
+work/scheme-overview-qa/kem-schemes-trial-check.cjs
+Report and screenshots:
+work/scheme-overview-qa/kem-schemes-trial-output/report.json
+Companion build script:
+work/build-kem-reviews.py
+
+A final wording-only refinement labels the existing DH/RSA cards' remaining work
+"Outstanding review" rather than suggesting they are not already active.
+No functional frontend change followed the passing browser checks.

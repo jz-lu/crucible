@@ -4,6 +4,14 @@ This first workflow accepts specifications and records manual review. It never
 executes uploaded algorithms, downloads an implementation URL, or automatically
 adds an approved proposal to the live challenge registry.
 
+Enforcement reviewed on 14 October 2026. Sections below distinguish implemented
+workflow checks from the scientific judgments a reviewer must make. They do not
+claim automated certification. The detailed requirements crosswalk and proposed
+extensions are in scheme-reviews/admission-and-coverage-challenge.txt, section 8;
+the immediate catalogue trial recommendation is in section 9. Numerical failure
+thresholds and general statistical-failure handling remain unresolved policy,
+not decisions silently supplied by the validator or this documentation update.
+
 1. Describe the scheme
 
 Use crucible-kem-spec-v1. The website supplies an annotated template, JSON Schema,
@@ -48,6 +56,14 @@ prove that an implementation is free of defects. The API rejects stale decisions
 self-review, incomplete approval checks, missing evidence, unknown correctness,
 or mismatched implementation hashes.
 
+The statistical failure bound is inert text; its numeric validity, probability
+scope, proof versus heuristic status, and coverage of every admitted profile
+remain substantive review duties. Evidence strings and completed checks do not
+establish that tests ran or a theorem is true. Distinct reviewer and author
+accounts are enforced; separate people or freedom from conflicts are not proven.
+Agent credentials currently have no proposal-review authority. Automation may
+prepare and reproduce evidence, but must not impersonate a human signoff.
+
 4. Integrate reviewed code explicitly
 
 A maintainer integrates the reviewed implementation and its tests in the trusted
@@ -72,6 +88,26 @@ the implementation correctly or that the test evidence is truthful. The trusted
 code change enabling CURRENT is the final manual activation step, after review
 of integration tests, failure handling, resource limits, and source provenance.
 Keep the check report with that change. Changed code needs a new reviewed artifact.
+
+CURRENT is a trusted manual code gate: runtime issuance does not consult the
+proposal approval ledger. The binding check is therefore not an automatic or
+unbypassable activation control. The activating maintainer must verify the report
+and record the decision for the exact artifact/profile set. Admission credit and
+recovery-scoring enrollment are separate explicit decisions.
+
+The current fingerprint covers the registered adapter source file. Before using
+an adapter backed by additional source files, native binaries or dependencies,
+the integration review must pin that behavior-affecting artifact set and build
+recipe too; a wrapper-file hash is insufficient. This is a required review scope,
+not a claim that a multi-file digest mechanism is already implemented.
+
+The live service currently pauses a profile on any agreement mismatch and does
+not implement a general statistical-failure ledger or issuance policy. Keep this
+conservative behavior for existing DH6/RSA3; do not extend it to a statistical KEM
+by assumption. Such a candidate needs an explicit failure/abort/distribution
+policy before activation, including how legitimate mathematical disagreement is
+distinguished from bugs. No hidden resampling or substitution of Decaps' key is
+allowed. See correctness-policy-v0.txt and crosswalk requirements R1–R8.
 
 5. Configure reviewers explicitly
 

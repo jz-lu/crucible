@@ -1,0 +1,200 @@
+HQC — selection and admission review
+Assessment date: 2026-10-14
+Decision: KEEP as one of the initial research catalogue's KEM constructions.
+Live challenge admission: NOT YET APPROVED.
+
+This is a source-based selection review, not an independent cryptographic proof,
+implementation audit, benchmark, or test-vector reproduction. Recommendations
+below are Crucible design judgments. Source claims retain their stated scope.
+
+1. Why HQC earns a place
+
+HQC supplies a useful contrast to both lattice KEMs and Classic McEliece. Its
+original framework deliberately avoids hiding an efficiently decodable code in
+the public matrix; it instead bases confidentiality on decisional decoding
+problems for random quasi-cyclic codes. The original paper presents both Hamming
+and rank-metric instantiations; they must not be conflated. [H2]
+
+For Crucible, the marginal value is threefold: a practically motivated alternative
+to lattice assumptions; statistical correctness whose analysis is an active
+research question; and a concrete example of why an implementation attack, a
+better generic decoder, and a changed mathematical parameter set are different
+results. Those are substantial differences from merely adding another module-LWE
+KEM or another set of security-category numbers.
+
+NIST selected HQC in March 2025 after its fourth-round comparison. [H3] This is
+evidence of importance and scrutiny, not a substitute for our adapter review.
+Use the catalogue status "Selected for NIST standardization". The reviewed
+artifact below is the team's specification, not an assertion of final FIPS
+conformance. NIST's September 2026 forum message plans to incorporate the proposed
+weight changes into the FIPS 207 initial public draft. [H9]
+
+2. Exact construction and profile scope
+
+Latest specification found at the official resource index: 2026-10-12. [H1]
+Downloaded PDF SHA-256:
+6cc6669404b1d28d6e571de69982a267c8a78cdbe6b5f0e8649011ccb0d02572
+
+The three named profiles in Table 8/9 are:
+
+Profile   n       message bits   w     wr=we   public key   ciphertext
+HQC-1     17669   128            67     76      2241 B       4433 B
+HQC-3     35851   192           101    114      4514 B       8978 B
+HQC-5     57637   256           132    150      7237 B      14421 B
+
+All use 32-byte shared keys and the default compressed 32-byte decapsulation
+seed. The stated DFR bounds are respectively <2^-127, <2^-192, <2^-256. The
+October revision changes weights, the default private-key format, and the GF(256)
+polynomial. Section 6.2 distinguishes 2-DQCSD-P and 3-DQCSD-PT in its reduction;
+"syndrome decoding is hard" alone does not identify those assumptions. [H1]
+
+Keep these three profiles nested under one HQC construction. Preserve the
+2025-08-22 construction as an explicitly dated historical release if needed;
+do not relabel an old hqc-128 implementation as the October HQC-1 profile. Neither
+compression experiments nor alternative decoders deserve independent front-page
+slots merely because they produce another implementation or parameter vector.
+They can become reviewed variants when their changed behavior matters.
+
+Assumption entries should pin parity conditions, truncation, block weights,
+sampling, public setup, and the adversary's access model. Link search attacks as
+attack routes, not as an unsupported equivalence between search and decision.
+This is a concrete test of whether the proposed assumption schema is precise
+enough without generating an entry for every mathematical combination.
+
+3. Correctness is statistical and model-dependent
+
+Do not mark HQC perfectly correct. A reduction with an explicitly bounded failure
+term, a model for that term, and observed test agreement are distinct evidence.
+Bombar–Resch–Wiedijk show that an independence model can fail without refuting the
+empirically observed concentration phenomenon. [H4] Annechini–Barenghi–Pelosi
+derive a model that removes coordinate independence and report that the older
+approximation was conservative. [H5] Bitzer et al. also refine dependent-error
+analysis and study ciphertext compression. [H6] Read these as complementary
+research inputs; do not compress them into a timeless "DFR formally verified"
+badge.
+
+Admission should record the bound, its exact probability space and parameter
+revision, every modeling assumption, and the implementation's actual decoder and
+tie-breaking rules. The October bound is not the older HQC-1 <2^-128 claim. A
+reviewer must check that claimed bounds apply to the chosen sampling and decoder,
+including any cached expanded private-key representation.
+
+Ordinary random testing cannot establish probabilities near 2^-128. It can catch
+implementation mismatches. Reduced profiles can make failures observable, but
+their measured rates do not prove the full-size tail bound.
+
+Crucible also needs an explicit issuance policy. Silently resampling whenever
+honest encapsulation and decapsulation disagree changes the challenge
+distribution, especially at reduced sizes. Record every generation failure and
+the conditioning policy; quarantine an affected profile/round when the observed
+behavior contradicts its admitted contract. A failed self-check is not a solver
+achievement and must not silently create a fresh instance under the same ID.
+
+4. Material cryptanalysis and what it does not establish
+
+Carrier–Hatey–Luzzi–Tillich, received 2026-07-22, introduce MAGE-Stern and report
+approximately three bits of time improvement for then-current HQC parameters
+under their cost model, with a larger memory reduction. [H7] The HQC team cites
+this work in proposing adjusted weights. Bernstein disputes the claimed
+improvement and comparability of its gate/memory model in the same official
+forum thread. NIST subsequently announces its intention to adopt the weight
+change for draft review. [H9] Crucible should retain the competing cost-model
+claims and version dates, not publish a settled universal "three bits broken"
+headline. The publication supplies no one-hour full-size shared-secret recovery.
+
+Dong–Guo's CRYPTO 2026 paper reports an attack on an official AVX2 implementation:
+compiler transformations produce secret-dependent decoder behavior, enabling a
+co-located Flush+Reload adversary to obtain a decryption-style oracle. The paper
+reports hqc-1 key recovery with under ten seconds of online trace collection;
+that is not total attack compute. [H8] It is also not public-input-only
+cryptanalysis. The accompanying artifact is useful for a separate implementation
+security review, not for credit on an offline recovery leaderboard without the
+same access conditions.
+
+This creates a specific acceptance gate: inspect and test the actual compiled
+binary, compiler version, flags, architecture, and any mitigations. The word
+"constant-time" in a source README or an earlier specification is insufficient.
+Do not assume that the October document proves this issue fixed in whichever
+repository revision an integrator happens to download.
+
+5. Implementation and test-vector provenance: an actual mismatch to resolve
+
+The official resource index links to https://gitlab.com/pqc-hqc/hqc/ . On this
+review date the public tags API lists v5.0.0, commit
+f46e54222ffb76706678a9ec8a43cd2188a12ab1, dated 2025-08-22; main resolves to that
+same commit. The repository also exposes development branches, including
+next-release. A branch name is not evidence that it implements the October
+specification. [H10]
+
+The pinned README describes reference and AVX2 implementations; unit tests, API
+tests, and official KAT folders for both. These are a useful reproducibility
+starting point. They have not been built or run in this review. Most importantly,
+v5.0.0 test vectors cannot certify the changed 2026-10-12 construction. [H10]
+
+Recommended sequence: catalogue the current specification; obtain or produce an
+explicitly reviewed matching implementation; pin its commit and archive hash;
+reproduce its exact KATs and intermediate values with a separate implementation;
+check canonical encoding and malformed-input behavior; then admit a frozen
+adapter. If using v5.0.0 sooner for research, publish it as the August 2025 release
+with its own reviewed limitations. Never claim the two are interchangeable.
+
+6. Full profiles versus a grindable challenge ladder
+
+Start with the named reference profiles for inspection and measured costs. Do not
+invent fifty scaled versions merely to match the current UI. HQC's finite-field
+arithmetic, concatenated decoder, ambient length, and sparse weights are coupled.
+A smaller n alone is not a valid parameter-mapping algorithm.
+
+A reduced research ladder is feasible in principle, but it is a new derivative
+with its own specification: admissible ambient rings; message/code dimensions;
+error distributions; fixed-weight sampling; failure analysis; hash framing; and
+an explicit generic-decoding estimate. Only register selected reviewed points.
+If a profile cannot be validated, leave it absent. Reduced-tier progress must not
+backfill a standard profile or imply its security-category claim was refuted.
+
+For the existing challenge game, publish only public key, ciphertext, public
+parameters, exact encoding/version, and deadline; verify the complete encapsulated
+shared key. Do not expose decapsulation/failure/timing oracles incidentally.
+Correctness experiments and implementation leakage belong in separate evidence
+records with explicit access models.
+
+7. Selection versus admission and future proposals
+
+KEEP HQC because of its marginal research value. DEFER live activation until the
+specification/source/KAT mismatch is resolved. Both the assumption and the
+construction were previously identified; importing or integrating them is not a
+Crucible discovery. Catalogue publication, manual implementation admission, and
+the existing admitted-scheme points ledger remain separate decisions.
+
+Future variants must explain what they change relative to this release and why
+the change matters. A smaller serialization or improved decoder is useful, but
+does not automatically establish a new assumption, security proof, or separately
+credited scheme family.
+
+Primary sources (all accessed 2026-10-14)
+
+[H1] HQC team, specification dated 2026-10-12; Sections 2.3, 4, 6 and changelog.
+https://pqc-hqc.org/doc/hqc_specifications_2026_10_12.pdf
+Official current-resource pointer: https://pqc-hqc.org/resources.html
+[H2] Aguilar Melchor et al., Efficient Encryption from Random Quasi-Cyclic Codes,
+2016 preprint / IEEE TIT 2018. https://arxiv.org/abs/1612.05572
+[H3] NIST IR 8545, March 2025, Sections 3.1–3.2.
+https://nvlpubs.nist.gov/nistpubs/ir/2025/NIST.IR.8545.pdf
+[H4] Bombar–Resch–Wiedijk, On the Independence Assumption in Quasi-Cyclic
+Code-Based Cryptography, 2025. https://arxiv.org/abs/2501.02626
+[H5] Annechini–Barenghi–Pelosi, On the Decoding Failure Rate of HQC, ISIT 2026.
+https://eprint.iacr.org/2026/795
+[H6] Bitzer et al., HQC Beyond the Standard: Ciphertext Compression and Refined
+DFR Analysis, 2025 preprint / EUROCRYPT 2026. https://eprint.iacr.org/2025/2259
+[H7] Carrier et al., Multilevel Amortized Gaussian Elimination in Information-Set
+Decoding: Applications to HQC and PCG, 2026. https://eprint.iacr.org/2026/1498
+[H8] Dong–Guo, Breaking Optimized HQC, CRYPTO 2026; revised 2026-07-30.
+https://eprint.iacr.org/2026/693
+Authors' artifact: https://github.com/ot-pca/cache-timing
+[H9] HQC team, Bernstein, and NIST FIPS 207 team, parameter-update discussion,
+2026-08-14 through 2026-09-09.
+https://groups.google.com/a/list.nist.gov/g/pqc-forum/c/9CFqM7dvf4g
+[H10] Official HQC source/tag metadata and version-pinned README.
+https://gitlab.com/pqc-hqc/hqc/-/tree/f46e54222ffb76706678a9ec8a43cd2188a12ab1
+https://gitlab.com/pqc-hqc/hqc/-/tags
+https://gitlab.com/pqc-hqc/hqc/-/blob/f46e54222ffb76706678a9ec8a43cd2188a12ab1/README.md
