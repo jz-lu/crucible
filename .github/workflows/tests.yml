@@ -11,13 +11,15 @@ jobs:
         python-version: ['3.11', '3.14']
     env:
       CRUCIBLE_ENV: development
-      CRUCIBLE_DATA_DIR: ${{ runner.temp }}/crucible-source-checks
-      PYTHONPYCACHEPREFIX: ${{ runner.temp }}/crucible-pycache
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Set isolated runtime directories
+        shell: bash
+        run: |
+          printf '%s\n' "CRUCIBLE_DATA_DIR=$RUNNER_TEMP/crucible-source-checks" "PYTHONPYCACHEPREFIX=$RUNNER_TEMP/crucible-pycache" >> "$GITHUB_ENV"
       - name: Install pinned Python dependencies
         run: |
           python -m pip install -r requirements.lock
