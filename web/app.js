@@ -4,6 +4,8 @@ const $ = selector => document.querySelector(selector);
 // Keep the research interface dormant while the first MVP focuses on numerical challenges.
 const RESEARCH_ENABLED = false;
 const state = {
+  access: null, sessionResolved: false, invitationToken: null, invitationBusy: false, invitationDelivery: null,
+  returnRoute: null, protectedLoaded: false, canManageBetaAccess: false,
   user: null, csrf: '', canReviewProposals: false, canSelfReviewProposals: false, schemes: [], profile: null, challenge: null,
   methods: [], view: 'leaderboard', authMode: 'login', round: null,
   timeOffset: 0, ready: false, challengeLoading: false, issueBusy: false,
@@ -26,6 +28,8 @@ let toastTimer;
 let roundRetryAt = 0;
 let sessionSynchronization = null;
 let notebookWorkspace = null;
+let notebookAssets = null;
+const protectedRequests = new Set();
 const dialogTriggers = new WeakMap();
 const authDialog = $('#auth-dialog');
 const submissionDialog = $('#submission-dialog');
@@ -251,10 +255,162 @@ function connectionCode(value) {
   const code = String(value || '').trim().toUpperCase().replace(/-/g, '');
   return /^[A-Z0-9]{8}$/.test(code) ? code.slice(0, 4) + '-' + code.slice(4) : null;
 }
+function hasAccess() { return state.sessionResolved && state.access?.allowed === true; }
+function captureInvitation() {
+  const [path, query = ''] = window.location.hash.split('?');
+  if (path !== '#join') return;
+  const token = new URLSearchParams(query).get('token');
+  if (!token || token.length > 512 || !/^[A-Za-z0-9_-]+$/.test(token)) {
+    state.invitationToken = null; state.invitationDelivery = null;
+    setError('#access-error', 'This invitation link is incomplete. Open the full link you received.');
+    return;
+  }
+  if (token && token.length <= 512 && /^[A-Za-z0-9_-]+$/.test(token) && token !== state.invitationToken) {
+    state.invitationToken = token;
+    state.invitationDelivery = null;
+    $('#access-code').value = '';
+    setError('#access-error', '');
+  }
+}
+function renderAccessGate() {
+  if (state.screen !== 'access' && window.location.hash && !window.location.hash.startsWith('#join')) state.returnRoute = window.location.hash;
+  state.screen = 'access';
+  showWorkspace('access');
+  const status = state.access?.status;
+  const blocked = ['revoked', 'suspended'].includes(status);
+  const joining = Boolean(state.invitationToken);
+  setText('#access-title', 'Private beta');
+  setText('#access-description', hasAccess() ? 'Your access is ready.' : blocked ?
+    'Your beta access is not active. Contact the person who invited you.' : joining ?
+    'Join Crucible with your invitation.' : state.user ?
+    'Open your invitation link to activate beta access.' : 'Sign in to continue, or open your invitation link to join.');
+  $('#access-auth-actions').hidden = Boolean(state.user);
+  $('#access-register').hidden = !joining;
+  $('#access-verification').hidden = !state.user || !joining || blocked || hasAccess();
+  $('#access-continue').hidden = !hasAccess();
+  setText('#access-account', state.user ? 'Joining as ' + state.user.handle : '');
+  $('#access-code-form').hidden = !state.invitationDelivery;
+  $('#access-send-code').disabled = state.invitationBusy;
+  $('#access-redeem').disabled = state.invitationBusy;
+  setText('#access-send-code', state.invitationDelivery ? 'Send a new code' : 'Email a verification code');
+  setText('#access-delivery', state.invitationDelivery ? 'Code sent to ' + state.invitationDelivery.masked_recipient + '. Check that inbox to continue.' : '');
+  $('#register-mode').hidden = state.access?.mode === 'beta' && !joining;
+  document.title = 'Private beta — Crucible';
+}
+function clearProtectedState() {
+  const reloadShell = state.protectedLoaded;
+  state.protectedLoaded = false;
+  state.ready = false;
+  for (const controller of protectedRequests) controller.abort();
+  for (const key of ['catalogueRequest', 'challengeRequest', 'leaderboardRequest', 'historyRequest', 'recoveryRequest', 'peopleRequest', 'personRequest', 'connectRequest']) state[key]++;
+  state.schemes = []; state.people = []; state.profile = null; state.challenge = null; state.methods = [];
+  state.schemeId = null; state.schemeVersion = null; state.personHandle = null; state.personDataKey = null;
+  state.pendingAttempt = null; state.submissionChallenge = null; state.connection = null; state.round = null;
+  state.challengeStartIntent = null; state.challengeLoading = false;
+  state.autoIssueAttempts.clear(); state.autoIssuePaused.clear();
+  state.canReviewProposals = false; state.canSelfReviewProposals = false; state.canManageBetaAccess = false;
+  resetAgentSettings(); resetAgentInstructions(); resetProposalAccount(state.user?.id);
+  research.request++; research.recoveriesRequest++; research.targets = []; research.target = null; research.findings = []; research.recoveries = [];
+  for (const selector of ['#kem-catalogue', '#people-content', '#person-content', '#leaderboard-content', '#history-content', '#recovery-content', '#connect-content', '#overview-graphs', '#target-catalogue']) $(selector).replaceChildren();
+  for (const dialog of document.querySelectorAll('dialog')) if (dialog.open && dialog !== authDialog) dialog.close();
+  $('#submission-form').reset();
+  // A fresh shell also releases notebook closures and private data held by the
+  // previous page. The next bootstrap stays on the access screen, without a loop.
+  if (reloadShell && typeof window.location.reload === 'function') window.location.reload();
+}
+async function loadAuthorizedCatalogue() {
+  if (!hasAccess()) return false;
+  if (state.screen === 'access') {
+    setText('#access-description', 'Opening your workspace…');
+    for (const selector of ['#access-auth-actions', '#access-verification', '#access-continue']) $(selector).hidden = true;
+  }
+  const revision = state.sessionRevision, request = ++state.catalogueRequest;
+  const data = await api('/api/schemes');
+  if (!hasAccess() || revision !== state.sessionRevision || request !== state.catalogueRequest) return false;
+  state.schemes = data.schemes || [];
+  state.ready = true;
+  state.protectedLoaded = true;
+  applyRoute();
+  return true;
+}
+async function showNotebook(query) {
+  const account = state.user?.id;
+  if (!window.CrucibleNotebook) {
+    setLoading($('#notebook-workspace'), 'Loading notebook…');
+    notebookAssets ||= (async () => {
+      await new Promise((resolve, reject) => {
+        const stylesheet = node('link'); stylesheet.rel = 'stylesheet'; stylesheet.href = '/notebook/notebook.css';
+        stylesheet.onload = resolve;
+        stylesheet.onerror = () => { stylesheet.remove(); reject(new Error('The notebook could not be loaded. Please try again.')); };
+        document.querySelector('head').append(stylesheet);
+      });
+      for (const src of ['/notebook/seed.js', '/notebook/store.js', '/notebook/notebook.js']) {
+        if (!hasAccess()) throw new Error('Sign in to open the notebook.');
+        await new Promise((resolve, reject) => {
+          const script = node('script'); script.src = src;
+          script.onload = resolve; script.onerror = () => { script.remove(); reject(new Error('The notebook could not be loaded. Please try again.')); };
+          document.body.append(script);
+        });
+      }
+    })().catch(error => { notebookAssets = null; throw error; });
+    try { await notebookAssets; }
+    catch (error) { if (hasAccess() && state.screen === 'notebook') showInlineError($('#notebook-workspace'), error.message, () => showNotebook(query)); return; }
+  }
+  if (!hasAccess() || account !== state.user?.id || state.screen !== 'notebook') return;
+  notebookWorkspace ||= window.CrucibleNotebook.mount($('#notebook-workspace'), {navigate});
+  notebookWorkspace.show(new URLSearchParams(window.location.hash.split('?')[1] || query));
+}
+$('#access-sign-in').addEventListener('click', () => { setAuthMode('login'); openAuth($('#access-sign-in')); });
+$('#access-register').addEventListener('click', () => { setAuthMode('register'); openAuth($('#access-register')); });
+$('#access-send-code').addEventListener('click', async () => {
+  if (!state.user || !state.invitationToken || state.invitationBusy) return;
+  const account = state.user.id, token = state.invitationToken;
+  state.invitationBusy = true; setError('#access-error', ''); renderAccessGate();
+  try {
+    const data = await api('/api/access/invitations/verify/start', {token});
+    if (state.user?.id !== account || state.invitationToken !== token) return;
+    state.invitationDelivery = data;
+    $('#access-code').value = '';
+  } catch (error) { if (state.user?.id === account) setError('#access-error', error.message); }
+  finally {
+    state.invitationBusy = false;
+    if (!hasAccess() || state.screen === 'access') { renderAccessGate(); if (state.invitationDelivery) $('#access-code').focus(); }
+  }
+});
+$('#access-code-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!state.user || !state.invitationToken || state.invitationBusy) return;
+  const account = state.user.id, token = state.invitationToken;
+  state.invitationBusy = true; setError('#access-error', ''); renderAccessGate();
+  try {
+    await api('/api/access/invitations/redeem', {token, code: $('#access-code').value.trim()});
+    if (state.user?.id !== account || state.invitationToken !== token) return;
+    const session = await api('/api/session');
+    if (state.user?.id !== account) return;
+    setSession(session);
+    if (!hasAccess()) throw new Error('Your access is not active yet. Please try again.');
+    state.invitationToken = null; state.invitationDelivery = null; $('#access-code').value = '';
+    window.history.replaceState(null, '', state.returnRoute || '#challenge');
+    await loadAuthorizedCatalogue();
+  } catch (error) { if (state.user?.id === account) setError('#access-error', error.message); }
+  finally { state.invitationBusy = false; if (!hasAccess() || state.screen === 'access') renderAccessGate(); }
+});
+$('#access-continue').addEventListener('click', async () => {
+  state.invitationToken = null; state.invitationDelivery = null;
+  window.history.replaceState(null, '', state.returnRoute || '#challenge');
+  try { if (state.ready) applyRoute(); else await loadAuthorizedCatalogue(); }
+  catch (error) { globalError(error.message); }
+});
 function workspaceSelector(screen) {
-  return {scheme: '#workspace', overview: '#overview-workspace', notebook: '#notebook-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
+  return {access: '#access-workspace', scheme: '#workspace', overview: '#overview-workspace', notebook: '#notebook-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
 }
 function applyRoute(focus = false) {
+  captureInvitation();
+  if (state.sessionResolved && (!hasAccess() || window.location.hash.split('?')[0] === '#join')) {
+    renderAccessGate();
+    if (focus) $('#access-workspace').focus();
+    return;
+  }
   if (!state.ready) return;
   const previous = selectionKey();
   const previousScreen = state.screen;
@@ -345,8 +501,7 @@ function applyRoute(focus = false) {
   if (screen === 'person') loadPerson(handle);
   if (screen === 'connect') loadConnection();
   if (screen === 'notebook') {
-    notebookWorkspace ||= window.CrucibleNotebook.mount($('#notebook-workspace'), {navigate});
-    notebookWorkspace.show(new URLSearchParams(query));
+    showNotebook(query);
   }
   document.title = ['scheme', 'overview'].includes(screen) ? scheme.name + (screen === 'overview' ? ' overview' : '') + ' — Crucible' : screen === 'person' ? handle + ' — Crucible' : screen === 'people' ? 'Leaderboard — Crucible' : screen === 'research' ? 'Research — Crucible' : screen === 'about' ? 'About us — Crucible' : screen === 'propose' ? 'Propose a scheme — Crucible' : 'Schemes — Crucible';
   if (screen === 'connect') document.title = 'Connect an agent — Crucible';
@@ -372,8 +527,15 @@ function absorbClock(data) {
   updateClock();
 }
 async function api(path, body) {
+  const protectedRequest = !/^\/api\/(?:session(?:\?|$)|auth\/|access\/)/.test(path);
+  if (protectedRequest && !hasAccess()) {
+    const error = new Error('Sign in with an active beta membership to continue.');
+    error.status = 403;
+    throw error;
+  }
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20000);
+  if (protectedRequest) protectedRequests.add(controller);
+  const timeout = setTimeout(() => controller.abort(), body !== undefined && path === '/api/challenges' ? 30000 : 20000);
   try {
     let response;
     try { response = await fetch(path, {
@@ -404,12 +566,19 @@ async function api(path, body) {
         'The request could not be completed. Please try again.';
       const error = new Error(detail || fallback);
       error.status = response.status;
+      if ((protectedRequest || path.startsWith('/api/access/')) && state.access?.mode === 'beta' && [401, 403].includes(response.status)) {
+        // Recheck membership without making a rejected child request await its parent refresh.
+        void synchronizeSession();
+      }
       if (Array.isArray(data?.errors)) error.fieldErrors = data.errors.filter(item => item && typeof item.path === 'string' && typeof item.message === 'string');
       throw error;
     }
+    if (protectedRequest && !hasAccess()) {
+      const error = new Error('Beta access is no longer active.'); error.status = 403; throw error;
+    }
     absorbClock(data);
     return data;
-  } finally { clearTimeout(timeout); }
+  } finally { clearTimeout(timeout); protectedRequests.delete(controller); }
 }
 function setSession(data) {
   state.sessionRevision++;
@@ -418,9 +587,16 @@ function setSession(data) {
   const previousSelfReview = state.canSelfReviewProposals;
   state.user = data.user || null;
   state.csrf = data.csrf_token || '';
+  state.sessionResolved = true;
+  state.access = data.access || (state.access?.mode === 'beta' ?
+    {mode: 'beta', allowed: false, status: state.user ? 'pending' : 'anonymous'} :
+    {mode: 'open', allowed: true, status: state.user ? 'active' : 'anonymous'});
+  state.canManageBetaAccess = Boolean(state.user && data.capabilities?.manage_beta_access);
   state.canReviewProposals = Boolean(state.user && data.capabilities?.review_protocol_proposals);
   state.canSelfReviewProposals = Boolean(state.canReviewProposals && data.capabilities?.self_review_protocol_proposals);
   if (previousId !== state.user?.id) {
+    state.invitationDelivery = null;
+    $('#access-code').value = '';
     state.challengeStartIntent = null;
     state.connectRequest++;
     state.connection = null;
@@ -458,11 +634,17 @@ function setSession(data) {
   if (previousId === state.user?.id && (previousReview !== state.canReviewProposals || previousSelfReview !== state.canSelfReviewProposals)) resetProposalAccount(previousId);
   $('#auth-button').hidden = Boolean(state.user);
   $('#auth-button').disabled = false;
-  $('#account-handle').hidden = !state.user;
+  $('#account-handle').hidden = !state.user || !hasAccess();
   setText('#account-handle', state.user?.handle || '');
   $('#account-handle').href = state.user ? personRoute(state.user.handle) : '#people';
   $('#logout-button').hidden = !state.user;
-  $('#history-button').hidden = !state.user;
+  $('#history-button').hidden = !state.user || !hasAccess();
+  $('#register-mode').hidden = state.access.mode === 'beta' && !state.invitationToken;
+  if (!hasAccess()) {
+    clearProtectedState();
+    renderAccessGate();
+    return;
+  }
   absorbClock(data);
   if (previousId !== state.user?.id && state.ready) {
     if (state.screen === 'connect') loadConnection();
@@ -495,6 +677,7 @@ function showInlineError(target, message, retry) {
 function showEmpty(target, message) { target.replaceChildren(node('div', message, 'empty-state')); }
 
 function updateClock() {
+  if (!hasAccess()) return;
   updateConnectionExpiry();
   const remaining = roundRemaining();
   if (remaining === null) return;
@@ -521,7 +704,7 @@ function canSubmitChallenge(challenge) {
     Number.isFinite(challenge.ends_at) && now() < challenge.ends_at && sharedKeyBytes(challenge) !== null);
 }
 async function refreshRound() {
-  if (state.roundRefreshing) return;
+  if (state.roundRefreshing || !hasAccess()) return;
   state.roundRefreshing = true;
   const oldRound = state.round?.id;
   const sessionRevision = state.sessionRevision;
@@ -529,6 +712,7 @@ async function refreshRound() {
     const data = await api('/api/session');
     if (state.sessionRevision !== sessionRevision) return;
     setSession(data);
+    if (!hasAccess()) return;
     if (state.round?.id !== oldRound || (state.challenge && state.challenge.round_id !== state.round.id)) {
       await loadChallenge();
       if (state.view === 'leaderboard') await loadLeaderboard();
@@ -542,7 +726,7 @@ async function refreshRound() {
   }
 }
 async function synchronizeSession() {
-  if (!state.ready || state.roundRefreshing) return;
+  if (!state.sessionResolved || state.roundRefreshing) return;
   if (sessionSynchronization) return sessionSynchronization;
   sessionSynchronization = (async () => {
     const oldRound = state.round?.id;
@@ -555,6 +739,8 @@ async function synchronizeSession() {
       if (revision !== state.sessionRevision) return;
       setSession(data);
       revision = state.sessionRevision;
+      if (!hasAccess()) return;
+      if (!state.ready) { await loadAuthorizedCatalogue(); return; }
       const changed = oldRound !== state.round?.id || oldUser !== state.user?.id;
       if (['catalogue', 'overview', 'scheme'].includes(state.screen) && await refreshProfiles({background: true}) === false) return;
       if (state.screen === 'person') await loadPerson(state.personHandle, {preserve: true});
@@ -580,6 +766,7 @@ function catalogueDisplayKey(scheme) {
     scheme.first_recovery, recoveredProfileIds(scheme)]);
 }
 async function refreshProfiles({background = false} = {}) {
+  if (!hasAccess()) return false;
   const request = ++state.catalogueRequest;
   const oldCatalogue = JSON.stringify(state.schemes.map(catalogueDisplayKey));
   const oldSelection = catalogueDisplayKey(selectedScheme());
@@ -2069,19 +2256,20 @@ for (const dialog of document.querySelectorAll('dialog')) {
   });
 }
 function setAuthMode(mode) {
+  if (mode === 'register' && state.access?.mode === 'beta' && !state.invitationToken) mode = 'login';
   state.authMode = mode;
   $('#login-mode').classList.toggle('selected', mode === 'login');
   $('#register-mode').classList.toggle('selected', mode === 'register');
   $('#login-mode').setAttribute('aria-pressed', String(mode === 'login'));
   $('#register-mode').setAttribute('aria-pressed', String(mode === 'register'));
   setText('#auth-title', mode === 'login' ? 'Welcome back.' : 'Join the challenge.');
-  setText('#auth-description', mode === 'login' ? 'Sign in to receive your instance for the current round.' : 'Create an account to investigate challenges and share your results.');
+  setText('#auth-description', state.access?.mode === 'beta' ? (mode === 'login' ? 'Sign in to your Crucible account.' : 'Create your account, then verify your invitation email.') : mode === 'login' ? 'Sign in to receive your instance for the current round.' : 'Create an account to investigate challenges and share your results.');
   setText('#auth-submit', mode === 'login' ? 'Sign in →' : 'Create account →');
   $('#auth-password').autocomplete = mode === 'login' ? 'current-password' : 'new-password';
   $('#auth-password').minLength = 12;
   setError('#auth-error', '');
 }
-function openAuth(trigger) { setError('#auth-error', ''); openDialog(authDialog, trigger); }
+function openAuth(trigger) { setAuthMode(state.authMode); openDialog(authDialog, trigger); }
 $('#auth-form').addEventListener('submit', async event => {
   event.preventDefault();
   const startIntent = state.challengeStartIntent;
@@ -2092,7 +2280,8 @@ $('#auth-form').addEventListener('submit', async event => {
   setError('#auth-error', '');
   setText('#auth-submit', state.authMode === 'login' ? 'Signing in…' : 'Creating your account…');
   try {
-    const data = await api('/api/auth/' + state.authMode, {handle: $('#auth-handle').value.trim(), password: $('#auth-password').value});
+    const data = await api('/api/auth/' + state.authMode, {handle: $('#auth-handle').value.trim(), password: $('#auth-password').value,
+      ...(state.authMode === 'register' && state.invitationToken ? {invitation_token: state.invitationToken} : {})});
     const dialogStillOpen = authDialog.open;
     const resumeStart = startIntent?.awaitingSignIn && state.challengeStartIntent === startIntent &&
       !state.user && dialogStillOpen && challengeStartSelectionMatches(startIntent);
@@ -2100,10 +2289,15 @@ $('#auth-form').addEventListener('submit', async event => {
     if (resumeStart && state.user) state.challengeStartIntent = {...startIntent, accountId: state.user.id, awaitingSignIn: false};
     $('#auth-form').reset();
     authDialog.close();
+    if (!hasAccess()) { renderAccessGate(); return; }
+    if (!state.ready) { await loadAuthorizedCatalogue(); return; }
     await loadChallenge({allowAutomatic: dialogStillOpen && (!startIntent || resumeStart)});
     if (state.screen === 'scheme' && state.view === 'leaderboard') await loadLeaderboard();
     toast('Signed in as ' + state.user.handle + '.');
-  } catch (error) { setError('#auth-error', error.message); }
+  } catch (error) {
+    if (authDialog.open) setError('#auth-error', error.message);
+    else globalError(error.message);
+  }
   finally {
     button.disabled = false;
     $('#login-mode').disabled = false;
@@ -2116,6 +2310,7 @@ async function logout() {
   try {
     const data = await api('/api/auth/logout', {});
     setSession(data);
+    if (!hasAccess()) { toast('You are signed out.'); return; }
     renderChallenge();
     if (state.screen === 'scheme' && state.view === 'leaderboard') loadLeaderboard();
     toast('You are signed out.');
@@ -3121,9 +3316,12 @@ $('#download-proposal').addEventListener('click', () => {
 
 // Research records keep claims and their conditions separate from hourly ranking.
 function showWorkspace(name) {
+  if (!hasAccess()) name = 'access';
   if (!RESEARCH_ENABLED && name === 'research') name = 'catalogue';
   const enteringResearch = !research.visible && name === 'research';
   research.visible = name === 'research';
+  $('#access-workspace').hidden = name !== 'access';
+  $('.primary-nav').hidden = name === 'access';
   $('#catalogue-workspace').hidden = name !== 'catalogue';
   $('#workspace').hidden = name !== 'scheme';
   $('#overview-workspace').hidden = name !== 'overview';
@@ -3579,18 +3777,16 @@ async function initialize() {
   globalError('');
   $('#retry-button').disabled = true;
   $('#challenge-loading').hidden = false;
-  const [session, catalogue] = await Promise.allSettled([api('/api/session'), api('/api/schemes')]);
-  if (session.status === 'fulfilled') setSession(session.value);
-  if (catalogue.status === 'fulfilled') {
-    state.schemes = catalogue.value.schemes || [];
-    state.ready = true;
-    applyRoute();
-  } else {
-    showInlineError($('#kem-catalogue'), catalogue.reason.message, initialize);
+  captureInvitation();
+  try {
+    setSession(await api('/api/session'));
+    if (!hasAccess()) return;
+    await loadAuthorizedCatalogue();
+  } catch (error) {
+    if (hasAccess()) { showWorkspace('catalogue'); showInlineError($('#kem-catalogue'), error.message, initialize); }
+    else { globalError(error.message); if (!state.sessionResolved) setText('#access-description', 'Access could not be checked. Try again.'); }
     $('#challenge-loading').hidden = true;
-  }
-  if (session.status === 'rejected') globalError('Sign-in could not be loaded. ' + session.reason.message);
-  $('#retry-button').disabled = false;
+  } finally { $('#retry-button').disabled = false; }
 }
 setInterval(updateClock, 1000);
 setInterval(() => { if (!document.hidden) synchronizeSession(); }, 60000);

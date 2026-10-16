@@ -270,7 +270,7 @@ def test_local_reviewer_assignment_resolves_existing_account_id_and_preserves_ot
 def test_local_grant_cannot_override_production_or_environment_policy(approved, monkeypatch):
     _, _, _, _, settings = approved
     with pytest.raises(ValueError, match='environment-managed'):
-        configure_reviewer(replace(settings, production=True), 'reviewer', grant=True)
+        configure_reviewer(replace(settings, production=True, access_mode="beta"), 'reviewer', grant=True)
     monkeypatch.setenv('CRUCIBLE_REVIEWER_IDS', '')
     with pytest.raises(ValueError, match='environment-managed'):
         configure_reviewer(settings, 'reviewer', grant=True)

@@ -17,12 +17,13 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
-from . import generation, standard_schemes, kem, machine_auth, method_sources, people, protocol_proposals, registry, research
+from . import beta_access, generation, standard_schemes, kem, machine_auth, method_sources, people, protocol_proposals, registry, research
 from .config import ROOT, Settings, load_settings
 from .db import AdapterVersion, Base, Challenge, Database, LoginSession, Method, ProfileIncident, RateBucket, Submission, User
 from .schemas import Credentials, NewChallenge, NewMethod, NewSubmission
 from .security import mac, passwords, payload_mac, target_mac, token_hash, verify_password
 from .public_json import catalogue_response
+from .access_policy import AccessPolicy
 
 
 def current_round(now):
@@ -36,12 +37,31 @@ class RequestBoundary:
     In production also configure proxy body limits/timeouts; do not log bodies.
     No forwarded IP is trusted here. The ASGI server must trust only its proxy.
     """
-    def __init__(self, app, settings, clock, db):
+    def __init__(self, app, settings, clock, db, policy=None):
         self.app, self.settings, self.clock, self.db = app, settings, clock, db
+        self.policy = policy or AccessPolicy()
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
+        original_send = send
+        async def secure_send(message):
+            if message["type"] == "http.response.start":
+                extra = [
+                    (b"x-content-type-options", b"nosniff"),
+                    (b"referrer-policy", b"no-referrer"),
+                    (b"x-frame-options", b"DENY"),
+                    (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
+                    (b"content-security-policy", b"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"),
+                ]
+                if scope["path"].startswith("/api") or self.settings.access_mode == "beta":
+                    extra.append((b"cache-control", b"no-store"))
+                if self.settings.production:
+                    extra.append((b"strict-transport-security", b"max-age=31536000"))
+                replaced = {key for key, _ in extra}
+                message["headers"] = [(key, value) for key, value in message.get("headers", []) if key.lower() not in replaced] + extra
+            await original_send(message)
+        send = secure_send
         headers = {key.lower(): value for key, value in scope["headers"]}
         authorization = [value for key, value in scope["headers"] if key.lower() == b"authorization"]
         machine = False
@@ -59,6 +79,22 @@ class RequestBoundary:
                 return await JSONResponse({"detail": error.detail}, error.status_code,
                                           headers={"Cache-Control": "no-store"})(scope, receive, send)
             machine = True
+        if self.settings.access_mode == "beta":
+            audience = self.policy.audience(scope["method"], scope["path"])
+            if audience is None:
+                return await JSONResponse({"detail": "Not found."}, 404)(scope, receive, send)
+            if audience == "member" and not machine:
+                def admit_browser():
+                    raw = Request(scope).cookies.get(self.settings.cookie_name, "")
+                    with self.db.transaction() as session:
+                        record = session.get(LoginSession, token_hash(raw), populate_existing=True) if raw.isascii() and 0 < len(raw) <= 128 else None
+                        user = session.get(User, record.user_id) if record and record.user_id and record.expires_at > self.clock() else None
+                        beta_access.require_access(session, self.settings, user, self.clock())
+                try:
+                    await run_in_threadpool(admit_browser)
+                except HTTPException as error:
+                    code = "authentication_required" if error.status_code == 401 else "membership_required"
+                    return await JSONResponse({"detail": error.detail, "code": code}, error.status_code)(scope, receive, send)
         unsafe = scope["method"] not in {"GET", "HEAD", "OPTIONS"}
         body = b""
         if unsafe:
@@ -94,22 +130,7 @@ class RequestBoundary:
                 return {"type": "http.request", "body": body, "more_body": False}
             return await receive()
 
-        async def secure_send(message):
-            if message["type"] == "http.response.start":
-                extra = [
-                    (b"x-content-type-options", b"nosniff"),
-                    (b"referrer-policy", b"no-referrer"),
-                    (b"x-frame-options", b"DENY"),
-                    (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
-                    (b"content-security-policy", b"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"),
-                ]
-                if scope["path"].startswith("/api"):
-                    extra.append((b"cache-control", b"no-store"))
-                if self.settings.production:
-                    extra.append((b"strict-transport-security", b"max-age=31536000"))
-                message["headers"] = list(message.get("headers", [])) + extra
-            await send(message)
-        await self.app(scope, buffered_receive, secure_send)
+        await self.app(scope, buffered_receive, send)
 
 
 def create_app(settings: Settings | None = None, *, clock=time.time, initialize=False):
@@ -120,7 +141,13 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         Base.metadata.create_all(db.engine)
     app = FastAPI(title="Crucible recovery API", version="0.1.0", docs_url=None, redoc_url=None)
     app.state.db, app.state.settings, app.state.clock = db, settings, clock
-    app.add_middleware(RequestBoundary, settings=settings, clock=clock, db=db)
+    app.state.generation_limiter = generation.GenerationLimiter(settings.generation_concurrency,
+                                                               max_per_account=settings.generation_per_account)
+    app.state.auth_limiter = generation.GenerationLimiter(settings.auth_concurrency,
+                                                         max_per_account=settings.auth_concurrency)
+    policy = AccessPolicy()
+    app.state.access_policy = policy
+    app.add_middleware(RequestBoundary, settings=settings, clock=clock, db=db, policy=policy)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.hosts)
 
     @app.exception_handler(RequestValidationError)
@@ -142,7 +169,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         raw = request.cookies.get(settings.cookie_name, "")
         record = None
         if raw and raw.isascii() and len(raw) <= 128:
-            record = session.get(LoginSession, token_hash(raw))
+            record = session.get(LoginSession, token_hash(raw), populate_existing=True)
         if record is None or record.expires_at <= clock():
             if required:
                 raise HTTPException(401, "Sign in to continue.")
@@ -160,12 +187,24 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                 raise HTTPException(403, "Your session changed. Refresh and try again.")
         return record
 
-    def user_for(request, session, *, mutation=False):
+    def account_for(request, session, *, mutation=False):
         record = (machine_auth.request_identity(request, session, settings, clock, mutation=mutation)
                   if "authorization" in request.headers else identity(request, session, mutation=mutation))
         if not record.user_id:
             raise HTTPException(401, "Sign in to continue.")
-        return session.get(User, record.user_id)
+        user = session.get(User, record.user_id)
+        if mutation:
+            user = beta_access.lock_user(session, record.user_id)
+            # Recheck credentials after the account lock; revocation takes it first.
+            record = (machine_auth.request_identity(request, session, settings, clock, mutation=True)
+                      if "authorization" in request.headers else identity(request, session, mutation=True))
+            if not record.user_id or user is None or record.user_id != user.id:
+                raise HTTPException(401, "Sign in to continue.")
+        return beta_access.require_not_suspended(session, user)
+
+    def user_for(request, session, *, mutation=False):
+        user = account_for(request, session, mutation=mutation)
+        return beta_access.require_access(session, settings, user, clock(), mutation=mutation)
 
     def issue_session(response, session, user_id=None):
         raw = secrets.token_urlsafe(32)
@@ -174,18 +213,30 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                             secure=settings.production, samesite="strict", path="/")
         return raw
 
-    def session_payload(user, raw):
-        return envelope(user={"id": user.id, "handle": user.handle} if user else None,
-                        capabilities={"review_protocol_proposals": protocol_proposals.is_reviewer(settings, user),
-                                      "self_review_protocol_proposals": protocol_proposals.can_self_review(settings, user)},
+    def session_payload(user, raw, session):
+        access = beta_access.access_payload(session, settings, user)
+        return envelope(user={"id": user.id, "handle": user.handle} if user else None, access=access,
+                        capabilities={"manage_beta_access": beta_access.is_admin(settings, user) and access["allowed"],
+                                      "review_protocol_proposals": protocol_proposals.is_reviewer(settings, user) and access["allowed"],
+                                      "self_review_protocol_proposals": protocol_proposals.can_self_review(settings, user) and access["allowed"]},
                         csrf_token=mac(settings.secret, "csrf-v1", raw.encode("ascii")))
 
-    def throttle(request, name, limit, seconds, extra="", *, account_id=None):
+    def password_operation(operation, *arguments):
+        # Argon2 uses 64 MiB per operation. Bound memory independently of native
+        # challenge work; do not fill the request threadpool waiting for a slot.
+        try:
+            with app.state.auth_limiter.slot("password"):
+                return operation(*arguments)
+        except generation.GenerationBusy:
+            raise HTTPException(503, "Sign-in is busy. Please retry shortly.", headers={"Retry-After": "2"}) from None
+
+    def throttle(request, name, limit, seconds, extra="", *, account_id=None, handle=None):
         if not settings.rate_limits:
             return
         # Persist counters in their own transaction so rejected operations count.
         peer = request.client.host if request.client else "unknown"
-        subject = f"{name}:account:{account_id}" if account_id is not None else f"{name}:{peer}:{extra}"
+        subject = (f"{name}:account:{account_id}" if account_id is not None else
+                   f"{name}:handle:{handle}" if handle is not None else f"{name}:{peer}:{extra}")
         key = mac(settings.secret, "rate-v1", subject.encode())
         now = clock()
         bucket = int(now) // seconds
@@ -280,7 +331,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
 
     @app.get("/api/session")
     def get_session(request: Request):
-        throttle(request, "session", 90, 60)
+        throttle(request, "session", 300, 60)
         response = JSONResponse({})
         with db.transaction(write=True) as session:
             record = session_for(request, session)
@@ -288,26 +339,30 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             if not record:
                 raw = issue_session(response, session)
             user = session.get(User, record.user_id) if record and record.user_id else None
-            response.body = json.dumps(session_payload(user, raw)).encode()
+            response.body = json.dumps(session_payload(user, raw, session)).encode()
             response.headers["content-length"] = str(len(response.body))
         return response
 
     @app.post("/api/auth/register")
     def register(body: Credentials, request: Request):
-        throttle(request, "register", 5, 3600)
+        throttle(request, "register", 200 if settings.access_mode == "beta" else 5, 3600)
         with db.transaction() as session:
             identity(request, session, mutation=True)
-        encoded = passwords.hash(body.password)
+            if settings.access_mode == "beta":
+                beta_access.validate_registration_invitation(session, body.invitation_token, clock())
+        encoded = password_operation(passwords.hash, body.password)
         response = JSONResponse({})
         try:
             with db.transaction(write=True) as session:
                 previous = identity(request, session, mutation=True)
+                if settings.access_mode == "beta":
+                    beta_access.validate_registration_invitation(session, body.invitation_token, clock(), lock=True)
                 user = User(id=str(uuid4()), handle=body.handle, password_hash=encoded, created_at=clock())
                 session.add(user)
                 session.flush()
                 session.delete(previous)
                 raw = issue_session(response, session, user.id)
-                response.body = json.dumps(session_payload(user, raw)).encode()
+                response.body = json.dumps(session_payload(user, raw, session)).encode()
                 response.headers["content-length"] = str(len(response.body))
         except IntegrityError:
             raise HTTPException(409, "That handle is unavailable.")
@@ -315,24 +370,28 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
 
     @app.post("/api/auth/login")
     def login(body: Credentials, request: Request):
-        throttle(request, "login-ip", 30, 900)
-        throttle(request, "login-handle", 10, 900, body.handle)
+        throttle(request, "login-ip", 600 if settings.access_mode == "beta" else 30, 900)
+        throttle(request, "login-handle", 10, 900, handle=body.handle)
         with db.transaction() as session:
             identity(request, session, mutation=True)
             user = session.scalar(select(User).where(User.handle == body.handle))
-            valid = verify_password(user.password_hash if user else None, body.password)
-            if not user or not valid:
-                raise HTTPException(401, "Handle or password is incorrect.")
-            user_id = user.id
+            user_id, encoded = (user.id, user.password_hash) if user else (None, None)
+        valid = password_operation(verify_password, encoded, body.password)
+        if not user_id or not valid:
+            raise HTTPException(401, "Handle or password is incorrect.")
+        replacement = password_operation(passwords.hash, body.password) if passwords.check_needs_rehash(encoded) else None
         response = JSONResponse({})
         with db.transaction(write=True) as session:
+            user = beta_access.lock_user(session, user_id)
+            beta_access.require_not_suspended(session, user)
+            if user.password_hash != encoded:
+                raise HTTPException(401, "Your credentials changed. Please sign in again.")
             previous = identity(request, session, mutation=True)
             session.delete(previous)
-            user = session.get(User, user_id)
-            if passwords.check_needs_rehash(user.password_hash):
-                user.password_hash = passwords.hash(body.password)
+            if replacement:
+                user.password_hash = replacement
             raw = issue_session(response, session, user_id)
-            response.body = json.dumps(session_payload(user, raw)).encode()
+            response.body = json.dumps(session_payload(user, raw, session)).encode()
             response.headers["content-length"] = str(len(response.body))
         return response
 
@@ -343,7 +402,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             session.delete(previous)
             response = JSONResponse({})
             raw = issue_session(response, session)
-            response.body = json.dumps(session_payload(None, raw)).encode()
+            response.body = json.dumps(session_payload(None, raw, session)).encode()
             response.headers["content-length"] = str(len(response.body))
         return response
 
@@ -438,14 +497,20 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
 
     @app.post("/api/challenges")
     def start_challenge(body: NewChallenge, request: Request):
-        throttle(request, "issue", 30, 60)
+        throttle(request, "issue", 1200, 60)
         manifest = challenge_manifest(body)
         profile_id = manifest["id"]
         adapter = adapter_for(manifest["version"], manifest["scheme_id"])
         # Adapters are an explicit code registry; proposals never execute uploads.
         local_beta = (not settings.production and manifest["scheme_id"] in standard_schemes.SCHEMES
                       and manifest.get("profile_kind") in {"standard-parameter-set", "research-tier"})
-        if not manifest.get("educational") and not local_beta:
+        hosted_beta = (settings.production and settings.access_mode == "beta" and
+                       f'{manifest["scheme_id"]}@{manifest["version"]}' in settings.beta_releases)
+        if settings.production:
+            eligible = hosted_beta
+        else:
+            eligible = manifest.get("educational") or local_beta
+        if not eligible:
             raise HTTPException(409, "This profile has not been admitted to this challenge track.")
 
         def preflight(session, *, expected_user=None, expected_round=None):
@@ -512,25 +577,29 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             # lock. Cross-process duplicates still converge in the final phase.
             attempt_id = None
             tracked = manifest.get("profile_kind") in {"standard-parameter-set", "research-tier"}
-            try:
+            with app.state.generation_limiter.slot(user_id):
+                # Quota/ledger failures are infrastructure failures, not evidence
+                # of a faulty cryptographic profile. Only classify adapter errors.
+                # Revisits and saturation retries do not consume this allowance.
+                throttle(request, "generation-account", 30, 60, account_id=user_id)
                 if tracked:
-                    with generation.generation_slot():
-                        attempt_id = generation.start_attempt(db, manifest, user_id, round_["id"], clock())
-                        generated = adapter.generate(profile_id)
-                else:
+                    attempt_id = generation.start_attempt(db, manifest, user_id, round_["id"], clock())
+                try:
                     generated = adapter.generate(profile_id)
-            except generation.GenerationBusy:
-                raise
-            except Exception as error:
-                limit_types = tuple(kind for name in ("PrimeGenerationLimit", "GenerationLimit", "GenerationUnavailable", "GenerationResourceLimit")
-                                    if isinstance(kind := getattr(adapter, name, None), type))
-                limited = bool(limit_types and isinstance(error, limit_types))
-                if attempt_id:
-                    generation.finish_attempt(db, attempt_id, clock(), "generation_abort" if limited else "implementation_fault", "unissued")
-                if limited:
-                    raise HTTPException(503, "Parameter generation is unavailable or exceeded its resource allowance. Please retry later.") from None
-                record_incident({"reason": "adapter_execution_failed"})
-                raise HTTPException(503, "This profile encountered an implementation fault and is paused for review.") from None
+                except generation.GenerationBusy:
+                    raise
+                except HTTPException:
+                    raise
+                except Exception as error:
+                    limit_types = tuple(kind for name in ("PrimeGenerationLimit", "GenerationLimit", "GenerationUnavailable", "GenerationResourceLimit")
+                                        if isinstance(kind := getattr(adapter, name, None), type))
+                    limited = bool(limit_types and isinstance(error, limit_types))
+                    if attempt_id:
+                        generation.finish_attempt(db, attempt_id, clock(), "generation_abort" if limited else "implementation_fault", "unissued")
+                    if limited:
+                        raise HTTPException(503, "Parameter generation is unavailable or exceeded its resource allowance. Please retry later.") from None
+                    record_incident({"reason": "adapter_execution_failed"})
+                    raise HTTPException(503, "This profile encountered an implementation fault and is paused for review.") from None
             if not generated.diagnostics.get("shared_secret_matches", False):
                 # Hold all mismatches without retrying or calling a mathematical
                 # failure an implementation bug. No secrets enter this ledger.
@@ -849,4 +918,6 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     people.register_routes(app, db, envelope)
     research.register_routes(app, db, settings, clock, user_for, throttle)
     protocol_proposals.register_routes(app, db, settings, clock, user_for, throttle)
+    beta_access.register_routes(app, db, settings, clock, account_for, throttle)
+    policy.register(app.routes)
     return app

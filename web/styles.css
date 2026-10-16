@@ -46,6 +46,23 @@ body {
   display: none!important;
 }
 
+.access-workspace {
+  max-width: 520px;
+  margin: clamp(44px, 12vh, 120px) auto;
+  padding: 32px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.access-workspace h1 { font: 600 36px/1.15 var(--display); color: var(--ink); }
+.access-workspace p { margin: 14px 0; }
+.access-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+#access-code-form { display: grid; gap: 12px; margin-top: 20px; }
+#access-code { width: 100%; min-width: 0; letter-spacing: .16em; }
+#access-verification { margin-top: 24px; }
+#access-send-code { margin-bottom: 4px; }
+@media (max-width: 480px) { .access-workspace { padding: 24px; } }
+
 h1,h2,h3,h4,p {
   margin: 0;
 }

@@ -12,6 +12,7 @@ from crucible import scoring_awards  # Register explicit scheme admission credit
 from crucible import machine_auth  # Register scoped agent credentials and browser handoff.
 from crucible import generation  # Register non-secret generation outcome evidence.
 from crucible import method_sources  # Register immutable uploaded method source bundles.
+from crucible import beta_access  # Register invitations, membership and verified mailboxes.
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

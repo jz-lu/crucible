@@ -1069,13 +1069,13 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.deepEqual(railButtons(app).filter(isLargestRecovery).map(railSize), [22]);
     assert.equal(app.requests.some(request => request.options.method === 'POST'), false);
   });
-  await test('public catalogue remains available when session creation fails', async () => {
+  await test('a session outage never assumes the catalogue is public', async () => {
     const app = await createApp({schemes, responder: url => {
       if (url.pathname === '/api/session') throw new Error('Simulated session outage');
     }});
-    assert.equal(app.$('#catalogue-workspace').hidden, false);
-    assert.match(app.$('#kem-catalogue').textContent, /Alpha <KEM>/);
-    assert.match(app.$('#kem-catalogue').textContent, /Beta KEM/);
+    assert.equal(app.$('#catalogue-workspace').hidden, true);
+    assert.equal(app.requests.some(request => request.url.pathname === '/api/schemes'), false);
+    assert.equal(app.$('#global-message').hidden, false);
     assert.equal(app.requests.some(request => request.options.method === 'POST'), false);
   });
   await test('deep links select an exact KEM, version, profile and protocol view', async () => {

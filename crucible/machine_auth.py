@@ -20,6 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base, User
+from . import beta_access
 from .security import token_hash
 
 
@@ -126,13 +127,21 @@ def authorize(header, method, path, session, settings, clock, *, mutation=False)
     if scope is None:
         raise HTTPException(403, "Agent credentials cannot access this action. Use your browser account.")
     query = select(MachineToken).where(MachineToken.token_hash == token_hash(raw))
-    if mutation:
-        query = query.with_for_update()
     token = session.scalar(query)
     if token is None or token.revoked_at is not None or token.expires_at <= clock():
         raise HTTPException(401, "Invalid or expired agent credential.")
     if not isinstance(token.scopes, list) or scope not in token.scopes:
         raise HTTPException(403, "This agent credential does not allow that action.")
+    user = session.get(User, token.user_id)
+    beta_access.require_access(session, settings, user, clock(), mutation=mutation)
+    if mutation:
+        # Membership revocation locks User before credentials. Match that order
+        # and re-read the token after waiting, so a stale approval cannot win.
+        token = session.scalar(query.with_for_update().execution_options(populate_existing=True))
+        if token is None or token.revoked_at is not None or token.expires_at <= clock():
+            raise HTTPException(401, "Invalid or expired agent credential.")
+        if not isinstance(token.scopes, list) or scope not in token.scopes:
+            raise HTTPException(403, "This agent credential does not allow that action.")
     return token
 
 
@@ -180,7 +189,7 @@ def _token_data(token, now):
 def register_routes(app, db, settings, clock, user_for, throttle):
     @app.post("/api/agent/connect/start")
     def start(body: ConnectInput, request: Request):
-        throttle(request, "agent-connect-start", 10, 600)
+        throttle(request, "agent-connect-start", 300 if settings.access_mode == "beta" else 10, 600)
         for _ in range(3):
             raw = "crd_" + secrets.token_urlsafe(32)
             code = "".join(secrets.choice(_USER_ALPHABET) for _ in range(8))
@@ -207,15 +216,25 @@ def register_routes(app, db, settings, clock, user_for, throttle):
     @app.post("/api/agent/connect/poll")
     def poll(body: PollInput, request: Request):
         digest = token_hash(body.device_code)
-        throttle(request, "agent-connect-poll-ip", 120, 60)
+        # A cohort may share one institutional egress address. Per-device
+        # polling intervals and counters remain authoritative within this cap.
+        throttle(request, "agent-connect-poll-ip", 5000 if settings.access_mode == "beta" else 120, 60)
         throttle(request, "agent-connect-poll-device", 60, 60, digest)
         with db.transaction(write=True) as session:
-            connection = session.scalar(select(DeviceConnection).where(
-                DeviceConnection.device_hash == digest).with_for_update())
+            query = select(DeviceConnection).where(DeviceConnection.device_hash == digest)
+            connection = session.scalar(query)
+            observed_owner = connection.approved_user_id if connection else None
+            if observed_owner:
+                beta_access.lock_user(session, observed_owner)
+            connection = session.scalar(query.with_for_update().execution_options(populate_existing=True))
             now = clock()
             status = _status(connection, now) if connection else "expired"
             if status in {"expired", "denied"}:
                 return {"status": status, "interval": POLL_INTERVAL}
+            if connection.approved_user_id != observed_owner:
+                # Approval arrived while acquiring the connection lock. Retry
+                # in User->Connection order instead of inverting revocation.
+                return {"status": "pending", "interval": POLL_INTERVAL}
             if status == "pending":
                 if connection.last_polled_at is not None and now < connection.last_polled_at + POLL_INTERVAL:
                     raise HTTPException(429, "Wait before checking this connection again.", headers={"Retry-After": str(POLL_INTERVAL)})
@@ -224,6 +243,10 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             user = session.get(User, connection.approved_user_id)
             if user is None:
                 return {"status": "expired", "interval": POLL_INTERVAL}
+            try:
+                beta_access.require_access(session, settings, user, now)
+            except HTTPException:
+                return {"status": "denied", "interval": POLL_INTERVAL}
             raw = _derived_token(settings, body.device_code, connection.id)
             if connection.token_id is None:
                 token = MachineToken(id=str(uuid4()), user_id=user.id, token_hash=token_hash(raw),
@@ -252,7 +275,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
 
     @app.get("/api/agent/connect/{code}")
     def preview(code: str, request: Request):
-        throttle(request, "agent-connect-preview", 60, 60)
+        throttle(request, "agent-connect-preview", 600 if settings.access_mode == "beta" else 60, 60)
         with db.transaction() as session:
             user = user_for(request, session)
             connection = owned_connection(session, code, user)
@@ -260,7 +283,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
 
     @app.post("/api/agent/connect/{code}/approve")
     def approve(code: str, body: EmptyInput, request: Request):
-        throttle(request, "agent-connect-approve", 20, 600)
+        throttle(request, "agent-connect-approve", 600 if settings.access_mode == "beta" else 20, 600)
         with db.transaction(write=True) as session:
             user = user_for(request, session, mutation=True)
             connection = owned_connection(session, code, user, write=True)
@@ -274,7 +297,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
 
     @app.post("/api/agent/connect/{code}/deny")
     def deny(code: str, body: EmptyInput, request: Request):
-        throttle(request, "agent-connect-deny", 20, 600)
+        throttle(request, "agent-connect-deny", 600 if settings.access_mode == "beta" else 20, 600)
         with db.transaction(write=True) as session:
             user = user_for(request, session, mutation=True)
             connection = owned_connection(session, code, user, write=True)

@@ -1,6 +1,7 @@
 """Bound generation work and retain a denominator without retaining secrets."""
 from contextlib import contextmanager
 import threading
+import time
 from uuid import uuid4
 
 from sqlalchemy import Float, ForeignKey, Index, Integer, String
@@ -29,9 +30,93 @@ class GenerationBusy(RuntimeError):
     pass
 
 
-# Two in-flight native workers per service process. Production must additionally
-# bound worker/process counts at the deployment layer; this is not a global
-# distributed quota. Saturation does not draw randomness or create an attempt.
+class GenerationLimiter:
+    """Non-queueing admission for one app's expensive generation work.
+
+    The account limit covers different schemes/profiles too. Neither rejection
+    draws randomness nor opens a database transaction. This is process-local:
+    deployments must also bound the number of app processes. Account identifiers
+    are retained only while their slots are active and never enter snapshots.
+    """
+
+    def __init__(self, max_inflight=2, *, max_per_account=1):
+        if type(max_inflight) is not int or max_inflight < 1:
+            raise ValueError("Generation capacity must be a positive integer")
+        if type(max_per_account) is not int or not 1 <= max_per_account <= max_inflight:
+            raise ValueError("Per-account capacity must be between one and total capacity")
+        self.max_inflight = max_inflight
+        self.max_per_account = max_per_account
+        self._lock = threading.Lock()
+        self._accounts = {}
+        self._inflight = self._peak = self._started = self._completed = self._failed = 0
+        self._busy_capacity = self._busy_account = 0
+        self._duration_seconds = self._max_duration_seconds = 0.0
+
+    @contextmanager
+    def slot(self, account_id):
+        """Acquire immediately or raise GenerationBusy; release on every exit.
+
+        Hold this only around generation, outside DB transactions. Timing covers
+        the admitted block, not a request's authentication or commit. A completed
+        block is not a claim of cryptographic correctness or successful issuance.
+        """
+        if not isinstance(account_id, str) or not account_id:
+            raise ValueError("Generation requires an account identifier")
+        with self._lock:
+            account_active = self._accounts.get(account_id, 0)
+            if account_active >= self.max_per_account:
+                self._busy_account += 1
+                raise GenerationBusy("This account already has generation in progress")
+            if self._inflight >= self.max_inflight:
+                self._busy_capacity += 1
+                raise GenerationBusy("Generation capacity is busy")
+            started = time.monotonic()
+            self._accounts[account_id] = account_active + 1
+            self._inflight += 1
+            self._started += 1
+            self._peak = max(self._peak, self._inflight)
+        failed = True
+        try:
+            yield
+            failed = False
+        finally:
+            elapsed = max(0.0, time.monotonic() - started)
+            with self._lock:
+                remaining = self._accounts[account_id] - 1
+                if remaining:
+                    self._accounts[account_id] = remaining
+                else:
+                    del self._accounts[account_id]
+                self._inflight -= 1
+                self._completed += 1
+                self._failed += int(failed)
+                self._duration_seconds += elapsed
+                self._max_duration_seconds = max(self._max_duration_seconds, elapsed)
+
+    def snapshot(self):
+        """Aggregate process-local counters since startup; no user data.
+
+        `completed` includes blocks that raised, recorded separately as `failed`.
+        Durations include completed blocks only; counters reset on app restart.
+        """
+        with self._lock:
+            return {
+                "max_inflight": self.max_inflight,
+                "max_per_account": self.max_per_account,
+                "inflight": self._inflight,
+                "peak_inflight": self._peak,
+                "started": self._started,
+                "completed": self._completed,
+                "failed": self._failed,
+                "busy_capacity": self._busy_capacity,
+                "busy_account": self._busy_account,
+                "duration_seconds": self._duration_seconds,
+                "max_duration_seconds": self._max_duration_seconds,
+            }
+
+
+# Compatibility for callers of the original helper. The app uses its own
+# GenerationLimiter so separate app instances do not share this legacy quota.
 _slots = threading.BoundedSemaphore(2)
 _instances = set()
 _instance_lock = threading.Lock()

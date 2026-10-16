@@ -11,12 +11,8 @@
     </title>
     <link rel="stylesheet" href="/vendor/katex/katex.min.css">
     <link rel="stylesheet" href="/styles.css">
-    <link rel="stylesheet" href="/notebook/notebook.css">
     <script src="/vendor/katex/katex.min.js" defer></script>
     <script src="/math.js" defer></script>
-    <script src="/notebook/seed.js" defer></script>
-    <script src="/notebook/store.js" defer></script>
-    <script src="/notebook/notebook.js" defer></script>
     <script src="/app.js" defer>
     </script>
   </head>
@@ -32,7 +28,7 @@
             Crucible
           </span>
         </a>
-        <nav class="primary-nav" aria-label="Main navigation">
+        <nav class="primary-nav" aria-label="Main navigation" hidden>
           <button id="nav-challenge" class="nav-button selected" type="button" aria-current="page">
             Schemes
           </button>
@@ -73,7 +69,27 @@
           Try again
         </button>
       </div>
-      <section id="catalogue-workspace" class="catalogue-workspace" aria-labelledby="catalogue-title" tabindex="-1">
+      <section id="access-workspace" class="access-workspace" aria-labelledby="access-title" tabindex="-1">
+        <h1 id="access-title">Crucible</h1>
+        <p id="access-description" role="status">Checking access…</p>
+        <div id="access-auth-actions" class="access-actions" hidden>
+          <button id="access-sign-in" class="button button-primary" type="button">Sign in</button>
+          <button id="access-register" class="button button-quiet" type="button" hidden>Create account</button>
+        </div>
+        <div id="access-verification" hidden>
+          <p id="access-account"></p>
+          <button id="access-send-code" class="button button-primary" type="button">Email a verification code</button>
+          <form id="access-code-form" hidden>
+            <label for="access-code">Code from your invitation email</label>
+            <input id="access-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12" required>
+            <button id="access-redeem" class="button button-primary" type="submit">Join Crucible</button>
+          </form>
+          <p id="access-delivery" class="field-hint" role="status"></p>
+        </div>
+        <button id="access-continue" class="button button-primary" type="button" hidden>Continue to Crucible</button>
+        <p id="access-error" class="form-error" role="alert" hidden></p>
+      </section>
+      <section id="catalogue-workspace" class="catalogue-workspace" aria-labelledby="catalogue-title" tabindex="-1" hidden>
         <div class="catalogue-heading">
           <div>
             <h1 id="catalogue-title">KEM Schemes</h1>

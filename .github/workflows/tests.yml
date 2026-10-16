@@ -39,6 +39,9 @@ jobs:
           tests/test_classical_frontier_audit.py
           tests/test_cli.py
           tests/test_kem.py
+          tests/test_beta_invitations.py
+          tests/test_beta_operator.py
+          tests/test_beta_migration.py
       - name: Run all standalone frontend regressions
         run: |
           node --version

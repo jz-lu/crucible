@@ -1,3 +1,39 @@
+Current checkpoint — Private beta foundation, 16 October 2026
+
+- Implement explicit membership, recipient-bound invitations with mailbox proof,
+  revocation/suspension, audit events and one browser/agent access policy. Existing
+  account identities/history are preserved; migration 0009 grants no memberships.
+- Keep local development open by default. Enable its beta gate deliberately after
+  granting existing participants. Operator CLI accepts handles and records UUIDs;
+  API administration uses separately configured account UUIDs. Mail is disabled
+  by default; explicit local outbox mode supports isolated workflow testing.
+- Production requires beta access and an explicit release allowlist for challenge
+  issuance, retaining source/artifact checks and independent-admission status.
+  Public mode awaits per-record publication policy; private beta contributions
+  must not become public through a site-wide toggle.
+- Bound all generation, including DH/RSA, to two in-flight jobs per app by default,
+  one per account; separate password-work capacity defaults to two. Immediate busy
+  responses carry Retry-After. Keep generation lazy and reuse each account's
+  existing instance for that configuration and hourly round.
+- Capacity verification: 45 focused tests passed. An isolated 150-request ASGI
+  burst admitted two synthetic jobs and rejected 148 as busy; independent reads
+  completed while generation was held, with no leaked slots. This is admission
+  verification, not a real-crypto, PostgreSQL, network or hosted-capacity result.
+- Additional checks cover invitation ownership/replay/revocation, private routes,
+  agent credentials, cross-IP login throttling and migration preservation. All
+  12 frontend suites passed, plus desktop/mobile browser invitation and sign-out
+  flows. Notebook styles now load only after admission alongside its scripts.
+- Quota or generation-ledger database failures no longer quarantine a healthy
+  cryptographic profile. Added regressions distinguish infrastructure failures
+  from adapter faults and ensure busy/reused requests preserve generation quotas.
+- docs/private-beta-setup.txt and .env.example describe operator setup, optional
+  invitation testing, capacity settings and the remaining gates. Target 100–150
+  active participants remains unvalidated on a host. No service was provisioned.
+- Pending: reviewed native Linux artifact identities/builds; actual PostgreSQL
+  concurrency, backup/restore and realistic hosted load; production email and
+  account recovery; ORCID linking; shared notebook persistence/API/review; and
+  explicit publication decisions before public launch. No live-state reset.
+
 Current checkpoint — Notebook integration and bounded robustness pass, 16 October 2026
 
 - Native Research notebook tab: title list, tag/claim previews and full note pages.

@@ -1,5 +1,5 @@
 """Configuration. Local convenience must not silently become production defaults."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import base64
 import json
 import os
@@ -13,17 +13,60 @@ ROOT = Path(__file__).resolve().parent.parent
 @dataclass(frozen=True)
 class Settings:
     database_url: str
-    secret: bytes
+    secret: bytes = field(repr=False)
     origins: tuple[str, ...] = ("http://127.0.0.1:8000", "http://localhost:8000")
     production: bool = False
     rate_limits: bool = True
     session_seconds: int = 86400
     reviewer_ids: tuple[str, ...] = ()
     allow_self_review: bool = False
+    access_mode: str = "open"
+    access_admin_ids: tuple[str, ...] = ()
+    generation_concurrency: int = 2
+    generation_per_account: int = 1
+    auth_concurrency: int = 2
+    beta_releases: tuple[str, ...] = ()
+    mail_backend: str = "disabled"
+    mail_outbox_dir: str | None = None
+    mail_from: str = ""
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = field(default="", repr=False)
+    smtp_starttls: bool = True
 
     def __post_init__(self):
         if type(self.allow_self_review) is not bool or (self.production and self.allow_self_review):
             raise RuntimeError("Self-review is available only through an explicit development setting.")
+        if self.access_mode not in {"open", "beta"}:
+            raise RuntimeError("Access mode must be open or beta.")
+        if self.production and self.access_mode != "beta":
+            raise RuntimeError("Production currently requires beta access; public publication policy is not implemented.")
+        for name in ("generation_concurrency", "generation_per_account", "auth_concurrency"):
+            if type(getattr(self, name)) is not int or not 1 <= getattr(self, name) <= 32:
+                raise RuntimeError(f"{name} must be an integer from 1 to 32.")
+        if self.generation_per_account > self.generation_concurrency:
+            raise RuntimeError("Per-account generation capacity cannot exceed total capacity.")
+        if self.mail_backend not in {"disabled", "local", "smtp"}:
+            raise RuntimeError("Mail backend must be disabled, local, or smtp.")
+        if self.production and self.mail_backend == "local":
+            raise RuntimeError("Local mail delivery is for development only.")
+        if self.mail_backend == "local" and not self.mail_outbox_dir:
+            raise RuntimeError("Local mail delivery requires an explicit private outbox directory.")
+        if self.mail_backend == "smtp" and (not self.smtp_host or not self.mail_from or
+                type(self.smtp_port) is not int or not 1 <= self.smtp_port <= 65535 or
+                not self.smtp_starttls):
+            raise RuntimeError("SMTP requires a host, sender, valid port and TLS.")
+        if any("\n" in value or "\r" in value for value in (self.mail_from, self.smtp_host)):
+            raise RuntimeError("Invalid mail configuration.")
+        try:
+            if any(str(UUID(value)) != value for value in self.access_admin_ids):
+                raise ValueError
+        except (ValueError, TypeError, AttributeError):
+            raise RuntimeError("Access administrators must be explicit account UUIDs.") from None
+        if any(not isinstance(value, str) or value.count("@") != 1 or
+               not all(value.split("@")) for value in self.beta_releases):
+            raise RuntimeError("Beta releases must use scheme_id@version identifiers.")
 
     @property
     def cookie_name(self):
@@ -113,5 +156,29 @@ def load_settings() -> Settings:
         reviewers = tuple(dict.fromkeys(str(UUID(value)) for value in identifiers))
     except (ValueError, OSError, TypeError, AttributeError):
         raise RuntimeError("Reviewer configuration must contain explicit account UUIDs.") from None
+    def number(name, default):
+        try:
+            return int(os.getenv(name, str(default)))
+        except ValueError:
+            raise RuntimeError(f"{name} must be an integer.") from None
+    try:
+        admins = tuple(dict.fromkeys(str(UUID(value.strip())) for value in
+                       os.getenv("CRUCIBLE_ACCESS_ADMIN_IDS", "").split(",") if value.strip()))
+    except ValueError:
+        raise RuntimeError("CRUCIBLE_ACCESS_ADMIN_IDS requires explicit account UUIDs.") from None
+    tls = os.getenv("CRUCIBLE_SMTP_STARTTLS", "true")
+    if tls not in {"true", "false"}:
+        raise RuntimeError("CRUCIBLE_SMTP_STARTTLS must be true or false.")
     return Settings(database_url=database_url, secret=secret, origins=origins, production=production,
-                    reviewer_ids=reviewers, allow_self_review=self_review == "true")
+                    reviewer_ids=reviewers, allow_self_review=self_review == "true",
+                    access_mode=os.getenv("CRUCIBLE_ACCESS_MODE", "beta" if production else "open"),
+                    access_admin_ids=admins,
+                    generation_concurrency=number("CRUCIBLE_GENERATION_CONCURRENCY", 2),
+                    generation_per_account=number("CRUCIBLE_GENERATION_PER_ACCOUNT", 1),
+                    auth_concurrency=number("CRUCIBLE_AUTH_CONCURRENCY", 2),
+                    beta_releases=tuple(value.strip() for value in os.getenv("CRUCIBLE_BETA_RELEASES", "").split(",") if value.strip()),
+                    mail_backend=os.getenv("CRUCIBLE_MAIL_BACKEND", "disabled"),
+                    mail_outbox_dir=os.getenv("CRUCIBLE_MAIL_OUTBOX_DIR"),
+                    mail_from=os.getenv("CRUCIBLE_MAIL_FROM", ""), smtp_host=os.getenv("CRUCIBLE_SMTP_HOST", ""),
+                    smtp_port=number("CRUCIBLE_SMTP_PORT", 587), smtp_username=os.getenv("CRUCIBLE_SMTP_USERNAME", ""),
+                    smtp_password=os.getenv("CRUCIBLE_SMTP_PASSWORD", ""), smtp_starttls=tls == "true")

@@ -409,12 +409,13 @@ def test_reviewer_capability_is_explicit_stable_account_id_and_defaults_false(re
     app, clock, settings, alice, reviewer, bob = review_system
     for actor, allowed in ((alice, False), (reviewer, True), (bob, False)):
         result = actor.client.get("/api/session").json()
-        assert result["capabilities"] == {"review_protocol_proposals": allowed, "self_review_protocol_proposals": False}
-    assert TestClient(app).get("/api/session").json()["capabilities"] == {"review_protocol_proposals": False, "self_review_protocol_proposals": False}
+        assert result["capabilities"] == {"review_protocol_proposals": allowed, "self_review_protocol_proposals": False,
+                                          "manage_beta_access": False}
+    assert TestClient(app).get("/api/session").json()["capabilities"] == {"review_protocol_proposals": False, "self_review_protocol_proposals": False, "manage_beta_access": False}
     unconfigured = create_app(replace(settings, reviewer_ids=()), clock=lambda: clock[0])
     client = TestClient(unconfigured)
     client.cookies.update(reviewer.client.cookies)
-    assert client.get("/api/session").json()["capabilities"] == {"review_protocol_proposals": False, "self_review_protocol_proposals": False}
+    assert client.get("/api/session").json()["capabilities"] == {"review_protocol_proposals": False, "self_review_protocol_proposals": False, "manage_beta_access": False}
     assert client.get("/api/protocol/review-queue").status_code == 403
     unconfigured.state.db.engine.dispose()
     assert alice.client.get("/api/protocol/review-queue").status_code == 403
@@ -703,7 +704,7 @@ def test_development_self_review_requires_explicit_flag_and_remains_test_only(re
         reviewer.client = client
         try:
             assert client.get('/api/session').json()['capabilities'] == {
-                'review_protocol_proposals': True, 'self_review_protocol_proposals': True}
+                'review_protocol_proposals': True, 'self_review_protocol_proposals': True, 'manage_beta_access': False}
             own = submit(reviewer)
             assert own['id'] in {row['id'] for row in client.get('/api/protocol/review-queue').json()['proposals']}
             body = review_body(own)

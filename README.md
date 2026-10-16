@@ -101,9 +101,12 @@ Open **http://127.0.0.1:8000**. On a fresh checkout, the script creates a virtua
 environment, installs pinned dependencies, applies database migrations, and
 starts the server on loopback. Stop it with Ctrl+C. No Node build is needed.
 
-Create an account with a public handle and a password of 12–128 characters. This
-local iteration has no email verification or password-reset service; use a
-password manager. Sessions last 24 hours and can be ended with Sign out.
+In default open local mode, create an account with a public handle and a password
+of 12–128 characters. Optional private beta mode requires explicit membership or
+an invitation with mailbox verification. See [private beta setup](docs/private-beta-setup.txt)
+for operator controls and local mail testing. Password recovery and ORCID linking
+remain pending; use a password manager. Sessions last 24 hours and can be ended
+with Sign out.
 
 The default SQLite database and persistent server key live in ignored `.local/`.
 Back them up together. Changing the key makes old pending answers unverifiable.
@@ -414,12 +417,14 @@ not automatically loaded. SQLite is the tested local database. PostgreSQL is
 supported by the persistence layer and migrations; its concurrency behavior still
 needs integration testing before a public release.
 
-Production mode requires PostgreSQL, an explicit HTTPS origin and a persistent
-random server secret. See `.env.example`. That guard is **not a claim of production
+Production mode requires PostgreSQL, an explicit HTTPS origin, a persistent
+random server secret and beta access. Issuing hosted challenges also requires an
+explicit release allowlist. See `.env.example`. These guards are **not a claim of production
 readiness**: identity/recovery policy, abuse/moderation, hosting limits, proxy
 trust, monitoring, backups, and independent admission/security review remain.
 
 - [Architecture and API](docs/architecture.txt)
+- [Private beta setup and release gates](docs/private-beta-setup.txt)
 - [Private beta and public hosting direction](docs/hosting-plan.txt)
 - [Current and remaining decisions](docs/implementation-v1.txt)
 - [Correctness policy](docs/correctness-policy-v0.txt)
