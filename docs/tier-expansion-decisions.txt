@@ -1,0 +1,228 @@
+Current parameter-efficiency revision — 2026-10-16
+=================================================
+This section supersedes the applicable mappings in the historical records below.
+It does not rewrite their parameters, sources, scientific claims or receipts.
+
+Current family                       Natural tiers    Release
+Finite-field DH                      50               7
+RSA                                  50               4
+Elliptic-curve DH                     50               curve-compressed-v2
+Module-lattice encryption            11               packed-research-v3
+FrodoKEM                             74               frontier-research-v2
+Streamlined NTRU Prime                27               3
+HQC                                  27               growth-research-v2
+Classic McEliece                     50               length-research-v1
+
+339 current profiles across eight pages. Six new releases improve parameters or
+representations under stated objectives. No comparison asserts a global optimum:
+DH's short-exponent reference is restricted; RSA/EC/module improvements remove
+representation overhead; Frodo searches a fixed-modulus/noise construction; NTRU
+uses a finite candidate pool and incomplete hybrid-inclusive attack reference.
+HQC remains uncalibrated at equal security, and McEliece's cost frontier remains
+unresolved. Every current ladder keeps its declared correctness envelope.
+
+Natural steps remain useful even where numerical estimates are unsupported.
+Frodo includes 16 unestimated dimensions before its modeled path and ends at n=592,
+the first fixed-construction candidate meeting its 128 planning target. NTRU has
+13 unestimated profiles and a scoped endpoint near 129 reference bits. Module's
+unchanged mathematical endpoint is about 138 flattened-LWE reference bits. These
+are not interchangeable KEM security levels or predictions of hourly solvability.
+
+Parameter selection must state which costs are optimized, which construction
+features remain fixed, the candidates searched, any safety/design margin and all
+known relevant attack models. Examine tradeoffs and rejected candidates; do not
+manufacture tiers by reducing entropy, relaxing correctness or adding padding.
+Do not optimize a known estimator blind spot. Where evidence is incomplete,
+name the limitation and retain a provisional status. The proposal template and
+manual approval/admission gates now require this explanation and assessment.
+
+Scoring v5 enrolls these exact releases; its formula remains provisional and
+unchanged. No archived receipts are relabeled or transferred. Local development
+self-review can exercise the proposal workflow but is visibly test-only and can
+never supply independent admission or contribution points. Accounts and sign-ins
+are preserved; no history reset is part of this revision.
+
+See parameter-frontier-review.txt, classical-parameter-frontier.txt,
+lattice-parameter-frontier.txt, ntru-parameter-frontier.txt,
+code-parameter-frontier-review.txt and protocol-admission.txt.
+
+Historical revision records follow unchanged.
+
+Current revision — 2026-10-15
+=============================
+The historical expansion record below remains unchanged as evidence of earlier
+choices. The following supersedes its module/HQC mappings and fixed-count policy.
+
+Current family                       Natural tiers    Release
+Finite-field DH                      50               6
+RSA                                  50               3
+Elliptic-curve DH                     50               curve-research-v1
+Module-lattice encryption            11               dimension-research-v2
+FrodoKEM                             50               dimension-research-v1
+Streamlined NTRU Prime                50               2
+HQC                                  27               growth-research-v2
+Classic McEliece                     50               length-research-v1
+
+338 current profiles. Old releases retain their original identifiers, source,
+parameters, artifacts and receipts. No history or account reset is required.
+The module release grows degree/rank and chooses minimal admissible moduli;
+HQC grows code/ring sizes with weight. Both retain perfect mathematical honest
+agreement. Frodo retains one common bound of 2^-133 in its declared model.
+
+The upper endpoint aims for a defensible roughly 128-bit initial reference,
+not a mandatory label of 50. Module's first selected natural setting above the
+target is about 138 flattened-LWE reference bits. NTRU and McEliece retain
+published anchors without calibrated attack estimates; HQC remains a partial,
+uncalibrated ladder. Do not present these exceptions as 128-bit guarantees.
+Future reviewed attack progress can motivate new parameters in a new release,
+while the initial reference and old evidence remain frozen.
+
+See docs/ladder-design-review.txt, docs/lattice-module-v2.txt,
+docs/hqc-growth.txt, docs/code-ntru-ladder-review.txt and the proposal-admission
+requirements. This is a local research beta, not scientific security certification.
+
+Crucible research-tier expansion — decision record
+=================================================
+2026-10-14. Local research beta; independent scientific admission is separate.
+
+Mission and constraints
+-----------------------
+Keep at most10 visible scheme families, meaningful distinct attack surfaces,
+low navigation cost, actual mathematical parameters and machine-readable exact
+contracts. Preserve accounts/history and make automation convenient. A tier is
+not evidence of security. A recovered individual secret is not an IND-CCA break
+or a statement about every other instance. Never manufacture correctness from
+passing samples or artificially restrict secret entropy to create easy levels.
+
+Eight family pages
+------------------
+Family                      Current research progression
+Finite-field DH             Existing50, release6; unchanged
+RSA                         Existing50, release3; unchanged
+Elliptic-curve DH            50 distinct certified prime-order curves
+Module-lattice encryption   50 explicit research parameter profiles
+FrodoKEM                    50 matrix dimensions,8..640
+Streamlined NTRU Prime      50 certified(p,q,w) tuples, ending sntrup761
+HQC                         27 weights; unchanged published ring/decoder
+Classic McEliece            50 code lengths; unchanged m12/t64 arithmetic
+
+Published-reference implementations remain separate immutable releases inside
+these families. They are not50 duplicated ordinal labels. They are available for
+inspection/conformance; new issued challenges select the current research release.
+The family container is not a claim that its derivative equals the named standard.
+
+Why these ladders differ
+-----------------------
+1. EC: X25519 is fixed-size. Bounded exponents would quietly change the secret
+   distribution, so we instead generate ordinary prime-order curves with full
+   nonzero scalars and a separately specified full-point KDF. All constants have
+   exact public primality/group-order proofs. A generic rho reference is useful
+   but is not a full security analysis. The endpoint is not Curve25519.
+
+2. Frodo: changing the matrix dimension retains the core plain-LWE problem,
+   full noise distribution, message, salt and seed lengths. The640 endpoint is
+   byte-conformant to current salted Frodo640. The entire ladder has a conservative
+   analytical agreement-failure bound2^-133 in the declared ideal-XOF model;
+   the smallest profile additionally has a deterministic zero-failure argument.
+   The pinned estimator is unreliable at its small block-size floor, so the
+   smallest costs are left unknown rather than invented.
+
+3. Module lattices: naively shrinking polynomial degree loses message capacity;
+   changing ciphertext compression without a new bound is unjustified. This
+   explicit lossless module-LWE derivative retains full256-bit messages and CBD2
+   noise. Its moduli make the worst-case noise smaller than the decoding margin.
+   It differs from FIPS203 in parameters, matrix sampling and wire encoding and
+   does not inherit an ML-KEM security theorem. Larger easy-tier moduli can mean
+   larger keys: graphs report that real tradeoff, not a forced monotone size curve.
+   Tier1 uses module rank1; tiers2–50 use rank3. The smallest modulus is47339;
+   the final model value is127.978777 reference bits, not relabelled128. First
+   profiles affected by the estimator floor have no asserted numerical value.
+   Bounded attempts at a public-only first-tier LLL recovery did not complete;
+   the example solver remains experimental, with no validated solve-time claim.
+
+4. NTRU Prime: exact algebraic admissibility and perfect-correctness inequalities
+   support a degree ladder with real smaller rings. All50 tuples are certified.
+   The endpoint agrees with original sntrup761 vectors; the full uniform sampler
+   is explicitly distinguished from the old reference's near-uniform maps.
+   Degree order is not a measured attack-cost order. Search-space enumeration is
+   published separately, never presented as estimated security.
+
+5. HQC: keeping the established ring and decoder while varying weights permits
+   a transparent worst-case correctness proof through weight27. Extending to50
+   would leave that proof's domain. Fewer justified levels are preferable to
+   fabricated duplicates or an inherited tiny failure probability. These are
+   low-weight research targets, not a ladder ending at a published128-bit claim.
+
+6. McEliece: retain the field/Goppa degree/decoder and vary code length within
+   the published general-parameter construction. Use its exact variable sampling
+   batch rule. Actual elementary Prange trial counts guide parameter spacing;
+   they exclude elimination work, improved decoding and structural attacks and
+   therefore are not labelled security bits or normalized to128.
+
+Evidence and operational choices
+--------------------------------
+Correctness has three layers: an analytical statement with declared scope;
+independent arithmetic/conformance tests; and one honest agreement check for
+each runtime draw. The latter never validates a rare-failure bound by itself.
+Encaps' original secret is always the target. A disagreement is recorded and
+the profile held; no resampling until a convenient success or replacement with
+Decaps' output. Process aborts and discarded draws remain in the outcome ledger.
+Public reports expose aggregate counts without participant identity or secrets.
+
+The source wrapper, parameter data, helper code and relevant native build are
+pinned as a complete artifact closure. The CLI verifies that closure and fetches
+declared first-party source/parameters into reference/source/. It never executes
+downloaded reference code automatically, installs native dependencies or runs
+participant code on the service. Local native workers have fixed allowed
+operations, output bounds and deadlines. No arbitrary decapsulation oracle.
+
+Uncalibrated research releases use exact-profile recovery records: solving one
+does not backfill another. Milestone badges follow the same rule. The existing
+DH/RSA recognition convention stays, and the EC generic progression explicitly
+uses it as a display convention rather than an assertion of individual solves.
+Research releases were initially excluded from global point scoring. On
+2026-10-14 the user explicitly requested their enrollment; points policy v3
+includes the six frozen research releases with the existing provisional weights.
+Exact-profile recovery rules remain unchanged. Equal points are participation
+incentives, not equal measured attack difficulty. No proposal/admission points
+are created by adding these known reference families.
+
+Independent manual admission and production operation remain separate from
+user-authorized local-beta availability. Do not represent these implementation
+checks as an independent cryptographic audit. Current native pins are macOS
+arm64-specific; see native-setup.txt before another deployment.
+
+Evidence index
+--------------
+docs/implementation-ec-research.txt; tests/test_ec_research.py
+docs/lattice-frodo.txt; tests/test_lattice_frodo.py
+docs/lattice-module.txt; tests/test_lattice_module.py
+docs/implementation-ntru-tiers.txt; tests/test_ntru_tiers.py
+docs/code-research.txt; tests/test_code_research.py
+docs/implementation-pq.txt; docs/implementation-dhkem-sntrup.txt
+docs/scheme-reviews/: original coverage, exclusion and source reviews
+tests/test_research_challenges.py; tests/test_standard_challenges.py
+
+MinRank remains deferred per the user's clarification. Its candidate note is
+not admission or an additional implementation requirement.
+
+Final verification
+------------------
+1253 backend tests passed in the final fully registered candidate; all nine
+frontend suites passed. Independent Sage checks cover EC certificates/arithmetic,
+NTRU admissibility and lattice reference arithmetic. The live Python3.14 runtime
+also validated every source/native closure and successfully generated the first
+and last tier of every family. Desktop1440/mobile320 browser checks, browser-
+approved CLI connection, exact-instance downloads, reference-source hashing,
+manual cross-family upload, deadlines and archived controls passed in an isolated
+database. A public-only NTRU Tier2 attack was submitted with source/compute and
+accepted; its exact-only highlight/badge and zero global score were verified.
+Tests do not constitute an independent cryptographic audit.
+
+Local rollout
+-------------
+Installed in ~/git/towards-new-crypto and served at http://127.0.0.1:8000.
+Migration0007 adds artifact pins and the generation ledger. A private backup
+was made first; all pre-existing rows and the server key were verified unchanged.
+The two-scheme checkpoint bbb7714fb282a88b88be909b3f89f5fcd45544ab is pushed.
+This expanded working tree remains uncommitted for review.

@@ -11,13 +11,15 @@ from alembic.config import Config
 import pytest
 from sqlalchemy import func, inspect, select
 
-from crucible import registry, rsa_v3
+from crucible import registry
 from crucible.config import ROOT, Settings
 from crucible.db import AdapterVersion, Base, Database, User
 from crucible.protocol_proposals import ProtocolProposal, ProtocolProposalRevision, ProtocolProposalReview, ReviewChecks
 from crucible.protocol_specs import builtin_spec
 from crucible.scoring_awards import AdmissionCreditError, SchemeAdmissionCredit, award_scheme_credit
 
+
+CURRENT_RSA = registry.adapter_for("rsa-kem")
 
 def digest(spec):
     return hashlib.sha256(json.dumps(spec, sort_keys=True, separators=(",", ":"),
@@ -30,7 +32,7 @@ def admission(tmp_path):
     Base.metadata.create_all(db.engine)
     author_id, reviewer_id = str(uuid4()), str(uuid4())
     proposal_id, review_id = str(uuid4()), str(uuid4())
-    spec = deepcopy(builtin_spec("rsa-kem", "3"))
+    spec = deepcopy(builtin_spec("rsa-kem", CURRENT_RSA.SCHEME_VERSION))
     content_sha = digest(spec)
     with db.transaction(write=True) as session:
         session.add_all([User(id=author_id, handle="author", password_hash="unused", created_at=1),
@@ -45,12 +47,12 @@ def admission(tmp_path):
             content_sha256=content_sha, specification=spec))
         session.add(ProtocolProposalReview(id=review_id, proposal_id=proposal_id,
             revision=1, reviewer_id=reviewer_id, created_at=3, decision="approved",
-            content_sha256=content_sha, implementation_sha256=rsa_v3.IMPLEMENTATION_SHA256,
+            content_sha256=content_sha, implementation_sha256=CURRENT_RSA.IMPLEMENTATION_SHA256,
             checks={name: True for name in ReviewChecks.model_fields},
             notes="Reviewed exact source and specification.", evidence="Independent verification commands and results.",
             idempotency_key=str(uuid4()), request_sha256="a" * 64))
     settings = Settings(db.engine.url.render_as_string(), b"a" * 32, reviewer_ids=(reviewer_id,))
-    args = dict(family_id="rsa-kem", scheme_id="rsa-kem", scheme_version="3",
+    args = dict(family_id="rsa-kem", scheme_id="rsa-kem", scheme_version=CURRENT_RSA.SCHEME_VERSION,
                 proposal_id=proposal_id, review_id=review_id, reviewer_id=reviewer_id,
                 evidence="Explicit reviewed admission of a new family; integrated source matches the approval.",
                 confirm_new_family=True, clock=lambda: 10.0)
@@ -71,7 +73,7 @@ def test_approval_alone_awards_nothing_dry_run_is_inert_and_exact_retry_is_idemp
     assert preview["credit"]["user_id"] == author and count(db) == 0
     first = award_scheme_credit(db, settings, **args)
     assert first["created"] is True and first["credit"] == preview["credit"]
-    assert first["credit"]["source_sha256"] == rsa_v3.IMPLEMENTATION_SHA256
+    assert first["credit"]["source_sha256"] == CURRENT_RSA.IMPLEMENTATION_SHA256
     again = award_scheme_credit(db, settings, **args)
     assert again["created"] is False and again["credit"] == first["credit"] and count(db) == 1
 
@@ -113,7 +115,7 @@ def test_stale_review_mismatch_and_incomplete_checks_fail_closed(admission, tamp
             revision.specification = {**revision.specification, "summary": "Changed frozen specification."}
         elif tamper == "wrong-source": review.implementation_sha256 = "b" * 64
         elif tamper == "unchecked": review.checks = {**review.checks, "correctness": False}
-        else: session.add(AdapterVersion(scheme_id="rsa-kem", version="3", source_sha256="b" * 64, created_at=1))
+        else: session.add(AdapterVersion(scheme_id="rsa-kem", version=CURRENT_RSA.SCHEME_VERSION, source_sha256="b" * 64, created_at=1))
     with pytest.raises(AdmissionCreditError):
         award_scheme_credit(db, settings, **args)
     assert count(db) == 0
@@ -121,7 +123,7 @@ def test_stale_review_mismatch_and_incomplete_checks_fail_closed(admission, tamp
 
 def test_mutated_source_manifest_pin_is_not_accepted(admission, monkeypatch):
     db, settings, args, _ = admission
-    monkeypatch.setattr(rsa_v3, "IMPLEMENTATION_SHA256", "0" * 64)
+    monkeypatch.setattr(CURRENT_RSA, "IMPLEMENTATION_SHA256", "0" * 64)
     with pytest.raises(AdmissionCreditError, match="match exactly"):
         award_scheme_credit(db, settings, **args)
     assert count(db) == 0

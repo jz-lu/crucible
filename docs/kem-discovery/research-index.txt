@@ -1,0 +1,138 @@
+KEM discovery research index
+Updated 2026-10-15
+
+Current direction: a fresh mathematical search
+
+Start from square one. Do not take electrical networks, boundary subspaces,
+hidden conjugation or polynomial-map expansion as the default architecture.
+The previous candidate is a retained research record, not the design to repair
+in the next pass. Returning to it would require a specific new reason.
+
+Carry forward the user's requirements:
+- Seek a potentially new average-case hardness mechanism and a path to a KEM.
+- Derive small-polynomial public-key scaling with an explicitly conjectured
+  parameter-to-security relationship before experimental development.
+- Count the full public parameters, field widths and honest evaluation costs.
+- Do not perform concerted attacks. Keep correctness and security separate.
+- Preserve uncertainty; do not manufacture novelty, proofs or security bits.
+- Do not submit a Crucible proposal without a separate user request.
+
+Pipeline clarification from the user (2026-10-14): useful research intake can
+include incomplete or impractical earlier proposals, and new concrete
+constructions built from known mathematics. Construction origin, assumption
+origin and readiness are separate. Readiness does not determine the origin
+column. Keep the implementation/stress-test gate; do not impose a new-hardness-
+family requirement on retaining or documenting a useful pipeline candidate.
+
+The detailed working brief is scalability-first-design-brief.txt. Quadratic
+growth is a proposed screening preference, not a user-approved byte budget.
+The full research prompt is ../kem-discovery-agent-prompt.txt; its current
+constraints override its older attack-experiment suggestions.
+
+Retained candidate: Nonlinear Boundary Actions, 0.1-research
+
+Status: parked, unvalidated cryptographically, not submitted.
+Reason: no supported security-parameter mapping or demonstrated practical
+small-polynomial size bound in target security bits. No new negative security
+result is claimed by this decision.
+
+Definition and research history:
+  nonlinear-boundary-candidate.txt
+Source:
+  ../../scripts/kem_discovery_nonlinear.py
+Recorded correctness evidence:
+  nonlinear-results.json
+  nonlinear-101-results.json
+  nonlinear-n3-results.json
+Prepared Crucible workspace:
+  /Users/aksharramkumar/crucible-proposal
+Validated specification content SHA-256:
+  982e973b1be6efecafb5b07265b880be009b277a7bfd39ad789748f6388008c1
+Validation was format-only; it does not establish admission or security.
+
+Historical baseline
+
+network-subspace-results.json and ../../scripts/kem_discovery_networks.py
+record earlier linear-baseline work. They predate the restriction on concerted
+attacks. Do not rerun or extend that work as part of the fresh search.
+
+Fresh-search status
+
+The first fresh pass produced Compact Transfer Actions (CTF1), a retained
+mathematical lead using local Yang-Baxter rules and global transfer maps.
+Its complete public-key representation is quadratic in a structural parameter
+m, and exact honest agreement and polynomial evaluation bounds are recorded.
+The relationship between m and security bits remains unsupported, so this
+lead has NOT passed the full scalability/security gate. No candidate code,
+stress tests, concerted attacks, or submission were performed.
+
+Current lead:
+  compact-transfer-candidate.txt
+Preliminary variant, retained:
+  compact-transfer-initial-variant.txt
+Formula-only size accounting:
+  compact-transfer-size-accounting.json
+Primary-source research record and other mathematical observations:
+  fresh-search-2026-10-14.txt
+
+Follow-up prior-art check (2026-10-14): the candidate's Section 10 now credits
+explicit group-action KEM predecessors, including GA-HEG (ASIACRYPT 2022)
+and CSIDH-ECIES-KEM (2019). The KEM wrapper is established prior art. No exact
+Yang-Baxter transfer-selector instantiation was located; novelty is unresolved.
+
+Recommended research-intake classification for CTF1: proposed new construction
+from established mathematics, with construction novelty awaiting review and
+assumption novelty unestablished. This recommendation is not a reviewed
+Crucible-discovery designation, catalogue change, submission or live admission.
+The distinct proposed target is the fully public compact transfer action with
+its specified distribution; its KEM wrapper is known. Earlier published
+Yang-Baxter cryptography and group-action KEMs remain previously identified
+research targets regardless of maturity.
+
+CTF1 proposal preparation (2026-10-15)
+
+At the user's request, a fresh research-intake proposal was prepared at:
+  /Users/aksharramkumar/crucible-ctf1-2026-10-15/crucible-proposal
+The previous nonlinear-boundary proposal is preserved unchanged.
+The downloaded client was inspected before execution. Public init and
+validation used http://localhost:8000 without account credentials. No login,
+private API access or submission was performed. Before later private access
+or an explicitly requested submission, run login and allow browser approval
+for proposal permissions.
+
+The CTF1 0.1-research specification selects structural profiles m=16,32,48
+from the retained formula examples, makes the SHAKE256 wrapper mandatory,
+and defines canonical standalone secret-key serialization and input bounds.
+The profiles have no security-bit labels; their sampler is unchanged.
+implementation is null. The zero mathematical honest-failure bound has a
+written algebraic argument, not an executable or independently verified proof.
+No candidate code, stress testing, cryptanalysis or benchmarks were run.
+
+Server validation result: format-valid
+Canonical specification SHA-256:
+  26f838b80e9310e9b58444fb71a5cb5f6ce6669806ada981f80c386ac6adbbf5
+Format validation does not verify correctness, security, novelty,
+implementation or admission. The server hash matches the local JSON.
+The workspace includes specification-readable.txt, validation-result.json,
+verification-result.json and four local evidence snapshots with a manifest.
+Only specification.json is transmitted by the proposal CLI; the evidence
+snapshots are not automatically uploaded. No private proposal link exists.
+
+CTF1 proposal submission (2026-10-15)
+
+The user subsequently authorized submission. The inspected client completed
+login with browser approval before private access. The unchanged validated
+specification was submitted successfully as revision 1:
+  http://localhost:8000/#propose?proposal=eee7ee05-3ad5-4c63-8549-4c7133ec0b04
+Status: submitted; pending human review, not approved or activated.
+Receipt content SHA-256 matches the validation hash above. Receipt saved at:
+  /Users/aksharramkumar/crucible-ctf1-2026-10-15/crucible-proposal/proposal-receipt.json
+The frozen request in .crucible/proposal-submission.json is preserved. Do not
+edit or delete it; any revised specification needs a revision workspace.
+Preparation and verification records describe the earlier pre-submission
+state. No candidate code, attacks or benchmarks were run during submission.
+
+The next substantive question is a credible security-parameter justification
+for the exact sampled common-image problem. Do not equate m, state-space size,
+selector entropy, or hash output length with achieved security. Do not treat
+the construction as an admitted, secure or demonstrably novel KEM.

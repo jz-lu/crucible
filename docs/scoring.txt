@@ -1,6 +1,28 @@
-CRUCIBLE — PROVISIONAL POINTS POLICY v2
+Stage presentation — 16 October 2026
 
-Policy ID: crucible-points-v2. Accepted by the user on 2026-10-14.
+Default progression stages are navigation labels, independent of the existing
+points policy. Curation keeps all original configuration IDs and frozen credit
+weights: the old configuration selector remains the v6 weight, even when its
+new stage number differs or the configuration sits between default stages.
+The per-family rule remains 10 times the highest eligible configuration weight
+plus 40 times the highest eligible first-record weight. No history is rewritten
+and no points are earned merely by adding, hiding or renumbering milestones.
+Cross-family weight comparability remains provisional and requires a separate
+scoring decision; rounded default stage counts do not resolve it.
+
+Earlier policy records follow; references to tier weights below mean the frozen
+configuration weights, not the new displayed stage positions.
+
+CRUCIBLE — PROVISIONAL POINTS POLICY v6
+
+Policy ID: crucible-points-v6. Current eight-family ladder enrollment.
+
+Read projections do not change this policy. The leaderboard may request
+include_records=false to omit unused per-person evidence summaries; profiles may
+request include_milestones=false to omit the legacy first_ten section. Both default
+to true. Scores and their winning receipt identifiers are always derived from the
+current database, with the same per-user family results reused within a profile
+request. No participant score or recovery response is cached.
 
 For each explicitly enrolled scheme family:
   Personal progress = 10 * highest recovered tier.
@@ -11,33 +33,67 @@ For each explicitly enrolled scheme family:
 For example, the first person reaching Tier20 earns 200+800=1,000 points.
 Someone reaching Tier20 second, with no earlier first, earns 200 progress points.
 Someone first at Tier19 and then second at Tier20 earns 200+760=960 points.
-Places two through ten earn no recovery bonus, but keep their First 10 milestone
-recognition. An unchanged personal best and repeated hourly runs do not
+Places two through ten earn no recovery bonus. An unchanged personal best and repeated hourly runs do not
 accumulate points. Reaching every intermediate tier before Tier20 earns the same
 total as reaching Tier20 directly. An earlier first-recovery bonus remains when
 a later personal best is not first.
 
-This policy replaces v1's bonuses for places two through ten. Scores are derived
-again from the existing evidence under v2; there are no grandfathered v1 bonuses.
-All receipts, account history, admission credits and First 10 milestones remain.
-The API retains its early_recovery field names for compatibility; under v2 these
-fields describe only the selected first-place bonus. Without a positive bonus,
-its tier, rank and submission identifier are null.
+Version 2 replaced v1's bonuses for places two through ten. Version 3 explicitly
+enrolls all eight current scheme families. Scores are derived again from existing
+evidence; no receipt, account history, admission credit or milestone is deleted.
+There are no grandfathered v1 bonuses. The API retains its early_recovery field
+names for compatibility. Without a positive bonus, its tier, rank and submission
+identifier are null.
 
-Place is determined by each distinct account's earliest verified receipt at
-that tier OR HIGHER, ordered by server receipt time then receipt identifier.
-Higher-tier solves reserve lower-tier places, matching the existing challenge
-leaderboards. Taking the maximum bonus avoids rewarding artificial intermediate
-steps. At identical server receipt times, the lower receipt identifier wins.
+For DH, RSA and the elliptic-curve research release, place is determined by each
+account's earliest verified receipt at that tier OR HIGHER. Their registered
+inheritance rules reserve lower-tier places. For Module-LWE, FrodoKEM, NTRU Prime,
+HQC and Classic McEliece research releases, place is determined ONLY at the exact
+registered profile recovered. A higher tier does not imply recovery of a lower
+profile or take its first-place bonus. This matches their challenge leaderboards.
+Ordering is server receipt time then receipt identifier; the lower identifier
+wins at identical times. Take only the highest first-place tier per family,
+never the sum of first places. This rewards first recorded results while avoiding
+extra points for repeated runs or visiting every intermediate profile. It
+recognizes recorded account success, not independent algorithmic novelty.
 Only successful, internally consistent receipts within their server deadline
-qualify. Computation estimates do not change points and remain self-reported.
+qualify. JSON tier values must be genuine integers matching enrolled profiles.
+Computation estimates do not change points and remain self-reported.
 
-This policy retains DH release6 and RSA release3 enrollment, each with tiers1..50.
-The eligible source releases/profile identifiers are explicitly frozen in
-crucible/scoring.py. Registry changes never automatically multiply or reinterpret
-points. Archived records retain their actual original tier/release and can be
-inspected on profiles, but receive no v2 recovery points. Adding or replacing an
-eligible release requires an explicit comparison and policy decision.
+The explicit source release enrollment is:
+  teaching-dh-kem / 7                         tiers 1..50; inheritance
+  rsa-kem / 4                                 tiers 1..50; inheritance
+  dhkem-x25519 / curve-compressed-v2          tiers 1..50; inheritance
+  ml-kem / packed-research-v3                 tiers 1..11; exact profile
+  frodokem / anchor-research-v3               tiers 1..80; exact profile
+  sntrup / 3                                  tiers 1..27; exact profile
+  hqc / growth-research-v2                    tiers 1..27; exact profile
+  classic-mceliece / length-research-v1       tiers 1..50; exact profile
+
+The frozen identifiers, ranges and inheritance rules live in crucible/scoring.py.
+Registry changes never automatically enroll releases, multiply family totals,
+or reinterpret archived tiers. No archived/published release is newly eligible,
+even where an endpoint shares parameters with a research release. Any future
+compatibility decision must explicitly define receipt mapping and deduplication.
+Version 4 replaced only the module-lattice and HQC enrollment with their new
+parameter ladders. Version 5 replaces the DH, RSA, EC, module, Frodo and NTRU
+enrollments with the parameter-efficiency revisions listed above. Old receipts
+remain archived and are not relabelled or
+transferred to new tiers. Version 6 restores the Frodo640 endpoint through anchor-research-v3, with 80 natural settings. The other seven family enrollments are unchanged.
+The scoring formula itself is unchanged.
+The maximum recovery total is 2,500 per 50-tier family, 550 for the eleven-tier
+module ladder, 4,000 for the 80-tier Frodo ladder, and 1,350 for each 27-tier NTRU
+and HQC ladder. These unequal maxima remain explicitly provisional: natural
+parameter counts do not determine equal difficulty, scientific value or attack
+cost. The formula is unchanged; we have not inserted artificial tiers or silently
+normalized points. Cross-family incentive calibration remains a future decision.
+An accepted scheme contribution is separate from these recovery maxima.
+
+Scoring presentation is derived from the current versioned policy, separately
+from immutable adapter manifests. Historical manifest/public-input metadata may
+contain its original disabled-scoring flag; the live catalogue and challenge's
+top-level scoring_eligible/scoring_policy_id state the applicable current policy.
+Frozen source hashes, manifests and existing challenge data are not rewritten.
 
 Overall ranking sorts the sum of all component points, descending. Equal totals
 share a competition rank; handles break display-order ties. Zero-score accounts
@@ -48,6 +104,9 @@ independent attacks.
 
 New scheme contribution: 1,000 points once for an explicitly admitted new family.
 Submission, format validation, or proposal approval alone awards nothing.
+Development self-review is test-only and is rejected by independent admission
+and contribution-credit gates, even if all review checkboxes pass. Disabling
+the local flag later does not upgrade the recorded decision.
 Trusted integration must first register the exact approved source as an active
 scheme. Then a configured approving reviewer (not the proposer) records a
 separate new-family admission decision using scripts/award_scheme_credit.py.
@@ -72,10 +131,25 @@ Raw receipt counts remain in the API for compatibility but are not displayed as
 achievements. Personal bests show progress per scheme; Recent solves shows the
 underlying verified instances without awarding points for their quantity.
 
-First 10 milestones are recognition, with no additional points. An actual,
+Personal records show one actual recovery per scheme. Prefer the highest actual
+tier recovered in the current release. If none exists, select the most recently
+participated archived release and its highest actual tier. Named published
+parameter sets have no invented strength ordering: show the most recently
+recovered named set in that selected release. This display projection does not
+assert that exact-only lower profiles were solved, and never compares numeric
+tiers between incompatible releases. The one family score appears only once.
+
+First to reach shows one actual highest first-place receipt per enrolled family
+in person.first_records. If someone was first at Tier1 and later second at Tier3,
+their personal record is Tier3 and First to reach remains Tier1. Participants
+with no first-place result have no entry. Places two through ten and an exhaustive
+milestone history do not appear in this compact profile section.
+
+Legacy First 10 API milestones remain available for compatibility and preserve
+history, with no additional points. An actual,
 valid, on-time correct submission must improve that person's highest tier in
-the exact registered scheme release, and place among the first ten accounts to
-reach its tier or higher. Order is receipt time then receipt identifier, as in
+the exact registered scheme release (or exact profile when inheritance is disabled),
+and place among the first ten accounts under that release's recovery rules. Order is receipt time then receipt identifier, as in
 the existing score policy. Repeats and implied lower-tier standings are not
 separate milestones. The compact view keeps records not superseded by an
 equal/higher tier with an equal/better place (one comparison strictly better).

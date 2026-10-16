@@ -1,6 +1,6 @@
 CRUCIBLE — HUMAN CHOICE, AGENT EXECUTION
 
-The website is for choosing a scheme/tier, watching progress and inspecting
+The website is for choosing a scheme/stage, watching progress and inspecting
 evidence. The CLI fetches exact challenges, prepares a local attack workspace,
 runs an explicitly chosen local command and submits a structured result. A
 participant does not need a GitHub repository. A workspace can remain an ordinary
@@ -28,27 +28,39 @@ polls for approval and saves its scoped, revocable credential in
 server origins; localhost and 127.0.0.1 are intentionally different origins.
 
 The short code and approval URL are not access tokens. Approve only a connection
-you started. Expired or revoked connections need a new login. The browser grants
-the challenge/method/submission scopes defined by the server, not account,
-proposal-review or administrative access.
+you started. Expired or revoked connections need a new login. The browser displays
+the exact permissions before connecting. New connections cover challenges,
+methods, recovery submissions and your own scheme proposals; they do not grant
+account management, proposal review or administrative access. Existing connections
+keep their original permissions. Run login again and approve the new connection
+once to add proposal access. Older pending requests also retain their permissions.
 
 Picking up a challenge
 
 The website handoff is optional. Once the client is installed and connected,
-an agent can respond to "Get the latest RSA tier 12 challenge" directly:
+an agent can respond to "Get the latest RSA stage 12 challenge" directly:
 
-  python3 /path/to/crucible_cli.py init rsa-kem --tier 12 --path rsa-tier12-current --json
+  python3 /path/to/crucible_cli.py init rsa-kem --stage 12 --path rsa-stage12-current --json
+
+The preferred selector is --stage for the default progression. The legacy --tier
+selector remains available for its original numeric configuration mapping.
+A stage selects a configuration on that scheme's versioned default progression,
+not an instance or a cross-scheme difficulty unit. Stage counts differ naturally.
+Frozen JSON may retain instance_size and tier_* field names. Preserve exact
+configuration/release identities when reproducing a result.
 
 The client remembers the server selected at login. No Ready click, copied
 challenge ID or repeated browser approval is required. Name the scheme as well
-as the tier; use schemes --json to discover the registered identifiers. Choose
+as the stage; use schemes --json to discover the registered identifiers. Choose
 a fresh directory for each instance. Repeating the request in the same hour
 reuses the account's instance, including its answered status; it is not a reroll.
 
-When starting from the website instead, choose Ready, Use with an agent, then
-Copy prompt in the panel that opens. The instructions identify the exact
+When starting from an unsolved record on the website, Take on this stage opens
+and requests its current challenge in one click (continuing after sign-in if
+needed). From the challenge tab directly, Ready still requests the instance.
+Then choose Use with an agent and Copy prompt. The instructions identify the exact
 owned instance. The panel also shows a reusable request naming the selected
-scheme and tier, such as "Retrieve the newest RSA challenge at Tier 12."
+scheme and stage, such as "Retrieve the newest RSA challenge at Stage 12."
 The copied prompt includes the corresponding init command for future rounds.
 Fetch the selected instance without copying its public inputs manually:
 
@@ -57,7 +69,7 @@ Fetch the selected instance without copying its public inputs manually:
 To list schemes and start another workspace:
 
   python3 crucible_cli.py schemes --json
-  python3 crucible_cli.py init rsa-kem --tier 1 --path my-attack
+  python3 crucible_cli.py init rsa-kem --stage 1 --path my-attack
 
 init resolves the current registered release, retrieves an existing instance for
 the current round if present, or requests that round's instance. It never changes
@@ -69,6 +81,8 @@ A workspace contains:
   challenge.json             exact instance and frozen manifest
   protocol.json              scheme specification
   reference/protocol.py      hash-checked reference source, never auto-executed
+  reference/source/          pinned first-party helpers/parameter files, if any
+  reference/implementation-artifacts.json  verified dependency closure, if any
   attack/solve.py             a deliberately incomplete local solver stub
   method.md                  describe the actual method and preparation
   result.json                structured result template, later filled by run
@@ -134,6 +148,85 @@ starting a process or producing a local result does not meet the deadline. The
 complete final answer must reach the server before the hour ends. Only one final
 answer is accepted per instance, whether correct or incorrect. receipt.json
 contains the verified result and source reference, without printing the key.
+
+Proposing a scheme
+
+On the website, choose Propose a scheme, then Use with an agent and Copy prompt.
+This starts a local drafting workflow. Manual tools still offer the annotated
+template, schema and browser upload. You can also ask a connected agent directly:
+"Prepare a Crucible proposal for this KEM" and describe the construction.
+
+  python3 crucible_cli.py proposal init --path my-kem-proposal
+  python3 crucible_cli.py proposal validate --path my-kem-proposal --json
+  python3 crucible_cli.py proposal submit --path my-kem-proposal --json
+
+init creates a fresh local workspace with specification.json, the server's schema
+and drafting instructions. Fill in the specification using the annotated template.
+Explain why this construction deserves a catalogue entry and what it adds over
+the closest existing scheme. Describe exact algorithms, parameter mapping, full
+randomness, reused values, invalid-input behavior, encodings and correctness scope.
+Separate the admissible configuration domain from the default human progression.
+Give stable configuration identities, exact parameter sets or a reviewed generation
+rule, and the ordered mapping to local stage numbers. Preserve the construction's
+family, full sampling distributions, transform and game. Explain coordinated
+parameter changes, natural intermediate settings, legitimate resource tradeoffs,
+the published/approved or justified new endpoint, and known gaps. There is no
+fixed 50 target or requirement of linear security spacing. Prefer a useful default
+route with a multiple-of-ten count, or five when appropriate, without changing
+parameters to fit it; retain reviewed off-route configurations.
+
+Every admitted configuration, including off-route settings, must meet one strong
+common correctness envelope; negligible nonzero failure is allowed. Report tighter
+bounds and material variation, and keep generation/resource aborts separate. Do
+not add padding, leaked information, specially easy keys, selective resampling or
+restricted randomness merely to manufacture reachable stages. A naturally small
+input space may allow enumeration; disclose its implications without extrapolating
+a small recovery to the endpoint. Justify efficiency within a declared workload,
+cost objective, candidate domain and attack model; finite searches do not prove
+universal optimality. Version configurations, route mappings and security evidence
+separately. Changing stage labels must not rewrite historical receipts.
+
+The v1 specification retains tier_design, tier_meaning and supported_tiers as
+wire names. supported_tiers continues to list legacy numeric configuration
+selectors, including off-route settings. Describe the default stage mapping
+separately in mapping and parameter_progression. Refer to
+ladder-principles.txt and the annotated template for review requirements. Current
+ordinal scoring is provisional; existing configuration credit is preserved when
+stage numbering changes. This guidance introduces no replacement formula.
+
+Separate demonstrated results, estimates, assumptions and unresolved claims. Never
+invent a correctness bound, implementation hash, security estimate or reference.
+An implementation may be omitted at intake; a pinned, reviewed implementation is
+required before approval and trusted integration.
+
+validate checks format only and creates no proposal. Drafting and validation need
+no account. They send the specification to the configured server for checking.
+submit is the explicit authenticated write, returning a private proposal link.
+No GitHub repository, PR or code execution is needed. The submission identifies
+implementation artifacts through the specification; it does not upload or run
+the local project. A source link is inert evidence, not an execution request.
+
+The client binds each workspace to its server and saves an exact retry request
+before sending. After an uncertain response, repeat the same submit command with
+the same workspace; do not delete its state or edit its frozen submission. This
+recovers the original receipt instead of creating another proposal.
+
+  python3 crucible_cli.py proposal list --json
+  python3 crucible_cli.py proposal show PROPOSAL_ID --json
+  python3 crucible_cli.py proposal revise PROPOSAL_ID --path my-kem-revision
+  python3 crucible_cli.py proposal validate --path my-kem-revision --json
+  python3 crucible_cli.py proposal submit --path my-kem-revision --json
+
+show returns status and reviewer feedback. revise starts a fresh workspace from
+the owned proposal's exact current revision, preserving its ID and content hash.
+Edit specification.json to address feedback, validate, then submit. A conflicting
+revision is rejected instead of overwriting someone else's changes. Every new
+revision returns to review and preserves earlier specifications and decisions.
+
+Agent credentials can read and revise only their owner's proposals, including
+when that owner is a configured reviewer. They cannot inspect another author's
+private proposal, access the review queue, record approval or activate a scheme.
+Manual review and trusted integration remain separate from this drafting flow.
 
 Automation
 

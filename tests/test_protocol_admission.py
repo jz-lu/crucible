@@ -20,6 +20,7 @@ from crucible.protocol_admission import CHECKS, check_admission
 from crucible.protocol_proposals import ProtocolProposal, ProtocolProposalRevision, ProtocolProposalReview
 from crucible.protocol_specs import builtin_spec
 from test_api import system
+from proposal_fixtures import tier_design
 
 
 def digest(spec):
@@ -30,7 +31,7 @@ def digest(spec):
 @pytest.fixture
 def approved(system):
     app, _, settings = system
-    spec = builtin_spec('teaching-dh-kem', '4')
+    spec = {**builtin_spec('teaching-dh-kem', '4'), 'tier_design': tier_design()}
     author, reviewer, identifier = (str(uuid4()) for _ in range(3))
     with app.state.db.transaction(write=True) as session:
         session.add_all([User(id=author, handle='author', password_hash='unused', created_at=1),
@@ -105,6 +106,83 @@ def test_registered_source_fingerprint_cannot_change_after_review(approved, monk
     monkeypatch.setattr(registry.ADAPTERS[('teaching-dh-kem','4')], 'IMPLEMENTATION_SHA256', '0'*64)
     with app.state.db.transaction() as session, pytest.raises(ValueError, match='exact reviewed implementation'):
         check_admission(session, identifier, 'teaching-dh-kem', '4')
+
+
+def replace_reviewed_specification(app, identifier, change):
+    """Keep exact review bindings while testing one changed declaration."""
+    with app.state.db.transaction(write=True) as session:
+        root = session.get(ProtocolProposal, identifier)
+        spec = deepcopy(root.specification)
+        change(spec)
+        root.specification, root.content_sha256 = spec, digest(spec)
+        revision = session.scalar(select(ProtocolProposalRevision))
+        revision.specification, revision.content_sha256 = spec, digest(spec)
+        session.scalar(select(ProtocolProposalReview)).content_sha256 = digest(spec)
+
+
+@pytest.mark.parametrize('missing', ['plan', 'check'])
+def test_historical_approval_requires_new_tier_review_before_admission_without_rewriting_history(approved, missing):
+    app, identifier, _, _, _ = approved
+    if missing == 'plan':
+        replace_reviewed_specification(app, identifier, lambda spec: spec.pop('tier_design'))
+    else:
+        with app.state.db.transaction(write=True) as session:
+            review = session.scalar(select(ProtocolProposalReview))
+            review.checks = {key:value for key,value in review.checks.items() if key != 'tier_design'}
+    with app.state.db.transaction() as session:
+        before = deepcopy(session.get(ProtocolProposal, identifier).specification)
+        before_checks = deepcopy(session.scalar(select(ProtocolProposalReview)).checks)
+        with pytest.raises(ValueError):
+            check_admission(session, identifier, 'teaching-dh-kem', '4')
+        assert session.get(ProtocolProposal, identifier).status == 'approved'
+        assert session.get(ProtocolProposal, identifier).specification == before
+        assert session.scalar(select(ProtocolProposalReview)).checks == before_checks
+
+
+@pytest.mark.parametrize('claim', [None, {'kind':'unknown','failure_bound':None},
+    {'kind':'perfect','failure_bound':'2^-133'}, {'kind':'statistical','failure_bound':'2^-133'},
+    {'kind':'statistical','failure_bound':' '}, {'kind':'perfect','failure_bound':0}])
+def test_profile_correctness_must_be_consistent_with_perfect_envelope(approved, monkeypatch, claim):
+    app, identifier, _, _, _ = approved
+    adapter = registry.ADAPTERS[('teaching-dh-kem', '4')]
+    profiles = deepcopy(adapter.manifests())
+    profiles[-1]['correctness'] = ({**profiles[-1]['correctness'], **claim} if claim else claim)
+    monkeypatch.setattr(adapter, 'manifests', lambda: profiles)
+    with app.state.db.transaction() as session, pytest.raises(ValueError):
+        check_admission(session, identifier, 'teaching-dh-kem', '4')
+
+
+@pytest.mark.parametrize('profile_bound,accepted', [('2^-133',True), ('2^-10',False), ('equivalent expression',False)])
+def test_statistical_common_envelope_binds_exact_declarations_and_allows_perfect_profiles(approved, monkeypatch, profile_bound, accepted):
+    app, identifier, _, _, _ = approved
+    replace_reviewed_specification(app, identifier,
+        lambda spec: spec['correctness'].update(kind='statistical', failure_bound='2^-133'))
+    adapter = registry.ADAPTERS[('teaching-dh-kem', '4')]
+    profiles = deepcopy(adapter.manifests())
+    profiles[-1]['correctness'].update(kind='statistical', failure_bound=profile_bound)
+    monkeypatch.setattr(adapter, 'manifests', lambda: profiles)
+    with app.state.db.transaction() as session:
+        if accepted:
+            assert check_admission(session, identifier, 'teaching-dh-kem', '4')['status'] == 'binding-check-passed'
+        else:
+            with pytest.raises(ValueError, match='exact reviewed common failure bound'):
+                check_admission(session, identifier, 'teaching-dh-kem', '4')
+
+
+def test_actual_frodo_profiles_bind_the_common_envelope_with_stronger_perfect_first_profile(approved):
+    app, identifier, _, _, _ = approved
+    spec = {**builtin_spec('frodokem', 'dimension-research-v1'), 'tier_design': tier_design()}
+    with app.state.db.transaction(write=True) as session:
+        record = session.get(ProtocolProposal, identifier)
+        record.specification, record.content_sha256 = spec, digest(spec)
+        revision = session.scalar(select(ProtocolProposalRevision))
+        revision.specification, revision.content_sha256 = spec, digest(spec)
+        review = session.scalar(select(ProtocolProposalReview))
+        review.content_sha256 = digest(spec)
+        review.implementation_sha256 = spec['implementation']['sha256']
+    with app.state.db.transaction() as session:
+        report = check_admission(session, identifier, 'frodokem', 'dimension-research-v1')
+        assert report['status'] == 'binding-check-passed' and report['profiles_checked'] == 50
 
 
 def set_reviewed_variable_output(app, identifier):
@@ -268,3 +346,21 @@ def test_concurrent_revoke_and_grant_lock_the_entire_policy_update(approved, mon
     assert json.loads(target.read_text()) == {'reviewer_ids': [reviewer]}
     assert target.stat().st_mode & 0o777 == 0o600
     assert (tmp_path / '.reviewers.lock').stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.parametrize('missing', ['plan', 'check', 'test-only-marker'])
+def test_new_admission_requires_selection_review_and_rejects_test_only_decisions(approved, missing):
+    app, identifier, _, _, _ = approved
+    if missing == 'plan':
+        replace_reviewed_specification(app, identifier, lambda spec: spec['tier_design'].pop('parameter_selection'))
+    else:
+        with app.state.db.transaction(write=True) as session:
+            review = session.scalar(select(ProtocolProposalReview))
+            checks = dict(review.checks)
+            if missing == 'check':
+                checks.pop('parameter_selection')
+            else:
+                checks['test_only_self_review'] = True
+            review.checks = checks
+    with app.state.db.transaction() as session, pytest.raises(ValueError):
+        check_admission(session, identifier, 'teaching-dh-kem', '4')

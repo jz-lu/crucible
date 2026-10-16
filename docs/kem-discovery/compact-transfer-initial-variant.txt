@@ -1,0 +1,30 @@
+Retained preliminary variant CTQ0
+2026-10-14
+
+This records the first public-rule choice considered during the fresh search.
+It is superseded for further construction work by the permutation-rule version
+CTF1 in compact-transfer-candidate.txt. No attack, implementation or experiment
+on either version prompted this change.
+
+Use the same A=F_2^(2m), N=4m+1, local r/R formulas, transfer maps, uniformly
+sampled base state and 4m-bit private selectors as CTF1. Instead of four Feistel
+rounds, sample public U,W,V uniformly from F_2^(2m by 2m) and c uniformly from
+F_2^(2m), independently, and put
+
+    j(t) = V ((U t) AND (W t)) + c.
+
+Every entry is an independent fair bit; there is no conditioning. The same
+local braid identity and global agreement proof hold even if j is not
+injective. The public rule has 12m^2+2m bits, and the rule plus base and receiver
+image have 44m^2+10m bits before framing. This is a representation calculation,
+not security evidence.
+
+The CTF1 replacement guarantees that j is a permutation for every sample.
+That gives the two local properties described in the main note without any
+rank tests, resampling or secrecy of the circuit. It increases the public-rule
+description by only 2m bits and retains quadratic evaluation cost for j. No
+claim that this improves cryptographic hardness is made.
+
+CTQ0 has no supported security-bit mapping, no justified hardness assumption,
+no implementation, no benchmark and no proposal submission. Retain the
+definition without promoting it to further testing.

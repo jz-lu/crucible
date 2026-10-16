@@ -1,0 +1,53 @@
+{
+  "format": "compact-transfer-size-accounting-v1",
+  "status": "formula-derived-only-not-benchmarks",
+  "security_mapping": "unknown; m is not a bit-security claim",
+  "public_key_formula_bytes": "4 + uleb128_bytes(m) + ceil((44*m*m + 12*m)/8)",
+  "ciphertext_formula_bytes": "ceil((16*m*m + 4*m)/8)",
+  "honest_cost": "O(m^4) elementary bit operations per word, O(m^2) memory",
+  "candidate_implementation_executed": false,
+  "rows": [
+    {
+      "structural_m_not_security_bits": 16,
+      "vector_bits": 32,
+      "sites": 65,
+      "rule_bits": 3136,
+      "one_state_bits": 4160,
+      "public_key_payload_bits": 11456,
+      "public_key_bytes": 1437,
+      "ciphertext_bytes": 520,
+      "private_selector_bytes": 8,
+      "unoptimized_R_calls_one_word": 4096,
+      "optimized_max_R_calls_one_word": 2048,
+      "optimized_max_R_calls_encaps_plus_decaps": 6144
+    },
+    {
+      "structural_m_not_security_bits": 32,
+      "vector_bits": 64,
+      "sites": 129,
+      "rule_bits": 12416,
+      "one_state_bits": 16512,
+      "public_key_payload_bits": 45440,
+      "public_key_bytes": 5685,
+      "ciphertext_bytes": 2064,
+      "private_selector_bytes": 16,
+      "unoptimized_R_calls_one_word": 16384,
+      "optimized_max_R_calls_one_word": 8192,
+      "optimized_max_R_calls_encaps_plus_decaps": 24576
+    },
+    {
+      "structural_m_not_security_bits": 48,
+      "vector_bits": 96,
+      "sites": 193,
+      "rule_bits": 27840,
+      "one_state_bits": 37056,
+      "public_key_payload_bits": 101952,
+      "public_key_bytes": 12749,
+      "ciphertext_bytes": 4632,
+      "private_selector_bytes": 24,
+      "unoptimized_R_calls_one_word": 36864,
+      "optimized_max_R_calls_one_word": 18432,
+      "optimized_max_R_calls_encaps_plus_decaps": 55296
+    }
+  ]
+}

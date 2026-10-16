@@ -1,3 +1,17 @@
+Clarification — 16 October 2026
+Fixed correctness means one accepted upper bound, not mandatory zero failure or
+identical actual failure probabilities. Disclose per-profile bounds and material
+variation. A rigorous common bound may be negligible and nonzero. Existing frozen
+perfect-correctness releases are not silently changed by this policy clarification.
+
+Update 2026-10-16 — Stage design is part of proposal approval and admission.
+The scheme specifies one correctness envelope for all registered profiles and
+explains its parameter growth, resulting costs, endpoint evidence and meaningful
+intermediate settings. Reviewers explicitly assess this plan. Admission binds
+the profile declarations to the reviewed envelope, including perfect profiles
+under a statistical envelope. Passing metadata checks is not a proof of the
+claimed bound. See docs/protocol-admission.txt for the enforced workflow.
+
 CORRECTNESS BEFORE OFFICIAL CHALLENGES — PROPOSED POLICY 0.1
 
 Status
@@ -58,19 +72,43 @@ Evidence required for official admission
     establish that the submitted executable implements it correctly.
 
 Parameter design
-    The common integer challenge tier maps to exact registered parameters for
-    each scheme and release. State what it means, which integers are supported,
-    and the complete mapping, including a parameter vector where needed. A scheme
-    need not admit every integer. Every mapped profile needs correctness coverage;
-    unsupported sizes must not produce interpolated or unreviewed parameters.
-    Equal tiers across schemes do not imply equal strength or attack cost.
-    Output-key length is a separate property of the scheme.
+    A configuration has stable identity and exact parameters, or a fully specified
+    reviewed generation rule over a declared domain. A stage is its position on a
+    versioned default progression, not the generated challenge instance. Describe
+    admissible settings separately from the default human route. Different schemes
+    can have different numbers of useful natural stages. Multiples of ten or five
+    are a presentation preference, never a correctness/admissibility condition.
+    Every admitted configuration needs correctness coverage, including settings
+    outside the default route. A family proof must cover its full admitted domain;
+    unsupported choices must not produce interpolated or unreviewed parameters.
+    Stage ordinals are not comparable strength or attack-cost units. Output-key
+    length is a separate property. Historical tier_design/supported_tiers and
+    instance_size wire names remain compatible; see ladder-principles.txt.
 
     Every challenge profile needs coverage by the correctness argument. A single
     argument may cover a family of profiles; do not demand redundant proofs.
     Changing dimensions, modulus, noise, compression, or decoding thresholds can
     invalidate the original argument. Recheck both correctness and how meaningful
     the recovery task remains. This constrains how challenge ladders are built.
+
+    Fixed correctness across stages — decision 2026-10-14. Within each scheme's
+    versioned progression, keep one declared correctness requirement: every
+    profile must satisfy delta_t <= delta_max for the same bound delta_max.
+    A perfect-correctness ladder must retain delta_max = 0. Do not make higher
+    stages harder by relaxing this requirement. Actual failure probabilities
+    need not be identical, nor must profiles retain identical unused decoding
+    margins. Evidence must cover every profile. This rule does not choose a
+    universal numerical threshold for all schemes.
+
+    Keep generation/resource aborts separately visible; do not hide degraded
+    reliability by changing which outcomes are excluded from correctness.
+    A perfect-correctness construction may reduce unused decoding margin while
+    retaining its guarantee. A statistical construction may instead meet a strong
+    common negligible nonzero bound. Review the bound for each exact release and
+    configuration; old numeric examples are not evidence for a changed ladder.
+    Neither statement guarantees implementation correctness or resource success.
+    Report tighter per-configuration bounds and material variation, rather than
+    conceal a large reliability change under a conveniently loose envelope.
 
     Record the purpose of a profile: deliberately reduced research parameters
     or the proposal's intended operating parameters. A purpose label is not a
@@ -110,7 +148,7 @@ Live challenge behavior
     Never silently turn successful-agreement filtering into the stated original
     distribution. See the dated crosswalk, requirements R1–R8.
 
-Current reference implementations — 14 October 2026
+Historical reference implementations — 14 October 2026
     Finite-field DH release 6 and RSA release 3 each register tiers 1 through 50.
     Each tier maps to exact parameters under its frozen initial classical
     reference model; it is not the subgroup/modulus bit length or a measured
@@ -146,3 +184,12 @@ Primary references
     stated random-function heuristic. These illustrate why correctness and
     security strength must not be collapsed into a single percentage/bit count.
     https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf#page=24
+
+Current design and implementation status — 16 October 2026
+    Natural scaling may coordinate dimensions, noise, modulus or compression. It
+    must preserve the declared construction and correctness contract, with review
+    of any distribution/transform change. A round-count default route may select
+    from more reviewed configurations, but cannot alter them or their guarantees. See stage-progressions.txt for current paths and remaining concerns.
+    Accepted principles are not a claim that all current built-in paths have
+    completed independent scientific admission. Their original release contracts
+    and any statistical-failure handling limitations remain explicit.

@@ -1,0 +1,243 @@
+{
+  "model_id": "module-lwe-dimension-core-svp-v2",
+  "estimator_commit": "53da5982597709ba0fdf94ea37a84d822310fd84",
+  "archive_sha256": "4236adc38031c139c8a2721804d8962d6cacd015fae37f6f5215d2ac7f011060",
+  "sage_version": "10.1",
+  "method": "LWE.estimate.rough; ADPS16 classical Core-SVP/GSA, primal uSVP and dual hybrid",
+  "parameters": "Each exact flattened dimension n*rank with m=n*rank, full CBD2 secret/error; native uniform n-bit plaintext, full256-bit seeds",
+  "prime_verification": "Every q proved prime and minimal among integers with floor(q/4)>2*rank*n*eta^2+eta",
+  "correctness": "Fixed perfect honest agreement (delta0) across all profiles, conditional on completed generation and faithful implementation",
+  "limitations": [
+    "Not a full module/KEM analysis: ring/module structure and ciphertext information omitted.",
+    "Core-SVP heuristic costs are not measured operations, seconds or security lower bounds.",
+    "Native plaintext enumeration uses at most2^n candidate encryptions; these are not the same cost units as Core-SVP operations, so the two numbers are not silently minimized. KDF output length does not remove this attack.",
+    "Small unsupported/floor profiles intentionally have no numerical estimate."
+  ],
+  "profiles": [
+    {
+      "tier": 1,
+      "n": 8,
+      "rank": 1,
+      "q": "269",
+      "noise_bound": 66,
+      "decoding_threshold": 67,
+      "native_plaintext_bits": 8,
+      "generic_message_search_bits": 8,
+      "bits": null,
+      "reason": "Dimension below supported range of pinned rough estimator; no numerical claim"
+    },
+    {
+      "tier": 2,
+      "n": 16,
+      "rank": 1,
+      "q": "541",
+      "noise_bound": 130,
+      "decoding_threshold": 135,
+      "native_plaintext_bits": 16,
+      "generic_message_search_bits": 16,
+      "bits": null,
+      "reason": "Dimension below supported range of pinned rough estimator; no numerical claim"
+    },
+    {
+      "tier": 3,
+      "n": 32,
+      "rank": 1,
+      "q": "1039",
+      "noise_bound": 258,
+      "decoding_threshold": 259,
+      "native_plaintext_bits": 32,
+      "generic_message_search_bits": 32,
+      "bits": null,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 11.68,
+          "beta": 40
+        },
+        "dual_hybrid": {
+          "log2_rop": 12.194175893643369,
+          "beta": 40
+        }
+      },
+      "flattened_lwe_bits": 11.68,
+      "reason": "Estimator beta40 floor; numerical security claim omitted"
+    },
+    {
+      "tier": 4,
+      "n": 64,
+      "rank": 1,
+      "q": "2063",
+      "noise_bound": 514,
+      "decoding_threshold": 515,
+      "native_plaintext_bits": 64,
+      "generic_message_search_bits": 64,
+      "bits": null,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 11.68,
+          "beta": 40
+        },
+        "dual_hybrid": {
+          "log2_rop": 12.367781537512673,
+          "beta": 40
+        }
+      },
+      "flattened_lwe_bits": 11.68,
+      "reason": "Estimator beta40 floor; numerical security claim omitted"
+    },
+    {
+      "tier": 5,
+      "n": 64,
+      "rank": 2,
+      "q": "4111",
+      "noise_bound": 1026,
+      "decoding_threshold": 1027,
+      "native_plaintext_bits": 64,
+      "generic_message_search_bits": 64,
+      "bits": null,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 11.68,
+          "beta": 40
+        },
+        "dual_hybrid": {
+          "log2_rop": 17.409086474868197,
+          "beta": 55
+        }
+      },
+      "flattened_lwe_bits": 11.68,
+      "reason": "Estimator beta40 floor; numerical security claim omitted"
+    },
+    {
+      "tier": 6,
+      "n": 64,
+      "rank": 3,
+      "q": "6163",
+      "noise_bound": 1538,
+      "decoding_threshold": 1540,
+      "native_plaintext_bits": 64,
+      "generic_message_search_bits": 64,
+      "bits": 25.112,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 25.112,
+          "beta": 86
+        },
+        "dual_hybrid": {
+          "log2_rop": 28.17730965000287,
+          "beta": 94
+        }
+      },
+      "flattened_lwe_bits": 25.112
+    },
+    {
+      "tier": 7,
+      "n": 128,
+      "rank": 2,
+      "q": "8209",
+      "noise_bound": 2050,
+      "decoding_threshold": 2052,
+      "native_plaintext_bits": 128,
+      "generic_message_search_bits": 128,
+      "bits": 37.96,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 37.96,
+          "beta": 130
+        },
+        "dual_hybrid": {
+          "log2_rop": 39.87577320812357,
+          "beta": 135
+        }
+      },
+      "flattened_lwe_bits": 37.96
+    },
+    {
+      "tier": 8,
+      "n": 128,
+      "rank": 3,
+      "q": "12301",
+      "noise_bound": 3074,
+      "decoding_threshold": 3075,
+      "native_plaintext_bits": 128,
+      "generic_message_search_bits": 128,
+      "bits": 63.364,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 63.364,
+          "beta": 217
+        },
+        "dual_hybrid": {
+          "log2_rop": 63.397251890588294,
+          "beta": 217
+        }
+      },
+      "flattened_lwe_bits": 63.364
+    },
+    {
+      "tier": 9,
+      "n": 128,
+      "rank": 4,
+      "q": "16411",
+      "noise_bound": 4098,
+      "decoding_threshold": 4102,
+      "native_plaintext_bits": 128,
+      "generic_message_search_bits": 128,
+      "bits": 88.18550290204402,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 89.05999999999999,
+          "beta": 305
+        },
+        "dual_hybrid": {
+          "log2_rop": 88.18550290204402,
+          "beta": 302
+        }
+      },
+      "flattened_lwe_bits": 88.18550290204402
+    },
+    {
+      "tier": 10,
+      "n": 128,
+      "rank": 5,
+      "q": "20507",
+      "noise_bound": 5122,
+      "decoding_threshold": 5126,
+      "native_plaintext_bits": 128,
+      "generic_message_search_bits": 128,
+      "bits": 113.16969670905222,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 115.63199999999999,
+          "beta": 396
+        },
+        "dual_hybrid": {
+          "log2_rop": 113.16969670905222,
+          "beta": 385
+        }
+      },
+      "flattened_lwe_bits": 113.16969670905222
+    },
+    {
+      "tier": 11,
+      "n": 256,
+      "rank": 3,
+      "q": "24593",
+      "noise_bound": 6146,
+      "decoding_threshold": 6148,
+      "native_plaintext_bits": 256,
+      "generic_message_search_bits": 256,
+      "bits": 137.5479433065055,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 142.20399999999998,
+          "beta": 487
+        },
+        "dual_hybrid": {
+          "log2_rop": 137.5479433065055,
+          "beta": 470
+        }
+      },
+      "flattened_lwe_bits": 137.5479433065055
+    }
+  ]
+}

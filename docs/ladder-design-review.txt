@@ -1,0 +1,264 @@
+Challenge ladders: correctness, resource costs and honest comparisons
+Review date: 2026-10-15
+
+Purpose and limits
+------------------
+This review asks whether each ladder changes a meaningful problem dimension
+while preserving its correctness requirement, and whether its graphs represent
+the registered implementation faithfully. It is not independent cryptographic
+certification, a proof that higher tiers are harder, or an optimization of every
+scheme over all possible parameter choices. A coherent research ladder can
+still have avoidable overhead and an incomplete attack model.
+
+Design requirements
+-------------------
+1. Publish one correctness requirement for each scheme/version ladder. Every
+   tier must satisfy that same bound. A smaller actual failure probability or
+   larger unused decoding margin at an easier tier is permitted; relaxing the
+   required bound to obtain harder challenges is not. Keep generation/resource
+   aborts separate, with their conditioning explicit. See correctness-policy-v0.txt.
+2. Scale an actual mathematical problem or construction resource. Increasing
+   dimensions, field sizes, code lengths or error-correction resources should
+   have a defensible connection to the attack problem and to at least one real
+   cost. Do not obtain a convincing-looking curve merely by adding padding,
+   lowering message entropy at fixed geometry, or spending correctness margin.
+3. Prefer reasonably efficient choices within the declared construction and
+   correctness envelope. Explain deliberately conservative choices and exact
+   published-reference endpoints. Do not claim a globally optimal efficiency
+   frontier merely because encoded sizes increase with tier. Nor must every
+   individual metric increase: a meaningful tradeoff can affect computation
+   or memory while leaving a particular wire length unchanged.
+4. Report native parameter vectors, distributions, exact encodings and the
+   source of every estimate. A tier is an ordinal position in a versioned
+   ladder, not a unit of security. Do not force fifty distinct steps where the
+   construction supports only a smaller defensible set of geometries.
+5. An attack reference is neither a lower bound nor measured time. State which
+   attacks, costs, preprocessing and entropy ceilings it covers. Missing or
+   unsupported estimates stay missing. A brute-force ceiling is an upper
+   bound on an attack cost, not evidence that the scheme attains that strength.
+6. Graphs show this implementation's canonical binary public-key/ciphertext
+   lengths, excluding JSON, hexadecimal wrappers and separately registered
+   shared domain parameters. They are not optimized minima for a scheme family.
+   Key generation, encapsulation and decapsulation graphs remain unpopulated
+   until a shared measurement method and actual measurements exist. Bit sizes
+   and operation-count arguments do not by themselves justify seconds.
+7. Keep issued parameter mappings, receipts and evidence immutable. A changed
+   construction or sampling distribution needs a distinct release/profile
+   identity. Do not silently reinterpret old recoveries on a replacement ladder.
+
+Retained finite-field DH release 6
+---------------------------------
+Local sources: crucible/dh_v6.py; scripts/generate_dh_v6_parameters.py;
+crucible/calibration_v2.py; tests/test_dh_v6.py.
+
+The field modulus grows from 32 to 3072 bits. The order-q subgroup grows with
+it, and full uniform nonzero exponents are sampled independently per challenge.
+Public keys and ciphertexts each grow from 4 to 384 bytes. Agreement is perfect
+for every honest draw under the exact group arithmetic and transcript encoding.
+These are real resource increases, with no correctness relaxation.
+
+The public setup generates p=2*R*q+1, with q proved prime and q^2>p. Pocklington
+certificates prove every p and q; they do not certify a discrete-log cost.
+The subgroup order doubles as the large certificate factor, which is convenient
+for a compact exact proof but is not an optimized subgroup-size selection:
+
+  tier    field bits    subgroup bits    R bits    initial reference bits
+     1            32               17        14                  8.299441
+    25           678              340       338                 66.818913
+    50          3072             1537      1535                128.000000
+
+At tier 50, the generic log2(q)/2 term is about 768.05, while the normalized
+prime-field NFS reference is 128. Full-width subgroup exponents therefore spend
+substantially more exponent bits than the model needs once its field attack
+dominates. This does not make the ladder direction wrong, but it prevents a
+claim that its future arithmetic timings represent efficient DH at those
+reference strengths. A separately reviewed smaller-subgroup construction or
+explicitly specified short-exponent variant could reduce that overhead. Do not
+silently restrict the current uniform distribution to obtain such a speedup.
+
+The published relation p=2*R*q+1 is not, by itself, evidence of a special-NFS
+weakness. At the high endpoint R is 1535 bits, not a small fixed coefficient.
+At the tiny endpoint the entire field is deliberately small. The subgroup is
+prime-order, so factoring its cofactor does not split the subgroup order into
+small Pohlig-Hellman components. This review did not perform an exhaustive
+special-structure attack analysis and does not establish equivalence to
+uniformly sampled primes. The exact structured distribution remains disclosed.
+Fixed groups also permit reusable preprocessing; reports must include that cost.
+
+The rho/NFS reference uses a project-normalized asymptotic expression anchored
+at 3072 bits. It is not a validated finite-size cost estimator, a confidentiality
+reduction or an online-only cost. Retain the release and these limitations;
+revisit exponent/subgroup efficiency before claiming representative DH timings.
+
+Primary context: RFC 7919 section 5.2 discusses shorter exponents as an explicit
+efficiency choice and gives a 275-bit example for its different ffdhe3072 group.
+That recommendation is not automatically transferable to Crucible's custom
+groups. Appendix A.2 estimates that published group at 125 bits, illustrating
+that Crucible's normalized 128-bit anchor is a convention, not a universal fact.
+https://www.rfc-editor.org/rfc/rfc7919.html#section-5.2
+https://www.rfc-editor.org/rfc/rfc7919.html#appendix-A.2
+Pocklington certificates and constructive prime generation are described in
+Handbook of Applied Cryptography, chapter 4, sections 4.3 and 4.4.4. Crucible's
+fixed recursive factor-size/base-2 sampler is not Maurer's full distribution,
+and must not inherit the latter's almost-uniformity claim.
+https://cacr.uwaterloo.ca/hac/about/chap4.pdf
+
+Retained RSA release 3
+----------------------
+Local sources: crucible/rsa_v3.py; crucible/calibration_v2.py;
+tests/test_rsa_v3.py.
+
+The modulus grows from 32 to 3072 bits with independently generated balanced
+factors. Larger integer arithmetic and ciphertext lengths are real costs.
+For distinct proved prime factors and e*d=1 modulo (p-1)(q-1), RSA inversion
+works for every honest sampled z, including nonunits. The same perfect-agreement
+requirement applies throughout, conditioned on successful bounded generation.
+The shared candidate/pair/time limits can abort generation; an abort is not a
+completed agreement trial and must not be hidden as success.
+
+Factors have a disclosed recursive Pocklington distribution, not uniformity over
+all primes. Private certificates never enter the public transcript. This review
+found no basis to assert a specific attack from that structure alone; it also
+did not prove this distribution as strong as generic balanced RSA moduli.
+The nominal rho/NFS model omits ECM, quadratic sieve and other attacks/constants.
+Low-tier values are particularly rough. A selected field size reaching a model
+target does not establish that all practical attacks require that work.
+
+The current pk is N||e, padding both to the modulus width even though e=65537
+always needs only three bytes. Thus the tier-50 graph reports a 768-byte key,
+where this same integer pair could use 384+3 bytes with a different agreed
+encoding. Ciphertext size is 384 bytes. This is an avoidable implementation
+overhead, not an intrinsic doubling of RSA public-key size. Retain the immutable
+encoding now; a future encoding revision should be explicit and independently
+identified, including its KDF transcript. Do not replace actual graph values
+with hypothetical compact sizes.
+
+The custom transcript KDF and variable-time Python implementation are not
+RFC 9690 RSA-KEM compliance or a confidentiality theorem. That RFC supplies
+construction context, not admission evidence for this adapter:
+https://datatracker.ietf.org/doc/html/rfc9690
+Constructive-prime context and distribution cautions:
+https://cacr.uwaterloo.ca/hac/about/chap4.pdf
+
+Retained elliptic-curve research release 1
+-----------------------------------------
+Local sources: crucible/ec_research.py; crucible/ec_parameters.json;
+docs/implementation-ec-research.txt; scripts/check_ec_parameters.py;
+tests/test_ec_research.py.
+
+Each tier uses a distinct certified prime-order short-Weierstrass curve.
+Field sizes grow from 17 to 257 bits; the displayed generic attack reference
+is log2(q)/2 for the actual group order, about 8.136488 to 128.239715 bits.
+Larger fields and full-width scalars create real encoding and arithmetic costs.
+The same exact group identity r(xG)=x(rG) gives perfect honest agreement at
+every tier. The published ECPP/Lucas and group-order certificates establish the
+algebra used by that argument, not confidentiality or optimized curve choice.
+
+The generator excludes singular curves, j=0/1728, anomalous order and embedding
+degrees at most 100. These are useful checks, not an exhaustive curve-security
+review. Generic rho references omit curve-specific attacks, constants, reusable
+preparation, parallel tradeoffs and quantum algorithms. These custom curves and
+the transcript KDF are not X25519 or RFC 9180 DHKEM.
+
+The registered encoding is 0x04||x||y, with full affine coordinates. Public keys
+and ciphertexts grow from 7 to 67 bytes. At the endpoint a compressed encoding
+could use 34 bytes, but it changes the wire format and decoding obligations.
+SEC 1 section 2.3.3 describes compressed and uncompressed point encodings; this
+does not certify these custom curves. Retain the current release and disclose
+that its graph is the full-point implementation, not an optimized minimum.
+https://www.secg.org/sec1-v2.pdf
+Published, distinct X25519/DHKEM constructions:
+https://www.rfc-editor.org/rfc/rfc7748.html
+https://www.rfc-editor.org/rfc/rfc9180.html
+
+Retained Frodo matrix-dimension research release 1
+-------------------------------------------------
+Local sources: crucible/lattice_frodo.py; docs/lattice-frodo.txt;
+docs/lattice-frodo-calibration.json; docs/lattice-frodo-correctness.json;
+scripts/lattice_calibrate_frodo.py; tests/test_lattice_frodo.py.
+
+The frozen ladder increases n through 50 distinct multiples of eight from 8
+to 640, retaining q=32768, nbar=8, the exact finite noise law and full message,
+seed, salt and output distributions of its declared Frodo640 construction.
+Canonical public-key size is 16+15*n bytes; ciphertext size is 152+15*n bytes.
+The full matrix contains n^2 entries and the main products perform increasing
+arithmetic. These are meaningful resource costs. Actual memory and time still
+depend on implementation and have not been published as benchmark results.
+
+Every tier meets the common honest-disagreement requirement delta<=2^-133 under
+the explicitly declared ideal-XOF sampling model. The proof uses an exact
+rational Chernoff bound on each coordinate, then a union bound over 64 decoded
+coordinates. Evaluating at n640 covers all smaller dimensions. No independence
+between decoded coordinates is needed for that union bound. n8 additionally has
+a deterministic support bound giving delta=0; this stronger result does not
+change the common requirement. The finite SHAKE seed is not literally an
+unbounded independent random tape, so retain the statistical model qualification.
+
+The first two dimensions have no numerical estimate because the selected
+lattice estimator is unsupported or hits its small-block-size floor. Later
+references use only primal-uSVP and dual-hybrid estimates with a moment-matched
+Gaussian approximation to the finite noise law, capped at 128 by message search.
+This is not an exhaustive KEM attack model or a security lower bound.
+
+The final published-construction anchor is a deliberate efficiency exception:
+
+  n       uncapped minimum lattice reference    displayed capped reference
+  576                              124.684                       124.684
+  584                              127.020                       127.020
+  592                              129.064                       128.000
+  640                              141.912                       128.000
+
+Only n576 and n640 in this table are active late-ladder profiles; the other
+rows come from the recorded candidate scan. The model cap is already reached
+at n592. Compared with that candidate, n640 uses 720 more public-key bytes and
+720 more ciphertext bytes, and about 16.9% more matrix entries. It is therefore
+not the minimum-resource parameter attaining the displayed 128-bit cap under
+this limited model. Nor does the cap prove n592 has the same actual security
+as n640. Keeping the independently byte-checked published n640 endpoint is a
+defensible reference choice with broader provenance, not a measured security
+improvement inferred from the flat capped number. Preserve this distinction.
+
+Published Frodo parameters and implementations:
+https://frodokem.org/
+Pinned upstream construction used for the n640 conformance fixture:
+https://github.com/microsoft/PQCrypto-LWEKE/tree/a2f9dec8917ccc3464b3378d46b140fa7353320d
+Pinned, incomplete attack-estimation baseline:
+https://github.com/malb/lattice-estimator/tree/53da5982597709ba0fdf94ea37a84d822310fd84
+
+Recommendations from the four-family review
+-------------------------------------------
+Retain these four mathematical mappings and their historical evidence. Their
+resource direction and common correctness envelopes make sense. This is not
+a clean bill of optimal efficiency or comprehensive security estimation.
+Before making competitive cross-scheme timing claims, review DH subgroup/
+exponent choices, RSA public-exponent padding and EC point compression, then
+measure identified implementations under a shared benchmark. Keep the Frodo
+anchor choice visible in the detailed specification. Improve attack estimates
+as separately versioned evidence rather than rewriting the original records.
+
+Other-family dispositions
+-------------------------
+Module-lattice: replace the fixed-geometry modulus path with eleven degree/rank
+settings. Lossless encodings and minimal prime moduli satisfy the same perfect
+correctness requirement. Bytes and arithmetic grow. Native message capacity
+grows with degree; the reference includes an explicit message-search caveat.
+Six larger settings have independently reproduced flattened-LWE estimates;
+smaller estimator-floor cases remain unknown. See lattice-module-v2.txt.
+
+HQC: replace fixed ring/decoder geometry with 27 weights and 23 minimally sized
+supported codecs, retaining a worst-case zero-failure bound. Some adjacent
+weights share a code because that is a real discretization. The endpoint is a
+partial proof/decoder boundary, not a calibrated security target. See
+hqc-growth.txt for the proof, source/build limitations and sanitizer coverage.
+
+NTRU Prime: retain the certified degree/weight growth and common perfect bound.
+Admissibility can cause small encoding dips. McEliece: retain length growth,
+fixed m12/t64 and syndrome size; public matrices and matrix work grow. Neither
+family's elementary search-space data is a complete attack estimate. See
+code-ntru-ladder-review.txt for sources, tradeoffs and endpoint qualifications.
+
+Current disposition: all eight families have explicit progression, cost,
+correctness and endpoint explanations. This is a design audit, not a proof of
+monotone security, Pareto optimality or a full security review. The new proposal
+gate requires these same explanations and an independent manual assessment;
+future submissions do not inherit approval from resemblance to a built-in.

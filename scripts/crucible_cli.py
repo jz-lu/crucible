@@ -20,20 +20,57 @@ import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
-from uuid import uuid4
+from uuid import UUID, uuid4
 import webbrowser
 
 DEFAULT_SERVER = "http://127.0.0.1:8000"
 DEFAULT_CONFIG = Path.home() / ".config" / "crucible" / "config.json"
 MAX_RESPONSE = 2 * 1024 * 1024
 MAX_CATALOGUE_RESPONSE = 8 * 1024 * 1024
+MAX_CHALLENGE_RESPONSE = 8 * 1024 * 1024
+# Up to 50 bounded specifications plus reviewer notes/evidence per history page.
+MAX_PROPOSAL_RESPONSE = 8 * 1024 * 1024
+MAX_SPECIFICATION = 48 * 1024
+PROPOSALS = "/api/protocol/proposals"
 METHOD_TODO = "CRUCIBLE_METHOD_TODO"
+
+# Only schema field names can appear in validation diagnostics. Unknown JSON
+# keys and arbitrary server messages can contain submitted secrets or terminals
+# controls, so they are never copied into the client error output.
+PROPOSAL_FIELDS = frozenset("specification format name version summary algorithms setup keygen encapsulate decapsulate parameters tier_meaning supported_tiers kind min max step values mapping distribution reuse encoding public_key ciphertext shared_secret shared_secret_bytes correctness failure_bound argument scope evidence security notion model claim assumptions tier_design parameter_progression cost_tradeoff fixed_correctness endpoint_status endpoint_target endpoint_evidence intermediate_steps parameter_selection objective constraints security_model search_domain comparison_evidence tradeoffs_and_uncertainty implementation url sha256 artifact_sha256 runtime entrypoint references title _instructions idempotency_key expected_revision content_sha256 range list".split())
+
+
+def proposal_field_errors(raw):
+    try:
+        document = json.loads(raw)
+        errors = document.get("errors", [])
+        if not isinstance(errors, list):
+            return []
+    except (ValueError, AttributeError):
+        return []
+    result = []
+    for error in errors[:50]:
+        if not isinstance(error, dict) or not isinstance(error.get("path"), str):
+            continue
+        parts = error["path"].split(".")[:12]
+        safe = [part if part in PROPOSAL_FIELDS or re.fullmatch(r"[0-9]{1,4}", part)
+                else "<unknown-field>" for part in parts]
+        result.append({"path": ".".join(safe) or "specification",
+                       "message": "Check this field's required type and bounds in schema.json; remove unknown fields."})
+    return result
 
 
 class ClientError(ValueError):
     def __init__(self, message, code="client_error", data=None):
         super().__init__(message)
         self.code, self.data = code, data
+
+
+def retry_after_seconds(value):
+    """Accept bounded delta-seconds only; never expose arbitrary header text."""
+    if isinstance(value, str) and re.fullmatch(r"[0-9]{1,5}", value):
+        value = int(value)
+    return value if type(value) is int and 0 <= value <= 86400 else None
 
 
 def origin(value):
@@ -124,6 +161,7 @@ class NoRedirect(HTTPRedirectHandler):
 class Client:
     def __init__(self, server, config_path=DEFAULT_CONFIG):
         self.server, self.config_path = origin(server), Path(config_path).expanduser()
+        self.expected_handle = None
         # Environment proxy settings must not redirect loopback credentials.
         self.opener = build_opener(ProxyHandler({}), NoRedirect())
 
@@ -138,6 +176,8 @@ class Client:
             credential = configuration(self.config_path)["servers"].get(self.server)
             if not isinstance(credential, dict) or not isinstance(credential.get("access_token"), str):
                 raise ClientError("Connect this server first with the login command.", "login_required")
+            if self.expected_handle is not None and credential.get("handle") != self.expected_handle:
+                raise ClientError("The connected account changed. Reconnect the original proposal author before retrying.", "proposal_account_changed")
             expiry = credential.get("expires_at")
             if not isinstance(expiry, (int, float)) or not math.isfinite(expiry) or expiry <= time.time():
                 raise ClientError("This connection expired. Run login again.", "login_required")
@@ -148,9 +188,21 @@ class Client:
         data = encode(body) if body is not None else None
         if data is not None:
             headers["Content-Type"] = "application/json"
+        if parts.path == PROPOSALS + "/validate" and data is not None and not auth:
+            # Public, format-only validation creates no session or proposal.
+            # Keep the server's same-origin boundary; this sends no credential.
+            headers["Origin"] = self.server
         request = Request(self.server + path, data=data, headers=headers)
-        # The current catalogue embeds every tier's complete frozen manifest.
-        response_limit = MAX_CATALOGUE_RESPONSE if parts.path == "/api/schemes" else MAX_RESPONSE
+        # Catalogue manifests and full public-key encodings need separate read
+        # budgets. This does not enlarge result or source upload limits.
+        response_limit = MAX_RESPONSE
+        if parts.path == "/api/schemes":
+            response_limit = MAX_CATALOGUE_RESPONSE
+        elif parts.path == "/api/challenges" or re.fullmatch(r"/api/challenges/[A-Za-z0-9_-]+(?:/(?:download|submit))?", parts.path):
+            # Submission receipts include the complete public challenge too.
+            response_limit = MAX_CHALLENGE_RESPONSE
+        elif parts.path == "/api/me/protocol-proposals" or re.fullmatch(r"/api/protocol/proposals/[0-9a-f-]{36}(?:/revisions)?", parts.path):
+            response_limit = MAX_PROPOSAL_RESPONSE
         try:
             with self.opener.open(request, timeout=30) as response:
                 if response.url != self.server + path:
@@ -165,9 +217,21 @@ class Client:
                         409: "The request conflicts with recorded state or the round deadline. Preserve the retry file.",
                         422: "The server rejected the input format. Check the workspace and result contract.",
                         429: "Too many requests. Wait before retrying."}
+            delay = retry_after_seconds(error.headers.get("Retry-After"))
+            details = {"retry_after_seconds": delay} if delay is not None else {}
+            proposal_request = parts.path == "/api/me/protocol-proposals" or parts.path == PROPOSALS or parts.path.startswith(PROPOSALS + "/")
+            if proposal_request:
+                messages.update({403: "Proposal access needs a newly connected agent with proposal permissions. Run login again and use the proposal author's account.",
+                                 409: "The proposal revision or frozen retry conflicts with recorded state. Preserve the retry file; use proposal show, then proposal revise into a new directory for a new revision.",
+                                 413: "The specification must fit within 48 KiB and the complete request within 64 KiB.",
+                                 422: "Check the specification fields against schema.json and the template instructions."})
+                if error.code == 422:
+                    raw_error = error.read(65537)
+                    if len(raw_error) <= 65536:
+                        details["field_errors"] = proposal_field_errors(raw_error)
             # Never echo a request body, candidate, token, or arbitrary server error text.
             raise ClientError(messages.get(error.code, "The server could not complete the request."),
-                              "http_" + str(error.code), {"retry_after": error.headers.get("Retry-After")}) from None
+                              "http_" + str(error.code), details) from None
         except (URLError, TimeoutError, OSError):
             raise ClientError("Could not reach the configured server. Preserve the retry file and retry.", "network_error") from None
         if len(value) > response_limit:
@@ -210,10 +274,8 @@ def login(client, args):
                 continue
             if error.code != "http_429":
                 raise
-            try:
-                interval = max(interval, min(30, float(error.data.get("retry_after") or 2)))
-            except ValueError:
-                interval = max(interval, 5)
+            delay = error.data.get("retry_after_seconds") if isinstance(error.data, dict) else None
+            interval = max(interval, min(30, retry_after_seconds(delay) or 2))
             continue
         status = result.get("status")
         if status == "pending":
@@ -227,7 +289,10 @@ def login(client, args):
         if not isinstance(expiry, (int, float)) or not math.isfinite(expiry) or expiry <= time.time():
             raise ClientError("The server returned an expired access token.")
         config = configuration(client.config_path)
-        config["servers"][client.server] = {"access_token": token, "expires_at": expiry}
+        handle = result.get("user", {}).get("handle")
+        if not isinstance(handle, str) or not re.fullmatch(r"[a-z0-9_]{3,32}", handle):
+            raise ClientError("The server returned an invalid account identity.")
+        config["servers"][client.server] = {"access_token": token, "expires_at": expiry, "handle": handle}
         config["default_server"] = client.server
         save_json(client.config_path, config)
         return {"status": "connected", "server": client.server,
@@ -261,10 +326,61 @@ def workspace(client, package, destination):
             or specification.get("implementation", {}).get("sha256") != expected
             or specification.get("version") != challenge["scheme_version"]):
         raise ClientError("Reference source does not match the challenge's pinned implementation hash.")
+    artifacts = None
+    source_files = {}
+    artifact_hash = package.get("scheme_manifest", {}).get("implementation", {}).get("artifact_sha256")
+    if artifact_hash is not None:
+        if not isinstance(artifact_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", artifact_hash):
+            raise ClientError("The challenge has an invalid implementation artifact pin.")
+        artifacts = client.request("/api/protocol/artifacts" + query)
+        payload = {key: value for key, value in artifacts.items() if key != "artifact_sha256"}
+        digest = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                                          ensure_ascii=True, allow_nan=False).encode("utf-8")).hexdigest()
+        if (digest != artifact_hash or artifacts.get("artifact_sha256") != artifact_hash
+                or artifacts.get("scheme_id") != challenge["scheme_id"]
+                or artifacts.get("scheme_version", artifacts.get("version")) != challenge["scheme_version"]
+                or ("adapter_source_sha256" in artifacts and artifacts["adapter_source_sha256"] != expected)):
+            raise ClientError("Implementation artifacts do not match the challenge's pinned dependency closure.")
+        declared = artifacts.get("files", {})
+        if isinstance(declared, list):
+            try:
+                pairs = [(row["path"], row["sha256"]) for row in declared]
+                declared = dict(pairs)
+                if len(declared) != len(pairs):
+                    raise ClientError("Duplicate public source artifact paths.")
+            except (KeyError, TypeError):
+                raise ClientError("The server returned an invalid source closure.") from None
+        if not isinstance(declared, dict) or len(declared) > 32:
+            raise ClientError("The source closure exceeds its file allowance.")
+        if any(not isinstance(name, str) for name in declared):
+            raise ClientError("Invalid public source artifact path.")
+        names = {name.casefold() for name in declared}
+        if len(names) != len(declared) or any("/".join(name.split("/")[:i]) in names
+                for name in names for i in range(1, len(name.split("/")))):
+            raise ClientError("Public source artifact paths conflict on a portable filesystem.")
+        total = 0
+        for name, digest in declared.items():
+            if not isinstance(name, str):
+                raise ClientError("Invalid public source artifact path.")
+            path = PurePosixPath(name)
+            if (path.is_absolute() or ".." in path.parts or "\\" in name or str(path) != name
+                    or not path.parts or path.parts[0] not in {"crucible", "scripts", "data"}
+                    or path.suffix not in {".py", ".c", ".h", ".json", ".txt", ".sage"}
+                    or not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None):
+                raise ClientError("Invalid public source artifact path or pin.")
+            content = client.request("/api/protocol/artifact-source" + query + "&" + urlencode({"path": name}), raw=True)
+            total += len(content)
+            if len(content) > 2*1024*1024 or total > 8*1024*1024 or hashlib.sha256(content).hexdigest() != digest:
+                raise ClientError("Public source closure is oversized or differs from the challenge's pinned artifacts.")
+            source_files[name] = content
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
     save_json(root / "challenge.json", package)
     save_json(root / "protocol.json", specification)
     private_write(root / "reference" / "protocol.py", source)
+    if artifacts is not None:
+        save_json(root / "reference" / "implementation-artifacts.json", artifacts)
+    for name, content in source_files.items():
+        private_write(root / "reference" / "source" / name, content)
     save_json(root / ".crucible.json", {"format": "crucible-workspace-v1", "server": client.server,
                                       "challenge_id": challenge["id"]})
     private_write(root / "attack" / "solve.py", '''"""Implement your attack on challenge.json. Print only the recovered key as hex.
@@ -290,6 +406,10 @@ raise SystemExit("Implement the attack using the public challenge inputs first."
         "Edit attack/solve.py and method.md, then run your own command through the client.\n"
         "The solver reads challenge.json and prints one hexadecimal shared secret (or JSON with candidate).\n"
         "Protocol source under reference/ is for inspection; it is never automatically executed.\n"
+        "The exact profile ID identifies this configuration. Frozen instance_size/tier fields are legacy selectors and can differ from displayed stages.\n"
+        "If present, reference/implementation-artifacts.json records the pinned dependency closure.\n"
+        "Declared first-party source and parameter files are hash-checked under reference/source/.\n"
+        "Its digest is verified against the challenge; this does not install or independently audit those dependencies.\n"
         "Run: python /path/to/crucible_cli.py run -- python attack/solve.py\n"
         "Submit explicitly: python /path/to/crucible_cli.py submit result.json\n"
         "Use --source attack/helper.py to include additional selected UTF-8 source files.\n"
@@ -298,8 +418,13 @@ raise SystemExit("Implement the attack using the public challenge inputs first."
         "A verified key does not verify your reported compute or method. Do not put credentials in source.\n"
         "Once submission starts, keep .crucible/submission.json: retries reuse its frozen payload.\n")
     private_write(root / ".gitignore", ".crucible/\n.crucible.json\nchallenge.json\nresult.json\nreceipt.json\n__pycache__/\n.env\n")
+    manifest = package.get("scheme_manifest", {})
+    named = manifest.get("profile_kind") == "standard-parameter-set"
     return {"status": "ready", "path": str(root), "challenge_id": challenge["id"],
-            "scheme_id": challenge["scheme_id"], "tier": package.get("scheme_manifest", {}).get("instance_size"),
+            "scheme_id": challenge["scheme_id"], "profile_id": manifest.get("profile_id", manifest.get("id")),
+            "profile_label": manifest.get("profile_label", manifest.get("name")),
+            "selection_kind": "parameter-set" if named else "tier",
+            "tier": None if named else manifest.get("instance_size"),
             "ends_at": challenge["ends_at"], "challenge_status": challenge["status"]}
 
 
@@ -308,19 +433,50 @@ def init_workspace(client, args):
     scheme = next((item for item in schemes if item.get("id") == args.scheme), None)
     if scheme is None:
         raise ClientError("Unknown scheme; use schemes to list available identifiers.")
-    profile = next((item for item in scheme.get("profiles", []) if item.get("instance_size") == args.tier), None)
+    stage = getattr(args, "stage", None)
+    if (args.tier is not None or stage is not None) and (scheme.get("selection_kind") == "parameter-set"
+            or any(item.get("profile_kind") == "standard-parameter-set" for item in scheme.get("profiles", []))):
+        raise ClientError("This scheme uses named parameter sets. Select an exact --profile-id from schemes; storage ordinals are not stages.")
+    stage_entry = None
+    if stage is not None:
+        progression = scheme.get("default_progression")
+        if not isinstance(progression, dict):
+            raise ClientError("This server has no published stage progression. Use an exact --profile-id from schemes, or the legacy --tier selector.")
+        stage_entry = next((item for item in progression.get("stages", []) if item.get("number") == stage), None)
+        if stage_entry is None:
+            raise ClientError("That stage is not available in this scheme's default progression.")
+    profile = next((item for item in scheme.get("profiles", []) if
+                    (item.get("profile_id", item.get("id")) == stage_entry["profile_id"] if stage_entry is not None
+                     else item.get("profile_id", item.get("id")) == args.profile_id if args.profile_id is not None
+                     else item.get("instance_size") == args.tier)), None)
     if profile is None:
-        raise ClientError("That tier is not available for this scheme.")
+        raise ClientError("That parameter profile is not available for this scheme.")
     # Validate destination before issuing a challenge as a side effect.
     destination = Path(args.path).expanduser()
     if destination.exists() and (not destination.is_dir() or any(destination.iterdir())):
         raise ClientError("Choose a new or empty workspace directory.")
-    query = urlencode({"scheme_id": scheme["id"], "scheme_version": scheme["version"], "profile_id": profile["id"]})
+    selected_id = profile.get("profile_id", profile.get("id"))
+    if not isinstance(selected_id, str) or not selected_id:
+        raise ClientError("The selected parameter profile has no valid identifier.")
+    query = urlencode({"scheme_id": scheme["id"], "scheme_version": scheme["version"], "profile_id": selected_id})
     current = client.request("/api/challenges?" + query).get("challenge")
     if current is None:
         current = client.request("/api/challenges", {"scheme_id": scheme["id"], "scheme_version": scheme["version"],
-                                                     "instance_size": args.tier})["challenge"]
-    return workspace(client, download_challenge(client, current["id"]), args.path)
+                                                     "profile_id": selected_id})["challenge"]
+    package = download_challenge(client, current["id"])
+    downloaded = package.get("scheme_manifest", {})
+    if (package["challenge"].get("scheme_id") != scheme["id"]
+            or package["challenge"].get("scheme_version") != scheme["version"]
+            or downloaded.get("profile_id", downloaded.get("id")) != selected_id):
+        raise ClientError("The server returned a challenge for a different parameter profile.")
+    result = workspace(client, package, args.path)
+    if "stage_number" in profile:
+        result.update(stage=profile["stage_number"], stage_label=profile.get("stage_label"),
+                      progression_id=profile.get("progression_id"))
+    if stage_entry is not None:
+        result.update(stage=stage, stage_label=f"Stage {stage}",
+                      progression_id=progression["id"])
+    return result
 
 
 def workspace_metadata(path):
@@ -350,7 +506,7 @@ def run_solver(args):
         raise ClientError("Provide a local solver command after --.")
     if (root / ".crucible" / "submission.json").exists():
         raise ClientError("A submission is already frozen for this workspace. Retry it without changing the answer.")
-    package = load_json(root / "challenge.json")
+    package = load_json(root / "challenge.json", MAX_CHALLENGE_RESPONSE)
     if package.get("challenge", {}).get("id") != metadata["challenge_id"]:
         raise ClientError("Workspace and challenge identifiers differ.")
     method = method_from_file(root)
@@ -478,7 +634,7 @@ def submit(client, args):
     root, metadata = workspace_metadata(args.path)
     result_path = Path(args.result)
     result = load_json(result_path if result_path.is_absolute() else root / result_path, 128 * 1024)
-    package = load_json(root / "challenge.json")
+    package = load_json(root / "challenge.json", MAX_CHALLENGE_RESPONSE)
     result = validate_result(result, package)
     if result["challenge_id"] != metadata["challenge_id"]:
         raise ClientError("Workspace and result challenge identifiers differ.")
@@ -528,6 +684,245 @@ def submit(client, args):
     return {"status": "recorded", "submission": receipt, "source": pending.get("source_receipt"), "replayed": False}
 
 
+def proposal_id(value):
+    try:
+        if not isinstance(value, str) or str(UUID(value)) != value:
+            raise ValueError()
+    except (ValueError, AttributeError):
+        raise ClientError("Use the full proposal UUID returned by proposal list or submit.") from None
+    return value
+
+
+def proposal_owner(client):
+    credential = configuration(client.config_path)["servers"].get(client.server)
+    handle = credential.get("handle") if isinstance(credential, dict) else None
+    if not isinstance(handle, str) or not re.fullmatch(r"[a-z0-9_]{3,32}", handle):
+        raise ClientError("Run login again to connect proposal permissions and record the proposal author's identity.", "login_required")
+    return handle
+
+
+def proposal_metadata(path):
+    root = Path(path).expanduser().absolute()
+    metadata = load_json(root / ".crucible-proposal.json", 4096)
+    if metadata.get("format") != "crucible-proposal-workspace-v1" or metadata.get("mode") not in {"new", "revision"}:
+        raise ClientError("Use proposal init or proposal revise to create a proposal workspace first.")
+    if origin(metadata.get("server")) != metadata.get("server"):
+        raise ClientError("The proposal workspace has an invalid server binding.")
+    if metadata["mode"] == "revision":
+        proposal_id(metadata.get("proposal_id"))
+        if (type(metadata.get("expected_revision")) is not int or not 1 <= metadata["expected_revision"] < 2147483647
+                or not isinstance(metadata.get("content_sha256"), str)
+                or re.fullmatch(r"[0-9a-f]{64}", metadata["content_sha256"]) is None
+                or not isinstance(metadata.get("owner_handle"), str)
+                or re.fullmatch(r"[a-z0-9_]{3,32}", metadata["owner_handle"]) is None):
+            raise ClientError("The proposal's revision base is incomplete or invalid.")
+    return root, metadata
+
+
+def empty_proposal_destination(path):
+    root = Path(path).expanduser().absolute()
+    if any(part.is_symlink() for part in (root, *root.parents)):
+        raise ClientError("Refusing to write a proposal through a symbolic link.")
+    if root.exists() and (not root.is_dir() or any(root.iterdir())):
+        raise ClientError("Choose a new or empty proposal directory; existing files are never overwritten.")
+    return root
+
+
+def proposal_document(value):
+    if not isinstance(value, dict) or value.get("format") != "crucible-kem-spec-v1":
+        raise ClientError("Expected a crucible-kem-spec-v1 specification object.")
+    if len(encode(value)) > MAX_SPECIFICATION:
+        raise ClientError("The specification must fit within 48 KiB of UTF-8 JSON.", "proposal_too_large")
+    return value
+
+
+def checked_proposal(record):
+    if not isinstance(record, dict):
+        raise ClientError("The server returned an invalid proposal record.")
+    proposal_id(record.get("id"))
+    if (type(record.get("revision")) is not int or not 1 <= record["revision"] <= 2147483647
+            or record.get("status") not in {"submitted", "approved", "changes_requested"}
+            or not isinstance(record.get("content_sha256"), str)
+            or re.fullmatch(r"[0-9a-f]{64}", record["content_sha256"]) is None):
+        raise ClientError("The server returned an invalid proposal revision.")
+    document = proposal_document(record.get("specification"))
+    if hashlib.sha256(encode(document)).hexdigest() != record["content_sha256"]:
+        raise ClientError("The proposal content does not match its recorded hash.")
+    return record
+
+
+def proposal_summary(record):
+    return {key: record[key] for key in ("id", "status", "revision", "content_sha256", "created_at") if key in record}
+
+
+def save_specification(path, value):
+    pretty = (json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8")
+    private_write(path, pretty if len(pretty) <= MAX_SPECIFICATION else encode(value))
+
+
+def proposal_result(client, receipt, *, replayed):
+    return {"status": "recorded", "proposal": proposal_summary(receipt), "replayed": replayed,
+            "proposal_url": client.server + "/#propose?proposal=" + proposal_id(receipt.get("id"))}
+
+
+def proposal_workspace(client, args, *, revise=False):
+    root = empty_proposal_destination(args.path)
+    metadata = {"format": "crucible-proposal-workspace-v1", "server": client.server, "mode": "new"}
+    feedback = None
+    if revise:
+        identifier = proposal_id(args.proposal_id)
+        owner = proposal_owner(client)
+        client.expected_handle = owner
+        feedback = client.request(PROPOSALS + "/" + identifier)
+        record = checked_proposal(feedback.get("proposal"))
+        if record["id"] != identifier or feedback.get("author", {}).get("handle") != owner:
+            raise ClientError("That proposal is not owned by the connected account.")
+        metadata.update(mode="revision", proposal_id=identifier, expected_revision=record["revision"],
+                        content_sha256=record["content_sha256"], owner_handle=owner)
+    template = proposal_document(client.request("/api/protocol/spec-template", auth=False))
+    schema = client.request("/api/protocol/spec-schema", auth=False)
+    if not isinstance(schema.get("properties"), dict):
+        raise ClientError("The server returned an invalid specification schema.")
+    specification = dict(feedback["proposal"]["specification"]) if feedback else template
+    if feedback and "_instructions" in template:
+        specification["_instructions"] = template["_instructions"]
+        # A nearly full valid revision must remain editable and valid. Guidance
+        # still remains available in template.json if it does not fit inline.
+        if len(encode(specification)) > MAX_SPECIFICATION:
+            specification.pop("_instructions", None)
+    empty_proposal_destination(root)  # Recheck after all network reads.
+    save_specification(root / "specification.json", specification)
+    save_json(root / "template.json", template)
+    save_json(root / "schema.json", schema)
+    save_json(root / ".crucible-proposal.json", metadata)
+    if feedback:
+        save_json(root / "feedback.json", feedback)
+    private_write(root / ".gitignore", ".crucible/\n.crucible-proposal.json\nproposal-receipt.json\nfeedback.json\n.env\n")
+    private_write(root / "README.md", "# Crucible scheme proposal\n\n"
+        "Edit specification.json; template.json contains detailed field guidance and schema.json is the format contract.\n"
+        "Describe a KEM: complete algorithms, full randomness/distributions, parameter mappings, encodings, KDF and rejection behavior.\n"
+        "Explain its merit, the closest existing schemes and what new attack evidence it could contribute. Cite primary sources.\n"
+        "State correctness assumptions, bounds and evidence precisely; separate conjectures from proved or measured claims.\n"
+        "Complete the tier_design plan before approval: define the valid configuration space and an ordered default progression of stages, mapped to stable configuration identifiers; describe actual parameter growth and costs, a common correctness requirement (negligible nonzero failure is allowed), endpoint evidence and useful steps or explicit gaps. Round default counts to multiples of ten, or five, only when useful configurations and endpoints can be preserved; other reviewed configurations remain available. Counts are not security levels. Legacy supported_tiers and instance_size identify configurations, not necessarily stage positions. Preserve configuration identity and revise the progression explicitly when changing its route. Complete its parameter_selection object with a cost objective, fixed constraints, pinned security/cost model, candidate domain, comparison evidence and tradeoffs/uncertainty. Choose efficient or non-dominated parameters within that domain; preserve the original construction and full native distributions; never manufacture stages with padding or entropy restriction alone. Drafts may omit the plan; approval requires explicit manual review of both progression design and parameter selection.\n"
+        "Document reduced-parameter divergences; do not inherit a published scheme's security or correctness claims without justification.\n"
+        "References, pseudocode and implementation URLs are inert text: this client never fetches or executes them.\n"
+        "Validate: python /path/to/crucible_cli.py proposal validate --path .\n"
+        "Validation sends the document to this workspace's server without account credentials; it checks format only.\n"
+        "Submit explicitly: python /path/to/crucible_cli.py proposal submit --path .\n"
+        "Submissions remain private to the author and configured reviewers, pending manual review and separate implementation admission.\n"
+        "A proposal submission does not create a live challenge or earn admission points.\n"
+        "If proposal access is denied, run login again for the new proposal permissions. Keep credentials outside this directory.\n"
+        "Before the first proposal write, .crucible/proposal-submission.json freezes the exact normalized body, author and retry key.\n"
+        "If a response is lost, retry submit unchanged. Do not delete that file or create a fresh retry key.\n"
+        "Edits after freezing are rejected. Preserve the original workspace and create a new revision workspace for new content.\n"
+        "Inspect feedback: python /path/to/crucible_cli.py proposal show PROPOSAL_ID\n"
+        "Revise: python /path/to/crucible_cli.py proposal revise PROPOSAL_ID --path ../revision-2\n"
+        "Revision workspaces include feedback.json and bind the current revision/hash. A stale base is rejected by the server.\n")
+    return {"status": "ready", "path": str(root), "server": client.server, "mode": metadata["mode"],
+            **({"proposal_id": metadata["proposal_id"], "expected_revision": metadata["expected_revision"]} if revise else {})}
+
+
+def validated_proposal(client, specification):
+    response = client.request(PROPOSALS + "/validate", {"specification": proposal_document(specification)}, auth=False)
+    canonical = proposal_document(response.get("specification"))
+    digest = hashlib.sha256(encode(canonical)).hexdigest()
+    if response.get("content_sha256") != digest or response.get("validation", {}).get("status") != "format-valid":
+        raise ClientError("The validation response has an invalid content hash or status.")
+    return canonical, digest
+
+
+def proposal_validate(client, args):
+    root, _ = proposal_metadata(args.path)
+    _, digest = validated_proposal(client, load_json(root / "specification.json", MAX_SPECIFICATION))
+    return {"status": "format-valid", "content_sha256": digest,
+            "scope": "Format only; correctness, security, novelty, implementation and admission remain unverified."}
+
+
+def proposal_submit(client, args):
+    root, metadata = proposal_metadata(args.path)
+    specification = proposal_document(load_json(root / "specification.json", MAX_SPECIFICATION))
+    input_digest = hashlib.sha256(encode(specification)).hexdigest()
+    owner = proposal_owner(client)
+    if metadata.get("owner_handle", owner) != owner:
+        raise ClientError("Reconnect the account that owns this proposal revision.", "proposal_account_changed")
+    client.expected_handle = owner
+    endpoint = PROPOSALS + ("/" + metadata["proposal_id"] + "/revisions" if metadata["mode"] == "revision" else "")
+    expected_revision = metadata["expected_revision"] + 1 if metadata["mode"] == "revision" else 1
+    pending_path = root / ".crucible" / "proposal-submission.json"
+    if pending_path.exists():
+        pending = load_json(pending_path, 128 * 1024)
+        if (pending.get("format") != "crucible-pending-proposal-v1" or pending.get("workspace") != metadata
+                or pending.get("input_sha256") != input_digest or pending.get("owner_handle") != owner):
+            raise ClientError("A different proposal or author is already frozen. Restore the original specification and account to retry; use a new revision workspace for changes.", "proposal_retry_changed")
+        payload = pending.get("payload")
+        if not isinstance(payload, dict) or hashlib.sha256(encode(payload)).hexdigest() != pending.get("payload_sha256"):
+            raise ClientError("The frozen proposal retry file changed. Preserve it for recovery; no request was sent.")
+        proposal_id(payload.get("idempotency_key"))
+        canonical = proposal_document(payload.get("specification"))
+        digest = hashlib.sha256(encode(canonical)).hexdigest()
+        expected_keys = {"specification", "idempotency_key"}
+        if metadata["mode"] == "revision":
+            expected_keys |= {"expected_revision", "content_sha256"}
+            if payload.get("expected_revision") != metadata["expected_revision"] or payload.get("content_sha256") != metadata["content_sha256"]:
+                raise ClientError("The frozen revision base changed. No request was sent.")
+        if set(payload) != expected_keys:
+            raise ClientError("The frozen proposal payload has unexpected fields.")
+        if pending.get("receipt"):
+            receipt = pending["receipt"]
+            if (not isinstance(receipt, dict) or receipt.get("content_sha256") != digest
+                    or receipt.get("revision") != expected_revision
+                    or receipt.get("status") not in {"submitted", "approved", "changes_requested"}
+                    or metadata["mode"] == "revision" and receipt.get("id") != metadata["proposal_id"]):
+                raise ClientError("The saved proposal receipt does not match the frozen request.")
+            return proposal_result(client, receipt, replayed=True)
+    else:
+        canonical, digest = validated_proposal(client, specification)
+        payload = {"specification": canonical, "idempotency_key": str(uuid4())}
+        if metadata["mode"] == "revision":
+            payload.update(expected_revision=metadata["expected_revision"], content_sha256=metadata["content_sha256"])
+        pending = {"format": "crucible-pending-proposal-v1", "workspace": metadata,
+                   "input_sha256": input_digest, "owner_handle": owner,
+                   "payload": payload, "payload_sha256": hashlib.sha256(encode(payload)).hexdigest()}
+        # The retry identity and exact request are durable before any proposal
+        # mutation. A lost response never causes a new key or recanonicalization.
+        save_json(pending_path, pending)
+    if len(encode(payload)) > 65536:
+        raise ClientError("The frozen proposal request exceeds 64 KiB.")
+    response = client.request(endpoint, payload)
+    record = checked_proposal(response.get("proposal"))
+    if (record["content_sha256"] != digest or record["revision"] != expected_revision
+            or metadata["mode"] == "revision" and record["id"] != metadata["proposal_id"]):
+        raise ClientError("The returned proposal receipt does not match the frozen request. Preserve the retry file.")
+    receipt = proposal_summary(record)
+    pending["receipt"] = receipt
+    save_json(pending_path, pending)
+    save_json(root / "proposal-receipt.json", {"format": "crucible-proposal-receipt-v1",
+        "server": client.server, "owner_handle": owner, "proposal": receipt,
+        "proposal_url": client.server + "/#propose?proposal=" + record["id"]})
+    return proposal_result(client, receipt, replayed=False)
+
+
+def proposal_read(client, args):
+    if args.proposal_action == "list":
+        response = client.request("/api/me/protocol-proposals")
+        records = response.get("proposals")
+        if not isinstance(records, list) or len(records) > 50:
+            raise ClientError("The server returned an invalid proposal list.")
+        return {"proposals": [{**proposal_summary(checked_proposal(record)),
+                               "name": record["specification"].get("name")} for record in records],
+                "limit": 50}
+    identifier = proposal_id(args.proposal_id)
+    query = {"limit": args.limit}
+    if args.before_revision is not None:
+        if not 1 <= args.before_revision <= 2147483647:
+            raise ClientError("--before-revision must be a positive revision number.")
+        query["before_revision"] = args.before_revision
+    response = client.request(PROPOSALS + "/" + identifier + "/revisions?" + urlencode(query))
+    if checked_proposal(response.get("proposal"))["id"] != identifier:
+        raise ClientError("The server returned a different proposal.")
+    return response
+
+
 def parser():
     command = argparse.ArgumentParser(description=__doc__)
     def common(target, suppress=False):
@@ -547,7 +942,10 @@ def parser():
             item.add_argument("--path", default=".", help="Local challenge workspace directory")
         if name == "init":
             item.add_argument("scheme")
-            item.add_argument("--tier", required=True, type=int)
+            selection = item.add_mutually_exclusive_group(required=True)
+            selection.add_argument("--stage", type=int, help="Stage in this scheme's published default progression")
+            selection.add_argument("--tier", type=int, help="Legacy numeric configuration selector; may differ from the displayed stage")
+            selection.add_argument("--profile-id", help="Exact published parameter-profile identifier")
         if name == "get":
             item.add_argument("--challenge-id", required=True)
         if name == "run":
@@ -558,6 +956,19 @@ def parser():
         if name == "submit":
             item.add_argument("result", nargs="?", default="result.json")
             item.add_argument("--source", action="append", default=[], help="Additional selected UTF-8 source file beneath attack/")
+    proposals = commands.add_parser("proposal", help="Prepare and privately submit a KEM specification for review")
+    common(proposals, True)
+    actions = proposals.add_subparsers(dest="proposal_action", required=True)
+    for name in ("init", "validate", "submit", "list", "show", "revise"):
+        item = actions.add_parser(name)
+        common(item, True)
+        if name in {"init", "validate", "submit", "revise"}:
+            item.add_argument("--path", default=".", help="Local proposal workspace directory")
+        if name in {"show", "revise"}:
+            item.add_argument("proposal_id", help="Full proposal UUID")
+        if name == "show":
+            item.add_argument("--limit", type=int, choices=range(1, 51), default=20, metavar="1..50")
+            item.add_argument("--before-revision", type=int)
     return command
 
 
@@ -569,6 +980,11 @@ def main(argv=None):
             server = origin(metadata["server"])
             if args.server and origin(args.server) != server:
                 raise ClientError("The selected server differs from this workspace's bound server.")
+        elif args.action == "proposal" and args.proposal_action in {"validate", "submit"}:
+            _, metadata = proposal_metadata(args.path)
+            server = metadata["server"]
+            if args.server and origin(args.server) != server:
+                raise ClientError("The selected server differs from this proposal workspace's bound server.")
         else:
             config = configuration(args.config)
             server = origin(args.server or config.get("default_server") or DEFAULT_SERVER)
@@ -578,22 +994,41 @@ def main(argv=None):
         elif args.action == "init": result = init_workspace(client, args)
         elif args.action == "get": result = workspace(client, download_challenge(client, args.challenge_id), args.path)
         elif args.action == "run": result = run_solver(args)
+        elif args.action == "proposal":
+            if args.proposal_action in {"init", "revise"}:
+                result = proposal_workspace(client, args, revise=args.proposal_action == "revise")
+            elif args.proposal_action == "validate": result = proposal_validate(client, args)
+            elif args.proposal_action == "submit": result = proposal_submit(client, args)
+            else: result = proposal_read(client, args)
         else: result = submit(client, args)
         if args.json:
             print(json.dumps(result, ensure_ascii=False, allow_nan=False))
         elif args.action == "schemes":
             for scheme in result.get("schemes", []):
                 print(scheme["id"] + " — " + scheme["name"])
+                if scheme.get("selection_kind") == "parameter-set":
+                    for profile in scheme.get("profiles", []):
+                        print("  " + str(profile.get("profile_label", profile.get("name", "Parameter set")))
+                              + " [" + str(profile.get("profile_id", profile.get("id", ""))) + "]")
         else:
             print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
         return 0
     except (ClientError, OSError, KeyError, TypeError, ValueError) as error:
         message = str(error) if isinstance(error, ClientError) else "The local input or response could not be processed. Check the workspace files."
         code = getattr(error, "code", "client_error")
+        data = error.data if isinstance(error, ClientError) and isinstance(error.data, dict) else {}
+        delay = retry_after_seconds(data.get("retry_after_seconds"))
         if args.json:
-            print(json.dumps({"error": {"code": code, "message": message}}))
+            print(json.dumps({"error": {"code": code, "message": message,
+                **({"retry_after_seconds": delay} if delay is not None else {}),
+                **({"field_errors": data["field_errors"]} if data.get("field_errors") else {})}}))
         else:
             print(message, file=sys.stderr)
+            if delay is not None:
+                print(f"Retry after {delay} seconds.", file=sys.stderr)
+            if isinstance(error, ClientError) and isinstance(error.data, dict):
+                for field in error.data.get("field_errors", []):
+                    print(field["path"] + ": " + field["message"], file=sys.stderr)
         return 1
 
 

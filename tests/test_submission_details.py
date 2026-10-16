@@ -10,7 +10,8 @@ from test_api import Actor, system
 
 
 DETAIL_FIELDS = {"id", "challenge_id", "handle", "status", "scheme_id", "scheme_version",
-                 "profile_id", "instance_size", "received_at", "elapsed_seconds", "method", "compute"}
+                 "profile_id", "instance_size", "received_at", "elapsed_seconds", "method", "compute",
+                 "scoring_eligible", "scoring_policy_id"}
 COMPUTE_FIELDS = {"hardware", "workers", "wall_seconds", "precomputation", "peak_memory", "notes"}
 
 
@@ -44,6 +45,8 @@ def test_correct_detail_is_exact_public_and_available_when_not_on_leaderboard(sy
     expected = {"id": receipt["id"], "challenge_id": second["id"], "handle": "alice", "status": "correct",
                 "scheme_id": second["scheme_id"], "scheme_version": second["scheme_version"],
                 "profile_id": "dh-20", "instance_size": 20, "received_at": clock[0], "elapsed_seconds": 17,
+                # The archived receipt stays readable without entering today's points policy.
+                "scoring_eligible": False, "scoring_policy_id": "crucible-points-v6",
                 "method": {**{key: method[key] for key in ("id", "name", "pseudocode")}, "source": None}, "compute": answer["compute"]}
     url = f'/api/submissions/{receipt["id"]}'
     anonymous = TestClient(app)

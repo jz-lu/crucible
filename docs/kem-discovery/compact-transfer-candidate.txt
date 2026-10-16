@@ -1,0 +1,410 @@
+Compact transfer actions: retained fresh research lead CTF1
+2026-10-14
+
+Status
+
+This is a new mathematical construction record, not a submitted proposal or a
+secure KEM claim. It specifies a compact agreement mechanism, exact sampling,
+a finite research KEM wrapper, and an abstract correctness argument. Its full
+public key has a proved quadratic size formula in a structural parameter m.
+There is no justified relationship between m and security bits. Consequently
+it has NOT cleared the complete scalability/security gate in the research brief.
+
+No candidate implementation, correctness experiment, stress test, parameter
+sweep, or concerted attack was performed. The numerical sizes below are exact
+encoding calculations, not benchmarks. The old boundary-action candidate and
+its unsubmitted Crucible workspace are unchanged.
+
+The new mechanism uses a public local permutation and a transfer identity.
+It does not need a hidden change of coordinates or published polynomial
+expansions. The underlying mathematical identities are known; the proposed
+public circuit sampler and its use in this particular agreement family are
+an exploratory adaptation whose cryptographic novelty is unresolved.
+
+Mathematical starting point and sources
+
+[1] F. Cedo and J. Okninski, New simple solutions of the Yang-Baxter equation
+    and solutions associated to simple left braces, Section 3 (pp. 5-6 of
+    the arXiv version), including Propositions 3.2 and 3.3:
+    https://arxiv.org/abs/2112.07271
+    https://arxiv.org/pdf/2112.07271
+
+    Their construction uses an abelian group A and a function j with j(x)=j(-x).
+    It gives an involutive braid map on A^2. Over a binary vector space the
+    condition on j holds automatically. This is the local mathematical family
+    used here, not a newly discovered Yang-Baxter solution.
+
+[2] A. P. Veselov, Yang-Baxter maps and integrable dynamics, Theorem 1:
+    https://arxiv.org/abs/math/0205335
+    https://arxiv.org/pdf/math/0205335
+
+    Reversible Yang-Baxter maps give commuting transfer maps, whose product
+    is the identity. This supplies the agreement identity and the evaluation
+    shortcut below. The theorem is a correctness tool, not a hardness result.
+
+[3] F. Chouraqui, Yang-Baxter equation and cryptography, especially Section 4
+    and the construction in the appendix, Section 5:
+    https://arxiv.org/abs/2212.13807
+
+[4] G. Maze, C. Monico and J. Rosenthal, Public Key Cryptography based on
+    Semigroup Actions:
+    https://arxiv.org/abs/cs/0501017
+
+[5] J. Duman, D. Hartmann, E. Kiltz, S. Kunzweiler, J. Lehmann and D. Riepel,
+    Group Action Key Encapsulation and Non-Interactive Key Exchange in the
+    QROM, ASIACRYPT 2022, Section 3, Figure 3:
+    https://eprint.iacr.org/2022/1230
+
+[6] K. Yoneyama, Post-Quantum Variants of ISO/IEC Standards: Compact Chosen
+    Ciphertext Secure Key Encapsulation Mechanism from Isogenies, 2019:
+    https://eprint.iacr.org/2019/1036
+
+1. A compact public local permutation
+
+Choose an integer m >= 1. It is a structural parameter, not security bits.
+Let A = F_2^(2m), and let N = 4m+1. Addition of vectors is XOR. A site is
+an ordered pair (a,b) in A^2, containing 4m bits. A global state is an ordered
+N-tuple of sites; sites and coordinates are never sorted or relabeled.
+
+For each r=1,2,3,4 sample independently
+
+    U_r, W_r, V_r uniformly from F_2^(m by m),
+    c_r uniformly from F_2^m.
+
+Every matrix entry and vector bit is an independent fair bit. Singular and
+zero matrices are allowed. There is no rejection or conditioning. All these
+values are PUBLIC. Define, for t in F_2^m,
+
+    f_r(t) = V_r ((U_r t) AND (W_r t)) + c_r,
+
+where AND is coordinatewise multiplication in F_2. Vectors are columns and
+matrix multiplication has its usual meaning over F_2. Define the round
+
+    J_r(L,R) = (R, L + f_r(R)),   L,R in F_2^m,
+
+and j = J_4 o J_3 o J_2 o J_1, with J_1 applied first. Each round has the
+explicit inverse (L',R') -> (R'+f_r(L'), L'), so j is a permutation for EVERY
+sample, including samples with singular matrices. Its description occupies
+12m^2+4m bits. Evaluating j takes twelve m-by-m matrix/vector products, four
+coordinatewise products, and vector XORs. It never requires a lookup table
+on the exponentially large set A or a polynomial coefficient expansion.
+
+This four-round choice is a design convention, not a calibrated round count.
+The circuit is public and its round functions are public quadratic functions.
+No secrecy, pseudorandom-permutation theorem, or security strength is inherited
+from conventional uses of Feistel networks.
+
+2. The local scattering rule
+
+For sites x=(a,b), y=(c,d) in A^2, put q=j(a+b+c) and define
+
+    r(x,y) = ((c+b, d+q), (a+d+q, b+q)),
+    R(x,y) = ((a+d+q, b+q), (c+b, d+q)).
+
+Thus R=P o r, where P swaps the two output sites. A local update uses exactly
+one evaluation of j and XORs. It is defined on EVERY bit string of the stated
+length; there are no divisions, poles, retries, or charts.
+
+This is the binary specialization of [1]. In that paper's notation,
+
+    sigma_(a,b)(c,d) = (c+b, d+j(c+b+a)),
+
+and r(x,y)=(sigma_x(y), sigma_(sigma_x(y))^(-1)(x)). We use the explicit
+four-vector formula above, so an implementation would not need permutation
+tables, a brace multiplication table, or a presentation of a large group.
+
+3. Global transfer maps
+
+For distinct i,j, R_ij applies R to the ordered pair of sites (i,j), placing
+the first output at i and second at j. Other sites are unchanged. Indices
+are reduced modulo N to 1,...,N. Define
+
+    T_i = R_(i,i+N-1) o ... o R_(i,i+2) o R_(i,i+1).
+
+To evaluate T_i, call R on (i,i+1), then (i,i+2), up to (i,i+N-1), in that
+order. There are N-1 calls. The local rule is uniform; a separate table or
+circuit for each T_i is not public data.
+
+The identities needed from [2] are
+
+    T_i T_j = T_j T_i  for every i,j,
+    T_1 T_2 ... T_N = identity.
+
+For a selector alpha in {0,1}^(N-1), let F_alpha apply T_i once whenever
+alpha_i=1, visiting i=1,...,N-1 in order. There is no sampled T_N exponent.
+This omits one known relation from the description; it does NOT assert that
+the remaining selectors give distinct transformations or distinct outputs.
+
+4. Exact sampled agreement family
+
+KeyGen(m): sample the public rule parameters in Section 1. Independently sample
+every bit of a base state X in (A^2)^N uniformly. Independently sample alpha
+as N-1=4m fair bits. Set Y=F_alpha(X). The public key contains m, all twelve
+matrices and four constants, X and Y. The secret is alpha and the public context.
+
+Encaps(pk): parse the key as in Section 5. Independently sample beta as N-1
+fair bits. Set C=F_beta(X) and Z=F_beta(Y). Send the canonical encoding of C
+as the ciphertext. The common-secret encoding is the canonical encoding of Z.
+
+Decaps(sk,ct): parse C using the trusted m in the stored public context, and
+compute Z'=F_alpha(C). The common-secret encoding is that of Z'.
+
+All public-rule bits, base-state bits, alpha and beta are independent in the
+mathematical sampler. No rank test, orbit-size test, simplicity test, successful
+agreement test, or apparent-weakness test conditions the distribution. Identity
+selectors and coincident outputs are retained. Fresh KeyGen uses fresh public
+rule data, X and alpha. Repeated Encaps under one receiver key resamples beta.
+No globally amortized setup object or hidden setup witness is assumed.
+
+A finite research KEM wrapper may derive
+
+    K = SHAKE256(ASCII("CTF1-KEM") || 0x00 || pk || ct || Encode(Z), 32 bytes).
+
+Decaps derives the same expression using Z'. The concatenation is unambiguous:
+pk is self-delimiting via its parameter and fixed payload size, and the other
+two encodings have lengths determined by m. This is an exact wrapper definition,
+not an implemented or proved-secure KDF transform. It has no IND-CCA claim.
+Its fixed 32-byte output also cannot support an unbounded asymptotic security
+claim as m grows; asymptotic discussion below concerns the common-image problem.
+A complete asymptotic KEM would additionally need an appropriately parameterized
+hash model/family and a security argument. No such argument is supplied here.
+
+5. Encoding and failure behavior of the draft
+
+The pk header is four ASCII bytes "CTF1", followed by the shortest unsigned
+LEB128 encoding of positive m. Each LEB128 byte has seven low payload bits,
+least-significant group first, with the high bit marking continuation; redundant
+terminal zero groups are forbidden. N and the four-round count are derived.
+
+The payload is ONE concatenated bit string, in this order:
+  for r=1..4: U_r, W_r, V_r in row-major order, then c_r;
+  X in increasing site order, each site's a then b in coordinate order;
+  Y in the same order.
+Pack the first bit into the high bit of the first byte, proceeding high to low.
+Pad only the end of the entire payload with zero bits to the next whole byte.
+
+Encode(C) and Encode(Z) use the same state order and packing, with zero end
+padding. Ciphertexts have no additional header. Exactly ceil((16m^2+4m)/8)
+bytes are expected. The selector has 4m bits in increasing index order, with
+the same packing and end-padding rule. Its secret state must also retain pk,
+or use an explicitly supplied trusted public context; that storage is not free.
+
+Reject a wrong tag, zero m, nonminimal/incomplete parameter encoding, wrong
+payload length, trailing bytes, or nonzero padding. Decaps returns explicit
+failure on a bad ciphertext length or padding. Any correctly encoded state C
+is accepted; no honest-orbit membership test is defined. No implicit rejection
+key or re-encryption transform is present. There is no executable parser or
+admission adapter. A maximum m and allocation/time policy must be set before
+accepting untrusted network input; this draft does not define those operational
+limits or promise constant-time execution.
+
+6. Abstract correctness calculation
+
+First, the Feistel inverse proves that j is a permutation. In fact the braid
+calculation below works for any function j on A.
+
+For r^2, after one application of r the next argument to j is
+
+    (c+b)+(d+q)+(a+d+q) = a+b+c.
+
+The next j value is therefore q again, and the second application returns
+((a,b),(c,d)). Hence r^2=identity.
+
+For the braid identity take three sites (a,b),(c,d),(e,f), and abbreviate
+
+    q = j(a+b+c),   t = j(a+b+d+e),   s = j(c+d+e).
+
+Expanding either r_12 o r_23 o r_12 or r_23 o r_12 o r_23 gives
+
+    ((e+b+d,             f+t+s),
+     (c+b+f+t+s,         d+q+s),
+     (a+d+f+q+t,         b+q+t)).
+
+This is a pen-and-paper identity using only XOR cancellation, not an empirical
+test. It verifies the braid relation for the explicit binary formula. With
+R=P o r, it gives the Yang-Baxter relation in the non-braid convention and
+R_21 o R=identity. These are precisely the reversible-map hypotheses used in
+Veselov's transfer theorem. Its commuting identity extends to the selector
+products, so
+
+    Z' = F_alpha(F_beta(X)) = F_beta(F_alpha(X)) = Z.
+
+Canonical encoding and identical KDF inputs then give identical keys. The
+abstract honest-agreement failure probability is zero for every parameter
+sample, every base state and both selectors, assuming exact arithmetic and
+correct execution. This is not a machine-checked implementation proof. No
+finite-runtime availability bound for an implementation has been established.
+
+An additional local property follows from using a permutation j. Its image
+is all of A and it has no nonzero translation period. By [1, Props. 3.2-3.3],
+the associated local solution is indecomposable and irretractable. These terms
+refer to that mathematical solution. They do not prove simplicity, large global
+transfer orbits, private-selector injectivity, or any security statement.
+
+7. Honest evaluation shortcut
+
+Let S={i<N: alpha_i=1}. When |S| <= 2m, evaluate the selected T_i directly.
+Otherwise use
+
+    product_(i in S) T_i = (product_(i not in S) T_i)^(-1),
+
+where the complement is taken in ALL N indices, including N. This follows
+from commutation and product_i T_i=identity. It is an exact alternative
+evaluation of the SAME sampled map, not a changed sampler or a resampling rule.
+
+Evaluate each inverse T_i by reversing its local-update order and replacing
+each R_ij by R_ji. Since N=4m+1, at most 2m transfers are needed, each with
+4m local calls. Thus a word needs at most 8m^2 evaluations of R, versus the
+unoptimized 16m^2 worst-case bound. Encaps evaluates two words, Decaps one;
+the combined bound is 24m^2 local calls. All these are operation counts, not
+timing measurements.
+
+Each R evaluates four public Feistel rounds, each using three m-by-m
+matrix/vector products. Elementary bit arithmetic therefore gives O(m^4)
+work per word and O(m^2) stored bits. Packing binary vectors may change the
+practical constants; no implementation or speedup measurement is claimed.
+Setup sampling is O(m^2) bits of work/storage before applying alpha in KeyGen.
+KDF input processing and parsing are O(m^2) bytes/bits up to constant factors.
+No polynomial expansion, unbounded search or exponential-size table occurs in
+these honest algorithms. Quartic evaluation cost is still a practical concern.
+
+8. Complete size accounting
+
+The public rule has 4*(3m^2+m) = 12m^2+4m bits.
+One global state has N*4m = 16m^2+4m bits.
+The full public key includes BOTH X and Y, hence
+
+    payload_pk = 44m^2+12m bits,
+    bytes_pk   = 4 + uleb128_bytes(m) + ceil((44m^2+12m)/8),
+    bytes_ct   = ceil((16m^2+4m)/8),
+    bytes_selector = ceil(4m/8).
+
+A standalone secret state storing its public context costs bytes_pk plus
+bytes_selector, excluding implementation object overhead. The common image
+has the ciphertext length. The finite wrapper's derived key is 32 bytes.
+
+Formula-derived examples (m is NOT security bits):
+
+    m     sites    full pk bytes    ct bytes    selector bytes
+    16       65            1437         520                 8
+    32      129            5685        2064                16
+    48      193           12749        4632                24
+
+The arithmetic is recorded in compact-transfer-size-accounting.json. These
+are not generated protocol instances, benchmarks, or secure parameter sets.
+Every required public object is included. The circuit's matrix factors are
+deliberately public; no secret factorization is being repackaged as compression.
+
+If an independent security argument eventually justified s(m) >= c*m bits
+for a known positive constant c, choosing m >= lambda/c would yield a quadratic
+public-key bound in lambda, with leading constant 44/(8*c^2) bytes. NO SUCH c,
+ARGUMENT OR BOUND IS KNOWN HERE. If security grows more slowly, the dependence
+on lambda worsens. Therefore O(m^2) alone does not meet the user's full demand.
+No size-at-128/192/256-security claim is made.
+
+9. The actual security question
+
+The distribution to study is exactly the sampler in Section 4. An observer
+gets m, all local-rule parameters, X, Y=F_alpha(X), and C=F_beta(X).
+
+Candidate common-image task:
+    Compute the canonical encoding of F_alpha(F_beta(X)).
+
+Recovering alpha, beta, a Feistel factorization, or a particular group element
+is not required by this task. The Feistel factorization is already public.
+The computational asymmetry being sought is between evaluating one's known
+selector on a received state and obtaining the common image from two state
+images. This asymmetry is an objective, not a demonstrated hardness gap.
+
+A prospective exponential average-case hardness hypothesis would need to state
+success probabilities and time as functions of m for THIS distribution. No
+such hypothesis is currently supported by a reduction, calibration, or other
+independent evidence. The 4m selector bits do not establish 4m security bits;
+different selectors may induce the same map or agree at X. Algebraic properties
+of the local solution do not settle the common-image problem.
+
+The finite KEM wrapper would additionally require key indistinguishability,
+with a precise hash model and a justified relationship to the search problem.
+No IND-CPA proof, IND-CCA transform, key-entropy theorem, multi-user theorem,
+or quantum-security claim is supplied. Public precomputation, repeated
+encapsulations and evaluation of all public circuits are not excluded.
+
+10. Closest constructions and novelty limits
+
+At the protocol level this is an instance of [4]: the finite abelian subgroup
+generated by the T_i acts on (A^2)^N, and the two parties compute a common image.
+That identification preserves the agreement mechanism exactly. It does not
+identify this specific sampler with a previously studied hard distribution.
+
+Follow-up literature check (2026-10-14): explicit group-action KEMs also
+precede this draft. GA-HEG [5, Fig. 3] publishes g acting on a base, sends
+r acting on that base, and hashes the ciphertext with the common image.
+CTF1 follows this algorithmic pattern with transfer-selector sampling and
+additional public-key hash binding. We have not established the action,
+sampling, validation and hardness conditions needed to apply [5]'s security
+results. Yoneyama [6] gives CSIDH-ECIES-KEM using an isogeny action.
+The KEM wrapper itself therefore supplies no supported novelty claim.
+
+The local solution family comes directly from [1], and the transfer mechanism
+from [2]. They must be credited; changing terminology would not create a new
+assumption. The potential contribution is the specific fully public compact
+permutation sampler, binary selector distribution, and resulting common-image
+problem. No claim of a new general key-agreement identity is appropriate.
+
+Chouraqui [3] already studies cryptography from Yang-Baxter solutions. Its
+appendix grows a hidden original solution and has the two participants share
+knowledge of that solution. Here all local-rule data are public, the private
+data are transfer selectors, and the transmitted objects are fixed-size state
+images. This is a concrete difference in mechanism/public information, not
+proof of a security improvement or distribution-preserving separation.
+
+Searches for combinations of Yang-Baxter, transfer maps, key agreement,
+cryptography and Feistel did not establish novelty. No distribution-preserving
+equivalence to, or separation from, standard group-action problems, multivariate
+assumptions or other established assumptions is proved. A generic circuit or
+polynomial encoding alone would not settle that comparison.
+
+The follow-up search included explicit KEM/encapsulation terms, monodromy,
+braces, self-distributive key establishment, and group-action KEMs. No paper
+with the exact public Feistel / Cedo-Okninski / transfer-selector combination
+was located in that bounded search. This is not evidence of first publication.
+The lead is retained unchanged; this update records prior art, not cryptanalysis.
+
+Pipeline interpretation after the user's clarification (2026-10-14)
+
+Recommended intake placement: a proposed new concrete construction, with origin
+review pending. The public transfer-action family, precise sampler and resulting
+common-image task are the proposed contribution. Existing mathematics and the
+established KEM pattern are explicitly credited above. No new hardness-family
+claim, reviewed-discovery designation or community endorsement follows.
+
+The research value to review is a compact, fully public, explicitly sampled
+Yang-Baxter transfer-action target with exact honest agreement and complete size
+accounting. Its security-parameter mapping remains open. This can justify a
+research-intake discussion without passing the implementation/stress-test gate.
+Reproducing an earlier published scheme would instead be a previously identified
+entry, even if the earlier scheme was incomplete, impractical or neglected.
+
+The recorded discovery route was local consistency/transfer-map mathematics,
+finite algebraic Yang-Baxter constructions, and a compact binary circuit sampler,
+followed by comparison with prior cryptographic proposals. The exact known
+GA-HEG KEM reference was added in the follow-up literature check. This history
+records our route and does not establish priority over all earlier work.
+
+11. What this pass has and has not achieved
+
+Established on paper: a total explicit local rule; an honest agreement
+construction; a complete sampler; a quadratic full-public-key formula; an
+exact evaluation shortcut; and polynomial honest cost bounds.
+
+Unresolved: the parameter/security relationship, average-case hardness,
+derived-key security, cryptographic novelty, quantum behavior, practical
+runtime constants, and an implementation suitable for review.
+
+Keep this as a compact research lead. Do not implement or stress test it merely
+because its size formula is attractive. The next substantive work is to obtain
+a credible security-parameter justification or a distribution-preserving
+connection to an independently motivated computational problem, while retaining
+the size bound. Under the current scope this must remain mathematical/literature
+work, with no concerted attacks. If that link cannot be supplied, the lead stays
+in the notebook and the search should continue elsewhere.

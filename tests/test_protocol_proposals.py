@@ -22,6 +22,7 @@ from crucible.protocol_proposals import ProtocolProposal, ProtocolProposalRevisi
 from crucible.protocol_specs import ProtocolSpec, SPEC_MAX_BYTES, builtin_spec, canonical_spec
 from scripts.solve_teaching import recover
 from test_api import pin_legacy_releases
+from proposal_fixtures import tier_design
 
 
 ORIGIN = "http://testserver"
@@ -54,7 +55,7 @@ def proposal_system(tmp_path):
 
 
 def specification():
-    return deepcopy(builtin_spec("teaching-dh-kem", "4"))
+    return {**deepcopy(builtin_spec("teaching-dh-kem", "4")), "tier_design": tier_design()}
 
 
 def canonical(value):
@@ -228,6 +229,17 @@ def test_canonical_reordered_retry_is_one_record_and_mismatch_is_409(proposal_sy
     assert alice.client.get(f'{SUBMIT}/{first["id"]}').json()["proposal"] == first
 
 
+def test_legacy_draft_submission_keeps_original_canonical_hash(proposal_system):
+    app, _, _ = proposal_system
+    alice = Actor(app, "legacy_author")
+    spec = deepcopy(builtin_spec("teaching-dh-kem", "4"))
+    assert "tier_design" not in spec
+    record = submit(alice, spec)
+    assert record["specification"] == spec
+    assert record["content_sha256"] == digest(spec)
+    assert record["status"] == "submitted"
+
+
 def test_concurrent_replays_are_one_record_and_key_is_scoped_per_author(proposal_system):
     app, _, _ = proposal_system
     alice, bob = Actor(app, "alice"), Actor(app, "bob")
@@ -315,7 +327,9 @@ def test_additive_migration_preserves_existing_account_challenge_and_receipt(tmp
     monkeypatch.setenv("CRUCIBLE_ENV", "development")
     config = Config(str(ROOT / "alembic.ini"))
     config.set_main_option("script_location", str(ROOT / "migrations"))
-    command.upgrade(config, "0002")
+    # Seed an authentic receipt with today's ORM, then downgrade its schema to
+    # the historical checkpoint. The old service binary is not under test.
+    command.upgrade(config, "head")
     settings = Settings(database_url, b"m" * 32, origins=(ORIGIN,), rate_limits=False)
     old = create_app(settings, clock=lambda: 3_600_600)
     alice = Actor(old, "migration_alice")
@@ -335,6 +349,7 @@ def test_additive_migration_preserves_existing_account_challenge_and_receipt(tmp
         before = alice.client.get(f"/api/submissions/{receipt_id}").json()["submission"]
     contract = alice.client.get(challenge["download_url"]).json()
     old.state.db.engine.dispose()
+    command.downgrade(config, "0002")
     command.upgrade(config, "head")
     command.check(config)
     current = create_app(settings, clock=lambda: 3_600_600)
@@ -371,7 +386,7 @@ def review_system(proposal_system):
 def review_body(record, **changes):
     return {"expected_revision": record["revision"], "content_sha256": record["content_sha256"],
             "decision": "approved", "implementation_sha256": (record["specification"].get("implementation") or {}).get("sha256"),
-            "checks": {name: True for name in ("specification_complete", "correctness", "implementation_conformance", "input_resource_safety", "reproduction")},
+            "checks": {name: True for name in ("specification_complete", "correctness", "tier_design", "parameter_selection", "implementation_conformance", "input_resource_safety", "reproduction")},
             "notes": "Independent manual review of the precise frozen document and source artifact.",
             "evidence": "Ran public-input fixture reproduction and reviewed the proof and malformed-input checks; artifact digest recorded above.",
             "idempotency_key": str(uuid4()), **changes}
@@ -394,12 +409,12 @@ def test_reviewer_capability_is_explicit_stable_account_id_and_defaults_false(re
     app, clock, settings, alice, reviewer, bob = review_system
     for actor, allowed in ((alice, False), (reviewer, True), (bob, False)):
         result = actor.client.get("/api/session").json()
-        assert result["capabilities"] == {"review_protocol_proposals": allowed}
-    assert TestClient(app).get("/api/session").json()["capabilities"] == {"review_protocol_proposals": False}
+        assert result["capabilities"] == {"review_protocol_proposals": allowed, "self_review_protocol_proposals": False}
+    assert TestClient(app).get("/api/session").json()["capabilities"] == {"review_protocol_proposals": False, "self_review_protocol_proposals": False}
     unconfigured = create_app(replace(settings, reviewer_ids=()), clock=lambda: clock[0])
     client = TestClient(unconfigured)
     client.cookies.update(reviewer.client.cookies)
-    assert client.get("/api/session").json()["capabilities"] == {"review_protocol_proposals": False}
+    assert client.get("/api/session").json()["capabilities"] == {"review_protocol_proposals": False, "self_review_protocol_proposals": False}
     assert client.get("/api/protocol/review-queue").status_code == 403
     unconfigured.state.db.engine.dispose()
     assert alice.client.get("/api/protocol/review-queue").status_code == 403
@@ -434,6 +449,33 @@ def test_manual_approval_records_exact_revision_artifact_checks_and_evidence_wit
     assert count(app, Challenge) == count(app, AdapterVersion) == 0
 
 
+def test_legacy_review_exact_retry_is_readable_without_granting_new_approval(review_system):
+    app, clock, _, alice, reviewer, _ = review_system
+    record = submit(alice, deepcopy(builtin_spec("teaching-dh-kem", "4")))
+    body = review_body(record)
+    body["checks"].pop("tier_design")
+    body["checks"].pop("parameter_selection")
+    commitment = digest({"proposal_id": record["id"],
+        **{key:value for key,value in body.items() if key != "idempotency_key"}})
+    with app.state.db.transaction(write=True) as session:
+        session.get(ProtocolProposal, record["id"]).status = "approved"
+        session.add(ProtocolProposalReview(id=str(uuid4()), proposal_id=record["id"],
+            revision=1, reviewer_id=reviewer.user["id"], created_at=clock[0],
+            decision="approved", content_sha256=record["content_sha256"],
+            implementation_sha256=body["implementation_sha256"], checks=body["checks"],
+            notes=body["notes"], evidence=body["evidence"],
+            idempotency_key=body["idempotency_key"], request_sha256=commitment))
+    path = f'{SUBMIT}/{record["id"]}/reviews'
+    retry = reviewer.post(path, body)
+    assert retry.status_code == 200, retry.text
+    assert retry.json()["review"]["checks"] == body["checks"]
+    assert retry.json()["proposal"]["specification"] == record["specification"]
+    assert count(app, ProtocolProposalReview) == 1
+    changed = reviewer.post(path, {**body, "checks": {**body["checks"], "tier_design": True}})
+    assert changed.status_code == 409
+    assert count(app, ProtocolProposalReview) == 1
+
+
 def test_reviews_require_csrf_configured_other_person_and_current_revision_hash(review_system):
     app, _, _, alice, reviewer, bob = review_system
     record, own = submit(alice), submit(reviewer)
@@ -450,7 +492,7 @@ def test_reviews_require_csrf_configured_other_person_and_current_revision_hash(
     assert count(app, ProtocolProposalReview) == 0
 
 
-@pytest.mark.parametrize("case", ["unknown", "no-implementation", "no-sha", "false-check", "short-evidence", "blank-notes", "unpaired-unicode"])
+@pytest.mark.parametrize("case", ["unknown", "no-implementation", "no-sha", "false-check", "short-evidence", "blank-notes", "unpaired-unicode", "missing-plan", "missing-tier-check", "false-tier-check", "missing-selection", "missing-selection-check", "false-selection-check"])
 def test_approval_rejects_missing_correctness_artifact_checks_or_supporting_evidence(review_system, case):
     app, _, _, alice, reviewer, _ = review_system
     spec = specification()
@@ -460,10 +502,22 @@ def test_approval_rejects_missing_correctness_artifact_checks_or_supporting_evid
         spec["implementation"] = None
     elif case == "no-sha":
         spec["implementation"]["sha256"] = None
+    elif case == "missing-plan":
+        spec.pop("tier_design")
+    elif case == "missing-selection":
+        spec["tier_design"].pop("parameter_selection")
     record = submit(alice, spec)
     body = review_body(record)
     if case == "false-check":
         body["checks"]["reproduction"] = False
+    elif case == "missing-tier-check":
+        body["checks"].pop("tier_design")
+    elif case == "false-tier-check":
+        body["checks"]["tier_design"] = False
+    elif case == "missing-selection-check":
+        body["checks"].pop("parameter_selection")
+    elif case == "false-selection-check":
+        body["checks"]["parameter_selection"] = False
     elif case == "short-evidence":
         body["evidence"] = "Done."
     elif case == "blank-notes":
@@ -633,4 +687,86 @@ def test_reviewer_configuration_uses_ids_default_none_and_explicit_env_overrides
                       {"reviewer_ids": first}, {"reviewer_ids": [], "unexpected": True}):
         config.write_text(json.dumps(malformed))
         with pytest.raises(RuntimeError, match="account UUIDs"):
+            load_settings()
+
+
+def test_development_self_review_requires_explicit_flag_and_remains_test_only(review_system):
+    from crucible.protocol_admission import check_admission
+    from crucible.scoring_awards import AdmissionCreditError, SchemeAdmissionCredit, award_scheme_credit
+
+    original, clock, settings, alice, reviewer, _ = review_system
+    enabled = replace(settings, allow_self_review=True)
+    app = create_app(enabled, clock=lambda: clock[0])
+    with TestClient(app) as client:
+        client.cookies.update(reviewer.client.cookies)
+        prior = reviewer.client
+        reviewer.client = client
+        try:
+            assert client.get('/api/session').json()['capabilities'] == {
+                'review_protocol_proposals': True, 'self_review_protocol_proposals': True}
+            own = submit(reviewer)
+            assert own['id'] in {row['id'] for row in client.get('/api/protocol/review-queue').json()['proposals']}
+            body = review_body(own)
+            path = f'{SUBMIT}/{own["id"]}/reviews'
+            result = reviewer.post(path, body)
+            assert result.status_code == 200, result.text
+            data = result.json()
+            assert data['review']['checks']['test_only_self_review'] is True
+            assert 'Development self-review only' in data['review']['scope']
+            assert data['proposal']['status'] == 'approved'
+            assert reviewer.post(path, body).json()['review'] == data['review']
+            assert count(app, ProtocolProposalReview) == 1
+            assert count(app, SchemeAdmissionCredit) == 0
+            with app.state.db.transaction() as session, pytest.raises(ValueError, match='independent'):
+                check_admission(session, own['id'], 'teaching-dh-kem', '4')
+            with pytest.raises(AdmissionCreditError, match='self-review'):
+                award_scheme_credit(app.state.db, enabled, family_id='test-self-review',
+                    scheme_id='teaching-dh-kem', scheme_version='4', proposal_id=own['id'],
+                    review_id=data['review']['id'], reviewer_id=reviewer.user['id'],
+                    evidence='Local test approval must never produce scientific admission credit.',
+                    confirm_new_family=True)
+            assert count(app, SchemeAdmissionCredit) == 0
+            assert count(app, Challenge) == count(app, AdapterVersion) == 0
+        finally:
+            reviewer.client = prior
+    # The persisted marker stays visible when the testing flag is turned off.
+    historical = reviewer.client.get(f'{SUBMIT}/{own["id"]}').json()
+    assert historical['reviews'][0]['checks']['test_only_self_review'] is True
+    assert reviewer.post(path, body).status_code == 403
+    # A flag does not grant reviewer authority or permit forged metadata.
+    unauthorized = TestClient(app)
+    unauthorized.cookies.update(alice.client.cookies)
+    assert unauthorized.get('/api/session').json()['capabilities']['self_review_protocol_proposals'] is False
+    assert unauthorized.post(path, json=body, headers={'Origin': ORIGIN, 'X-CSRF-Token': alice.csrf}).status_code == 403
+    app.state.db.engine.dispose()
+
+
+def test_client_cannot_assign_test_only_marker_or_bypass_new_checks(review_system):
+    _, _, _, alice, reviewer, _ = review_system
+    record = submit(alice)
+    body = review_body(record)
+    body['checks']['test_only_self_review'] = False
+    result = reviewer.post(f'{SUBMIT}/{record["id"]}/reviews', body)
+    assert result.status_code == 422
+
+
+def test_self_review_flag_defaults_off_is_strict_and_fails_closed_in_production(tmp_path, monkeypatch):
+    monkeypatch.setenv('CRUCIBLE_ENV', 'development')
+    monkeypatch.setenv('CRUCIBLE_DATA_DIR', str(tmp_path))
+    monkeypatch.setenv('DATABASE_URL', f'sqlite:///{tmp_path / "config.db"}')
+    monkeypatch.setenv('CRUCIBLE_SECRET', base64.b64encode(b'c' * 32).decode())
+    monkeypatch.delenv('CRUCIBLE_ALLOW_SELF_REVIEW', raising=False)
+    monkeypatch.delenv('CRUCIBLE_REVIEWER_IDS', raising=False)
+    assert load_settings().allow_self_review is False
+    monkeypatch.setenv('CRUCIBLE_ALLOW_SELF_REVIEW', 'true')
+    assert load_settings().allow_self_review is True
+    monkeypatch.setenv('CRUCIBLE_ENV', 'production')
+    with pytest.raises(RuntimeError, match='cannot be enabled in production'):
+        load_settings()
+    with pytest.raises(RuntimeError, match='development'):
+        Settings('sqlite://', b'x' * 32, production=True, allow_self_review=True)
+    monkeypatch.setenv('CRUCIBLE_ENV', 'development')
+    for invalid in ('1', 'TRUE', '', 'yes'):
+        monkeypatch.setenv('CRUCIBLE_ALLOW_SELF_REVIEW', invalid)
+        with pytest.raises(RuntimeError, match='exactly true or false'):
             load_settings()

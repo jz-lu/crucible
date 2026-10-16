@@ -1,0 +1,3042 @@
+{
+  "format": "crucible-ntru-frontier-parameters-v1",
+  "profiles": [
+    {
+      "p": 5,
+      "q": 79,
+      "w": 3,
+      "public_key_bytes": 4,
+      "ciphertext_bytes": 35,
+      "communication_bytes": 39,
+      "reference": {
+        "bits": null,
+        "status": "outside-model-domain",
+        "reason": "Fewer than 40 available lattice samples",
+        "nonhybrid_bits": null
+      },
+      "target_reference_bits": null,
+      "tier": 1
+    },
+    {
+      "p": 17,
+      "q": 67,
+      "w": 4,
+      "public_key_bytes": 13,
+      "ciphertext_bytes": 42,
+      "communication_bytes": 55,
+      "reference": {
+        "bits": null,
+        "status": "outside-model-domain",
+        "reason": "Fewer than 40 available lattice samples",
+        "nonhybrid_bits": null
+      },
+      "target_reference_bits": null,
+      "tier": 2
+    },
+    {
+      "p": 13,
+      "q": 313,
+      "w": 8,
+      "public_key_bytes": 14,
+      "ciphertext_bytes": 43,
+      "communication_bytes": 57,
+      "reference": {
+        "bits": null,
+        "status": "outside-model-domain",
+        "reason": "Fewer than 40 available lattice samples",
+        "nonhybrid_bits": null
+      },
+      "target_reference_bits": null,
+      "tier": 3
+    },
+    {
+      "p": 17,
+      "q": 457,
+      "w": 11,
+      "public_key_bytes": 19,
+      "ciphertext_bytes": 48,
+      "communication_bytes": 67,
+      "reference": {
+        "bits": null,
+        "status": "outside-model-domain",
+        "reason": "Fewer than 40 available lattice samples",
+        "nonhybrid_bits": null
+      },
+      "target_reference_bits": null,
+      "tier": 4
+    },
+    {
+      "p": 29,
+      "q": 313,
+      "w": 19,
+      "public_key_bytes": 31,
+      "ciphertext_bytes": 57,
+      "communication_bytes": 88,
+      "reference": {
+        "bits": null,
+        "status": "outside-model-domain",
+        "reason": "Fewer than 40 available lattice samples",
+        "nonhybrid_bits": null
+      },
+      "target_reference_bits": null,
+      "tier": 5
+    },
+    {
+      "p": 37,
+      "q": 601,
+      "w": 24,
+      "public_key_bytes": 43,
+      "ciphertext_bytes": 68,
+      "communication_bytes": 111,
+      "reference": {
+        "bits": null,
+        "status": "outside-model-domain",
+        "reason": "Fewer than 40 available lattice samples",
+        "nonhybrid_bits": null
+      },
+      "target_reference_bits": null,
+      "tier": 6
+    },
+    {
+      "p": 41,
+      "q": 1321,
+      "w": 27,
+      "public_key_bytes": 54,
+      "ciphertext_bytes": 78,
+      "communication_bytes": 132,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 40,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      },
+      "target_reference_bits": null,
+      "tier": 7
+    },
+    {
+      "p": 53,
+      "q": 3331,
+      "w": 35,
+      "public_key_bytes": 78,
+      "ciphertext_bytes": 100,
+      "communication_bytes": 178,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 40,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      },
+      "target_reference_bits": null,
+      "tier": 8
+    },
+    {
+      "p": 61,
+      "q": 1627,
+      "w": 40,
+      "public_key_bytes": 82,
+      "ciphertext_bytes": 102,
+      "communication_bytes": 184,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 40,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      },
+      "target_reference_bits": null,
+      "tier": 9
+    },
+    {
+      "p": 73,
+      "q": 691,
+      "w": 43,
+      "public_key_bytes": 87,
+      "ciphertext_bytes": 104,
+      "communication_bytes": 191,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 40,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      },
+      "target_reference_bits": null,
+      "tier": 10
+    },
+    {
+      "p": 97,
+      "q": 859,
+      "w": 53,
+      "public_key_bytes": 119,
+      "ciphertext_bytes": 132,
+      "communication_bytes": 251,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 60,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      },
+      "target_reference_bits": null,
+      "tier": 11
+    },
+    {
+      "p": 101,
+      "q": 1543,
+      "w": 67,
+      "public_key_bytes": 134,
+      "ciphertext_bytes": 146,
+      "communication_bytes": 280,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 60,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      },
+      "target_reference_bits": null,
+      "tier": 12
+    },
+    {
+      "p": 109,
+      "q": 1483,
+      "w": 72,
+      "public_key_bytes": 144,
+      "ciphertext_bytes": 154,
+      "communication_bytes": 298,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 80,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      },
+      "target_reference_bits": null,
+      "tier": 13
+    },
+    {
+      "p": 137,
+      "q": 1237,
+      "w": 77,
+      "public_key_bytes": 176,
+      "ciphertext_bytes": 181,
+      "communication_bytes": 357,
+      "reference": {
+        "bits": 16.584778417548993,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 16.584778417548993,
+        "raw_bits": 16.584778417548993,
+        "attack": "non-hybrid",
+        "block_size": 56,
+        "parameters": {
+          "bits": 16.584778417548993,
+          "status": "scoped-reference",
+          "raw_bits": 16.584778417548993,
+          "block_size": 56,
+          "force": 5,
+          "samples": 130,
+          "scale": 1.0,
+          "force_penalty_bits": 0.20582839738899
+        }
+      },
+      "target_reference_bits": 16,
+      "tier": 14
+    },
+    {
+      "p": 157,
+      "q": 1051,
+      "w": 65,
+      "public_key_bytes": 198,
+      "ciphertext_bytes": 198,
+      "communication_bytes": 396,
+      "reference": {
+        "bits": 21.286099416096135,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 21.286099416096135,
+        "raw_bits": 21.286099416096135,
+        "attack": "non-hybrid",
+        "block_size": 72,
+        "parameters": {
+          "bits": 21.286099416096135,
+          "status": "scoped-reference",
+          "raw_bits": 21.286099416096135,
+          "block_size": 72,
+          "force": 8,
+          "samples": 150,
+          "scale": 1.2689587898180186,
+          "force_penalty_bits": 0.2274493901761374
+        }
+      },
+      "target_reference_bits": 20,
+      "tier": 15
+    },
+    {
+      "p": 229,
+      "q": 523,
+      "w": 32,
+      "public_key_bytes": 259,
+      "ciphertext_bytes": 246,
+      "communication_bytes": 505,
+      "reference": {
+        "bits": 34.650815732961156,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 35.01792735627524,
+        "raw_bits": 34.650815732961156,
+        "attack": "mitm",
+        "block_size": 80,
+        "parameters": {
+          "samples": 120,
+          "guessed_positions": 80,
+          "imax": 5,
+          "nearest_plane_log2_probability": -6.677903414329993,
+          "search_probability": 0.21355258815421035
+        }
+      },
+      "target_reference_bits": 24,
+      "tier": 16
+    },
+    {
+      "p": 241,
+      "q": 1447,
+      "w": 90,
+      "public_key_bytes": 317,
+      "ciphertext_bytes": 301,
+      "communication_bytes": 618,
+      "reference": {
+        "bits": 39.69232335929704,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 39.69232335929704,
+        "raw_bits": 39.69232335929704,
+        "attack": "non-hybrid",
+        "block_size": 135,
+        "parameters": {
+          "bits": 39.69232335929704,
+          "status": "scoped-reference",
+          "raw_bits": 39.69232335929704,
+          "block_size": 135,
+          "force": 10,
+          "samples": 200,
+          "scale": 1.3361082236051034,
+          "force_penalty_bits": 0.20735456069703967
+        }
+      },
+      "target_reference_bits": 36,
+      "tier": 17
+    },
+    {
+      "p": 277,
+      "q": 661,
+      "w": 41,
+      "public_key_bytes": 325,
+      "ciphertext_bytes": 302,
+      "communication_bytes": 627,
+      "reference": {
+        "bits": 44.019021545245806,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 45.6843239106496,
+        "raw_bits": 44.019021545245806,
+        "attack": "mitm",
+        "block_size": 120,
+        "parameters": {
+          "samples": 160,
+          "guessed_positions": 120,
+          "imax": 5,
+          "nearest_plane_log2_probability": -4.3118120741355234e-13,
+          "search_probability": 0.002083185176520866
+        }
+      },
+      "target_reference_bits": 40,
+      "tier": 18
+    },
+    {
+      "p": 349,
+      "q": 2437,
+      "w": 152,
+      "public_key_bytes": 491,
+      "ciphertext_bytes": 454,
+      "communication_bytes": 945,
+      "reference": {
+        "bits": 62.07168187783489,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 62.83071318847257,
+        "raw_bits": 62.07168187783489,
+        "attack": "mitm",
+        "block_size": 200,
+        "parameters": {
+          "samples": 320,
+          "guessed_positions": 80,
+          "imax": 20,
+          "nearest_plane_log2_probability": -1.9080554943627652,
+          "search_probability": 0.7185299064002704
+        }
+      },
+      "target_reference_bits": 48,
+      "tier": 19
+    },
+    {
+      "p": 401,
+      "q": 2053,
+      "w": 128,
+      "public_key_bytes": 552,
+      "ciphertext_bytes": 505,
+      "communication_bytes": 1057,
+      "reference": {
+        "bits": 74.57687081400672,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 74.57687081400672,
+        "raw_bits": 74.57687081400672,
+        "attack": "non-hybrid",
+        "block_size": 253,
+        "parameters": {
+          "bits": 74.57687081400672,
+          "status": "scoped-reference",
+          "raw_bits": 74.57687081400672,
+          "block_size": 253,
+          "force": 15,
+          "samples": 310,
+          "scale": 1.4451787663353854,
+          "force_penalty_bits": 0.579114472926722
+        }
+      },
+      "target_reference_bits": 64,
+      "tier": 20
+    },
+    {
+      "p": 433,
+      "q": 3931,
+      "w": 245,
+      "public_key_bytes": 647,
+      "ciphertext_bytes": 593,
+      "communication_bytes": 1240,
+      "reference": {
+        "bits": 80.23227969609704,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 80.23227969609704,
+        "raw_bits": 80.23227969609704,
+        "attack": "non-hybrid",
+        "block_size": 274,
+        "parameters": {
+          "bits": 80.23227969609704,
+          "status": "scoped-reference",
+          "raw_bits": 80.23227969609704,
+          "block_size": 274,
+          "force": 6,
+          "samples": 370,
+          "scale": 1.0,
+          "force_penalty_bits": 0.09241709745705107
+        }
+      },
+      "target_reference_bits": 76,
+      "tier": 21
+    },
+    {
+      "p": 457,
+      "q": 3061,
+      "w": 191,
+      "public_key_bytes": 662,
+      "ciphertext_bytes": 604,
+      "communication_bytes": 1266,
+      "reference": {
+        "bits": 85.81070348153395,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 86.22275209375448,
+        "raw_bits": 85.81070348153395,
+        "attack": "mitm",
+        "block_size": 280,
+        "parameters": {
+          "samples": 400,
+          "guessed_positions": 120,
+          "imax": 25,
+          "nearest_plane_log2_probability": -0.9526793805254251,
+          "search_probability": 0.2779613348166604
+        }
+      },
+      "target_reference_bits": 84,
+      "tier": 22
+    },
+    {
+      "p": 569,
+      "q": 1579,
+      "w": 98,
+      "public_key_bytes": 756,
+      "ciphertext_bytes": 676,
+      "communication_bytes": 1432,
+      "reference": {
+        "bits": 96.50635677239879,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 111.1476068641502,
+        "raw_bits": 96.50635677239879,
+        "attack": "mitm",
+        "block_size": 280,
+        "parameters": {
+          "samples": 320,
+          "guessed_positions": 240,
+          "imax": 15,
+          "nearest_plane_log2_probability": -5.547824339267273,
+          "search_probability": 0.002007276895012337
+        }
+      },
+      "target_reference_bits": 88,
+      "tier": 23
+    },
+    {
+      "p": 613,
+      "q": 1459,
+      "w": 91,
+      "public_key_bytes": 806,
+      "ciphertext_bytes": 717,
+      "communication_bytes": 1523,
+      "reference": {
+        "bits": 100.66192489758373,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 120.24885177972811,
+        "raw_bits": 100.66192489758373,
+        "attack": "mitm",
+        "block_size": 280,
+        "parameters": {
+          "samples": 320,
+          "guessed_positions": 280,
+          "imax": 15,
+          "nearest_plane_log2_probability": -8.545399312758713,
+          "search_probability": 0.001546992596381621
+        }
+      },
+      "target_reference_bits": 100,
+      "tier": 24
+    },
+    {
+      "p": 557,
+      "q": 4759,
+      "w": 297,
+      "public_key_bytes": 851,
+      "ciphertext_bytes": 773,
+      "communication_bytes": 1624,
+      "reference": {
+        "bits": 107.45420823955341,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 107.45420823955341,
+        "raw_bits": 107.45420823955341,
+        "attack": "non-hybrid",
+        "block_size": 367,
+        "parameters": {
+          "bits": 107.45420823955341,
+          "status": "scoped-reference",
+          "raw_bits": 107.45420823955341,
+          "block_size": 367,
+          "force": 7,
+          "samples": 460,
+          "scale": 1.1181594625159317,
+          "force_penalty_bits": 0.11358935743340724
+        }
+      },
+      "target_reference_bits": 104,
+      "tier": 25
+    },
+    {
+      "p": 613,
+      "q": 3319,
+      "w": 207,
+      "public_key_bytes": 897,
+      "ciphertext_bytes": 807,
+      "communication_bytes": 1704,
+      "reference": {
+        "bits": 121.33616171806575,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 121.33616171806575,
+        "raw_bits": 121.33616171806575,
+        "attack": "non-hybrid",
+        "block_size": 413,
+        "parameters": {
+          "bits": 121.33616171806575,
+          "status": "scoped-reference",
+          "raw_bits": 121.33616171806575,
+          "block_size": 413,
+          "force": 15,
+          "samples": 470,
+          "scale": 1.4050747683557225,
+          "force_penalty_bits": 0.5414053193857647
+        }
+      },
+      "target_reference_bits": 108,
+      "tier": 26
+    },
+    {
+      "p": 653,
+      "q": 4621,
+      "w": 288,
+      "public_key_bytes": 994,
+      "ciphertext_bytes": 897,
+      "communication_bytes": 1891,
+      "reference": {
+        "bits": 129.2330884297,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 129.2330884297,
+        "raw_bits": 129.2330884297,
+        "attack": "non-hybrid",
+        "block_size": 441,
+        "parameters": {
+          "bits": 129.2330884297,
+          "status": "scoped-reference",
+          "raw_bits": 129.2330884297,
+          "block_size": 441,
+          "force": 10,
+          "samples": 540,
+          "scale": 1.2294608875739295,
+          "force_penalty_bits": 0.24885702094000575
+        }
+      },
+      "target_reference_bits": 124,
+      "tier": 27
+    }
+  ],
+  "candidates": [
+    {
+      "p": 5,
+      "q": 79,
+      "w": 1,
+      "public_key_bytes": 4,
+      "ciphertext_bytes": 35,
+      "communication_bytes": 39,
+      "reference": {
+        "bits": null,
+        "status": "outside-model-domain",
+        "reason": "Fewer than 40 available lattice samples",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 5,
+      "q": 79,
+      "w": 3,
+      "public_key_bytes": 4,
+      "ciphertext_bytes": 35,
+      "communication_bytes": 39,
+      "reference": {
+        "bits": null,
+        "status": "outside-model-domain",
+        "reason": "Fewer than 40 available lattice samples",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 13,
+      "q": 313,
+      "w": 4,
+      "public_key_bytes": 14,
+      "ciphertext_bytes": 43,
+      "communication_bytes": 57,
+      "reference": {
+        "bits": null,
+        "status": "outside-model-domain",
+        "reason": "Fewer than 40 available lattice samples",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 13,
+      "q": 313,
+      "w": 8,
+      "public_key_bytes": 14,
+      "ciphertext_bytes": 43,
+      "communication_bytes": 57,
+      "reference": {
+        "bits": null,
+        "status": "outside-model-domain",
+        "reason": "Fewer than 40 available lattice samples",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 17,
+      "q": 67,
+      "w": 4,
+      "public_key_bytes": 13,
+      "ciphertext_bytes": 42,
+      "communication_bytes": 55,
+      "reference": {
+        "bits": null,
+        "status": "outside-model-domain",
+        "reason": "Fewer than 40 available lattice samples",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 17,
+      "q": 457,
+      "w": 6,
+      "public_key_bytes": 19,
+      "ciphertext_bytes": 48,
+      "communication_bytes": 67,
+      "reference": {
+        "bits": null,
+        "status": "outside-model-domain",
+        "reason": "Fewer than 40 available lattice samples",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 17,
+      "q": 457,
+      "w": 11,
+      "public_key_bytes": 19,
+      "ciphertext_bytes": 48,
+      "communication_bytes": 67,
+      "reference": {
+        "bits": null,
+        "status": "outside-model-domain",
+        "reason": "Fewer than 40 available lattice samples",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 29,
+      "q": 61,
+      "w": 3,
+      "public_key_bytes": 22,
+      "ciphertext_bytes": 48,
+      "communication_bytes": 70,
+      "reference": {
+        "bits": null,
+        "status": "outside-model-domain",
+        "reason": "Fewer than 40 available lattice samples",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 29,
+      "q": 313,
+      "w": 10,
+      "public_key_bytes": 31,
+      "ciphertext_bytes": 57,
+      "communication_bytes": 88,
+      "reference": {
+        "bits": null,
+        "status": "outside-model-domain",
+        "reason": "Fewer than 40 available lattice samples",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 29,
+      "q": 313,
+      "w": 19,
+      "public_key_bytes": 31,
+      "ciphertext_bytes": 57,
+      "communication_bytes": 88,
+      "reference": {
+        "bits": null,
+        "status": "outside-model-domain",
+        "reason": "Fewer than 40 available lattice samples",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 37,
+      "q": 601,
+      "w": 13,
+      "public_key_bytes": 43,
+      "ciphertext_bytes": 68,
+      "communication_bytes": 111,
+      "reference": {
+        "bits": null,
+        "status": "outside-model-domain",
+        "reason": "Fewer than 40 available lattice samples",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 37,
+      "q": 601,
+      "w": 24,
+      "public_key_bytes": 43,
+      "ciphertext_bytes": 68,
+      "communication_bytes": 111,
+      "reference": {
+        "bits": null,
+        "status": "outside-model-domain",
+        "reason": "Fewer than 40 available lattice samples",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 41,
+      "q": 1321,
+      "w": 15,
+      "public_key_bytes": 54,
+      "ciphertext_bytes": 78,
+      "communication_bytes": 132,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 40,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 41,
+      "q": 1321,
+      "w": 27,
+      "public_key_bytes": 54,
+      "ciphertext_bytes": 78,
+      "communication_bytes": 132,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 40,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 53,
+      "q": 3331,
+      "w": 19,
+      "public_key_bytes": 78,
+      "ciphertext_bytes": 100,
+      "communication_bytes": 178,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 40,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 53,
+      "q": 3331,
+      "w": 35,
+      "public_key_bytes": 78,
+      "ciphertext_bytes": 100,
+      "communication_bytes": 178,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 40,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 61,
+      "q": 1627,
+      "w": 22,
+      "public_key_bytes": 82,
+      "ciphertext_bytes": 102,
+      "communication_bytes": 184,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 40,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 61,
+      "q": 1627,
+      "w": 40,
+      "public_key_bytes": 82,
+      "ciphertext_bytes": 102,
+      "communication_bytes": 184,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 40,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 73,
+      "q": 691,
+      "w": 27,
+      "public_key_bytes": 87,
+      "ciphertext_bytes": 104,
+      "communication_bytes": 191,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 40,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 73,
+      "q": 691,
+      "w": 43,
+      "public_key_bytes": 87,
+      "ciphertext_bytes": 104,
+      "communication_bytes": 191,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 40,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 97,
+      "q": 859,
+      "w": 36,
+      "public_key_bytes": 119,
+      "ciphertext_bytes": 132,
+      "communication_bytes": 251,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 50,
+        "scale": 1.3402597868683133,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 97,
+      "q": 859,
+      "w": 53,
+      "public_key_bytes": 119,
+      "ciphertext_bytes": 132,
+      "communication_bytes": 251,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 60,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 101,
+      "q": 1543,
+      "w": 37,
+      "public_key_bytes": 134,
+      "ciphertext_bytes": 146,
+      "communication_bytes": 280,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 50,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 101,
+      "q": 1543,
+      "w": 67,
+      "public_key_bytes": 134,
+      "ciphertext_bytes": 146,
+      "communication_bytes": 280,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 60,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 109,
+      "q": 1483,
+      "w": 40,
+      "public_key_bytes": 144,
+      "ciphertext_bytes": 154,
+      "communication_bytes": 298,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 60,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 109,
+      "q": 1483,
+      "w": 72,
+      "public_key_bytes": 144,
+      "ciphertext_bytes": 154,
+      "communication_bytes": 298,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 80,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 113,
+      "q": 5479,
+      "w": 42,
+      "public_key_bytes": 176,
+      "ciphertext_bytes": 186,
+      "communication_bytes": 362,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 50,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 113,
+      "q": 5479,
+      "w": 75,
+      "public_key_bytes": 176,
+      "ciphertext_bytes": 186,
+      "communication_bytes": 362,
+      "reference": {
+        "bits": null,
+        "status": "block-size-floor",
+        "raw_bits": 11.6992500144,
+        "block_size": 40,
+        "force": 0,
+        "samples": 60,
+        "scale": 1.0,
+        "force_penalty_bits": -0.0,
+        "reason": "The asymptotic estimator reaches its minimum block size; this is not an estimated security level",
+        "nonhybrid_bits": null
+      }
+    },
+    {
+      "p": 137,
+      "q": 1237,
+      "w": 51,
+      "public_key_bytes": 176,
+      "ciphertext_bytes": 181,
+      "communication_bytes": 357,
+      "reference": {
+        "bits": 14.066222977399134,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 14.066222977399134,
+        "raw_bits": 14.066222977399134,
+        "attack": "non-hybrid",
+        "block_size": 46,
+        "parameters": {
+          "bits": 14.066222977399134,
+          "status": "scoped-reference",
+          "raw_bits": 14.066222977399134,
+          "block_size": 46,
+          "force": 10,
+          "samples": 130,
+          "scale": 1.3382263161373769,
+          "force_penalty_bits": 0.6120854608391337
+        }
+      }
+    },
+    {
+      "p": 137,
+      "q": 1237,
+      "w": 77,
+      "public_key_bytes": 176,
+      "ciphertext_bytes": 181,
+      "communication_bytes": 357,
+      "reference": {
+        "bits": 16.584778417548993,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 16.584778417548993,
+        "raw_bits": 16.584778417548993,
+        "attack": "non-hybrid",
+        "block_size": 56,
+        "parameters": {
+          "bits": 16.584778417548993,
+          "status": "scoped-reference",
+          "raw_bits": 16.584778417548993,
+          "block_size": 56,
+          "force": 5,
+          "samples": 130,
+          "scale": 1.0,
+          "force_penalty_bits": 0.20582839738899
+        }
+      }
+    },
+    {
+      "p": 149,
+      "q": 1471,
+      "w": 55,
+      "public_key_bytes": 196,
+      "ciphertext_bytes": 199,
+      "communication_bytes": 395,
+      "reference": {
+        "bits": 16.578479070074124,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 16.578479070074124,
+        "raw_bits": 16.578479070074124,
+        "attack": "non-hybrid",
+        "block_size": 56,
+        "parameters": {
+          "bits": 16.578479070074124,
+          "status": "scoped-reference",
+          "raw_bits": 16.578479070074124,
+          "block_size": 56,
+          "force": 9,
+          "samples": 130,
+          "scale": 1.34389754299225,
+          "force_penalty_bits": 0.19952904991412146
+        }
+      }
+    },
+    {
+      "p": 149,
+      "q": 1471,
+      "w": 91,
+      "public_key_bytes": 196,
+      "ciphertext_bytes": 199,
+      "communication_bytes": 395,
+      "reference": {
+        "bits": 19.36136037013379,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 19.36136037013379,
+        "raw_bits": 19.36136037013379,
+        "attack": "non-hybrid",
+        "block_size": 66,
+        "parameters": {
+          "bits": 19.36136037013379,
+          "status": "scoped-reference",
+          "raw_bits": 19.36136037013379,
+          "block_size": 66,
+          "force": 4,
+          "samples": 140,
+          "scale": 1.0,
+          "force_penalty_bits": 0.057597846373793476
+        }
+      }
+    },
+    {
+      "p": 157,
+      "q": 1051,
+      "w": 59,
+      "public_key_bytes": 198,
+      "ciphertext_bytes": 198,
+      "communication_bytes": 396,
+      "reference": {
+        "bits": 20.69126106609575,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 20.69126106609575,
+        "raw_bits": 20.69126106609575,
+        "attack": "non-hybrid",
+        "block_size": 70,
+        "parameters": {
+          "bits": 20.69126106609575,
+          "status": "scoped-reference",
+          "raw_bits": 20.69126106609575,
+          "block_size": 70,
+          "force": 9,
+          "samples": 150,
+          "scale": 1.3319201550524822,
+          "force_penalty_bits": 0.21757354089574985
+        }
+      }
+    },
+    {
+      "p": 157,
+      "q": 1051,
+      "w": 65,
+      "public_key_bytes": 198,
+      "ciphertext_bytes": 198,
+      "communication_bytes": 396,
+      "reference": {
+        "bits": 21.286099416096135,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 21.286099416096135,
+        "raw_bits": 21.286099416096135,
+        "attack": "non-hybrid",
+        "block_size": 72,
+        "parameters": {
+          "bits": 21.286099416096135,
+          "status": "scoped-reference",
+          "raw_bits": 21.286099416096135,
+          "block_size": 72,
+          "force": 8,
+          "samples": 150,
+          "scale": 1.2689587898180186,
+          "force_penalty_bits": 0.2274493901761374
+        }
+      }
+    },
+    {
+      "p": 173,
+      "q": 3109,
+      "w": 65,
+      "public_key_bytes": 251,
+      "ciphertext_bytes": 249,
+      "communication_bytes": 500,
+      "reference": {
+        "bits": 18.464514665034677,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 18.464514665034677,
+        "raw_bits": 18.464514665034677,
+        "attack": "non-hybrid",
+        "block_size": 63,
+        "parameters": {
+          "bits": 18.464514665034677,
+          "status": "scoped-reference",
+          "raw_bits": 18.464514665034677,
+          "block_size": 63,
+          "force": 8,
+          "samples": 170,
+          "scale": 1.3320506650870958,
+          "force_penalty_bits": 0.03819589235467735
+        }
+      }
+    },
+    {
+      "p": 173,
+      "q": 3109,
+      "w": 115,
+      "public_key_bytes": 251,
+      "ciphertext_bytes": 249,
+      "communication_bytes": 500,
+      "reference": {
+        "bits": 21.257773398454816,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 21.257773398454816,
+        "raw_bits": 21.257773398454816,
+        "attack": "non-hybrid",
+        "block_size": 72,
+        "parameters": {
+          "bits": 21.257773398454816,
+          "status": "scoped-reference",
+          "raw_bits": 21.257773398454816,
+          "block_size": 72,
+          "force": 4,
+          "samples": 170,
+          "scale": 1.0,
+          "force_penalty_bits": 0.19912337253481788
+        }
+      }
+    },
+    {
+      "p": 181,
+      "q": 7207,
+      "w": 68,
+      "public_key_bytes": 290,
+      "ciphertext_bytes": 287,
+      "communication_bytes": 577,
+      "reference": {
+        "bits": 15.911340344508195,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 15.911340344508195,
+        "raw_bits": 15.911340344508195,
+        "attack": "non-hybrid",
+        "block_size": 53,
+        "parameters": {
+          "bits": 15.911340344508195,
+          "status": "scoped-reference",
+          "raw_bits": 15.911340344508195,
+          "block_size": 53,
+          "force": 10,
+          "samples": 180,
+          "scale": 1.3321072794341935,
+          "force_penalty_bits": 0.4098340754281952
+        }
+      }
+    },
+    {
+      "p": 181,
+      "q": 7207,
+      "w": 120,
+      "public_key_bytes": 290,
+      "ciphertext_bytes": 287,
+      "communication_bytes": 577,
+      "reference": {
+        "bits": 18.596267213432583,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 18.596267213432583,
+        "raw_bits": 18.596267213432583,
+        "attack": "non-hybrid",
+        "block_size": 63,
+        "parameters": {
+          "bits": 18.596267213432583,
+          "status": "scoped-reference",
+          "raw_bits": 18.596267213432583,
+          "block_size": 63,
+          "force": 4,
+          "samples": 170,
+          "scale": 1.0,
+          "force_penalty_bits": 0.16994844075258436
+        }
+      }
+    },
+    {
+      "p": 193,
+      "q": 1753,
+      "w": 72,
+      "public_key_bytes": 260,
+      "ciphertext_bytes": 254,
+      "communication_bytes": 514,
+      "reference": {
+        "bits": 26.636322560691493,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 26.636322560691493,
+        "raw_bits": 26.636322560691493,
+        "attack": "non-hybrid",
+        "block_size": 91,
+        "parameters": {
+          "bits": 26.636322560691493,
+          "status": "scoped-reference",
+          "raw_bits": 26.636322560691493,
+          "block_size": 91,
+          "force": 8,
+          "samples": 180,
+          "scale": 1.3368010461684405,
+          "force_penalty_bits": 0.020528777931493724
+        }
+      }
+    },
+    {
+      "p": 193,
+      "q": 1753,
+      "w": 109,
+      "public_key_bytes": 260,
+      "ciphertext_bytes": 254,
+      "communication_bytes": 514,
+      "reference": {
+        "bits": 28.750565689493392,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 28.750565689493392,
+        "raw_bits": 28.750565689493392,
+        "attack": "non-hybrid",
+        "block_size": 98,
+        "parameters": {
+          "bits": 28.750565689493392,
+          "status": "scoped-reference",
+          "raw_bits": 28.750565689493392,
+          "block_size": 98,
+          "force": 5,
+          "samples": 190,
+          "scale": 1.0,
+          "force_penalty_bits": 0.08740315421339065
+        }
+      }
+    },
+    {
+      "p": 197,
+      "q": 11437,
+      "w": 74,
+      "public_key_bytes": 332,
+      "ciphertext_bytes": 326,
+      "communication_bytes": 658,
+      "reference": {
+        "bits": 17.310995494353932,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 17.310995494353932,
+        "raw_bits": 17.310995494353932,
+        "attack": "non-hybrid",
+        "block_size": 58,
+        "parameters": {
+          "bits": 17.310995494353932,
+          "status": "scoped-reference",
+          "raw_bits": 17.310995494353932,
+          "block_size": 58,
+          "force": 10,
+          "samples": 190,
+          "scale": 1.3322067312451078,
+          "force_penalty_bits": 0.3470829734739301
+        }
+      }
+    },
+    {
+      "p": 197,
+      "q": 11437,
+      "w": 131,
+      "public_key_bytes": 332,
+      "ciphertext_bytes": 326,
+      "communication_bytes": 658,
+      "reference": {
+        "bits": 19.74133559479523,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 19.74133559479523,
+        "raw_bits": 19.74133559479523,
+        "attack": "non-hybrid",
+        "block_size": 67,
+        "parameters": {
+          "bits": 19.74133559479523,
+          "status": "scoped-reference",
+          "raw_bits": 19.74133559479523,
+          "block_size": 67,
+          "force": 4,
+          "samples": 190,
+          "scale": 1.0,
+          "force_penalty_bits": 0.14509182067522963
+        }
+      }
+    },
+    {
+      "p": 229,
+      "q": 523,
+      "w": 32,
+      "public_key_bytes": 259,
+      "ciphertext_bytes": 246,
+      "communication_bytes": 505,
+      "reference": {
+        "bits": 34.650815732961156,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 35.01792735627524,
+        "raw_bits": 34.650815732961156,
+        "attack": "mitm",
+        "block_size": 80,
+        "parameters": {
+          "samples": 120,
+          "guessed_positions": 80,
+          "imax": 5,
+          "nearest_plane_log2_probability": -6.677903414329993,
+          "search_probability": 0.21355258815421035
+        }
+      }
+    },
+    {
+      "p": 229,
+      "q": 3457,
+      "w": 86,
+      "public_key_bytes": 337,
+      "ciphertext_bytes": 324,
+      "communication_bytes": 661,
+      "reference": {
+        "bits": 30.66928124989855,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 30.66928124989855,
+        "raw_bits": 30.66928124989855,
+        "attack": "non-hybrid",
+        "block_size": 104,
+        "parameters": {
+          "bits": 30.66928124989855,
+          "status": "scoped-reference",
+          "raw_bits": 30.66928124989855,
+          "block_size": 104,
+          "force": 10,
+          "samples": 200,
+          "scale": 1.3323639887244072,
+          "force_penalty_bits": 0.2512312124585475
+        }
+      }
+    },
+    {
+      "p": 229,
+      "q": 3457,
+      "w": 152,
+      "public_key_bytes": 337,
+      "ciphertext_bytes": 324,
+      "communication_bytes": 661,
+      "reference": {
+        "bits": 33.726448567065695,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 33.726448567065695,
+        "raw_bits": 33.726448567065695,
+        "attack": "non-hybrid",
+        "block_size": 115,
+        "parameters": {
+          "bits": 33.726448567065695,
+          "status": "scoped-reference",
+          "raw_bits": 33.726448567065695,
+          "block_size": 115,
+          "force": 4,
+          "samples": 220,
+          "scale": 1.0,
+          "force_penalty_bits": 0.09110477566569554
+        }
+      }
+    },
+    {
+      "p": 233,
+      "q": 3529,
+      "w": 87,
+      "public_key_bytes": 344,
+      "ciphertext_bytes": 330,
+      "communication_bytes": 674,
+      "reference": {
+        "bits": 31.356972457460472,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 31.356972457460472,
+        "raw_bits": 31.356972457460472,
+        "attack": "non-hybrid",
+        "block_size": 107,
+        "parameters": {
+          "bits": 31.356972457460472,
+          "status": "scoped-reference",
+          "raw_bits": 31.356972457460472,
+          "block_size": 107,
+          "force": 9,
+          "samples": 220,
+          "scale": 1.3362038066952286,
+          "force_penalty_bits": 0.06147866894047205
+        }
+      }
+    },
+    {
+      "p": 233,
+      "q": 3529,
+      "w": 155,
+      "public_key_bytes": 344,
+      "ciphertext_bytes": 330,
+      "communication_bytes": 674,
+      "reference": {
+        "bits": 34.513033533237916,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 34.513033533237916,
+        "raw_bits": 34.513033533237916,
+        "attack": "non-hybrid",
+        "block_size": 118,
+        "parameters": {
+          "bits": 34.513033533237916,
+          "status": "scoped-reference",
+          "raw_bits": 34.513033533237916,
+          "block_size": 118,
+          "force": 3,
+          "samples": 230,
+          "scale": 1.0,
+          "force_penalty_bits": 0.0002459907579179137
+        }
+      }
+    },
+    {
+      "p": 241,
+      "q": 1447,
+      "w": 90,
+      "public_key_bytes": 317,
+      "ciphertext_bytes": 301,
+      "communication_bytes": 618,
+      "reference": {
+        "bits": 39.69232335929704,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 39.69232335929704,
+        "raw_bits": 39.69232335929704,
+        "attack": "non-hybrid",
+        "block_size": 135,
+        "parameters": {
+          "bits": 39.69232335929704,
+          "status": "scoped-reference",
+          "raw_bits": 39.69232335929704,
+          "block_size": 135,
+          "force": 10,
+          "samples": 200,
+          "scale": 1.3361082236051034,
+          "force_penalty_bits": 0.20735456069703967
+        }
+      }
+    },
+    {
+      "p": 257,
+      "q": 4567,
+      "w": 96,
+      "public_key_bytes": 391,
+      "ciphertext_bytes": 372,
+      "communication_bytes": 763,
+      "reference": {
+        "bits": 34.98263053069305,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 34.98263053069305,
+        "raw_bits": 34.98263053069305,
+        "attack": "non-hybrid",
+        "block_size": 119,
+        "parameters": {
+          "bits": 34.98263053069305,
+          "status": "scoped-reference",
+          "raw_bits": 34.98263053069305,
+          "block_size": 119,
+          "force": 10,
+          "samples": 240,
+          "scale": 1.3359349618234497,
+          "force_penalty_bits": 0.17736173785304957
+        }
+      }
+    },
+    {
+      "p": 257,
+      "q": 4567,
+      "w": 171,
+      "public_key_bytes": 391,
+      "ciphertext_bytes": 372,
+      "communication_bytes": 763,
+      "reference": {
+        "bits": 36.536609153603514,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 38.315143217204195,
+        "raw_bits": 36.536609153603514,
+        "attack": "mitm",
+        "block_size": 120,
+        "parameters": {
+          "samples": 240,
+          "guessed_positions": 40,
+          "imax": 20,
+          "nearest_plane_log2_probability": -1.1883077816130447,
+          "search_probability": 1.0
+        }
+      }
+    },
+    {
+      "p": 277,
+      "q": 661,
+      "w": 41,
+      "public_key_bytes": 325,
+      "ciphertext_bytes": 302,
+      "communication_bytes": 627,
+      "reference": {
+        "bits": 44.019021545245806,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 45.6843239106496,
+        "raw_bits": 44.019021545245806,
+        "attack": "mitm",
+        "block_size": 120,
+        "parameters": {
+          "samples": 160,
+          "guessed_positions": 120,
+          "imax": 5,
+          "nearest_plane_log2_probability": -4.3118120741355234e-13,
+          "search_probability": 0.002083185176520866
+        }
+      }
+    },
+    {
+      "p": 277,
+      "q": 9343,
+      "w": 104,
+      "public_key_bytes": 457,
+      "ciphertext_bytes": 435,
+      "communication_bytes": 892,
+      "reference": {
+        "bits": 34.84063541784926,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 34.84063541784926,
+        "raw_bits": 34.84063541784926,
+        "attack": "non-hybrid",
+        "block_size": 119,
+        "parameters": {
+          "bits": 34.84063541784926,
+          "status": "scoped-reference",
+          "raw_bits": 34.84063541784926,
+          "block_size": 119,
+          "force": 9,
+          "samples": 250,
+          "scale": 1.332531810367402,
+          "force_penalty_bits": 0.03536662500925889
+        }
+      }
+    },
+    {
+      "p": 277,
+      "q": 9343,
+      "w": 184,
+      "public_key_bytes": 457,
+      "ciphertext_bytes": 435,
+      "communication_bytes": 892,
+      "reference": {
+        "bits": 36.32392739842432,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 37.779544293052474,
+        "raw_bits": 36.32392739842432,
+        "attack": "mitm",
+        "block_size": 120,
+        "parameters": {
+          "samples": 240,
+          "guessed_positions": 40,
+          "imax": 20,
+          "nearest_plane_log2_probability": -0.9756260264338498,
+          "search_probability": 1.0
+        }
+      }
+    },
+    {
+      "p": 293,
+      "q": 3907,
+      "w": 110,
+      "public_key_bytes": 438,
+      "ciphertext_bytes": 412,
+      "communication_bytes": 850,
+      "reference": {
+        "bits": 44.24696372122541,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 44.24696372122541,
+        "raw_bits": 44.24696372122541,
+        "attack": "non-hybrid",
+        "block_size": 150,
+        "parameters": {
+          "bits": 44.24696372122541,
+          "status": "scoped-reference",
+          "raw_bits": 44.24696372122541,
+          "block_size": 150,
+          "force": 11,
+          "samples": 250,
+          "scale": 1.3325755422330008,
+          "force_penalty_bits": 0.3747761672254127
+        }
+      }
+    },
+    {
+      "p": 293,
+      "q": 3907,
+      "w": 195,
+      "public_key_bytes": 438,
+      "ciphertext_bytes": 412,
+      "communication_bytes": 850,
+      "reference": {
+        "bits": 47.716942875654674,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 47.716942875654674,
+        "raw_bits": 47.716942875654674,
+        "attack": "non-hybrid",
+        "block_size": 163,
+        "parameters": {
+          "bits": 47.716942875654674,
+          "status": "scoped-reference",
+          "raw_bits": 47.716942875654674,
+          "block_size": 163,
+          "force": 4,
+          "samples": 280,
+          "scale": 1.0,
+          "force_penalty_bits": 0.04249906697466822
+        }
+      }
+    },
+    {
+      "p": 313,
+      "q": 11071,
+      "w": 117,
+      "public_key_bytes": 526,
+      "ciphertext_bytes": 496,
+      "communication_bytes": 1022,
+      "reference": {
+        "bits": 40.96766014040532,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 40.96766014040532,
+        "raw_bits": 40.96766014040532,
+        "attack": "non-hybrid",
+        "block_size": 139,
+        "parameters": {
+          "bits": 40.96766014040532,
+          "status": "scoped-reference",
+          "raw_bits": 40.96766014040532,
+          "block_size": 139,
+          "force": 11,
+          "samples": 290,
+          "scale": 1.335468376067282,
+          "force_penalty_bits": 0.31276634036532
+        }
+      }
+    },
+    {
+      "p": 313,
+      "q": 11071,
+      "w": 208,
+      "public_key_bytes": 526,
+      "ciphertext_bytes": 496,
+      "communication_bytes": 1022,
+      "reference": {
+        "bits": 44.196096477412745,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 44.196096477412745,
+        "raw_bits": 44.196096477412745,
+        "attack": "non-hybrid",
+        "block_size": 151,
+        "parameters": {
+          "bits": 44.196096477412745,
+          "status": "scoped-reference",
+          "raw_bits": 44.196096477412745,
+          "block_size": 151,
+          "force": 4,
+          "samples": 290,
+          "scale": 1.0,
+          "force_penalty_bits": 0.03142767305274356
+        }
+      }
+    },
+    {
+      "p": 317,
+      "q": 15643,
+      "w": 119,
+      "public_key_bytes": 553,
+      "ciphertext_bytes": 522,
+      "communication_bytes": 1075,
+      "reference": {
+        "bits": 39.59226955475372,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 39.59226955475372,
+        "raw_bits": 39.59226955475372,
+        "attack": "non-hybrid",
+        "block_size": 135,
+        "parameters": {
+          "bits": 39.59226955475372,
+          "status": "scoped-reference",
+          "raw_bits": 39.59226955475372,
+          "block_size": 135,
+          "force": 10,
+          "samples": 280,
+          "scale": 1.3326328692275522,
+          "force_penalty_bits": 0.10730075615372052
+        }
+      }
+    },
+    {
+      "p": 317,
+      "q": 15643,
+      "w": 211,
+      "public_key_bytes": 553,
+      "ciphertext_bytes": 522,
+      "communication_bytes": 1075,
+      "reference": {
+        "bits": 42.70227287871567,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 42.70227287871567,
+        "raw_bits": 42.70227287871567,
+        "attack": "non-hybrid",
+        "block_size": 146,
+        "parameters": {
+          "bits": 42.70227287871567,
+          "status": "scoped-reference",
+          "raw_bits": 42.70227287871567,
+          "block_size": 146,
+          "force": 3,
+          "samples": 310,
+          "scale": 1.0,
+          "force_penalty_bits": 1.032615567016753e-05
+        }
+      }
+    },
+    {
+      "p": 337,
+      "q": 6481,
+      "w": 126,
+      "public_key_bytes": 534,
+      "ciphertext_bytes": 499,
+      "communication_bytes": 1033,
+      "reference": {
+        "bits": 49.990638674997804,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 49.990638674997804,
+        "raw_bits": 49.990638674997804,
+        "attack": "non-hybrid",
+        "block_size": 170,
+        "parameters": {
+          "bits": 49.990638674997804,
+          "status": "scoped-reference",
+          "raw_bits": 49.990638674997804,
+          "block_size": 170,
+          "force": 11,
+          "samples": 290,
+          "scale": 1.3353159862252766,
+          "force_penalty_bits": 0.2688261137978077
+        }
+      }
+    },
+    {
+      "p": 337,
+      "q": 6481,
+      "w": 224,
+      "public_key_bytes": 534,
+      "ciphertext_bytes": 499,
+      "communication_bytes": 1033,
+      "reference": {
+        "bits": 53.54732728001149,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 53.54732728001149,
+        "raw_bits": 53.54732728001149,
+        "attack": "non-hybrid",
+        "block_size": 183,
+        "parameters": {
+          "bits": 53.54732728001149,
+          "status": "scoped-reference",
+          "raw_bits": 53.54732728001149,
+          "block_size": 183,
+          "force": 4,
+          "samples": 330,
+          "scale": 1.0,
+          "force_penalty_bits": 0.023258464131486606
+        }
+      }
+    },
+    {
+      "p": 349,
+      "q": 2437,
+      "w": 131,
+      "public_key_bytes": 491,
+      "ciphertext_bytes": 454,
+      "communication_bytes": 945,
+      "reference": {
+        "bits": 61.03514479498986,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 61.39117660563783,
+        "raw_bits": 61.03514479498986,
+        "attack": "mitm",
+        "block_size": 200,
+        "parameters": {
+          "samples": 320,
+          "guessed_positions": 80,
+          "imax": 20,
+          "nearest_plane_log2_probability": -1.260345397605652,
+          "search_probability": 0.9407916081234208
+        }
+      }
+    },
+    {
+      "p": 349,
+      "q": 2437,
+      "w": 152,
+      "public_key_bytes": 491,
+      "ciphertext_bytes": 454,
+      "communication_bytes": 945,
+      "reference": {
+        "bits": 62.07168187783489,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 62.83071318847257,
+        "raw_bits": 62.07168187783489,
+        "attack": "mitm",
+        "block_size": 200,
+        "parameters": {
+          "samples": 320,
+          "guessed_positions": 80,
+          "imax": 20,
+          "nearest_plane_log2_probability": -1.9080554943627652,
+          "search_probability": 0.7185299064002704
+        }
+      }
+    },
+    {
+      "p": 353,
+      "q": 2719,
+      "w": 132,
+      "public_key_bytes": 504,
+      "ciphertext_bytes": 466,
+      "communication_bytes": 970,
+      "reference": {
+        "bits": 60.87540793542871,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 61.37189653007125,
+        "raw_bits": 60.87540793542871,
+        "attack": "mitm",
+        "block_size": 200,
+        "parameters": {
+          "samples": 320,
+          "guessed_positions": 80,
+          "imax": 20,
+          "nearest_plane_log2_probability": -1.1044044504211883,
+          "search_probability": 0.9432702086731768
+        }
+      }
+    },
+    {
+      "p": 353,
+      "q": 2719,
+      "w": 169,
+      "public_key_bytes": 504,
+      "ciphertext_bytes": 466,
+      "communication_bytes": 970,
+      "reference": {
+        "bits": 63.11378278897981,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 63.43942432254071,
+        "raw_bits": 63.11378278897981,
+        "attack": "mitm",
+        "block_size": 200,
+        "parameters": {
+          "samples": 320,
+          "guessed_positions": 80,
+          "imax": 20,
+          "nearest_plane_log2_probability": -2.240796288720227,
+          "search_probability": 0.4394466681342491
+        }
+      }
+    },
+    {
+      "p": 353,
+      "q": 3559,
+      "w": 222,
+      "public_key_bytes": 521,
+      "ciphertext_bytes": 483,
+      "communication_bytes": 1004,
+      "reference": {
+        "bits": 62.7319406427276,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 62.7319406427276,
+        "raw_bits": 62.7319406427276,
+        "attack": "non-hybrid",
+        "block_size": 214,
+        "parameters": {
+          "bits": 62.7319406427276,
+          "status": "scoped-reference",
+          "raw_bits": 62.7319406427276,
+          "block_size": 214,
+          "force": 5,
+          "samples": 310,
+          "scale": 1.0,
+          "force_penalty_bits": 0.1409530656875947
+        }
+      }
+    },
+    {
+      "p": 373,
+      "q": 11149,
+      "w": 140,
+      "public_key_bytes": 627,
+      "ciphertext_bytes": 586,
+      "communication_bytes": 1213,
+      "reference": {
+        "bits": 53.295006215374045,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 53.295006215374045,
+        "raw_bits": 53.295006215374045,
+        "attack": "non-hybrid",
+        "block_size": 182,
+        "parameters": {
+          "bits": 53.295006215374045,
+          "status": "scoped-reference",
+          "raw_bits": 53.295006215374045,
+          "block_size": 182,
+          "force": 10,
+          "samples": 340,
+          "scale": 1.3327379623131008,
+          "force_penalty_bits": 0.06341864985404636
+        }
+      }
+    },
+    {
+      "p": 373,
+      "q": 11149,
+      "w": 248,
+      "public_key_bytes": 627,
+      "ciphertext_bytes": 586,
+      "communication_bytes": 1213,
+      "reference": {
+        "bits": 57.04867113666895,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 57.04867113666895,
+        "raw_bits": 57.04867113666895,
+        "attack": "non-hybrid",
+        "block_size": 195,
+        "parameters": {
+          "bits": 57.04867113666895,
+          "status": "scoped-reference",
+          "raw_bits": 57.04867113666895,
+          "block_size": 195,
+          "force": 4,
+          "samples": 340,
+          "scale": 1.0,
+          "force_penalty_bits": 0.014827316468952524
+        }
+      }
+    },
+    {
+      "p": 389,
+      "q": 6781,
+      "w": 146,
+      "public_key_bytes": 619,
+      "ciphertext_bytes": 575,
+      "communication_bytes": 1194,
+      "reference": {
+        "bits": 60.69784406656111,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 61.03704959227183,
+        "raw_bits": 60.69784406656111,
+        "attack": "mitm",
+        "block_size": 200,
+        "parameters": {
+          "samples": 360,
+          "guessed_positions": 80,
+          "imax": 20,
+          "nearest_plane_log2_probability": -0.9205991965014806,
+          "search_probability": 0.9391982489607167
+        }
+      }
+    },
+    {
+      "p": 389,
+      "q": 6781,
+      "w": 259,
+      "public_key_bytes": 619,
+      "ciphertext_bytes": 575,
+      "communication_bytes": 1194,
+      "reference": {
+        "bits": 65.22331951222682,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 65.22331951222682,
+        "raw_bits": 65.22331951222682,
+        "attack": "non-hybrid",
+        "block_size": 223,
+        "parameters": {
+          "bits": 65.22331951222682,
+          "status": "scoped-reference",
+          "raw_bits": 65.22331951222682,
+          "block_size": 223,
+          "force": 3,
+          "samples": 370,
+          "scale": 1.0,
+          "force_penalty_bits": 6.81946834872543e-07
+        }
+      }
+    },
+    {
+      "p": 397,
+      "q": 6703,
+      "w": 149,
+      "public_key_bytes": 631,
+      "ciphertext_bytes": 585,
+      "communication_bytes": 1216,
+      "reference": {
+        "bits": 62.786361575984856,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 62.786361575984856,
+        "raw_bits": 62.786361575984856,
+        "attack": "non-hybrid",
+        "block_size": 214,
+        "parameters": {
+          "bits": 62.786361575984856,
+          "status": "scoped-reference",
+          "raw_bits": 62.786361575984856,
+          "block_size": 214,
+          "force": 11,
+          "samples": 340,
+          "scale": 1.3327739318682525,
+          "force_penalty_bits": 0.19537399894485513
+        }
+      }
+    },
+    {
+      "p": 397,
+      "q": 6703,
+      "w": 264,
+      "public_key_bytes": 631,
+      "ciphertext_bytes": 585,
+      "communication_bytes": 1216,
+      "reference": {
+        "bits": 66.9891960731286,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 66.9891960731286,
+        "raw_bits": 66.9891960731286,
+        "attack": "non-hybrid",
+        "block_size": 229,
+        "parameters": {
+          "bits": 66.9891960731286,
+          "status": "scoped-reference",
+          "raw_bits": 66.9891960731286,
+          "block_size": 229,
+          "force": 4,
+          "samples": 370,
+          "scale": 1.0,
+          "force_penalty_bits": 0.010989740688603379
+        }
+      }
+    },
+    {
+      "p": 401,
+      "q": 2053,
+      "w": 128,
+      "public_key_bytes": 552,
+      "ciphertext_bytes": 505,
+      "communication_bytes": 1057,
+      "reference": {
+        "bits": 74.57687081400672,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 74.57687081400672,
+        "raw_bits": 74.57687081400672,
+        "attack": "non-hybrid",
+        "block_size": 253,
+        "parameters": {
+          "bits": 74.57687081400672,
+          "status": "scoped-reference",
+          "raw_bits": 74.57687081400672,
+          "block_size": 253,
+          "force": 15,
+          "samples": 310,
+          "scale": 1.4451787663353854,
+          "force_penalty_bits": 0.579114472926722
+        }
+      }
+    },
+    {
+      "p": 401,
+      "q": 9511,
+      "w": 150,
+      "public_key_bytes": 663,
+      "ciphertext_bytes": 616,
+      "communication_bytes": 1279,
+      "reference": {
+        "bits": 60.27549432668928,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 60.43240233579626,
+        "raw_bits": 60.27549432668928,
+        "attack": "mitm",
+        "block_size": 200,
+        "parameters": {
+          "samples": 360,
+          "guessed_positions": 80,
+          "imax": 20,
+          "nearest_plane_log2_probability": -0.5012627494135342,
+          "search_probability": 0.94116196049706
+        }
+      }
+    },
+    {
+      "p": 401,
+      "q": 9511,
+      "w": 267,
+      "public_key_bytes": 663,
+      "ciphertext_bytes": 616,
+      "communication_bytes": 1279,
+      "reference": {
+        "bits": 64.64934514554686,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 64.64934514554686,
+        "raw_bits": 64.64934514554686,
+        "attack": "non-hybrid",
+        "block_size": 221,
+        "parameters": {
+          "bits": 64.64934514554686,
+          "status": "scoped-reference",
+          "raw_bits": 64.64934514554686,
+          "block_size": 221,
+          "force": 4,
+          "samples": 360,
+          "scale": 1.0,
+          "force_penalty_bits": 0.01098881598685672
+        }
+      }
+    },
+    {
+      "p": 409,
+      "q": 1993,
+      "w": 124,
+      "public_key_bytes": 561,
+      "ciphertext_bytes": 512,
+      "communication_bytes": 1073,
+      "reference": {
+        "bits": 74.58664523625907,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 76.32995601015165,
+        "raw_bits": 74.58664523625907,
+        "attack": "mitm",
+        "block_size": 240,
+        "parameters": {
+          "samples": 320,
+          "guessed_positions": 120,
+          "imax": 20,
+          "nearest_plane_log2_probability": -0.30705051316570703,
+          "search_probability": 0.562484570144677
+        }
+      }
+    },
+    {
+      "p": 409,
+      "q": 2833,
+      "w": 153,
+      "public_key_bytes": 587,
+      "ciphertext_bytes": 538,
+      "communication_bytes": 1125,
+      "reference": {
+        "bits": 74.43482007335102,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 74.43482007335102,
+        "raw_bits": 74.43482007335102,
+        "attack": "non-hybrid",
+        "block_size": 253,
+        "parameters": {
+          "bits": 74.43482007335102,
+          "status": "scoped-reference",
+          "raw_bits": 74.43482007335102,
+          "block_size": 253,
+          "force": 12,
+          "samples": 330,
+          "scale": 1.3349663202690634,
+          "force_penalty_bits": 0.4370637322710115
+        }
+      }
+    },
+    {
+      "p": 409,
+      "q": 2833,
+      "w": 177,
+      "public_key_bytes": 587,
+      "ciphertext_bytes": 538,
+      "communication_bytes": 1125,
+      "reference": {
+        "bits": 75.77492717014617,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 75.77492717014617,
+        "raw_bits": 75.77492717014617,
+        "attack": "non-hybrid",
+        "block_size": 259,
+        "parameters": {
+          "bits": 75.77492717014617,
+          "status": "scoped-reference",
+          "raw_bits": 75.77492717014617,
+          "block_size": 259,
+          "force": 8,
+          "samples": 360,
+          "scale": 1.2411646313783509,
+          "force_penalty_bits": 0.022283326906182756
+        }
+      }
+    },
+    {
+      "p": 421,
+      "q": 10789,
+      "w": 158,
+      "public_key_bytes": 706,
+      "ciphertext_bytes": 654,
+      "communication_bytes": 1360,
+      "reference": {
+        "bits": 63.63734310238555,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 63.63734310238555,
+        "raw_bits": 63.63734310238555,
+        "attack": "non-hybrid",
+        "block_size": 217,
+        "parameters": {
+          "bits": 63.63734310238555,
+          "status": "scoped-reference",
+          "raw_bits": 63.63734310238555,
+          "block_size": 217,
+          "force": 11,
+          "samples": 370,
+          "scale": 1.3328058028148277,
+          "force_penalty_bits": 0.16891177426555135
+        }
+      }
+    },
+    {
+      "p": 421,
+      "q": 10789,
+      "w": 280,
+      "public_key_bytes": 706,
+      "ciphertext_bytes": 654,
+      "communication_bytes": 1360,
+      "reference": {
+        "bits": 67.85595869538865,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 67.85595869538865,
+        "raw_bits": 67.85595869538865,
+        "attack": "non-hybrid",
+        "block_size": 231,
+        "parameters": {
+          "bits": 67.85595869538865,
+          "status": "scoped-reference",
+          "raw_bits": 67.85595869538865,
+          "block_size": 231,
+          "force": 5,
+          "samples": 380,
+          "scale": 1.0,
+          "force_penalty_bits": 0.29278986222865055
+        }
+      }
+    },
+    {
+      "p": 433,
+      "q": 3931,
+      "w": 162,
+      "public_key_bytes": 647,
+      "ciphertext_bytes": 593,
+      "communication_bytes": 1240,
+      "reference": {
+        "bits": 76.44103244426509,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 76.44103244426509,
+        "raw_bits": 76.44103244426509,
+        "attack": "non-hybrid",
+        "block_size": 260,
+        "parameters": {
+          "bits": 76.44103244426509,
+          "status": "scoped-reference",
+          "raw_bits": 76.44103244426509,
+          "block_size": 260,
+          "force": 12,
+          "samples": 360,
+          "scale": 1.334875651180748,
+          "force_penalty_bits": 0.3959073506650874
+        }
+      }
+    },
+    {
+      "p": 433,
+      "q": 3931,
+      "w": 245,
+      "public_key_bytes": 647,
+      "ciphertext_bytes": 593,
+      "communication_bytes": 1240,
+      "reference": {
+        "bits": 80.23227969609704,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 80.23227969609704,
+        "raw_bits": 80.23227969609704,
+        "attack": "non-hybrid",
+        "block_size": 274,
+        "parameters": {
+          "bits": 80.23227969609704,
+          "status": "scoped-reference",
+          "raw_bits": 80.23227969609704,
+          "block_size": 274,
+          "force": 6,
+          "samples": 370,
+          "scale": 1.0,
+          "force_penalty_bits": 0.09241709745705107
+        }
+      }
+    },
+    {
+      "p": 457,
+      "q": 3061,
+      "w": 171,
+      "public_key_bytes": 662,
+      "ciphertext_bytes": 604,
+      "communication_bytes": 1266,
+      "reference": {
+        "bits": 84.23076258141978,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 85.17868210920089,
+        "raw_bits": 84.23076258141978,
+        "attack": "mitm",
+        "block_size": 280,
+        "parameters": {
+          "samples": 400,
+          "guessed_positions": 120,
+          "imax": 25,
+          "nearest_plane_log2_probability": -0.584696477170579,
+          "search_probability": 0.6439024819115433
+        }
+      }
+    },
+    {
+      "p": 457,
+      "q": 3061,
+      "w": 191,
+      "public_key_bytes": 662,
+      "ciphertext_bytes": 604,
+      "communication_bytes": 1266,
+      "reference": {
+        "bits": 85.81070348153395,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 86.22275209375448,
+        "raw_bits": 85.81070348153395,
+        "attack": "mitm",
+        "block_size": 280,
+        "parameters": {
+          "samples": 400,
+          "guessed_positions": 120,
+          "imax": 25,
+          "nearest_plane_log2_probability": -0.9526793805254251,
+          "search_probability": 0.2779613348166604
+        }
+      }
+    },
+    {
+      "p": 461,
+      "q": 1021,
+      "w": 63,
+      "public_key_bytes": 577,
+      "ciphertext_bytes": 517,
+      "communication_bytes": 1094,
+      "reference": {
+        "bits": 72.37153411056077,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 85.58899810468412,
+        "raw_bits": 72.37153411056077,
+        "attack": "mitm",
+        "block_size": 200,
+        "parameters": {
+          "samples": 200,
+          "guessed_positions": 240,
+          "imax": 10,
+          "nearest_plane_log2_probability": 0.0,
+          "search_probability": 0.00010727995970181974
+        }
+      }
+    },
+    {
+      "p": 461,
+      "q": 8779,
+      "w": 173,
+      "public_key_bytes": 755,
+      "ciphertext_bytes": 696,
+      "communication_bytes": 1451,
+      "reference": {
+        "bits": 74.31830038066522,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 74.31830038066522,
+        "raw_bits": 74.31830038066522,
+        "attack": "non-hybrid",
+        "block_size": 254,
+        "parameters": {
+          "bits": 74.31830038066522,
+          "status": "scoped-reference",
+          "raw_bits": 74.31830038066522,
+          "block_size": 254,
+          "force": 10,
+          "samples": 400,
+          "scale": 1.332851550722001,
+          "force_penalty_bits": 0.028062789225222755
+        }
+      }
+    },
+    {
+      "p": 461,
+      "q": 8779,
+      "w": 307,
+      "public_key_bytes": 755,
+      "ciphertext_bytes": 696,
+      "communication_bytes": 1451,
+      "reference": {
+        "bits": 78.92717327148688,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 78.92717327148688,
+        "raw_bits": 78.92717327148688,
+        "attack": "non-hybrid",
+        "block_size": 269,
+        "parameters": {
+          "bits": 78.92717327148688,
+          "status": "scoped-reference",
+          "raw_bits": 78.92717327148688,
+          "block_size": 269,
+          "force": 5,
+          "samples": 420,
+          "scale": 1.0,
+          "force_penalty_bits": 0.2497169246468693
+        }
+      }
+    },
+    {
+      "p": 509,
+      "q": 10939,
+      "w": 191,
+      "public_key_bytes": 854,
+      "ciphertext_bytes": 785,
+      "communication_bytes": 1639,
+      "reference": {
+        "bits": 82.48976479068243,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 82.48976479068243,
+        "raw_bits": 82.48976479068243,
+        "attack": "non-hybrid",
+        "block_size": 281,
+        "parameters": {
+          "bits": 82.48976479068243,
+          "status": "scoped-reference",
+          "raw_bits": 82.48976479068243,
+          "block_size": 281,
+          "force": 12,
+          "samples": 420,
+          "scale": 1.332896961751254,
+          "force_penalty_bits": 0.30253343952243383
+        }
+      }
+    },
+    {
+      "p": 509,
+      "q": 10939,
+      "w": 339,
+      "public_key_bytes": 854,
+      "ciphertext_bytes": 785,
+      "communication_bytes": 1639,
+      "reference": {
+        "bits": 87.36098675526831,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 87.36098675526831,
+        "raw_bits": 87.36098675526831,
+        "attack": "non-hybrid",
+        "block_size": 298,
+        "parameters": {
+          "bits": 87.36098675526831,
+          "status": "scoped-reference",
+          "raw_bits": 87.36098675526831,
+          "block_size": 298,
+          "force": 5,
+          "samples": 450,
+          "scale": 1.0,
+          "force_penalty_bits": 0.20157414798831114
+        }
+      }
+    },
+    {
+      "p": 557,
+      "q": 4759,
+      "w": 209,
+      "public_key_bytes": 851,
+      "ciphertext_bytes": 773,
+      "communication_bytes": 1624,
+      "reference": {
+        "bits": 103.49657981502348,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 103.49657981502348,
+        "raw_bits": 103.49657981502348,
+        "attack": "non-hybrid",
+        "block_size": 353,
+        "parameters": {
+          "bits": 103.49657981502348,
+          "status": "scoped-reference",
+          "raw_bits": 103.49657981502348,
+          "block_size": 353,
+          "force": 12,
+          "samples": 460,
+          "scale": 1.3329345496147285,
+          "force_penalty_bits": 0.2506984379434839
+        }
+      }
+    },
+    {
+      "p": 557,
+      "q": 4759,
+      "w": 297,
+      "public_key_bytes": 851,
+      "ciphertext_bytes": 773,
+      "communication_bytes": 1624,
+      "reference": {
+        "bits": 107.45420823955341,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 107.45420823955341,
+        "raw_bits": 107.45420823955341,
+        "attack": "non-hybrid",
+        "block_size": 367,
+        "parameters": {
+          "bits": 107.45420823955341,
+          "status": "scoped-reference",
+          "raw_bits": 107.45420823955341,
+          "block_size": 367,
+          "force": 7,
+          "samples": 460,
+          "scale": 1.1181594625159317,
+          "force_penalty_bits": 0.11358935743340724
+        }
+      }
+    },
+    {
+      "p": 569,
+      "q": 1579,
+      "w": 98,
+      "public_key_bytes": 756,
+      "ciphertext_bytes": 676,
+      "communication_bytes": 1432,
+      "reference": {
+        "bits": 96.50635677239879,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 111.1476068641502,
+        "raw_bits": 96.50635677239879,
+        "attack": "mitm",
+        "block_size": 280,
+        "parameters": {
+          "samples": 320,
+          "guessed_positions": 240,
+          "imax": 15,
+          "nearest_plane_log2_probability": -5.547824339267273,
+          "search_probability": 0.002007276895012337
+        }
+      }
+    },
+    {
+      "p": 569,
+      "q": 12781,
+      "w": 213,
+      "public_key_bytes": 971,
+      "ciphertext_bytes": 890,
+      "communication_bytes": 1861,
+      "reference": {
+        "bits": 93.66093027047097,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 93.66093027047097,
+        "raw_bits": 93.66093027047097,
+        "attack": "non-hybrid",
+        "block_size": 320,
+        "parameters": {
+          "bits": 93.66093027047097,
+          "status": "scoped-reference",
+          "raw_bits": 93.66093027047097,
+          "block_size": 320,
+          "force": 11,
+          "samples": 490,
+          "scale": 1.3345065261105364,
+          "force_penalty_bits": 0.06693015527096728
+        }
+      }
+    },
+    {
+      "p": 569,
+      "q": 12781,
+      "w": 379,
+      "public_key_bytes": 971,
+      "ciphertext_bytes": 890,
+      "communication_bytes": 1861,
+      "reference": {
+        "bits": 99.0135838215598,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 99.0135838215598,
+        "raw_bits": 99.0135838215598,
+        "attack": "non-hybrid",
+        "block_size": 338,
+        "parameters": {
+          "bits": 99.0135838215598,
+          "status": "scoped-reference",
+          "raw_bits": 99.0135838215598,
+          "block_size": 338,
+          "force": 5,
+          "samples": 500,
+          "scale": 1.0,
+          "force_penalty_bits": 0.15492119987980346
+        }
+      }
+    },
+    {
+      "p": 613,
+      "q": 1459,
+      "w": 91,
+      "public_key_bytes": 806,
+      "ciphertext_bytes": 717,
+      "communication_bytes": 1523,
+      "reference": {
+        "bits": 100.66192489758373,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 120.24885177972811,
+        "raw_bits": 100.66192489758373,
+        "attack": "mitm",
+        "block_size": 280,
+        "parameters": {
+          "samples": 320,
+          "guessed_positions": 280,
+          "imax": 15,
+          "nearest_plane_log2_probability": -8.545399312758713,
+          "search_probability": 0.001546992596381621
+        }
+      }
+    },
+    {
+      "p": 613,
+      "q": 3319,
+      "w": 207,
+      "public_key_bytes": 897,
+      "ciphertext_bytes": 807,
+      "communication_bytes": 1704,
+      "reference": {
+        "bits": 121.33616171806575,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 121.33616171806575,
+        "raw_bits": 121.33616171806575,
+        "attack": "non-hybrid",
+        "block_size": 413,
+        "parameters": {
+          "bits": 121.33616171806575,
+          "status": "scoped-reference",
+          "raw_bits": 121.33616171806575,
+          "block_size": 413,
+          "force": 15,
+          "samples": 470,
+          "scale": 1.4050747683557225,
+          "force_penalty_bits": 0.5414053193857647
+        }
+      }
+    },
+    {
+      "p": 613,
+      "q": 4363,
+      "w": 230,
+      "public_key_bytes": 927,
+      "ciphertext_bytes": 838,
+      "communication_bytes": 1765,
+      "reference": {
+        "bits": 118.35395702037212,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 118.35395702037212,
+        "raw_bits": 118.35395702037212,
+        "attack": "non-hybrid",
+        "block_size": 403,
+        "parameters": {
+          "bits": 118.35395702037212,
+          "status": "scoped-reference",
+          "raw_bits": 118.35395702037212,
+          "block_size": 403,
+          "force": 13,
+          "samples": 490,
+          "scale": 1.3329709652512685,
+          "force_penalty_bits": 0.48401312529212936
+        }
+      }
+    },
+    {
+      "p": 613,
+      "q": 4363,
+      "w": 272,
+      "public_key_bytes": 927,
+      "ciphertext_bytes": 838,
+      "communication_bytes": 1765,
+      "reference": {
+        "bits": 120.50853886971343,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 120.50853886971343,
+        "raw_bits": 120.50853886971343,
+        "attack": "non-hybrid",
+        "block_size": 412,
+        "parameters": {
+          "bits": 120.50853886971343,
+          "status": "scoped-reference",
+          "raw_bits": 120.50853886971343,
+          "block_size": 412,
+          "force": 8,
+          "samples": 520,
+          "scale": 1.2257450715349243,
+          "force_penalty_bits": 0.006263721393439507
+        }
+      }
+    },
+    {
+      "p": 617,
+      "q": 12829,
+      "w": 231,
+      "public_key_bytes": 1053,
+      "ciphertext_bytes": 963,
+      "communication_bytes": 2016,
+      "reference": {
+        "bits": 104.17395250527547,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 104.17395250527547,
+        "raw_bits": 104.17395250527547,
+        "attack": "non-hybrid",
+        "block_size": 356,
+        "parameters": {
+          "bits": 104.17395250527547,
+          "status": "scoped-reference",
+          "raw_bits": 104.17395250527547,
+          "block_size": 356,
+          "force": 11,
+          "samples": 510,
+          "scale": 1.3344151455464601,
+          "force_penalty_bits": 0.05062737711545693
+        }
+      }
+    },
+    {
+      "p": 617,
+      "q": 12829,
+      "w": 411,
+      "public_key_bytes": 1053,
+      "ciphertext_bytes": 963,
+      "communication_bytes": 2016,
+      "reference": {
+        "bits": 109.80631723632501,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 109.80631723632501,
+        "raw_bits": 109.80631723632501,
+        "attack": "non-hybrid",
+        "block_size": 375,
+        "parameters": {
+          "bits": 109.80631723632501,
+          "status": "scoped-reference",
+          "raw_bits": 109.80631723632501,
+          "block_size": 375,
+          "force": 5,
+          "samples": 540,
+          "scale": 1.0,
+          "force_penalty_bits": 0.12584835132502076
+        }
+      }
+    },
+    {
+      "p": 653,
+      "q": 2311,
+      "w": 144,
+      "public_key_bytes": 913,
+      "ciphertext_bytes": 816,
+      "communication_bytes": 1729,
+      "reference": {
+        "bits": 120.31224628585012,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 130.91155333754972,
+        "raw_bits": 120.31224628585012,
+        "attack": "mitm",
+        "block_size": 400,
+        "parameters": {
+          "samples": 440,
+          "guessed_positions": 240,
+          "imax": 25,
+          "nearest_plane_log2_probability": -0.4162551418472337,
+          "search_probability": 0.1362495364682272
+        }
+      }
+    },
+    {
+      "p": 653,
+      "q": 4621,
+      "w": 245,
+      "public_key_bytes": 994,
+      "ciphertext_bytes": 897,
+      "communication_bytes": 1891,
+      "reference": {
+        "bits": 127.11050062962418,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 127.11050062962418,
+        "raw_bits": 127.11050062962418,
+        "attack": "non-hybrid",
+        "block_size": 434,
+        "parameters": {
+          "bits": 127.11050062962418,
+          "status": "scoped-reference",
+          "raw_bits": 127.11050062962418,
+          "block_size": 434,
+          "force": 12,
+          "samples": 540,
+          "scale": 1.3329931538831397,
+          "force_penalty_bits": 0.17363797338418885
+        }
+      }
+    },
+    {
+      "p": 653,
+      "q": 4621,
+      "w": 288,
+      "public_key_bytes": 994,
+      "ciphertext_bytes": 897,
+      "communication_bytes": 1891,
+      "reference": {
+        "bits": 129.2330884297,
+        "status": "scoped-reference",
+        "nonhybrid_bits": 129.2330884297,
+        "raw_bits": 129.2330884297,
+        "attack": "non-hybrid",
+        "block_size": 441,
+        "parameters": {
+          "bits": 129.2330884297,
+          "status": "scoped-reference",
+          "raw_bits": 129.2330884297,
+          "block_size": 441,
+          "force": 10,
+          "samples": 540,
+          "scale": 1.2294608875739295,
+          "force_penalty_bits": 0.24885702094000575
+        }
+      }
+    }
+  ],
+  "selection": {
+    "objective": "Minimize canonical public-key plus one ciphertext bytes; ties: public-key bytes, p, q, decreasing w",
+    "fixed_constraints": [
+      "Perfect honest agreement: q>=16w+1 and 2p>=3w",
+      "Full uniform ideal-model samplers and the 2020 transform/encodings",
+      "p,q prime; p mod4=1; q mod6=1; x^p-x-1 irreducible modulo q",
+      "32-byte output; no padding or forced timing"
+    ],
+    "domain": "Inherited certified degrees through653; at each p, old q plus first admissible q above16*floor(a*p/8)+1 for a=1,2,3,4, bounded by q<16384 and q<=16*floor(2p/3)+1. Test maximum correctness-admissible weight at each q and the old weight at oldq.",
+    "scope": "Minimum only among the listed finite candidates under the scoped reference, not a global or full-security optimum",
+    "timing": "No runtime/memory dominance claimed; increased weight can increase sampler work",
+    "targets": "Uncalibrated introductory tuples screened for increasing bytes and exact input-enumeration ceilings below the first calibrated cost; then distinct minimum-communication tuples at4-bit classical hybrid-inclusive reference targets through128",
+    "model": "ntruprime-20200927-hybrid-classical-free-memory-v1",
+    "upstream_estimator_sha256": "f22b040c7ecc6bee5a94fd81921cd4bf0bd43094b7074613465fbf773fdd2158",
+    "omissions": "Dual/structural attacks, memory cost, side channels, full-KEM proof losses and concrete small-dimension reliability. The hybrid model includes simple and meet-in-the-middle guessing; neither this estimate nor Core-SVP is a security lower bound.",
+    "input_enumeration": "2^w*C(p,w) candidate input-polynomial re-encryptions, reported separately from Core-SVP units"
+  },
+  "certificate": {
+    "tool": "SageMath version 10.1, Release Date: 2023-08-20",
+    "prime_proof": true,
+    "irreducibility": "SageMath GF(q)[x]: (x^p-x-1).is_irreducible() for every candidate",
+    "honest_failure_bound": "0",
+    "meaning": "Algebra/encoding conditions, not a confidentiality certificate"
+  }
+}

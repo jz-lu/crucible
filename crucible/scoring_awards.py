@@ -92,6 +92,8 @@ reuse; semantic novelty still requires the trusted reviewer's judgment.
             review = session.get(ProtocolProposalReview, review_id)
             if proposal is None or review is None or review.proposal_id != proposal.id:
                 raise AdmissionCreditError("Proposal and matching review are required.")
+            if review.checks.get("test_only_self_review") is True:
+                raise AdmissionCreditError("Development self-review cannot earn scheme contribution credit.")
             if proposal.author_id == reviewer_id or review.reviewer_id != reviewer_id:
                 raise AdmissionCreditError("The approving reviewer must record this credit and cannot be its recipient.")
             if (proposal.status != "approved" or review.decision != "approved"

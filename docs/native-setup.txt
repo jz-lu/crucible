@@ -1,0 +1,74 @@
+Expanded catalogue: local native setup
+======================================
+
+The checked implementation artifacts currently target macOS arm64, Python3.11+
+and Apple clang14.0.3. X25519 uses cryptography50.0.2's pinned native extension.
+NTRU's worker and static dependency digests are exact local build pins; another
+platform/compiler requires its own reviewed artifact pin, not merely the same
+version label. This is a local research beta, not a portable production release.
+
+Create the environment and install pinned dependencies:
+
+  python3 -m venv .venv
+  .venv/bin/python -m pip install -r requirements.lock
+  .venv/bin/python -m pip install --no-deps -e .
+
+Build prerequisites: a C compiler, CMake, Ninja and OpenSSL3 development/static
+libraries. The recorded macOS OpenSSL prefix is /opt/homebrew/opt/openssl@3.
+Builders accept explicit paths where documented by --help.
+
+Explicitly fetch and verify upstream sources, then build the reference workers:
+
+  .venv/bin/python scripts/build_pq_backend.py --download
+  .venv/bin/python scripts/build_sntrup.py --download --reference
+  .venv/bin/python scripts/build_ntru_tiers.py
+  .venv/bin/python scripts/build_ntru_frontier.py
+  .venv/bin/python scripts/code_build_backend.py
+  .venv/bin/python scripts/build_hqc_growth.py --base-native .native-pq
+
+The source archives and build products stay in ignored .native-pq/, .native/
+and .native-code/, plus .native-hqc-growth/. Each builder checks source digests
+before use. PQ build runs upstream conformance checks; code-family build checks
+all 77 specialized workers.
+The NTRU reference build supplies the checked 2020 source archive and pinned
+static dependencies for both the archived tier worker and current frontier worker.
+build_ntru_frontier.py reads .native/source-cache/ntruprime-20201007.tar.gz and
+.native/sntrup by default; --source-cache and --base-native can select an already
+reviewed installation. It builds the 27-profile v3 worker in .native/ntru-frontier/
+without downloading sources, changing the registry or overwriting the v2 worker.
+The source archive, worker, parameter table and static dependencies are hash-pinned;
+recording a prebuilt library digest is not a reproducible-build proof.
+
+Validate the registered source/native closure before running the service:
+
+  .venv/bin/python -c 'from crucible.registry import validate_registry; validate_registry()'
+  ./run.sh
+
+Missing or changed artifacts fail closed. Do not bypass a digest check to make
+the site start. Reproduce the build and review its exact provenance first.
+SageMath is needed only for offline parameter/estimator reproduction and some
+independent validation tests. Runtime servers and the participant CLI client do
+not need it; the optional public-input Frodo example solver does require Sage.
+
+Runtime files for an already verified installation:
+  .native-pq/install/ (worker, build manifest and licenses)
+  .native-code/install/ (77 workers, build manifest and licenses)
+  .native-hqc-growth/install/ (27 growing-code HQC workers, separate manifest/licenses)
+  .native/sntrup/crucible-sntrup-worker
+  .native/ntru-tiers/crucible-ntru-tier-worker (archived v2)
+  .native/ntru-frontier/crucible-ntru-frontier-worker (current v3, 27 profiles)
+All first-party source and parameter files referenced by their closure must also
+be present. Keep upstream license files when copying native build products.
+
+Accounts, sessions, server keys and submissions live in .local/ by default;
+none belong in a source or build artifact. Preserve that directory during code
+updates and use an isolated CRUCIBLE_DATA_DIR for tests.
+
+CI coverage
+
+The portable-source-checks workflow checks Python compilation, migrations, its
+explicitly listed source-only Python tests and all standalone frontend regression
+scripts. It does not validate native workers. A full pytest run and registry
+validation on the reviewed native runtime remain required local checkpoint/release
+checks. Fresh Ubuntu runners cannot satisfy the current macOS artifact pins; do
+not bypass those pins or describe the portable job as complete backend coverage.

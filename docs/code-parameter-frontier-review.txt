@@ -1,0 +1,70 @@
+HQC AND CLASSIC MCELIECE — COST FRONTIER PASS
+2026-10-16
+
+These families remain playable, but their current paths must not be presented
+as optimized at equal security. This pass supplies exact reproducible cost
+checks and unresolved conditions rather than inventing confidence in a proxy.
+Neither family has a qualified full attack-cost model for every reduced tuple.
+
+HQC: retain growth-research-v2; limited cost minimum, unresolved security frontier
+
+The audit exhausts all 45 supported codec choices: fixed 16-byte message,
+RS(16+2delta,16) for delta 1..15, and RM(1,7) repeated 1, 2, 3 times. It independently
+finds the smallest primitive ring prime above each code length, verifies the
+same deterministic zero-disagreement bound, and compares canonical public-key
+plus ciphertext bytes at each of 27 equal-weight choices. All existing selected
+codecs attain that finite-domain cost minimum. The first five profiles share
+914 total bytes; the final profile uses 6674 bytes.
+
+Equal-size steps are not necessarily global dominance: higher weights can
+increase sampler work, and no measured timing or qualified best-attack estimate
+was supplied. Removing those steps or enlarging their encodings would not fix
+the missing model. Likewise, different secret/encryption/error weights, message
+lengths or decoder families can change the frontier; they are not covered by
+this 45-codec search. A replacement needs QCSD/DOOM and other relevant attack
+calibration, a declared fixed correctness envelope, a broader admissible domain,
+and conformance checks. The current endpoint is provisional, not 128-bit security.
+
+The upstream specification separates message/code parameters and weights,
+analyzes decoding failures, and discusses quasi-cyclic decoding and DOOM attacks.
+Our zero-failure reduced construction is a different constrained experiment;
+standard parameter estimates cannot be transferred to it merely by weight.
+Source: https://pqc-hqc.org/doc/hqc_specifications_2025_08_22.pdf
+
+Classic McEliece: retain length-research-v1 as a restricted path
+
+Each current row is the shortest byte-aligned code length reaching its declared
+elementary Prange-trial reference while m=12,t=64 stay fixed. The audit verifies
+all 50 minima exactly. This is not a frontier over the general(m,n,t)domain.
+The main cost is the systematic public matrix; the syndrome remains 96bytes.
+
+A concrete diagnostic exposes the restriction: current Tier 1(m12,n840,t64)
+uses 6912 public-key bytes and 96 ciphertext bytes with 8.61693 log2 Prange trials.
+The algebraically admissible broader-domain tuple(m7,n120,t4) would use 336 + 4
+bytes and have 8.64818 log2 Prange trials. This disproves global optimality under
+that proxy, but DOES NOT prove equal security or justify activating the smaller
+tuple: work per decoding trial, improved ISD, low-degree structural attacks,
+valid field/extension choices and a general decoder implementation still need
+review. No unimplemented tuple is shown as a live challenge.
+
+The authors' rationale explicitly optimizes security subject to size constraints
+and allows varying field size, code length and error count. Our fixed(m,t)
+shortening experiment was convenient for a vetted native implementation, not an
+adequate surrogate for that full design process. A new native revision should
+follow improved-ISD/structural calibration and the same correctness obligation.
+Sources:
+https://classic.mceliece.org/mceliece-rationale-20221023.pdf
+https://classic.mceliece.org/mceliece-spec-20221023.pdf
+https://classic.mceliece.org/mceliece-sage-20221023/parameters.sage.html
+
+Evidence
+
+  python scripts/audit_code_parameter_frontiers.py \
+    --output docs/code-parameter-frontier-audit.json
+  python -m pytest tests/test_ntru_frontier.py
+
+The JSON includes exact objective/domain/status, plateau groups, per-profile
+cost checks and the explicitly unimplemented McEliece diagnostic. Existing
+protocol source, frozen parameters, native workers and history are untouched.
+Future proposals should declare these restrictions and reviewer exceptions;
+passing a limited byte calculation cannot silently become a security claim.

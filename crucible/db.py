@@ -96,6 +96,7 @@ class AdapterVersion(Base):
     scheme_id: Mapped[str] = mapped_column(String(100), primary_key=True)
     version: Mapped[str] = mapped_column(String(32), primary_key=True)
     source_sha256: Mapped[str] = mapped_column(String(64))
+    artifact_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[float] = mapped_column(Float)
 
 

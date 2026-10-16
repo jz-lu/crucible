@@ -1,0 +1,175 @@
+HQC GROWTH LADDER — VERSIONED RESEARCH REVISION
+2026-10-15
+
+Decision and scope
+
+hqc/growth-research-v2 replaces the preferred weight-only research ladder with
+27 frozen tuples that jointly grow secret/error weight, ring length and the
+error-correcting code. It is a derivative of the HQC team specification dated
+2025-08-22 as vendored in pinned liboqs 0.16.0, not the later HQC construction
+or a newly standardized parameter set. Existing hqc/weight-research-v1 and
+published-reference releases, code and native artifacts remain unchanged.
+Old receipts cannot be relabeled as evidence for the new public distribution.
+
+Every new profile retains the same mathematical honest disagreement bound:
+zero, conditional on valid successful generation and faithful implementation.
+The construction does not spend correctness to gain security. Resource aborts,
+entropy failures and implementation defects remain separate failure classes.
+
+The endpoint is provisional. Weight 27 is where this retained decoder domain
+and the deterministic worst-case argument stop; it is NOT a claim of 128-bit
+security. Extending to an approximately 128-bit endpoint requires a reviewed
+attack model, parameter search and correctness/implementation validation.
+There is no finite claim that this is the final possible family or its strongest
+secure profile. No numerical security estimate is invented for this release.
+
+Why change the previous ladder
+
+The old ladder kept n=17669, RS(46,16), and tripled RM(1,7) at every weight.
+Public keys and ciphertexts were constant, and the native dense Karatsuba
+multiplication did substantially the same ring work. Increasing weights only
+used more of the already allocated decoding capacity (and sampler work).
+That is a useful parameter-sensitivity experiment but a poor representative
+of the communication/computation cost of adding strength.
+
+The revision chooses the smallest supported code for each declared weight,
+then the smallest admissible ring above that code. More noise weight therefore
+requires more code redundancy and larger rings in genuine discrete steps.
+It does not insert padding or artificially slow algorithms to force a graph.
+This is minimum encoded length within the explicitly retained codec domain,
+not a globally optimal HQC parameter frontier or a best-attack-cost estimate.
+
+Exact parameter selection
+
+For tier w=1..27 set all three weights to w. Retain the full 16-byte message,
+32-byte seeds, 16-byte salt, 32-byte KEM output, GF(256) polynomial 0x11d and
+published KEM transform/samplers. Candidate codecs have:
+  RS(16+2*delta,16), delta in 1..15;
+  RM(1,7) repeated r in {1,2,3}, so n2=128r;
+  code length L=(16+2*delta)*128r.
+
+Among codecs satisfying 2w^2+w < 32r(delta+1), select minimum L, tie-breaking
+by smaller r then smaller delta. Delta>=1 retains the native RS decoder's
+supported nonzero-redundancy domain. No zero-parity special implementation is
+introduced merely to squeeze the smallest profiles.
+
+Set n to the smallest prime greater than L for which 2 has multiplicative
+order n-1. This keeps (X^n-1)/(X-1) irreducible over GF(2) and avoids quietly
+introducing extra quotient factors. The table is generated/certified offline
+with SageMath 10.1 and bound to a file digest; the server performs no searches.
+
+There are 23 distinct codecs over 27 weights. Weights 1..5 share the smallest
+supported codec; these are genuinely different secret/error distributions,
+not duplicates advertised as larger instances. There is no reason to enlarge
+the first four unnecessarily. Native sampling effort depends on weight, but
+no measured timing or best-attack-cost increase is asserted for these plateaus.
+
+Representative rows (bytes exclude transport hex/JSON):
+  Tier   n      RS length   RM length   public key   ciphertext
+   1     2309       18         128          321          593
+   5     2309       18         128          321          593
+  10     3613       28         128          484          916
+  15     5651       44         128          739         1427
+  20    10253       40         256         1314         2578
+  25    16139       42         384         2050         4050
+  27    17669       46         384         2241         4433
+
+Public-key bytes = 32+ceil(n/8).
+Ciphertext bytes = ceil(n/8)+L/8+16.
+Secret-key bytes = public-key bytes+80, retaining the native format.
+
+Fixed correctness proof
+
+The honest residual error is x*r2+r1*y+e, of Hamming weight at most E=2w^2+w.
+Truncating from n bits to the L-bit codeword cannot increase that weight.
+Repeated RM(1,7) has distance 64r. Its nearest-codeword decoder cannot produce
+an incorrect symbol if that block has fewer than 32r errors. Therefore the
+number of bad RS symbols is at most floor(E/(32r)). Our selection guarantees
+this is at most delta. RS(16+2*delta,16) has distance 2*delta+1 and corrects
+all such symbol patterns. The same zero-disagreement statement holds for all
+frozen profiles; neither statistical failure estimates nor passing samples
+are substituted for this argument.
+
+Native parameter adaptations and sampler fidelity
+
+Only parameters.h and api.h differ from the upstream HQC source. The builder
+changes n, n1, n2, L, the weights, delta, generator length/coefficient list,
+and encoded lengths. It clears unused standard security/DFR declarations.
+The RS generator has consecutive roots alpha^1..alpha^(2*delta), with the
+existing GF(256) primitive element. Existing alpha-power tables are large
+enough; the algorithms use the relevant prefixes. PARAM_FFT remains 4,
+sufficient for all retained delta<=15. Decoder algorithms are unchanged.
+
+For every n, the builder recomputes:
+  Barrett multiplier floor(2^32/n);
+  rejection threshold floor(2^24/n)*n.
+The key sampler rejects 24-bit draws outside that exact multiple of n and
+rejects duplicate positions, retaining uniform supports in the XOF model.
+The encapsulation sampler remains the published slightly biased sampler:
+it is not mislabeled as uniform or replaced by a different construction.
+Full seeds/message/salt remain intact. There is no correctness-conditioned
+resampling. The worker emits the original Encaps secret and an independent
+honest Decaps comparison, even when they disagree.
+
+Artifact and execution boundaries
+
+New runtime files are code_hqc_v2.py, hqc_growth_parameters.py and the frozen
+hqc_growth_profiles.json. The isolated native directory is .native-hqc-growth,
+with its own build manifest; CRUCIBLE_HQC_GROWTH_BACKEND may select an already
+built install directory. It never modifies .native-code or .native-pq.
+
+The builder verifies the original pinned archive and exact extracted source
+inventory before copying it. The public artifact binds the runtime sources,
+parameter table/certifier, builder, worker, patched sources via the build
+manifest, base library and per-profile native binary hashes. Verification is
+performed before and after generation. No runtime compilation, download or
+uploaded executable code is involved. The existing bounded subprocess policy
+is retained (20-second wall limit and 18-second CPU limit, bounded output).
+
+Validation completed in this revision
+
+- SageMath independently proved every n prime and ord_n(2)=n-1, enumerated
+  the full RM nonzero-codeword distance, reconstructed each RS generator in
+  GF(256), and verified all 27 deterministic correctness inequalities.
+- All 27 native builds performed a fresh unconditioned honest exchange.
+- 56 targeted tests pass, including fresh runtime agreement for all 27 tiers,
+  encoded sizes, source/binary closure, fail-closed tampering, no retry after
+  mismatch, distinct legacy IDs and a public-input-only full recovery at w=1.
+- Every one of the 23 distinct codecs passed 256 deterministic message
+  fixtures at its guaranteed error boundary, under UndefinedBehaviorSanitizer
+  with recovery disabled: delta damaged RM blocks at their error threshold
+  and one immediately below it (5,888 fixtures total).
+- The endpoint's complete deterministic public key/private key/ciphertext/key
+  transcript exactly matches the earlier w=27 implementation.
+
+AddressSanitizer was attempted but its allocator failed during initialization
+on this host, before main, for every executable. Thus ASan validation is not
+claimed. The successful UBSan and conformance checks do not constitute a
+constant-time audit, a machine-checked proof of the C decoder, or independent
+scientific admission.
+
+Build provenance limitation: the base liboqs.a is a trusted prebuilt input.
+The builder verifies the upstream source inventory and records the exact static
+library hash in the artifact, but does not reconstruct or attest the binding
+from that source to the library. A trusted/reproducible base build remains the
+operator's responsibility; source checks alone do not establish that provenance.
+
+Reproduce with a trusted native source/static-library build:
+  DOT_SAGE=/tmp/crucible-sage sage -python scripts/hqc_growth_parameters.py \
+    --output crucible/data/hqc_growth_profiles.json
+  python scripts/build_hqc_growth.py --base-native PATH_TO_VERIFIED_NATIVE_PQ
+  CRUCIBLE_HQC_TEST_BASE_NATIVE=PATH_TO_VERIFIED_NATIVE_PQ \
+  CRUCIBLE_HQC_TEST_LEGACY_SOURCE=PATH_TO_OLD_HQC27_SOURCE \
+    python -m pytest tests/test_hqc_growth.py
+
+A changed certified table requires reviewing/updating its digest explicitly;
+the builder will reject a table that no longer matches the registered pin.
+Source/compiler/platform changes produce a different public artifact closure.
+
+Primary sources
+
+HQC team specification 2025-08-22, vector samplers, concatenated codes,
+PKE/KEM construction and parameter conditions:
+https://pqc-hqc.org/doc/hqc_specifications_2025_08_22.pdf
+Pinned implementation:
+https://github.com/open-quantum-safe/liboqs/tree/5a1a854b0dc9f2141bdc771c555ee60c37950183

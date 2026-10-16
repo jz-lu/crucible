@@ -1,0 +1,81 @@
+Classical-family parameter-efficiency review — 16 October 2026
+
+Scope
+
+The objective is to remove justified avoidable costs while retaining the honest
+correctness requirement. A finite search or a better representation is not a
+proof of optimal parameters or full KEM security. These remain research KEMs;
+their custom transforms and reduced settings are not standardized deployment
+recommendations. Classical here describes the attack reference, not a UI group.
+
+Finite-field DH: release 7, 50 profiles
+
+Keep the exact certified groups, generator choice and field-size ladder from
+release 6. For frozen baseline b, sample each secret exponent independently and
+uniformly from 1..M, where M=min(q-1,2^ceil(2*b+32)-1). Publish M with the profile.
+This sizes the secret exponent against the field attack reference with about
+16 extra generic interval-search reference bits where q permits. Small groups
+still use the full nonzero scalar range. The endpoint uses a 288-bit exponent
+bound rather than the roughly 1537-bit subgroup range. Subgroup validation still
+uses the full q; no measured wall-time speedup is asserted.
+
+The new displayed reference includes log2(M)/2 alongside the frozen subgroup-rho
+and NFS references. The margin is an explicit design constraint, not a proven
+security margin. Fixed public groups permit reusable preparation; structured
+prime selection, constants and specialized attacks need separate assessment.
+Correctness is still exact by the same group algebra. This changes the sampling
+distribution and therefore receives a new release, challenge IDs and KDF domain.
+It is not relabelled full-range DH, nor a claim of RFC7919 conformance.
+
+RFC7919 section 5.2 motivates short-exponent optimization, but does not validate
+these custom certified groups, this margin, or the custom KDF:
+https://www.rfc-editor.org/rfc/rfc7919.html#section-5.2
+
+RSA: release 4, 50 profiles
+
+Keep the modulus lengths, balanced certified-factor sampler, e=65537 and full
+native encapsulation input distribution from release 3. Encode the public key
+as fixed-width N followed by the three bytes 01 00 01. Previously e was padded
+to the same width as N. The endpoint public key shrinks from 768 to 387 bytes;
+the ciphertext remains 384 bytes. KDF framing and input validation use the new
+canonical representation consistently. This is representation improvement, not
+a change to factoring difficulty, correctness, or the modulus-generation cost.
+
+An implicit fixed e could save another three bytes; keeping it explicit is a
+format choice, not a claim of globally minimal RSA encoding. The existing ladder
+uses the smallest integer modulus width reaching each restricted rho/NFS target.
+Other factoring attacks and other prime-generation distributions were not
+optimized. The custom KDF remains distinct from standardized RSA-KEM.
+https://www.rfc-editor.org/rfc/rfc9690.html
+
+Elliptic-curve DH: curve-compressed-v2, 50 profiles
+
+Keep every certified curve and its full-range scalar distribution. Encode a
+nonidentity point as a parity prefix (02 or 03) plus x, recovering y with modular
+square root and checking the canonical representation. The endpoint point width
+falls from 67 to 34 bytes for both public key and ciphertext. The decoder rejects
+nonresidues, noncanonical coordinates, invalid prefixes/lengths and negative-zero
+encodings. The KDF binds the new compressed shared-point representation.
+
+Compression is lossless, so honest correctness stays exact. It adds a square-root
+operation at decoding: appropriate for the stated communication objective, not
+necessarily the fastest implementation. It does not establish optimal curve
+selection or turn the research curves into standardized X25519.
+SEC1 version 2, section 2.3.3 describes compressed point representation:
+https://www.secg.org/sec1-v2.pdf
+
+Validation and compatibility
+
+tests/test_classical_frontier.py checks all DH interval bounds, honest exchanges
+including boundary scalars, RSA honest/nonunit inputs and canonical rejection,
+all curve encodings, modular square roots and public-only DH/RSA example solvers.
+tests/test_classical_frontier_audit.py independently recomputes the DH reference
+using 65-digit Decimal arithmetic; exhausts the first curve's compressed domain
+against a directly enumerated square table; independently frames the RSA KDF;
+and pins the unchanged archived classical source/parameter hashes.
+
+Separate isolated agent/CLI workflows download and verify source closures, solve
+fresh public Tier 1 challenges, submit authenticated results and check method,
+compute and idempotency behavior. These tests validate implementation behavior,
+not resistance to all attacks. Old release sources and receipts are retained;
+their recovered keys or scores are not transferred to a new protocol contract.

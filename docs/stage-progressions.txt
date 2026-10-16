@@ -1,0 +1,171 @@
+Configurations and default stage progressions — 16 October 2026
+
+Decision
+
+Stage replaces tier in human-facing navigation. A configuration is an exact,
+reviewed parameter setting. A challenge instance is a fresh public key and
+ciphertext generated for a configuration and round. A stage number locates a
+configuration on one declared default progression; it is neither estimated
+security nor a cross-scheme unit of difficulty.
+
+There is no required count, fixed 50-stage endpoint, or requirement to select
+every admissible parameter setting. The current presentation prefers counts
+divisible by10, with5 as a fallback, when a small justified selection achieves
+this without changing any configuration or hiding its availability. This is a
+navigation preference, never an admission requirement or a reason to invent
+parameters. Different schemes can have different path lengths. The human
+display should identify the position, total and actual
+parameters, while agents address stable configuration IDs. Changing labels does
+not itself make a parameter path more faithful or efficient.
+
+Current default progressions
+
+Family            Default stages  Configurations  Selection and endpoint
+Finite-field DH                50              50  Certified groups through3072-bit field.
+RSA                            50              50  Balanced-modulus lengths32..3072 bits.
+Elliptic-curve DH              50              50  Certified curves through generic-rho reference128.
+Module lattice                10              11  Degree/rank/modulus path through n256/rank3/q24593.
+Frodo                         80              80  Every dimension8..640 by8; published640 anchor.
+NTRU Prime                    25              27  Finite candidate path through sntrup653.
+HQC                           25              27  Equal-weight path through weight27/proof boundary.
+McEliece                      50              50  Length840..3488, m12/t64 fixed;348864 anchor.
+
+The current total is345 configurations, of which340 are on default paths. The
+remaining five are accessible intermediate configurations, not rejected or
+inferior schemes. The four counts of50 are retained
+historical samplings, not a mathematical requirement or evidence that those
+families satisfy every current design recommendation. Resampling them solely to
+obtain different counts would be cosmetic. Enumerating every valid bit/byte
+increment would produce many more configurations without automatically giving
+better milestones. New configurations require their own implementation review.
+
+How the small presentation selections were made
+
+Keep both endpoints and all unestimated introductory configurations. Where a
+supported numerical reference exists, also retain the first estimated setting;
+then successively omit the eligible interior setting whose two remaining
+neighbors have the smallest reference difference. Unknown is never treated as
+zero, easy, or interpolated security. Selection is frozen explicitly after this
+review, rather than recomputed when estimates change.
+
+Module lattice: omit configuration7 (n128/rank2/q8209) only from the default
+path, yielding10 stages. Its neighboring references25.112 and63.364 give the
+smallest merged gap38.252. The configuration remains independently challengeable.
+
+NTRU Prime: omit configurations17 and24 only from the default path, yielding25
+stages. The merged adjacent reference gaps are34.651..44.019 and96.506..107.454.
+All13 unestimated introductory settings and the first estimated setting remain.
+
+HQC: there is no calibrated security reference. Preserve both endpoints and
+successively omit the interior weight with the smallest ratio between its
+remaining neighboring weights. This selects weight26 (27/25), then24 (25/23).
+These are native-parameter navigation gaps, not equal-security gaps. Every
+weight remains available; this selection does not imply weights24/26 lack value.
+
+The tests independently reproduce these choices. The defaults are intentionally
+editable through a reviewed progression revision, without rewriting configs.
+
+Selection evidence and limits
+
+DH, RSA and elliptic curves: docs/classical-parameter-frontier.txt records the
+sampling and representation decisions. The DH/RSA references omit attacks;
+generic-rho curve estimates do not cover curve-specific attacks. DH's bounded
+exponents are a distinct sampling choice requiring justification under fidelity,
+not a neutral encoding optimization. The curves are not resized X25519.
+
+Module lattice: docs/lattice-parameter-frontier.txt and
+docs/parameter-frontier-review.txt describe the eleven available tuples and
+lossless packing. Degree/rank/modulus/noise/compression have not been jointly
+optimized. The flattened-LWE reference is incomplete and the endpoint is not a
+standard ML-KEM profile. A common negligible nonzero failure bound could support
+different reviewed choices; perfect correctness is not a platform requirement.
+
+Frodo: docs/frodo-anchor-ladder.txt explains the natural dimension increments,
+the common failure bound at most2^-133 and the retained640 reference endpoint.
+Actual per-configuration failure probabilities may vary within that bound.
+The first16 configurations remain unestimated. Uncapped lattice-reference work
+and native-message enumeration have different units; neither the stage number
+nor a clipped plot should redefine the endpoint.
+
+NTRU Prime: docs/ntru-parameter-frontier.txt records the103-candidate search,
+hybrid-inclusive reference, deduplication and endpoint. Its27 configurations reflect
+that bounded model and objective, not all admissible NTRU Prime configurations
+or a security lower bound. Irregular steps are an expected consequence of the
+actual parameters and encodings.
+
+HQC and McEliece: docs/code-ntru-ladder-review.txt,
+docs/parameter-frontier-review.txt and scripts/audit_code_parameter_frontiers.py
+record their current limits. HQC's27 weights form a partial decoder/proof path,
+not a calibrated128-bit endpoint. McEliece's fixed m/t shortening path is not a
+joint efficiency frontier. Its elementary Prange trials omit improved decoding,
+structural attacks and work per trial. New counts alone would fix neither issue.
+
+Common recommendations for future configurations and proposals
+
+1. Declare the construction, distributions, transform, challenge game and
+   shared setup before choosing a path. Preserve fidelity; justify variations.
+2. Use natural parameter scaling without specially easy keys, leaked bits,
+   artificial entropy restrictions or correctness-conditioned resampling.
+3. Choose and justify one acceptable correctness envelope. Zero failure is
+   permitted but not required. Report stronger bounds and material variation;
+   separate resource/availability aborts from honest decapsulation failure.
+4. Compare meaningful communication, computation and memory tradeoffs under a
+   declared workload and attack model. Reject demonstrated inferior choices
+   within scope; do not claim global optimality from a bounded candidate search.
+5. Retain a justified published or independently reviewed endpoint. Small
+   instance success does not alone refute its full-size security assumption.
+6. Select a useful default path from reviewed configurations. Explain spacing,
+   unknown estimates and genuine gaps. Stage counts and security spacing need
+   not match between schemes; alternative tradeoffs need not be new catalogue
+   entries.
+7. Freeze configuration identities and evidence. Review and version changes in
+   mathematical settings, path membership/order, implementation and estimates.
+
+Implementation and compatibility
+
+crucible/progressions.py declares exact ordered membership for the eight current
+releases. The metadata has its own versioned progression ID, stage_count,
+configuration_count, available_configuration_count compatibility alias, explicit
+additional_configuration_ids and ordered stage-number/profile-ID pairs.
+A membership_sha256 binds release identity, revision, full configuration list
+and selected stage list. The stage count comes from that selected list, not a
+platform-wide quota. All current configurations stay accessible, and are not
+assigned different cryptographic identities merely because of presentation.
+
+The helper validates exact configuration coverage, unique identities, release
+ownership and frozen original ordinals. It validates that default stages form an
+ordered subset retaining the endpoints. Caller list ordering is irrelevant.
+Unexpected insertions, removals or renumbering require a reviewed revision;
+historical and named reference releases receive no invented default progression.
+
+No protocol source, profile ID, historical manifest, stored receipt or challenge
+instance is rewritten by this metadata. Existing IDs containing "tier" and
+instance_size fields remain compatibility identifiers. A later path revision
+can map the same immutable configurations differently, with explicit migration
+and display handling rather than altering their historical meaning.
+
+Point scores remain a separate provisional policy. An ordinal must not become
+scientific credit merely because a path is sampled more densely. Renaming or
+reordering stages must not silently change an existing configuration's credit.
+The present metadata does not introduce a new scoring formula.
+
+Primary construction references
+
+FrodoKEM2025 proposal:
+https://frodokem.org/files/FrodoKEM_standard_proposal_20250929.pdf
+ML-KEM standard (the research family is separately identified):
+https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf
+NTRU Prime specification and attack-model discussion:
+https://ntruprime.cr.yp.to/nist/ntruprime-20201007.pdf
+https://ntruprime.cr.yp.to/security.html
+HQC2025-08-22 construction:
+https://pqc-hqc.org/doc/hqc_specifications_2025_08_22.pdf
+Classic McEliece construction and design rationale:
+https://classic.mceliece.org/mceliece-spec-20221023.pdf
+https://classic.mceliece.org/mceliece-rationale-20221023.pdf
+Finite-field DH short-exponent context (not validation of our custom groups):
+https://www.rfc-editor.org/rfc/rfc7919.html#section-5.2
+SEC1 compressed-point encoding:
+https://www.secg.org/sec1-v2.pdf
+RSA-KEM context (our custom KDF remains distinct):
+https://www.rfc-editor.org/rfc/rfc9690.html

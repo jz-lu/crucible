@@ -13,7 +13,7 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
 (async () => {
   await test('Leaderboard is the second navigation item and loads only on demand', async () => {
     const app = await createApp({schemes, responder: baseResponder});
-    assert.deepEqual(app.$('.primary-nav').children.filter(e => !e.hidden).map(e => e.textContent.trim()), ['Schemes', 'Leaderboard', 'About us']);
+    assert.deepEqual(app.$('.primary-nav').children.filter(e => !e.hidden).map(e => e.textContent.trim()), ['Schemes', 'Leaderboard', 'Research notebook', 'About us']);
     assert.equal(app.requests.some(r => r.url.pathname === '/api/people'), false);
     app.$('#nav-people').click(); await flush();
     assert.equal(app.location.hash, '#people');
@@ -37,7 +37,7 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
     assert.equal(app.$('#person-workspace').hidden, false);
     assert.equal(app.$('#recovery-dialog').open, false);
     assert.match(app.$('#person-content').textContent, /Personal progress40First-record bonus160Accepted proposals0/);
-    assert.match(app.$('#person-content').textContent, /Intermediate tiers and repeated solves do not accumulate extra points/);
+    assert.match(app.$('#person-content').textContent, /Intermediate stages and repeated solves do not accumulate extra points/);
     app.history.back(); await flush();
     assert.equal(app.$('#catalogue-workspace').hidden, false);
   });

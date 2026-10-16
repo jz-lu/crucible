@@ -1,0 +1,190 @@
+Lossless module-LWE research KEM — dimension-research-v2
+Assessment date: 2026-10-15. Local research beta; not scientific admission.
+
+Why this ladder replaces the preferred modulus ladder
+-----------------------------------------------------
+The previous modulus-research-v1 release held degree/noise mostly fixed and
+reduced oversized moduli. Its later profiles were both stronger under a chosen
+attack estimate and smaller in bytes. That was a deliberately weakened practice
+ladder, not a useful illustration of the cost of increasing security. Its source,
+profiles, estimates, vectors and historical submissions remain immutable.
+
+This release instead increases the actual lattice dimension. Eleven distinct
+natural profiles are registered, without invented intermediate tiers. The ring
+degree is nondecreasing, and rank increases provide intermediate dimensions
+before the degree rises again. Every degree is a power of two,
+so x^n+1 remains the corresponding cyclotomic polynomial over the integers.
+For each profile, q is the smallest prime satisfying the SAME perfect honest
+correctness bound. Noise remains full CBD2; there is no ciphertext compression.
+
+Tier  degree  rank  q      native message bits  public key bytes  ciphertext bytes
+1     8       1     269    8                    59                32
+2     16      1     541    16                   75                64
+3     32      1     1039   32                   107               128
+4     64      1     2063   64                   171               256
+5     64      2     4111   64                   299               384
+6     64      3     6163   64                   427               512
+7     128     2     8209   128                  555               768
+8     128     3     12301  128                  811               1024
+9     128     4     16411  128                  1067              1280
+10    128     5     20507  128                  1323              1536
+11    256     3     24593  256                  1579              2048
+
+Larger profiles pay in coefficients, byte encodings and polynomial/matrix
+arithmetic. This is still a selected research path, NOT a proof that these are
+globally optimal parameter choices or that every larger profile has greater
+actual confidentiality. The lossless format deliberately favors a simple exact
+correctness argument over production-style compression. Wall-clock performance
+depends on the implementation and hardware and must be benchmarked separately.
+
+The initial endpoint target is approximately128 classical reference bits when
+supported by analysis. The first natural endpoint here exceeds it: Tier11 has a
+flattened-LWE heuristic reference of approximately137.547943 bits. This is a
+discrete overshoot, not an exact128-bit or full-KEM security claim. We do not
+weaken an otherwise sensible profile merely to hit a desired numerical target.
+Eleven tiers do not imply comparability with ordinal tiers of another scheme.
+Future harder profiles can extend the ladder; revised attack estimates belong
+alongside the frozen initial reference, without silently redefining old tiers.
+Intermediate ranks improve the ladder's coverage without reducing native
+plaintext capacity at a later tier. Gaps in estimated attack cost remain large,
+especially at higher dimensions; consecutive tiers are not a promise of small
+or equal effort increments. More dense steps would need further justified
+construction/parameter work rather than hidden entropy truncation or oversized
+moduli chosen merely to weaken a level.
+
+Native plaintexts and their explicit enumeration limitation
+---------------------------------------------------------
+One bit is carried by each ring coefficient, so the complete native plaintext
+space is {0,1}^n: 8 bits at the smallest degree, growing to256 bits. Every native
+plaintext is sampled with its full probability; we do not restrict the message
+space of a nominal256-bit scheme or truncate the seed that samples s,e or A.
+Key generation and private rejection each retain a full256-bit input seed.
+
+The encapsulated key is the full32-byte KDF output at every profile. Its length
+does not create entropy absent from the plaintext. With the public key and
+ciphertext, an attacker can enumerate at most2^n native messages, derive coins,
+and compare entire deterministic ciphertexts. This is an explicit attack in
+candidate encryptions, not the same unit as an estimator's Core-SVP operations.
+It is therefore reported separately rather than silently taking a numerical
+minimum across incompatible cost units. The tiny profiles are openly weak.
+
+scripts/lattice_solve_module_v2_tier1.py implements this attack using only a
+public Tier1 challenge. A test forbids private generation, decapsulation and
+fresh randomness during the solve, and verifies the returned full shared key
+against a newly issued instance. This establishes a working public-input
+example; it is not a general lattice attack or a higher-tier time guarantee.
+
+Exact construction and framing
+------------------------------
+This is a separate, nonstandard KEM, inspired by primitives in FIPS203. It is
+not standardized ML-KEM, not wire-compatible, and inherits neither ML-KEM's
+security theorem nor its official known-answer vectors.
+Reference: https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf
+
+R_q = Z_q[x]/(x^n+1), rank k, eta=2. Coefficients are serialized in increasing
+degree using w=ceil(bit_length(q)/8) little-endian bytes, each strictly less
+than q. All eleven current profiles have w=2. No lossy compression is applied.
+Define BIND = uint16le(n)||uint8(k)||uint32le(q); all lengths are explicit.
+Literal domains below are ASCII, without terminators. H=SHA3-256, G=SHA3-512.
+
+Key generation draws d32||z32. Compute
+  rho32||sigma32 = G("Crucible-Module-LWE-v2/keygen"||BIND||d32).
+Matrix A[i,j] expands
+  SHAKE128("Crucible-Module-LWE-v2/A"||BIND||rho32||uint8(i)||uint8(j)).
+Read w-byte little-endian candidates, mask to bit_length(q), reject values>=q.
+Expansion is capped at32*n candidates per polynomial; exceeding this cap aborts
+without biased modulo substitution or resampling a favorable honest outcome.
+Each polynomial is pseudorandom from a256-bit seed. Ideal independent XOF bits
+induce uniform field coefficients through rejection; a finite seeded expansion
+is not literally uniform over all possible full matrices.
+
+Noise(seed32,nonce) expands n/2 bytes using
+  SHAKE256("Crucible-Module-LWE-v2/noise"||BIND||seed32||uint8(nonce)).
+Each four consecutive bits (b0,b1,b2,b3), in least-significant-bit order, yield
+b0+b1-b2-b3. Thus the full CBD2 support is retained; ideal independent expansion
+bits induce probabilities1,4,6,4,1 over -2,-1,0,1,2. No coefficient is truncated.
+Use nonces0..k-1 for s, k..2k-1 for e, both under sigma. Set t=A*s+e.
+  pk = "MLD2"||BIND||rho32||Encode(t).
+  sk = z32||signed-int8(s)||pk||H(pk).
+The public header and every derivation bind n,k,q; another profile's public key
+cannot be silently reinterpreted under new parameters.
+
+Encapsulation samples native mu of exactly n/8 bytes, uniformly over all n bits.
+  K32||coins32 = G("Crucible-Module-LWE-v2/encap"||BIND||mu||H(pk)).
+Use Noise(coins,0..k-1) for r, nonces k..2k-1 for e1, and2k for e2. Compute
+  u=A^T*r+e1,
+  v=t^T*r+e2+EncodeMessage(mu),
+where bit i, taken least-significant-bit first, is multiplied by ceil(q/2).
+The ciphertext is Encode(u)||Encode(v); return the full K32.
+
+Decapsulation computes v-s^T*u, rounds each coefficient to the nearest message
+center modulo q, derives coins from the recovered native mu and completely
+reencrypts. It returns K32 only if every ciphertext byte agrees; otherwise it
+returns SHAKE256(z32||ct,32). A length-correct noncanonical ciphertext also
+returns this implicit-rejection key. Wrong sizes/types are format errors.
+There is no public decapsulation oracle in Crucible.
+
+Fixed correctness across every profile
+-------------------------------------
+The residual error is E=e^T*r-s^T*e1+e2. Every coefficient of a negacyclic
+product of degree n contributes at most n*eta^2 in absolute value, hence
+  |E_i| <= C(n,k)=2*k*n*eta^2+eta = 8*k*n+2.
+Every profile chooses the smallest prime q with floor(q/4)>C(n,k). This suffices
+for all n native message bits to decode for EVERY allowed noise draw. Faithful
+arithmetic and full reencryption consequently give honest shared-key agreement.
+The mathematical disagreement bound is the same delta=0 throughout the ladder;
+independence assumptions are not needed for this deterministic support proof.
+
+For Tier1, C=66 and floor(269/4)=67. For Tier11, C=6146 and floor(24593/4)=6148.
+Small spare margin does not change the zero-disagreement claim: the proof
+covers the entire declared support, including extremal errors. Resource aborts
+and implementation faults are separate. The finite sampling cap and20-second
+generator deadline can abort; the proof does not claim those operational
+failure probabilities are zero. An issued challenge retains its original
+encapsulated target and performs one honest agreement check, never resampling
+until a passing example appears.
+
+Calibration and evidence
+------------------------
+docs/lattice-module-v2-calibration.json contains actual outputs from the pinned
+official lattice-estimator commit53da5982597709ba0fdf94ea37a84d822310fd84,
+archiveSHA2564236adc38031c139c8a2721804d8962d6cacd015fae37f6f5215d2ac7f011060,
+under Sage10.1. Exact prime proofs establish both primality and minimality above
+the support threshold. The script verifies the archive and extracted files
+before executing estimator code. No network access is needed for reproduction.
+
+Each profile uses LWE.estimate.rough with flattened dimension n*k, m=n*k,
+CBD2 secret/error, ADPS16 classical Core-SVP/GSA, primal uSVP and dual hybrid.
+The first two dimensions are outside the tool's supported small-dimension
+range; the next three hit its beta40 floor. They intentionally have no
+numerical security estimate. Tiers6..11 yield approximately25.112,37.96,63.364,
+88.185503,113.169697 and137.547943 reference bits respectively. No interpolation
+is reported as a result.
+
+This flattened approximation omits module/ring structure, additional ciphertext
+information, full-KEM reductions, quantum attacks, side channels and multi-target
+effects. Its numbers are heuristic attack-model costs, not measured work,
+elapsed seconds or lower bounds on confidentiality. Perfect correctness does
+not establish any confidentiality claim or deployment suitability.
+
+Reproduce with Sage10.1:
+  sage -python scripts/lattice_calibrate_module_v2.py \
+    --estimator /path/to/lattice-estimator-53da5982597709ba0fdf94ea37a84d822310fd84 \
+    --archive /path/to/pinned-estimator.tar.gz --output /tmp/module-v2-calibration.json
+  sage -python scripts/lattice_module_v2_reference.py \
+    --calibration /tmp/module-v2-calibration.json --output /tmp/module-v2-vectors.json
+
+Independent Sage quotient-ring vectors cover all eleven parameter profiles,
+including native plaintext lengths and independent nearest-center decoding.
+They are research vectors, not official NIST vectors. Tests also cover every
+issued profile, all256 Tier1 plaintexts, actual public-only recovery, exact
+support endpoints and every scalar error in the proven support interval,
+canonical encodings, implicit rejection, parameter/domain binding, sampler
+aborts, source-change races and generation deadlines.
+
+The generator is variable-time Python with bounded output and a20-second
+process deadline. Its child reports the executed source digest; the parent
+checks that digest and checks its registered source before and after the run.
+Runtime/OS provenance is recorded only to the documented artifact scope, not
+a complete dependency closure. Independent cryptographic review remains
+necessary before scientific admission or any deployment recommendation.

@@ -142,10 +142,15 @@ def register_routes(app, db, user_for, clock, throttle):
 
     @app.post("/api/methods/{method_id}/source")
     def attach(method_id: UUID, body: SourceBundle, request: Request):
-        throttle(request, "method-source", 30, 3600)
+        throttle(request, "method-source-ip", 1000, 3600)
+        with db.transaction() as session:
+            account_id = user_for(request, session, mutation=True).id
+        throttle(request, "method-source-account", 100, 3600, account_id=account_id)
         bundle, digest = canonical_bundle(body)
         with db.transaction(write=True) as session:
             user = user_for(request, session, mutation=True)
+            if user.id != account_id:
+                raise HTTPException(403, "Your session changed. Refresh and try again.")
             # Same first row lock as final answers: adding evidence cannot race a
             # submission and retroactively change what accompanied that answer.
             session.execute(select(User.id).where(User.id == user.id).with_for_update())

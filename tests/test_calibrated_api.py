@@ -1,5 +1,6 @@
-"""Current DH6/RSA3 integration, independent of archived release fixtures."""
+"""Current DH7/RSA4 integration, independent of archived release fixtures."""
 import hashlib
+import math
 from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
@@ -14,19 +15,19 @@ from crucible.app import create_app
 from crucible.config import Settings
 from crucible.db import Challenge, ProfileIncident, Submission
 from crucible.protocol_specs import ProtocolSpec, canonical_spec
-from scripts.solve_rsa import recover as recover_rsa
-from scripts.solve_teaching import recover as recover_dh
+from scripts.solve_rsa_frontier import recover as recover_rsa
+from scripts.solve_teaching_frontier import recover as recover_dh
 from test_api import Actor
 
 
-IDENTITIES = (("teaching-dh-kem", "6", "dh-v6-tier-1", recover_dh),
-              ("rsa-kem", "3", "rsa-v3-tier-1", recover_rsa))
+IDENTITIES = (("teaching-dh-kem", "7", "dh-v7-tier-1", recover_dh),
+              ("rsa-kem", "4", "rsa-v4-tier-1", recover_rsa))
 
 
 @pytest.fixture
 def current_system(tmp_path):
     # Deliberately do not import/use the archive-pinning system fixture.
-    assert registry.CURRENT == {"teaching-dh-kem": "6", "rsa-kem": "3"}
+    assert {k: registry.CURRENT[k] for k in ("teaching-dh-kem", "rsa-kem")} == {"teaching-dh-kem": "7", "rsa-kem": "4"}
     clock = [3_600_600.0]
     settings = Settings(f"sqlite:///{tmp_path / 'calibrated.db'}", b"c" * 32,
                         origins=("http://testserver",), rate_limits=False)
@@ -57,8 +58,8 @@ def answer(actor, challenge, recover):
 def test_actual_current_catalogue_has_one_hundred_calibrated_profiles_and_unmodified_archives(current_system):
     app, _, _ = current_system
     schemes = catalogue(app)
-    assert set(schemes) == {identity[0] for identity in IDENTITIES}
-    assert sum(len(scheme["profiles"]) for scheme in schemes.values()) == 100
+    calibrated = {key: schemes[key] for key, *_ in IDENTITIES}
+    assert sum(len(scheme["profiles"]) for scheme in calibrated.values()) == 100
     all_ids = set()
     for scheme_id, version, first_id, _ in IDENTITIES:
         scheme = schemes[scheme_id]
@@ -77,21 +78,30 @@ def test_actual_current_catalogue_has_one_hundred_calibrated_profiles_and_unmodi
             assert profile["modulus_bits"] == bits
             q = int(profile["parameters"]["q"], 16) if scheme_id == "teaching-dh-kem" else None
             assert profile["parameter_bits"] == (q.bit_length() if q is not None else bits)
-            assert profile["initial_security_estimate"] == calibration.profile_estimate(tier, bits, q)
+            expected = calibration.profile_estimate(tier, bits, q)
+            if q is not None:
+                # New explicit interval distribution has a separately declared cost.
+                exponent_limit = int(profile["parameters"]["exponent_upper_bound"], 16)
+                expected["bits"] = round(min(expected["bits"], math.log2(exponent_limit) / 2), 6)
+                expected["model_id"] = "dh-interval-rho-nfs-v1"
+            assert profile["initial_security_estimate"] == expected
             width = (bits + 7) // 8
             assert scheme["profile_metrics"][profile["id"]] == {
-                "public_key_bytes": width if q is not None else 2 * width, "ciphertext_bytes": width,
+                "public_key_bytes": width if q is not None else width + 3, "ciphertext_bytes": width,
             }
             assert profile["shared_secret_bytes"] == 32
         last = scheme["profiles"][-1]
         assert last["modulus_bits"] == 3072
-        assert last["initial_security_estimate"] == {"model_id": "classical-baseline-v2", "bits": 128.0, "target_bits": 128.0}
+        assert last["initial_security_estimate"] == {"model_id": "dh-interval-rho-nfs-v1" if scheme_id == "teaching-dh-kem" else "classical-baseline-v2", "bits": 128.0, "target_bits": 128.0}
         for archive in scheme["previous_releases"]:
             assert archive["profiles"] == registry.adapter_for(scheme_id, archive["version"]).manifests()
             old_calibrated = (scheme_id, archive["version"]) in {("teaching-dh-kem", "5"), ("rsa-kem", "2")}
             if old_calibrated:
                 assert archive["initial_security_model"]["id"] == "classical-baseline-v1"
                 assert archive["profiles"][24]["initial_security_estimate"]["target_bits"] == 32
+            elif (scheme_id, archive["version"]) in {("teaching-dh-kem", "6"), ("rsa-kem", "3")}:
+                assert archive["initial_security_model"]["id"] == "classical-baseline-v2"
+                assert archive["profiles"][-1]["initial_security_estimate"]["target_bits"] == 128
             else:
                 assert all("initial_security_estimate" not in item for item in archive["profiles"])
     assert count(app, Challenge) == count(app, Submission) == 0
@@ -243,7 +253,7 @@ def test_bounded_rsa_generation_exhaustion_is_private_retryable_and_not_a_correc
     assert response.status_code == 503
     assert "PRIVATE_GENERATOR_STATE_17" not in response.text
     assert count(app, Challenge) == count(app, ProfileIncident) == 0
-    state = actor.client.get("/api/challenges", params={"scheme_id": "rsa-kem", "scheme_version": "3", "profile_id": "rsa-v3-tier-1"}).json()
+    state = actor.client.get("/api/challenges", params={"scheme_id": "rsa-kem", "scheme_version": "4", "profile_id": "rsa-v4-tier-1"}).json()
     assert state["challenge"] is None and state["round_started"] is False
     monkeypatch.setattr(adapter, "generate", original)
     retry = actor.post("/api/challenges", {"scheme_id": "rsa-kem", "instance_size": 1})

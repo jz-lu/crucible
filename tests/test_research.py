@@ -83,7 +83,7 @@ def test_catalogue_separates_scheme_and_problem_without_hardness_claim(research_
     assert [item["parameter_bits"] for item in problem["profiles"]] == list(range(20, 301))
     assert problem["related_targets"][0]["id"] == "teaching-dh-kem"
     versions = targets["teaching-dh-kem"]["versions"]
-    assert [item["version"] for item in versions] == ["4", "6", "5", "3", "2", "1"]
+    assert [item["version"] for item in versions] == ["4", "7", "6", "5", "3", "2", "1"]
     legacy_one = next(item for item in versions if item["version"] == "1")
     assert [item["parameter_bits"] for item in legacy_one["profiles"]] == [20, 24, 28, 32, 36]
     assert [item["version"] for item in problem["versions"]] == ["1"]

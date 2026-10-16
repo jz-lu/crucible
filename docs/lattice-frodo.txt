@@ -1,0 +1,127 @@
+Frodo matrix-dimension research release 1 — reviewed implementation notes
+Assessment date: 2026-10-14. Status: local research beta, not scientific admission.
+
+Identity and relationship to the published construction
+------------------------------------------------------
+Family frodokem; release dimension-research-v1; IDs frodo-lwe-v1-tier-1..50.
+The published salted FrodoKEM profiles remain immutable reference releases.
+This derivative changes only n within the salted FrodoKEM-640-SHAKE algorithms.
+It preserves q=32768, nbar=8, B=2, the exact 16-bit Frodo640 noise CDF,
+128-bit encapsulation message, 256-bit salt, 256-bit noise-generation seed,
+128-bit public matrix seed, 128-bit private rejection fallback, full ciphertext
+reencryption and implicit rejection, and the full 128-bit shared secret.
+There is no reduced-entropy seed, partial key or conditioned correctness retry.
+
+The n640 endpoint matches Microsoft/PQCrypto-LWEKE commit
+ a2f9dec8917ccc3464b3378d46b140fa7353320d
+as vendored in liboqs0.16.0 commit
+ 5a1a854b0dc9f2141bdc771c555ee60c37950183.
+Independent native C key generation and encapsulation, with fixed randomness,
+match Python pk, sk, ct and shared-secret bytes exactly. The fixture records
+that native provenance; it is generated conformance evidence, not a claim that
+this derivative has upstream approval. Other dimensions are nonstandard.
+
+Primary authorities:
+https://frodokem.org/
+https://github.com/microsoft/PQCrypto-LWEKE/tree/a2f9dec8917ccc3464b3378d46b140fa7353320d
+https://cic.iacr.org/p/2/3/25
+https://github.com/open-quantum-safe/liboqs/tree/5a1a854b0dc9f2141bdc771c555ee60c37950183/src/kem/frodokem
+
+Parameter selection and security model
+--------------------------------------
+The frozen 50-dimensional table is in crucible/lattice_frodo.py. The first
+profile is n8 for a practical public-input LLL attack; n16 is the next. Later
+profiles choose distinct increasing multiples of eight nearest the target
+8+120(t-1)/49 under the recorded heuristic. The final profile retains n640,
+even though the 128-bit message-search cap already applies at smaller n.
+Targets are a selection convention, not security measurements or lower bounds.
+In particular there is NO numerical security claim for the first two profiles.
+The estimator has an assertion at n8 and a beta40 cost floor at small n.
+
+Estimates are reproducible in docs/lattice-frodo-calibration.json using:
+  lattice-estimator commit 53da5982597709ba0fdf94ea37a84d822310fd84
+  source archive SHA256 4236adc38031c139c8a2721804d8962d6cacd015fae37f6f5215d2ac7f011060
+  SageMath10.1, LWE.estimate.rough, classical ADPS16 Core-SVP, GSA,
+  primal uSVP and dual hybrid attacks, samples m=n+16.
+The finite noise law is approximated by a Gaussian of the same exact variance,
+129790/16384. This is explicit estimator modeling, not a change to sampling.
+The m=n+16 convention follows the estimator's own Frodo parameter definitions;
+it is not a proof that this summarizes all information in eight public-key
+columns and one full KEM ciphertext. Multi-target, implementation, transform,
+quantum and other attack avenues are outside this two-attack baseline.
+An LWE cost capped at128 is neither a complete KEM reduction nor validation of
+128-bit security. Shared-secret recovery within an hour measures a particular
+challenge result, not this estimator or the complete confidentiality game.
+
+Reproduce (offline; no runtime Sage dependency):
+  sage -python scripts/lattice_calibrate_frodo.py \
+    --estimator /path/to/extracted/lattice-estimator-53da5982597709ba0fdf94ea37a84d822310fd84 \
+    --archive /path/to/pinned-estimator.tar.gz --output /tmp/frodo-calibration.json
+The script checks the archive hash and every source-file byte before importing
+it. The public source is https://github.com/malb/lattice-estimator/tree/53da5982597709ba0fdf94ea37a84d822310fd84.
+
+Correctness proof and scope
+---------------------------
+Let chi be the exact symmetric finite noise law obtained by enumerating all
+65536 words through the published CDF (variance519160/65536, support[-12,12]).
+One decoded coordinate has integer error
+  Z = E'' + sum_{j=1}^n (S'_j E_j - E'_j S_j).
+Correctness is guaranteed if every coordinate has |Z|<4096. For r=1071/1024,
+  Pr[any error] <= 128 E[r^chi] E[r^(chi*chi)]^(2n) / r^4096.
+The factors are exact finite rational numbers. scripts/lattice_calibrate_frodo.py
+forms their numerator/denominator as integers and rounds the final bound UP to
+a power of two by integer comparison. No floating-point tail extrapolation is
+used. Cross-coordinate independence is unnecessary for the union bound.
+At n640 the bound is2^-133; smaller n only improve it. At n8, the deterministic
+support bound 2*n*12^2+12=2316<4096 gives perfect mathematical correctness.
+Per-dimension certificates are docs/lattice-frodo-correctness.json.
+Reproduce an individual certificate with ordinary Python:
+  python scripts/lattice_calibrate_frodo.py --dimension 640 --output /tmp/certificate.json
+
+Statistical bounds assume independent samples under ideal SHAKE expansion, as
+in the standard construction's random-oracle/XOF model. A finite SHAKE seed is
+not literally an unbounded source of independent random bits. Bounds concern
+mathematical decoding, not implementation faults or security. Every issued
+instance checks its original encapsulated secret against honest decapsulation
+once. A mismatch is returned as a mismatch; the target is never overwritten
+and generation is never retried to hide it. Runtime resource aborts are a
+different typed event with no completed mathematical trial.
+
+Implementation and reproducibility limits
+----------------------------------------
+The self-contained adapter uses Python hashlib SHAKE128 and OS randomness.
+It is variable-time; no constant-time claim and no public decapsulation oracle.
+All public keys/ciphertexts use canonical fixed-length encodings. Invalid
+ciphertexts use the full prescribed reencryption check and private fallback.
+The worker has a hard20-second process deadline and exact stdout byte bound;
+private key/coins stay inside the child, and diagnostics do not contain them.
+The adapter file's digest is registered and rechecked before worker execution.
+The artifact records the Python/runtime identity; it is not a complete hash
+closure over the operating system or every dynamically linked system library.
+
+Tests: tests/test_lattice_frodo.py covers independent native-anchor bytes,
+all50 actual dimensions, complete sampler enumeration, encoding boundaries,
+salt/ciphertext mutation and rejection, malformed lengths, no resampling,
+public/private isolation, exact correctness arithmetic and deadline behavior.
+Public-input attack:
+  sage -python scripts/lattice_solve_frodo_tier1.py challenge.json
+Ten fresh n8 challenges were solved with lattice LLL and exact Babai nearest
+plane, then full ciphertext reencryption before deriving the shared key. The
+attack uses no private generation values. After Sage initialization, each solve
+was about0.008seconds on the development host. This is evidence for this tiny
+profile, not a benchmark or guarantee about later tiers.
+
+Remaining gates before scientific admission: independent review of the
+parameter generalization and estimator's modeling choices; substantially
+broader differential/KAT coverage; deployment/side-channel hardening if this
+code were ever used beyond offline challenge generation. This derivative does
+not inherit published FrodoKEM security claims or automatic leaderboard credit.
+
+Reproduce the independent native anchor using the already pinned native build:
+  cc -O2 -I .native-pq/build/include scripts/lattice_frodo_reference.c \
+    .native-pq/build/lib/liboqs.a -o /tmp/frodo-reference
+  /tmp/frodo-reference > /tmp/frodo-reference.bin
+The output is pk9616||sk19888||ct9752||shared16. Its RNG callback supplies
+bytes0..length-1 for each call, exactly matching the fixture randomness fields.
+The harness contains deterministic TEST randomness and must never generate live
+challenges. The runtime adapter has no dependency on the harness or liboqs.

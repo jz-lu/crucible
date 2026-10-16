@@ -1,0 +1,36 @@
+RESEARCH NOTEBOOK DRAFT — 2026-10-16
+
+Entry: /#notebook. Native to the main Crucible header and navigation.
+Titles open a preview with tags and claim; Read full note opens a reading page.
+There is no generic Visualizations tab. Dedicated pages such as Schemes can
+later explain selected notes alongside built-in challenge and protocol data.
+Notes may stand alone or apply to multiple schemes.
+
+CURRENT SCOPE
+Six illustrative toy notes; none assesses the live KEMs. New notes and revisions
+are saved only in browser localStorage (crucible-theory-prototype-v1), not in
+accounts or the server database. Clearing browser data removes local drafts.
+Draft tools provides JSON export/import and an agent starting prompt. Port 8011
+and port 8000 have independent storage; export/import transfers a draft.
+This is not a shared repository, authenticated model API or review pipeline.
+
+PROVISIONAL CONTRACT
+Title, precise claim, conditions and supporting body are required. Tags and
+an evidence description are freeform. Motivated conjectures are eligible and
+must be labelled unproved. Labels and subject tags do not establish truth or
+reviewed applicability. Revisions are append-only; imports preserve prior
+note history. Exact revisions can be linked with ?note=ID&revision=N in the
+notebook hash route. Visualization membership is not a note requirement.
+
+FUTURE BOUNDARIES
+Shared storage, permissions, discussion, review/assessment, agent API and
+production schema remain to be designed. Curated explanations should reference
+exact source revisions; publication and mathematical assessment are separate
+from metadata. Human and model review should use one auditable record.
+
+IMPLEMENTATION
+web/notebook/{seed,store,notebook}.js and notebook.css form a scoped module.
+Main app mounts it on demand. Backend exposes only those four allowlisted
+assets. Existing security headers, accounts, database and challenge flows are
+unchanged. Notes render as text with local KaTeX, not executable HTML.
+The older experimental research UI remains disabled.

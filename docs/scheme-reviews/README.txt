@@ -5,7 +5,7 @@ New live challenges, runtime policy changes and admission awards are not in scop
 
 DECISION: EIGHT VISIBLE SCHEMES
 
-Diffie–Hellman & RSA
+Standalone entries
   Finite-field Diffie–Hellman — existing custom Crucible benchmark, release 6.
   RSA encapsulation — existing custom Crucible benchmark, release 3.
   DHKEM (X25519) — RFC 9180's exact X25519/HKDF-SHA256 construction.

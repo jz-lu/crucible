@@ -1,0 +1,79 @@
+MinRank candidate — bounded research review, 2026-10-14
+
+Recommendation: a serious research candidate, not an admission or implementation.
+MinRank adds a rank-metric direction to the proposed lattice/Hamming-code roster.
+Different problems do not imply independent security. Being recent or lacking
+standardization is not a reason to exclude a research proposal from Crucible.
+
+Concrete constructions
+
+Chatterjee, Mu and Vasudevan, Public-Key Encryption from the MinRank Problem
+(2025), construct PKE from planted generic MinRank, with the specified uniform
+matrix/error distributions and search-to-decision machinery. This is a direct
+reason not to describe MinRank as supporting only signatures. [M1]
+
+Debris-Alazard, Gaborit, Neveu and Ruatta, A Minrank-based Encryption Scheme à la
+Alekhnovich-Regev (2025), give practical MinRankPKE and author implementation.
+Its reduction uses stationary-MinRank; concrete analysis also treats MinRank
+Support Learning (MSL). These must not be relabeled plain generic MinRank. Its
+published dimensions, ranks and field choices provide an engineering starting
+point, not a pre-existing 50-tier ladder. This is my preferred first feasibility
+investigation because there is executable author code. [M2, M3]
+
+Both are PKE constructions. A Crucible KEM target needs an explicit, reviewed
+PKE-to-KEM transform, input entropy, encoding, hash/domain separation and game.
+Encrypting a random message can define a passive recovery experiment; doing so
+does not automatically justify a CCA-security claim. No such wrapper was
+implemented or reviewed in this task.
+
+Correctness and tier feasibility
+
+For practical MinRankPKE, the bounded-rank noise must fit the Gabidulin decoder's
+guaranteed radius. The paper states a condition involving r*d and
+floor((ell_2-kappa)/2). Its Proposition 3 says "smaller than", while its first
+parameter table reaches equality. Reconcile that wording with the decoder
+theorem and actual implementation before fixing a tier certificate. Preserve
+the exact field and sampling distributions, code-length/dimension conditions,
+and complete KEM transform. The paper's asymptotic or benchmark values must not
+be stretched into an unsupported linear security scale. Tests are implementation
+evidence; the mathematical bound must cover every admitted reduced profile.
+
+Published performance measurements are hardware- and implementation-specific.
+They are not Crucible's comparative benchmark, and full-sized parameters alone
+do not establish a usable low-tier challenge family.
+
+Related names and attacks
+
+MIRA, MiRitH and Mirath are signatures, outside the current KEM target. ROLLO and
+RQC are actual rank-metric encryption/KEM constructions, but their structured
+code distributions and exact reductions require separate descriptions. Rank
+decoding and MinRank have precise relationships; sharing the word "rank" is not
+an equivalence of every assumption or security claim. [M4, M5, M6]
+
+EGMC/MinRank-Gabidulin is another distinct construction. A 2026 primary attack
+reports breaks of all 16 proposed EGMC parameter sets. That does not establish
+a break of either new construction above. A targeted current search found no
+primary-source break of those two constructions; this is not an exhaustive
+cryptanalysis survey or a security certification. An already-broken target may
+still be useful if clearly identified as a historical attack exercise. [M7]
+
+Origin and admission
+
+These are previously identified proposals, not Crucible discoveries. Importing
+them, adding a wrapper, or writing a tier generator does not create a newly
+discovered assumption or automatically earn a new-family contribution award.
+Follow the same exact-revision correctness, implementation, resource, sampler,
+cryptanalysis and manual-review gates as other proposals. See
+admission-and-coverage-challenge.txt and ../correctness-policy-v0.txt.
+
+Primary sources inspected on 2026-10-14
+[M1] https://arxiv.org/abs/2510.03752
+     https://arxiv.org/html/2510.03752v1
+[M2] https://arxiv.org/abs/2510.07584
+     https://arxiv.org/html/2510.07584v1
+[M3] https://github.com/R-Neveu/MinRank-Encryption
+[M4] https://csrc.nist.gov/csrc/media/Projects/pqc-dig-sig/documents/round-2/spec-files/mirath-spec-round2-web.pdf
+[M5] https://pqc-rollo.org/
+[M6] https://pqc-rqc.org/
+     https://arxiv.org/abs/2207.01410
+[M7] https://arxiv.org/abs/2608.03328

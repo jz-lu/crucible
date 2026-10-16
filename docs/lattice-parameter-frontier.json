@@ -1,0 +1,1546 @@
+{
+  "format": "crucible-bounded-parameter-review-v1",
+  "frodo": {
+    "evidence_sha256": "2cc09becc57cc5f72e67d6e8c7ec9b6f9e10b0c2c6b14ca677accf2348096449",
+    "model_id": "frodo-lwe-core-svp-v1",
+    "construction_invariants": "q32768, nbar8, exact Frodo640 CDF,128-bit native message, salted transform, full seeds; fixed correctness envelope2^-133",
+    "search_space": "All80 natural matrix dimensions n8..640 in steps of8. No joint q/noise/nbar optimization.",
+    "objective": "Minimize public-key bytes, ciphertext bytes and matrix coefficient count at each supported planning reference.",
+    "limitations": "Two heuristic LWE attack families, Gaussian approximation, a separate message-enumeration ceiling with different operation units; not an optimum under complete security analysis. Published n640 has security margins outside this narrow objective.",
+    "selected_endpoint": {
+      "n": 592,
+      "modeled_lattice_log2_rop": 129.064,
+      "native_message_bits": 128,
+      "planning_reference_bits": 128,
+      "public_key_bytes": 8896,
+      "ciphertext_bytes": 9032,
+      "matrix_coefficients": 350464,
+      "selected": true,
+      "selection_reason": "First candidate meeting128 planning target"
+    },
+    "candidates": [
+      {
+        "n": 8,
+        "modeled_lattice_log2_rop": null,
+        "native_message_bits": 128,
+        "planning_reference_bits": null,
+        "public_key_bytes": 136,
+        "ciphertext_bytes": 272,
+        "matrix_coefficients": 64,
+        "selected": true,
+        "selection_reason": "Unestimated natural warmup; unknown is not dominated"
+      },
+      {
+        "n": 16,
+        "modeled_lattice_log2_rop": null,
+        "native_message_bits": 128,
+        "planning_reference_bits": null,
+        "public_key_bytes": 256,
+        "ciphertext_bytes": 392,
+        "matrix_coefficients": 256,
+        "selected": true,
+        "selection_reason": "Unestimated natural warmup; unknown is not dominated"
+      },
+      {
+        "n": 24,
+        "modeled_lattice_log2_rop": null,
+        "native_message_bits": 128,
+        "planning_reference_bits": null,
+        "public_key_bytes": 376,
+        "ciphertext_bytes": 512,
+        "matrix_coefficients": 576,
+        "selected": true,
+        "selection_reason": "Unestimated natural warmup; unknown is not dominated"
+      },
+      {
+        "n": 32,
+        "modeled_lattice_log2_rop": null,
+        "native_message_bits": 128,
+        "planning_reference_bits": null,
+        "public_key_bytes": 496,
+        "ciphertext_bytes": 632,
+        "matrix_coefficients": 1024,
+        "selected": true,
+        "selection_reason": "Unestimated natural warmup; unknown is not dominated"
+      },
+      {
+        "n": 40,
+        "modeled_lattice_log2_rop": null,
+        "native_message_bits": 128,
+        "planning_reference_bits": null,
+        "public_key_bytes": 616,
+        "ciphertext_bytes": 752,
+        "matrix_coefficients": 1600,
+        "selected": true,
+        "selection_reason": "Unestimated natural warmup; unknown is not dominated"
+      },
+      {
+        "n": 48,
+        "modeled_lattice_log2_rop": null,
+        "native_message_bits": 128,
+        "planning_reference_bits": null,
+        "public_key_bytes": 736,
+        "ciphertext_bytes": 872,
+        "matrix_coefficients": 2304,
+        "selected": true,
+        "selection_reason": "Unestimated natural warmup; unknown is not dominated"
+      },
+      {
+        "n": 56,
+        "modeled_lattice_log2_rop": null,
+        "native_message_bits": 128,
+        "planning_reference_bits": null,
+        "public_key_bytes": 856,
+        "ciphertext_bytes": 992,
+        "matrix_coefficients": 3136,
+        "selected": true,
+        "selection_reason": "Unestimated natural warmup; unknown is not dominated"
+      },
+      {
+        "n": 64,
+        "modeled_lattice_log2_rop": null,
+        "native_message_bits": 128,
+        "planning_reference_bits": null,
+        "public_key_bytes": 976,
+        "ciphertext_bytes": 1112,
+        "matrix_coefficients": 4096,
+        "selected": true,
+        "selection_reason": "Unestimated natural warmup; unknown is not dominated"
+      },
+      {
+        "n": 72,
+        "modeled_lattice_log2_rop": null,
+        "native_message_bits": 128,
+        "planning_reference_bits": null,
+        "public_key_bytes": 1096,
+        "ciphertext_bytes": 1232,
+        "matrix_coefficients": 5184,
+        "selected": true,
+        "selection_reason": "Unestimated natural warmup; unknown is not dominated"
+      },
+      {
+        "n": 80,
+        "modeled_lattice_log2_rop": null,
+        "native_message_bits": 128,
+        "planning_reference_bits": null,
+        "public_key_bytes": 1216,
+        "ciphertext_bytes": 1352,
+        "matrix_coefficients": 6400,
+        "selected": true,
+        "selection_reason": "Unestimated natural warmup; unknown is not dominated"
+      },
+      {
+        "n": 88,
+        "modeled_lattice_log2_rop": null,
+        "native_message_bits": 128,
+        "planning_reference_bits": null,
+        "public_key_bytes": 1336,
+        "ciphertext_bytes": 1472,
+        "matrix_coefficients": 7744,
+        "selected": true,
+        "selection_reason": "Unestimated natural warmup; unknown is not dominated"
+      },
+      {
+        "n": 96,
+        "modeled_lattice_log2_rop": null,
+        "native_message_bits": 128,
+        "planning_reference_bits": null,
+        "public_key_bytes": 1456,
+        "ciphertext_bytes": 1592,
+        "matrix_coefficients": 9216,
+        "selected": true,
+        "selection_reason": "Unestimated natural warmup; unknown is not dominated"
+      },
+      {
+        "n": 104,
+        "modeled_lattice_log2_rop": null,
+        "native_message_bits": 128,
+        "planning_reference_bits": null,
+        "public_key_bytes": 1576,
+        "ciphertext_bytes": 1712,
+        "matrix_coefficients": 10816,
+        "selected": true,
+        "selection_reason": "Unestimated natural warmup; unknown is not dominated"
+      },
+      {
+        "n": 112,
+        "modeled_lattice_log2_rop": null,
+        "native_message_bits": 128,
+        "planning_reference_bits": null,
+        "public_key_bytes": 1696,
+        "ciphertext_bytes": 1832,
+        "matrix_coefficients": 12544,
+        "selected": true,
+        "selection_reason": "Unestimated natural warmup; unknown is not dominated"
+      },
+      {
+        "n": 120,
+        "modeled_lattice_log2_rop": null,
+        "native_message_bits": 128,
+        "planning_reference_bits": null,
+        "public_key_bytes": 1816,
+        "ciphertext_bytes": 1952,
+        "matrix_coefficients": 14400,
+        "selected": true,
+        "selection_reason": "Unestimated natural warmup; unknown is not dominated"
+      },
+      {
+        "n": 128,
+        "modeled_lattice_log2_rop": null,
+        "native_message_bits": 128,
+        "planning_reference_bits": null,
+        "public_key_bytes": 1936,
+        "ciphertext_bytes": 2072,
+        "matrix_coefficients": 16384,
+        "selected": true,
+        "selection_reason": "Unestimated natural warmup; unknown is not dominated"
+      },
+      {
+        "n": 136,
+        "modeled_lattice_log2_rop": 12.264,
+        "native_message_bits": 128,
+        "planning_reference_bits": 12.264,
+        "public_key_bytes": 2056,
+        "ciphertext_bytes": 2192,
+        "matrix_coefficients": 18496,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 144,
+        "modeled_lattice_log2_rop": 14.892,
+        "native_message_bits": 128,
+        "planning_reference_bits": 14.892,
+        "public_key_bytes": 2176,
+        "ciphertext_bytes": 2312,
+        "matrix_coefficients": 20736,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 152,
+        "modeled_lattice_log2_rop": 16.936,
+        "native_message_bits": 128,
+        "planning_reference_bits": 16.936,
+        "public_key_bytes": 2296,
+        "ciphertext_bytes": 2432,
+        "matrix_coefficients": 23104,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 160,
+        "modeled_lattice_log2_rop": 18.98,
+        "native_message_bits": 128,
+        "planning_reference_bits": 18.98,
+        "public_key_bytes": 2416,
+        "ciphertext_bytes": 2552,
+        "matrix_coefficients": 25600,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 168,
+        "modeled_lattice_log2_rop": 21.023999999999997,
+        "native_message_bits": 128,
+        "planning_reference_bits": 21.023999999999997,
+        "public_key_bytes": 2536,
+        "ciphertext_bytes": 2672,
+        "matrix_coefficients": 28224,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 176,
+        "modeled_lattice_log2_rop": 23.067999999999998,
+        "native_message_bits": 128,
+        "planning_reference_bits": 23.067999999999998,
+        "public_key_bytes": 2656,
+        "ciphertext_bytes": 2792,
+        "matrix_coefficients": 30976,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 184,
+        "modeled_lattice_log2_rop": 25.112,
+        "native_message_bits": 128,
+        "planning_reference_bits": 25.112,
+        "public_key_bytes": 2776,
+        "ciphertext_bytes": 2912,
+        "matrix_coefficients": 33856,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 192,
+        "modeled_lattice_log2_rop": 26.863999999999997,
+        "native_message_bits": 128,
+        "planning_reference_bits": 26.863999999999997,
+        "public_key_bytes": 2896,
+        "ciphertext_bytes": 3032,
+        "matrix_coefficients": 36864,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 200,
+        "modeled_lattice_log2_rop": 28.907999999999998,
+        "native_message_bits": 128,
+        "planning_reference_bits": 28.907999999999998,
+        "public_key_bytes": 3016,
+        "ciphertext_bytes": 3152,
+        "matrix_coefficients": 40000,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 208,
+        "modeled_lattice_log2_rop": 30.659999999999997,
+        "native_message_bits": 128,
+        "planning_reference_bits": 30.659999999999997,
+        "public_key_bytes": 3136,
+        "ciphertext_bytes": 3272,
+        "matrix_coefficients": 43264,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 216,
+        "modeled_lattice_log2_rop": 32.704,
+        "native_message_bits": 128,
+        "planning_reference_bits": 32.704,
+        "public_key_bytes": 3256,
+        "ciphertext_bytes": 3392,
+        "matrix_coefficients": 46656,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 224,
+        "modeled_lattice_log2_rop": 34.748,
+        "native_message_bits": 128,
+        "planning_reference_bits": 34.748,
+        "public_key_bytes": 3376,
+        "ciphertext_bytes": 3512,
+        "matrix_coefficients": 50176,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 232,
+        "modeled_lattice_log2_rop": 36.5,
+        "native_message_bits": 128,
+        "planning_reference_bits": 36.5,
+        "public_key_bytes": 3496,
+        "ciphertext_bytes": 3632,
+        "matrix_coefficients": 53824,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 240,
+        "modeled_lattice_log2_rop": 38.544,
+        "native_message_bits": 128,
+        "planning_reference_bits": 38.544,
+        "public_key_bytes": 3616,
+        "ciphertext_bytes": 3752,
+        "matrix_coefficients": 57600,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 248,
+        "modeled_lattice_log2_rop": 40.588,
+        "native_message_bits": 128,
+        "planning_reference_bits": 40.588,
+        "public_key_bytes": 3736,
+        "ciphertext_bytes": 3872,
+        "matrix_coefficients": 61504,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 256,
+        "modeled_lattice_log2_rop": 42.339999999999996,
+        "native_message_bits": 128,
+        "planning_reference_bits": 42.339999999999996,
+        "public_key_bytes": 3856,
+        "ciphertext_bytes": 3992,
+        "matrix_coefficients": 65536,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 264,
+        "modeled_lattice_log2_rop": 44.384,
+        "native_message_bits": 128,
+        "planning_reference_bits": 44.384,
+        "public_key_bytes": 3976,
+        "ciphertext_bytes": 4112,
+        "matrix_coefficients": 69696,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 272,
+        "modeled_lattice_log2_rop": 46.428,
+        "native_message_bits": 128,
+        "planning_reference_bits": 46.428,
+        "public_key_bytes": 4096,
+        "ciphertext_bytes": 4232,
+        "matrix_coefficients": 73984,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 280,
+        "modeled_lattice_log2_rop": 48.18,
+        "native_message_bits": 128,
+        "planning_reference_bits": 48.18,
+        "public_key_bytes": 4216,
+        "ciphertext_bytes": 4352,
+        "matrix_coefficients": 78400,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 288,
+        "modeled_lattice_log2_rop": 50.224,
+        "native_message_bits": 128,
+        "planning_reference_bits": 50.224,
+        "public_key_bytes": 4336,
+        "ciphertext_bytes": 4472,
+        "matrix_coefficients": 82944,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 296,
+        "modeled_lattice_log2_rop": 52.267999999999994,
+        "native_message_bits": 128,
+        "planning_reference_bits": 52.267999999999994,
+        "public_key_bytes": 4456,
+        "ciphertext_bytes": 4592,
+        "matrix_coefficients": 87616,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 304,
+        "modeled_lattice_log2_rop": 54.312,
+        "native_message_bits": 128,
+        "planning_reference_bits": 54.312,
+        "public_key_bytes": 4576,
+        "ciphertext_bytes": 4712,
+        "matrix_coefficients": 92416,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 312,
+        "modeled_lattice_log2_rop": 56.06399999999999,
+        "native_message_bits": 128,
+        "planning_reference_bits": 56.06399999999999,
+        "public_key_bytes": 4696,
+        "ciphertext_bytes": 4832,
+        "matrix_coefficients": 97344,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 320,
+        "modeled_lattice_log2_rop": 58.108,
+        "native_message_bits": 128,
+        "planning_reference_bits": 58.108,
+        "public_key_bytes": 4816,
+        "ciphertext_bytes": 4952,
+        "matrix_coefficients": 102400,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 328,
+        "modeled_lattice_log2_rop": 60.151999999999994,
+        "native_message_bits": 128,
+        "planning_reference_bits": 60.151999999999994,
+        "public_key_bytes": 4936,
+        "ciphertext_bytes": 5072,
+        "matrix_coefficients": 107584,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 336,
+        "modeled_lattice_log2_rop": 62.196,
+        "native_message_bits": 128,
+        "planning_reference_bits": 62.196,
+        "public_key_bytes": 5056,
+        "ciphertext_bytes": 5192,
+        "matrix_coefficients": 112896,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 344,
+        "modeled_lattice_log2_rop": 64.24,
+        "native_message_bits": 128,
+        "planning_reference_bits": 64.24,
+        "public_key_bytes": 5176,
+        "ciphertext_bytes": 5312,
+        "matrix_coefficients": 118336,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 352,
+        "modeled_lattice_log2_rop": 66.28399999999999,
+        "native_message_bits": 128,
+        "planning_reference_bits": 66.28399999999999,
+        "public_key_bytes": 5296,
+        "ciphertext_bytes": 5432,
+        "matrix_coefficients": 123904,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 360,
+        "modeled_lattice_log2_rop": 68.32799999999999,
+        "native_message_bits": 128,
+        "planning_reference_bits": 68.32799999999999,
+        "public_key_bytes": 5416,
+        "ciphertext_bytes": 5552,
+        "matrix_coefficients": 129600,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 368,
+        "modeled_lattice_log2_rop": 70.372,
+        "native_message_bits": 128,
+        "planning_reference_bits": 70.372,
+        "public_key_bytes": 5536,
+        "ciphertext_bytes": 5672,
+        "matrix_coefficients": 135424,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 376,
+        "modeled_lattice_log2_rop": 72.416,
+        "native_message_bits": 128,
+        "planning_reference_bits": 72.416,
+        "public_key_bytes": 5656,
+        "ciphertext_bytes": 5792,
+        "matrix_coefficients": 141376,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 384,
+        "modeled_lattice_log2_rop": 74.46,
+        "native_message_bits": 128,
+        "planning_reference_bits": 74.46,
+        "public_key_bytes": 5776,
+        "ciphertext_bytes": 5912,
+        "matrix_coefficients": 147456,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 392,
+        "modeled_lattice_log2_rop": 76.50399999999999,
+        "native_message_bits": 128,
+        "planning_reference_bits": 76.50399999999999,
+        "public_key_bytes": 5896,
+        "ciphertext_bytes": 6032,
+        "matrix_coefficients": 153664,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 400,
+        "modeled_lattice_log2_rop": 78.548,
+        "native_message_bits": 128,
+        "planning_reference_bits": 78.548,
+        "public_key_bytes": 6016,
+        "ciphertext_bytes": 6152,
+        "matrix_coefficients": 160000,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 408,
+        "modeled_lattice_log2_rop": 80.592,
+        "native_message_bits": 128,
+        "planning_reference_bits": 80.592,
+        "public_key_bytes": 6136,
+        "ciphertext_bytes": 6272,
+        "matrix_coefficients": 166464,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 416,
+        "modeled_lattice_log2_rop": 82.636,
+        "native_message_bits": 128,
+        "planning_reference_bits": 82.636,
+        "public_key_bytes": 6256,
+        "ciphertext_bytes": 6392,
+        "matrix_coefficients": 173056,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 424,
+        "modeled_lattice_log2_rop": 84.67999999999999,
+        "native_message_bits": 128,
+        "planning_reference_bits": 84.67999999999999,
+        "public_key_bytes": 6376,
+        "ciphertext_bytes": 6512,
+        "matrix_coefficients": 179776,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 432,
+        "modeled_lattice_log2_rop": 86.72399999999999,
+        "native_message_bits": 128,
+        "planning_reference_bits": 86.72399999999999,
+        "public_key_bytes": 6496,
+        "ciphertext_bytes": 6632,
+        "matrix_coefficients": 186624,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 440,
+        "modeled_lattice_log2_rop": 88.768,
+        "native_message_bits": 128,
+        "planning_reference_bits": 88.768,
+        "public_key_bytes": 6616,
+        "ciphertext_bytes": 6752,
+        "matrix_coefficients": 193600,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 448,
+        "modeled_lattice_log2_rop": 90.812,
+        "native_message_bits": 128,
+        "planning_reference_bits": 90.812,
+        "public_key_bytes": 6736,
+        "ciphertext_bytes": 6872,
+        "matrix_coefficients": 200704,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 456,
+        "modeled_lattice_log2_rop": 92.856,
+        "native_message_bits": 128,
+        "planning_reference_bits": 92.856,
+        "public_key_bytes": 6856,
+        "ciphertext_bytes": 6992,
+        "matrix_coefficients": 207936,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 464,
+        "modeled_lattice_log2_rop": 95.192,
+        "native_message_bits": 128,
+        "planning_reference_bits": 95.192,
+        "public_key_bytes": 6976,
+        "ciphertext_bytes": 7112,
+        "matrix_coefficients": 215296,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 472,
+        "modeled_lattice_log2_rop": 97.23599999999999,
+        "native_message_bits": 128,
+        "planning_reference_bits": 97.23599999999999,
+        "public_key_bytes": 7096,
+        "ciphertext_bytes": 7232,
+        "matrix_coefficients": 222784,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 480,
+        "modeled_lattice_log2_rop": 99.27999999999999,
+        "native_message_bits": 128,
+        "planning_reference_bits": 99.27999999999999,
+        "public_key_bytes": 7216,
+        "ciphertext_bytes": 7352,
+        "matrix_coefficients": 230400,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 488,
+        "modeled_lattice_log2_rop": 101.324,
+        "native_message_bits": 128,
+        "planning_reference_bits": 101.324,
+        "public_key_bytes": 7336,
+        "ciphertext_bytes": 7472,
+        "matrix_coefficients": 238144,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 496,
+        "modeled_lattice_log2_rop": 103.368,
+        "native_message_bits": 128,
+        "planning_reference_bits": 103.368,
+        "public_key_bytes": 7456,
+        "ciphertext_bytes": 7592,
+        "matrix_coefficients": 246016,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 504,
+        "modeled_lattice_log2_rop": 105.704,
+        "native_message_bits": 128,
+        "planning_reference_bits": 105.704,
+        "public_key_bytes": 7576,
+        "ciphertext_bytes": 7712,
+        "matrix_coefficients": 254016,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 512,
+        "modeled_lattice_log2_rop": 107.74799999999999,
+        "native_message_bits": 128,
+        "planning_reference_bits": 107.74799999999999,
+        "public_key_bytes": 7696,
+        "ciphertext_bytes": 7832,
+        "matrix_coefficients": 262144,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 520,
+        "modeled_lattice_log2_rop": 109.79199999999999,
+        "native_message_bits": 128,
+        "planning_reference_bits": 109.79199999999999,
+        "public_key_bytes": 7816,
+        "ciphertext_bytes": 7952,
+        "matrix_coefficients": 270400,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 528,
+        "modeled_lattice_log2_rop": 111.836,
+        "native_message_bits": 128,
+        "planning_reference_bits": 111.836,
+        "public_key_bytes": 7936,
+        "ciphertext_bytes": 8072,
+        "matrix_coefficients": 278784,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 536,
+        "modeled_lattice_log2_rop": 114.172,
+        "native_message_bits": 128,
+        "planning_reference_bits": 114.172,
+        "public_key_bytes": 8056,
+        "ciphertext_bytes": 8192,
+        "matrix_coefficients": 287296,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 544,
+        "modeled_lattice_log2_rop": 116.216,
+        "native_message_bits": 128,
+        "planning_reference_bits": 116.216,
+        "public_key_bytes": 8176,
+        "ciphertext_bytes": 8312,
+        "matrix_coefficients": 295936,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 552,
+        "modeled_lattice_log2_rop": 118.25999999999999,
+        "native_message_bits": 128,
+        "planning_reference_bits": 118.25999999999999,
+        "public_key_bytes": 8296,
+        "ciphertext_bytes": 8432,
+        "matrix_coefficients": 304704,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 560,
+        "modeled_lattice_log2_rop": 120.59599999999999,
+        "native_message_bits": 128,
+        "planning_reference_bits": 120.59599999999999,
+        "public_key_bytes": 8416,
+        "ciphertext_bytes": 8552,
+        "matrix_coefficients": 313600,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 568,
+        "modeled_lattice_log2_rop": 122.63999999999999,
+        "native_message_bits": 128,
+        "planning_reference_bits": 122.63999999999999,
+        "public_key_bytes": 8536,
+        "ciphertext_bytes": 8672,
+        "matrix_coefficients": 322624,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 576,
+        "modeled_lattice_log2_rop": 124.684,
+        "native_message_bits": 128,
+        "planning_reference_bits": 124.684,
+        "public_key_bytes": 8656,
+        "ciphertext_bytes": 8792,
+        "matrix_coefficients": 331776,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 584,
+        "modeled_lattice_log2_rop": 127.02,
+        "native_message_bits": 128,
+        "planning_reference_bits": 127.02,
+        "public_key_bytes": 8776,
+        "ciphertext_bytes": 8912,
+        "matrix_coefficients": 341056,
+        "selected": true,
+        "selection_reason": "Increasing reference, retained"
+      },
+      {
+        "n": 592,
+        "modeled_lattice_log2_rop": 129.064,
+        "native_message_bits": 128,
+        "planning_reference_bits": 128,
+        "public_key_bytes": 8896,
+        "ciphertext_bytes": 9032,
+        "matrix_coefficients": 350464,
+        "selected": true,
+        "selection_reason": "First candidate meeting128 planning target"
+      },
+      {
+        "n": 600,
+        "modeled_lattice_log2_rop": 131.108,
+        "native_message_bits": 128,
+        "planning_reference_bits": 128,
+        "public_key_bytes": 9016,
+        "ciphertext_bytes": 9152,
+        "matrix_coefficients": 360000,
+        "selected": false,
+        "selection_reason": "Extra cost after fixed128 planning ceiling; archived, not a claim about published security"
+      },
+      {
+        "n": 608,
+        "modeled_lattice_log2_rop": 133.444,
+        "native_message_bits": 128,
+        "planning_reference_bits": 128,
+        "public_key_bytes": 9136,
+        "ciphertext_bytes": 9272,
+        "matrix_coefficients": 369664,
+        "selected": false,
+        "selection_reason": "Extra cost after fixed128 planning ceiling; archived, not a claim about published security"
+      },
+      {
+        "n": 616,
+        "modeled_lattice_log2_rop": 135.488,
+        "native_message_bits": 128,
+        "planning_reference_bits": 128,
+        "public_key_bytes": 9256,
+        "ciphertext_bytes": 9392,
+        "matrix_coefficients": 379456,
+        "selected": false,
+        "selection_reason": "Extra cost after fixed128 planning ceiling; archived, not a claim about published security"
+      },
+      {
+        "n": 624,
+        "modeled_lattice_log2_rop": 137.82399999999998,
+        "native_message_bits": 128,
+        "planning_reference_bits": 128,
+        "public_key_bytes": 9376,
+        "ciphertext_bytes": 9512,
+        "matrix_coefficients": 389376,
+        "selected": false,
+        "selection_reason": "Extra cost after fixed128 planning ceiling; archived, not a claim about published security"
+      },
+      {
+        "n": 632,
+        "modeled_lattice_log2_rop": 139.868,
+        "native_message_bits": 128,
+        "planning_reference_bits": 128,
+        "public_key_bytes": 9496,
+        "ciphertext_bytes": 9632,
+        "matrix_coefficients": 399424,
+        "selected": false,
+        "selection_reason": "Extra cost after fixed128 planning ceiling; archived, not a claim about published security"
+      },
+      {
+        "n": 640,
+        "modeled_lattice_log2_rop": 141.91199999999998,
+        "native_message_bits": 128,
+        "planning_reference_bits": 128,
+        "public_key_bytes": 9616,
+        "ciphertext_bytes": 9752,
+        "matrix_coefficients": 409600,
+        "selected": false,
+        "selection_reason": "Extra cost after fixed128 planning ceiling; archived, not a claim about published security"
+      }
+    ]
+  },
+  "module": {
+    "search_space": "The11 registered mathematical profiles; canonical fixed-width coefficient encodings. Bounded n/rank alternatives are displayed, not asserted security-equivalent.",
+    "objective": "Remove wasted binary coefficient bits while preserving every mathematical parameter and native plaintext capacity; no lossy compression.",
+    "limitations": "ceil(log2 q) is minimal per-coefficient fixed-width binary storage, not an information-theoretic minimum for a whole vector. Changing ring degree/rank changes message capacity, structure and matrix expansion; flattened LWE equivalence is not full KEM equivalence.",
+    "profiles": [
+      {
+        "tier": 1,
+        "n": 8,
+        "rank": 1,
+        "q": 269,
+        "reference_bits": null,
+        "coefficient_bits": 9,
+        "prior_coefficient_bits": 16,
+        "old_public_key_bytes": 59,
+        "public_key_bytes": 52,
+        "old_ciphertext_bytes": 32,
+        "ciphertext_bytes": 18,
+        "same_flattened_dimension_alternatives": [
+          {
+            "n": 8,
+            "rank": 1,
+            "native_message_bits": 8,
+            "packed_public_key_bytes": 52,
+            "packed_ciphertext_bytes": 18,
+            "expanded_matrix_coefficients": 8,
+            "schoolbook_encapsulation_products": 128,
+            "retains_current_native_message_capacity": true
+          }
+        ]
+      },
+      {
+        "tier": 2,
+        "n": 16,
+        "rank": 1,
+        "q": 541,
+        "reference_bits": null,
+        "coefficient_bits": 10,
+        "prior_coefficient_bits": 16,
+        "old_public_key_bytes": 75,
+        "public_key_bytes": 63,
+        "old_ciphertext_bytes": 64,
+        "ciphertext_bytes": 40,
+        "same_flattened_dimension_alternatives": [
+          {
+            "n": 8,
+            "rank": 2,
+            "native_message_bits": 8,
+            "packed_public_key_bytes": 63,
+            "packed_ciphertext_bytes": 30,
+            "expanded_matrix_coefficients": 32,
+            "schoolbook_encapsulation_products": 384,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 16,
+            "rank": 1,
+            "native_message_bits": 16,
+            "packed_public_key_bytes": 63,
+            "packed_ciphertext_bytes": 40,
+            "expanded_matrix_coefficients": 16,
+            "schoolbook_encapsulation_products": 512,
+            "retains_current_native_message_capacity": true
+          }
+        ]
+      },
+      {
+        "tier": 3,
+        "n": 32,
+        "rank": 1,
+        "q": 1039,
+        "reference_bits": null,
+        "coefficient_bits": 11,
+        "prior_coefficient_bits": 16,
+        "old_public_key_bytes": 107,
+        "public_key_bytes": 87,
+        "old_ciphertext_bytes": 128,
+        "ciphertext_bytes": 88,
+        "same_flattened_dimension_alternatives": [
+          {
+            "n": 8,
+            "rank": 4,
+            "native_message_bits": 8,
+            "packed_public_key_bytes": 87,
+            "packed_ciphertext_bytes": 55,
+            "expanded_matrix_coefficients": 128,
+            "schoolbook_encapsulation_products": 1280,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 16,
+            "rank": 2,
+            "native_message_bits": 16,
+            "packed_public_key_bytes": 87,
+            "packed_ciphertext_bytes": 66,
+            "expanded_matrix_coefficients": 64,
+            "schoolbook_encapsulation_products": 1536,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 32,
+            "rank": 1,
+            "native_message_bits": 32,
+            "packed_public_key_bytes": 87,
+            "packed_ciphertext_bytes": 88,
+            "expanded_matrix_coefficients": 32,
+            "schoolbook_encapsulation_products": 2048,
+            "retains_current_native_message_capacity": true
+          }
+        ]
+      },
+      {
+        "tier": 4,
+        "n": 64,
+        "rank": 1,
+        "q": 2063,
+        "reference_bits": null,
+        "coefficient_bits": 12,
+        "prior_coefficient_bits": 16,
+        "old_public_key_bytes": 171,
+        "public_key_bytes": 139,
+        "old_ciphertext_bytes": 256,
+        "ciphertext_bytes": 192,
+        "same_flattened_dimension_alternatives": [
+          {
+            "n": 8,
+            "rank": 8,
+            "native_message_bits": 8,
+            "packed_public_key_bytes": 139,
+            "packed_ciphertext_bytes": 108,
+            "expanded_matrix_coefficients": 512,
+            "schoolbook_encapsulation_products": 4608,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 16,
+            "rank": 4,
+            "native_message_bits": 16,
+            "packed_public_key_bytes": 139,
+            "packed_ciphertext_bytes": 120,
+            "expanded_matrix_coefficients": 256,
+            "schoolbook_encapsulation_products": 5120,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 32,
+            "rank": 2,
+            "native_message_bits": 32,
+            "packed_public_key_bytes": 139,
+            "packed_ciphertext_bytes": 144,
+            "expanded_matrix_coefficients": 128,
+            "schoolbook_encapsulation_products": 6144,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 64,
+            "rank": 1,
+            "native_message_bits": 64,
+            "packed_public_key_bytes": 139,
+            "packed_ciphertext_bytes": 192,
+            "expanded_matrix_coefficients": 64,
+            "schoolbook_encapsulation_products": 8192,
+            "retains_current_native_message_capacity": true
+          }
+        ]
+      },
+      {
+        "tier": 5,
+        "n": 64,
+        "rank": 2,
+        "q": 4111,
+        "reference_bits": null,
+        "coefficient_bits": 13,
+        "prior_coefficient_bits": 16,
+        "old_public_key_bytes": 299,
+        "public_key_bytes": 251,
+        "old_ciphertext_bytes": 384,
+        "ciphertext_bytes": 312,
+        "same_flattened_dimension_alternatives": [
+          {
+            "n": 8,
+            "rank": 16,
+            "native_message_bits": 8,
+            "packed_public_key_bytes": 251,
+            "packed_ciphertext_bytes": 221,
+            "expanded_matrix_coefficients": 2048,
+            "schoolbook_encapsulation_products": 17408,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 16,
+            "rank": 8,
+            "native_message_bits": 16,
+            "packed_public_key_bytes": 251,
+            "packed_ciphertext_bytes": 234,
+            "expanded_matrix_coefficients": 1024,
+            "schoolbook_encapsulation_products": 18432,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 32,
+            "rank": 4,
+            "native_message_bits": 32,
+            "packed_public_key_bytes": 251,
+            "packed_ciphertext_bytes": 260,
+            "expanded_matrix_coefficients": 512,
+            "schoolbook_encapsulation_products": 20480,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 64,
+            "rank": 2,
+            "native_message_bits": 64,
+            "packed_public_key_bytes": 251,
+            "packed_ciphertext_bytes": 312,
+            "expanded_matrix_coefficients": 256,
+            "schoolbook_encapsulation_products": 24576,
+            "retains_current_native_message_capacity": true
+          },
+          {
+            "n": 128,
+            "rank": 1,
+            "native_message_bits": 128,
+            "packed_public_key_bytes": 251,
+            "packed_ciphertext_bytes": 416,
+            "expanded_matrix_coefficients": 128,
+            "schoolbook_encapsulation_products": 32768,
+            "retains_current_native_message_capacity": true
+          }
+        ]
+      },
+      {
+        "tier": 6,
+        "n": 64,
+        "rank": 3,
+        "q": 6163,
+        "reference_bits": 25.112,
+        "coefficient_bits": 13,
+        "prior_coefficient_bits": 16,
+        "old_public_key_bytes": 427,
+        "public_key_bytes": 355,
+        "old_ciphertext_bytes": 512,
+        "ciphertext_bytes": 416,
+        "same_flattened_dimension_alternatives": [
+          {
+            "n": 8,
+            "rank": 24,
+            "native_message_bits": 8,
+            "packed_public_key_bytes": 355,
+            "packed_ciphertext_bytes": 325,
+            "expanded_matrix_coefficients": 4608,
+            "schoolbook_encapsulation_products": 38400,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 16,
+            "rank": 12,
+            "native_message_bits": 16,
+            "packed_public_key_bytes": 355,
+            "packed_ciphertext_bytes": 338,
+            "expanded_matrix_coefficients": 2304,
+            "schoolbook_encapsulation_products": 39936,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 32,
+            "rank": 6,
+            "native_message_bits": 32,
+            "packed_public_key_bytes": 355,
+            "packed_ciphertext_bytes": 364,
+            "expanded_matrix_coefficients": 1152,
+            "schoolbook_encapsulation_products": 43008,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 64,
+            "rank": 3,
+            "native_message_bits": 64,
+            "packed_public_key_bytes": 355,
+            "packed_ciphertext_bytes": 416,
+            "expanded_matrix_coefficients": 576,
+            "schoolbook_encapsulation_products": 49152,
+            "retains_current_native_message_capacity": true
+          }
+        ]
+      },
+      {
+        "tier": 7,
+        "n": 128,
+        "rank": 2,
+        "q": 8209,
+        "reference_bits": 37.96,
+        "coefficient_bits": 14,
+        "prior_coefficient_bits": 16,
+        "old_public_key_bytes": 555,
+        "public_key_bytes": 491,
+        "old_ciphertext_bytes": 768,
+        "ciphertext_bytes": 672,
+        "same_flattened_dimension_alternatives": [
+          {
+            "n": 8,
+            "rank": 32,
+            "native_message_bits": 8,
+            "packed_public_key_bytes": 491,
+            "packed_ciphertext_bytes": 462,
+            "expanded_matrix_coefficients": 8192,
+            "schoolbook_encapsulation_products": 67584,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 16,
+            "rank": 16,
+            "native_message_bits": 16,
+            "packed_public_key_bytes": 491,
+            "packed_ciphertext_bytes": 476,
+            "expanded_matrix_coefficients": 4096,
+            "schoolbook_encapsulation_products": 69632,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 32,
+            "rank": 8,
+            "native_message_bits": 32,
+            "packed_public_key_bytes": 491,
+            "packed_ciphertext_bytes": 504,
+            "expanded_matrix_coefficients": 2048,
+            "schoolbook_encapsulation_products": 73728,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 64,
+            "rank": 4,
+            "native_message_bits": 64,
+            "packed_public_key_bytes": 491,
+            "packed_ciphertext_bytes": 560,
+            "expanded_matrix_coefficients": 1024,
+            "schoolbook_encapsulation_products": 81920,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 128,
+            "rank": 2,
+            "native_message_bits": 128,
+            "packed_public_key_bytes": 491,
+            "packed_ciphertext_bytes": 672,
+            "expanded_matrix_coefficients": 512,
+            "schoolbook_encapsulation_products": 98304,
+            "retains_current_native_message_capacity": true
+          },
+          {
+            "n": 256,
+            "rank": 1,
+            "native_message_bits": 256,
+            "packed_public_key_bytes": 491,
+            "packed_ciphertext_bytes": 896,
+            "expanded_matrix_coefficients": 256,
+            "schoolbook_encapsulation_products": 131072,
+            "retains_current_native_message_capacity": true
+          }
+        ]
+      },
+      {
+        "tier": 8,
+        "n": 128,
+        "rank": 3,
+        "q": 12301,
+        "reference_bits": 63.364,
+        "coefficient_bits": 14,
+        "prior_coefficient_bits": 16,
+        "old_public_key_bytes": 811,
+        "public_key_bytes": 715,
+        "old_ciphertext_bytes": 1024,
+        "ciphertext_bytes": 896,
+        "same_flattened_dimension_alternatives": [
+          {
+            "n": 8,
+            "rank": 48,
+            "native_message_bits": 8,
+            "packed_public_key_bytes": 715,
+            "packed_ciphertext_bytes": 686,
+            "expanded_matrix_coefficients": 18432,
+            "schoolbook_encapsulation_products": 150528,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 16,
+            "rank": 24,
+            "native_message_bits": 16,
+            "packed_public_key_bytes": 715,
+            "packed_ciphertext_bytes": 700,
+            "expanded_matrix_coefficients": 9216,
+            "schoolbook_encapsulation_products": 153600,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 32,
+            "rank": 12,
+            "native_message_bits": 32,
+            "packed_public_key_bytes": 715,
+            "packed_ciphertext_bytes": 728,
+            "expanded_matrix_coefficients": 4608,
+            "schoolbook_encapsulation_products": 159744,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 64,
+            "rank": 6,
+            "native_message_bits": 64,
+            "packed_public_key_bytes": 715,
+            "packed_ciphertext_bytes": 784,
+            "expanded_matrix_coefficients": 2304,
+            "schoolbook_encapsulation_products": 172032,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 128,
+            "rank": 3,
+            "native_message_bits": 128,
+            "packed_public_key_bytes": 715,
+            "packed_ciphertext_bytes": 896,
+            "expanded_matrix_coefficients": 1152,
+            "schoolbook_encapsulation_products": 196608,
+            "retains_current_native_message_capacity": true
+          }
+        ]
+      },
+      {
+        "tier": 9,
+        "n": 128,
+        "rank": 4,
+        "q": 16411,
+        "reference_bits": 88.18550290204402,
+        "coefficient_bits": 15,
+        "prior_coefficient_bits": 16,
+        "old_public_key_bytes": 1067,
+        "public_key_bytes": 1003,
+        "old_ciphertext_bytes": 1280,
+        "ciphertext_bytes": 1200,
+        "same_flattened_dimension_alternatives": [
+          {
+            "n": 8,
+            "rank": 64,
+            "native_message_bits": 8,
+            "packed_public_key_bytes": 1003,
+            "packed_ciphertext_bytes": 975,
+            "expanded_matrix_coefficients": 32768,
+            "schoolbook_encapsulation_products": 266240,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 16,
+            "rank": 32,
+            "native_message_bits": 16,
+            "packed_public_key_bytes": 1003,
+            "packed_ciphertext_bytes": 990,
+            "expanded_matrix_coefficients": 16384,
+            "schoolbook_encapsulation_products": 270336,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 32,
+            "rank": 16,
+            "native_message_bits": 32,
+            "packed_public_key_bytes": 1003,
+            "packed_ciphertext_bytes": 1020,
+            "expanded_matrix_coefficients": 8192,
+            "schoolbook_encapsulation_products": 278528,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 64,
+            "rank": 8,
+            "native_message_bits": 64,
+            "packed_public_key_bytes": 1003,
+            "packed_ciphertext_bytes": 1080,
+            "expanded_matrix_coefficients": 4096,
+            "schoolbook_encapsulation_products": 294912,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 128,
+            "rank": 4,
+            "native_message_bits": 128,
+            "packed_public_key_bytes": 1003,
+            "packed_ciphertext_bytes": 1200,
+            "expanded_matrix_coefficients": 2048,
+            "schoolbook_encapsulation_products": 327680,
+            "retains_current_native_message_capacity": true
+          },
+          {
+            "n": 256,
+            "rank": 2,
+            "native_message_bits": 256,
+            "packed_public_key_bytes": 1003,
+            "packed_ciphertext_bytes": 1440,
+            "expanded_matrix_coefficients": 1024,
+            "schoolbook_encapsulation_products": 393216,
+            "retains_current_native_message_capacity": true
+          }
+        ]
+      },
+      {
+        "tier": 10,
+        "n": 128,
+        "rank": 5,
+        "q": 20507,
+        "reference_bits": 113.16969670905222,
+        "coefficient_bits": 15,
+        "prior_coefficient_bits": 16,
+        "old_public_key_bytes": 1323,
+        "public_key_bytes": 1243,
+        "old_ciphertext_bytes": 1536,
+        "ciphertext_bytes": 1440,
+        "same_flattened_dimension_alternatives": [
+          {
+            "n": 8,
+            "rank": 80,
+            "native_message_bits": 8,
+            "packed_public_key_bytes": 1243,
+            "packed_ciphertext_bytes": 1215,
+            "expanded_matrix_coefficients": 51200,
+            "schoolbook_encapsulation_products": 414720,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 16,
+            "rank": 40,
+            "native_message_bits": 16,
+            "packed_public_key_bytes": 1243,
+            "packed_ciphertext_bytes": 1230,
+            "expanded_matrix_coefficients": 25600,
+            "schoolbook_encapsulation_products": 419840,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 32,
+            "rank": 20,
+            "native_message_bits": 32,
+            "packed_public_key_bytes": 1243,
+            "packed_ciphertext_bytes": 1260,
+            "expanded_matrix_coefficients": 12800,
+            "schoolbook_encapsulation_products": 430080,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 64,
+            "rank": 10,
+            "native_message_bits": 64,
+            "packed_public_key_bytes": 1243,
+            "packed_ciphertext_bytes": 1320,
+            "expanded_matrix_coefficients": 6400,
+            "schoolbook_encapsulation_products": 450560,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 128,
+            "rank": 5,
+            "native_message_bits": 128,
+            "packed_public_key_bytes": 1243,
+            "packed_ciphertext_bytes": 1440,
+            "expanded_matrix_coefficients": 3200,
+            "schoolbook_encapsulation_products": 491520,
+            "retains_current_native_message_capacity": true
+          }
+        ]
+      },
+      {
+        "tier": 11,
+        "n": 256,
+        "rank": 3,
+        "q": 24593,
+        "reference_bits": 137.5479433065055,
+        "coefficient_bits": 15,
+        "prior_coefficient_bits": 16,
+        "old_public_key_bytes": 1579,
+        "public_key_bytes": 1483,
+        "old_ciphertext_bytes": 2048,
+        "ciphertext_bytes": 1920,
+        "same_flattened_dimension_alternatives": [
+          {
+            "n": 8,
+            "rank": 96,
+            "native_message_bits": 8,
+            "packed_public_key_bytes": 1483,
+            "packed_ciphertext_bytes": 1455,
+            "expanded_matrix_coefficients": 73728,
+            "schoolbook_encapsulation_products": 595968,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 16,
+            "rank": 48,
+            "native_message_bits": 16,
+            "packed_public_key_bytes": 1483,
+            "packed_ciphertext_bytes": 1470,
+            "expanded_matrix_coefficients": 36864,
+            "schoolbook_encapsulation_products": 602112,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 32,
+            "rank": 24,
+            "native_message_bits": 32,
+            "packed_public_key_bytes": 1483,
+            "packed_ciphertext_bytes": 1500,
+            "expanded_matrix_coefficients": 18432,
+            "schoolbook_encapsulation_products": 614400,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 64,
+            "rank": 12,
+            "native_message_bits": 64,
+            "packed_public_key_bytes": 1483,
+            "packed_ciphertext_bytes": 1560,
+            "expanded_matrix_coefficients": 9216,
+            "schoolbook_encapsulation_products": 638976,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 128,
+            "rank": 6,
+            "native_message_bits": 128,
+            "packed_public_key_bytes": 1483,
+            "packed_ciphertext_bytes": 1680,
+            "expanded_matrix_coefficients": 4608,
+            "schoolbook_encapsulation_products": 688128,
+            "retains_current_native_message_capacity": false
+          },
+          {
+            "n": 256,
+            "rank": 3,
+            "native_message_bits": 256,
+            "packed_public_key_bytes": 1483,
+            "packed_ciphertext_bytes": 1920,
+            "expanded_matrix_coefficients": 2304,
+            "schoolbook_encapsulation_products": 786432,
+            "retains_current_native_message_capacity": true
+          }
+        ]
+      }
+    ]
+  }
+}

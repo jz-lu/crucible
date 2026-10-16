@@ -1,20 +1,59 @@
-name: tests
+name: portable-source-checks
 on: [push, pull_request]
 permissions:
   contents: read
 jobs:
-  local-foundation:
+  portable-source-checks:
+    name: Portable source checks (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: ['3.11', '3.14']
+    env:
+      CRUCIBLE_ENV: development
+      CRUCIBLE_DATA_DIR: ${{ runner.temp }}/crucible-source-checks
+      PYTHONPYCACHEPREFIX: ${{ runner.temp }}/crucible-pycache
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
-      - run: python -m pip install -r requirements.lock
-      - run: python -m pip install --no-deps -e .
-      - run: python -m crucible.manage migrate
-      - run: python -m alembic check
-      - run: python -m pytest -q
+      - name: Install pinned Python dependencies
+        run: |
+          python -m pip install -r requirements.lock
+          python -m pip install --no-deps -e .
+      - name: Compile Python sources
+        run: python -m compileall -q crucible scripts migrations tests
+      - name: Check fresh database migrations
+        run: |
+          python -m crucible.manage migrate
+          python -m alembic check
+      - name: Run explicitly portable Python tests
+        # This is deliberately not the complete backend/native suite.
+        run: >-
+          python -m pytest -q
+          tests/test_calibration.py
+          tests/test_calibration_v2.py
+          tests/test_classical_frontier_audit.py
+          tests/test_cli.py
+          tests/test_kem.py
+      - name: Run all standalone frontend regressions
+        run: |
+          node --version
+          for test in tests/test_*.cjs; do
+            node "$test"
+          done
+      - name: State verification boundary
+        shell: bash
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Portable source checks only
+          This job checks compilation, migrations, the explicitly listed source-only
+          Python tests, and all standalone JavaScript regressions. It does not build
+          or validate the registered native cryptographic workers.
+
+          Before release, run the full backend suite and registry validation on the
+          reviewed native runtime described in docs/native-setup.txt. Current macOS
+          artifact pins are not portable Ubuntu CI artifacts; this workflow does not
+          bypass them, replace them with mocks, or claim full native verification.
+          EOF

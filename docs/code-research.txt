@@ -1,0 +1,202 @@
+CODE-BASED RESEARCH TIERS — IMPLEMENTATION AND LIMITS
+
+Status, 2026-10-14
+
+Two separately versioned research derivatives provide actual mathematical
+parameter variation. The exact published-reference pq_hqc.py and
+pq_mceliece.py releases remain unchanged. These derivatives are local beta
+research targets; independent implementation/admission review is pending.
+They receive neither an official admission award nor a claim of standardized
+security. A full shared-secret recovery is evidence about the exact generated
+public instance, not an IND-CCA experiment or a complete security assessment.
+
+HQC: weight-research-v1 (27 tiers)
+
+The construction is the HQC team specification of 2025-08-22, as vendored by
+liboqs 0.16.0. It is explicitly not the revised 2026-10-12 construction.
+The actual ring n=17669, shortened 17664-bit concatenated code, outer
+RS(46,16), duplicated RM(1,7) blocks of length 384, ciphertext/KEM transform,
+key expansion and decapsulation are retained. Tier j sets all three actual
+weights w=wr=we=j, for j=1..27. Native source changes are confined to the three
+weight constants, plus clearing unused standard security/DFR declarations.
+
+Fresh OS randomness feeds the original full 256-bit seeds, 128-bit message,
+and 128-bit salt. The key sampler targets uniform supports in the XOF model;
+encapsulation retains the published slightly biased fixed-weight sampler.
+There is no truncation of secret randomness, no planted short secret, and no
+restricted public-key subgroup. Public key and ciphertext sizes remain
+constant while the mathematical secret and error weights change.
+
+Honest correctness has a simple deterministic bound in this range. The
+honest error x*r2+r1*y+e has Hamming weight at most 2w^2+w, at most 1485 for
+w=27. Truncation cannot increase weight. The duplicated RM code has minimum
+distance 192. Its nearest-codeword decoder cannot make a symbol error with
+fewer than 96 bit errors in that block. Consequently fewer than 1536 total
+bit errors cause at most 15 incorrect outer-code symbols. RS(46,16) has
+minimum distance 31 and corrects those 15 errors. The w=28 bound is 1596,
+so the same worst-case proof does not justify a 28th tier. This does not say
+that tier 28 necessarily fails, only that this admission argument stops at 27.
+We prefer 27 distinct justified tiers to an invented 50-step interpolation.
+The argument assumes exact stated arithmetic and decoder behavior, not an
+independently machine-checked proof of the entire native implementation.
+
+This is not a linear estimated-security ladder. Very low weights expose easy
+structural attacks; fresh parameter estimates would need to analyze the exact
+modified distributions. No standard HQC failure probability or security claim
+is copied to these profiles. Their correctness metadata is instead the
+conditional deterministic argument above.
+
+Classic McEliece: length-research-v1 (50 tiers)
+
+The base is the non-pc Classic McEliece 2022-10-23 construction. Its section 3
+explicitly defines a broader parameter space: m>0, t>=2, mt<n<=2^m, appropriate
+irreducible field polynomials and auxiliary parameters. We keep m=12, t=64,
+mu=nu=0, the field polynomial z^12+z^3+1, the extension polynomial
+Y^64+Y^3+Y+z, all symmetric primitives, and the original seeded key generation.
+Here z means the field generator, encoded as integer 0x002, not the integer 2
+viewed in a characteristic-two field. We vary the actual byte-aligned code
+length n from 840 to 3488, and hence dimension k=n-768 and public-key size.
+The exact 50 frozen lengths are in crucible/code_parameters.py.
+
+The native implementation retains the full 256-bit seed, degree-64 Goppa
+polynomial generation, original 4096-element permutation and Benes network,
+and decoder. It takes the first n support elements and samples weight-64
+errors. The native sampling batch is changed according to the specification's
+exact general-parameter FixedWeight rule (section 5.4): tau=t if n=q, 2t if
+q/2<=n<q, 4t if q/4<=n<q/2, and so on. This is not a secret-entropy restriction
+or a new distribution. Public-key/secret-key encoded lengths are adjusted to
+768*(n-768)/8 and 6056+n/8 bytes, respectively. Ciphertexts stay 96 bytes;
+the recovered KEM secret remains the complete 32-byte output.
+
+A binary irreducible Goppa code of degree t has minimum distance at least
+2t+1. Every honest weight-64 error is therefore uniquely decodable. The
+native decoder and degree remain unchanged. The correctness argument is
+conditional on successful systematic key generation and exact native
+implementation. Source-level modifications outside the selected published
+parameters still need independent review; passing tests are not a formal
+verification of this implementation.
+
+Section 1 of the specification restricts a compliance claim to a named
+selected parameter set in section 7. Accordingly these shorter lengths are
+research profiles inside its general mathematical definition, not published
+standard parameter sets. The endpoint is the exact mceliece348864 parameter
+set. Full public key, private key, ciphertext and secret match its upstream
+known-answer test using the same public test randomness.
+
+Tier placement uses the unscaled combinatorial reference
+  log2(binomial(n,64)/binomial(768,64)).
+This is the idealized inverse probability that a Prange trial's chosen 768
+positions contain the support of the error. Rank-deficient selected matrices
+add another rejection factor. Each trial also costs matrix elimination and
+weight testing. The n values are the smallest multiples of eight reaching
+evenly spaced reference values from 8 to the endpoint's approximately 142.8.
+This does NOT normalize the endpoint to 128 bits, count complete operations,
+or estimate the best known attack. Improved information-set decoding,
+low-weight techniques, contemporary Goppa structural attacks, quantum
+algorithms and implementation attacks are excluded. The UI should label
+this as an elementary work reference, never as estimated security.
+
+Record semantics
+
+Both adapters expose profile_kind=research-tier, profile_label="Tier N",
+and exact actual parameters. Tiers are navigation positions within one
+release and are not comparable between families. record_inheritance=False:
+a recovery of one tier does not manufacture recovery records for other
+lengths or weights. These uncalibrated releases have no numerical score
+policy. Standardized reference releases and earlier receipts remain distinct.
+
+Pinned source and implementation closure
+
+Source: liboqs 0.16.0 archive at commit
+5a1a854b0dc9f2141bdc771c555ee60c37950183.
+Archive SHA256:
+83c6e6cff490638312e1e20ed5de593fb5d7bfab162235f6238f519d6a1feafb.
+The existing scripts/build_pq_backend.py retrieves and verifies that source.
+This derivative builder checks the archive, every original source file and
+exact inventory before copying the two reference implementations. It never
+modifies .native-pq. The native backend must already be built there.
+
+Build from the staging repository:
+  ../kem-live-env/bin/python scripts/code_build_backend.py --jobs 4
+
+This creates .native-code/install with 77 parameter-specific workers,
+licenses, and build-manifest.json. The workers statically link the pinned
+liboqs common primitives. Their per-profile patched-source hashes, binaries,
+base static library, compiler, build script, parameter table and worker source
+are bound in the build manifest. Adapters additionally bind all runtime
+Python helper and adapter sources in artifact_sha256. Generation checks the
+selected binary and source closure both before and after its subprocess.
+The closure metadata is public and contains no local absolute paths.
+
+There is no runtime compilation, network fetch, uploaded executable code or
+Sage dependency. To deploy, preserve the pinned runtime sources and copy the
+native install directory for this exact platform. CRUCIBLE_CODE_BACKEND may
+point at its location. Platform/compiler changes require a new verified
+artifact closure, not silently replacing a frozen artifact. liboqs is MIT;
+the vendored HQC and McEliece source implementations are public domain, with
+source licensing retained in the install directory. This does not constitute
+a legal determination regarding patents or distribution obligations.
+
+Execution and evidence
+
+Each worker performs one fresh key generation, encapsulation and honest
+decapsulation. It never loops until agreement and never conceals a mismatch.
+Original algorithm-internal key-generation/sampling rejections are retained.
+A mismatch is returned in diagnostics for the application ledger/quarantine
+policy. Resource failures are typed availability failures, not incorrect
+cryptographic outputs. A separate process has an 18-second CPU limit,
+20-second wall limit, bounded output, no core dump and bounded stack. The
+parent executor kills and reaps the process group. The app owns the global
+worker budget and generation denominator; the adapter does not implement
+or weaken those policies.
+
+Validation includes one native honest-agreement build check for every one
+of the 77 profiles, a fresh runtime agreement for each profile, freshness,
+exact parameter/encoding checks, artifact tamper rejection, mismatch-without-
+retry behavior, and the published McEliece endpoint known-answer comparison.
+An additional native decoder harness tests 256 message fixtures with 1535
+adversarially placed bit errors (15 blocks with 96, one with 95).
+
+scripts/code_validate.sage is an independent exact algebra check, run with
+SageMath 10.1. It verifies both McEliece field polynomials are irreducible,
+17669 is prime with 2 of multiplicative order 17668, enumerates all nonzero
+RM codewords to verify distance 192, and reconstructs the RS generator from
+its 30 consecutive roots over the specified GF(256). It matches every native
+generator coefficient and checks all 27 weight bounds. This is not a proof
+of constant-time behavior, the native decoder, or IND-CCA security.
+
+Two public-only reference attacks demonstrate that the initial tier is
+actually approachable without knowing generation secrets:
+  scripts/code_solve_hqc_tier1.py
+  scripts/code_solve_mceliece_tier1.py
+They accept the public challenge JSON and return the complete KEM secret.
+The HQC attack finds a weight-one secret by cyclic shift and independently
+decodes the concatenated code. An observed local run took about 0.02 seconds.
+The McEliece attack implements elementary binary Prange decoding. One
+observed run took 2.14 seconds / 1184 trials; runtime is probabilistic and
+hardware dependent. These are demonstrations, not published benchmark data
+or general security estimates. Automated tests compare against the target
+only after each solver has completed using public inputs.
+
+Primary sources and remaining gates
+
+Classic McEliece 2022-10-23 specification, sections 1, 3, 5.4 and 7.1:
+https://classic.mceliece.org/mceliece-spec-20221023.pdf
+Defines the broader parameter space, exact FixedWeight rule, selected-set
+compliance scope and the retained field/extension polynomials.
+
+HQC 2025-08-22 team specification:
+https://pqc-hqc.org/doc/hqc_specifications_2025_08_22.pdf
+Construction, seeded samplers, concatenated-code design and KEM transform.
+
+Pinned implementations and common primitives:
+https://github.com/open-quantum-safe/liboqs/tree/5a1a854b0dc9f2141bdc771c555ee60c37950183
+Exact vendored implementations, upstream tests/KATs and licensing. The
+separate existing docs/implementation-pq.txt records the source provenance
+and original published-profile vector checks.
+
+Outstanding: independent review of the changed parameter assumptions and
+source patches; broader decoder/invalid-ciphertext tests; robust estimates
+for low-weight HQC and shortened Goppa codes; current structural-attack
+analysis; production deployment/resource review; and formal proposal
+admission. Neither a native library nor our tests close those gates by itself.

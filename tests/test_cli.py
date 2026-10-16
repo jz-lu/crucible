@@ -8,7 +8,7 @@ from pathlib import Path
 import sys
 import threading
 import time
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -27,15 +27,19 @@ def server(tmp_path):
     digest = hashlib.sha256(source).hexdigest()
     manifest = {"id": "rsa-v3-tier-1", "instance_size": 1, "shared_secret_bytes": 32,
                 "implementation": {"source_sha256": digest}}
+    state["manifest"] = manifest
+    state["source_sha256"] = digest
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args): pass
 
-        def reply(self, value, status=200, raw=False):
+        def reply(self, value, status=200, raw=False, headers=None):
             body = value if raw else json.dumps(value).encode()
             self.send_response(status)
             self.send_header("Content-Type", "text/plain" if raw else "application/json")
             self.send_header("Content-Length", str(len(body)))
+            for name, value in (headers or {}).items():
+                self.send_header(name, value)
             self.end_headers()
             try:
                 self.wfile.write(body)
@@ -50,6 +54,9 @@ def server(tmp_path):
             path = urlsplit(self.path).path
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"]))) if self.command == "POST" else None
             state["requests"].append((self.command, self.path, body, self.headers.get("Authorization")))
+            if state.get("error_status"):
+                headers = {"Retry-After": state["retry_after"]} if state.get("retry_after") is not None else {}
+                return self.reply({"detail": TOKEN + CANDIDATE}, state["error_status"], headers=headers)
             if state["redirect"]:
                 self.send_response(302)
                 self.send_header("Location", state["origin"] + "/redirect-target")
@@ -63,13 +70,15 @@ def server(tmp_path):
                 return self.reply({"status": "authorized", "access_token": TOKEN,
                     "expires_at": time.time() + 3600, "token_type": "Bearer", "user": {"handle": "solver"}})
             if path == "/api/schemes":
-                return self.reply({"schemes": [{"id": "rsa-kem", "name": "RSA", "version": "3", "profiles": [manifest]}],
+                return self.reply({"schemes": [{"id": "rsa-kem", "name": "RSA", "version": "3", "profiles": [manifest],
+                    "selection_kind": state.get("selection_kind", "tier"),
+                    "default_progression": state.get("default_progression")}],
                                    "padding": "x" * state.get("catalogue_padding", 0)})
             if self.headers.get("Authorization") != "Bearer " + TOKEN:
                 return self.reply({"detail": "Unauthorized"}, 401)
             challenge = {"id": "challenge-1", "scheme_id": "rsa-kem", "scheme_version": "3",
                 "status": "expired" if state["closed"] else "open", "ends_at": time.time() + 300,
-                "public": {"encoding": {"shared_secret_bytes": 32}}}
+                "public": {"encoding": {"shared_secret_bytes": 32}, "public_key": "a" * state.get("challenge_padding", 0)}}
             if path == "/api/challenges":
                 if body is not None: state["issued"] = True
                 return self.reply({"challenge": challenge if state["issued"] else None})
@@ -79,6 +88,11 @@ def server(tmp_path):
                 return self.reply({"version": "3", "implementation": {"sha256": digest}})
             if path == "/api/protocol/source":
                 return self.reply(b"changed" if state["wrong_hash"] else source, raw=True)
+            if path == "/api/protocol/artifacts":
+                return self.reply(state["artifacts"])
+            if path == "/api/protocol/artifact-source":
+                name = parse_qs(urlsplit(self.path).query)["path"][0]
+                return self.reply(state["artifact_files"][name], raw=True)
             if path == "/api/methods":
                 state["methods"] += 1
                 return self.reply({"method": {"id": "method-" + str(state["methods"]), **body}})
@@ -93,7 +107,8 @@ def server(tmp_path):
                     state["fail_answer_once"] = False
                     # Simulate a receipt that was recorded but whose response failed.
                     return self.reply({"detail": CANDIDATE + TOKEN}, 503)
-                return self.reply({"submission": {"id": "receipt-1", "status": "correct", "method_id": body["method_id"]}})
+                return self.reply({"submission": {"id": "receipt-1", "status": "correct", "method_id": body["method_id"]},
+                                   "challenge": challenge})
             self.reply({"detail": "Not found"}, 404)
 
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -120,6 +135,47 @@ def ready(server):
     (root / "method.md").write_text("# Public-input attack\nFactor the public modulus and apply the specified KDF. No prior preparation.\n")
     (root / "attack" / "solve.py").write_text("print('" + CANDIDATE + "')\n")
     return root
+
+
+@pytest.mark.parametrize("status,header,seconds", [(503, "3", 3), (429, "0", 0), (429, "86400", 86400)])
+def test_retry_after_is_bounded_machine_readable_and_does_not_retry(server, capsys, status, header, seconds):
+    state, _, _ = server
+    state.update(error_status=status, retry_after=header)
+    assert invoke(server, "schemes") == 1
+    output = capsys.readouterr()
+    error = json.loads(output.out)["error"]
+    assert error["code"] == "http_" + str(status)
+    assert error["retry_after_seconds"] == seconds
+    assert type(error["retry_after_seconds"]) is int
+    assert TOKEN not in output.out + output.err and CANDIDATE not in output.out + output.err
+    assert len(state["requests"]) == 1
+
+
+def test_retry_after_human_output_is_concise_without_echoing_server_body(server, capsys):
+    state, config, _ = server
+    state.update(error_status=503, retry_after="3")
+    assert cli.main(["--server", state["origin"], "--config", str(config), "schemes"]) == 1
+    output = capsys.readouterr()
+    assert not output.out
+    assert output.err == "The server could not complete the request.\nRetry after 3 seconds.\n"
+    assert len(state["requests"]) == 1
+
+
+@pytest.mark.parametrize("header", [None, "", "-1", "1.5", "86401", "9" * 1000,
+    "Wed, 21 Oct 2026 07:28:00 GMT", TOKEN + CANDIDATE])
+def test_invalid_retry_after_is_not_exposed_in_json_or_human_output(server, capsys, header):
+    state, config, _ = server
+    state.update(error_status=429, retry_after=header)
+    assert invoke(server, "schemes") == 1
+    output = capsys.readouterr()
+    error = json.loads(output.out)["error"]
+    assert error == {"code": "http_429", "message": "Too many requests. Wait before retrying."}
+    assert not output.err
+    assert cli.main(["--server", state["origin"], "--config", str(config), "schemes"]) == 1
+    output = capsys.readouterr()
+    assert not output.out
+    assert output.err == "Too many requests. Wait before retrying.\n"
+    assert len(state["requests"]) == 2  # One request per explicit command, no automatic retry.
 
 
 def test_login_stores_private_origin_bound_credentials_without_printing_them(server, monkeypatch, capsys):
@@ -196,9 +252,145 @@ def test_full_catalogue_has_separate_bounded_response_allowance(server, monkeypa
     monkeypatch.setattr(cli, "MAX_CATALOGUE_RESPONSE", 1024)
     with pytest.raises(cli.ClientError, match="size limit"):
         client.request("/api/schemes", auth=False)
-    monkeypatch.setattr(cli, "MAX_RESPONSE", 10)
+    monkeypatch.setattr(cli, "MAX_CHALLENGE_RESPONSE", 10)
     with pytest.raises(cli.ClientError, match="size limit"):
         client.request("/api/challenges/challenge-1/download")
+
+
+def test_named_profiles_require_exact_ids_and_never_present_ordinals_as_tiers(server, capsys):
+    state, _, root = server
+    state["selection_kind"] = "parameter-set"
+    state["manifest"].update(profile_kind="standard-parameter-set", profile_label="Named fixture 768")
+    assert invoke(server, "init", "rsa-kem", "--tier", "1", "--path", root) == 1
+    assert not state["issued"] and not root.exists()
+    assert "storage ordinals are not stages" in capsys.readouterr().out
+    assert invoke(server, "init", "rsa-kem", "--profile-id", "not-published", "--path", root) == 1
+    assert not state["issued"]
+    capsys.readouterr()
+    assert invoke(server, "init", "rsa-kem", "--profile-id", "rsa-v3-tier-1", "--path", root) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["tier"] is None and report["profile_label"] == "Named fixture 768"
+    assert report["profile_id"] == "rsa-v3-tier-1" and report["selection_kind"] == "parameter-set"
+    issue = next(request for request in state["requests"] if request[0] == "POST" and request[1] == "/api/challenges")
+    assert issue[2] == {"scheme_id": "rsa-kem", "scheme_version": "3", "profile_id": "rsa-v3-tier-1"}
+
+
+def test_profile_id_and_tier_are_mutually_exclusive():
+    with pytest.raises(SystemExit) as error:
+        cli.parser().parse_args(["init", "fixture", "--tier", "1", "--profile-id", "fixture-profile"])
+    assert error.value.code == 2
+
+
+def test_stage_resolves_published_configuration_without_reinterpreting_legacy_tier(server, capsys):
+    state, _, root = server
+    state["default_progression"] = {"id": "test/default/v1", "stage_count": 2,
+        "stages": [{"number": 2, "profile_id": "rsa-v3-tier-1"}]}
+    assert invoke(server, "init", "rsa-kem", "--stage", "2", "--path", root) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["stage"] == 2 and report["tier"] == 1
+    assert report["progression_id"] == "test/default/v1"
+    assert report["profile_id"] == "rsa-v3-tier-1"
+    assert json.loads((root / "challenge.json").read_text())["scheme_manifest"]["instance_size"] == 1
+
+
+def test_missing_or_unknown_stage_never_issues_a_different_configuration(server, capsys):
+    state, _, root = server
+    assert invoke(server, "init", "rsa-kem", "--stage", "1", "--path", root) == 1
+    assert "no published stage progression" in capsys.readouterr().out
+    state["default_progression"] = {"id": "test/default/v1", "stages": [{"number": 2, "profile_id": "rsa-v3-tier-1"}]}
+    assert invoke(server, "init", "rsa-kem", "--stage", "1", "--path", root) == 1
+    assert "not available" in capsys.readouterr().out
+    assert not state["issued"] and not root.exists()
+
+
+@pytest.mark.parametrize("other", [["--tier", "1"], ["--profile-id", "exact-id"]])
+def test_stage_and_other_selectors_are_mutually_exclusive(other):
+    with pytest.raises(SystemExit) as error:
+        cli.parser().parse_args(["init", "fixture", "--stage", "1", *other])
+    assert error.value.code == 2
+
+
+def test_large_public_key_download_run_and_receipt_keep_separate_size_limits(server, monkeypatch, capsys):
+    state, config, _ = server
+    state["challenge_padding"] = 2_800_000
+    root = ready(server)
+    assert (root / "challenge.json").stat().st_size > cli.MAX_RESPONSE
+    assert invoke(server, "run", "--path", root, "--", sys.executable, "attack/solve.py") == 0
+    assert invoke(server, "submit", "--path", root) == 0
+    assert state["answers"][-1]["candidate"] == CANDIDATE
+    assert cli.load_json(root / "receipt.json")["submission"]["id"] == "receipt-1"
+    requests = len(state["requests"])
+    assert invoke(server, "submit", "--path", root) == 0
+    assert len(state["requests"]) == requests, "A durable large-response receipt needs no network retry"
+    assert state["methods"] == state["uploads"] == len(state["answers"]) == 1
+    assert len(cli.encode(state["answers"][0])) < 65536, "The answer upload remains small"
+    monkeypatch.setattr(cli, "MAX_CHALLENGE_RESPONSE", 1024)
+    with pytest.raises(cli.ClientError, match="size limit"):
+        cli.Client(state["origin"], config).request("/api/challenges/challenge-1/download")
+    with pytest.raises(cli.ClientError, match="size limit"):
+        cli.Client(state["origin"], config).request("/api/challenges/challenge-1/submit", state["answers"][0])
+    monkeypatch.setattr(cli, "MAX_RESPONSE", 10)
+    with pytest.raises(cli.ClientError, match="size limit"):
+        cli.Client(state["origin"], config).request("/api/protocol/spec")
+
+
+def artifact_fixture(state):
+    value = {"format": "crucible-implementation-artifact-v1", "scheme_id": "rsa-kem", "scheme_version": "3",
+             "adapter_source_sha256": state["source_sha256"], "dependencies": [{"name": "Non-ASCII fixture café", "sha256": "1" * 64}]}
+    digest = hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    value["artifact_sha256"] = digest
+    state["manifest"]["implementation"]["artifact_sha256"] = digest
+    state["artifacts"] = value
+    return value
+
+
+def test_workspace_verifies_and_saves_pinned_dependency_closure_without_execution(server):
+    state, _, root = server
+    expected = artifact_fixture(state)
+    assert invoke(server, "get", "--challenge-id", "challenge-1", "--path", root) == 0
+    assert cli.load_json(root / "reference" / "implementation-artifacts.json") == expected
+    assert not state["issued"] and not state["answers"]
+
+
+@pytest.mark.parametrize("invalid", [None, "mismatch", "traversal"])
+def test_workspace_downloads_only_pinned_first_party_source(server, invalid):
+    state, _, root = server
+    artifact = artifact_fixture(state)
+    content = b'raise RuntimeError("inert reference, never execute")\n'
+    name = "../outside.py" if invalid == "traversal" else "crucible/reference.py"
+    artifact["files"] = {name: hashlib.sha256(content).hexdigest()}
+    artifact["artifact_sha256"] = hashlib.sha256(json.dumps(
+        {key: value for key, value in artifact.items() if key != "artifact_sha256"},
+        sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    state["manifest"]["implementation"]["artifact_sha256"] = artifact["artifact_sha256"]
+    state["artifact_files"] = {name: b"changed" if invalid == "mismatch" else content}
+    result = invoke(server, "get", "--challenge-id", "challenge-1", "--path", root)
+    assert result == (1 if invalid else 0)
+    if invalid:
+        assert not root.exists()
+    else:
+        assert (root / "reference/source/crucible/reference.py").read_bytes() == content
+    assert not state["issued"] and not state["answers"]
+
+
+@pytest.mark.parametrize("tamper", ["content", "self_hash", "self_consistent_wrong_pin", "scheme", "version", "source"])
+def test_wrong_dependency_closure_creates_no_workspace(server, tamper):
+    state, _, root = server
+    document = artifact_fixture(state)
+    if tamper in {"content", "self_consistent_wrong_pin"}:
+        document["dependencies"][0]["sha256"] = "2" * 64
+    elif tamper == "self_hash": document["artifact_sha256"] = "3" * 64
+    elif tamper == "scheme": document["scheme_id"] = "another-scheme"
+    elif tamper == "version": document["scheme_version"] = "other-release"
+    elif tamper == "source": document["adapter_source_sha256"] = "4" * 64
+    if tamper in {"self_consistent_wrong_pin", "scheme", "version", "source"}:
+        document["artifact_sha256"] = hashlib.sha256(json.dumps(
+            {key: value for key, value in document.items() if key != "artifact_sha256"},
+            sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        if tamper != "self_consistent_wrong_pin":
+            state["manifest"]["implementation"]["artifact_sha256"] = document["artifact_sha256"]
+    assert invoke(server, "get", "--challenge-id", "challenge-1", "--path", root) == 1
+    assert not root.exists() and not state["issued"] and not state["answers"]
 
 
 def test_run_measures_only_local_command_then_submit_uploads_only_selected_sources(server, capsys):

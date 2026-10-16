@@ -1,0 +1,73 @@
+{
+  "format": "crucible-ntru-estimator-calibration-v1",
+  "upstream_source_sha256": "f22b040c7ecc6bee5a94fd81921cd4bf0bd43094b7074613465fbf773fdd2158",
+  "sage": "SageMath version 10.1, Release Date: 2023-08-20",
+  "compatibility_changes": [
+    "collections.Hashable alias",
+    "Numeric NaN predicate",
+    "Return result map instead of printing"
+  ],
+  "scope": "Selected reproducibility checks, not independent validation of heuristic attack models",
+  "checks": [
+    {
+      "p": 653,
+      "q": 4621,
+      "w": 245,
+      "hybrid": false,
+      "official_bits": 127.11050062962418,
+      "local_bits": 127.11050062962418,
+      "absolute_difference": 0.0,
+      "official_search_notes": "force 12 lgprobforce -0.173638 m 540 blocksize 434 lgcostlattice 126.936863 delta 1.003762 scale 1.332993"
+    },
+    {
+      "p": 653,
+      "q": 4621,
+      "w": 288,
+      "hybrid": false,
+      "official_bits": 129.2330884297,
+      "local_bits": 129.2330884297,
+      "absolute_difference": 0.0,
+      "official_search_notes": "force 10 lgprobforce -0.248857 m 540 blocksize 441 lgcostlattice 128.984231 delta 1.003720 scale 1.229461"
+    },
+    {
+      "p": 761,
+      "q": 4591,
+      "w": 286,
+      "hybrid": false,
+      "official_bits": 153.89224751249074,
+      "local_bits": 153.8922475124907,
+      "absolute_difference": 2.842170943040401e-14,
+      "official_search_notes": "force 13 lgprobforce -0.339591 m 600 blocksize 525 lgcostlattice 153.552656 delta 1.003287 scale 1.331876"
+    },
+    {
+      "p": 617,
+      "q": 12829,
+      "w": 231,
+      "hybrid": false,
+      "official_bits": 104.17395250527547,
+      "local_bits": 104.17395250527547,
+      "absolute_difference": 0.0,
+      "official_search_notes": "force 11 lgprobforce -0.050627 m 510 blocksize 356 lgcostlattice 104.123325 delta 1.004315 scale 1.334415"
+    },
+    {
+      "p": 653,
+      "q": 2311,
+      "w": 144,
+      "hybrid": true,
+      "official_bits": 120.31224628585137,
+      "local_bits": 120.31224628585012,
+      "absolute_difference": 1.2505552149377763e-12,
+      "official_search_notes": "m 440 blocksize 400 lgcostlattice 116.992500 delta 1.003982 sigma 240 lgprobnp -0.416255 mitm imax 25 lgprobmitm -2.875677 lgcostmitm 111.309630"
+    },
+    {
+      "p": 653,
+      "q": 4621,
+      "w": 288,
+      "hybrid": true,
+      "official_bits": 129.2330884297,
+      "local_bits": 129.2330884297,
+      "absolute_difference": 0.0,
+      "official_search_notes": "force 10 lgprobforce -0.248857 m 540 blocksize 441 lgcostlattice 128.984231 delta 1.003720 scale 1.229461"
+    }
+  ]
+}

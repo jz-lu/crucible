@@ -1,24 +1,25 @@
 """Overview summaries describe exact releases without changing their contracts."""
 import hashlib
 from contextlib import ExitStack
+from copy import deepcopy
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from crucible import dh_v3, dh_v4, kem, registry, rsa
+from crucible import dh_v3, dh_v4, kem, registry, rsa, scoring
 from crucible.db import Challenge, Submission
 from crucible.legacy import teaching_dh_v1
 from test_api import system
 
 
 @pytest.mark.parametrize("adapter,scope,count", [
-    (teaching_dh_v1, "the five legacy tiers 20, 24, 28, 32, and 36 in release 1", 5),
-    (kem, "every registered tier from 20 through 36 in release 2", 17),
-    (dh_v3, "every registered tier from 20 through 128 in release 3", 109),
-    (dh_v4, "every registered tier from 20 through 300 in release 4", 281),
-    (rsa, "every registered tier from 20 through 128 in release 1", 109),
+    (teaching_dh_v1, "the five legacy configurations 20, 24, 28, 32, and 36 in release 1", 5),
+    (kem, "every registered configuration from 20 through 36 in release 2", 17),
+    (dh_v3, "every registered configuration from 20 through 128 in release 3", 109),
+    (dh_v4, "every registered configuration from 20 through 300 in release 4", 281),
+    (rsa, "every registered configuration from 20 through 128 in release 1", 109),
 ])
 def test_overview_is_bounded_plain_text_with_exact_honest_correctness_scope(adapter, scope, count):
     descriptor = registry.descriptor(adapter)
@@ -52,7 +53,7 @@ def test_construction_properties_do_not_turn_into_cross_scheme_security_comparis
         "Every new challenge independently samples the private exponent and encapsulation exponent in the registered prime-order group.",
     ]
     assert dh["limitations"][0] == (
-        "Each tier reuses its registered group. Group-specific preparation may be reusable across challenges and should be reported separately from online work."
+        "Each configuration reuses its registered group. Group-specific preparation may be reusable across challenges and should be reported separately from online work."
     )
     assert rsa_overview["strengths"] == [
         "Key generation independently samples primes for each key; the modulus is not a shared scheme-wide parameter.",
@@ -94,7 +95,8 @@ def test_api_overview_preserves_archived_manifests_source_pins_and_byte_metrics_
     with ExitStack() as stack:
         for adapter in registry.ADAPTERS.values():
             stack.enter_context(patch.object(adapter, "generate", side_effect=AssertionError("Metadata cannot issue an instance")))
-            stack.enter_context(patch.object(adapter, "keygen", side_effect=AssertionError("Metadata cannot generate a key")))
+            if hasattr(adapter, "keygen"):
+                stack.enter_context(patch.object(adapter, "keygen", side_effect=AssertionError("Metadata cannot generate a key")))
         response = client.get("/api/schemes")
         assert response.status_code == 200
         schemes = response.json()["schemes"]
@@ -104,7 +106,19 @@ def test_api_overview_preserves_archived_manifests_source_pins_and_byte_metrics_
             identity = release["id"], release["version"]
             adapter = registry.ADAPTERS[identity]
             assert release["overview"] == registry.overview_for(*identity)
-            assert release["profiles"] == originals[identity]
+            # The frozen contract remains exact, including an older release's
+            # historical scoring flag. Only the catalogue overlays live policy.
+            assert adapter.manifests() == originals[identity]
+            display_fields = {"stage_number", "native_parameter_label", "progression_id", "stage_label", "stage_position", "stage_context"}
+            assert [{k: v for k, v in p.items() if k not in display_fields}
+                    for p in registry.descriptor(adapter)["profiles"]] == originals[identity]
+            presented = deepcopy(originals[identity])
+            for profile in presented:
+                if "scoring_eligible" in profile:
+                    profile["scoring_eligible"] = scoring.manifest_eligible(profile)
+                    profile["scoring_policy_id"] = scoring.POLICY_ID
+            assert [{k: v for k, v in p.items() if k not in display_fields}
+                    for p in release["profiles"]] == presented
             assert release["profile_metrics"] == {
                 profile["id"]: registry.profile_metrics(profile) for profile in originals[identity]
             }

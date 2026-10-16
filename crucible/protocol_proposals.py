@@ -97,6 +97,8 @@ class ReviewChecks(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     specification_complete: bool
     correctness: bool
+    tier_design: bool = False
+    parameter_selection: bool = False
     implementation_conformance: bool
     input_resource_safety: bool
     reproduction: bool
@@ -176,6 +178,10 @@ def is_reviewer(settings, user):
     return bool(user and user.id in settings.reviewer_ids)
 
 
+def can_self_review(settings, user):
+    return bool(not settings.production and settings.allow_self_review and is_reviewer(settings, user))
+
+
 def _review_data(session, record):
     reviewer = session.get(User, record.reviewer_id)
     return {"id": record.id, "revision": record.revision, "created_at": record.created_at,
@@ -183,7 +189,9 @@ def _review_data(session, record):
             "decision": record.decision, "content_sha256": record.content_sha256,
             "implementation_sha256": record.implementation_sha256,
             "checks": record.checks, "notes": record.notes, "evidence": record.evidence,
-            "scope": "Manual reviewer assessment. Approval permits trusted integration review; it does not activate a challenge or prove correctness or security."}
+            "scope": ("Development self-review only. This decision cannot satisfy independent admission review or earn scheme contribution credit."
+                      if record.checks.get("test_only_self_review") is True else
+                      "Manual reviewer assessment. Approval permits trusted integration review; it does not activate a challenge or prove correctness or security.")}
 
 
 def _revision_data(record):
@@ -217,6 +225,10 @@ def _historical_proposal(session, record, revision):
 
 def register_routes(app, db, settings, clock, user_for, throttle):
     def accessible(session, request, proposal_id, *, owner_only=False, lock=False):
+        # A reviewer may inspect others' proposals through the browser only.
+        # Participant bearer credentials never inherit review authority, even
+        # when a request also happens to carry the reviewer's browser cookies.
+        owner_only = owner_only or "authorization" in request.headers
         try:
             user = user_for(request, session)
         except HTTPException as error:
@@ -232,6 +244,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
         return record, user
 
     def reviewer_for(request, session, *, mutation=False):
+        if "authorization" in request.headers:
+            raise HTTPException(403, "Proposal review requires your browser account.")
         user = user_for(request, session, mutation=mutation)
         if not is_reviewer(settings, user):
             raise HTTPException(403, "A configured protocol reviewer is required.")
@@ -319,8 +333,9 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                      limit: int = Query(default=20, ge=1, le=50)):
         with db.transaction() as session:
             user = reviewer_for(request, session)
-            query = select(ProtocolProposal).where(ProtocolProposal.status == "submitted",
-                                                   ProtocolProposal.author_id != user.id)
+            query = select(ProtocolProposal).where(ProtocolProposal.status == "submitted")
+            if not can_self_review(settings, user):
+                query = query.where(ProtocolProposal.author_id != user.id)
             if after:
                 anchor = session.get(ProtocolProposal, after)
                 if anchor is None:
@@ -375,10 +390,17 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             record = session.scalar(select(ProtocolProposal).where(ProtocolProposal.id == proposal_id).with_for_update())
             if record is None:
                 raise HTTPException(404, "Proposal not found.")
-            if record.author_id == reviewer.id:
+            self_review = record.author_id == reviewer.id
+            if self_review and not can_self_review(settings, reviewer):
                 raise HTTPException(403, "Review another author's proposal; self-review is not allowed.")
+            reviewed_request = body.model_dump(mode="json", exclude={"idempotency_key"})
+            # Preserve exact retries of historical decisions whose request did
+            # not contain the new check. This never grants a fresh approval.
+            for added_check in ("tier_design", "parameter_selection"):
+                if added_check not in body.checks.model_fields_set:
+                    reviewed_request["checks"].pop(added_check, None)
             commitment = hashlib.sha256(_canonical_bytes({"proposal_id": record.id,
-                **body.model_dump(mode="json", exclude={"idempotency_key"})})).hexdigest()
+                **reviewed_request})).hexdigest()
             replay = session.scalar(select(ProtocolProposalReview).where(
                 ProtocolProposalReview.reviewer_id == reviewer.id,
                 ProtocolProposalReview.idempotency_key == str(body.idempotency_key)))
@@ -395,6 +417,10 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             if body.implementation_sha256 is not None and body.implementation_sha256 != expected_sha:
                 raise HTTPException(422, "The reviewed implementation hash must match this exact specification.")
             if body.decision == "approved":
+                if not record.specification.get("tier_design"):
+                    raise HTTPException(422, "Approval requires a stage-progression plan (tier_design) in this exact revision. The author must add it in a new revision before review.")
+                if not record.specification["tier_design"].get("parameter_selection"):
+                    raise HTTPException(422, "Approval requires the parameter-selection objective, constraints, model, search domain, comparison evidence and uncertainty in this exact revision.")
                 if record.specification.get("correctness", {}).get("kind") == "unknown":
                     raise HTTPException(422, "Approval requires an explicit correctness claim for review.")
                 if not expected_sha or body.implementation_sha256 != expected_sha:
@@ -403,10 +429,13 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                     raise HTTPException(422, "Approval requires every manual review check to pass.")
                 if len(body.evidence) < 20:
                     raise HTTPException(422, "Record concrete review evidence, including commands, results, or artifact identifiers.")
+            review_checks = body.checks.model_dump()
+            if self_review:
+                review_checks["test_only_self_review"] = True
             review = ProtocolProposalReview(id=str(uuid4()), proposal_id=record.id,
                 revision=record.revision, reviewer_id=reviewer.id, created_at=clock(), decision=body.decision,
                 content_sha256=record.content_sha256, implementation_sha256=body.implementation_sha256,
-                checks=body.checks.model_dump(), notes=body.notes, evidence=body.evidence,
+                checks=review_checks, notes=body.notes, evidence=body.evidence,
                 idempotency_key=str(body.idempotency_key), request_sha256=commitment)
             session.add(review)
             record.status = body.decision

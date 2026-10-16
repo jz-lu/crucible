@@ -102,6 +102,9 @@ def test_concurrent_issue_returns_one_durable_instance(boundary):
         return boundary.client.post("/api/challenges", headers=headers(boundary.csrf), json={"profile_id": "dh-20"})
 
     responses = simultaneous([issue] * 6)
+    assert all(r.status_code in {200, 503} for r in responses)
+    assert all(r.headers["retry-after"] == "3" for r in responses if r.status_code == 503)
+    responses = [issue() if response.status_code == 503 else response for response in responses]
     assert [r.status_code for r in responses] == [200] * 6
     instances = [r.json()["challenge"] for r in responses]
     assert len({c["id"] for c in instances}) == 1
@@ -376,3 +379,80 @@ def test_production_config_requires_secure_cookie_and_postgres(production_env):
     assert settings.database_url.startswith("postgresql+psycopg://")
     assert settings.rate_limits
     assert not Path(production_env["CRUCIBLE_DATA_DIR"]).exists()
+
+
+@pytest.mark.parametrize("value", ["", "prod", "Production", "production ", "staging"])
+def test_unknown_environment_is_rejected_before_local_state_creation(production_env, monkeypatch, value):
+    monkeypatch.setenv("CRUCIBLE_ENV", value)
+    monkeypatch.delenv("CRUCIBLE_SECRET")
+    monkeypatch.delenv("DATABASE_URL")
+    with pytest.raises(RuntimeError, match="CRUCIBLE_ENV must be exactly development or production"):
+        load_settings()
+    assert not Path(production_env["CRUCIBLE_DATA_DIR"]).exists()
+
+
+@pytest.mark.parametrize("value", [None, "development"])
+def test_unset_and_explicit_development_keep_local_defaults(production_env, monkeypatch, value):
+    if value is None:
+        monkeypatch.delenv("CRUCIBLE_ENV")
+    else:
+        monkeypatch.setenv("CRUCIBLE_ENV", value)
+    for name in ("DATABASE_URL", "CRUCIBLE_SECRET", "CRUCIBLE_ORIGIN"):
+        monkeypatch.delenv(name)
+    settings = load_settings()
+    assert not settings.production
+    assert settings.cookie_name == "crucible_session"
+    assert settings.origins == ("http://127.0.0.1:8000", "http://localhost:8000")
+    assert settings.database_url == f'sqlite:///{Path(production_env["CRUCIBLE_DATA_DIR"]) / "crucible.db"}'
+    assert (Path(production_env["CRUCIBLE_DATA_DIR"]) / "server.key").read_bytes() == settings.secret
+
+
+@pytest.mark.parametrize("origin", [
+    "https://crucible.example:wrong", "https://crucible.example:99999",
+    "https://crucible.example:", "https://@crucible.example",
+    "https://:password@crucible.example", "https://crucible.example/path",
+    "https://crucible.example?query", "https://crucible.example#fragment",
+    " https://crucible.example", "https://crucible.\texample",
+    "https://crucible.example\\other", "https://[not-ipv6]",
+])
+@pytest.mark.parametrize("environment", ["development", "production"])
+def test_invalid_origin_is_rejected_before_local_state_creation(production_env, monkeypatch, origin, environment):
+    monkeypatch.setenv("CRUCIBLE_ENV", environment)
+    monkeypatch.setenv("CRUCIBLE_ORIGIN", origin)
+    if environment == "development":
+        monkeypatch.delenv("CRUCIBLE_SECRET")
+        monkeypatch.delenv("DATABASE_URL")
+    with pytest.raises(RuntimeError, match="CRUCIBLE_ORIGIN must be an origin"):
+        load_settings()
+    assert not Path(production_env["CRUCIBLE_DATA_DIR"]).exists()
+
+
+@pytest.mark.parametrize("configured,canonical,environment", [
+    ("https://Crucible.EXAMPLE:443/", "https://crucible.example", "production"),
+    ("https://Crucible.EXAMPLE:8443/", "https://crucible.example:8443", "production"),
+    ("https://[2001:DB8::1]:443/", "https://[2001:db8::1]", "production"),
+    ("https://[2001:DB8::1]:8443", "https://[2001:db8::1]:8443", "production"),
+    ("http://Crucible.EXAMPLE:80/", "http://crucible.example", "development"),
+    ("http://127.0.0.1:8000/", "http://127.0.0.1:8000", "development"),
+])
+def test_origin_normalization_preserves_valid_network_policy(production_env, monkeypatch, configured, canonical, environment):
+    monkeypatch.setenv("CRUCIBLE_ENV", environment)
+    monkeypatch.setenv("CRUCIBLE_ORIGIN", configured)
+    assert load_settings().origins == (canonical,)
+    assert not Path(production_env["CRUCIBLE_DATA_DIR"]).exists()
+
+
+def test_default_https_port_accepts_browser_same_origin_mutation(production_env, monkeypatch, tmp_path):
+    monkeypatch.setenv("CRUCIBLE_ORIGIN", "https://Crucible.EXAMPLE:443/")
+    settings = replace(load_settings(), database_url=f"sqlite:///{tmp_path / 'origin-boundary.db'}")
+    application = create_app(settings, initialize=True)
+    try:
+        with TestClient(application, base_url="https://crucible.example") as browser:
+            session = browser.get("/api/session")
+            assert session.status_code == 200
+            response = browser.post("/api/auth/logout", json={}, headers={
+                "Origin": "https://crucible.example", "X-CSRF-Token": session.json()["csrf_token"],
+            })
+            assert response.status_code == 200
+    finally:
+        application.state.db.engine.dispose()

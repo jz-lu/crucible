@@ -1,3 +1,301 @@
+Current checkpoint — Notebook integration and bounded robustness pass, 16 October 2026
+
+- Native Research notebook tab: title list, tag/claim previews and full note pages.
+  Six illustrative notes; browser-local drafts and JSON exchange only. Shared
+  repository, agent API and review/publication authority remain future work.
+- Preserve authored references/artifacts/extensions when editing; do not inherit
+  revision assessment fields. Reject stale overlapping file reads. Protect
+  unsaved edits and retain append-only revision/import history.
+- Add portable notebook store regressions; repair two obsolete ladder assertions
+  to reflect the separate default progression and revised proposal language.
+- Replace the obsolete full Ubuntu test claim with explicitly scoped portable CI.
+  Native macOS artifact pins remain enforced; portability needs reviewed builds.
+- Passed: all 11 standalone JS suites (200 existing groups +16 notebook tests);
+  136 portable Python tests in a clean source-only copy; 40 stage/progression,
+  89 CLI/proposal and 9 ladder checks on the current runtime (overlapping suites).
+  Fresh migrations through0008, alembic check and Python compilation passed.
+  Isolated browser checks passed full note/revision/import flows, safe math,
+  unsaved draft protection, overlapping imports, navigation and320–1400px widths.
+- Bounded broad Python run stopped at235 seconds:1312 passing progress markers,
+  67 sandbox socket setup errors and two stale assertions. The affected CLI and
+  ladder suites passed on focused reruns. This was not a completed full-suite run;
+  offline source-build/Sage checks were deliberately excluded from this short pass.
+- Private remote confirmed; local databases, secrets, accounts and native build
+  outputs remain ignored. No public deployment or data/history reset.
+
+Current checkpoint — Stage progressions, 16 October 2026
+
+Implemented: Stage terminology; per-scheme versioned default routes; rounded
+counts where supported by useful existing configurations; optional intermediate
+configuration navigation; --stage client selector; updated proposal guidance.
+All345 mathematical configurations and existing configuration credit preserved.
+Do not interpret the new counts as a security scale or an efficiency proof.
+Pending scientific work: DH short-exponent fidelity, module/HQC joint parameter
+choices under a common acceptable failure bound, McEliece joint m/n/t efficiency,
+and a separate cross-family scoring review. See stage-progressions.txt.
+
+Historical work-list entries follow and may describe superseded checkpoints.
+
+2026-10-16 — Frodo endpoint and ladder-rule discussion
+Completed: restore Frodo640 with80 natural settings; clarify statistical correctness
+is allowed; preserve old releases/accounts/history. Drafted the authenticity,
+efficiency, anchor and milestone principles for discussion. Remaining: review
+other families under the agreed final rule, calibrate practical tier spacing and
+revisit cross-scheme ordinal points. No other ladder is regenerated in this pass.
+
+2026-10-16 — Parameter-efficiency pass and local proposal self-review
+- Completed bounded reviews across all eight current families. Require an explicit
+  cost objective, candidate domain, fixed correctness, inherited construction and
+  competing-attack coverage; do not call a limited search a global optimum.
+- Six immutable replacement releases: DH7, RSA4, curve-compressed-v2,
+  packed-research-v3 module lattice, frontier-research-v2 Frodo and NTRU3.
+  Counts are 50/50/50/11/74/27; unchanged HQC27 and McEliece50 give 339 total.
+- DH now has a disclosed short-exponent distribution including interval-search
+  cost. RSA removes exponent padding; EC compresses points; module coefficients
+  are losslessly bit-packed. These choices preserve the stated correctness and
+  expose representation/compute tradeoffs instead of promising universal wins.
+- Frodo retains every natural n=8..592 by 8, including 16 unestimated warmups. The
+  smaller endpoint first reaches the restricted 128 planning target; broader
+  published-Frodo security margins are outside this optimization claim.
+- NTRU selection evaluates 103 certified candidates with hybrid attacks included;
+  27 distinct settings remain, 13 explicitly unestimated. Keep the complete pool,
+  rejected alternatives, scoped model and conformance/correctness evidence.
+- HQC's minimum-cost supported codecs are not an equal-security frontier without
+  calibration. McEliece's shortening path remains unresolved under this lens.
+  Preserve these gaps explicitly rather than inventing estimates or new tuples.
+- New proposal approval/admission requires a parameter-selection plan and seventh
+  manual review check. Existing canonical specs/hashes stay unchanged when absent;
+  drafts remain usable, but future approval needs completed evidence.
+- Configured reviewers can review their own proposals only with explicit local
+  development opt-in. The browser and immutable record label it test-only; such
+  approval cannot satisfy independent admission or earn scheme points. Production
+  refuses the flag, and agent credentials remain unable to review.
+- Scoring v5 changes exact enrollments, not the 10*best + 40*highest-first formula.
+  Tier74 earns its full bonus; repeats and intermediate steps do not accumulate.
+  Natural counts now have unequal ceilings; cross-family incentives remain
+  provisional. Archived results and account/session records are preserved.
+- Update current setup, scoring and proposal documentation; retain historical
+  entries below. Final whole-suite/browser and local rollout results are recorded
+  separately after verification. No public hosting or automatic commit/push is
+  part of this implementation pass.
+
+2026-10-15 — Natural ladders and enforceable proposal design review
+- Keep one correctness requirement per versioned ladder; use natural consecutive
+  tier counts and meaningful intermediate settings, not a mandatory fifty.
+- Module-lattice dimension-research-v2 has eleven degree/rank settings with
+  growing encodings and minimal correctness-preserving prime moduli. Six upper
+  profiles have reproduced flattened-LWE references; smaller estimates remain
+  unknown. The natural endpoint overshoots the intended 128-bit reference to
+  about 138; no full-KEM security claim is made.
+- HQC growth-research-v2 has 27 weights with 23 minimally sized supported codecs,
+  giving growing ring/code costs while retaining zero mathematical disagreement.
+  Its endpoint remains partial and uncalibrated. Retain the other six mappings
+  with their resource and estimation limitations explicitly recorded.
+- Keep every archived release and original receipt; do not transfer recoveries
+  to different parameter geometry. Scoring v4 replaces only the module/HQC
+  enrollments, keeping maximum-only formulas. Unequal natural tier counts now
+  give unequal per-family point ceilings; points remain provisional incentives.
+- Add bounded structured tier_design to proposals and a sixth explicit reviewer
+  check. New approval/admission requires both. Bind every admitted profile to
+  the reviewed common correctness declaration, allowing perfect profiles under
+  a statistical envelope. Legacy specs/hashes/approvals remain readable; missing
+  evidence needs a new revision/review for future admission. No automatic code
+  execution, mathematical-expression evaluation or claimed security certification.
+- Update the template, agent instructions, CLI field handling and review UI.
+  New release explanations live in Scheme specifics, keeping the home uncluttered.
+- Fix the module example to work in a fresh CLI workspace with locally verified
+  reference pins, without requiring an installed repository.
+- Validation: the broad backend run passed 1,521 tests, with two new test-only
+  assertions corrected and passing on follow-up. The 32-test follow-up also
+  includes five standalone example regressions added after collection. Two
+  optional old NTRU certification/reference checks were skipped in that runner.
+  All ten frontend suites pass. Python3.14 compatibility checks cover the new
+  module, registry, proposal bindings and archival behavior.
+- Independent mathematical and native checks include all eleven module vectors,
+  all 27 HQC exchanges and 5,888 decoder fixtures under UBSan. ASan failed during
+  host initialization, so ASan validation is not claimed. HQC's base static
+  library is a trusted, hash-pinned input, not a proven reproducible build.
+- Real isolated HTTP/CLI workflows passed for both new Tier 1 examples: connect,
+  download/verify, public-only solve, submit source/method/compute and idempotent
+  replay. Desktop and 320/375px browser checks passed, including archived
+  navigation, with no script errors or page overflow.
+- See ladder-design-review.txt, protocol-admission.txt and the revised expansion
+  decision record. No new hosted deployment or commit/push is part of this pass.
+
+Local update verified: all stored database rows and the server key are unchanged.
+The eight current releases expose 338 profiles, and the existing participant
+score remains 850. The background server is running at http://127.0.0.1:8000/.
+
+2026-10-14 — Fixed correctness across challenge tiers
+- Record the user's requirement that a scheme's tier ladder retain one declared
+  correctness bound; increasing difficulty must not relax honest agreement.
+- Clarify guarantee versus spare margin: the module-lattice research ladder
+  already guarantees zero mathematical honest-decryption failures at all tiers.
+  Its minimum decoding threshold 11834 exceeds the worst-case noise bound 6146.
+- Updated the correctness policy and design priorities. Generation/resource
+  aborts remain separate; no tier parameters, runtime code or history changed.
+
+2026-10-14 — Local polish with private-beta hosting in view
+- Next hosting stage must restrict site content to approved beta participants;
+  public launch follows later. Keep local bug fixes modest, review outstanding
+  issues together, then commit/push before building the hosted service.
+- docs/hosting-plan.txt records one shared browser/agent membership policy,
+  invite/approval onboarding, revocation and preserved owner/reviewer boundaries.
+  These are planned requirements, not a currently implemented beta access gate.
+- Audience and production security are independent: a private hosted beta still
+  needs production security settings. The current development-only research
+  release exception needs a separate explicit beta release policy before hosting.
+- Preserve beta contribution privacy when opening the site later; the private
+  GitHub repository itself does not restrict website/API access.
+- Fixed the visible Unsolved/Broken by card staying stale after another user or
+  agent recovers its tier. Refresh only when relevant recovery metadata changes;
+  preserve expanded notes, avoid duplicate reads and discard navigation races.
+- Reject misspelled environment settings and malformed configured origins before
+  creating local state. Normalize host/default ports so browser Origin matches
+  the configured deployment; valid IPv6 and custom ports remain supported.
+- CLI errors expose a bounded retry_after_seconds hint from Retry-After, without
+  leaking arbitrary header values or automatically retrying submissions.
+- Verified 60 configuration/request-boundary checks, 83 CLI/proposal CLI tests
+  and all 192 frontend checks. No beta access gate or hosted deployment added.
+
+2026-10-14 — Performance and reliability pass
+- Measured the live slow paths before changing them: catalogue median 463ms /
+  4.65MB, leaderboard 252ms, profile 624ms. Browser checks reproduced closed
+  disclosures and a stale Take on this tier callback after background refresh.
+- Cache immutable presentation metadata with explicit provider/pin identity;
+  retain live artifact, admission, generation and score checks. Public catalogue
+  serialization avoids a second recursive walk and negotiates gzip. Compact
+  participant reads skip unused records and historical milestone queries.
+- Coordinate overlapping refreshes, discard stale results/session responses,
+  preserve forms and disclosures, and avoid unchanged redraws. Visible profiles
+  pick up agent/other-tab results; focused tier controls defer recovery metadata
+  redraws until safe. Stable IDs keep Take on this tier usable after refresh.
+- Bound JSON-body reads as well as connection time. The CLI accepts large public
+  challenge submission receipts under its existing challenge response allowance.
+- Prevent duplicate same-instance generation within a process through durable
+  commit; retain cross-process database arbitration and all final authorization,
+  deadline, pin and correctness checks. Document the process-local boundary.
+- Independent authenticated-account evidence quotas allow a complete tier run
+  while retaining separate coarse IP budgets and existing upload byte limits.
+- Added lifecycle, concurrency, account-budget and read-performance regressions;
+  refreshed receipt/catalogue assertions for the existing points-v3 presentation.
+  Architecture/scoring documentation records the new read and cache boundaries.
+- Live verification: catalogue 39ms / 181KB transferred, leaderboard 18ms,
+  profile 140ms (local warm-request medians). Fresh-browser first catalogue
+  appeared in 152ms versus 855ms before; no console errors or long main-thread
+  tasks. Open profile sections and Take on this tier survive background sync.
+- Verification covers 1,348 backend cases (full run plus corrected-policy test
+  reruns) and 184 frontend checks. Local deployment preserves all six successful
+  submissions and the existing 850 points; accounts, sessions and keys retained.
+
+2026-10-14 — Restore red graph highlighting
+- Numeric-tier graphs shade the range to the single highest-recovery line,
+  including McEliece and other exact-profile schemes. Slightly stronger red
+  opacity makes the fill visible; it uses the same coordinate as the line.
+- This supersedes the earlier no-shading display choice. Individual recovery
+  evidence, challenge status and scores stay exact; named sets remain unshaded.
+
+2026-10-14 — All-scheme points and compact highest records
+- User authorized recovery points for all eight current scheme releases. Policy
+  v3 applies 10 times the highest recovered tier per scheme, plus one bonus of
+  40 times the highest first-place tier. Existing valid receipts qualify without
+  resubmission. Repeats and intermediate tiers do not accumulate extra awards.
+- Exact-profile families retain exact first places; DH/RSA/EC preserve their
+  registered inherited standings. Points do not assert equivalent difficulty.
+  Archived releases do not silently enroll or duplicate family totals.
+- First 10 milestones is replaced by First to reach: one highest first-place
+  result per scheme. Personal records likewise shows one highest actual tier
+  per scheme. Current releases take priority; incompatible archived tiers are
+  not compared. All original submissions and legacy API history are retained.
+- Both compact tables and Recent solves remain collapsible by default, with
+  counts and 12px space above the expanded contents. Points-related beta copy
+  follows the current policy while independent scientific review stays pending.
+- Verified 112 targeted backend tests and an independent 760-receipt scoring
+  comparison. Updated frontend checks cover first-only display and receipt links.
+
+2026-10-14 — Collapsible profile lists and one recovery line
+- First 10 milestones, Personal records/bests and Recent solves are closed by
+  default, with a full-width clickable heading, readable count and chevron.
+  Native details controls support keyboard interaction; result links and the
+  separate paginated milestone history stay available inside each section.
+- Numeric-tier graphs show one red line at the highest actually recovered tier.
+  Exact-profile families such as McEliece do not infer recovery of lower tiers
+  or shade unverified regions. Archived named sets remain distinct markers.
+- Verified 72 relevant frontend checks, desktop/mobile disclosure interactions
+  and all four McEliece graphs against current local data.
+
+2026-10-14 — Compact profile milestones and discovery prompt
+- First 10 highlights now use a Scheme / Milestone / Reached table, retaining
+  emphasized rank/tier links, original submission details and archived labels.
+  Mobile rows stack compactly; full history and pagination stay available.
+- Verified 22 targeted frontend checks and a read-only real-browser check of six
+  live milestones at desktop and 320px widths, including a submission dialog.
+- Drafted docs/kem-discovery-agent-prompt.txt: flexible mathematical exploration
+  before systematic cryptographic comparison, followed by precise mechanisms,
+  correctness, adversarial testing and honest novelty/security assessment.
+  This is a reusable research prompt, not a claim of a new secure construction.
+
+2026-10-14 — Agent scheme proposals and one-click challenge entry
+- Propose a scheme now has Use with an agent; Manual tools retains file upload,
+  annotated template and schema. Preparation works before sign-in.
+- Added CLI proposal init/validate/submit/list/show/revise. Workspaces bind the
+  server, and frozen submission/revision retries bind the author and exact body.
+  Receipts link to the existing private proposal; feedback and history remain.
+- New agent connections include owner-only proposal read/write. Existing tokens
+  and pending requests keep their permissions (migration 0008 snapshots scopes).
+  Manual review/approval and trusted activation remain separate browser actions.
+- Take on this tier requests the selected current-round instance in the same
+  click. Sign-in resumes that explicit selection; cancellation/navigation clears
+  it, and existing instances are reused. Ordinary navigation stays read-only
+  until the existing Ready/round-access conditions authorize a request.
+- Proposal workflow verified through an isolated real browser and CLI: draft,
+  validation, connection approval, submission/retry, reviewer-requested changes,
+  feedback retrieval and revision submission. No live test proposals created.
+
+2026-10-14 — Softer catalogue header
+- Replace the dark blue table header with a neutral light gray and a slightly
+  larger KEM label; keep the family groupings pale blue and subordinate.
+
+2026-10-14 — Catalogue heading hierarchy
+- Give the top KEM table header a dark blue band with light column labels,
+  distinct from the pale Lattice-based and Code-based subgroup rows. This
+  makes clear that the whole catalogue contains KEMs; no new groups or clicks.
+
+RESEARCH-TIER EXPANSION — AUTHORIZED 2026-10-14
+
+User clarified that new families should retain the existing tier experience,
+then authorized developing justified mathematical ladders and reporting the
+decisions. The earlier hold on the named-configuration-only candidate is
+superseded. Exact published implementations remain useful reference releases.
+
+- Eight family pages; no extra MinRank entry. The user explicitly deferred that
+  suggestion until this work is complete; its bounded candidate note is retained.
+- Genuine varied parameters, full randomness and complete shared secrets.
+  No reduced seeds or small private-key-range facades around fixed schemes.
+- EC, Frodo, NTRU and McEliece50-tier implementations verified; HQC27 weights
+  have a deterministic correctness argument. Module lattices have50 profiles,
+  full randomness and a perfect honest-correctness support bound.
+- Research derivatives are distinct from exact published parameter sets.
+  No invented security estimates, timing data, admission approvals or awards.
+- Exact-only recovery evidence for uncalibrated/non-inherited families, including
+  profile badges. Existing DH/RSA records and recognition remain unchanged.
+- Full source/native artifact binding; outcome accounting includes withheld and
+  discarded draws; agreement failures are held without retries.
+- CLI downloads pinned first-party helper/parameter files for inspection.
+- Final candidate verification:1253 backend tests passed, all nine frontend
+  suites passed, real desktop/mobile checks and agent CLI roundtrip passed.
+  NTRU Tier2 was genuinely solved from public inputs and accepted in an isolated
+  fixture; exact recovery highlighting, source ZIP, unscored badges verified.
+- Deployed to the main local checkout and detached server on127.0.0.1:8000.
+  Private database/key backup made; every pre-existing database row and the
+  server key were verified unchanged across migration0007. Accounts, sign-ins
+  and history are preserved. Expansion is not committed or pushed.
+
+Rollback checkpoint bbb7714fb282a88b88be909b3f89f5fcd45544ab was committed and
+pushed to origin/main before expansion, verified by ls-remote. 750 backend tests
+and all nine frontend test files passed on that checkpoint. No private data was
+committed. See docs/tier-expansion-decisions.txt for the current decision record.
+
 CRUCIBLE — RUNNING WORK LIST
 Updated 2026-10-14
 
@@ -9,27 +307,11 @@ Proposed: an idea for discussion, not adopted behavior.
 
 Current UI batch — verified and live locally
 
-
-Two-scheme checkpoint and expansion clarification — 2026-10-14
-
-- User requested a committed/pushed checkpoint of the current DH/RSA site before
-  adding more schemes to the main version. Preserve all accounts and history.
-- Six new adapters were developed in an isolated workspace against sixteen
-  published parameter sets; they have NOT been copied into this live checkout.
-- User clarified that new schemes should retain the challenge-tier experience.
-  Named published configurations are useful references, but do not replace the
-  intended tier ladders. Hold the expansion off main until its parameter mapping,
-  correctness scope and treatment of fixed-parameter constructions are resolved.
-- Main site remains the two existing schemes; the prior static trial is optional
-  historical work, not a separate product to maintain.
-- Checkpoint backend validation: 750 tests passed. Database files, passwords,
-  server key and session credentials remain ignored and outside the commit.
-
 KEM selection reviews and guideline audit — 2026-10-14
 
-- Naming refinement: replace the vague Classical browsing heading with
-  Diffie–Hellman & RSA. Classical/Quantum attack-model selectors retain their
-  technical meaning.
+- Grouping refinement: DH, RSA and X25519 are standalone entries; only lattice
+  and code families have headings. A scheme need not belong to a display group.
+  Classical/Quantum attack-model selectors retain their technical meaning.
 - User authorized sourced selection reviews and an updated isolated trial first;
   new executable challenges remain a later pass. Vet the established proposal,
   correctness and admission rules alongside the candidate schemes.

@@ -4,18 +4,19 @@ const $ = selector => document.querySelector(selector);
 // Keep the research interface dormant while the first MVP focuses on numerical challenges.
 const RESEARCH_ENABLED = false;
 const state = {
-  user: null, csrf: '', canReviewProposals: false, schemes: [], profile: null, challenge: null,
+  user: null, csrf: '', canReviewProposals: false, canSelfReviewProposals: false, schemes: [], profile: null, challenge: null,
   methods: [], view: 'leaderboard', authMode: 'login', round: null,
   timeOffset: 0, ready: false, challengeLoading: false, issueBusy: false,
   submitBusy: false, pendingAttempt: null, roundRefreshing: false,
   challengeRequest: 0, leaderboardRequest: 0, submissionChallenge: null,
-  historyRequest: 0, recoveryRequest: 0,
-  peopleRequest: 0, personRequest: 0, personHandle: null,
+  leaderboardDataKey: null, leaderboardPendingKey: null,
+  historyRequest: 0, recoveryRequest: 0, catalogueRequest: 0, sessionRevision: 0,
+  peopleRequest: 0, personRequest: 0, personHandle: null, personDataKey: null,
   people: [], peoplePagination: null,
   connectCode: null, connectRequest: 0, connection: null, connectBusy: false,
   agentTokenRequest: 0,
   agentTokens: [], agentTokenPagination: null,
-  agentInstructionsKey: null,
+  agentInstructionsKey: null, challengeStartIntent: null, profileMetadataPending: null,
   screen: 'catalogue', schemeId: null, schemeVersion: null,
   overviewMetrics: {computation: 'keygen', security: 'classical'},
   importBusy: false, recoveryImportRequest: 0, submissionFormRevision: 0,
@@ -23,6 +24,8 @@ const state = {
 };
 let toastTimer;
 let roundRetryAt = 0;
+let sessionSynchronization = null;
+let notebookWorkspace = null;
 const dialogTriggers = new WeakMap();
 const authDialog = $('#auth-dialog');
 const submissionDialog = $('#submission-dialog');
@@ -40,7 +43,8 @@ const proposals = {
   validating: false, submitting: false, validationRequest: 0, submitRequest: 0,
   listRequest: 0, detailRequest: 0, listUser: null, detailId: null,
   reviewMode: false, revisingId: null, revisionBase: null, detailRecord: null,
-  reviewRequest: 0, reviewBusy: false, reviewPending: null
+  reviewRequest: 0, reviewBusy: false, reviewPending: null,
+  agentRevision: null, agentRouteKey: null, agentKeys: {draft: null, revision: null}
 };
 
 // Versioned data contract: imports never execute code or submit an answer.
@@ -119,7 +123,7 @@ function recoveryTemplate(challenge) {
       fields: 'Required: format, challenge_id, candidate, method.name, method.pseudocode, compute.hardware, compute.workers, compute.wall_seconds, compute.precomputation, compute.peak_memory. Optional: compute.notes and this _instructions object. No other fields are accepted.',
       instructions: 'You may keep or remove _instructions. If kept, it must be an object of text values. It is guidance only, ignored when submitting; editing it cannot change validation rules.',
       format: 'Keep format exactly "crucible-recovery-v1". Empty strings and the null attack-time placeholder must be filled in before import.',
-      challenge_id: 'Use the exact challenge.id from the downloaded challenge contract or this template. The website looks up that instance and selects its scheme, release, and tier automatically, even if another tier is displayed. It must belong to the signed-in account, still be open, and have no final answer. Do not replace this ID with a tier number.',
+      challenge_id: 'Use the exact challenge.id from the downloaded challenge contract or this template. The website looks up that instance and selects its scheme, release, and parameter profile automatically, even if another profile is displayed. It must belong to the signed-in account, still be open, and have no final answer. Do not replace this ID with a stage number or parameter-set name.',
       candidate: `The complete ${keyBytes}-byte shared secret: exactly ${keyBytes * 2} hexadecimal characters. Uppercase or lowercase accepted; no spaces, line breaks, or 0x prefix.`,
       'method.name': 'Required nonblank text, at most 100 Unicode characters; a short descriptive name for the attack.',
       'method.pseudocode': 'Required nonblank text, at most 15000 Unicode characters. Describe the algorithm, key derivation, and preparation. The method object must also fit within a 65536-byte JSON request, including escapes. Pseudocode is stored as text, never executed.',
@@ -172,7 +176,39 @@ function duration(seconds) {
 }
 function now() { return (Date.now() + state.timeOffset) / 1000; }
 function profileId(profile = state.profile) { return profile?.profile_id || profile?.id || ''; }
-function instanceSize(profile) { return profile?.instance_size ?? profile?.parameter_bits; }
+function instanceSize(profile) { return profile && Object.hasOwn(profile, 'stage_number') ? profile.stage_number : profile?.instance_size ?? profile?.parameter_bits; }
+function stagePosition(profile) { return profile?.stage_position ?? instanceSize(profile); }
+function intermediateConfiguration(profile) { return profile != null && Object.hasOwn(profile, 'stage_number') && profile.stage_number === null; }
+function namedParameters(scheme, profile = null) {
+  return scheme?.selection_kind === 'parameter-set' || profile?.profile_kind === 'standard-parameter-set';
+}
+function researchTiers(scheme, profile = null) {
+  return profile?.profile_kind === 'research-tier' || scheme?.profile_kind === 'research-tier' ||
+    scheme?.profiles?.some(item => item.profile_kind === 'research-tier');
+}
+function exactProfileRecords(scheme, profile = null) {
+  return scheme?.record_inheritance === false || profile?.record_inheritance === false || namedParameters(scheme, profile);
+}
+function profileLabel(profile, scheme = null) {
+  return namedParameters(scheme, profile) ? profile?.profile_label || profile?.name || profileId(profile) :
+    profile?.stage_label || (instanceSize(profile) == null ? profile?.native_parameter_label || profileId(profile) : 'Stage ' + instanceSize(profile));
+}
+function orderedProfiles(scheme) {
+  return (scheme?.profiles || []).filter(profile => !scheme?.default_progression || Number.isSafeInteger(instanceSize(profile))).slice().sort((a, b) => namedParameters(scheme) ?
+    (a.profile_order ?? 0) - (b.profile_order ?? 0) : instanceSize(a) - instanceSize(b));
+}
+function recoveredProfileIds(scheme) {
+  if (Array.isArray(scheme?.recovered_profile_ids)) return scheme.recovered_profile_ids;
+  if (Array.isArray(scheme?.profile_recoveries)) return scheme.profile_recoveries.map(record => record.profile_id);
+  return scheme?.largest_recovered_profile_id ? [scheme.largest_recovered_profile_id] : [];
+}
+function recordProfileLabel(record) {
+  const scheme = availableReleases().find(item => item.id === record.scheme_id && String(item.version) === String(record.scheme_version));
+  const profile = scheme?.profiles?.find(item => profileId(item) === record.profile_id);
+  if (profile) return profileLabel(profile, scheme);
+  if (namedParameters(scheme, record)) return record.profile_label || record.profile_id;
+  return Number.isSafeInteger(record.tier ?? record.instance_size) ? 'Stage ' + (record.tier ?? record.instance_size) : record.profile_id;
+}
 function initialSecurityEstimate(scheme, profile) {
   const model = scheme?.initial_security_model;
   const estimate = profile?.initial_security_estimate;
@@ -180,10 +216,17 @@ function initialSecurityEstimate(scheme, profile) {
     Number.isFinite(estimate.bits) && estimate.bits >= 0 ? estimate.bits : null;
 }
 function estimateBits(value) { return value.toLocaleString('en-US', {maximumFractionDigits: 1}); }
+function attackReferenceModel(scheme) {
+  const model = scheme?.initial_security_model;
+  return researchTiers(scheme) || model?.kind === 'attack-reference' || model?.status === 'limited-reference' || model?.estimate_kind === 'attack-upper-bound';
+}
 function tierNote(scheme, profile) {
+  if (namedParameters(scheme, profile)) return 'Named parameter sets are distinct challenge targets, not a stage progression. Recoveries do not transfer between them.';
+  const context = profile?.stage_context;
+  if (intermediateConfiguration(profile)) return context?.before_stage != null && context?.after_stage != null ? `Between Stages ${context.before_stage} and ${context.after_stage}. ${profile.native_parameter_label || 'A reviewed intermediate configuration.'}` : 'A reviewed configuration outside the default progression.';
   const estimate = initialSecurityEstimate(scheme, profile);
-  return estimate === null ? 'Each scheme maps its tiers to its own parameters.' :
-    `Initial classical estimate: ≈${estimateBits(estimate)} bits.`;
+  if (estimate !== null) return `${attackReferenceModel(scheme) ? 'Initial classical attack reference' : 'Initial classical estimate'}: ≈${estimateBits(estimate)} bits.`;
+  return researchTiers(scheme, profile) ? 'Stages follow this scheme’s default progression through reviewed configurations. Security estimates are not yet available.' : 'Stages follow this scheme’s default progression through reviewed configurations.';
 }
 function availableReleases() { return state.schemes.flatMap(scheme => [scheme, ...(scheme.previous_releases || [])]); }
 function selectedScheme() {
@@ -209,7 +252,7 @@ function connectionCode(value) {
   return /^[A-Z0-9]{8}$/.test(code) ? code.slice(0, 4) + '-' + code.slice(4) : null;
 }
 function workspaceSelector(screen) {
-  return {scheme: '#workspace', overview: '#overview-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
+  return {scheme: '#workspace', overview: '#overview-workspace', notebook: '#notebook-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
 }
 function applyRoute(focus = false) {
   if (!state.ready) return;
@@ -223,8 +266,8 @@ function applyRoute(focus = false) {
   }
   const [path, query = ''] = hash.split('?');
   let scheme, profile, handle, view = 'leaderboard';
-  let screen = path === '#connect' ? 'connect' : path === '#people' ? 'people' : path === '#propose' ? 'propose' : path === '#about' ? 'about' : path === '#research' ? 'research' : 'catalogue';
-  let invalid = !['#challenge', '#research', '#about', '#propose', '#people', '#connect'].includes(path);
+  let screen = path === '#connect' ? 'connect' : path === '#people' ? 'people' : path === '#propose' ? 'propose' : path === '#about' ? 'about' : path === '#notebook' ? 'notebook' : path === '#research' ? 'research' : 'catalogue';
+  let invalid = !['#challenge', '#notebook', '#research', '#about', '#propose', '#people', '#connect'].includes(path);
   const personMatch = path.match(/^#person\/([^/]+)$/);
   if (personMatch) {
     try {
@@ -272,6 +315,7 @@ function applyRoute(focus = false) {
   state.schemeId = ['scheme', 'overview'].includes(screen) ? scheme.id : null;
   state.schemeVersion = ['scheme', 'overview'].includes(screen) ? String(scheme.version) : null;
   state.profile = screen === 'scheme' ? profile : null;
+  if (state.challengeStartIntent && !challengeStartSelectionMatches(state.challengeStartIntent, view)) state.challengeStartIntent = null;
   const changed = previous !== selectionKey();
   if (screen !== 'scheme' || changed) resetAgentInstructions();
   if (changed) {
@@ -290,17 +334,23 @@ function applyRoute(focus = false) {
   else if ($('#global-message-text').textContent === routeError) globalError('');
   if (screen === 'scheme') {
     $('#scheme-back').href = overviewRoute(scheme, profile);
-    renderProfiles();
+    renderProfiles(null, {details: changed || previousScreen !== 'scheme'});
     renderView(view);
     if (changed || previousScreen !== 'scheme' || (view === 'challenge' && previousView !== view)) loadChallenge();
     if (view === 'leaderboard' && (changed || previousView !== view || previousScreen !== 'scheme')) loadLeaderboard();
   }
+  if (screen === 'catalogue') renderCatalogue();
   if (screen === 'overview') renderOverview(scheme, profile);
   if (screen === 'people') loadPeople();
   if (screen === 'person') loadPerson(handle);
   if (screen === 'connect') loadConnection();
+  if (screen === 'notebook') {
+    notebookWorkspace ||= window.CrucibleNotebook.mount($('#notebook-workspace'), {navigate});
+    notebookWorkspace.show(new URLSearchParams(query));
+  }
   document.title = ['scheme', 'overview'].includes(screen) ? scheme.name + (screen === 'overview' ? ' overview' : '') + ' — Crucible' : screen === 'person' ? handle + ' — Crucible' : screen === 'people' ? 'Leaderboard — Crucible' : screen === 'research' ? 'Research — Crucible' : screen === 'about' ? 'About us — Crucible' : screen === 'propose' ? 'Propose a scheme — Crucible' : 'Schemes — Crucible';
   if (screen === 'connect') document.title = 'Connect an agent — Crucible';
+  if (screen === 'notebook') document.title = 'Research notebook — Crucible';
   if (focus && previousScreen !== screen) $(workspaceSelector(screen)).focus();
 }
 function sharedKeyBytes(challenge) {
@@ -322,45 +372,56 @@ function absorbClock(data) {
   updateClock();
 }
 async function api(path, body) {
-  let response;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20000);
   try {
-    response = await fetch(path, {
+    let response;
+    try { response = await fetch(path, {
       method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
       headers: body === undefined ? {Accept: 'application/json'} : {
         Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': state.csrf
       },
       ...(body === undefined ? {} : {body: JSON.stringify(body)})
-    });
-  } catch {
-    const error = new Error(controller.signal.aborted ? 'The server took too long to respond. Please try again.' : 'The server could not be reached. Check your connection and try again.');
-    error.status = 0;
-    throw error;
+    }); } catch {
+      const error = new Error(controller.signal.aborted ? 'The server took too long to respond. Please try again.' : 'The server could not be reached. Check your connection and try again.');
+      error.status = 0;
+      throw error;
+    }
+    let data;
+    try { data = await response.json(); } catch {
+      if (controller.signal.aborted || response.ok) {
+        const error = new Error(controller.signal.aborted ? 'The server took too long to respond. Please try again.' : 'The server returned an unreadable response. Please try again.');
+        error.status = 0;
+        throw error;
+      }
+      data = {};
+    }
+    if (!response.ok) {
+      const detail = typeof data?.detail === 'string' ? data.detail : null;
+      const fallback = response.status === 429 ? 'Too many requests. Wait a moment and try again.' :
+        response.status === 401 ? 'Your session has ended. Sign in again to continue.' :
+        response.status === 403 ? 'This request could not be authorized. Refresh your session and try again.' :
+        'The request could not be completed. Please try again.';
+      const error = new Error(detail || fallback);
+      error.status = response.status;
+      if (Array.isArray(data?.errors)) error.fieldErrors = data.errors.filter(item => item && typeof item.path === 'string' && typeof item.message === 'string');
+      throw error;
+    }
+    absorbClock(data);
+    return data;
   } finally { clearTimeout(timeout); }
-  let data;
-  try { data = await response.json(); } catch { data = {}; }
-  if (!response.ok) {
-    const detail = typeof data.detail === 'string' ? data.detail : null;
-    const fallback = response.status === 429 ? 'Too many requests. Wait a moment and try again.' :
-      response.status === 401 ? 'Your session has ended. Sign in again to continue.' :
-      response.status === 403 ? 'This request could not be authorized. Refresh your session and try again.' :
-      'The request could not be completed. Please try again.';
-    const error = new Error(detail || fallback);
-    error.status = response.status;
-    if (Array.isArray(data.errors)) error.fieldErrors = data.errors.filter(item => item && typeof item.path === 'string' && typeof item.message === 'string');
-    throw error;
-  }
-  absorbClock(data);
-  return data;
 }
 function setSession(data) {
+  state.sessionRevision++;
   const previousId = state.user?.id;
   const previousReview = state.canReviewProposals;
+  const previousSelfReview = state.canSelfReviewProposals;
   state.user = data.user || null;
   state.csrf = data.csrf_token || '';
   state.canReviewProposals = Boolean(state.user && data.capabilities?.review_protocol_proposals);
+  state.canSelfReviewProposals = Boolean(state.canReviewProposals && data.capabilities?.self_review_protocol_proposals);
   if (previousId !== state.user?.id) {
+    state.challengeStartIntent = null;
     state.connectRequest++;
     state.connection = null;
     state.connectBusy = false;
@@ -394,7 +455,7 @@ function setSession(data) {
     if (findingDialog.open) findingDialog.close();
     if (research.visible) renderFindings();
   }
-  if (previousId === state.user?.id && previousReview !== state.canReviewProposals) resetProposalAccount(previousId);
+  if (previousId === state.user?.id && (previousReview !== state.canReviewProposals || previousSelfReview !== state.canSelfReviewProposals)) resetProposalAccount(previousId);
   $('#auth-button').hidden = Boolean(state.user);
   $('#auth-button').disabled = false;
   $('#account-handle').hidden = !state.user;
@@ -463,8 +524,10 @@ async function refreshRound() {
   if (state.roundRefreshing) return;
   state.roundRefreshing = true;
   const oldRound = state.round?.id;
+  const sessionRevision = state.sessionRevision;
   try {
     const data = await api('/api/session');
+    if (state.sessionRevision !== sessionRevision) return;
     setSession(data);
     if (state.round?.id !== oldRound || (state.challenge && state.challenge.round_id !== state.round.id)) {
       await loadChallenge();
@@ -480,25 +543,77 @@ async function refreshRound() {
 }
 async function synchronizeSession() {
   if (!state.ready || state.roundRefreshing) return;
-  const oldRound = state.round?.id;
-  const oldUser = state.user?.id;
-  try {
-    const data = await api('/api/session');
-    setSession(data);
-    await refreshProfiles();
-    globalError('');
-    if (oldRound !== state.round?.id || oldUser !== state.user?.id) {
-      await loadChallenge();
-      if (state.view === 'leaderboard') await loadLeaderboard();
-    }
-  } catch (error) { globalError(error.message); }
+  if (sessionSynchronization) return sessionSynchronization;
+  sessionSynchronization = (async () => {
+    const oldRound = state.round?.id;
+    const oldUser = state.user?.id;
+    let revision = state.sessionRevision;
+    try {
+      const data = await api('/api/session');
+      // A login/logout completed after this read began. Its response owns the
+      // account state; the older read must not restore the previous account.
+      if (revision !== state.sessionRevision) return;
+      setSession(data);
+      revision = state.sessionRevision;
+      const changed = oldRound !== state.round?.id || oldUser !== state.user?.id;
+      if (['catalogue', 'overview', 'scheme'].includes(state.screen) && await refreshProfiles({background: true}) === false) return;
+      if (state.screen === 'person') await loadPerson(state.personHandle, {preserve: true});
+      if (revision !== state.sessionRevision) return;
+      globalError('');
+      if (state.screen === 'scheme') {
+        // Do not await a child that may itself request a session refresh on 401.
+        if (changed && state.view === 'challenge') loadChallenge();
+        else if (state.view === 'leaderboard' && !document.hidden) {
+          const key = leaderboardRecoveryKey();
+          if (changed || (key !== state.leaderboardDataKey && key !== state.leaderboardPendingKey)) loadLeaderboard({preserve: true});
+        }
+      }
+    } catch (error) { if (revision === state.sessionRevision) globalError(error.message); }
+  })();
+  try { await sessionSynchronization; }
+  finally { sessionSynchronization = null; }
 }
 
-async function refreshProfiles() {
-  const data = await api('/api/schemes');
+function catalogueDisplayKey(scheme) {
+  return JSON.stringify(scheme && [scheme.id, scheme.version, scheme.name, scheme.display_group,
+    scheme.participant_count, scheme.largest_recovered_profile_id, scheme.next_profile_id,
+    scheme.first_recovery, recoveredProfileIds(scheme)]);
+}
+async function refreshProfiles({background = false} = {}) {
+  const request = ++state.catalogueRequest;
+  const oldCatalogue = JSON.stringify(state.schemes.map(catalogueDisplayKey));
+  const oldSelection = catalogueDisplayKey(selectedScheme());
+  let data;
+  try { data = await api('/api/schemes'); }
+  catch (error) {
+    if (request !== state.catalogueRequest) return false;
+    throw error;
+  }
+  if (request !== state.catalogueRequest) return false;
   state.schemes = data.schemes || [];
-  renderCatalogue();
-  applyRoute();
+  const scheme = selectedScheme();
+  const selectionChanged = oldSelection !== catalogueDisplayKey(scheme);
+  if (state.screen === 'catalogue' && (!background || oldCatalogue !== JSON.stringify(state.schemes.map(catalogueDisplayKey)))) renderCatalogue();
+  if (['scheme', 'overview'].includes(state.screen) && !scheme) return applyRoute();
+  if (state.screen === 'overview' && (!background || selectionChanged)) {
+    const openCards = Object.keys(OVERVIEW_CARDS).filter(id => $('#overview-chart-' + id)?.querySelector('details')?.open);
+    const context = new URLSearchParams(window.location.hash.split('?')[1] || '').get('profile');
+    renderOverview(scheme, scheme.profiles.find(profile => profileId(profile) === context));
+    for (const id of openCards) { const details = $('#overview-chart-' + id).querySelector('details'); if (details) details.open = true; }
+  }
+  if (state.screen === 'scheme') {
+    const profile = scheme.profiles.find(item => profileId(item) === profileId());
+    if (!profile) return applyRoute();
+    state.profile = profile;
+    // Metadata refresh is not navigation. Preserve editors, disclosure state,
+    // in-flight connections, and a slider/jump input currently being edited.
+    const editing = [$('#size-slider'), $('#profile-select')].includes(document.activeElement);
+    if (!background || selectionChanged || state.profileMetadataPending === selectionKey()) {
+      if (editing) state.profileMetadataPending = selectionKey();
+      else renderProfiles(null, {details: !background && state.view === 'protocol'});
+    }
+  }
+  return true;
 }
 
 function profileBytes(scheme, profile, metric) {
@@ -511,12 +626,7 @@ function participantCount(scheme) {
 }
 function renderCatalogue() {
   const target = $('#kem-catalogue');
-  const commonReference = state.schemes.length && state.schemes.every(scheme => {
-    const profile = scheme.profiles?.find(item => instanceSize(item) === 50);
-    return ['classical-baseline-v1', 'classical-baseline-v2'].includes(scheme.initial_security_model?.id) && initialSecurityEstimate(scheme, profile) !== null && profile.initial_security_estimate.target_bits === 128;
-  });
-  setText('#tier-help', commonReference ? 'Tiers share an initial classical reference: Tier 50 ≈128 bits. Actual security and attack costs may differ.' :
-    'Tiers are specific to each scheme. Equal tiers across schemes do not imply equal security or attack cost.');
+  setText('#tier-help', 'Stages mark positions in each scheme’s default progression through reviewed configurations. Schemes can have different numbers of stages; equal stage numbers do not imply equal security or attack cost. Named parameter sets are distinct targets; their order does not imply security or transfer recovery results.');
   if (!state.schemes.length) return showEmpty(target, 'No KEMs have been published yet.');
   const wrap = node('div', undefined, 'kem-table-wrap');
   const table = node('table', undefined, 'kem-table');
@@ -528,7 +638,7 @@ function renderCatalogue() {
     if (label === 'Largest recovery') {
       th.className = 'recovery-heading';
       const help = node('button'); help.id = 'tier-info'; help.type = 'button';
-      help.setAttribute('aria-label', 'About challenge tiers');
+      help.setAttribute('aria-label', 'About challenge stages');
       help.setAttribute('aria-controls', 'tier-help');
       help.setAttribute('aria-expanded', String(!$('#tier-help').hidden));
       help.addEventListener('click', () => {
@@ -540,16 +650,31 @@ function renderCatalogue() {
       heading.append(node('span', label), help);
       th.replaceChildren(heading);
     }
-    if (label === 'Participants') th.setAttribute('aria-sort', 'descending');
+    if (label === 'Participants' && !state.schemes.some(scheme => ['lattices', 'codes'].includes(scheme.display_group))) th.setAttribute('aria-sort', 'descending');
     if (label === 'Participants') th.title = 'Distinct accounts with at least one submitted recovery attempt, successful or unsuccessful, including compatible releases.';
     headings.append(th);
   }
   head.append(headings);
-  const body = node('tbody');
+  const groups = [null, 'lattices', 'codes'];
   const catalogue = [...state.schemes].sort((a, b) =>
+    groups.indexOf(groups.includes(a.display_group) ? a.display_group : null) - groups.indexOf(groups.includes(b.display_group) ? b.display_group : null) ||
     (participantCount(b) ?? -1) - (participantCount(a) ?? -1) ||
     a.name.localeCompare(b.name, 'en', {sensitivity: 'base'}) || a.id.localeCompare(b.id));
+  table.append(head);
+  let body, currentGroup;
   for (const scheme of catalogue) {
+    const group = groups.includes(scheme.display_group) ? scheme.display_group : null;
+    if (!body || group !== currentGroup) {
+      body = node('tbody'); currentGroup = group;
+      if (group) {
+        const row = node('tr', undefined, 'kem-group-row');
+        const title = node('th', group === 'lattices' ? 'Lattice-based' : 'Code-based');
+        title.scope = 'rowgroup'; title.colSpan = 4;
+        title.append(node('span', String(catalogue.filter(item => item.display_group === group).length), 'kem-group-count'));
+        row.append(title); body.append(row);
+      }
+      table.append(body);
+    }
     const profiles = scheme.profiles || [];
     const largest = profiles.find(profile => profileId(profile) === scheme.largest_recovered_profile_id);
     const row = node('tr');
@@ -560,9 +685,9 @@ function renderCatalogue() {
     const progress = node('td');
     progress.dataset.label = 'Largest recovery';
     if (largest) {
-      const record = node('a', 'Tier ' + instanceSize(largest), 'kem-progress');
+      const record = node('a', profileLabel(largest, scheme), 'kem-progress');
       record.href = schemeRoute(scheme, largest, 'leaderboard');
-      record.setAttribute('aria-label', `View recoveries at tier ${instanceSize(largest)}`);
+      record.setAttribute('aria-label', `View recoveries for ${profileLabel(largest, scheme)}`);
       progress.append(record);
     } else progress.append(node('span', 'No recoveries yet', 'kem-record-empty'));
     const firstCell = node('td');
@@ -580,7 +705,6 @@ function renderCatalogue() {
     row.append(name, progress, firstCell, participants);
     body.append(row);
   }
-  table.append(head, body);
   wrap.append(table);
   target.replaceChildren(wrap);
 }
@@ -590,7 +714,9 @@ const AGENT_SCOPE_LABELS = {
   'methods:read': 'Read your saved attack methods and source',
   'methods:write': 'Create attack methods and upload source files',
   'submissions:read': 'Read your submission receipts',
-  'submissions:write': 'Submit recovered keys on your behalf'
+  'submissions:write': 'Submit recovered keys on your behalf',
+  'proposals:read': 'Read your private proposals and reviewer feedback',
+  'proposals:write': 'Submit your proposals and revisions for human review'
 };
 function agentScopeList(scopes) {
   const list = node('ul', undefined, 'agent-scope-list');
@@ -747,7 +873,7 @@ async function loadAgentTokens(more = false) {
   } finally { if (current()) $('#refresh-agent-tokens').disabled = false; }
 }
 function agentFollowupRequest() {
-  return `Retrieve the newest ${selectedScheme()?.name || state.schemeId} challenge at Tier ${instanceSize(state.profile)}.`;
+  return `Retrieve the newest ${selectedScheme()?.name || state.schemeId} challenge ${namedParameters(selectedScheme(), state.profile) ? 'for' : 'at'} ${profileLabel(state.profile, selectedScheme())}.`;
 }
 function agentInstructions(challenge) {
   const origin = siteOrigin();
@@ -755,7 +881,8 @@ function agentInstructions(challenge) {
   const client = 'python3 ./crucible_cli.py --server ' + quote(origin);
   const folder = './crucible-attack-' + challenge.id.slice(0, 8);
   const schemeId = challenge.public?.scheme_id || state.schemeId;
-  return `Retrieve my selected ${selectedScheme()?.name || schemeId} challenge at Tier ${instanceSize(state.profile)}.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running. If login is needed, run ${client} login and let me approve in my browser.\n\nFetch this exact instance into a fresh folder:\n${client} get --challenge-id ${quote(challenge.id)} --path ${quote(folder)}\nDeadline: ${utcDate(challenge.ends_at)}. Follow the workspace README for the attack and submission workflow.\n\nNext time I can just ask: “${agentFollowupRequest()}”\nFor those future requests, use ${client} init ${quote(schemeId)} --tier ${instanceSize(state.profile)} --path NEW_EMPTY_FOLDER. No website visit needed while connected.`;
+  const selection = namedParameters(selectedScheme(), state.profile) || intermediateConfiguration(state.profile) ? '--profile-id ' + quote(profileId()) : '--stage ' + instanceSize(state.profile);
+  return `Retrieve my selected ${selectedScheme()?.name || schemeId} challenge ${namedParameters(selectedScheme(), state.profile) ? 'for' : 'at'} ${profileLabel(state.profile, selectedScheme())}.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running. If login is needed, run ${client} login and let me approve in my browser.\n\nFetch this exact instance into a fresh folder:\n${client} get --challenge-id ${quote(challenge.id)} --path ${quote(folder)}\nDeadline: ${utcDate(challenge.ends_at)}. Follow the workspace README for the attack and submission workflow.\n\nNext time I can just ask: “${agentFollowupRequest()}”\nFor those future requests, use ${client} init ${quote(schemeId)} ${selection} --path NEW_EMPTY_FOLDER. No website visit needed while connected.`;
 }
 function agentInstructionsKey() {
   return state.user && state.challenge ? JSON.stringify([state.user.id, state.challenge.id]) : null;
@@ -862,7 +989,7 @@ async function loadPeople(more = false) {
     setLoading(target, 'Loading participants…');
   }
   try {
-    const data = await api('/api/people?' + new URLSearchParams({limit: '50', offset: String(offset)}));
+    const data = await api('/api/people?' + new URLSearchParams({limit: '50', offset: String(offset), include_records: 'false'}));
     if (!current()) return;
     if (!Array.isArray(data.people) || data.people.some(person => typeof person.handle !== 'string' || !person.handle)) throw new Error('The participant list could not be loaded.');
     state.people = more ? [...state.people, ...data.people.filter(person => !state.people.some(existing => existing.handle === person.handle))] : data.people;
@@ -876,16 +1003,21 @@ async function loadPeople(more = false) {
   }
 }
 function recoveryRecordLabel(record) {
-  return `${record.scheme_name || record.scheme_id} · Tier ${record.tier}`;
+  return `${record.scheme_name || record.scheme_id} · ${recordProfileLabel(record)}`;
+}
+function exactRecord(record) {
+  return exactProfileRecords(availableReleases().find(scheme => scheme.id === record.scheme_id && String(scheme.version) === String(record.scheme_version)), record);
 }
 function personalRecordTable(records) {
-  return peopleTable(['Scheme', 'Personal best', 'Points', 'Solved'], records.map(record => {
+  const includesNamed = records.some(record => namedParameters(availableReleases().find(scheme =>
+    scheme.id === record.scheme_id && String(scheme.version) === String(record.scheme_version)), record));
+  return peopleTable(['Scheme', includesNamed ? 'Stage / parameter set' : 'Highest stage', 'Points', 'Solved'], records.map(record => {
     const name = node('span', undefined, 'person-record-scheme');
     const link = node('a', record.scheme_name || record.scheme_id, 'person-scheme-link');
     link.href = overviewRoute({id: record.scheme_id, version: record.scheme_version});
     name.append(link);
     if (!record.is_current) name.append(node('span', 'Archived · release ' + record.scheme_version, 'person-record-release'));
-    const result = node('button', 'Tier ' + record.tier, 'person-record-result');
+    const result = node('button', recordProfileLabel(record), 'person-record-result');
     result.type = 'button'; result.disabled = !record.submission_id;
     result.setAttribute('aria-label', 'View result for ' + recoveryRecordLabel(record));
     result.setAttribute('aria-haspopup', 'dialog');
@@ -894,95 +1026,42 @@ function personalRecordTable(records) {
     return [name, result, points, node('span', utcDate(record.received_at), 'person-record-date')];
   }));
 }
-function milestoneLabel(record) {
-  const suffix = {1: 'st', 2: 'nd', 3: 'rd'}[record.place] || 'th';
-  return `${record.place}${suffix} to reach Tier ${record.tier}`;
-}
-function validMilestone(record) {
-  return record && Number.isInteger(record.tier) && record.tier > 0 &&
-    Number.isInteger(record.place) && record.place >= 1 && record.place <= 10 &&
+function validFirstRecord(record) {
+  return record && Number.isInteger(record.tier) && record.tier > 0 && record.place === 1 &&
     Number.isFinite(record.received_at) &&
     ['scheme_id', 'scheme_version', 'profile_id', 'submission_id'].every(key => typeof record[key] === 'string' && record[key]);
 }
-function milestoneResult(record, className, text) {
-  const button = node('button', text, className);
-  button.type = 'button';
-  button.setAttribute('aria-haspopup', 'dialog');
-  button.setAttribute('aria-label', `${record.scheme_name || record.scheme_id}: ${milestoneLabel(record)}. View result.`);
-  button.addEventListener('click', () => openSubmissionDetails(record.submission_id, button));
-  return button;
+function personDisclosure(title, count) {
+  const section = node('details', undefined, 'person-section person-disclosure');
+  const summary = node('summary', undefined, 'person-section-summary');
+  summary.append(node('h2', title), node('span', count, 'person-section-count'));
+  const content = node('div', undefined, 'person-section-content');
+  section.append(summary, content);
+  return {section, content};
 }
-function milestoneHistoryTable(records) {
-  return peopleTable(['Scheme', 'Milestone', 'Reached'], records.map(record => {
-    const name = node('span', record.scheme_name || record.scheme_id, 'person-record-scheme');
-    if (!record.is_current) name.append(node('span', 'Archived · release ' + record.scheme_version, 'person-record-release'));
-    const result = milestoneResult(record, 'milestone-result', milestoneLabel(record));
-    const date = node('span', utcDate(record.received_at), 'person-record-date');
-    return [name, result, date];
-  }));
-}
-function renderMilestones(person) {
-  if (!person.first_ten) return null;
-  const section = node('section', undefined, 'person-section person-milestones');
-  section.id = 'first-ten-milestones';
-  section.append(node('h2', 'First 10 milestones'));
-  const highlights = (person.first_ten.highlights || []).filter(validMilestone);
-  let history = (person.first_ten.history || []).filter(validMilestone);
-  if (!highlights.length && !history.length) {
-    section.append(node('div', 'No First 10 milestones yet.', 'empty-state'));
+function renderFirstRecords(person) {
+  const firsts = (person.first_records || []).filter(validFirstRecord);
+  const {section, content} = personDisclosure('First to reach', `${firsts.length} scheme${firsts.length === 1 ? '' : 's'}`);
+  section.id = 'first-records';
+  if (!firsts.length) {
+    content.append(node('div', 'No first-place records yet.', 'empty-state'));
     return section;
   }
-  section.append(node('p', 'Standout early results.', 'milestone-intro'));
-  const cards = node('div', undefined, 'milestone-highlights');
-  for (const record of highlights) {
-    const card = milestoneResult(record, 'milestone-card');
-    card.append(node('span', record.scheme_name || record.scheme_id, 'milestone-scheme'));
-    card.append(node('strong', milestoneLabel(record), 'milestone-achievement'));
-    const meta = node('span', undefined, 'milestone-meta');
-    if (!record.is_current) meta.append(node('span', 'Archived · release ' + record.scheme_version));
-    meta.append(node('span', utcDate(record.received_at)));
-    card.append(meta);
-    cards.append(card);
-  }
-  section.append(cards);
-  const disclosure = node('details', undefined, 'milestone-history');
-  disclosure.append(node('summary', 'View milestone history'));
-  disclosure.append(node('p', 'New personal bests among the first ten accounts to reach that tier or higher. Repeats and backfilled lower tiers add no milestones.', 'milestone-intro'));
-  const list = node('div', undefined, 'milestone-history-list');
-  list.append(milestoneHistoryTable(history));
-  const more = node('button', 'Show more', 'button button-quiet milestone-more');
-  more.type = 'button';
-  const error = node('p', undefined, 'field-error');
-  error.hidden = true; error.setAttribute('role', 'alert');
-  let pagination = person.first_ten.pagination;
-  more.hidden = !pagination?.has_more;
-  const profileRequest = state.personRequest;
-  const current = () => state.screen === 'person' && state.personRequest === profileRequest &&
-    state.personHandle?.toLowerCase() === person.handle.toLowerCase() && section.isConnected;
-  more.addEventListener('click', async () => {
-    if (more.disabled || !pagination?.has_more || !current()) return;
-    const offset = pagination.offset + pagination.limit;
-    more.disabled = true; more.textContent = 'Loading…'; error.hidden = true;
-    try {
-      const data = await api('/api/people/' + encodeURIComponent(person.handle) + '/milestones?' +
-        new URLSearchParams({limit: '20', offset: String(offset)}));
-      if (!current()) return;
-      if (!Array.isArray(data.milestones) || data.milestones.some(record => !validMilestone(record)) ||
-          data.pagination?.offset !== offset || data.pagination?.limit !== 20 || typeof data.pagination?.has_more !== 'boolean') {
-        throw new Error('Milestone history could not be loaded. Please try again.');
-      }
-      history = [...history, ...data.milestones.filter(record => !history.some(existing => existing.submission_id === record.submission_id))];
-      pagination = data.pagination;
-      list.replaceChildren(milestoneHistoryTable(history));
-      more.hidden = !pagination.has_more;
-    } catch (failure) {
-      if (current()) { error.textContent = failure.message; error.hidden = false; }
-    } finally {
-      if (current()) { more.disabled = false; more.textContent = 'Show more'; }
-    }
-  });
-  disclosure.append(list, more, error);
-  section.append(disclosure);
+  const table = peopleTable(['Scheme', 'Stage', 'Reached'], firsts.map(record => {
+    const name = node('span', undefined, 'person-record-scheme');
+    name.append(node('span', record.scheme_name || record.scheme_id, 'milestone-scheme'));
+    if (!record.is_current) name.append(node('span', 'Archived · release ' + record.scheme_version, 'person-record-release'));
+    const result = node('button', recordProfileLabel(record), 'milestone-result milestone-achievement');
+    result.type = 'button';
+    result.setAttribute('aria-haspopup', 'dialog');
+    result.setAttribute('aria-label', `${record.scheme_name || record.scheme_id}: first to reach ${recordProfileLabel(record)}. View result.`);
+    result.addEventListener('click', () => openSubmissionDetails(record.submission_id, result));
+    return [name, result, node('span', utcDate(record.received_at), 'person-record-date')];
+  }));
+  table.classList.add('first-records-table');
+  table.querySelector('table').classList.add('milestone-table');
+  table.querySelector('table').setAttribute('aria-label', 'Highest first-place stage per scheme');
+  content.append(table);
   return section;
 }
 function renderPerson(person) {
@@ -1002,19 +1081,20 @@ function renderPerson(person) {
       const part = node('div'); part.append(node('dt', label), node('dd', peopleNumber(person.score_breakdown[key]))); values.append(part);
     }
     breakdown.append(values);
-    breakdown.append(node('p', 'For each eligible scheme: 10 × your highest solved tier, plus 40 × the highest tier you were first to reach. Each explicitly admitted new scheme earns 1,000 points.'));
-    breakdown.append(node('p', 'Intermediate tiers and repeated solves do not accumulate extra points. Archived releases keep their records and are labelled when they are not scored. This is the provisional points policy.'));
+    breakdown.append(node('p', 'For each eligible scheme, your highest configuration weight earns 10 × that weight; your highest first-record weight earns a further 40 × that weight. Weights stay attached to configurations when the default progression changes. Each explicitly admitted new scheme earns 1,000 points.'));
+    breakdown.append(node('p', 'Intermediate stages and repeated solves do not accumulate extra points. Archived releases keep their records and are labelled when they are not scored. This is the provisional points policy.'));
     target.append(breakdown);
   }
-  const milestones = renderMilestones(person);
-  if (milestones) target.append(milestones);
-  const records = node('section', undefined, 'person-section');
-  records.append(node('h2', 'Personal bests'));
-  if (person.records?.length) records.append(personalRecordTable(person.records));
-  else records.append(node('div', 'No solved challenges yet.', 'empty-state'));
+  target.append(renderFirstRecords(person));
+  const {section: records, content: recordContent} = personDisclosure('Personal records',
+    `${peopleNumber(person.records?.length || 0)} scheme${person.records?.length === 1 ? '' : 's'}`);
+  records.id = 'personal-records';
+  if (person.records?.length) recordContent.append(personalRecordTable(person.records));
+  else recordContent.append(node('div', 'No solved challenges yet.', 'empty-state'));
   target.append(records);
-  const recent = node('section', undefined, 'person-section');
-  recent.append(node('h2', 'Recent solves'));
+  const {section: recent, content: recentContent} = personDisclosure('Recent solves',
+    peopleNumber(person.recent_recoveries?.length || 0) + (person.recent_recoveries_has_more ? ' shown' : ''));
+  recent.id = 'recent-solves';
   if (person.recent_recoveries?.length) {
     const list = node('div', undefined, 'person-recoveries');
     for (const record of person.recent_recoveries) {
@@ -1030,25 +1110,46 @@ function renderPerson(person) {
       item.addEventListener('click', () => openSubmissionDetails(record.submission_id, item));
       list.append(item);
     }
-    recent.append(list);
-  } else recent.append(node('div', 'No solved challenges yet.', 'empty-state'));
+    recentContent.append(list);
+  } else recentContent.append(node('div', 'No solved challenges yet.', 'empty-state'));
   target.append(recent);
+  state.personDataKey = JSON.stringify(person);
   renderAgentSettings();
 }
-async function loadPerson(handle) {
+async function loadPerson(handle, {preserve = false} = {}) {
   const request = ++state.personRequest;
-  const current = () => state.screen === 'person' && state.personHandle === handle && request === state.personRequest;
-  setText('#person-title', handle);
+  const revision = state.sessionRevision;
+  const current = () => state.screen === 'person' && state.personHandle === handle && request === state.personRequest &&
+    (!preserve || revision === state.sessionRevision);
   const target = $('#person-content');
-  setLoading(target, 'Loading profile…');
+  if (!preserve) {
+    state.personDataKey = null;
+    setText('#person-title', handle);
+    setLoading(target, 'Loading profile…');
+  }
   try {
-    const data = await api('/api/people/' + encodeURIComponent(handle));
+    const data = await api('/api/people/' + encodeURIComponent(handle) + '?include_milestones=false');
     if (!current()) return;
     if (!data.person || typeof data.person.handle !== 'string' || data.person.handle.toLowerCase() !== handle.toLowerCase()) throw new Error('That profile could not be loaded.');
+    // The server envelope changes on each poll; only actual public profile
+    // changes should replace these sections and their focused controls.
+    if (preserve && state.personDataKey === JSON.stringify(data.person)) return;
+    const disclosureKey = element => element.id || element.className;
+    const expanded = preserve ? new Set([...target.querySelectorAll('details')].filter(element => element.open).map(disclosureKey)) : new Set();
     renderPerson(data.person);
+    if (preserve) for (const element of target.querySelectorAll('details')) element.open = expanded.has(disclosureKey(element));
   } catch (error) {
-    if (current()) showInlineError(target, error.message, () => loadPerson(handle));
+    if (current()) {
+      if (preserve) toast('Profile refresh failed. ' + error.message);
+      else showInlineError(target, error.message, () => loadPerson(handle));
+    }
   }
+}
+async function refreshRecoveryViews() {
+  const refreshes = [refreshProfiles()];
+  if (state.screen === 'people') refreshes.push(loadPeople());
+  if (state.screen === 'person') refreshes.push(loadPerson(state.personHandle, {preserve: true}));
+  await Promise.allSettled(refreshes);
 }
 const OVERVIEW_METRICS = {
   public_key_bytes: {label: 'Public key', title: 'Public-key size', unit: 'Bytes', kind: 'encoding'},
@@ -1056,7 +1157,7 @@ const OVERVIEW_METRICS = {
   keygen: {label: 'Key generation', title: 'Key generation', unit: 'Seconds', kind: 'timing'},
   encapsulate: {label: 'Encapsulation', title: 'Encapsulation', unit: 'Seconds', kind: 'timing'},
   decapsulate: {label: 'Decapsulation', title: 'Decapsulation', unit: 'Seconds', kind: 'timing'},
-  classical: {label: 'Initial estimate', title: 'Initial classical reference', unit: 'Reference work (bits)', kind: 'baseline'},
+  classical: {label: 'Classical reference', title: 'Initial classical reference', unit: 'Reference work (bits)', kind: 'baseline'},
   quantum: {label: 'Quantum', title: 'Quantum security estimate', unit: 'Estimated security (bits)', kind: 'security'}
 };
 const OVERVIEW_CARDS = {
@@ -1066,8 +1167,9 @@ const OVERVIEW_CARDS = {
   security: ['classical', 'quantum']
 };
 function overviewProfiles(scheme) {
-  return (scheme.profiles || []).filter(profile => Number.isSafeInteger(instanceSize(profile)) && instanceSize(profile) > 0)
-    .slice().sort((a, b) => instanceSize(a) - instanceSize(b));
+  if (namedParameters(scheme)) return orderedProfiles(scheme).filter(profile => profileId(profile));
+  return (scheme.profiles || []).filter(profile => Number.isFinite(stagePosition(profile)) && stagePosition(profile) > 0)
+    .slice().sort((a, b) => stagePosition(a) - stagePosition(b));
 }
 function overviewValue(scheme, profile, metric) {
   if (metric === 'classical') return initialSecurityEstimate(scheme, profile);
@@ -1085,25 +1187,38 @@ function renderOverviewChart(scheme, cardId) {
   const target = $('#overview-chart-' + cardId);
   const card = target.closest('.overview-card');
   const profiles = overviewProfiles(scheme);
-  const values = profiles.map(profile => ({tier: instanceSize(profile), value: overviewValue(scheme, profile, metric)}));
+  const named = namedParameters(scheme);
+  const exact = exactProfileRecords(scheme);
+  const axisLabel = named ? 'Parameter set' : 'Challenge stage';
+  const values = profiles.map((profile, index) => ({tier: named ? index : stagePosition(profile), intermediate: intermediateConfiguration(profile), label: profileLabel(profile, scheme), profileId: profileId(profile), value: overviewValue(scheme, profile, metric)}));
+  const indexedLabels = named && (profiles.length > 3 || values.some(point => point.label.length > 16));
   const measured = values.filter(point => point.value !== null);
   const minTier = values[0]?.tier, maxTier = values.at(-1)?.tier;
   const recovered = profiles.find(profile => profileId(profile) === scheme.largest_recovered_profile_id);
-  const recoveredTier = recovered ? instanceSize(recovered) : null;
-  const recoveredLabel = recovered ? `Largest recovered · Tier ${recoveredTier}` : '';
+  const recoveredIds = new Set(recoveredProfileIds(scheme));
+  const recordedPoints = exact ? values.filter(point => recoveredIds.has(point.profileId)) : recovered ? values.filter(point => point.profileId === profileId(recovered)) : [];
+  // Numeric stages have a highest recorded coordinate. Named sets remain distinct,
+  // without treating their display order as a strength or security ranking.
+  const recoveredPoints = named ? recordedPoints : recordedPoints.slice(-1);
+  const recoveredTier = !named ? recoveredPoints[0]?.tier : null;
+  const recoveredLabel = !recoveredPoints.length ? '' : !named ? 'Largest recovered · ' + recoveredPoints[0].label :
+    'Recovered · ' + (recoveredPoints.length > 3 ? `${recoveredPoints.length} parameter sets` : recoveredPoints.map(point => point.label).join(', '));
   setText('#overview-title-' + cardId, descriptor.title);
   for (const button of card.querySelectorAll('[data-overview-metric]')) button.setAttribute('aria-pressed', String(button.dataset.overviewMetric === metric));
   const svg = svgNode('svg', {viewBox: '0 0 480 240', role: 'img', 'aria-labelledby': 'graph-title-' + cardId + ' graph-description-' + cardId, class: 'overview-svg'});
-  svg.append(svgNode('title', {id: 'graph-title-' + cardId}, descriptor.title + ' by challenge tier'));
+  svg.append(svgNode('title', {id: 'graph-title-' + cardId}, descriptor.title + ' by ' + axisLabel.toLowerCase()));
   const summary = measured.length ? `${measured.length} published values; ${descriptor.unit.toLowerCase()} on the vertical axis.` : 'No values have been published. This chart shows axes only.';
-  svg.append(svgNode('desc', {id: 'graph-description-' + cardId}, `${summary} ${values.length ? `Challenge tiers ${minTier} to ${maxTier} on the horizontal axis.` : 'No challenge tiers published.'}${recovered ? ` ${recoveredLabel}. The red line marks a recorded recovery, not a security guarantee or individual recoveries at every lower tier.` : ''}`));
+  const recoveryMeaning = named ? 'Red markers identify recorded recoveries, not a security guarantee or recoveries at other profiles.' :
+    exact ? 'The red line marks the highest recorded stage, not a security guarantee or recoveries at lower stages. The tinted area shows the range up to that stage.' :
+      'The red line marks a recorded recovery, not a security guarantee or individual recoveries at every lower stage.';
+  svg.append(svgNode('desc', {id: 'graph-description-' + cardId}, `${summary} ${named ? 'Distinct named parameter sets on the horizontal axis; points are not interpolated.' : values.length ? `Challenge stages ${minTier} to ${maxTier} on the horizontal axis.` : 'No challenge stages published.'}${recoveredLabel ? ` ${recoveredLabel}. ${recoveryMeaning}` : ''}`));
   const left = 48, right = 465, top = 43, bottom = 190;
   const x = tier => minTier === maxTier ? (left + right) / 2 : left + (tier - minTier) / (maxTier - minTier) * (right - left);
   const maximum = measured.length ? Math.max(...measured.map(point => point.value)) : 0;
   const ceiling = maximum > 0 ? maximum : 1;
   const y = value => bottom - value / ceiling * (bottom - top);
   svg.append(svgNode('text', {x: left, y: 19, class: 'chart-axis-title'}, descriptor.unit));
-  if (recovered && x(recoveredTier) > left) svg.append(svgNode('rect', {x: left, y: top, width: x(recoveredTier) - left, height: bottom - top, class: 'chart-recovery-area', 'aria-hidden': 'true'}));
+  if (Number.isFinite(recoveredTier) && x(recoveredTier) > left) svg.append(svgNode('rect', {x: left, y: top, width: x(recoveredTier) - left, height: bottom - top, class: 'chart-recovery-area', 'aria-hidden': 'true'}));
   for (let index = 0; index <= 3; index++) {
     const gridY = top + index * (bottom - top) / 3;
     svg.append(svgNode('line', {x1: left, y1: gridY, x2: right, y2: gridY, class: 'chart-gridline'}));
@@ -1113,13 +1228,15 @@ function renderOverviewChart(scheme, cardId) {
     for (const value of [0, ceiling]) svg.append(svgNode('text', {x: left - 9, y: y(value) + 4, 'text-anchor': 'end', class: 'chart-tick'}, value.toLocaleString('en-US')));
   }
   if (values.length) {
-    const tickTiers = [...new Set([minTier, values[Math.floor((values.length - 1) / 2)].tier, maxTier])];
+    const defaultValues = values.filter(point => !point.intermediate);
+    const tickValues = defaultValues.length ? defaultValues : values;
+    const tickTiers = named ? values.map(point => point.tier) : [...new Set([minTier, tickValues[Math.floor((tickValues.length - 1) / 2)].tier, maxTier])];
     for (const tier of tickTiers) {
       svg.append(svgNode('line', {x1: x(tier), y1: bottom, x2: x(tier), y2: bottom + 5, class: 'chart-axis'}));
-      svg.append(svgNode('text', {x: x(tier), y: bottom + 19, 'text-anchor': 'middle', class: 'chart-tick'}, tier));
+      svg.append(svgNode('text', {x: x(tier), y: bottom + 19, 'text-anchor': 'middle', class: 'chart-tick'}, named ? indexedLabels ? tier + 1 : values.find(point => point.tier === tier).label : tier));
     }
   }
-  svg.append(svgNode('text', {x: (left + right) / 2, y: 235, 'text-anchor': 'middle', class: 'chart-axis-title'}, 'Challenge tier'));
+  svg.append(svgNode('text', {x: (left + right) / 2, y: 235, 'text-anchor': 'middle', class: 'chart-axis-title'}, axisLabel));
   if (measured.length) {
     let path = '', connected = false;
     for (const point of values) {
@@ -1127,33 +1244,38 @@ function renderOverviewChart(scheme, cardId) {
       path += `${connected ? 'L' : 'M'}${x(point.tier).toFixed(2)} ${y(point.value).toFixed(2)} `;
       connected = true;
     }
-    svg.append(svgNode('path', {d: path.trim(), class: 'chart-series'}));
+    if (!named) svg.append(svgNode('path', {d: path.trim(), class: 'chart-series'}));
     for (const point of measured) {
-      const dot = svgNode('circle', {cx: x(point.tier), cy: y(point.value), r: values.length > 60 ? 1.6 : 2.8, class: 'chart-point', 'data-tier': point.tier, 'data-value': point.value});
-      dot.append(svgNode('title', {}, `Tier ${point.tier}: ${point.value.toLocaleString('en-US')} ${descriptor.unit.toLowerCase()}`));
+      const dot = svgNode('circle', {cx: x(point.tier), cy: y(point.value), r: named ? 4 : values.length > 60 ? 1.6 : 2.8, class: 'chart-point', 'data-tier': point.tier, 'data-profile-id': point.profileId, 'data-value': point.value});
+      dot.append(svgNode('title', {}, `${point.label}: ${point.value.toLocaleString('en-US')} ${descriptor.unit.toLowerCase()}`));
       svg.append(dot);
     }
   } else {
     svg.append(svgNode('text', {x: (left + right) / 2, y: 106, 'text-anchor': 'middle', class: 'chart-empty-label'}, ['security', 'baseline'].includes(descriptor.kind) ? 'No estimates published' : descriptor.kind === 'timing' ? 'No timings published' : 'No values published'));
     svg.append(svgNode('text', {x: (left + right) / 2, y: 128, 'text-anchor': 'middle', class: 'chart-empty-detail'}, 'Awaiting evidence'));
   }
-  if (recovered) {
-    const marker = svgNode('line', {x1: x(recoveredTier), y1: top, x2: x(recoveredTier), y2: bottom, class: 'chart-recovery-line', 'data-tier': recoveredTier});
-    marker.append(svgNode('title', {}, recoveredLabel));
+  for (const point of recoveredPoints) {
+    const marker = svgNode('line', {x1: x(point.tier), y1: top, x2: x(point.tier), y2: bottom, class: 'chart-recovery-line', 'data-tier': point.tier, 'data-profile-id': point.profileId});
+    marker.append(svgNode('title', {}, named ? 'Recovered · ' + point.label : recoveredLabel));
     svg.append(marker);
   }
   target.replaceChildren(svg);
-  if (recovered) {
+  if (recoveredLabel) {
     const label = node('p', recoveredLabel, 'overview-recovery-note');
     target.append(label);
   }
   const note = descriptor.kind === 'timing' ? 'Key generation, encapsulation, and decapsulation await a shared benchmark and measurement method.' :
-    descriptor.kind === 'baseline' ? (measured.length ? 'Frozen classical reference; not a measured security guarantee.' : 'No initial classical estimate is published for this release.') :
+    descriptor.kind === 'baseline' ? (measured.length ? attackReferenceModel(scheme) ? 'A stated classical attack reference, not a security lower bound. Other attacks may be faster.' : 'Frozen classical reference; not a measured security guarantee.' : 'No initial classical estimate is published for this release.') :
     descriptor.kind === 'security' ? 'An estimate needs a stated security game, attack model, and source. Recovery records are not estimates.' :
-    'Canonical encoded bytes. Excludes JSON and shared domain parameters. Dots mark published tiers.';
+    'Canonical encoded bytes. Excludes JSON and shared domain parameters. ' + (named ? 'Dots mark distinct parameter sets; no interpolation is implied.' : 'Dots mark reviewed configurations; intermediate configurations sit between the surrounding stages.');
+  if (indexedLabels) {
+    const legend = node('ol', undefined, 'chart-parameter-legend');
+    for (const point of values) legend.append(node('li', point.label));
+    target.append(legend);
+  }
   target.append(node('p', note, 'overview-chart-note'));
   const badge = $('#overview-badge-' + cardId);
-  badge.textContent = measured.length ? (descriptor.kind === 'baseline' ? 'Initial model' : 'Published values') : 'Not reported';
+  badge.textContent = measured.length ? (descriptor.kind === 'baseline' ? attackReferenceModel(scheme) ? 'Attack reference' : 'Initial model' : 'Published values') : 'Not reported';
   badge.classList.toggle('is-empty', !measured.length);
   if ((descriptor.kind === 'encoding' || descriptor.kind === 'baseline') && values.length) {
     const details = node('details', undefined, 'overview-values');
@@ -1161,35 +1283,37 @@ function renderOverviewChart(scheme, cardId) {
     const table = node('table');
     const caption = node('caption', descriptor.title + ' · version ' + scheme.version);
     const head = node('thead'), row = node('tr');
-    for (const label of ['Challenge tier', descriptor.unit]) { const th = node('th', label); th.scope = 'col'; row.append(th); }
+    for (const label of [axisLabel, descriptor.unit]) { const th = node('th', label); th.scope = 'col'; row.append(th); }
     head.append(row);
     const body = node('tbody');
     for (const point of values) {
       const row = node('tr');
-      row.append(node('td', point.tier), node('td', point.value === null ? 'Not reported' : point.value.toLocaleString('en-US')));
+      row.append(node('td', named || point.intermediate ? point.label : point.tier), node('td', point.value === null ? 'Not reported' : point.value.toLocaleString('en-US')));
       body.append(row);
     }
     table.append(caption, head, body);
     const scroll = node('div', undefined, 'overview-values-scroll');
     scroll.tabIndex = 0;
     scroll.setAttribute('role', 'region');
-    scroll.setAttribute('aria-label', descriptor.title + ' values by challenge tier');
+    scroll.setAttribute('aria-label', descriptor.title + ' values by ' + axisLabel.toLowerCase());
     scroll.append(table); details.append(scroll); target.append(details);
   }
 }
 function renderOverview(scheme, contextProfile = null) {
   setText('#overview-title', scheme.name);
   setText('#overview-summary', scheme.summary || '');
+  $('#overview-beta').hidden = scheme.review_status !== 'local-beta';
+  setText('#overview-beta', (researchTiers(scheme) ? 'Research stages · ' : '') + 'Local beta. Independent admission review pending.' + (scheme.scoring_eligible === false ? ' These profiles are not scored.' : ''));
   const profiles = overviewProfiles(scheme);
   const current = state.schemes.find(item => item.id === scheme.id);
   const archived = String(current?.version) !== String(scheme.version);
-  setText('#overview-release', `${archived ? 'Archived release ' + scheme.version + ' · ' : ''}${profiles.length} challenge tiers`);
+  setText('#overview-release', `${archived ? 'Archived release ' + scheme.version + ' · ' : ''}${namedParameters(scheme) ? profiles.length : scheme.default_progression?.stage_count ?? profiles.length} ${namedParameters(scheme) ? 'parameter set' + (profiles.length === 1 ? '' : 's') : 'challenge stages'}`);
   const entry = contextProfile || profiles.find(profile => profileId(profile) === scheme.next_profile_id) || profiles[0];
   const challengeLink = $('#overview-challenges');
   challengeLink.hidden = !entry;
   challengeLink.href = entry ? schemeRoute(scheme, entry) : '#challenge';
   const record = profiles.find(profile => profileId(profile) === scheme.largest_recovered_profile_id);
-  setText('#overview-progress', record ? `Largest recovery · Tier ${instanceSize(record)}` : 'No recoveries yet');
+  setText('#overview-progress', record ? `${namedParameters(scheme) ? 'Recovered parameter set' : 'Largest recovery'} · ${profileLabel(record, scheme)}` : 'No recoveries yet');
   const grid = $('#overview-graphs');
   if (!grid.childElementCount) {
     for (const id of Object.keys(OVERVIEW_CARDS)) {
@@ -1234,17 +1358,82 @@ function renderOverview(scheme, contextProfile = null) {
     $('#overview-' + field).closest('section').hidden = !value;
   }
 }
-function renderProfiles(previewProfile = null) {
+function renderIntermediateConfigurations(scheme, current) {
+  const section = $('#intermediate-configurations');
+  const choices = (scheme?.profiles || []).filter(intermediateConfiguration);
+  section.hidden = !choices.length;
+  const context = `${scheme?.id}/${scheme?.version}`;
+  if (section.dataset.context !== context) section.open = false;
+  section.dataset.context = context;
+  setText('#intermediate-configurations-label', `Intermediate configurations (${choices.length})`);
+  const target = $('#intermediate-configuration-options');
+  const restoreFocus = [...target.querySelectorAll('button')].includes(document.activeElement);
+  const recovered = new Set(recoveredProfileIds(scheme));
+  const buttons = choices.map(profile => {
+    const button = node('button', profileLabel(profile, scheme), 'parameter-set-option');
+    button.type = 'button';
+    button.setAttribute('aria-pressed', String(profileId(profile) === profileId(current)));
+    button.classList.toggle('is-recovered', recovered.has(profileId(profile)));
+    button.title = tierNote(scheme, profile);
+    button.addEventListener('click', () => navigate(schemeRoute(scheme, profile, state.view)));
+    return button;
+  });
+  target.replaceChildren(...buttons);
+  if (restoreFocus) buttons.find(button => button.getAttribute('aria-pressed') === 'true')?.focus();
+}
+function renderProfiles(previewProfile = null, {details = true} = {}) {
+  if (!previewProfile) state.profileMetadataPending = null;
   const input = $('#profile-select');
   const scheme = selectedScheme();
-  const profiles = [...(scheme?.profiles || [])].sort((a, b) => instanceSize(a) - instanceSize(b));
+  const profiles = orderedProfiles(scheme);
   const current = previewProfile || state.profile;
-  const index = profiles.findIndex(profile => profileId(profile) === profileId(current));
+  const named = namedParameters(scheme, current);
+  renderIntermediateConfigurations(scheme, current);
+  $('#advance-size').classList.toggle('is-parameter-set', named);
+  for (const id of ['#tier-size-rail', '#tier-size-slider', '#tier-size-jump']) $(id).hidden = named;
+  $('#parameter-set-options').hidden = !named;
+  if (named) {
+    const target = $('#parameter-set-options');
+    const restoreFocus = [...target.querySelectorAll('button')].includes(document.activeElement);
+    const recovered = new Set(recoveredProfileIds(scheme));
+    const frontier = profiles.find(profile => profileId(profile) === scheme.next_profile_id);
+    const choices = profiles.map(profile => {
+      const selected = profileId(profile) === profileId(current);
+      const solved = recovered.has(profileId(profile));
+      const button = node('button', profileLabel(profile, scheme), 'parameter-set-option');
+      button.type = 'button';
+      button.setAttribute('aria-pressed', String(selected));
+      button.classList.toggle('is-recovered', solved);
+      button.setAttribute('aria-label', profileLabel(profile, scheme) + (solved ? ', recovered' : ', unsolved'));
+      button.addEventListener('click', () => navigate(schemeRoute(scheme, profile, state.view)));
+      return button;
+    });
+    target.replaceChildren(...choices);
+    if (restoreFocus) choices.find(button => button.getAttribute('aria-pressed') === 'true')?.focus();
+    setText('#profile-label', 'Parameter set');
+    setText('#size-range', profiles.length > 1 ? `${profiles.length} sets` : '');
+    const conceal = !frontier || recovered.has(profileId(frontier)) || profileId(frontier) === profileId(current);
+    $('#advance-size').disabled = conceal;
+    $('#advance-size').classList.toggle('is-concealed', conceal);
+    $('#advance-size').setAttribute('aria-hidden', String(conceal));
+    setText('#advance-size-label', 'Go to next unsolved parameter set');
+    setText('#advance-size-value', frontier ? profileLabel(frontier, scheme) : '');
+    $('#advance-size').setAttribute('aria-label', `Go to next unsolved parameter set ${frontier ? profileLabel(frontier, scheme) : ''}`);
+    setError('#profile-error', '');
+    setText('#profile-note', tierNote(scheme, current));
+    if (!previewProfile && details) renderProtocol();
+    return;
+  }
+  const intermediate = intermediateConfiguration(current);
+  setText('#profile-label', intermediate ? 'Configuration' : 'Stage');
+  const selectedIndex = profiles.findIndex(profile => profileId(profile) === profileId(current));
+  const index = selectedIndex >= 0 ? selectedIndex : Math.max(0, profiles.findLastIndex(profile => stagePosition(profile) < stagePosition(current)));
   const options = $('#size-options');
   const restoreFocus = [...options.querySelectorAll('button')].includes(document.activeElement);
   const largest = profiles.find(profile => profileId(profile) === scheme?.largest_recovered_profile_id);
   const frontier = profiles.find(profile => profileId(profile) === scheme?.next_profile_id);
-  const recovered = new Set(scheme?.recovered_profile_ids || (largest ? [profileId(largest)] : []));
+  const exact = exactProfileRecords(scheme, current);
+  const recovered = new Set(recoveredProfileIds(scheme));
   input.disabled = !profiles.length;
   input.min = String(instanceSize(profiles[0]) || 1);
   input.max = String(instanceSize(profiles.at(-1)) || 1);
@@ -1256,19 +1445,19 @@ function renderProfiles(previewProfile = null) {
   slider.max = String(Math.max(0, profiles.length - 1));
   slider.value = String(Math.max(0, index));
   slider.disabled = profiles.length < 2;
-  const recoveredIndex = largest ? profiles.indexOf(largest) : -1;
+  const recoveredIndex = !exact && largest ? profiles.indexOf(largest) : -1;
   const recoveredThrough = recoveredIndex < 0 ? '0%' : profiles.length < 2 || recoveredIndex === profiles.length - 1
     ? '100%' : `calc(7px + (100% - 14px) * ${recoveredIndex / (profiles.length - 1)})`;
   slider.style.cssText = `--recovered-through: ${recoveredThrough}`;
-  slider.setAttribute('aria-valuetext', current ? `Challenge tier ${instanceSize(current)}` : 'No tiers available');
-  setText('#size-slider-value', current ? String(instanceSize(current)) : '—');
+  slider.setAttribute('aria-valuetext', current ? intermediate ? profileLabel(current, scheme) : `Challenge stage ${instanceSize(current)}` : 'No stages available');
+  setText('#size-slider-value', current && !intermediate ? String(instanceSize(current)) : '—');
   $('#jump-size').disabled = !profiles.length;
-  setText('#size-range', profiles.length ? `${input.min}–${input.max}` : '');
-  $('#previous-size').disabled = index <= 0;
-  $('#next-size').disabled = index < 0 || index >= profiles.length - 1;
-  const advanceLabel = 'Go to next unsolved tier';
+  setText('#size-range', profiles.length && current ? intermediate ? `Between ${current.stage_context?.before_stage ?? '—'} and ${current.stage_context?.after_stage ?? '—'}` : `${instanceSize(current)} of ${scheme?.default_progression?.stage_count ?? input.max}` : '');
+  $('#previous-size').disabled = !profiles.some(profile => stagePosition(profile) < stagePosition(current));
+  $('#next-size').disabled = !profiles.some(profile => stagePosition(profile) > stagePosition(current));
+  const advanceLabel = 'Go to next unsolved stage';
   const advanceNumber = frontier ? instanceSize(frontier) : '—';
-  const concealAdvance = !frontier || profileId(frontier) === profileId(current);
+  const concealAdvance = !frontier || (exact && recovered.has(profileId(frontier))) || profileId(frontier) === profileId(current);
   $('#advance-size').disabled = concealAdvance;
   $('#advance-size').classList.toggle('is-concealed', concealAdvance);
   $('#advance-size').setAttribute('aria-hidden', String(concealAdvance));
@@ -1281,16 +1470,16 @@ function renderProfiles(previewProfile = null) {
     const record = Boolean(largest && profileId(profile) === profileId(largest));
     const solved = recovered.has(profileId(profile));
     const nextUnsolved = Boolean(frontier && profileId(profile) === profileId(frontier));
-    const prior = Boolean(largest && instanceSize(profile) <= instanceSize(largest));
+    const prior = exact ? solved : Boolean(largest && instanceSize(profile) <= instanceSize(largest));
     const button = node('button', String(instanceSize(profile)), 'size-option');
     button.type = 'button';
     button.setAttribute('aria-pressed', String(selected));
-    const status = nextUnsolved ? ', next unsolved tier' : record ? ', largest recovered' : solved ? ', recovered' : prior ? ', earlier tier' : '';
-    button.setAttribute('aria-label', `Tier ${instanceSize(profile)}` + status);
-    button.title = `Tier ${instanceSize(profile)}` + status;
+    const status = nextUnsolved ? ', next unsolved stage' : record ? ', largest recovered' : solved ? ', recovered' : prior ? ', earlier stage' : '';
+    button.setAttribute('aria-label', `Stage ${instanceSize(profile)}` + status);
+    button.title = `Stage ${instanceSize(profile)}` + status;
     button.classList.toggle('is-next-unsolved', nextUnsolved);
     button.classList.toggle('is-prior', prior);
-    button.tabIndex = selected ? 0 : -1;
+    button.tabIndex = selected || (intermediate && profiles.indexOf(profile) === index) ? 0 : -1;
     button.addEventListener('click', () => navigate(schemeRoute(scheme, profile, state.view)));
     button.addEventListener('keydown', event => {
       let target;
@@ -1308,7 +1497,15 @@ function renderProfiles(previewProfile = null) {
   if (restoreFocus) choices.find(button => button.getAttribute('aria-pressed') === 'true')?.focus();
   setError('#profile-error', '');
   setText('#profile-note', tierNote(scheme, current));
-  if (!previewProfile) renderProtocol();
+  if (!previewProfile && details) renderProtocol();
+}
+function configurationProse(value) {
+  // Legacy descriptions refer to immutable configurations, not today's stage order.
+  // Keep math, URLs and identifiers intact; raw downloaded contracts are untouched.
+  if (typeof value !== 'string' || /[$]|\\[([]/.test(value)) return value;
+  return value.split(/(https?:\/\/\S+)/g).map((part, index) => index % 2 ? part :
+    part.replace(/(?<![\w/.-])([Tt])ier(s?)(?![\w/.-])/g, (_, initial, plural) =>
+      (initial === 'T' ? 'Configuration' : 'configuration') + plural)).join('');
 }
 function mathText(element, value) {
   if (window.CrucibleMath) window.CrucibleMath.render(element, value);
@@ -1330,21 +1527,37 @@ function renderProtocol() {
   if (scheme) {
     setText('#scheme-title', scheme.name);
     setText('#scheme-summary', scheme.summary);
+    $('#scheme-beta').hidden = scheme.review_status !== 'local-beta';
+    setText('#scheme-beta', (researchTiers(scheme, profile) ? 'Research stages · ' : '') + 'Local beta. Independent admission review pending.' + (scheme.scoring_eligible === false ? ' These profiles are not scored.' : ''));
     setText('#protocol-version', scheme.version ? `${scheme.name} · version ${scheme.version}` : scheme.name);
     const protocol = scheme.protocol || {};
-    mathText($('#protocol-construction'), protocol.construction_math || protocol.construction || 'The parameter contract below defines this KEM. Consult its registered specification for the full construction.');
-    mathText($('#scheme-construction-short'), protocol.construction_math || protocol.construction || scheme.summary);
+    mathText($('#protocol-construction'), protocol.construction_math || configurationProse(protocol.construction) || 'The parameter contract below defines this KEM. Consult its registered specification for the full construction.');
+    mathText($('#scheme-construction-short'), protocol.construction_math || configurationProse(protocol.construction) || scheme.summary);
     const specifics = $('#scheme-specific-facts');
     specifics.replaceChildren();
     addFact(specifics, 'Underlying problem', protocol.assumption || 'See the registered protocol.');
-    addFact(specifics, 'Mapped parameter', scheme.size_parameter?.meaning);
-    addFact(specifics, 'Public inputs', protocol.public_input_math || protocol.public_input, true);
+    addFact(specifics, namedParameters(scheme) ? 'Parameter sets' : 'Mapped parameter', configurationProse(scheme.size_parameter?.meaning));
+    if (scheme.ladder_design) {
+      addFact(specifics, 'Stage progression', scheme.ladder_design.progression);
+      addFact(specifics, 'Cost as stages rise', scheme.ladder_design.cost);
+      addFact(specifics, 'Parameter choices', scheme.ladder_design.qualification);
+      addFact(specifics, 'Upper endpoint', scheme.ladder_design.endpoint);
+      const selection = scheme.ladder_design.selection;
+      if (selection) {
+        addFact(specifics, 'Parameter selection', selection.status + '. ' + selection.objective);
+        addFact(specifics, 'Search scope', selection.domain);
+        addFact(specifics, 'Selection limits', selection.limitations);
+      }
+    }
+    if (researchTiers(scheme, profile)) addFact(specifics, 'Protocol relationship', configurationProse(protocol.research_relationship) || 'A scheme-specific research parameter family. Published parameter-set names apply only where explicitly declared; consult the exact parameter mapping and correctness domain below.');
+    if (scheme.review_status === 'local-beta') addFact(specifics, 'Review status', 'Local beta. Independent correctness and implementation admission review is pending.' + (scheme.scoring_eligible === false ? ' These profiles do not award points.' : ''));
+    addFact(specifics, 'Public inputs', protocol.public_input_math || configurationProse(protocol.public_input), true);
     addFact(specifics, 'Required answer', protocol.shared_secret || 'The complete shared key declared by the instance.');
-    addFact(specifics, 'Correctness', protocol.correctness || profile?.correctness?.argument);
+    addFact(specifics, 'Correctness', configurationProse(protocol.correctness || profile?.correctness?.argument));
     const downloads = $('#protocol-downloads');
     downloads.replaceChildren();
     const specUrl = '/api/protocol/spec?' + new URLSearchParams({scheme_id: scheme.id, version: scheme.version});
-    for (const [url, label] of [[specUrl, 'Download the scheme specification ↓'], [protocol.source_url, 'Download the reference implementation ↓'], [protocol.example_url, 'Download the example solver ↓']]) {
+    for (const [url, label] of [[specUrl, 'Download the scheme specification ↓'], [protocol.source_url, 'Download the reference implementation ↓'], [protocol.artifacts_url, 'Download implementation manifest ↓'], [protocol.correctness_url, 'View correctness checks →'], [protocol.example_url, 'Download the example solver ↓']]) {
       if (!url) continue;
       let parsed;
       try { parsed = new URL(url, window.location.href); } catch { continue; }
@@ -1364,22 +1577,23 @@ function renderProtocol() {
   $('#parameter-measurement-basis').hidden = true;
   if (!profile) return;
   const descriptor = scheme?.size_parameter;
-  setText('#profile-label', 'Challenge tier');
+  setText('#profile-label', namedParameters(scheme, profile) ? 'Parameter set' : intermediateConfiguration(profile) ? 'Configuration' : 'Stage');
   setText('#profile-note', tierNote(scheme, profile));
-  addFact(facts, 'Challenge tier', `Tier ${instanceSize(profile)}`);
+  addFact(facts, namedParameters(scheme, profile) ? 'Parameter set' : intermediateConfiguration(profile) ? 'Configuration' : 'Challenge stage', profileLabel(profile, scheme));
+  setText('#protocol-record-rules', 'Method versions are immutable. Correct recoveries can appear publicly with the account handle, method, pseudocode, and compute declaration. ' + (exactProfileRecords(scheme, profile) ? `Records apply only to the exact ${namedParameters(scheme, profile) ? 'parameter set' : intermediateConfiguration(profile) ? 'configuration' : 'stage'} recovered, across all rounds. Recoveries do not transfer to other profiles.${scheme?.scoring_eligible === false ? ' These profiles do not award points.' : ''}` : 'Each stage highlights the earliest accepted recovery at that stage or higher, across all rounds.') + ' Other results remain on participant profiles. Different profiles are not ranked against one another.');
   const estimate = initialSecurityEstimate(scheme, profile);
   if (estimate !== null) {
-    addFact(facts, 'Initial classical estimate', `≈${estimateBits(estimate)} bits`);
+    addFact(facts, attackReferenceModel(scheme) ? 'Initial classical attack reference' : 'Initial classical estimate', `≈${estimateBits(estimate)} bits`);
     const model = scheme.initial_security_model;
     addFact(facts, 'Reference model', typeof model.name === 'string' ? model.name : typeof model.label === 'string' ? model.label : model.id);
     const scope = [model.summary, model.scope].filter(value => typeof value === 'string' && value.trim()).join(' ');
-    if (scope) addFact(facts, 'Estimate scope', scope);
+    if (scope) addFact(facts, attackReferenceModel(scheme) ? 'Reference scope' : 'Estimate scope', configurationProse(scope));
   }
   setText('#protocol-size-caveat', 'An incorrect answer locks that instance. An expired instance without an accepted recovery is simply unsolved here; it is not evidence of a security bound. ' +
-    (estimate === null ? 'A challenge tier selects a scheme-specific parameter set, not an estimate of security bits.' :
-      'This tier selects parameters using a frozen initial classical reference. The estimate is not a measured security guarantee; actual attack costs may differ.'));
-  addFact(facts, 'Profile', profile.name || profileId());
-  if (descriptor?.mapping) addFact(facts, 'Parameter mapping', descriptor.mapping_math || descriptor.mapping, true);
+    (namedParameters(scheme, profile) ? 'This named parameter set is a distinct target. A recovery is not inherited by other parameter sets, and no stage or security estimate is implied.' : estimate === null ? 'A configuration selects exact scheme parameters, not an estimate of security bits.' :
+      attackReferenceModel(scheme) ? 'This configuration has a stated classical attack reference, not a security lower bound; other attacks may be faster.' : 'This configuration selects parameters using a frozen initial classical reference. The estimate is not a measured security guarantee; actual attack costs may differ.'));
+  addFact(facts, 'Configuration', profile.native_parameter_label || profileLabel(profile, scheme));
+  if (descriptor?.mapping) addFact(facts, 'Parameter mapping', descriptor.mapping_math || configurationProse(descriptor.mapping), true);
   if (profile.parameter_label === 'subgroup-order bits') addFact(facts, 'Subgroup order size', `${profile.parameter_bits} bits`);
   if (profile.modulus_bits != null) addFact(facts, 'Modulus size', `${profile.modulus_bits} bits`);
   for (const [metric, label] of [['public_key_bytes', 'Public key'], ['ciphertext_bytes', 'Ciphertext']]) {
@@ -1397,9 +1611,9 @@ function renderProtocol() {
   const claim = profile.correctness || {};
   addFact(correctness, 'Claim type', claim.kind);
   addFact(correctness, 'Failure bound', claim.failure_bound);
-  addFact(correctness, 'Argument', scheme?.protocol?.correctness_argument_math || claim.argument, true);
-  addFact(correctness, 'Scope', claim.scope);
-  addFact(correctness, 'Evidence status', claim.evidence_status);
+  addFact(correctness, 'Argument', scheme?.protocol?.correctness_argument_math || configurationProse(claim.argument), true);
+  addFact(correctness, 'Scope', configurationProse(claim.scope));
+  addFact(correctness, 'Evidence status', configurationProse(claim.evidence_status));
 }
 function renderChallenge() {
   if (state.agentInstructionsKey !== agentInstructionsKey()) resetAgentInstructions();
@@ -1451,6 +1665,25 @@ function currentChallengeRelease() {
   return state.screen === 'scheme' && state.schemes.some(scheme =>
     scheme.id === state.schemeId && String(scheme.version) === state.schemeVersion);
 }
+function challengeStartSelectionMatches(intent, view = state.view) {
+  return intent && state.screen === 'scheme' && view === 'challenge' &&
+    intent.schemeId === state.schemeId && intent.schemeVersion === state.schemeVersion &&
+    intent.profileId === profileId() && currentChallengeRelease();
+}
+function takeOnChallenge(scheme, profile, event) {
+  if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey ||
+      (event.button != null && event.button !== 0)) return;
+  event.preventDefault();
+  if (state.screen !== 'scheme' || state.schemeId !== scheme.id || state.schemeVersion !== String(scheme.version) ||
+      profileId() !== profileId(profile)) return;
+  const route = schemeRoute(scheme, profile, 'challenge');
+  // Only this deliberate action grants one request; a copied URL carries no authority.
+  state.challengeStartIntent = currentChallengeRelease() ? {
+    schemeId: scheme.id, schemeVersion: String(scheme.version), profileId: profileId(profile),
+    accountId: state.user?.id || null, awaitingSignIn: !state.user
+  } : null;
+  navigate(route);
+}
 function challengeAccessScope() {
   return JSON.stringify([state.user?.id, state.schemeId, state.schemeVersion, state.round?.id]);
 }
@@ -1466,7 +1699,7 @@ function showAutomaticPause() {
   setText('#challenge-error-text', message);
   $('#challenge-error').hidden = false;
 }
-async function loadChallenge({retry = false} = {}) {
+async function loadChallenge({retry = false, allowAutomatic = true} = {}) {
   const request = ++state.challengeRequest;
   const selected = profileId();
   const selection = selectionKey();
@@ -1482,6 +1715,8 @@ async function loadChallenge({retry = false} = {}) {
   if (state.screen !== 'scheme' || !state.user || !selected) {
     state.challengeLoading = false;
     renderChallenge();
+    if (!state.user && state.challengeStartIntent?.awaitingSignIn &&
+        challengeStartSelectionMatches(state.challengeStartIntent) && !authDialog.open) openAuth($('#issue-button'));
     return;
   }
   state.challengeLoading = true;
@@ -1489,11 +1724,13 @@ async function loadChallenge({retry = false} = {}) {
   let access;
   try {
     const data = await api('/api/challenges?' + new URLSearchParams({profile_id: selected, scheme_id: state.schemeId, scheme_version: state.schemeVersion}));
-    if (!stillSelected() || data.round?.id !== state.round?.id) return;
+    if (!stillSelected()) return;
+    if (data.round?.id !== state.round?.id) { state.challengeStartIntent = null; return; }
     state.challenge = data.challenge || null;
     access = data;
   } catch (error) {
     if (!stillSelected()) return;
+    state.challengeStartIntent = null;
     setText('#challenge-error-text', error.message);
     $('#challenge-error').hidden = false;
     if (error.status === 401) await synchronizeSession();
@@ -1503,7 +1740,17 @@ async function loadChallenge({retry = false} = {}) {
       renderChallenge();
     }
   }
-  if (stillSelected() && !state.challenge && currentChallengeRelease() &&
+  const intent = state.challengeStartIntent;
+  if (stillSelected() && access && challengeStartSelectionMatches(intent) &&
+      !intent.awaitingSignIn && intent.accountId === state.user?.id) {
+    if (state.challenge || roundRemaining() <= 0) state.challengeStartIntent = null;
+    else if (!state.issueBusy) {
+      state.challengeStartIntent = null;
+      await issueChallenge();
+    }
+    return;
+  }
+  if (allowAutomatic && stillSelected() && !state.challenge && currentChallengeRelease() &&
       state.view === 'challenge' && confirmedRoundAccess(access)) {
     if (state.autoIssuePaused.has(challengeAccessScope())) showAutomaticPause();
     else if (!state.issueBusy) await issueChallenge({activeRoundId: access.round_started_round_id});
@@ -1525,8 +1772,8 @@ async function issueChallenge({activeRoundId} = {}) {
       activeRoundId !== state.round?.id || roundRemaining() <= 0 || state.challenge ||
       state.autoIssueAttempts.has(attempt) || state.autoIssuePaused.has(scope))) return;
   if (!automatic) state.autoIssuePaused.delete(scope);
-  // Retain attempted tiers even after an uncertain response; only an explicit
-  // retry can issue that tier again. The server also reuses existing instances.
+  // Retain attempted stages even after an uncertain response; only an explicit
+  // retry can issue that stage again. The server also reuses existing instances.
   state.autoIssueAttempts.add(attempt);
   state.issueBusy = true;
   const selected = profileId();
@@ -1567,26 +1814,50 @@ async function issueChallenge({activeRoundId} = {}) {
   }
 }
 
-async function loadLeaderboard() {
+function leaderboardRecoveryKey() {
+  // Catalogue counts and recoveries outside this record's scope cannot change
+  // its winner. Include the exact release/selection in both completed and pending keys.
+  const scheme = selectedScheme(), exact = exactProfileRecords(scheme, state.profile);
+  const relevant = new Set((scheme?.profiles || []).filter(profile => exact ? profileId(profile) === profileId() :
+    stagePosition(profile) >= stagePosition(state.profile)).map(profile => profileId(profile)));
+  const recovered = recoveredProfileIds(scheme).filter(id => relevant.has(id)).sort();
+  const records = (scheme?.profile_recoveries || []).filter(record => relevant.has(record.profile_id))
+    .sort((a, b) => a.profile_id.localeCompare(b.profile_id));
+  const first = !exact && relevant.has(scheme?.first_recovery?.profile_id) ? scheme.first_recovery : null;
+  return JSON.stringify([selectionKey(), exact, recovered, records, first]);
+}
+
+async function loadLeaderboard({preserve = false} = {}) {
   const target = $('#leaderboard-content');
   const card = $('#tier-record');
-  const scope = 'The earliest accepted recovery at this tier or higher, across all rounds. Ties use the server receipt identifier.';
-  setText('#leaderboard-title', 'Recovery record');
-  card.setAttribute('data-state', 'loading');
-  $('#tier-record-notes').hidden = true;
-  $('#tier-record-notes').open = false;
-  $('#leaderboard-scope').hidden = true;
-  $('#leaderboard-footnote').hidden = true;
-  setText('#leaderboard-scope', scope);
+  const named = namedParameters(selectedScheme(), state.profile);
+  const exact = exactProfileRecords(selectedScheme(), state.profile);
+  const scope = exact ? `The earliest accepted recovery of this exact ${named ? 'parameter set' : intermediateConfiguration(state.profile) ? 'configuration' : 'stage'}, across all rounds. Ties use the server receipt identifier.` : 'The earliest accepted recovery at this stage or higher, across all rounds. Ties use the server receipt identifier.';
+  const footnote = (exact ? 'Recoveries do not transfer between profiles. ' : '“Via Stage” credits a recovery at a higher stage; the result describes that actual instance. ') + 'A recovery verifies one challenge answer. It does not establish a new attack method or a general break of the scheme. Method and compute details are contributor-reported.';
   const request = ++state.leaderboardRequest;
   const selected = profileId();
   const schemeId = state.schemeId, schemeVersion = state.schemeVersion;
-  if (state.screen !== 'scheme' || !selected) return showEmpty(target, 'Choose an available tier to see its record.');
-  setLoading(target, 'Loading the recovery record…');
+  const selection = selectionKey(), dataKey = leaderboardRecoveryKey();
+  const current = () => request === state.leaderboardRequest && state.screen === 'scheme' &&
+    state.view === 'leaderboard' && selection === selectionKey();
+  if (state.screen !== 'scheme' || !selected) return showEmpty(target, named ? 'Choose an available parameter set to see its record.' : 'Choose an available stage to see its record.');
+  state.leaderboardPendingKey = dataKey;
+  if (!preserve) {
+    state.leaderboardDataKey = null;
+    setText('#leaderboard-title', 'Recovery record');
+    card.setAttribute('data-state', 'loading');
+    $('#tier-record-notes').hidden = true;
+    $('#tier-record-notes').open = false;
+    $('#leaderboard-scope').hidden = true;
+    $('#leaderboard-footnote').hidden = true;
+    setText('#leaderboard-scope', scope);
+    setText('#leaderboard-footnote', footnote);
+    setLoading(target, 'Loading the recovery record…');
+  }
   $('#refresh-leaderboard').disabled = true;
   try {
     const data = await api('/api/leaderboard?' + new URLSearchParams({profile_id: selected, scheme_id: schemeId, scheme_version: schemeVersion}));
-    if (request !== state.leaderboardRequest) return;
+    if (!current()) return;
     if (!Array.isArray(data.entries) || (data.profile_id != null && data.profile_id !== selected) ||
         (data.scheme_id != null && data.scheme_id !== schemeId) ||
         (data.scheme_version != null && data.scheme_version !== schemeVersion)) {
@@ -1595,23 +1866,35 @@ async function loadLeaderboard() {
     if (!data.entries.length) {
       setText('#leaderboard-title', 'Unsolved');
       card.setAttribute('data-state', 'unsolved');
+      $('#tier-record-notes').hidden = true;
+      $('#tier-record-notes').open = false;
+      $('#leaderboard-scope').hidden = true;
+      $('#leaderboard-footnote').hidden = true;
       const empty = node('div', undefined, 'tier-record-open');
-      empty.append(node('p', 'No accepted recoveries yet. Set the first record for Tier ' + instanceSize(state.profile) + '.', 'tier-record-invitation'));
-      const challenge = node('a', 'Take on this tier →', 'button button-primary tier-record-challenge');
-      challenge.href = schemeRoute(selectedScheme(), state.profile, 'challenge');
+      empty.append(node('p', 'No accepted recoveries yet. Set the first record for ' + profileLabel(state.profile, selectedScheme()) + '.', 'tier-record-invitation'));
+      const challenge = node('a', named ? 'Take on this parameter set →' : intermediateConfiguration(state.profile) ? 'Take on this configuration →' : 'Take on this stage →', 'button button-primary tier-record-challenge');
+      const scheme = selectedScheme(), profile = state.profile;
+      challenge.href = schemeRoute(scheme, profile, 'challenge');
+      challenge.addEventListener('click', event => takeOnChallenge(scheme, profile, event));
       empty.append(challenge);
       target.replaceChildren(empty);
+      state.leaderboardDataKey = dataKey;
       return;
     }
     const entry = data.entries[0];
     if (entry.rank !== 1 || typeof entry.handle !== 'string' || !entry.handle || !Number.isFinite(entry.received_at)) {
       throw new Error('The recovery record could not be loaded. Please try again.');
     }
+    if (exact && (entry.is_inherited || (entry.profile_id != null && entry.profile_id !== selected))) {
+      throw new Error('The recovery record does not belong to this exact profile. Please refresh.');
+    }
     setText('#leaderboard-title', 'Broken by');
     card.setAttribute('data-state', 'solved');
     $('#tier-record-notes').hidden = false;
     $('#leaderboard-scope').hidden = false;
     $('#leaderboard-footnote').hidden = false;
+    setText('#leaderboard-scope', scope);
+    setText('#leaderboard-footnote', footnote);
     if (data.includes_compatible_versions?.length) setText('#leaderboard-scope', scope + ' Includes identical parameters from version ' + data.includes_compatible_versions.join(', ') + '; each record keeps its original release.');
     const winner = node('div', undefined, 'tier-winner');
     const name = node('a', entry.handle, 'tier-winner-name');
@@ -1620,7 +1903,8 @@ async function loadLeaderboard() {
     winner.append(name);
     const meta = node('div', undefined, 'tier-record-meta');
     meta.append(node('span', 'First recovery · ' + utcDate(entry.received_at)));
-    if (entry.is_inherited) meta.append(node('span', 'Via Tier ' + entry.instance_size, 'leaderboard-credit'));
+    const entryLabel = recordProfileLabel({...entry, scheme_id: entry.scheme_id || state.schemeId, scheme_version: entry.scheme_version || state.schemeVersion, profile_id: entry.profile_id || selected});
+    if (entry.is_inherited && !exact) meta.append(node('span', 'Via ' + entryLabel, 'leaderboard-credit'));
     if (entry.scheme_version && entry.scheme_version !== state.schemeVersion) meta.append(node('span', 'Release ' + entry.scheme_version, 'tier-record-release'));
     winner.append(meta);
     const evidence = node('div', undefined, 'tier-record-evidence');
@@ -1629,16 +1913,18 @@ async function loadLeaderboard() {
     result.type = 'button';
     result.setAttribute('aria-label', 'View recovery by ' + entry.handle);
     result.setAttribute('aria-haspopup', 'dialog');
-    const recoveredSize = entry.instance_size ?? instanceSize(state.profile);
-    const context = `${selectedScheme().name} · Tier ${recoveredSize} · version ${entry.scheme_version || state.schemeVersion}`;
+    const context = `${selectedScheme().name} · ${entryLabel} · version ${entry.scheme_version || state.schemeVersion}`;
     result.addEventListener('click', () => entry.submission_id
       ? openSubmissionDetails(entry.submission_id, result)
       : openRecovery(entry, context, result));
     evidence.append(result);
     winner.append(evidence);
     target.replaceChildren(winner);
+    state.leaderboardDataKey = dataKey;
   } catch (error) {
-    if (request === state.leaderboardRequest) {
+    if (current()) state.leaderboardDataKey = null;
+    if (current() && preserve) toast('Recovery record refresh failed. ' + error.message);
+    else if (current()) {
       setText('#leaderboard-title', 'Recovery record');
       card.setAttribute('data-state', 'error');
       $('#tier-record-notes').hidden = true;
@@ -1646,7 +1932,12 @@ async function loadLeaderboard() {
       $('#leaderboard-footnote').hidden = true;
       showInlineError(target, error.message, loadLeaderboard);
     }
-  } finally { if (request === state.leaderboardRequest) $('#refresh-leaderboard').disabled = false; }
+  } finally {
+    if (request === state.leaderboardRequest) {
+      state.leaderboardPendingKey = null;
+      $('#refresh-leaderboard').disabled = false;
+    }
+  }
 }
 function renderRecovery(entry, context) {
   const incorrect = entry.status === 'incorrect';
@@ -1704,7 +1995,7 @@ async function openSubmissionDetails(id, trigger) {
     }
     const scheme = availableReleases().find(release => release.id === entry.scheme_id && String(release.version) === String(entry.scheme_version));
     const name = scheme?.name || entry.scheme_id;
-    const tier = Number.isSafeInteger(entry.instance_size) ? 'Tier ' + entry.instance_size : entry.profile_id;
+    const tier = recordProfileLabel(entry);
     const context = `${name} · ${tier} · version ${entry.scheme_version}`;
     renderRecovery(entry, context);
   } catch (error) {
@@ -1764,7 +2055,10 @@ for (const dialog of document.querySelectorAll('dialog')) {
       setText('#recovery-context', '');
       setText('#recovery-title', 'Submission details');
     }
-    if (dialog === authDialog) $('#auth-password').value = '';
+    if (dialog === authDialog) {
+      $('#auth-password').value = '';
+      if (state.challengeStartIntent?.awaitingSignIn) state.challengeStartIntent = null;
+    }
     if (dialog === submissionDialog && !state.pendingAttempt && !state.submitBusy) $('#candidate').value = '';
     if (dialog === submissionDialog) {
       state.recoveryImportRequest++;
@@ -1790,6 +2084,7 @@ function setAuthMode(mode) {
 function openAuth(trigger) { setError('#auth-error', ''); openDialog(authDialog, trigger); }
 $('#auth-form').addEventListener('submit', async event => {
   event.preventDefault();
+  const startIntent = state.challengeStartIntent;
   const button = $('#auth-submit');
   button.disabled = true;
   $('#login-mode').disabled = true;
@@ -1798,10 +2093,14 @@ $('#auth-form').addEventListener('submit', async event => {
   setText('#auth-submit', state.authMode === 'login' ? 'Signing in…' : 'Creating your account…');
   try {
     const data = await api('/api/auth/' + state.authMode, {handle: $('#auth-handle').value.trim(), password: $('#auth-password').value});
+    const dialogStillOpen = authDialog.open;
+    const resumeStart = startIntent?.awaitingSignIn && state.challengeStartIntent === startIntent &&
+      !state.user && dialogStillOpen && challengeStartSelectionMatches(startIntent);
     setSession(data);
+    if (resumeStart && state.user) state.challengeStartIntent = {...startIntent, accountId: state.user.id, awaitingSignIn: false};
     $('#auth-form').reset();
     authDialog.close();
-    await loadChallenge();
+    await loadChallenge({allowAutomatic: dialogStillOpen && (!startIntent || resumeStart)});
     if (state.screen === 'scheme' && state.view === 'leaderboard') await loadLeaderboard();
     toast('Signed in as ' + state.user.handle + '.');
   } catch (error) { setError('#auth-error', error.message); }
@@ -1885,7 +2184,7 @@ async function importRecoveryFile(file) {
     if (!canSubmitChallenge(challenge)) throw new Error('This file’s instance has expired, already has a final answer, or cannot accept a key.');
     if (state.pendingAttempt || state.submitBusy) throw new Error('Finish the pending submission before importing another result.');
     const target = submissionTarget(challenge);
-    if (!target.scheme || !target.profile) throw new Error('This instance’s scheme, release, or tier is unavailable. Refresh the page and try again.');
+    if (!target.scheme || !target.profile) throw new Error('This instance’s scheme, release, or parameter profile is unavailable. Refresh the page and try again.');
     const result = parseRecoveryFile(text, challenge);
     // Commit target and draft together, only after the whole file is valid.
     state.submissionChallenge = challenge;
@@ -1936,7 +2235,7 @@ function submissionTarget(challenge) {
 }
 function submissionTargetLabel(challenge) {
   const {scheme, profile} = submissionTarget(challenge);
-  return scheme && profile ? `${scheme.name} (Tier ${instanceSize(profile)})` : challenge?.profile_id || 'Choose an instance';
+  return scheme && profile ? `${scheme.name} (${profileLabel(profile, scheme)})` : challenge?.profile_id || 'Choose an instance';
 }
 function renderSubmissionTarget() {
   const challenge = state.submissionChallenge;
@@ -2037,7 +2336,7 @@ $('#submission-form').addEventListener('submit', async event => {
     renderChallenge();
     toast(data.submission.status === 'correct' ? 'Key recovered. Your recovery has been recorded.' : 'Answer recorded. The key did not match this instance.');
     // A progress hint refresh cannot change the accepted submission receipt.
-    if (data.submission.status === 'correct') refreshProfiles().catch(() => {});
+    if (data.submission.status === 'correct') refreshRecoveryViews();
     if (state.view === 'leaderboard') loadLeaderboard();
   } catch (error) {
     if (error.status === 409) {
@@ -2082,8 +2381,7 @@ async function showHistory() {
         String(release.version) === String(submission.scheme_version));
       const profile = scheme?.profiles?.find(profile => profileId(profile) === submission.profile_id);
       const name = scheme?.name || state.schemes.find(release => release.id === submission.scheme_id)?.name || submission.scheme_id;
-      const tier = instanceSize(profile);
-      const title = `${name || 'Scheme'} (${tier == null ? submission.profile_id : 'Tier ' + tier})`;
+      const title = `${name || 'Scheme'} (${profile ? profileLabel(profile, scheme) : recordProfileLabel(submission)})`;
       copy.append(node('span', title, 'history-item-title'), node('span', submission.method_name || 'Submitted method', 'history-item-meta'), node('span', utcDate(submission.received_at), 'history-item-meta'));
       item.setAttribute('aria-label', 'View submission for ' + title + ' received ' + utcDate(submission.received_at));
       item.addEventListener('click', () => openSubmissionDetails(submission.id, item));
@@ -2131,17 +2429,17 @@ function chooseInstanceSize() {
     }
     navigate(schemeRoute(scheme, profile, state.view));
   }
-  else setError('#profile-error', `Choose a published integer tier from ${$('#profile-select').min} to ${$('#profile-select').max}.`);
+  else setError('#profile-error', `Choose a published integer stage from ${$('#profile-select').min} to ${$('#profile-select').max}.`);
 }
 function stepInstanceSize(direction) {
   const scheme = selectedScheme();
-  const profiles = [...(scheme?.profiles || [])].sort((a, b) => instanceSize(a) - instanceSize(b));
-  const index = profiles.findIndex(profile => profileId(profile) === profileId());
-  const profile = profiles[index + direction];
+  const profiles = orderedProfiles(scheme);
+  const position = stagePosition(state.profile);
+  const profile = direction > 0 ? profiles.find(profile => stagePosition(profile) > position) : profiles.findLast(profile => stagePosition(profile) < position);
   if (profile) navigate(schemeRoute(scheme, profile, state.view));
 }
 function sliderProfile() {
-  const profiles = [...(selectedScheme()?.profiles || [])].sort((a, b) => instanceSize(a) - instanceSize(b));
+  const profiles = orderedProfiles(selectedScheme());
   const index = Number($('#size-slider').value);
   return Number.isInteger(index) ? profiles[index] : null;
 }
@@ -2191,7 +2489,7 @@ $('#history-button').addEventListener('click', showHistory);
 $('#retry-button').addEventListener('click', () => state.ready ? synchronizeSession() : initialize());
 $('#refresh-catalogue').addEventListener('click', async () => {
   $('#refresh-catalogue').disabled = true;
-  try { await refreshProfiles(); globalError(''); }
+  try { if (await refreshProfiles() !== false) globalError(''); }
   catch (error) { globalError(error.message); }
   finally { $('#refresh-catalogue').disabled = false; }
 });
@@ -2207,14 +2505,88 @@ window.addEventListener('hashchange', () => applyRoute(true));
 
 
 // A proposal is a description for review. No uploaded instructions or links run.
+const PROPOSAL_AGENT_UI = {
+  draft: {button: '#proposal-use-agent', panel: '#proposal-agent-instructions', text: '#proposal-agent-text', followup: '#proposal-agent-followup', copy: '#copy-proposal-agent'},
+  revision: {button: '#proposal-revise-agent', panel: '#proposal-revise-agent-instructions', text: '#proposal-revise-agent-text', followup: '#proposal-revise-agent-followup', copy: '#copy-proposal-revise-agent'}
+};
+function proposalAgentTarget(kind) {
+  if (state.screen !== 'propose') return null;
+  let record = null;
+  if (kind === 'revision') {
+    record = proposals.agentRevision;
+    if (!state.user || !record || proposals.detailId !== record.id) return null;
+  } else {
+    if (proposals.detailId || proposals.reviewMode || proposals.pending || proposals.submitting) return null;
+    if (proposals.revisingId) {
+      record = proposals.revisionBase;
+      if (!state.user || !record || record.id !== proposals.revisingId) return null;
+    }
+  }
+  return {record, key: JSON.stringify([state.user?.id || null, record?.id || 'new', record?.revision || null, record?.content_sha256 || null])};
+}
+function proposalAgentPrompt(record) {
+  const origin = siteOrigin();
+  const quote = value => "'" + String(value).replace(/'/g, "'\\''") + "'";
+  const client = 'python3 ./crucible_cli.py --server ' + quote(origin);
+  const folder = record ? './crucible-proposal-' + record.id.slice(0, 8) + '-r' + (record.revision + 1) : './crucible-proposal';
+  const initialize = record ? `proposal revise ${quote(record.id)}` : 'proposal init';
+  const base = record ? `\nExpected base: revision ${record.revision}, content SHA-256 ${record.content_sha256}. If the fetched revision or hash differs, show me the change before editing.\n` : '\n';
+  const login = `${client} login`;
+  return `${record ? 'Help me revise my KEM proposal' : 'Help me prepare a new KEM proposal'} for Crucible.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running.\nBefore private access or submission, run ${login} if needed and let me approve the proposal permissions in my browser. Existing connections need login once to add those permissions.\n\nPrepare a fresh workspace:\n${client} ${initialize} --path ${quote(folder)}\n${base}\nFollow its README, template and schema. Explain what it adds over the closest existing scheme. Describe the exact algorithms and sampling distributions, correctness bound and scope, security assumptions, and identified implementation/evidence. Complete the template’s tier_design plan: describe the supported configuration space or reviewed generation rule, with stable configuration identities, and a default progression through natural parameter settings. Its positions are stages; their count is scheme-specific and equal stage numbers do not imply equal security. Preserve the construction and sampling distributions, explaining any coordinated parameter changes. Hold a common correctness requirement across the progression; negligible nonzero failure is allowed, and material per-configuration differences must be disclosed. State the endpoint target, evidence and status (supported-estimate, provisional or unestimated), retaining meaningful published or justified endpoints; justify useful intermediate stages. Prefer a default stage count in multiples of ten, with multiples of five as a fallback when the reviewed configurations support it; preserve endpoints and useful intermediate configurations, and never invent settings or compromise correctness or fidelity to meet a count. Complete parameter_selection: justify efficient admissible configurations under a stated cost objective, constraints, pinned security model and candidate domain; document comparison evidence, tradeoffs and uncertainty without claiming global optimality. Never add padding or restrict entropy just to manufacture stages. Keep unknowns explicit. Ask me for missing information; do not invent proofs, benchmarks or security claims.\n\nCheck the specification:\n${client} proposal validate --path ${quote(folder)}\nShow me the specification and validation result. Only when I ask you to submit, run:\n${client} proposal submit --path ${quote(folder)}\nReturn the private proposal link from the receipt. Submission requests human review; it does not approve or activate the scheme.`;
+}
+function resetProposalAgentInstructions(kind = null) {
+  for (const name of kind ? [kind] : Object.keys(PROPOSAL_AGENT_UI)) {
+    const ui = PROPOSAL_AGENT_UI[name];
+    proposals.agentKeys[name] = null;
+    $(ui.panel).hidden = true;
+    $(ui.button).setAttribute('aria-expanded', 'false');
+    setText(ui.text, ''); setText(ui.followup, '');
+  }
+}
+function renderProposalAgentControls() {
+  for (const [kind, ui] of Object.entries(PROPOSAL_AGENT_UI)) {
+    const target = proposalAgentTarget(kind);
+    $(ui.button).disabled = !target;
+    if (kind === 'revision') $(ui.button).hidden = !target;
+    if (proposals.agentKeys[kind] && proposals.agentKeys[kind] !== target?.key) resetProposalAgentInstructions(kind);
+  }
+  setText('#proposal-use-agent', proposals.revisingId ? 'Revise with an agent →' : 'Use with an agent →');
+}
+function showProposalAgentInstructions(kind) {
+  const target = proposalAgentTarget(kind);
+  if (!target) return;
+  const ui = PROPOSAL_AGENT_UI[kind];
+  proposals.agentKeys[kind] = target.key;
+  setText(ui.text, proposalAgentPrompt(target.record));
+  setText(ui.followup, target.record ? `“Update my Crucible proposal ${target.record.id} using the reviewer feedback.”` : '“Help me prepare a new KEM proposal for Crucible.”');
+  $(ui.panel).hidden = false;
+  $(ui.button).setAttribute('aria-expanded', 'true');
+}
+async function copyProposalAgentInstructions(kind) {
+  const target = proposalAgentTarget(kind);
+  if (!target) return;
+  const ui = PROPOSAL_AGENT_UI[kind];
+  $(ui.copy).disabled = true;
+  const current = () => proposalAgentTarget(kind)?.key === target.key && proposals.agentKeys[kind] === target.key;
+  try {
+    await navigator.clipboard.writeText(proposalAgentPrompt(target.record));
+    if (current()) toast('Proposal prompt copied. Give it to your agent.');
+  } catch {
+    if (current()) { showProposalAgentInstructions(kind); toast('Copy the proposal instructions shown below.'); }
+  } finally { $(ui.copy).disabled = false; }
+}
 const SPECIFICATION_LABELS = {
   setup: 'Setup', keygen: 'Key generation', encapsulate: 'Encapsulation', decapsulate: 'Decapsulation',
-  tier_meaning: 'Meaning of a tier', supported_tiers: 'Supported tiers', mapping: 'Parameter mapping',
+  tier_meaning: 'Meaning of a stage', supported_tiers: 'Supported stages', mapping: 'Parameter mapping',
   distribution: 'Sampling distribution', reuse: 'Parameter reuse', public_key: 'Public key',
   ciphertext: 'Ciphertext', shared_secret: 'Shared secret', shared_secret_bytes: 'Shared-secret bytes',
   kind: 'Claim type', failure_bound: 'Failure bound', argument: 'Argument', scope: 'Scope', evidence: 'Evidence',
   notion: 'Security notion', model: 'Attack model', claim: 'Claim', assumptions: 'Assumptions',
-  url: 'URL', sha256: 'SHA-256', runtime: 'Runtime', entrypoint: 'Entry point'
+  url: 'URL', sha256: 'SHA-256', runtime: 'Runtime', entrypoint: 'Entry point',
+  parameter_progression: 'Parameter progression', cost_tradeoff: 'Resource costs', fixed_correctness: 'Common correctness requirement',
+  endpoint_status: 'Endpoint status', endpoint_target: 'Endpoint target', endpoint_evidence: 'Endpoint evidence', intermediate_steps: 'Intermediate steps', parameter_selection: 'Parameter selection',
+  objective: 'Cost objective', constraints: 'Fixed constraints', security_model: 'Security and cost model',
+  search_domain: 'Candidate search domain', comparison_evidence: 'Candidate comparison evidence', tradeoffs_and_uncertainty: 'Tradeoffs and uncertainty'
 };
 function proposalError(error) {
   setError('#proposal-error', error?.message || '');
@@ -2240,11 +2612,25 @@ function validProposal(record, id = null) {
     Number.isSafeInteger(record.revision) && record.revision > 0 && Number.isFinite(record.created_at) &&
     typeof record.content_sha256 === 'string' && /^[a-f0-9]{64}$/.test(record.content_sha256) && validSpecification(record.specification);
 }
+function hasProposalTierDesign(spec) {
+  const plan = spec.tier_design;
+  return plan && typeof plan === 'object' && !Array.isArray(plan) &&
+    ['supported-estimate', 'provisional', 'unestimated'].includes(plan.endpoint_status) &&
+    ['parameter_progression', 'cost_tradeoff', 'fixed_correctness', 'endpoint_target', 'endpoint_evidence', 'intermediate_steps']
+      .every(key => typeof plan[key] === 'string' && plan[key].trim());
+}
+function hasProposalParameterSelection(spec) {
+  const plan = spec.tier_design?.parameter_selection;
+  return plan && typeof plan === 'object' && !Array.isArray(plan) &&
+    ['objective', 'constraints', 'security_model', 'search_domain', 'comparison_evidence', 'tradeoffs_and_uncertainty']
+      .every(key => typeof plan[key] === 'string' && plan[key].trim());
+}
 function proposalStatusLabel(status) {
-  return {submitted: 'Review pending', changes_requested: 'Changes requested', approved: 'Approved for trusted integration'}[status] || status;
+  return {submitted: 'Review pending', changes_requested: 'Changes requested', approved: 'Approved'}[status] || status;
 }
 function previewValue(key, value) {
   if (value === null || value === undefined) return key === 'shared_secret_bytes' ? 'See shared-secret encoding' : 'Not provided';
+  if (key === 'endpoint_status') return {'supported-estimate': 'Supported estimate', provisional: 'Provisional', unestimated: 'Unestimated'}[value] || String(value);
   if (key === 'supported_tiers' && value && typeof value === 'object') {
     if (value.kind === 'range') return `${value.min}–${value.max} · step ${value.step}`;
     if (value.kind === 'list' && Array.isArray(value.values)) return value.values.join(', ');
@@ -2253,7 +2639,7 @@ function previewValue(key, value) {
 }
 function renderSpecification(target, spec) {
   target.replaceChildren(node('h2', spec.name), node('p', 'Version ' + spec.version, 'proposal-version'), node('p', spec.summary, 'proposal-summary'));
-  for (const [key, label] of [['parameters', 'Parameters'], ['algorithms', 'Algorithms'], ['encoding', 'Encoding'],
+  for (const [key, label] of [['parameters', 'Parameters'], ['tier_design', 'Default progression'], ['algorithms', 'Algorithms'], ['encoding', 'Encoding'],
     ['correctness', 'Correctness claim'], ['security', 'Security claim'], ['implementation', 'Implementation']]) {
     const section = node('details', undefined, 'proposal-section');
     section.open = key === 'parameters';
@@ -2261,9 +2647,15 @@ function renderSpecification(target, spec) {
     const value = spec[key];
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       const facts = node('dl', undefined, 'detail-list proposal-facts');
-      for (const [field, content] of Object.entries(value)) addFact(facts, SPECIFICATION_LABELS[field] || field, previewValue(field, content));
+      for (const [field, content] of Object.entries(value)) {
+        if (field === 'parameter_selection' && content && typeof content === 'object') {
+          for (const [choice, description] of Object.entries(content)) addFact(facts, SPECIFICATION_LABELS[choice] || choice, previewValue(choice, description));
+        } else addFact(facts, SPECIFICATION_LABELS[field] || field, previewValue(field, content));
+      }
       section.append(facts);
-    } else section.append(node('p', 'Not provided. Implementation review is required before activation.', 'field-hint'));
+    } else section.append(node('p', key === 'tier_design'
+      ? 'Not provided in this revision. A default-progression plan is required before approval: reviewed configurations, faithful parameter scaling, resource costs, a common correctness bound, endpoint target and evidence or provisional status, and useful intermediate stages.'
+      : 'Not provided. Implementation review is required before activation.', 'field-hint'));
     target.append(section);
   }
   if (spec.references.length) {
@@ -2278,6 +2670,7 @@ function renderSpecification(target, spec) {
   }
 }
 function renderProposalDraft() {
+  renderProposalAgentControls();
   const busy = proposals.validating || proposals.submitting;
   $('#upload-proposal').disabled = busy || Boolean(proposals.pending) || Boolean(proposals.revisingId && !proposals.revisionBase);
   $('#proposal-file').disabled = $('#upload-proposal').disabled;
@@ -2308,6 +2701,7 @@ function clearProposalDraft() {
   proposalStatus('');
 }
 function resetProposalAccount(previousId) {
+  resetProposalAgentInstructions();
   proposals.validationRequest++;
   proposals.submitRequest++;
   proposals.listRequest++;
@@ -2331,6 +2725,7 @@ function resetProposalAccount(previousId) {
   if (state.screen === 'propose' && state.ready) enterProposalPage(new URLSearchParams(window.location.hash.split('?')[1] || ''), true);
 }
 function leaveProposalPage() {
+  resetProposalAgentInstructions();
   proposals.validationRequest++;
   proposals.listRequest++;
   proposals.detailRequest++;
@@ -2347,6 +2742,9 @@ function enterProposalPage(params, entering) {
   const id = params.get('proposal');
   const revise = id ? null : params.get('revise');
   const reviewMode = params.get('review') === '1';
+  const agentRouteKey = JSON.stringify([id, revise, reviewMode]);
+  if (proposals.agentRouteKey !== agentRouteKey) resetProposalAgentInstructions();
+  proposals.agentRouteKey = agentRouteKey;
   const modeChanged = proposals.reviewMode !== reviewMode;
   proposals.reviewMode = reviewMode;
   if (!id && !reviewMode && proposals.pending && proposals.pending.revisionId !== revise) {
@@ -2380,6 +2778,7 @@ function enterProposalPage(params, entering) {
     $('#proposal-detail-content').replaceChildren();
     clearProposalReview();
   }
+  renderProposalAgentControls();
 }
 async function importProposal(file) {
   if (!file || proposals.submitting || proposals.pending || state.screen !== 'propose') return;
@@ -2512,16 +2911,20 @@ async function loadProposalDetail(id) {
     if (!validProposal(result.proposal, id)) throw new Error('The proposal details could not be loaded.');
     const record = result.proposal;
     proposals.detailRecord = record;
+    proposals.detailOwn = result.author?.id === account;
     renderSpecification(target, record.specification);
     target.prepend(node('p', 'Revision ' + record.revision + ' · ' + proposalStatusLabel(record.status) + ' · ' + utcDate(record.created_at), 'proposal-status'));
-    target.append(node('p', record.status === 'approved' ? 'A manual reviewer approved this revision for trusted integration. Approval does not activate a live challenge or certify security.' : 'Format checked only. This submitted specification has not been approved or activated as a live challenge.', 'panel-footnote'),
+    const testOnlyReview = (result.reviews || []).some(review => review.revision === record.revision && review.checks?.test_only_self_review === true);
+    target.append(node('p', testOnlyReview ? 'Development self-review only. This decision does not satisfy independent admission review or earn scheme contribution points.' : record.status === 'approved' ? 'A manual reviewer approved this revision for trusted integration. Approval does not activate a live challenge or certify security.' : 'Format checked only. This submitted specification has not been approved or activated as a live challenge.', 'panel-footnote'),
       node('p', 'Content SHA-256 · ' + record.content_sha256, 'proposal-digest'));
     renderProposalAudit(target, result);
     const own = result.author?.id === account;
+    proposals.agentRevision = own ? record : null;
+    renderProposalAgentControls();
     $('#proposal-detail-actions').hidden = !own && !(state.canReviewProposals && result.author?.id);
     $('#revise-proposal').hidden = !own;
     $('#revise-proposal').href = '#propose?revise=' + encodeURIComponent(record.id);
-    if (!own && result.author?.id && state.canReviewProposals && (record.status === 'submitted' || proposals.reviewPending?.id === record.id)) showProposalReview(record, true);
+    if ((!own || state.canSelfReviewProposals) && result.author?.id && state.canReviewProposals && (record.status === 'submitted' || proposals.reviewPending?.id === record.id)) showProposalReview(record, true);
   } catch (error) { if (current()) showInlineError(target, error.message, () => loadProposalDetail(id)); }
 }
 async function loadProposalRevision(id) {
@@ -2562,9 +2965,12 @@ function renderProposalAudit(target, result) {
     history.append(item);
     for (const review of reviews.filter(review => review.revision === revision.revision)) {
       const note = node('div', undefined, 'proposal-audit-note');
-      note.append(node('h4', proposalStatusLabel(review.decision) + (review.reviewer?.handle ? ' · ' + review.reviewer.handle : '')),
+      note.append(node('h4', (review.checks?.test_only_self_review === true ? 'Development self-review · ' : '') + proposalStatusLabel(review.decision) + (review.reviewer?.handle ? ' · ' + review.reviewer.handle : '')),
         node('p', typeof review.notes === 'string' ? review.notes : '', 'proposal-summary'),
-        node('p', 'Evidence', 'eyebrow'), node('p', typeof review.evidence === 'string' ? review.evidence : '', 'proposal-summary'));
+        node('p', 'Evidence', 'eyebrow'), node('p', typeof review.evidence === 'string' ? review.evidence : '', 'proposal-summary'),
+        node('p', review.checks?.tier_design === true ? 'Default progression: reviewed.' : 'Default progression: not reviewed in this decision.', 'field-hint'),
+        node('p', review.checks?.parameter_selection === true ? 'Parameter selection: reviewed.' : 'Parameter selection: not reviewed in this decision.', 'field-hint'));
+      if (review.checks?.test_only_self_review === true) note.append(node('p', 'Test only; independent admission and scheme contribution credit still require another reviewer.', 'field-hint'));
       history.append(note);
     }
   }
@@ -2589,7 +2995,12 @@ function renderProposalAudit(target, result) {
   target.append(history);
 }
 function clearProposalReview() {
+  proposals.agentRevision = null;
+  resetProposalAgentInstructions('revision');
+  $('#proposal-revise-agent').hidden = true;
   proposals.detailRecord = null;
+  proposals.detailOwn = false;
+  $('#proposal-self-review-notice').hidden = true;
   $('#proposal-detail-actions').hidden = true;
   $('#revise-proposal').hidden = true;
   $('#proposal-review-form').hidden = true;
@@ -2602,6 +3013,9 @@ function clearProposalReview() {
 }
 function showProposalReview(record, initialize = false) {
   $('#proposal-review-form').hidden = false;
+  $('#proposal-self-review-notice').hidden = !proposals.detailOwn;
+  const approvalOption = $('#proposal-decision').querySelector('[value="approved"]');
+  if (approvalOption) approvalOption.textContent = proposals.detailOwn ? 'Approve for testing only' : 'Approve for trusted integration';
   const artifact = record.specification.implementation?.sha256;
   setText('#proposal-review-artifact', artifact ? 'Implementation SHA-256 · ' + artifact : 'Approval requires an implementation artifact with a SHA-256 identifier.');
   if (initialize) $('#proposal-decision').value = 'changes_requested';
@@ -2641,7 +3055,9 @@ async function submitProposalReview(event) {
   setError('#proposal-review-error', '');
   if (!proposals.reviewPending) {
     if (!['approved', 'changes_requested'].includes(decision) || !notes || !evidence) return setError('#proposal-review-error', 'Choose a decision and include notes and supporting evidence.');
-    if (decision === 'approved' && (!Object.values(checks).every(Boolean) || !/^[a-f0-9]{64}$/.test(implementation || '') || [...evidence].length < 20 || record.specification.correctness.kind === 'unknown')) return setError('#proposal-review-error', 'Approval requires all five checks, an explicit correctness claim, an identified implementation artifact, and a documented reproduction record.');
+    if (decision === 'approved' && !hasProposalTierDesign(record.specification)) return setError('#proposal-review-error', 'Approval requires a default-progression plan in this specification. Ask the proposer to submit a new revision with the completed plan.');
+    if (decision === 'approved' && !hasProposalParameterSelection(record.specification)) return setError('#proposal-review-error', 'Approval requires a parameter-selection plan: objective, constraints, pinned model, search domain, candidate comparisons and uncertainty. Submit a completed revision first.');
+    if (decision === 'approved' && (!checks.parameter_selection || !checks.tier_design || !Object.values(checks).every(Boolean) || !/^[a-f0-9]{64}$/.test(implementation || '') || [...evidence].length < 20 || record.specification.correctness.kind === 'unknown')) return setError('#proposal-review-error', 'Approval requires all review checks, an explicit correctness claim, an identified implementation artifact, and a documented reproduction record.');
     proposals.reviewPending = {id: record.id, payload: {
       expected_revision: record.revision, content_sha256: record.content_sha256, decision,
       implementation_sha256: implementation, checks, notes, evidence, idempotency_key: crypto.randomUUID()
@@ -2684,6 +3100,13 @@ $('#submit-proposal').addEventListener('click', submitProposal);
 $('#refresh-proposals').addEventListener('click', loadProposals);
 $('#proposal-sign-in').addEventListener('click', () => openAuth($('#proposal-sign-in')));
 $('#proposal-review-form').addEventListener('submit', submitProposalReview);
+for (const [kind, ui] of Object.entries(PROPOSAL_AGENT_UI)) {
+  $(ui.button).addEventListener('click', () => {
+    if ($(ui.panel).hidden) showProposalAgentInstructions(kind);
+    else resetProposalAgentInstructions(kind);
+  });
+  $(ui.copy).addEventListener('click', () => copyProposalAgentInstructions(kind));
+}
 $('#download-proposal').addEventListener('click', () => {
   const record = proposals.detailRecord;
   if (!record) return;
@@ -2704,13 +3127,14 @@ function showWorkspace(name) {
   $('#catalogue-workspace').hidden = name !== 'catalogue';
   $('#workspace').hidden = name !== 'scheme';
   $('#overview-workspace').hidden = name !== 'overview';
+  $('#notebook-workspace').hidden = name !== 'notebook';
   $('#research-workspace').hidden = !research.visible;
   $('#about-workspace').hidden = name !== 'about';
   $('#proposal-workspace').hidden = name !== 'propose';
   $('#people-workspace').hidden = name !== 'people';
   $('#person-workspace').hidden = name !== 'person';
   $('#connect-workspace').hidden = name !== 'connect';
-  for (const kind of ['challenge', 'people', 'research', 'about']) {
+  for (const kind of ['challenge', 'people', 'notebook', 'research', 'about']) {
     const button = $('#nav-' + kind);
     const selected = kind === 'challenge' ? ['catalogue', 'scheme', 'overview', 'propose'].includes(name) : kind === 'people' ? ['people', 'person'].includes(name) : kind === name;
     button.classList.toggle('selected', selected);
@@ -2995,7 +3419,7 @@ function renderFindingProfiles(selected = []) {
     input.type = 'checkbox';
     input.value = profile.id;
     input.checked = selected.includes(profile.id);
-    label.append(input, node('span', instanceSize(profile) == null ? profile.name || profile.id : `Tier ${instanceSize(profile)}`));
+    label.append(input, node('span', profileLabel(profile, target)));
     options.append(label);
   }
   if (!options.childElementCount) options.append(node('p', 'No registered profiles for this target. Describe the parameter regime in Conditions and scope.', 'field-hint'));
@@ -3121,6 +3545,7 @@ $('#finding-form').addEventListener('submit', async event => {
 });
 $('#nav-challenge').addEventListener('click', () => navigate('#challenge'));
 $('#nav-people').addEventListener('click', () => navigate('#people'));
+$('#nav-notebook').addEventListener('click', () => navigate('#notebook'));
 $('#refresh-people').addEventListener('click', () => loadPeople());
 $('#more-people').addEventListener('click', () => loadPeople(true));
 $('#nav-about').addEventListener('click', () => navigate('#about'));
@@ -3159,7 +3584,6 @@ async function initialize() {
   if (catalogue.status === 'fulfilled') {
     state.schemes = catalogue.value.schemes || [];
     state.ready = true;
-    renderCatalogue();
     applyRoute();
   } else {
     showInlineError($('#kem-catalogue'), catalogue.reason.message, initialize);

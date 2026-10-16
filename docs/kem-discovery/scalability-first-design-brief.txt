@@ -1,0 +1,116 @@
+Scalability-first KEM discovery brief
+2026-10-14
+
+Decision
+
+Park the nonlinear boundary-action candidate before further testing or
+submission. Retain the source, evidence and validated but unsubmitted Crucible
+draft. The new prerequisite is a plausible security parameter family with a
+small-polynomial bound on the complete public representation. No concerted
+cryptanalytic work is authorized. This note contains size accounting and design
+requirements, not a new KEM or a claim of security.
+
+What "linear security, small-polynomial key" means
+
+Let lambda be intended security bits. The desired claim would relate a family
+of sampled instances to computational work 2^(Omega(lambda)), with the model,
+assumptions and constants stated. Classical and quantum targets need separate
+justification. lambda is not automatically the dimension, log field size, word
+length, secret entropy or hash output length.
+
+The working size target is an explicit bound close to quadratic in lambda,
+with any logarithmic factors written out. A cubic bound requires convincing
+byte estimates and an agreed practical budget. Neither degree nor byte budget
+was fixed numerically by the user; quadratic is the proposed screening target.
+An asymptotic polynomial by itself is insufficient. The constants and the field
+element widths can make even a low-degree polynomial impractical.
+
+A new hardness assumption need not already have a proof. It does need an exact
+sampled problem and a proposed parameter-to-security relationship, clearly
+marked as conjectural. Size formulas can be proved independently of hardness.
+No amount of honest agreement testing supplies the missing security mapping.
+
+What the present representation actually costs
+
+The existing construction publishes 2n polynomial generators. Each has 2n
+output coordinates in 2n state variables and one scalar t. Each coordinate has
+state degree at most 12 and t degree at most 2. Consequently a loose upper bound
+on its total coefficient slots is
+
+    N(n) = (2n)(2n) * 3 * binomial(2n + 12, 12).
+
+This follows by counting all state monomials of total degree at most 12 and
+three powers of t, independently, for each output coordinate. Some slots are
+necessarily zero or satisfy stronger structure, so this is not a lower bound
+or a claim about actual coefficient counts. It is O(n^14) for fixed degree.
+
+The current JSON additionally stores a length-(2n+1) exponent vector for each
+nonzero coefficient. Since these exponents are bounded by 12, a loose byte-size
+bound for this representation is
+
+    O(N(n) * (n + log p) + n*M*log p),
+
+plus metadata, with the last term accounting for the base and image samples.
+The field width log p must remain in the accounting. A hypothetical dense
+coefficient ordering could eliminate per-coefficient exponent vectors and give
+a bound O(N(n)*log p + n*M*log p) bits plus framing; this format has not been
+implemented or measured and need not be smaller for sparse instances.
+
+Thus the present generic expansion already has a polynomial size bound in n,
+but of a high degree. It is inaccurate to call that fixed-degree expansion
+exponential in n. It is also unjustified to substitute lambda for n: there is
+no supported security-parameter mapping. This calculation neither proves that
+all representations must be large nor establishes a practical compact one.
+
+The recorded public-parameter sizes are 54,185 bytes (n=2,p=7), 531,713 bytes
+(n=2,p=101), and 8,128,897 bytes (n=3,p=7). These are isolated toy instances with
+different sampled maps; they are not data from which to fit a security-scaling
+law. Their respective 32/64/96-byte ciphertexts do not remove the receiver's
+parameter cost. Setup is currently per receiver key, reused across its
+encapsulations.
+
+What a replacement must supply before experimental work
+
+1. A mathematical parameter family and exact public/secret distributions.
+   State the conjectured security problem and its lambda dependence. Identify
+   whether the target is classical or quantum, without assigning measured bits.
+
+2. A complete public representation with an explicit size formula. Count every
+   required public object; state field widths, degree, number of generators,
+   support sizes and framing. Do not make a growing circuit, hidden dictionary,
+   large public setup or private factorization disappear from the accounting.
+
+3. An honest common-secret mechanism and a correctness argument. Explain what
+   participants can evaluate with their secrets, and the computational task
+   defined by the public data. A generic hard search problem alone is not a KEM.
+
+4. Honest computation and memory bounds for setup, KeyGen, Encaps and Decaps.
+   Public-key, ciphertext and secret-state sizes must be reported separately.
+   A compact key that requires an impractical expanded object to evaluate has
+   not resolved the practical problem.
+
+5. Once a parameter map exists, calculate encoded sizes at target lambda values
+   128, 192 and 256. Mark them as formula-derived budgets under conjectural
+   security mapping, not benchmark results or secure parameter recommendations.
+
+Only then consider small correctness examples. Do not run stress tests or
+security experiments just because a candidate has working toy code. Failure
+to clear this screen means preserve the idea as a note and change direction.
+
+Where to restart
+
+Look for mathematical objects whose useful public representation is compact
+from the outset: bounded local data, a compact global object, or an explicitly
+counted evaluation representation. The honest agreement mechanism must operate
+directly on that representation. Global interaction, compact public description
+and useful secret assistance all need an explicit explanation; none is supplied
+merely by choosing a sparse format or a circuit.
+
+In particular, replacing expanded maps with an expression containing the hidden
+conjugator would change what is public. It cannot be called a lossless encoding
+optimization without accounting for that information. Compactness is an early
+design constraint, not a later compression promise.
+
+No replacement currently satisfies these requirements. This is a deliberate
+change of research objective and a stopping rule for unpromising experiments,
+not a negative security result about the retained nonlinear candidate.

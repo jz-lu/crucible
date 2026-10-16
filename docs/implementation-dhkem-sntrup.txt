@@ -1,0 +1,179 @@
+DHKEM/X25519 and Streamlined NTRU Prime — local implementation evidence
+Date: 2026-10-14
+
+Scope and status
+
+These are exact published KEM profiles for Crucible's passive shared-secret
+recovery experiment. They are local beta adapters, unscored until an explicit
+policy decision. Implementing and testing them is not independent cryptographic
+audit, formal proof verification, proposal review, or a declaration that the
+operator has performed a human scientific review. Registry activation and any
+later admission ledger are separate decisions.
+
+Neither adapter invents smaller curves, lower-entropy secrets or a 1–50 ladder.
+Both expose profile_kind=standard-parameter-set and ordinal profile_order=1.
+The displayed parameter set, not that integer, identifies the actual experiment.
+There is no initial_security_estimate field. X25519's 255 field bits and
+sntrup761's polynomial degree 761 are parameters, not comparable security bits.
+
+1. Exact construction and runtime
+
+dhkem-x25519 / release 1 / dhkem-x25519-v1-rfc9180
+  RFC 9180 DHKEM(X25519, HKDF-SHA256), KEM ID 0x0020, unauthenticated base KEM.
+  Recipient and ephemeral key pairs independently use DeriveKeyPair on 32 fresh
+  OS-random bytes. X25519 is cryptography 50.0.2's native implementation; labeled
+  HKDF follows sections 4.1/7.1.3. The target is the KEM shared_secret, not raw DH,
+  the HPKE exporter secret, or an AEAD key. pk/enc/K lengths are each 32 bytes.
+  Inputs have exact length/type checks; a null DH result is rejected.
+  cryptography's version, native extension digest and X25519 wrapper digest are
+  pinned. The extension is hashed before native import. No timing resistance
+  claim for all of Python/application code follows from the library's use.
+
+sntrup / release 1 / sntrup-v1-761
+  Streamlined NTRU Prime sntrup761, specification 2020-10-07; p=761, q=4591, w=286.
+  The implementation is current libntruprime 20260717, statically linked with
+  librandombytes 20240318's kernel implementation. Public/secret keys are 1158/
+  1763 bytes, ciphertext 1039 bytes, shared key 32 bytes. Only public key/ciphertext
+  are serialized. The target is the full specified HashSession output.
+  This is not NTRU LPRime, an earlier sntrup4591761 encoding, or an SSH hybrid.
+
+  scripts/native/sntrup_worker.c is a fixed-operation binary pipe wrapper.
+  Generate performs one keypair/encapsulation/decapsulation sequence. Its private
+  key remains inside that process; Python receives only public inputs, Encaps'
+  target and the self-check value. Keygen/encapsulate/decapsulate operations are
+  also available to local tests; the HTTP API must not expose a private-key or
+  decapsulation oracle. Secret input never appears in arguments/environment.
+
+  Python verifies the executable and worker-source digests on every call, then
+  runs a fixed executable without inherited loader environment or shell. It
+  concurrently handles bounded stdin/stdout, discards stderr and kills/reaps
+  the process on a 15-second deadline. The worker disables core dumps and has a
+  20-second CPU hard limit. A timeout is GenerationLimit; unavailable/changed
+  artifacts, malformed output or worker crashes are GenerationUnavailable.
+  No pipe bytes appear in public exceptions. The macOS executable dynamically
+  imports only system libSystem; no unpinned libntruprime/crypto shared library
+  is selected by a runtime search path.
+
+Each adapter preserves Encaps' target on a failed honest self-check, reports one
+trial and a false agreement diagnostic, and performs no correctness-conditioned
+retry. The service's hold/incident policy remains responsible for a mismatch.
+Resource exhaustion returns no instance and does not assert mathematical failure.
+
+2. Reproduce from a checkout
+
+Prerequisites: Python 3.11+, a C compiler and make; cryptography 50.0.2 in the
+candidate environment. The currently reviewed runtime pins are macOS arm64,
+Python 3.11.14, Apple clang 14.0.3, and cryptography's OpenSSL 4.0.3 wheel. OpenSSL
+development headers/libraries are needed to compile an upstream optional
+librandombytes variant and the optional old reference. They are not linked into
+the production sntrup worker. The default header prefix is Homebrew's
+/opt/homebrew/opt/openssl@3; --openssl-prefix can select another installation.
+
+From the checkout root, using its intended Python environment:
+
+  python scripts/build_sntrup.py --download --reference
+  python -m pytest -q tests/test_dhkem_x25519.py tests/test_sntrup.py
+
+The --reference flag is optional for operation. It fetches/builds the old
+2020 submission reference solely for cross-implementation tests and makes all
+100 original KATs available. Without it, eight bundled original KATs still run;
+the full 100-vector and reference differential tests explicitly skip.
+
+For an offline build, provide the three pinned archives (plus the original
+submission archive when using --reference) in a directory and run:
+
+  python scripts/build_sntrup.py --source-cache /path/to/source-archives --reference
+
+Downloads are opt-in and bounded. Each archive digest is checked before unpacking
+or running its build. No build/download occurs in the web server or on proposal
+upload. The helper runs upstream conventional sntrup761 tests and writes a
+build-manifest.json containing archive, source, static-library and final-binary
+hashes under .native/sntrup. It does not automatically register or approve an
+adapter. A compiler/platform change may change the resulting digest: inspect,
+test and explicitly review a new pin rather than bypass the mismatch check.
+
+Runtime installation needs .native/sntrup/crucible-sntrup-worker and the tracked
+scripts/native/sntrup_worker.c, together with the adapters. Build caches, source
+trees, logs and the optional reference dylib are not runtime dependencies and
+must not be committed as generated binaries. Moving a checkout does not change
+the embedded source/artifact identities. Both artifact_manifest() providers
+return bounded public evidence without absolute machine paths; both revalidate
+the current pinned dependency before returning that evidence. The service
+records this artifact digest separately from the adapter source digest.
+
+3. Evidence actually executed
+
+The RFC test fixture is a projection of the test-vector JSON at commit
+5f503c564da00b0687b3de75f1dfbdfc4079ad31, linked by RFC 9180. The original JSON
+SHA256 is 61fc662f01996cd06d713dacf5e133167bd309a1f329442d53f1e21a47b3ede6.
+All 16 X25519 vectors in modes 0 and 1 were checked for derived private/public keys,
+encapsulation bytes and KEM shared_secret. PSK enters the later HPKE schedule,
+so its KEM is the same; modes 2 and 3's additional authenticated DH are excluded.
+
+The original sntrup761 KAT response file has SHA256
+e720b256c12c50fa4281708342aae2c6a47b01ae83b152f3fd03d7680e376172.
+All 100 decapsulations matched it. Eight distributed cases are bundled under
+tests/fixtures; these are intentionally public test keys, not service secrets.
+
+The independent older submission reference was compiled only for tests. Twenty
+fresh differential rounds checked native and reference key generation, both
+encapsulation directions, and identical implicit rejection on altered
+ciphertexts. A separate test derives that rejection key directly from the
+private fallback rho and the specified prefix-SHA512 formula.
+
+Upstream ntruprime-test kem sntrup761 passed for its selected implementation and
+both compiled implementation choices/offsets. A clean build from the same pinned
+archives in a different source directory reproduced the exact worker digest.
+The focused suite also covers malformed lengths, fresh sampling, target
+preservation after a forced disagreement, dependency substitution, excessive/
+short output, redacted stderr and process timeout/cleanup.
+
+Material limitation: Valgrind/TIMECOP cannot run on this Apple arm64 host. The
+build uses --no-valgrind and --no-trim. The upstream project requires its complete
+suite to call a build supported; we do not claim that level of support or a
+complete constant-time audit. Its conventional checks and our cross-checks are
+bounded local-beta evidence. No timing benchmark here establishes security bits.
+Python, the operating system, entropy source and system C runtime remain trusted
+platform components; these hashes are not remote attestation of the whole host.
+
+4. Dependency pins and provenance
+
+libntruprime 20260717 archive:
+  https://libntruprime.cr.yp.to/libntruprime-20260717.tar.gz
+  768350cd57a9395d80545d2091ed27cd7ccf93c09b41671e4e50e053bcb0bff1
+librandombytes 20240318 archive:
+  https://randombytes.cr.yp.to/librandombytes-20240318.tar.gz
+  fae6fb839096e54ce8abb6dc8ae46ed67b02034474e83cbda088eddd2e584641
+libcpucycles 20260901 (build/upstream tests; absent from final runtime linkage):
+  https://cpucycles.cr.yp.to/libcpucycles-20260901.tar.gz
+  c914c7275952ed00bb188e1170409c83b61abfd0b828cdb2b5a87275be43344e
+Original 2020 reference/KAT archive:
+  https://ntruprime.cr.yp.to/nist/ntruprime-20201007.tar.gz
+  280e5dad090144446a49cc0e283163b8167a7961f5ccb183817501fcc3b695ce
+Pinned macOS arm64 executable:
+  313433b1bae0ff25c7a5b68f452c8307250ac2d3e7f7bbd4f08e7d3fb7bd310a
+Worker source:
+  6d1db77a88df02a22473e3750d0b79efad9f3145025e56d57d4798d3e71b6cf6
+cryptography 50.0.2 native extension:
+  0aced18998c288668c0eb65cfdc76fd41726370e6d5d9760c0b27143929162d2
+cryptography 50.0.2 X25519 Python wrapper:
+  950720524f8f8ae6e3f329c535641e6267b7b5864c80742a9112a42033872f3a
+
+The three current upstream libraries' doc/license.md files place them in the
+public domain and offer fallback licenses. Preserve their source license files
+when redistributing artifacts; cryptoint also carries its own LICENSE. The
+cryptography distribution includes its Apache 2.0/BSD license and dependency
+notices. The optional 2020 reference retains its original notices. No third-party
+code is presented as a Crucible invention.
+
+Primary specifications, vectors and verification scope:
+  https://www.rfc-editor.org/rfc/rfc9180.html
+  https://www.rfc-editor.org/rfc/rfc7748.html
+  https://raw.githubusercontent.com/cfrg/draft-irtf-cfrg-hpke/5f503c564da00b0687b3de75f1dfbdfc4079ad31/test-vectors.json
+  https://ntruprime.cr.yp.to/nist/ntruprime-20201007.pdf
+  https://libntruprime.cr.yp.to/test.html
+  https://libntruprime.cr.yp.to/license.html
+  https://cryptography.io/en/latest/changelog/
+
+No live environment was installed into, no private user history was changed,
+and no new admission credit or reviewer attestation was created by this work.

@@ -1,0 +1,146 @@
+Lossless module-LWE research KEM — release modulus-research-v1
+Assessment date2026-10-14. Local research beta, not scientific admission.
+
+Why this is a separate construction
+----------------------------------
+The family page retains ML-KEM as its published reference; its immutable
+standardized adapters remain available separately. The research release has
+its OWN identity, encodings, public matrix sampler and parameters. It must not
+be called standardized ML-KEM, a byte-compatible ML-KEM variant, or a scheme
+covered automatically by the original security theorem.
+
+All profiles retain degree256, full CBD eta2 noise, full256-bit key-generation
+seed, full256-bit private rejection seed, full256-bit message and shared key,
+and a complete reencryption/implicit-rejection transform. Tier1 uses module
+rank1; tiers2-50 use rank3. Rank1 is the natural ring-LWE special case and reduces
+the first-tier attack lattice from1536 to512 coordinates; this is not a
+validated solve-time guarantee. The remaining
+profiles keep rank fixed and change the prime modulus q. No seed, message,
+noise seed or output key is entropy-truncated. Tiers are frozen profiles, not
+claims of equal measured work. Recovery does not backfill other profiles.
+
+The q ladder decreases from the Mersenne prime2^127-1 to47339. Increasing q
+makes fixed small errors relatively easier to distinguish/recover; the cost of
+encoding q is consequently HIGHER at easier tiers. This is intentional and
+explains why security and public-key size need not increase together. The
+rank1-to-rank3 transition also affects sizes. The graphs should report actual
+encodings, rather than synthesize a monotone cost curve.
+
+Source primitives and exact specification
+-----------------------------------------
+FIPS203 algorithms and ML-KEM-768 motivate rank3, degree256, CBD2,
+SHA3-256/SHA3-512/SHAKE256, message encoding and the reencryption transform.
+Primary source: https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf
+This derivative explicitly differs as follows:
+* q is a profile-specific prime, rather than3329.
+* A is sampled UNIFORMLY IN THE COEFFICIENT DOMAIN, not ML-KEM's NTT domain.
+* Public keys include a header and q; coefficients are losslessly serialized.
+* Ciphertexts contain full u and v coefficients; no lossy compression.
+* Tier1 has rank1. Other profiles have rank3.
+
+Ring: R_q=Z_q[x]/(x^256+1). k is the registered module rank, eta=2.
+Hash definitions: H=SHA3-256, G=SHA3-512, J=SHAKE256(output32).
+Keygen randomness: d32||z32. rho||sigma=G(d||uint8(k)).
+A[i,j] comes from SHAKE128("Crucible-Module-LWE-v1/A" || uint128le(q) ||
+rho32 || uint8(i) || uint8(j)). Consume fixed-width little-endian candidates,
+mask to bit_length(q), and REJECT those>=q. Never reduce a nonuniform candidate
+modulo q. The finite expansion cap aborts without substituting another sampler.
+CBD2(PRF(sigma,nonce)) sums two bits minus two independent bits for each
+coefficient; PRF=SHAKE256(seed32||nonce1,128). Nonces0..k-1 give s and k..2k-1
+give e. t=A*s+e. Public key is "MLW1"||uint128le(q)||rho32||Encode(t).
+Each polynomial encodes256 coefficients in increasing order; each coefficient
+uses ceil(bit_length(q)/8) bytes, little-endian, and must be<q.
+The private serialization is z32||signed-int8(s)||pk||H(pk).
+
+Encap draws the complete message mu32. K||coins=G(mu||H(pk)). Sample r,e1,e2
+from coins using nonces0..k-1,k..2k-1,2k. Compute u=A^T*r+e1 and
+v=t^T*r+e2+EncodeMessage(mu). Message bit i is coefficient ceil(q/2)*bit_i,
+with LSB-first bit order within each byte. Ciphertext=Encode(u)||Encode(v).
+Return the complete K32, with no truncation or replacement.
+
+Decap subtracts s^T*u from v, rounds each coordinate to the nearest message
+center modulo q, computes G(mu'||H(pk)), and reencrypts the entire ciphertext.
+Return K' on equality; otherwise J(z||ct). A length-correct noncanonical
+ciphertext also returns that implicit-rejection key. Wrong lengths/types are
+format errors. Private/public inputs are fixed to the requested profile.
+There is no public decapsulation oracle in Crucible.
+
+Perfect correctness for every actual profile
+--------------------------------------------
+The error polynomial is e^T*r-s^T*e1+e2. Each product contributes at most
+n*eta^2 to an individual coefficient, even with negacyclic signs. Thus
+  |error_i| <= 2*k*n*eta^2+eta <=6146.
+Every registered prime satisfies floor(q/4)>6146; the smallest is47339, with
+margin11834>6146. There is no lossy compression term. Consequently every honest
+message bit decodes correctly for every allowed noise draw. This proof does
+not rely on sample independence or a simulated failure rate. Exact encoding,
+faithful arithmetic and full reencryption then give equal shared keys.
+Implementation bugs and resource aborts remain distinct from this mathematical
+statement. Every issued challenge checks honest agreement once and retains the
+original encapsulated target, even if that check were to fail.
+
+Calibration and its material limits
+-----------------------------------
+Frozen primes and actual estimator outputs are docs/lattice-module-calibration.json.
+The target8+120(t-1)/49 chooses q; it is not reported as the actual cost.
+Offline calibration uses the pinned official lattice-estimator commit
+53da5982597709ba0fdf94ea37a84d822310fd84, archiveSHA256
+4236adc38031c139c8a2721804d8962d6cacd015fae37f6f5215d2ac7f011060, Sage10.1.
+https://github.com/malb/lattice-estimator/tree/53da5982597709ba0fdf94ea37a84d822310fd84
+LWE.estimate.rough takes flattened n768,m768,CBD2 secret/CBD2 error, classical
+ADPS16 Core-SVP and GSA, returning primal uSVP and dual hybrid estimates.
+The endpoint minimum is approximately127.978777 reference bits, not exactly128.
+The first two low-cost profiles omit numerical estimates: the heuristic's
+minimum block-size floor is not credible evidence of their tiny attack cost.
+Rank1 Tier1 has no flattened rank3 estimate at all.
+
+Coarse exponent interpolation selects candidate primes only. Every reported
+number is recomputed by the estimator at that exact prime. All50 primes were
+proved with Sage is_prime(proof=True)/next_prime(proof=True). The source archive
+and every extracted file are checked before estimator execution.
+Reproduce using Sage:
+  sage -python scripts/lattice_calibrate_module.py \
+    --estimator /path/to/lattice-estimator-53da5982597709ba0fdf94ea37a84d822310fd84 \
+    --archive /path/to/pinned-estimator.tar.gz --output /tmp/module-calibration.json
+
+This flattened LWE approximation does not account for every use of the module
+structure, partial information in v, multi-target advantage, other attacks,
+full KEM reduction, quantum attacks or side channels. Core-SVP is not a
+hardware-operation counter and does not predict seconds. A perfect correctness
+proof provides NO confidentiality guarantee. In particular this construction
+is not admitted for cryptographic deployment.
+
+Implementation evidence and remaining work
+------------------------------------------
+The self-contained Python implementation uses standard-library hash primitives
+and OS randomness, without native crypto dependencies. It runs in a bounded
+20-second process; stdout is restricted to the exact allowed payload length.
+Its registered source hash is rechecked before execution. The artifact records
+Python/runtime identity, not a complete closure over OS/system libraries.
+It is variable-time and not a hardened cryptographic library.
+
+Tests cover all50 actual profiles, complete CBD2 four-bit distribution,
+rejection-vs-modulo sampling, canonical encodings, negacyclic wrap signs,
+full implicit rejection including malformed coefficients, source changes and
+resource deadlines. Independent vectors come from scripts/lattice_module_reference.py,
+which uses Sage's finite-field polynomial quotient arithmetic and independently
+implements sampling/serialization. Six profiles span both ranks and multiple
+coefficient widths. These are generated research vectors, NOT NIST KATs.
+The immutable published ML-KEM adapter retains its separate official ACVP/KAT
+evidence. This new derivative cannot reuse that evidence as a full-conformance
+claim. Independent cryptographic review and analysis of this precise parameter
+and transform family remain required before scientific admission.
+
+Public-input solver demonstration status
+---------------------------------------
+scripts/lattice_solve_module_tier1.py is an EXPERIMENTAL lattice/CVP sketch,
+not a verified example solution. It expands only the public ring equations,
+runs fpylll LLL/nearest-plane, reconstructs a candidate message, and requires
+complete ciphertext reencryption before returning a key. It has no access to
+private generation coins or the server target. The first rank3 experiment was
+stopped without completion; the final rank1 experiment was also stopped within
+a short manual test budget without a result. A fast-double LLL attempt reported
+a numerical reduction error. No public-input successful recovery or Tier1
+solve-time claim is established for this construction. This limitation is
+separate from the completed full-KEM correctness/KAT and all-profile tests.
+Do not interpret the absence of a completed example attack as security evidence.

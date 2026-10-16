@@ -22,7 +22,7 @@ def add_user(app, handle):
 
 def receipt(app, user_id, tier, tick=0, *, scheme="teaching-dh-kem", version=None,
             correct=True, submission_id=None, mutate=None):
-    version = version or ("6" if scheme == "teaching-dh-kem" else "3")
+    version = version or registry.CURRENT[scheme]
     profile = f'{"dh" if scheme == "teaching-dh-kem" else "rsa"}-v{version}-tier-{tier}'
     received = 3_600_600.0 + tick * 3600
     round_id = int(received) // 3600
@@ -55,6 +55,17 @@ def people(app, **params):
     return response.json()
 
 
+def registered_receipt(app, user_id, adapter, tier, tick=0):
+    """Use an exact registered manifest without generating private fixture keys."""
+    profile = adapter.manifests()[tier-1]
+    def bind(result, session):
+        challenge = session.get(Challenge, result.challenge_id)
+        challenge.profile_id = result.profile_id = profile["id"]
+        challenge.manifest = profile
+    return receipt(app, user_id, profile["instance_size"], tick,
+                   scheme=adapter.SCHEME_ID, version=adapter.SCHEME_VERSION, mutate=bind)
+
+
 def person(app, handle):
     response = TestClient(app).get(f"/api/people/{handle}")
     assert response.status_code == 200, response.text
@@ -78,7 +89,7 @@ def test_zero_result_accounts_have_shared_zero_rank_and_bounded_pagination(curre
     assert [row["handle"] for row in last["people"]] == ["charlie"]
     assert not last["pagination"]["has_more"]
     assert people(app, offset=99)["people"] == []
-    assert first["scoring"]["policy_id"] == "crucible-points-v2"
+    assert first["scoring"]["policy_id"] == "crucible-points-v6"
 
 
 @pytest.mark.parametrize("query", [{"limit": 0}, {"limit": 101}, {"offset": -1}, {"limit": "x"}])
@@ -106,6 +117,24 @@ def test_profiles_normalize_handles_and_do_not_publish_private_or_incorrect_evid
     assert TestClient(app).get("/api/people/missing").status_code == 404
     assert TestClient(app).get("/api/people/a%20b").status_code == 404
     assert TestClient(app).get("/api/people/%C3%A9clair").status_code == 404
+
+
+def test_research_names_and_archived_published_names_follow_exact_release(current_system):
+    app, _, _ = current_system
+    user = add_user(app, "alice")
+    research = registered_receipt(app, user, registry.adapter_for("dhkem-x25519"), 1, 0)
+    published = registered_receipt(app, user, registry.dhkem_x25519, 1, 1)
+    data = person(app, "alice")
+    records = {row["submission_id"]: row for row in data["records"]}
+    assert len(records) == 1
+    assert records[research["submission_id"]]["scheme_name"] == "Elliptic-curve Diffie–Hellman"
+    assert records[research["submission_id"]]["profile_kind"] == "research-tier"
+    recent = {row["submission_id"]: row for row in data["recent_recoveries"]}
+    assert recent[published["submission_id"]]["scheme_name"] == "DHKEM (X25519)"
+    assert recent[published["submission_id"]]["profile_kind"] == "standard-parameter-set"
+    assert recent[published["submission_id"]]["tier"] is None
+    assert data["first_ten"]["history"][0]["scheme_name"] == "Elliptic-curve Diffie–Hellman"
+    assert people(app)["people"][0]["records"] == data["records"]
 
 
 def test_higher_recovery_reserves_lower_places_and_repeats_do_not_add_points(current_system):
@@ -197,10 +226,11 @@ def test_archives_keep_exact_tiers_but_never_gain_current_score_or_double_family
     data = person(app, "alice")
     assert data["points"] == 200 and data["schemes_recovered"] == 2
     records = {row["submission_id"]: row for row in data["records"]}
-    assert records[old["submission_id"]]["tier"] == 50
-    assert records[old["submission_id"]]["scheme_version"] == "5"
-    assert records[old["submission_id"]]["score"] is None
-    assert not records[old["submission_id"]]["scoring_eligible"]
+    assert len(records) == 2
+    recent = {row["submission_id"]: row for row in data["recent_recoveries"]}
+    assert recent[old["submission_id"]]["tier"] == 50
+    assert recent[old["submission_id"]]["scheme_version"] == "5"
+    assert not recent[old["submission_id"]]["scoring_eligible"]
     assert records[new["submission_id"]]["score"]["total"] == 100
     assert records[rsa["submission_id"]]["score"]["total"] == 100
     # Displaying another current release cannot silently change enrollment.
@@ -212,7 +242,7 @@ def test_inconsistent_receipts_and_unregistered_profiles_do_not_earn_points(curr
     app, _, _ = current_system
     alice, bob = (add_user(app, handle) for handle in ("alice", "bob"))
     receipt(app, alice, 5, 0, mutate=lambda result, _: setattr(result, "user_id", bob))
-    receipt(app, alice, 6, 1, mutate=lambda result, _: setattr(result, "profile_id", "dh-v6-tier-50"))
+    receipt(app, alice, 6, 1, mutate=lambda result, _: setattr(result, "profile_id", "dh-v7-tier-50"))
     receipt(app, alice, 7, 2, mutate=lambda result, _: setattr(result, "scheme_version", "5"))
     receipt(app, alice, 8, 3, mutate=lambda result, _: setattr(result, "round_id", 1))
     receipt(app, alice, 9, 4, mutate=lambda result, _: setattr(result, "received_at", 0))

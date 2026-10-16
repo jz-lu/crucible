@@ -11,8 +11,12 @@
     </title>
     <link rel="stylesheet" href="/vendor/katex/katex.min.css">
     <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/notebook/notebook.css">
     <script src="/vendor/katex/katex.min.js" defer></script>
     <script src="/math.js" defer></script>
+    <script src="/notebook/seed.js" defer></script>
+    <script src="/notebook/store.js" defer></script>
+    <script src="/notebook/notebook.js" defer></script>
     <script src="/app.js" defer>
     </script>
   </head>
@@ -34,6 +38,9 @@
           </button>
           <button id="nav-people" class="nav-button" type="button">
             Leaderboard
+          </button>
+          <button id="nav-notebook" class="nav-button" type="button">
+            Research notebook
           </button>
           <button id="nav-about" class="nav-button" type="button">
             About us
@@ -78,7 +85,7 @@
             </button>
           </div>
         </div>
-        <p id="tier-help" hidden>Tiers are specific to each scheme. Equal tiers across schemes do not imply equal security or attack cost.</p>
+        <p id="tier-help" hidden>Stages mark positions in each scheme’s default progression. Schemes can have different numbers of stages; equal stage numbers do not imply equal security or attack cost.</p>
         <div id="kem-catalogue" aria-live="polite">
           <div class="loading-state" role="status">
             <span class="loader" aria-hidden="true"></span>
@@ -86,6 +93,7 @@
           </div>
         </div>
       </section>
+      <section id="notebook-workspace" aria-label="Research notebook" tabindex="-1" hidden></section>
       <section id="people-workspace" class="people-workspace" aria-labelledby="people-title" tabindex="-1" hidden>
         <div class="catalogue-heading">
           <h1 id="people-title">Leaderboard</h1>
@@ -121,6 +129,7 @@
             <p id="overview-release" class="eyebrow"></p>
             <h1 id="overview-title"></h1>
             <p id="overview-summary"></p>
+            <p id="overview-beta" class="beta-note" hidden></p>
           </div>
           <div class="overview-entry">
             <a id="overview-challenges" class="button button-primary" href="#challenge">View challenges <span aria-hidden="true">→</span></a>
@@ -148,9 +157,10 @@
             <p id="scheme-summary">
               Loading the challenge profiles…
             </p>
+            <p id="scheme-beta" class="beta-note" hidden></p>
             <div class="scheme-actions">
               <button id="advance-size" class="next-instance-button is-concealed" type="button" disabled aria-hidden="true">
-                <span id="advance-size-label">Go to next unsolved tier</span>
+                <span id="advance-size-label">Go to next unsolved stage</span>
                 <strong id="advance-size-value">—</strong>
                 <span aria-hidden="true">→</span>
               </button>
@@ -160,26 +170,31 @@
             <div class="profile-field">
               <div class="size-heading">
                 <span class="tier-label">
-                  <span id="profile-label">Challenge tier</span>
+                  <span id="profile-label">Stage</span>
                 </span>
-                <span id="size-range">1–50</span>
+                <span id="size-range"></span>
               </div>
-              <div class="size-rail">
-                <button id="previous-size" class="size-step" type="button" aria-label="Previous supported tier" disabled>‹</button>
-                <div id="size-options" role="group" aria-label="Choose challenge tier"></div>
-                <button id="next-size" class="size-step" type="button" aria-label="Next supported tier" disabled>›</button>
+              <div id="parameter-set-options" class="parameter-set-options" role="group" aria-label="Choose parameter set" hidden></div>
+              <div id="tier-size-rail" class="size-rail">
+                <button id="previous-size" class="size-step" type="button" aria-label="Previous supported stage" disabled>‹</button>
+                <div id="size-options" role="group" aria-label="Choose challenge stage"></div>
+                <button id="next-size" class="size-step" type="button" aria-label="Next supported stage" disabled>›</button>
               </div>
-              <div class="size-slider-control">
-                <input id="size-slider" type="range" min="0" max="1" step="1" value="0" aria-label="Browse challenge tiers" disabled>
+              <div id="tier-size-slider" class="size-slider-control">
+                <input id="size-slider" type="range" min="0" max="1" step="1" value="0" aria-label="Browse challenge stages" disabled>
                 <output id="size-slider-value" for="size-slider" aria-hidden="true">—</output>
               </div>
-              <div class="size-jump">
+              <div id="tier-size-jump" class="size-jump">
                 <label for="profile-select">Jump to</label>
-                <input id="profile-select" type="number" step="1" inputmode="numeric" autocomplete="off" placeholder="Tier" aria-describedby="profile-note profile-error" disabled>
-                <button id="jump-size" class="text-button" type="button" aria-label="Go to entered tier" disabled>Go <span aria-hidden="true">→</span></button>
+                <input id="profile-select" type="number" step="1" inputmode="numeric" autocomplete="off" placeholder="Stage" aria-describedby="profile-note profile-error" disabled>
+                <button id="jump-size" class="text-button" type="button" aria-label="Go to entered stage" disabled>Go <span aria-hidden="true">→</span></button>
               </div>
               <p id="profile-error" class="size-error" role="alert" hidden></p>
-              <p id="profile-note" class="field-hint">Each scheme maps its tiers to its own parameters.</p>
+              <p id="profile-note" class="field-hint">Stages follow this scheme’s default progression through reviewed configurations.</p>
+              <details id="intermediate-configurations" class="manual-tools" hidden>
+                <summary id="intermediate-configurations-label">Intermediate configurations</summary>
+                <div id="intermediate-configuration-options" class="parameter-set-options manual-tools-content" role="group" aria-label="Choose an intermediate configuration"></div>
+              </details>
             </div>
           </div>
         </div>
@@ -218,10 +233,10 @@
           <details id="tier-record-notes" class="tier-record-notes" hidden>
             <summary>About this record</summary>
             <p id="leaderboard-scope" class="panel-footnote" hidden>
-              The earliest accepted recovery at this tier or higher, across all rounds. Ties use the server receipt identifier.
+              The earliest accepted recovery at this stage or higher, across all rounds. Ties use the server receipt identifier.
             </p>
             <p id="leaderboard-footnote" class="panel-footnote" hidden>
-              “Via Tier” credits a recovery at a higher tier; the result describes that actual instance. A recovery verifies one challenge answer. It does not establish a new attack method or a general break of the scheme. Method and compute details are contributor-reported.
+              “Via Stage” credits a recovery at a higher stage; the result describes that actual instance. A recovery verifies one challenge answer. It does not establish a new attack method or a general break of the scheme. Method and compute details are contributor-reported.
             </p>
           </details>
         </section>
@@ -421,7 +436,7 @@
             </dl>
             <p id="parameter-measurement-basis" class="panel-footnote" hidden></p>
             <p class="field-hint">
-              Shared-key output length is independent of challenge tier; it does not measure security strength.
+              Shared-key output length is independent of the challenge profile; it does not measure security strength.
             </p>
             <pre id="parameter-json" class="code-block" tabindex="0">
             </pre>
@@ -462,7 +477,7 @@
               A correct submission establishes that the submitted key matches this instance and was received within its round. The site checks the answer and records the accompanying method and resources. It does not independently verify the declared computation or reproduce the method.
             </p>
             <p id="protocol-size-caveat">
-              An incorrect answer locks that instance. An expired instance without an accepted recovery is simply unsolved here; it is not evidence of a security bound. A challenge tier selects a scheme-specific parameter set, not an estimate of security bits.
+              An incorrect answer locks that instance. An expired instance without an accepted recovery is simply unsolved here; it is not evidence of a security bound. A challenge stage selects a scheme-specific parameter set, not an estimate of security bits.
             </p>
             <p>
               This challenge records practical recoveries. It does not yet accept or verify asymptotic attack proofs.
@@ -478,8 +493,8 @@
             <p id="protocol-key-requirement">
               Each account gets one private instance per profile per round, and one well-formed answer for that instance. Submit the complete shared key, a reusable method version, and a compute declaration.
             </p>
-            <p>
-              Method versions are immutable. Correct recoveries can appear publicly with the account handle, method, pseudocode, and compute declaration. Each tier highlights the earliest accepted recovery at that tier or higher, across all rounds. Other results remain on participant profiles. Different profiles are not ranked against one another.
+            <p id="protocol-record-rules">
+              Method versions are immutable. Correct recoveries can appear publicly with the account handle, method, pseudocode, and compute declaration. Each stage highlights the earliest accepted recovery at that stage or higher, across all rounds. Other results remain on participant profiles. Different profiles are not ranked against one another.
             </p>
           </details>
         </section>
@@ -589,15 +604,31 @@
         </div>
         <div id="proposal-draft">
           <p id="proposal-revision-context" class="proposal-status" hidden></p>
-          <div class="proposal-import">
-            <div class="recovery-import-actions">
-              <button id="upload-proposal" class="button button-quiet" type="button">Upload specification</button>
-              <input id="proposal-file" type="file" accept=".json,application/json" hidden>
-              <a class="text-button" href="/api/protocol/spec-template" download>Download template ↓</a>
-              <a class="text-button" href="/api/protocol/spec-schema" download>JSON schema ↓</a>
-            </div>
-            <p class="field-hint">JSON · up to 48 KiB. Fill in the template, then upload it for a format check.</p>
+          <div class="agent-handoff-action">
+            <button id="proposal-use-agent" class="button button-primary" type="button" aria-controls="proposal-agent-instructions" aria-expanded="false">Use with an agent <span aria-hidden="true">→</span></button>
+            <p class="field-hint">Prepare the specification with your agent, then submit it for human review.</p>
           </div>
+          <details id="proposal-manual-tools" class="manual-tools">
+            <summary>Manual tools</summary>
+            <div class="proposal-import">
+              <div class="recovery-import-actions">
+                <button id="upload-proposal" class="button button-quiet" type="button">Upload specification</button>
+                <input id="proposal-file" type="file" accept=".json,application/json" hidden>
+                <a class="text-button" href="/api/protocol/spec-template" download>Download template ↓</a>
+                <a class="text-button" href="/api/protocol/spec-schema" download>JSON schema ↓</a>
+              </div>
+              <p class="field-hint">JSON · up to 48 KiB. Fill in the template, then upload it for a format check.</p>
+            </div>
+          </details>
+          <section id="proposal-agent-instructions" class="agent-instructions" aria-labelledby="proposal-agent-title" hidden>
+            <div class="agent-instructions-heading">
+              <h4 id="proposal-agent-title">Give this to your agent</h4>
+              <button id="copy-proposal-agent" class="button button-quiet" type="button">Copy prompt</button>
+            </div>
+            <p class="field-hint">No sign-in needed to prepare. Connect before reading private proposals or submitting.</p>
+            <p class="agent-followup">Next time, ask: <strong id="proposal-agent-followup"></strong></p>
+            <pre id="proposal-agent-text" class="code-block" tabindex="0" aria-label="Proposal instructions to give your agent"></pre>
+          </section>
           <p id="proposal-error" class="form-error" role="alert" hidden></p>
           <ul id="proposal-field-errors" class="proposal-field-errors" hidden></ul>
           <p id="proposal-status" class="proposal-status" role="status" hidden></p>
@@ -614,17 +645,30 @@
           <a class="text-button" href="#propose">← New proposal</a>
           <div id="proposal-detail-content" aria-live="polite"></div>
           <div id="proposal-detail-actions" class="recovery-import-actions" hidden>
+            <button id="proposal-revise-agent" class="button button-primary" type="button" aria-controls="proposal-revise-agent-instructions" aria-expanded="false" hidden>Revise with an agent <span aria-hidden="true">→</span></button>
             <button id="download-proposal" class="text-button" type="button">Download specification ↓</button>
             <a id="revise-proposal" class="text-button" href="#propose">Upload a revised specification →</a>
           </div>
+          <section id="proposal-revise-agent-instructions" class="agent-instructions" aria-labelledby="proposal-revise-agent-title" hidden>
+            <div class="agent-instructions-heading">
+              <h4 id="proposal-revise-agent-title">Give this to your agent</h4>
+              <button id="copy-proposal-revise-agent" class="button button-quiet" type="button">Copy prompt</button>
+            </div>
+            <p class="field-hint">Your agent starts from this exact revision. New revisions return to human review.</p>
+            <p class="agent-followup">Next time, ask: <strong id="proposal-revise-agent-followup"></strong></p>
+            <pre id="proposal-revise-agent-text" class="code-block" tabindex="0" aria-label="Revision instructions to give your agent"></pre>
+          </section>
           <form id="proposal-review-form" class="proposal-review-form" hidden>
             <h3>Manual review</h3>
             <p class="field-hint">Record your assessment and supporting evidence for this exact revision. Approval permits trusted integration; it does not activate a challenge or execute an artifact.</p>
+            <p id="proposal-self-review-notice" class="field-hint" hidden>Development self-review. This tests the workflow; it cannot satisfy independent admission review or earn scheme contribution points.</p>
             <p id="proposal-review-artifact" class="proposal-digest"></p>
             <fieldset id="proposal-review-fields">
               <legend>Checks performed</legend>
               <label class="proposal-check"><input type="checkbox" data-proposal-check="specification_complete"> Specification and parameter distribution are complete</label>
               <label class="proposal-check"><input type="checkbox" data-proposal-check="correctness"> Correctness argument and its scope reviewed</label>
+              <label class="proposal-check"><input type="checkbox" data-proposal-check="tier_design"> Default progression, faithful configurations, resource costs, a common correctness bound, endpoint evidence or provisional status, and useful intermediate stages reviewed</label>
+              <label class="proposal-check"><input type="checkbox" data-proposal-check="parameter_selection"> Parameter selection objective, constraints, security model, candidate comparisons and tradeoffs reviewed</label>
               <label class="proposal-check"><input type="checkbox" data-proposal-check="implementation_conformance"> Implementation conforms to the specification</label>
               <label class="proposal-check"><input type="checkbox" data-proposal-check="input_resource_safety"> Input validation and resource limits reviewed</label>
               <label class="proposal-check"><input type="checkbox" data-proposal-check="reproduction"> Results reproduced from the identified artifact</label>
@@ -744,7 +788,7 @@
             <button id="download-recovery-template" class="text-button" type="button">Download template</button>
           </div>
           <p id="recovery-file-hint" class="field-hint">JSON · up to 128 KB. Import fills the form for review.</p>
-          <p id="submission-target-hint" class="field-hint" hidden>Upload a result file to select its instance, or request this tier’s instance in Challenge.</p>
+          <p id="submission-target-hint" class="field-hint" hidden>Upload a result file to select its instance, or request an instance in Challenge.</p>
           <p id="recovery-file-error" class="form-error" role="alert" hidden></p>
           <p id="recovery-file-status" class="recovery-import-status" role="status" hidden></p>
         </div>

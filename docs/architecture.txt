@@ -5,6 +5,13 @@ A static file URL is not enough for the working application. The source is share
 for collaboration; the hosted service has not been deployed or cleared for public
 operation.
 
+Hosting direction: the next hosted stage is a restricted private beta, followed
+by an explicit public launch. This audience policy is separate from production
+security settings. The current app has no beta-membership gate and still permits
+anonymous catalogue/profile/result reads; a private source repository does not
+restrict those routes. docs/hosting-plan.txt records the shared browser/agent
+access model and the remaining implementation work. Local polish comes first.
+
 Persistence and boundaries
 
 SQLAlchemy tables store accounts, hashed sessions, immutable methods, challenges,
@@ -12,6 +19,13 @@ one final submission per challenge, rate buckets, correctness incidents, and
 versioned findings. Alembic migrations version the schema. SQLite serializes write
 transactions with BEGIN IMMEDIATE; PostgreSQL uses account/challenge row locks.
 Database uniqueness backs both. The local concurrency tests exercise SQLite.
+
+Method creation and source attachment each allow 100 requests per authenticated
+account per hour, plus a separate coarse 1,000-request IP budget. The account
+budget is shared across browser/agent credentials and networks. Failed attempts
+and retries count; existing source/body byte limits still apply. Authentication
+is rechecked in the mutation transaction, and limiter writes hold no surrounding
+mutation transaction. Challenge issuance and answer limits remain separate.
 
 The round is derived from UTC epochs; no hourly background job is needed. Unique
 instances are generated on demand within the shared hour. A future expensive KEM
@@ -45,12 +59,41 @@ The browser renders untrusted content as text. External research links require
 HTTPS and are not fetched by the server. A restrictive content security policy
 blocks inline scripts. Pseudocode and complexity expressions are never evaluated.
 
+Public catalogue and participant reads
+
+GET /api/schemes preserves the full catalogue and archived release payload. Its
+JSON-native data is serialized directly, avoiding a second recursive conversion.
+Only this public response supports gzip (level 4) when Accept-Encoding permits it;
+explicit gzip;q=0 is respected. Both representations vary on Accept-Encoding and
+retain the normal no-store and security headers. Account, credential and challenge
+responses are not compressed by this mechanism.
+
+Immutable presentation manifests and registered profile tuples use bounded
+in-process caches. Keys include the registered scheme/release, adapter object,
+manifest provider and declared implementation hash. Replacing any of these
+invalidates the corresponding snapshot; callers receive fresh manifest copies.
+Changing frozen artifacts on disk is a deployment operation requiring a process
+restart and new pins. These caches never replace exact manifest, generation or
+admission artifact verification. Generated instances, participant aggregates,
+scores, current recoveries and private responses remain uncached.
+
+GET /api/people?include_records=false returns the ranked participant headings and
+point components, omitting records, correct_submission_count and schemes_recovered.
+GET /api/people/{handle}?include_milestones=false retains personal records, recent
+recoveries and First to reach, but omits the legacy first_ten projection and its
+queries. Both flags default to true for existing clients. The current frontend
+uses the smaller projections; the paginated milestone endpoint remains available.
+
 Automation
 
 GET /openapi.json describes request schemas. Use a cookie jar; GET /api/session,
 then send its csrf_token as X-CSRF-Token and the configured Origin on every POST.
 Login/register rotate both session and CSRF token. Keep credentials out of public
 logs, source control and shell command-line arguments.
+
+CLI errors expose retry_after_seconds when the server supplies a bounded integer
+Retry-After value. This is a retry hint for the caller, not an automatic resubmit;
+frozen requests retain their existing explicit retry and idempotency behavior.
 
 Core endpoints:
   GET  /api/session
@@ -197,6 +240,12 @@ returns no instance and is retryable; arithmetic agreement failures still pause
 the profile. Expensive generation runs outside database transactions. Before
 persisting, a short final transaction rechecks session/account, hour, source,
 registered manifest, active-round permission, duplicate issuance and holds.
+A process-local reservation for an app/account/release/profile/round prevents
+duplicate in-flight requests from consuming another generation slot. Duplicates
+return 503 with Retry-After: 3; retrying after completion reuses the durable
+instance. The reservation holds through commit and releases on every failure.
+It is not a distributed lock: other service processes may still generate a
+duplicate candidate, and the final database checks retain one durable instance.
 Overview graphs plot exact profile values and the frozen initial estimate.
 A thin red line marks the largest recorded recovery for that release; faint
 left shading is a progress cue, not evidence of individual smaller recoveries.

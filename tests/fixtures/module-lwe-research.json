@@ -1,0 +1,67 @@
+{
+  "format": "crucible-independent-research-kat-v1",
+  "authority": "Independent SageMath10.1 finite-field polynomial quotient implementation; not published NIST vectors",
+  "reference_source_sha256": "431b766458c64baa53f97193b76410a53fde786ec24d3d98a80428e3231492a5",
+  "vectors": [
+    {
+      "q": "170141183460469231731687303715884105727",
+      "seed": 0,
+      "key_randomness": "f2e5ef6806e24a894a987492029b45162bea6be7c70a0adf6c7e3548ecf20b4a9bf703ad98ecc0aaaf9c29e241498d6082111860361e719f663a2807159bd029",
+      "encapsulation_message": "50a1de3dbe472fd351fae3e0da38f69006849ebbb600937e37bd8c1d73cc297e",
+      "pk_sha256": "84920d448fabfc1127d8b387118f396e80886c005c3da3c0421ff2078be79128",
+      "sk_sha256": "f9150ccdaf6b66669dc1991f03240736cff0243b0ead93b63f90de8bade5b0f0",
+      "ct_sha256": "f8d57b1340459f2e04cc647e68763e1bd4a57720d17fdf866056f58885da2d6a",
+      "shared_secret": "7e98d836df1d84a29762238917688af65ed75c7af69b218e51b1cbab80b919d5"
+    },
+    {
+      "q": "9223372036854775837",
+      "seed": 1,
+      "key_randomness": "b11a35811fee53e7d6902a00016e230970ef5a1c705eef832346bd75ff8a1140c112d661f5ed2698adf8bfe7f7573abff24739cc4ddc24f15abee04efb9384f7",
+      "encapsulation_message": "843eee662c30a8d80e9fbd3b7590ed92d97bb6a52d7ddf6e5c5edbfab83ff2ba",
+      "pk_sha256": "e709d15f8ac5091d3d28158f201c9675917d228e010a4004cfc6ccee6b146514",
+      "sk_sha256": "85f0b9ee0332ed4992cf8100ac30979e8cb294eda550a1ee41765551e5c87647",
+      "ct_sha256": "5aaa5a22d52295dc4b42c615f6e803d51bd10c9493a716c467a8c354fc709985",
+      "shared_secret": "4e8897a7b1c2e2f08dad4f32f57852f4849ffa791d99dde735514dabbc861d50"
+    },
+    {
+      "q": "404619960419",
+      "seed": 2,
+      "key_randomness": "e025589ce2d3148d92b6a20aa485a04a79f33b4c32e77c0d35d6a225d2c58aeb088044be3a575c927ea625562524fa30da9858f36ab59b1217a14a1d1b67ed1a",
+      "encapsulation_message": "1b568b8ae6d6d1cc47c98d59d0904ef633dcb8f3bbec40762ffaaabb2708f8c5",
+      "pk_sha256": "7028a489fc6f94d952367b9c274a6a9c60400b95ccac74bf18449eb8e515ae35",
+      "sk_sha256": "89dda215a114b8f55fcddf05406258d721905296fa0f5200ec9a40290144b510",
+      "ct_sha256": "8f44a1a2460245cc3edc3af302166a3bf5dce881c358afb7cd517b16e871e104",
+      "shared_secret": "68fd2b3fd6556f79c9a1be420bf1ffdd7b282d28be5402a5a16cd35f14e0f02a"
+    },
+    {
+      "q": "60891151",
+      "seed": 3,
+      "key_randomness": "eae2364e6ab8ec4681a8130df296381215b8cc241e76cb2274a3b2561d50bc59ccb2ae79f77065c58fcfe23dcd6f059731cd13f6ab198d3021e4e20722d7d22e",
+      "encapsulation_message": "cc80774911a71facb44b07d42399a341b8988a605ddc09285a5f65659c477a62",
+      "pk_sha256": "887e57a830b9e3ffd7fa7a49fe815026712662bcee868b3c4a193865d4b461cb",
+      "sk_sha256": "51a64027476a21e74d88f370f9a3d7bf443f454cd1f2d62ada7c58e09bd92df9",
+      "ct_sha256": "815961f87fd2a889a169ddffba98d992c9e05bfff3640de90444f85694adf6c2",
+      "shared_secret": "e83bbfbc272471d54432b4ea9fe10d276b4cc4f8cdc88373de37afca4546ad42"
+    },
+    {
+      "q": "860051",
+      "seed": 4,
+      "key_randomness": "f75edc5259c2632746b22f12cc38ae1e0d5c3d95be0627d5bba0a108162e9ef7854cca556f3d672e6bd0b11f3405e4d99e0decae29e4c37a857e45e3eccb378d",
+      "encapsulation_message": "f724f803d704573f80cded0ebbf4db05357146042aaee3973b847814a79a417d",
+      "pk_sha256": "acd1be55cf612afd9e1a4b935e9ab47c70f6162ef713fa2df04bc013cc4ba0d5",
+      "sk_sha256": "06ea98e93e2483d49c8d1b4b78766ab991cef5a4b827a703dffcd57af7bf09f8",
+      "ct_sha256": "41aa0eef10f38b3f58a18ff4ac0816cfc0bbb3ab69ec39401fad749dbdd74a74",
+      "shared_secret": "6d38b8e8d95392c674f0ea1fc1f20bc5a2dc1ac5310a6d8847a0043150dbc022"
+    },
+    {
+      "q": "47339",
+      "seed": 5,
+      "key_randomness": "27c8208c60181cbc715924ca1edee02aa776eb9f628c686a0fa9a2d72f35d12c51d42377206d3f9b71346fc962048613c3232b71e20b3333e065ecd5de4f10ac",
+      "encapsulation_message": "d2d4854935111e5f637bdd34b08215fba6a44a224978cc31af33404d63c6eef1",
+      "pk_sha256": "49e31aba090a71dc66a40898b06a014558d33709f2504f4d06ab7937113491a4",
+      "sk_sha256": "357835a745c56bf9626d162a7bfd7cf1a6764b73c1c779df00c5b1c4db542786",
+      "ct_sha256": "21ebf2f3622c356f75fee2fa185725231c6e89fd10a9d1848e267dcc040d04a1",
+      "shared_secret": "9b77964db1865fa9fbc81b7271ab80b2d496a7ca352bb553d5a88950702fc3bd"
+    }
+  ]
+}

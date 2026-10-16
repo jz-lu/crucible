@@ -27,8 +27,9 @@ DEVICE_SECONDS = 600
 EXCHANGE_SECONDS = 120
 TOKEN_SECONDS = 30 * 86400
 POLL_INTERVAL = 2
-SCOPES = ("challenges:read", "challenges:write", "methods:read", "methods:write",
-          "submissions:read", "submissions:write")
+LEGACY_SCOPES = ("challenges:read", "challenges:write", "methods:read", "methods:write",
+                 "submissions:read", "submissions:write")
+SCOPES = LEGACY_SCOPES + ("proposals:read", "proposals:write")
 ANONYMOUS_POST_PATHS = frozenset({"/api/agent/connect/start", "/api/agent/connect/poll"})
 _UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 _TOKEN = re.compile(r"Bearer (cru_[A-Za-z0-9_-]{43})", re.IGNORECASE)
@@ -53,6 +54,9 @@ class DeviceConnection(Base):
     device_hash: Mapped[str] = mapped_column(String(64), unique=True)
     user_code: Mapped[str] = mapped_column(String(9), unique=True)
     label: Mapped[str] = mapped_column(String(80))
+    # Freeze exactly what the browser will approve. Future scope additions must
+    # never broaden an already pending or approved connection request.
+    scopes: Mapped[list] = mapped_column(JSON)
     created_at: Mapped[float] = mapped_column(Float)
     expires_at: Mapped[float] = mapped_column(Float, index=True)
     last_polled_at: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -85,12 +89,17 @@ def required_scope(method, path):
     if method == "GET":
         if path in {"/api/schemes", "/api/leaderboard", "/api/challenges",
                     "/api/protocol/source", "/api/protocol/example", "/api/protocol/spec",
+                    "/api/protocol/artifacts", "/api/protocol/artifact-source", "/api/protocol/correctness",
                     "/api/agent/client"} or re.fullmatch(rf"/api/challenges/{_UUID}/download", path):
             return "challenges:read"
         if path == "/api/methods" or re.fullmatch(rf"/api/methods/{_UUID}/source(?:/download)?", path):
             return "methods:read"
         if path == "/api/me/submissions" or re.fullmatch(rf"/api/submissions/{_UUID}", path):
             return "submissions:read"
+        if path in {"/api/protocol/spec-schema", "/api/protocol/spec-template",
+                    "/api/me/protocol-proposals"} or re.fullmatch(
+                        rf"/api/protocol/proposals/{_UUID}(?:/revisions)?", path):
+            return "proposals:read"
     if method == "POST":
         if path == "/api/challenges":
             return "challenges:write"
@@ -98,6 +107,9 @@ def required_scope(method, path):
             return "methods:write"
         if re.fullmatch(rf"/api/challenges/{_UUID}/submit", path):
             return "submissions:write"
+        if path in {"/api/protocol/proposals/validate", "/api/protocol/proposals"} or re.fullmatch(
+                rf"/api/protocol/proposals/{_UUID}/revisions", path):
+            return "proposals:write"
     return None
 
 
@@ -153,7 +165,7 @@ def _status(connection, now):
 
 def _connection_data(connection, now):
     return {"user_code": connection.user_code, "label": connection.label,
-            "scopes": list(SCOPES), "created_at": connection.created_at,
+            "scopes": list(connection.scopes), "created_at": connection.created_at,
             "expires_at": connection.approved_at + EXCHANGE_SECONDS if connection.approved_at is not None else connection.expires_at,
             "status": _status(connection, now)}
 
@@ -175,7 +187,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             code = code[:4] + "-" + code[4:]
             now = clock()
             connection = DeviceConnection(id=str(uuid4()), device_hash=token_hash(raw), user_code=code,
-                                          label=body.label, created_at=now, expires_at=now+DEVICE_SECONDS)
+                                          label=body.label, scopes=list(SCOPES),
+                                          created_at=now, expires_at=now+DEVICE_SECONDS)
             try:
                 with db.transaction(write=True) as session:
                     session.add(connection)
@@ -189,7 +202,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
         return {"device_code": raw, "user_code": code,
                 "verification_uri": origin + "/#connect?code=" + quote(code),
                 "expires_at": now+DEVICE_SECONDS, "expires_in": DEVICE_SECONDS,
-                "interval": POLL_INTERVAL, "scopes": list(SCOPES)}
+                "interval": POLL_INTERVAL, "scopes": list(connection.scopes)}
 
     @app.post("/api/agent/connect/poll")
     def poll(body: PollInput, request: Request):
@@ -214,7 +227,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             raw = _derived_token(settings, body.device_code, connection.id)
             if connection.token_id is None:
                 token = MachineToken(id=str(uuid4()), user_id=user.id, token_hash=token_hash(raw),
-                                     label=connection.label, scopes=list(SCOPES), created_at=now,
+                                     label=connection.label, scopes=list(connection.scopes), created_at=now,
                                      expires_at=now+TOKEN_SECONDS)
                 session.add(token)
                 session.flush()

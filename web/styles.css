@@ -365,6 +365,11 @@ button {
   margin-top: 10px;
 }
 
+#proposal-manual-tools .proposal-import {
+  padding: 16px 0 4px;
+  border: 0;
+}
+
 .proposal-status {
   margin: 18px 0;
   color: var(--primary);
@@ -590,6 +595,21 @@ button {
   font-weight: 550;
 }
 
+/* Neutral column headings stay distinct from the pale blue subfamilies. */
+.kem-table thead,.kem-table thead th {
+  background: #f2f3f5;
+  color: #263343;
+}
+
+.kem-table thead th {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.kem-table thead th:first-child {
+  font-size: 15px;
+}
+
 .kem-table th:first-child {
   width: 36%;
 }
@@ -618,6 +638,19 @@ button {
   vertical-align: middle;
   overflow-wrap: anywhere;
   font-size: 14px;
+}
+
+.kem-table .kem-group-row th {
+  width: auto;
+  padding: 10px 22px;
+  border-top: 1px solid var(--line);
+  background: var(--light);
+  color: var(--ink);
+}
+.kem-group-count {
+  margin-left: 9px;
+  color: var(--muted);
+  font-weight: 400;
 }
 
 .kem-name {
@@ -699,6 +732,17 @@ button {
 .person-stats > div:first-child dd { color: var(--primary); }
 .person-section { margin-top: 34px; }
 .person-section h2 { margin: 0 0 16px; font: 650 24px/1.2 var(--display); }
+.person-disclosure { margin-top: 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.person-section-summary { display: flex; align-items: center; gap: 14px; padding: 18px 22px; list-style: none; cursor: pointer; border-radius: 6px; }
+.person-section-summary::-webkit-details-marker { display: none; }
+.person-section-summary::marker { content: ''; }
+.person-section-summary:hover { background: var(--light); }
+.person-section-summary h2 { margin: 0; }
+.person-section-count { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.person-section-summary::after { content: ''; flex-shrink: 0; width: 8px; height: 8px; margin-left: auto; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); }
+.person-disclosure[open] > .person-section-summary::after { transform: rotate(45deg); }
+.person-disclosure[open] > .person-section-summary { border-radius: 6px 6px 0 0; }
+.person-section-content { padding: 12px 22px 22px; }
 .person-record-release { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; }
 .person-record-result { background: transparent; padding: 4px 0; text-align: left; }
 .person-record-date { color: var(--muted); font-size: 13px; }
@@ -714,19 +758,12 @@ button {
 .person-score-breakdown p { margin-top: 12px; max-width: 780px; }
 .person-score-parts { display: flex; flex-wrap: wrap; gap: 16px 40px; margin-top: 16px; }
 .person-score-parts dd { margin: 2px 0 0; color: var(--ink); font: 600 22px/1.3 var(--display); }
-.milestone-intro { margin: -5px 0 18px; color: var(--muted); font-size: 13px; line-height: 1.6; }
-.milestone-highlights { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.milestone-card { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 22px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: var(--surface); text-align: left; overflow-wrap: anywhere; }
-.milestone-card:hover { background: var(--light); border-color: var(--primary); }
+.milestone-table th,.milestone-table td { padding: 13px 18px; }
+.milestone-table tbody tr:has(.milestone-result:hover),.milestone-table tbody tr:focus-within { background: var(--light); }
 .milestone-scheme { font: 550 16px/1.4 var(--display); }
-.milestone-achievement { color: var(--primary); font: 650 27px/1.25 var(--display); }
-.milestone-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: auto; padding-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.5; }
-.milestone-history { margin-top: 18px; }
-.milestone-history > summary { width: fit-content; color: var(--primary); cursor: pointer; font-size: 14px; }
-.milestone-history > .milestone-intro { margin-top: 14px; }
 .milestone-result { background: transparent; padding: 4px 0; text-align: left; color: var(--ink); font: 600 18px/1.35 var(--display); }
 .milestone-result:hover { color: var(--primary); }
-.milestone-more { margin-top: 16px; }
+.milestone-achievement { color: var(--primary); font-size: 20px; font-weight: 650; }
 .connect-workspace { max-width: 650px; }
 .connect-origin { margin: -10px 0 25px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 .connect-code { width: fit-content; padding: 14px 20px; margin-bottom: 20px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font: 600 30px/1.2 var(--mono); letter-spacing: 3px; }
@@ -766,9 +803,6 @@ button {
   .account-actions { flex-basis: 100%; justify-content: flex-end; }
 }
 @media(max-width:700px) {
-  .milestone-highlights { grid-template-columns: 1fr; }
-  .milestone-card { padding: 18px; }
-  .milestone-achievement { font-size: 25px; }
   .primary-nav { flex-wrap: wrap; }
   .people-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .people-table,.people-table tbody,.people-table tr,.people-table td { display: block; }
@@ -782,8 +816,18 @@ button {
   .person-stats > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
   .person-stats > div:last-child { border-bottom: 0; }
   .person-stats dd { margin: 0; font-size: 26px; }
+  .person-section-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; padding: 16px; }
+  .person-section-summary h2 { font-size: 22px; }
+  .person-section-count { grid-column: 1; font-size: 12px; }
+  .person-section-summary::after { grid-column: 2; grid-row: 1 / span 2; }
+  .person-section-content { padding: 12px; }
   .person-result-action { display: none; }
   .person-record-date { display: inline-block; max-width: 55%; vertical-align: top; }
+  .milestone-table tr { padding: 14px 16px; }
+  .milestone-table td { padding: 3px 0; }
+  .milestone-table td::before { display: none; }
+  .milestone-table td:has(.person-record-scheme) { padding-bottom: 3px; }
+  .milestone-table .person-record-date { max-width: none; }
   .people-workspace,.person-workspace { padding-top: 24px; }
   #person-title { overflow-wrap: anywhere; }
 }
@@ -956,6 +1000,49 @@ button {
 
 .profile-field {
   min-width: 0;
+}
+
+.parameter-set-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.parameter-set-option {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 16px/1.35 var(--display);
+  overflow-wrap: anywhere;
+}
+.parameter-set-option:hover {
+  border-color: var(--primary);
+}
+.parameter-set-option.is-recovered {
+  background: #edf7ee;
+  border-color: #c5ddcb;
+}
+.parameter-set-option[aria-pressed="true"] {
+  background: #246c47;
+  border-color: #246c47;
+  color: #fff;
+}
+.next-instance-button.is-parameter-set {
+  flex-wrap: wrap;
+}
+.next-instance-button.is-parameter-set strong {
+  font-size: 17px;
+  overflow-wrap: anywhere;
+}
+.beta-note {
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
 }
 
 .size-heading {
@@ -2499,6 +2586,7 @@ dialog h2 {
 /* Research is a separate reading and contribution workspace. */
 .primary-nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 24px;
   align-items: center;
 }
@@ -3098,6 +3186,15 @@ dialog h2 {
   .kem-table tr:first-child {
     border-top: 0;
   }
+  .kem-table .kem-group-row {
+    padding: 0;
+    border: 0;
+  }
+  .kem-table .kem-group-row th {
+    display: block;
+    width: 100%;
+    padding: 10px 19px;
+  }
   .kem-table td {
     border: 0;
     padding: 0;
@@ -3319,6 +3416,16 @@ dialog h2 {
   margin-top: 14px;
   min-height: 36px;
 }
+.chart-parameter-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 25px;
+  margin: 9px 0;
+  padding-left: 20px;
+  font-size: 11px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
 .overview-values {
   margin-top: 10px;
   font-size: 11px;
@@ -3467,7 +3574,7 @@ dialog h2 {
 
 .chart-recovery-area {
   fill: #d32f3d;
-  fill-opacity: .08;
+  fill-opacity: .14;
 }
 .chart-recovery-line {
   stroke: #d32f3d;

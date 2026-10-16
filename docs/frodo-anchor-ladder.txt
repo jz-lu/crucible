@@ -1,0 +1,63 @@
+Frodo640 endpoint restoration — 16 October 2026
+
+Decision
+
+The user explicitly requested restoration of the640 endpoint after the review
+identified a weakness in truncating the ladder at592. The published Frodo640
+parameters provide an external reference; hitting a clipped plotting ceiling
+does not establish that larger parameters add no useful security margin.
+
+The current release is frodokem / anchor-research-v3 with80 natural dimensions
+n=8,16,...,640. Tier80 reaches the Frodo640 parameter anchor. The modulus32768,
+nbar8, complete finite noise CDF, full128-bit native message,32-byte salt and
+salted transform are unchanged. Existing native known-answer evidence checks the
+640 endpoint. Reduced profiles remain research instances, not published sets.
+
+Correctness
+
+Every profile remains covered by the same conservative honest-disagreement bound
+2^-133, conditional on the specified ideal-XOF/arithmetic assumptions and completed
+generation. Smaller profiles may have stronger bounds; n8 has perfect agreement.
+The common guarantee does not claim identical actual probabilities. No failure
+rate is increased merely to make a smooth ladder; no zero-failure requirement
+is imposed on this noisy construction. The existing640 certificate covers all80
+dimensions. Resource aborts are separate from agreement failures.
+
+Security reference
+
+The pinned lattice-estimator evidence already contains all80 dimensions. Keep
+n<=128 unestimated because of the estimator's unsupported range/floor. For larger
+dimensions, display the uncapped minimum of the recorded primal uSVP and dual
+hybrid classical Core-SVP estimates:129.064 at592 and141.912 at640. This is a
+restricted lattice attack reference, not full-KEM security bits or measured time.
+The128-bit native-message search space is reported separately. Candidate-message
+encryptions and Core-SVP work are not interchangeable units. Other attacks,
+memory requirements and full-KEM security reasoning remain relevant.
+
+This correction does not claim joint efficiency across modulus/noise/encoding
+choices, nor select a new global optimum. It retains a coherent dimension path
+and a meaningful published reference while broader ladder principles are reviewed.
+
+Compatibility and validation
+
+The new self-contained adapter and solver have new release/profile identities;
+old v1/v2 sources and records are preserved. No stored accounts, sign-ins or
+submissions are erased or relabelled. Current Frodo records use the new release;
+other family enrollments are unchanged. Scoring policyv6 supports all80 profiles
+with the existing formula; its unequal ordinal maxima remain provisional.
+
+tests/test_frodo_anchor_ladder.py checks every worker profile, the independent
+published-anchor fixture, deterministic overlap with v2, canonical input handling,
+source integrity and the pinned estimator evidence. Existing API, proposal,
+archive and scoring regression suites exercise the registry integration.
+
+Sources and evidence
+
+  docs/lattice-frodo-calibration.json
+  docs/lattice-frodo-correctness.json
+  tests/fixtures/frodo-research-anchor.json
+  https://frodokem.org/files/FrodoKEM_standard_proposal_20250929.pdf
+  https://github.com/microsoft/PQCrypto-LWEKE/tree/a2f9dec8917ccc3464b3378d46b140fa7353320d
+
+The earlier docs/lattice-parameter-frontier.{txt,json} remain a historical record
+of the v2 search and its limited592 endpoint decision, not the current policy.

@@ -1,0 +1,40 @@
+{
+  "format": "crucible-kem-discovery-nonlinear-v1",
+  "status": "retained-unvalidated-candidate",
+  "scope": "construction and honest correctness only; no cryptanalysis",
+  "python": "3.14.6",
+  "seed": 20261016,
+  "parameters": {
+    "n": 2,
+    "p": 101,
+    "word_length": 8,
+    "point_count": 16
+  },
+  "diagnostics": {
+    "expansion_and_inverse_checks": 40,
+    "sampled_base_draws": 16,
+    "coefficient_count": 31350,
+    "maximum_coordinate_degree": 12,
+    "maximum_parameter_degree": 2,
+    "public_map_json_bytes": 531434,
+    "setup_seconds": 0.5920833329946618
+  },
+  "public_keys": 1,
+  "ciphertexts": 16,
+  "correct": 16,
+  "public_key_point_bytes": 64,
+  "ciphertext_bytes": 64,
+  "key_bytes": 32,
+  "public_parameters_bytes": 531713,
+  "public_key_with_parameters_bytes": 531777,
+  "serialized_public_parameters_reloaded": true,
+  "malformed_encodings_rejected": 4,
+  "median_encaps_decaps_seconds": 0.41461010350030847,
+  "example": {
+    "parameter_id": "3bd185c8d137d5bb6f102098f7d5acd5fbe9ea624c079319198da89f4003a360",
+    "pk": "080a591f0a424f4f101d5f1512114248185a381b2152491323171f2d282f472c3d145e623e2d50263f1c120747433646484a025c485714184c503e145d4f3507",
+    "ct": "080e603808555d6226071d2a2b1916002b2f4d4437145d20393336203a1e4e0b40182c4b42503237472208554a09383b4e0e0d16513824325b1337085c336214",
+    "encapsulated_key": "65c29484f70e8a82e7dd8bc4645c334d735d7db808c64bd96bf91b8cfcc90b1c",
+    "decapsulated_key": "65c29484f70e8a82e7dd8bc4645c334d735d7db808c64bd96bf91b8cfcc90b1c"
+  }
+}

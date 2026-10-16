@@ -1,0 +1,170 @@
+Published PQ KEM adapters: implementation checkpoint
+Date: 2026-10-14
+
+Scope and status
+
+The four adapters generate honest instances of fourteen published parameter
+sets. They are user-authorized local beta integrations, not independently
+approved scheme admissions, security certifications, or recommendations to
+protect production data. No admission points are earned by installing them.
+
+  ml-kem / fips203-oqs016-v1:
+    ML-KEM-512, ML-KEM-768, ML-KEM-1024 (FIPS 203)
+  frodokem / salted-oqs016-v1:
+    FrodoKEM-640-SHAKE, FrodoKEM-976-SHAKE, FrodoKEM-1344-SHAKE
+    Salted construction; NOT the old unsalted eFrodoKEM.
+  hqc / 20250822-oqs016-v1:
+    HQC-1, HQC-3, HQC-5, explicitly the 2025-08-22 construction.
+    NOT the changed 2026-10-12 construction or a final NIST standard.
+  classic-mceliece / 20221023-oqs016-v1:
+    Classic-McEliece-348864, -460896, -6688128, -6960119, -8192128.
+    The 2022-10-23 baseline, non-pc, non-f sets.
+
+All profile IDs bind their exact scheme, release, and published name. Ordinal
+instance_size/profile_order values exist solely for storage compatibility.
+parameter_bits=0 is an explicitly inapplicable legacy field, not an estimate.
+No initial_security_estimate is supplied. No interpolated parameters, reduced
+entropy, ladder calibration, or automatic credit across parameter sets exists
+in these adapters. NIST categories remain claimed categories, not estimated
+security bits or online attack times. Shared-secret recovery on one instance
+is narrower than an IND-CCA game and does not certify the remaining instances.
+Frodo shared secrets are respectively 16, 24 and 32 bytes; other sets use 32.
+
+Exact source and build closure
+
+Native library: liboqs 0.16.0, release 2026-07-09, commit
+5a1a854b0dc9f2141bdc771c555ee60c37950183
+https://github.com/open-quantum-safe/liboqs/releases/tag/0.16.0
+https://codeload.github.com/open-quantum-safe/liboqs/tar.gz/5a1a854b0dc9f2141bdc771c555ee60c37950183
+Archive SHA256:
+83c6e6cff490638312e1e20ed5de593fb5d7bfab162235f6238f519d6a1feafb
+
+The archive contains the vendored cryptographic sources and local OQS patches,
+so the pin covers those dependencies, not just Python wrappers. Its metadata
+identifies upstream ML-KEM mlkem-native commit
+0ba906cb14b1c241476134d7403a811b382ca498;
+Frodo Microsoft/PQCrypto-LWEKE commit
+a2f9dec8917ccc3464b3378d46b140fa7353320d;
+HQC official source commit 161cd4fdf6b4a5198cf40b3a1243f9f27f13e03d;
+and McEliece PQClean commit 1eacfdafc15ddc5d5759d0b85b4cef26627df181.
+The exact vendored sources, including patches, are the archive contents.
+
+The reproducible recipe is scripts/build_pq_backend.py. It checks the archive
+SHA256, safely extracts it, and checks every extracted source file and its
+inventory against the archive on each rebuild. CMake uses a minimal static
+build containing only these fourteen algorithms, OQS_USE_OPENSSL=OFF,
+OQS_DIST_BUILD=OFF, OQS_OPT_TARGET=generic and -O1. The C worker links liboqs
+statically. On this Apple arm64 build, otool reports only the OS libSystem
+as a dynamic dependency. Compiler, platform, build options, worker hash,
+source hashes, test-vector hashes, and license-file hashes are recorded in
+.native-pq/install/build-manifest.json. OS entropy and the compiler/OS remain
+trusted dependencies; this is not a hermetic compiler bootstrap or a promise
+of bit-identical binaries on different systems.
+
+Runtime artifact_manifest() publishes the adapter, common Python helper,
+C worker source, build script and native build-manifest hashes, plus public
+source/test/license provenance. artifact_sha256 hashes canonical sorted JSON
+excluding that hash field itself. It contains no private filesystem paths or
+credentials. The public verify_artifact() hook checks the current source/helper/native
+binary and build manifest for admission. Every generation repeats those checks
+before starting and again before returning. The service must
+freeze and compare this artifact hash in addition to the adapter source hash.
+An intentional rebuild can change artifact identity even when the mathematical
+scheme is unchanged; it must not silently overwrite a frozen deployed artifact.
+
+Licensing: liboqs is MIT; the pinned ML-KEM source offers MIT OR Apache-2.0 OR
+ISC; Frodo is MIT; HQC and McEliece implementation sources are public domain.
+Additional bundled helper license notices are retained. The build copies all
+upstream LICENSE*/COPYING files to .native-pq/install/licenses and hashes them.
+Distribute those notices with the worker; this document is not a substitute
+for the individual notices.
+
+Bounded execution and correctness handling
+
+A fresh short-lived C process is allowlisted to a fixed algorithm name. It
+accepts no public keys, ciphertexts, files, attacker code, randomness seed or
+decapsulation requests. It switches liboqs explicitly to OS randomness, makes
+one native KeyGen, one Encaps and one honest Decaps. Native key-generation
+rejection sampling remains part of the original construction. Private keys
+and decapsulation output stay in the worker and are cleared before exit. The
+only secret returned to the service is the encapsulated target, never a public
+instance field. The worker's binary output is exact-length framed. Its stdout
+is bounded to less than 1.43MB, stderr is discarded, and core dumps are disabled.
+
+Limits are 20s monotonic parent wall time, 18s child CPU, 20s child alarm,
+2MB child file output and up to 64MiB stack. Linux additionally has a 1GiB
+address-space limit. macOS lacks the Linux address-space cap here; all arrays
+are nevertheless bounded by the allowlisted fixed profiles and native code.
+The parent kills/reaps the process group on timeout or excess output. Resource
+aborts raise GenerationLimit; missing/changed/invalid native artifacts or
+unsuccessful generation raise GenerationUnavailable (alias of Unavailable).
+These are availability failures, not fabricated agreement failures. The app
+must also limit aggregate concurrent workers and record generation outcomes.
+
+There is exactly one application-level honest trial. An agreement mismatch is
+returned as correctness_checked=true, shared_secret_matches=false with the
+original target and public inputs. It is NEVER retried to obtain a passing
+sample. The service must hold/quarantine that profile and record the incident.
+No challenge is published until the service's independent validation passes.
+
+Correctness and construction limits
+
+ML-KEM's published honest-failure estimates are statistical, not perfect.
+Frodo also has rare honest failure; salted construction and 16/24/32-byte
+outputs are preserved. HQC's 2025-08-22 Table 5 claims <2^-128/-192/-256, but
+these are dated analytical claims. The later 2026 work revises weights and
+failure analysis; this adapter does not revalidate or transfer those claims.
+Classic McEliece has perfect honest algebraic correctness under its stated
+encoding/arithmetic assumptions; this does not exclude implementation faults.
+Ordinary random tests cannot establish extremely small failure probabilities.
+
+Classic McEliece's enclosing liboqs release is maintained, but its vendored
+PQClean McEliece upstream is explicitly marked inactive. OQS also lists
+compiler/platform constant-time caveats for 460896/6960119. The official current
+libmceliece is a future separately reviewed replacement; this checkpoint does
+not silently substitute it. Current structural cryptanalysis and the 2026
+assessment remain material; this is a research target, not a deployment
+recommendation. No constant-time claim or full side-channel audit was performed
+for any of these local binaries, and no online decapsulation oracle exists.
+
+Checks actually performed on this checkpoint
+
+- All 14 pinned upstream single-vector KAT output hashes match liboqs's
+  tests/KATs/kem/kats.json, including exact full key/ciphertext/shared-secret
+  bytes. Provenance: upstream tests/KATs/README.md; these are upstream regression
+  vectors, not fourteen independent standards certifications.
+- 180 official NIST ACVP-Server v1.1.0.41 ML-KEM cases passed: per parameter
+  set 25 key-generation, 25 encapsulation and 10 decapsulation cases, including
+  supplied implicit-rejection ciphertexts. The upstream vectors_kem harness
+  does not exercise separate encapsulationKeyCheck/decapsulationKeyCheck
+  groups; those 60 cases are explicitly excluded. No ACVP certificate.
+- All 14 fresh honest round trips passed with exact registered lengths.
+- Focused pytest tests cover freshness, wrong IDs, per-profile secret parsing,
+  no private-key public fields, artifact hashing/tampering/missing files,
+  honest mismatch preservation without resampling, malformed worker output,
+  timeout/reaping and bounded stdout. See tests/test_pq_native.py.
+
+NIST vector URLs and SHA256:
+https://raw.githubusercontent.com/usnistgov/ACVP-Server/refs/tags/v1.1.0.41/gen-val/json-files/ML-KEM-keyGen-FIPS203/internalProjection.json
+80a2f859ecdebdba349a55fd3ccb1b8b33ee9c0eab08b171f0ed1a6e3bb45fb9
+https://raw.githubusercontent.com/usnistgov/ACVP-Server/refs/tags/v1.1.0.41/gen-val/json-files/ML-KEM-encapDecap-FIPS203/internalProjection.json
+e2d53b623c3ff79a52695d72ed10595ee1743ad6260ed0a3ff89d51bb5d474eb
+
+Rebuild/install without system changes
+
+From the repository, with Python3.12+ (safe tar extraction filter), CMake,
+Ninja and a C compiler available:
+  python3 scripts/build_pq_backend.py --download
+  python3 -m pytest tests/test_pq_native.py -q
+Without --download the script requires the pinned archives/vectors already
+present and makes no network request. Runtime never downloads or compiles.
+For another isolated output directory use --directory PATH and configure
+CRUCIBLE_PQ_BACKEND to PATH/install. For deployment copy the checked install
+folder including licenses, the five Python modules and both build script
+sources; do not copy test private keys or native build scratch directories.
+
+Remaining gates: independent construction/source/admission review; broader
+cross-platform and compiler checking; a formal operational threat model and
+aggregate resource budget; continued monitoring of source advisories and HQC /
+McEliece analysis. Tests and artifact hashes establish this checkpoint's
+identity and observed behavior, not a complete cryptographic security audit.

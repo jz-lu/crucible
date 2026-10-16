@@ -1,0 +1,148 @@
+NTRU PARAMETER SELECTION — RELEASE 3
+2026-10-16
+
+Decision
+
+Streamlined NTRU Prime v3 replaces the preferred degree-only v2 ladder with 27
+frozen profiles chosen from 103 certified candidate tuples. The first 13 small
+profiles remain explicitly uncalibrated. The subsequent profiles minimize
+public-key plus one ciphertext bytes within the listed candidate pool at
+4-bit targets under a declared classical hybrid-inclusive attack reference.
+Duplicate selections appear only once. This is a bounded model-dependent
+selection, not a global optimum and not a guarantee of the displayed security.
+
+The endpoint is (p,q,w)=(653,4621,288): the published sntrup653 algebra and
+encodings, with 994 public-key bytes and 897 ciphertext bytes. The actual scoped
+reference is129.2330884297, not an artificial128 cap. Exact uniform ideal-model
+samplers replace the upstream near-uniform mappings as in the previous release;
+this distinction remains explicit. The v2 parameters, source and native worker
+are unchanged. Existing receipts are not relabeled, inherited or destroyed.
+
+Why the previous degree path needed revision
+
+Choosing w=floor(286p/761) and the first admissible q needlessly restricted the
+search. In particular, v2's (653,4621,245) had the same encoded sizes as published
+sntrup653 but a weaker 127.1105 classical reference. Some degrees required large
+moduli: (617,12829,231) consumed1053 public-key bytes while its reference was
+only 104.174. Degree order alone was therefore a poor efficiency/security ladder.
+Increasing w at the same p,q preserves encoded size and correctness when
+q>=16w+1; it can increase sampling work. We do not call that a runtime win or
+assert that increasing w always improves every attack model.
+
+The search deliberately rejected a second trap. Against a non-hybrid model
+alone, (653,2311,144) appeared to reach 130.912 at 1729 total bytes. Including the
+authors' meet-in-the-middle hybrid attack reduces its reference to 120.312.
+It is not selected as the 128-target endpoint. Parameter tuning must not exploit
+an estimator's known blind spots and then advertise the resulting value as
+full security.
+
+Objective and candidate domain
+
+Objective: minimize canonical public-key bytes plus one canonical ciphertext.
+Tie-breaks: public-key bytes, degree p, modulus q, decreasing weight w.
+No timings, throughput or memory optima are inferred from this objective.
+
+The finite candidate domain is recorded in full, including rejected alternatives,
+in crucible/data/ntru_frontier_profiles.json. It contains:
+
+- The previously certified degrees through653.
+- Each old modulus, plus the first admissible prime modulus above the
+  correctness threshold for trial weights floor(a*p/8), a in {1,2,3,4}.
+- Moduli remain below 16384 and satisfy q mod6=1; p mod4=1 is retained.
+- At each ring, test the maximum weight allowed by q >=16w+1 and 2p >=3w.
+  The previous weight is additionally retained at the old modulus.
+- Every exact candidate has certified prime p,q and irreducible x^p-x-1 modq.
+
+This finite search is broader than the previous fixed ratio, but it is not an
+exhaustive search of all primes, weights, implementation algorithms or timing
+tradeoffs. The frozen candidate ledger makes that boundary reviewable.
+
+Profiles below the estimator's sample/block-size domain receive no numerical
+security estimate. Their introductory ordering keeps increasing byte costs and
+increasing exact encapsulation-input enumeration ceilings, stopping before the
+first modeled profile's cost. That is a limited proxy screen: it does not prove
+monotone best-attack costs. In particular, changing degree can expose structure
+that an entropy count ignores. These small cases remain useful research tests.
+
+Attack model and evidence
+
+The offline estimator reproduces the classical sieving/free-memory branch of
+the NTRU Prime team's 2020 estimator, including non-hybrid, simple hybrid and
+meet-in-the-middle hybrid attacks. It retains bounded sample/scale/block-size/
+guessed-position searches and a heuristic nearest-plane success calculation.
+The floating implementation uses a stable complementary beta expression;
+selected original Sage outputs agree to within 1e-8 bits. The force-search
+heuristic tracks the selected classical model; the original multi-model
+estimator's additional cost models can alter how far that heuristic searches.
+No claim of complete attack-search equivalence is made beyond the recorded
+calibration checks.
+
+The model also retains the upstream p-fold rotation/equivalence approximation,
+which the authors flag as treating NTRU Prime like classic NTRU. It assumes free
+memory and omits dual/structural/quantum/multi-target attacks,
+and does not price full KEM reductions or side channels. Its asymptotic cost and
+probability heuristics need experimental validation, especially at small sizes.
+Neither it nor Core-SVP is a conservative security lower bound. Attack reference
+values stay frozen with the release; later evidence must be recorded separately.
+
+The exact encapsulation-input count 2^w*C(p,w) is reported separately in candidate
+re-encryptions. It is not silently mixed with Core-SVP operation units to create
+an apparently universal minimum. Benchmarks must declare hardware and units.
+
+Fixed correctness and runtime
+
+All 27 profiles retain the same ideal mathematical honest disagreement bound 0.
+The theorem's coefficient bound |3fm+gr|<=8w<q/2 gives exact centered lifting;
+reduction modulo 3 recovers the message. Irreducibility gives the required mod-q
+inverse. Availability/resource aborts and implementation faults are separate.
+
+The adapter is crucible/ntru_frontier.py; its isolated worker lives in
+.native/ntru-frontier. It uses the pinned 2020 reference core, existing exact
+uniform sampler substitutions, bounded pipes and deadlines. The source/table/
+model/builder/native hashes are bound in the artifact, checked before and after
+each operation. There is no runtime compilation, parameter search or submitted
+code execution. The standalone example enumerates public candidates only.
+
+Validation
+
+- SageMath 10.1 certified all 103 exact candidate primes and irreducibilities.
+- The original authors' pinned Sage estimator independently reproduced four
+  non-hybrid values and two hybrid-inclusive values; the sparse endpoint trap
+  was explicitly exercised. The full frozen sweep includes all 103 candidates.
+- All 27 native profiles are checked against independent Python decapsulation,
+  including malformed-ciphertext implicit rejection and actual secret weights.
+- The endpoint decapsulates three original published sntrup653 known-answer
+  vectors. This checks the shared encoding/transform, not sampler identity.
+- A fresh Tier 1 shared secret was recovered with the standalone public-only
+  example, including a CLI-style challenge.json invocation.
+- Tampering and post-execution artifact changes fail closed; a deliberately
+  disagreeing honest comparison is neither retried nor retargeted.
+
+The static dependency hashes identify trusted prebuilt inputs; they do not by
+themselves prove reproducible source-to-library provenance or constant-time
+behavior. Independent mathematical admission remains a separate review.
+
+Reproduce offline
+
+  sage -python scripts/ntru_frontier_parameters.py \
+    --output crucible/data/ntru_frontier_profiles.json
+  sage -python scripts/ntru_frontier_calibrate.py \
+    --estimator PATH_TO_REVIEWED_estimate-20200927.sage \
+    --output docs/ntru-frontier-estimator-calibration.json
+  python scripts/build_ntru_frontier.py \
+    --source-cache PATH_TO_PINNED_SOURCE_ARCHIVE_DIRECTORY \
+    --base-native PATH_TO_TRUSTED_NATIVE_DIRECTORY
+  python -m pytest tests/test_ntru_frontier.py
+
+Review and update pins deliberately after any changed source/candidate/build.
+The builder does not activate a release or silently replace an old artifact.
+
+Primary sources
+
+NTRU Prime 2020 specification, parameter conditions, encodings, correctness and
+attack-model discussion:
+https://ntruprime.cr.yp.to/nist/ntruprime-20201007.pdf
+Authors' estimator and explicitly qualified published reference table:
+https://ntruprime.cr.yp.to/security.html
+Pinned estimator source (SHA256 f22b040c7ecc6bee5a94fd81921cd4bf0bd43094b7074613465fbf773fdd2158):
+https://ntruprime.cr.yp.to/estimate-20200927.sage

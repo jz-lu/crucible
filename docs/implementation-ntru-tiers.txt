@@ -1,0 +1,174 @@
+Streamlined NTRU Prime research tiers — implementation record
+2026-10-14. Staged local-beta candidate, release sntrup/2.
+
+Scope and identity
+
+This implements the published Streamlined NTRU Prime algorithm family with
+50 distinct certified (p,q,w) tuples and the 2020-10-07 encodings, confirmation
+and session-key transform. It is not NTRU LPRime, conventional NTRU-HPS/HRSS,
+or an SSH hybrid. It is not a statement that all 50 tuples are published or
+recommended production parameter sets.
+
+Tier 1:  p=5, q=79, w=1.
+Tier 2:  p=13, q=313, w=4.
+Tier 50: p=761, q=4591, w=286.
+
+The last tuple and byte encodings match published sntrup761: public key 1158
+bytes, secret key 1763 bytes, ciphertext 1039 bytes, shared secret 32 bytes.
+The sampler implements the ideal specification's exact uniform distribution;
+the old reference C's near-uniform 32-bit maps are deliberately not retained.
+Accordingly, conformance claims concern arithmetic, encodings, decapsulation
+and hash domains, not identical deterministic RNG transcripts for generation.
+The fixed standard-profile adapter sntrup/1 remains separate and unchanged.
+
+Tier meaning and scoring
+
+The integer selects a frozen parameter tuple, with increasing polynomial degree.
+It is not a bit count, an equal-cost increment, or an asserted monotone security
+scale. Moduli vary, communication size need not be monotone, and this release
+does not claim Tier 50 is calibrated to exactly 128 classical bits. No qualified
+common attack estimator has been executed for these reduced parameters.
+
+Manifests leave initial_security_estimate null. They separately publish the
+size of the encapsulation-input search space, binomial(p,w)*2^w, as a concrete
+exhaustive attack bound. This is not a best-known cost or a security estimate;
+lattice, hybrid and other attacks can be much faster. Do not plot it as an
+initial security estimate. Low-tier reference attacks enumerate complete
+possible r values and match the full ciphertext, including confirmation.
+
+record_inheritance=False and scoring_eligible=False preserve exact-profile
+evidence. A result at one tuple does not certify actual recovery at other tuples.
+Local availability is separate from independent scientific admission and scoring
+enrollment. No registry, scoring policy, database or live installation was
+changed by this module's author.
+
+Certified parameter domain
+
+scripts/ntru_tier_parameters.py uses SageMath 10.1 with proven primality and
+finite-field polynomial irreducibility checks. It searches prime degrees
+p in [5,761] with p mod4=1, sets w=max(1,floor(286p/761)), and finds the first
+prime q in [16w+1,16384) with q mod6=1 for which x^p-x-1 is irreducible modq.
+The endpoint explicitly uses (761,4591,286). Fifty increasing-degree choices
+are selected deterministically from the 53 admissible candidates found.
+
+Every frozen row satisfies:
+  p and q prime; 0<w<=p; 2p>=3w; q>=16w+1;
+  x^p-x-1 irreducible over Fq;
+  p mod4=1; q mod6=1; p<=761; q<16384.
+
+The first four algebraic conditions are the published core's parameter domain.
+The congruences and upper bounds retain the reference implementation's encoding
+and integer-arithmetic domain. The server does not invoke Sage or search for
+parameters: it only uses the frozen, digest-pinned table compiled into its
+worker. Independent release validation rechecks all 50 tuples with Sage.
+
+Exact honest correctness argument
+
+Let f and r be weight-w ternary ring elements, let g be ternary and invertible
+mod3, and h=g/(3f) modulo (q,x^p-x-1). Irreducibility modulo prime q makes the
+nonzero f invertible. Rounding h*r to multiples of three introduces a ternary
+error m. Therefore 3f*c = 3f*m + g*r modulo q.
+
+Theorem 3/4 of the published specification bound every coefficient of the
+integer ring expression 3f*m+g*r in absolute value by 8w. Since q>=16w+1,
+centered lifting modulo q recovers that integer expression exactly. Reduction
+mod3 removes 3f*m; multiplication by g^-1 then recovers r. Matching encodings,
+confirmation and HashSession domains give the same 32-byte key on both sides.
+This applies throughout the declared domain, not just to sampled passing tests.
+
+The mathematical honest disagreement probability is zero conditional on valid
+successful generation and faithful implementation. Bugs, entropy failures and
+process resource aborts are separate. No numerical generation-abort bound is
+asserted. The 15-second wall deadline / 20-second CPU cap returns no challenge
+on exhaustion; the service must report the abort rather than retrying until a
+correctness check happens to pass. generate() performs one honest exchange,
+preserves Encaps' original target, and returns the independent Decaps comparison
+even if that comparison is false. There is no correctness-conditioned resampling.
+
+Sampling
+
+For g, each coefficient is uniform over {-1,0,1}. Rejection of g occurs only
+when it lacks an inverse in R/3, as the published KeyGen requires. For f and r,
+partial Fisher-Yates samples a uniform size-w support, then independently samples
+each sign. A 32-bit rejection sampler makes each bounded draw exact: discarding
+the initial incomplete residue block leaves equally many representatives of
+each residue. Thus every allowed polynomial has its prescribed probability;
+there are no shortened seeds, hidden low-dimensional subspaces or fixed keys.
+
+OS-backed librandombytes supplies all draws. This sampler is not constant-time
+audited. In particular, support-dependent memory access and rejection behavior
+make this a research challenge generator, not a production side-channel claim.
+
+Implementation and artifact closure
+
+crucible/ntru_tiers.py is the adapter. The separate native process imports the
+pinned October 2020 reference arithmetic and encodings. The build helper checks
+exact source substitutions: public runtime parameters, variable-length local
+input arrays, exact uniform samplers and removal of the fixed sntrup761 API
+macros. It does not replace the cryptographic construction.
+
+The native worker accepts only a tier in the compiled 1..50 table and a fixed
+operation. Secret key material uses bounded stdin/stdout pipes, never argv,
+environment, files, logs or exception text. Stderr is discarded, core dumps
+disabled, and both input/output lengths checked. It wipes temporary byte keys
+before exiting; this is not a formal secure-memory-erasure guarantee.
+
+The public artifact manifest binds the wrapper source, parameter JSON,
+parameter-generation script, build script, C worker source, independent Python
+reference and the statically linked executable. The original archive and static
+dependency hashes are recorded. A changed source/worker pin fails closed.
+Source validation is not scientific approval; no automatic review/activation
+or arbitrary code upload is involved.
+
+Reproduction (explicit build-time operations only)
+
+With SageMath installed:
+  sage -python scripts/ntru_tier_parameters.py --output crucible/data/ntru_tier_profiles.json
+
+With the verified 2020 source archive available in SOURCE_CACHE, the already
+built pinned librandombytes-kernel archive, and the pinned OpenSSL static archive:
+  python scripts/build_ntru_tiers.py --source-cache SOURCE_CACHE
+
+No network download occurs. The builder refuses changed source/dependency hashes.
+It writes only .native/ntru-tiers and does not automatically change a runtime
+pin or admit a scheme. A different build/platform needs a reviewed replacement
+pin. Rebuilding twice on the recorded host reproduced the same executable hash.
+
+Recorded pins
+
+2020 upstream source archive:
+  280e5dad090144446a49cc0e283163b8167a7961f5ccb183817501fcc3b695ce
+Frozen parameter JSON file:
+  a9873c40310e54803fb3ba939d3a5d4508e08e0884863d8bb3bf248b88c74e46
+Adapted reference core:
+  40fc66dcb74cf4aedc0c096e2da6e711cc7d2d6d3da3115a9a4c3a3b5567aa16
+Native executable (Apple clang 14.0.3, macOS arm64):
+  1770bc68b2ec0a295a5b1d47a544e9a33a392428dd93819e594d46eb3c92767b
+
+Validation performed
+
+tests/test_ntru_tiers.py: 78 tests passed on 2026-10-14, including:
+- independent Sage proof-primality and irreducibility checks for all 50 rows;
+- all 50 profiles: native honest agreement, independent Python decapsulation,
+  exact weight/ternary key shape, 3*f*h=g and g*ginv=1 modulo3;
+- all 100 original 2020 sntrup761 known-answer decapsulations at Tier 50;
+- public-only exhaustive recovery of full shared secrets at Tiers 1 and 2;
+- invalid-ciphertext deterministic implicit rejection;
+- malformed profiles and lengths rejected before native execution;
+- artifact tamper detection, bounded output, timeout distinction, secret-safe
+  errors, and preservation of Encaps' target without retry after disagreement.
+
+Generating and self-checking all 50 profiles took about 1.1 seconds total on this
+host in one local run. This is neither a standardized benchmark nor a tail-time
+guarantee. No production data, accounts, submissions or challenges were touched.
+
+Sources
+
+https://ntruprime.cr.yp.to/nist/ntruprime-20201007.pdf
+https://ntruprime.cr.yp.to/nist/ntruprime-20201007.tar.gz
+https://ntruprime.cr.yp.to/ntruprime-20200930.sage
+
+The complete pinned submission archive and specification were already available
+locally and were inspected. The web fetches on 2026-10-14 failed, so this record
+does not pretend they supplied a newer specification. See also
+scheme-reviews/sntrup.txt and correctness-policy-v0.txt.

@@ -1,0 +1,156 @@
+Fresh KEM search: local consistency and compact state representations
+2026-10-14
+
+Scope
+
+This pass began from local update rules whose consistency identities allow
+different update orders to agree. It did not start by modifying the retained
+boundary-action construction. The work consisted of primary-source reading,
+algebraic derivation, construction, and exact size arithmetic. No attacks,
+candidate code, stress tests, trial parameter instances, or submissions were
+performed. Not every mathematical direction below is a KEM candidate.
+
+Main result
+
+compact-transfer-candidate.txt records CTF1: a fully specified public local
+permutation circuit on binary vectors, a known reversible Yang-Baxter local
+map, commuting transfer maps, exact sampling, an agreement/KEM-wrapper draft,
+and pen-and-paper correctness and cost arguments.
+
+Its complete encoded public key has
+
+    4 + uleb128_bytes(m) + ceil((44m^2+12m)/8) bytes,
+
+including all public rule parameters and both global states. Its ciphertext
+has ceil((16m^2+4m)/8) bytes. Honest word evaluation has O(m^4) elementary bit
+cost and O(m^2) space. A consequence of the transfer-product identity reduces
+the worst-case local-call count from 16m^2 to 8m^2 without changing the sampled
+transformation. These formulas are not measured performance.
+
+The preliminary direct-quadratic rule is preserved in
+compact-transfer-initial-variant.txt. Moving to a permutation rule was a
+constructive choice with a specific algebraic guarantee, not a security result.
+
+CTF1 clears the representation-size part of the brief in the structural
+parameter m. It does NOT yet clear the relationship-to-security requirement.
+No lower bound or well-supported conjectural scaling constant relates m to
+classical or quantum security bits. Thus there are no 128/192/256-bit parameter
+recommendations and no justification for implementation or stress testing yet.
+
+How the mathematical route developed
+
+Transfer maps offered an initial mechanism: a small two-site rule induces
+commuting transformations on a long state. This separates the size of a public
+description from the degree of its fully composed polynomial expansion. The
+rule can be evaluated directly, while the state length remains fixed.
+
+Veselov's transfer theorem is the relevant identity:
+  A. P. Veselov, Yang-Baxter maps and integrable dynamics, Theorem 1.
+  https://arxiv.org/abs/math/0205335
+
+Some familiar examples are birational; a formula that works at generic complex
+points does not automatically give a total map on all sampled finite-field
+states. No such rational example was turned into a candidate here. Instead the
+search followed finite algebraic constructions with total maps.
+
+Braces supply many such constructions. The discussion of radical rings and
+classical braces in Smoktunowicz/Vendramin was useful background; no new
+radical-ring KEM assumption was claimed. Simple/asymmetric-product braces
+then led to the more flexible function-parametrized construction used in CTF1.
+  A. Smoktunowicz and L. Vendramin, On skew braces.
+  https://arxiv.org/abs/1705.06958
+  D. Bachiller, F. Cedo, E. Jespers and J. Okninski, Asymmetric product of
+  left braces and simplicity; new solutions of the Yang-Baxter equation.
+  https://arxiv.org/abs/1705.08493
+
+Cedo/Okninski Section 3 gives the needed family for any j satisfying
+j(x)=j(-x). Characteristic two makes that condition automatic. This permits
+the explicit compact permutation circuit while retaining an exact local
+consistency identity. The main note includes a direct binary braid calculation.
+  F. Cedo and J. Okninski, New simple solutions of the Yang-Baxter equation
+  and solutions associated to simple left braces.
+  https://arxiv.org/abs/2112.07271
+
+Other mathematical directions retained as observations
+
+1. Tetrahedron maps. These give higher-dimensional consistency identities.
+   For example, the published associative-ring map
+   (X,Y,Z) -> (X,Y+XMZ,Z) has compact matrix input/output and an explicit
+   inverse obtained by subtraction. The existence of this local identity
+   does not itself specify a two-party common-secret protocol. In particular,
+   a theorem about commuting transfer MATRICES, which can act on an enormous
+   vector space, is not automatically a theorem about compact deterministic
+   state maps. No suitable global boundary prescription and KEM mechanism
+   were derived in this pass, so this observation was not promoted.
+   S. Igonin, Set-theoretical solutions to the Zamolodchikov tetrahedron
+   equation on associative rings and Liouville integrability, Theorem 1.
+   https://arxiv.org/abs/2203.05552
+   S. Igonin and S. Konstantinou-Rizos, Algebraic and differential-geometric
+   constructions of set-theoretical solutions to the Zamolodchikov
+   tetrahedron equation.
+   https://arxiv.org/abs/2110.05998
+
+2. Abelian processor networks. Order-independent stabilization is another
+   possible source of agreement. The literature already identifies a critical
+   group and a quotient of a lattice associated with the network. Those
+   structural connections must be carried into any novelty comparison;
+   a new name for stabilization would not establish an independent assumption.
+   No secret-assisted computational gap, security distribution, or appropriate
+   honest-runtime bound was supplied here. This remains a mathematical note.
+   B. Bond and L. Levine, Abelian networks III. The critical group.
+   https://arxiv.org/abs/1409.0170
+
+3. Finite-field cellular automata. A recent construction studies a different
+   function-parametrized Yang-Baxter family and reports finite-field examples.
+   This is background, not evidence about CTF1. A table describing an arbitrary
+   function on 2^d inputs is too large in d; any use of that route needs a
+   compact sampled family with its own accounting. No table enumeration was
+   performed and no experimental claims were imported into this research.
+   A. Araoka and T. Tokihiro, Integrable cellular automata on finite fields
+   of order 2^n.
+   https://arxiv.org/abs/2602.17148
+
+Novelty comparison actually completed
+
+The generic protocol is a common-image semigroup/group-action construction,
+not a new agreement pattern. The precise abstract translation for CTF1 is:
+state set (A^2)^N, abelian transformation group generated by the T_i, and
+private elements drawn by independent binary selectors, not uniformly over
+that group. This does not by itself identify a hard known distribution.
+  G. Maze, C. Monico and J. Rosenthal, Public Key Cryptography based on
+  Semigroup Actions.
+  https://arxiv.org/abs/cs/0501017
+
+Chouraqui's paper establishes that cryptographic use of Yang-Baxter solutions
+is not new as a category. Its tentative key exchange in Section 5 requires
+participants to share knowledge of an underlying solution that is hidden from
+others. CTF1 instead publishes its entire rule and keeps only independent
+transfer selectors private. This is a public-data/mechanism distinction;
+no distribution-preserving equivalence or separation is established.
+  F. Chouraqui, Yang-Baxter equation and cryptography.
+  https://arxiv.org/abs/2212.13807
+
+Focused searches included "Yang-Baxter maps integrable dynamics transfer",
+"skew braces", "simple left braces asymmetric product", "Yang-Baxter key
+exchange", "Yang-Baxter Feistel", and "transfer maps cryptography". They
+located the primary constructions above but did not establish the novelty of
+the particular CTF1 sampler. No conclusion is based on search-result absence.
+No attack implementations or attack experiments were used.
+
+Evidence inventory
+
+- Main construction/correctness/cost note: compact-transfer-candidate.txt.
+- Initial rule retained: compact-transfer-initial-variant.txt.
+- Formula arithmetic: compact-transfer-size-accounting.json.
+- No implementation or empirical protocol transcripts exist for this lead.
+- No published source artifact or Crucible admission adapter exists.
+- The old candidate's specification and validation hash remain unchanged.
+
+Useful next question
+
+Can the exact common-image distribution in CTF1 be connected to an independently
+motivated average-case problem, or otherwise support a credible conjecture that
+security grows linearly in a stated structural parameter? Local invertibility,
+indecomposability, irretractability, large state spaces and selector lengths do
+not answer that question. Until it has a substantive answer, keep CTF1 as a
+research lead and continue mathematical discovery without stress testing it.

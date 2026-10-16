@@ -8,7 +8,7 @@
     {
       "id": "teaching-dh-kem",
       "name": "Finite-field Diffie–Hellman",
-      "family": "Diffie–Hellman & RSA",
+      "family": null,
       "file": "finite-field-dh.txt",
       "status": "Existing custom benchmark",
       "why": "Discrete logarithms with shared public groups: a clear experiment in reusable preparation versus per-instance work.",
@@ -29,7 +29,7 @@
     {
       "id": "rsa-kem",
       "name": "RSA encapsulation",
-      "family": "Diffie–Hellman & RSA",
+      "family": null,
       "file": "rsa.txt",
       "status": "Existing custom benchmark",
       "why": "Factoring and RSA inversion with fresh moduli, giving a different classical attack setting from either form of DH.",
@@ -50,7 +50,7 @@
     {
       "id": "dhkem-x25519",
       "name": "DHKEM (X25519)",
-      "family": "Diffie–Hellman & RSA",
+      "family": null,
       "file": "dhkem-x25519.txt",
       "status": "Selected reference · not live",
       "why": "Fills the elliptic-curve gap with a precisely specified KEM around a widely used primitive.",

@@ -9,7 +9,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from crucible import registry
 from crucible.db import Challenge, Submission
 from test_calibrated_api import current_system
-from test_people import add_user, people, person, receipt
+from test_people import add_user, people, person, receipt, registered_receipt
 
 
 def history(app, handle="alice", **params):
@@ -20,6 +20,37 @@ def history(app, handle="alice", **params):
 
 def pairs(rows):
     return [(row["tier"], row["place"]) for row in rows]
+
+
+def test_exact_hqc_profiles_keep_independent_places_and_lower_tier_highlights(current_system):
+    app, _, _ = current_system
+    alice, bob = (add_user(app, name) for name in ("alice", "bob"))
+    high = registered_receipt(app, alice, registry.code_hqc_v2, 27, 0)
+    low = registered_receipt(app, bob, registry.code_hqc_v2, 1, 1)
+    alice_low = registered_receipt(app, alice, registry.code_hqc_v2, 1, 2)
+    bob_high = registered_receipt(app, bob, registry.code_hqc_v2, 27, 3)
+    registered_receipt(app, alice, registry.code_hqc_v2, 1, 4)
+    registered_receipt(app, bob, registry.code_hqc_v2, 27, 5)
+    board = TestClient(app).get("/api/leaderboard", params={"scheme_id": "hqc",
+        "profile_id": "hqc-growth-research-v2-tier-1"}).json()["entries"]
+    assert [(row["handle"], row["rank"]) for row in board] == [("bob", 1), ("alice", 2)]
+    for name, expected, identifiers in (
+        ("alice", [(1, 2), (27, 1)], {high["submission_id"], alice_low["submission_id"]}),
+        ("bob", [(27, 2), (1, 1)], {low["submission_id"], bob_high["submission_id"]}),
+    ):
+        data = person(app, name)
+        milestones = data["first_ten"]
+        assert pairs(milestones["history"]) == expected
+        assert set(pairs(milestones["highlights"])) == set(expected)
+        assert {row["submission_id"] for row in milestones["history"]} == identifiers
+        assert history(app, name)["milestones"] == milestones["history"]
+        assert data["points"] == (1350 if name == "alice" else 310)
+        winner = high["submission_id"] if name == "alice" else low["submission_id"]
+        for row in milestones["history"]:
+            assert row["profile_kind"] == "research-tier"
+            assert row["profile_label"] == f'Tier {row["tier"]}'
+            assert row["record_inheritance"] is False
+            assert row["counts_toward_bonus"] == (row["submission_id"] == winner)
 
 
 @pytest.mark.parametrize("ladder", [False, True])

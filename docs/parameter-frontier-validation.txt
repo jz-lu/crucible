@@ -1,0 +1,71 @@
+Parameter frontier validation — 16 October 2026
+
+This records implementation checks, not a security certification.
+
+Backend
+
+The broad Python 3.11 suite completed with 1667 passing tests, 45 failures and
+two optional skips. Every failure was investigated and resolved:
+  * Current-release concurrency, machine authentication, source-publication,
+    catalogue and contribution-award fixtures still referred to old releases
+    or the old public-only example solver. They now exercise the new releases.
+    Archived-release fixtures remain explicit and continue to run.
+  * HQC decoder harness compilation required the existing generated native
+    source tree. Restoring that QA input resolved the missing-header errors;
+    no HQC implementation change was needed.
+  * NTRU's exact manifest API checked files internally but bypassed the public
+    verify_artifact hook. It now uses that hook, preserving the exact-manifest
+    contract and leaving the cached presentation path unchanged.
+
+All 197 tests in the affected API/concurrency/authentication/source/catalogue/HQC
+suites then passed, including native undefined-behavior sanitizer checks. A
+concurrent NTRU source edit during an intermediate run correctly triggered the
+source-change guard; the final run used stable sources. The two optional skips
+are full archived sntrup reference-archive comparisons; bundled representatives
+still run. The existing Starlette/httpx test-client deprecation warning remains.
+
+Python 3.14 compatibility initially passed 362 selected checks with five stale
+award-fixture failures. After updating that fixture, all 82 tests in the NTRU,
+read-performance and award follow-up passed. This includes the exact-manifest
+hook regression. All new classical/lattice/native arithmetic, registry, proposal,
+admission and testing self-review checks passed in the compatibility run.
+
+Frontend
+
+All ten Node test files passed. These include request lifecycle, scheme overview,
+round access, proposal review, milestones and submission-detail regressions.
+
+Independent crypto evidence
+
+Classical checks include independent high-precision DH reference calculations,
+an exhaustive first-curve compressed-domain check, independently framed RSA KDF
+inputs and preservation of archived source/parameter hashes.
+
+Lattice release checks cover all 74 new Frodo worker profiles, all 11 packed
+module profiles, independent Sage module vectors, exact correctness certificates,
+the published Frodo640 native conformance anchor, full native Tier 1 module input
+space, canonical rejection and worker source/deadline checks.
+
+The 37 new code-family checks cover all 27 NTRU native profiles against independent
+Python decapsulation, invalid-ciphertext rejection, three published sntrup653
+known-answer vectors, public-only Tier 1 recovery and pre/post worker tampering.
+Six calibration checks against the authors' Sage estimator agree within
+1.3e-12 reference bits. HQC and McEliece bounded parameter/cost audits are recorded
+separately; matching a proxy does not establish equal security.
+
+Actual agent workflow
+
+All six new releases were exercised through isolated real CLI/server workflows:
+fresh accounts, browser-approved device connections, downloaded and hash-verified
+source workspaces, public-only Tier 1 solutions, authenticated submission,
+published method/source/compute detail, secret-free receipts and idempotent retry.
+Temporary servers were stopped afterward. These runs wrote no live account or
+challenge data. The EC solver was a QA-only public-input enumeration example.
+
+Scope
+
+The pass preserves old releases, account/session data and stored history. Its
+deployment is source-only, with a private database/source backup and comparison
+of every stored table before and after restart. Broader cryptanalytic review,
+equal-security calibration for HQC/McEliece, production hosting and public beta
+access controls remain separate work.

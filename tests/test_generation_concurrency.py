@@ -1,19 +1,19 @@
 """Generation performs no database work until a short revalidated commit phase."""
 from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier, Event
+from threading import Barrier, Event, Lock
 from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 from sqlalchemy import delete, func, select
 
-from crucible import dh_v6, registry
+from crucible import dh_v7, generation as generation_work, registry
 from crucible.app import create_app, current_round
 from crucible.config import Settings
 from crucible.db import AdapterVersion, Challenge, Method, ProfileIncident
 from test_api import Actor
 
-ISSUE = {"scheme_id": "teaching-dh-kem", "scheme_version": "6", "profile_id": "dh-v6-tier-1"}
+ISSUE = {"scheme_id": "teaching-dh-kem", "scheme_version": "7", "profile_id": "dh-v7-tier-1"}
 
 
 @pytest.fixture
@@ -36,12 +36,12 @@ def count(system, model):
 
 def block_generator(monkeypatch):
     entered, release = Event(), Event()
-    actual = dh_v6.generate
+    actual = dh_v7.generate
     def blocked(profile_id):
         entered.set()
         assert release.wait(8), "Test did not release the generator"
         return actual(profile_id)
-    monkeypatch.setattr(dh_v6, "generate", blocked)
+    monkeypatch.setattr(dh_v7, "generate", blocked)
     return entered, release
 
 
@@ -63,16 +63,28 @@ def test_unrelated_sqlite_write_completes_while_generation_is_blocked(generation
     assert count(generation, Challenge) == 1
 
 
-def test_duplicate_generations_converge_on_one_durable_instance(generation, monkeypatch):
+def test_separate_apps_still_converge_on_one_durable_instance(generation, monkeypatch):
     barrier = Barrier(3)
-    actual = dh_v6.generate
+    actual = dh_v7.generate
     def simultaneous(profile_id):
         barrier.wait(timeout=5)
         return actual(profile_id)
-    monkeypatch.setattr(dh_v6, "generate", simultaneous)
-    with ThreadPoolExecutor(max_workers=3) as pool:
-        futures = [pool.submit(generation.actor.post, "/api/challenges", ISSUE) for _ in range(3)]
-        responses = [future.result(timeout=8) for future in futures]
+    monkeypatch.setattr(dh_v7, "generate", simultaneous)
+    # Distinct app/engine identities simulate the uncoordinated-process case.
+    apps = [create_app(generation.app.state.settings, clock=lambda: generation.now[0]) for _ in range(2)]
+    actors = [generation.actor, *[Actor(app) for app in apps]]
+    for actor in actors[1:]:
+        actor.client.cookies.clear()
+        actor.client.cookies.update(generation.actor.client.cookies)
+        actor.csrf = generation.actor.csrf
+    try:
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            futures = [pool.submit(actor.post, "/api/challenges", ISSUE) for actor in actors]
+            responses = [future.result(timeout=8) for future in futures]
+    finally:
+        for actor, app in zip(actors[1:], apps):
+            actor.client.close()
+            app.state.db.engine.dispose()
     assert [response.status_code for response in responses] == [200, 200, 200]
     challenges = [response.json()["challenge"] for response in responses]
     assert challenges[0] == challenges[1] == challenges[2]
@@ -80,7 +92,68 @@ def test_duplicate_generations_converge_on_one_durable_instance(generation, monk
     assert count(generation, ProfileIncident) == 0
 
 
+def test_duplicate_does_not_consume_native_capacity_and_retry_reuses_instance(generation, monkeypatch):
+    adapter = registry.adapter_for("sntrup")
+    profile_id = adapter.manifests()[0]["id"]
+    body = {"scheme_id": adapter.SCHEME_ID, "scheme_version": adapter.SCHEME_VERSION, "profile_id": profile_id}
+    other = Actor(generation.app)
+    other.register("independent_solver")
+    entered, release, mutex = Event(), Event(), Lock()
+    calls = []
+    actual = adapter.generate
+    def blocked(profile_id):
+        with mutex:
+            calls.append(profile_id)
+            first = len(calls) == 1
+        if first:
+            entered.set()
+            assert release.wait(8)
+        return actual(profile_id)
+    monkeypatch.setattr(adapter, "generate", blocked)
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(generation.actor.post, "/api/challenges", body)
+            assert entered.wait(3)
+            try:
+                duplicate = generation.actor.post("/api/challenges", body)
+                assert duplicate.status_code == 503 and duplicate.headers["retry-after"] == "3"
+                assert len(calls) == count(generation, generation_work.GenerationAttempt) == 1
+                independent = other.post("/api/challenges", body)
+                assert independent.status_code == 200, independent.text
+                assert not future.done()
+            finally:
+                release.set()
+            first = future.result(timeout=3)
+            assert first.status_code == 200, first.text
+        retry = generation.actor.post("/api/challenges", body)
+        assert retry.status_code == 200
+        assert retry.json()["challenge"] == first.json()["challenge"]
+        assert len(calls) == count(generation, generation_work.GenerationAttempt) == 2
+        assert count(generation, Challenge) == 2
+    finally:
+        other.client.close()
+
+
+def test_generation_resource_abort_releases_reservation_for_retry(generation, monkeypatch):
+    adapter = registry.adapter_for("sntrup")
+    profile_id = adapter.manifests()[0]["id"]
+    body = {"scheme_id": adapter.SCHEME_ID, "scheme_version": adapter.SCHEME_VERSION, "profile_id": profile_id}
+    actual = adapter.generate
+    def abort(profile_id):
+        raise adapter.GenerationResourceLimit("Synthetic resource abort")
+    monkeypatch.setattr(adapter, "generate", abort)
+    assert generation.actor.post("/api/challenges", body).status_code == 503
+    monkeypatch.setattr(adapter, "generate", actual)
+    assert generation.actor.post("/api/challenges", body).status_code == 200
+    assert count(generation, Challenge) == 1
+    assert count(generation, ProfileIncident) == 0
+    with generation.app.state.db.transaction() as session:
+        rows = session.scalars(select(generation_work.GenerationAttempt)).all()
+        assert {(row.outcome, row.disposition) for row in rows} == {("generation_abort", "unissued"), ("agreement", "issued")}
+
+
 def test_generation_finishing_at_the_deadline_cannot_issue_in_either_round(generation, monkeypatch):
+    original_round = current_round(generation.now[0])["id"]
     entered, release = block_generator(monkeypatch)
     with ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(generation.actor.post, "/api/challenges", ISSUE)
@@ -91,6 +164,11 @@ def test_generation_finishing_at_the_deadline_cannot_issue_in_either_round(gener
     assert response.status_code == 409, response.text
     assert count(generation, Challenge) == 0
     assert count(generation, ProfileIncident) == 0
+    account_id = generation.actor.client.get("/api/session").json()["user"]["id"]
+    old_key = (generation.app.state.db.engine, account_id, ISSUE["scheme_id"], ISSUE["scheme_version"], ISSUE["profile_id"], original_round)
+    with generation_work.instance_reservation(old_key):
+        pass  # The abandoned round's reservation must not remain in memory.
+    assert generation.actor.post("/api/challenges", ISSUE).status_code == 200
 
 
 @pytest.mark.parametrize("change,status", [("logout", 401), ("release", 409), ("source_pin", 409), ("paused", 503)])
@@ -107,10 +185,10 @@ def test_generation_rechecks_authority_release_pin_and_hold_before_persisting(ge
             else:
                 with generation.app.state.db.transaction(write=True) as session:
                     if change == "source_pin":
-                        session.get(AdapterVersion, ("teaching-dh-kem", "6")).source_sha256 = "0" * 64
+                        session.get(AdapterVersion, ("teaching-dh-kem", "7")).source_sha256 = "0" * 64
                     else:
                         session.add(ProfileIncident(id=str(uuid4()), profile_id=ISSUE["profile_id"],
-                            scheme_version="6", created_at=generation.now[0], diagnostics={"reason": "concurrent_hold"}))
+                            scheme_version="7", created_at=generation.now[0], diagnostics={"reason": "concurrent_hold"}))
         finally:
             release.set()
         response = future.result(timeout=3)
@@ -124,7 +202,7 @@ def test_automatic_generation_rechecks_round_activation_after_preflight(generati
     assert initial.status_code == 200
     round_id = initial.json()["challenge"]["round_id"]
     entered, release = block_generator(monkeypatch)
-    body = {**ISSUE, "profile_id": "dh-v6-tier-2", "active_round_id": round_id}
+    body = {**ISSUE, "profile_id": "dh-v7-tier-2", "active_round_id": round_id}
     with ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(generation.actor.post, "/api/challenges", body)
         assert entered.wait(3)

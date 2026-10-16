@@ -1,0 +1,99 @@
+HOSTING DIRECTION — PRIVATE BETA, THEN PUBLIC
+Recorded 2026-10-14. Design requirements, not an implemented access gate or a
+deployment approval. Finish local polish and collaborator review before hosting.
+
+Keep one application and one API for people and agents. The next hosted stage
+must restrict site content to approved beta participants. Opening selected
+content later should extend that policy, without replacing accounts, challenge
+contracts, evidence, or the agent workflow.
+
+Current state
+
+The local launcher binds to 127.0.0.1. The app has password hashing, browser
+sessions, scoped agent credentials, owner/reviewer checks, rate limits, versioned
+migrations and production configuration guards. It does not have beta membership
+or closed registration. Catalogue, profiles, successful receipts and source,
+protocol artifacts and some other reads currently permit anonymous access.
+A private GitHub repository does not make an internet-hosted instance private.
+
+Access model to implement before private hosting
+
+- An active beta membership grants entry. Store it against a stable account ID
+  with explicit grant/revocation; keep it separate from reviewer privileges.
+  Existing ownership, token scopes and review rules still apply after entry.
+- Enforce entry centrally for pages, API reads/writes, source downloads, schemas
+  and archived/legacy routes. New routes should be denied until classified.
+  A hidden navigation link or an unlisted URL cannot provide this boundary.
+- Allow only the minimal sign-in page/assets and authentication bootstrap to
+  outsiders. Initialize the browser session before loading protected catalogue
+  data; offer a clear sign-in/access-pending screen, including on direct links.
+  The generic CLI installer/source may be public if it contains no beta data;
+  scheme-specific source and artifacts remain subject to the membership gate.
+- Close ordinary registration. Use expiring, single-use invitations or explicit
+  approval of existing accounts. An invitation grants beta membership only.
+- Browser sessions and scoped CLI credentials consult the same membership.
+  Removing access also blocks existing credentials; recheck before committing
+  writes and issuing a token from an earlier device approval.
+- Device start/poll may remain reachable for login, but must expose no scheme,
+  participant or evidence data. Approval requires an active member. APIs return
+  structured errors, so agents do not need to automate a separate login wall.
+- Keep proposals author/reviewer-only and personal challenge instances and failed
+  answers owner-only. Beta membership must not broaden these existing rules.
+
+Hosting security and audience are separate
+
+Production security settings apply to both private beta and public operation:
+HTTPS, Secure cookies, explicit origin, persistent secrets and PostgreSQL.
+Do not use development mode to enable beta schemes on an internet server.
+Today the six newer research families use a development-only issuance exception.
+Replace that exception with an explicit private-beta release policy when the
+membership gate is implemented; preserve pending independent admission status.
+Public availability of a release remains a separate reviewed decision.
+
+Start with a modest, reproducible deployment: one application service behind an
+HTTPS proxy, a private database, and private persistent storage/backups. Restrict
+direct origin access and trust only the actual proxy. Build the pinned native
+artifacts for the hosting platform and validate them before starting the service.
+Exercise real PostgreSQL concurrency and migrations before opening beta access.
+
+Keep expensive generation outside database transactions. Existing reservations
+and native capacity bounds are process-local. Start with a controlled worker
+count and an explicit total generation budget; add shared admission or a queue
+when that scale requires it. Preserve one durable instance, hourly deadlines and
+failure evidence when the execution mechanism changes.
+
+Performance changes must respect the access boundary. Authorize before returning
+a protected response, including any cached response; cache keys and delivery
+rules must preserve its permitted audience. Immutable presentation caches remain
+separate from live authorization, scores and generation checks. Keep logs free
+of passwords, bearer/device codes, submitted answers and source payloads.
+
+Before going from beta to public
+
+Decide which records and source attachments are intended for publication and
+record that audience explicitly. Do not turn all beta evidence public by flipping
+one site-wide setting. Preserve private proposal/account/instance boundaries;
+make publication of existing beta contributions an explicit decision with their
+authors. Add account recovery, moderation and operational monitoring appropriate
+to the actual launch scale. Keep private backups and test a restoration.
+
+Verification at the beta milestone
+
+Test direct page/API/download URLs as anonymous, unapproved and revoked users;
+test removed membership with an existing browser session and agent token. Cover
+HEAD requests, legacy routes, schemas, new routes, owner/reviewer separation,
+invitation replay, device approval/exchange, and frontend direct-link login.
+Run the real CLI against the hosted access policy. These are future release
+checks, not a reason to add hosting machinery to the current local polish pass.
+
+Reference principles
+
+OWASP Authorization Cheat Sheet: deny by default, validate permissions on every
+request, and include static resources in access policy.
+https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html
+RFC 8628: device authorization separates client polling from user approval in
+the browser. Our existing endpoints are a custom flow, not a claim of OAuth
+conformance.
+https://www.rfc-editor.org/rfc/rfc8628.html
+FastAPI deployment concepts: HTTPS, process lifecycle, memory and replication.
+https://fastapi.tiangolo.com/deployment/concepts/

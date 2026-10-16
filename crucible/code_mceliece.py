@@ -1,0 +1,15 @@
+"""Explicit research derivative; published reference release remains unchanged."""
+from pathlib import Path
+import hashlib
+from .code_native import Adapter,GenerationLimit,GenerationUnavailable
+SCHEME_ID='classic-mceliece'
+SCHEME_VERSION='length-research-v1'
+IMPLEMENTATION_SHA256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+SIZE_PARAMETER={'name':'Challenge tier','meaning':'Research parameters, not comparable security bits','mapping':'50 frozen code lengths840..3488 at m=12,t=64; chosen along the unscaled combinatorial Prange trial reference, not estimated security bits'}
+_adapter=Adapter(__file__,'mceliece',SCHEME_ID,SCHEME_VERSION)
+get_manifest=_adapter.get_manifest
+manifests=_adapter.manifests
+generate=_adapter.generate
+artifact_manifest=_adapter.artifact_manifest
+verify_artifact=_adapter.verify_artifact
+def source_bytes():return Path(__file__).read_bytes()

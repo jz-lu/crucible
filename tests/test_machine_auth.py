@@ -16,7 +16,7 @@ from crucible.app import create_app
 from crucible.db import Challenge, Submission
 from crucible.machine_auth import DeviceConnection, MachineToken
 from crucible.security import token_hash
-from scripts.solve_teaching import recover
+from scripts.solve_teaching_frontier import recover
 from test_api import Actor
 from test_calibrated_api import current_system
 
@@ -189,8 +189,8 @@ def test_challenges_and_methods_remain_owned_with_agent_credentials(current_syst
     ("GET", "/api/session"), ("POST", "/api/auth/logout"), ("POST", "/api/auth/login"),
     ("POST", "/api/auth/register"), ("GET", "/api/agent/tokens"),
     ("POST", "/api/agent/connect/start"), ("POST", "/api/agent/connect/ABCD-EFGH/approve"),
-    ("GET", "/api/protocol/proposals"), ("POST", "/api/protocol/proposals"),
-    ("POST", "/api/protocol/proposals/00000000-0000-4000-8000-000000000000/review"),
+    ("GET", "/api/protocol/proposals"), ("GET", "/api/protocol/review-queue"),
+    ("POST", "/api/protocol/proposals/00000000-0000-4000-8000-000000000000/reviews"),
 ])
 def test_agent_cannot_reuse_cookies_for_account_or_review_actions(current_system, method, path):
     app, _, _ = current_system

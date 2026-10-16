@@ -1,0 +1,99 @@
+CODE-BASED AND NTRU LADDER COST/CORRECTNESS REVIEW
+2026-10-15
+
+Decision: revise HQC, retain McEliece and Streamlined NTRU Prime parameters.
+This is a parameter-design review, not independent scientific admission.
+It neither certifies monotone best-attack costs nor fills missing estimates
+with a shared 128-bit endpoint claim. Exact-profile evidence remains exact;
+no record is manufactured at a different tuple.
+
+HQC
+
+The old fixed-ring/fixed-code varying-weight experiment was not a useful
+communication-cost ladder. The new isolated growth-research-v2 construction
+uses minimum-size supported codecs at each weight and grows the ring with
+the code, maintaining the same zero honest disagreement bound. See the exact
+selection, proof, retained sampler distinctions and validation in hqc-growth.txt.
+The new endpoint remains an uncalibrated provisional profile, not 128 bits.
+
+Classic McEliece: retain length-research-v1
+
+The ladder fixes field degree m=12 and error weight/Goppa degree t=64, and
+grows n from 840 to 3488. Code dimension k=n-768 therefore grows from 72 to
+2720. This has a real cost: the systematic public key grows from 6,912 to
+261,120 bytes, exactly 768*(n-768)/8. The syndrome ciphertext remains 96
+bytes. More columns must be processed for key generation and public-matrix
+operations; actual timings should be measured, not inferred as exact rates.
+It is legitimate that one cost grows while another remains flat.
+
+The same correctness requirement holds throughout: the binary irreducible
+Goppa code's distance is at least 2t+1=129, and every honest weight-64 error
+is uniquely decodable. Full randomness, the field/extension polynomials,
+the required specification-defined sampling batch and decoder are retained.
+This is conditional on successful systematic key generation and faithful
+implementation, with generation aborts kept separate.
+
+The code-length choice corresponds to a real increase in the elementary
+Prange trial reference log2(C(n,64)/C(768,64)), but that is not a best-known
+security estimate. Matrix-elimination work, rank rejections, improved ISD,
+structural Goppa attacks and quantum attacks are not included. The endpoint
+is the exact published mceliece348864 tuple and has an upstream full KAT
+match. It is not justified to normalize its approximately 142.8 Prange
+trial exponent to 128 claimed bits. The existing metadata already preserves
+these distinctions; changing n/t solely to make all graphs rise would remove
+a sensible actual tradeoff without gaining scientific justification.
+
+This is a restricted shortened-code path within the general parameter space,
+not a claim to optimize all possible (m,n,t) at every attack cost. A future
+best-attack calibration may justify a different versioned frontier.
+
+Streamlined NTRU Prime: retain sntrup/2
+
+The ladder grows polynomial degree p from 5 to 761 and fixed weight w from
+1 to 286, with full prescribed uniform distributions. The ring carries more
+coefficients, and the reference convolution/inversion loops process larger
+polynomials. This is a genuine computation/memory cost rather than spending
+correctness or gratuitous padding. The scalar modulus q is selected to meet
+q>=16w+1, reference encoding constraints and irreducibility of x^p-x-1.
+
+The same deterministic bound holds at every tuple: |3fm+gr| <=8w<q/2,
+so centered lifting is exact and reducing modulo 3 recovers the ephemeral
+polynomial. Prime/irreducibility certificates cover the frozen tuples. The
+native code retains full randomness and performs no correctness-conditioned
+retries. Resource failures are a separately visible availability outcome.
+
+The first admissible q is irregular as p changes, because irreducibility is
+an arithmetic condition, not a smooth knob. Some higher-degree profiles have
+smaller encodings than their predecessor. This is not by itself a defect:
+polynomial arithmetic still has more coefficients, and the ladder does not
+claim each tuple is a proven larger attack cost or a globally optimized
+encoding frontier. Do not pad q or encoded keys merely to remove those dips.
+Document the tradeoff, and measure execution costs on one shared benchmark
+before assigning exact timing values. No lattice/hybrid estimator has been
+qualified for these reduced tuples; the existing encapsulation-input search
+space is only an explicit exhaustive upper bound and must stay separate from
+estimated security. Its endpoint sntrup761 algebra/encoding does not make the
+whole reduced ladder a calibrated linear 128-bit scale.
+
+A prospective revision is warranted if a reviewed estimator identifies
+clearly dominated or anomalously easy tuples. Until then, keeping the exact
+certified degree ladder and honest uncertainty is better justified than
+changing moduli to force smooth cost or security curves.
+
+Evidence and primary sources
+
+Implementation/proof records already checked in this repository:
+  docs/code-research.txt
+  docs/implementation-ntru-tiers.txt
+  crucible/code_parameters.py
+  crucible/data/ntru_tier_profiles.json
+  scripts/ntru_tier_parameters.py
+  tests/test_code_research.py
+  tests/test_ntru_tiers.py
+
+Classic McEliece 2022-10-23, sections 3, 5.4 and 7:
+https://classic.mceliece.org/mceliece-spec-20221023.pdf
+NTRU Prime 2020-10-07, parameter domain and Theorems 3/4:
+https://ntruprime.cr.yp.to/nist/ntruprime-20201007.pdf
+HQC 2025-08-22:
+https://pqc-hqc.org/doc/hqc_specifications_2025_08_22.pdf

@@ -1,4 +1,85 @@
+2026-10-16 — Stages, configurations and rounded default progressions
+
+Use Stage in the interface. A configuration is an exact reviewed parameter set;
+a default progression is a versioned ordered route through configurations.
+User prefers multiples of ten, or five where ten would remove useful detail.
+This is a presentation preference, never a mathematical admission requirement.
+Current counts: DH50, RSA50, EC50, module10, Frodo80, NTRU25, HQC25, McEliece50.
+All345 configurations remain available: five intermediates sit off the default
+route. Native parameters, estimates, correctness, artifacts, sources and receipts
+are unchanged. New progression membership is pinned independently from protocol
+identity. CLI --stage resolves that route; --tier keeps its legacy configuration
+selector and --profile-id remains exact. Existing configuration points are fixed.
+See stage-progressions.txt for sampling rationale and unresolved scheme-specific
+limitations; ladder-principles.txt is now accepted design direction.
+
+2026-10-16 — Restore Frodo640; distinguish fixed guarantee from zero failure
+User approved restoring the published640 endpoint and clarified zero failure is
+not required. Frodo anchor-research-v3 has80 natural dimensions8..640 with the same
+2^-133 correctness envelope. Lattice references remain uncapped and separate from
+native-message entropy. Other scheme parameters are unchanged. See
+frodo-anchor-ladder.txt and the discussion draft ladder-principles.txt.
+
 CRUCIBLE — DESIGN PRINCIPLES AND DECISIONS
+
+Parameter efficiency at each reference level — 2026-10-16
+
+Treat a ladder as a sequence of justified parameter choices for the construction,
+not an arbitrary trajectory that worsens several properties together. Declare
+the cost objective or Pareto dimensions, construction invariants, candidate
+domain, constraints, common correctness envelope and attack model. Search and
+retain evidence for alternatives, including exclusions and any retained dominated
+choices. Efficiency is conditional on that domain and model; never imply a
+universal optimum from one estimator or hide a known competing attack.
+
+Do not weaken correctness, truncate seed/message support or add padding merely
+to manufacture progress. Natural intermediate settings are welcome. Unsupported
+estimates remain unknown; unknown is not a low estimate or evidence of dominance.
+Changing a distribution, encoding, transform or mathematical profile requires an
+explicit version. Preserve all old sources, receipts, accounts and sign-ins.
+
+Six replacement releases implement concrete improvements:
+- DH7 uses explicit short exponent intervals with interval-search cost and an
+  approximately 16-reference-bit design margin where the subgroup permits.
+- RSA4 removes padded exponent bytes; EC curve-compressed-v2 compresses points
+  on the same certified curves with the same full scalar distribution.
+- Module packed-research-v3 losslessly packs coefficients in its existing eleven
+  mathematical profiles; no compression error or native-message truncation.
+- Frodo frontier-research-v2 includes every dimension 8..592 by 8: 74 tiers, the
+  first 16 unestimated. Its restricted 128 planning target first occurs at n=592;
+  this is not a claim that published Frodo640 lacks worthwhile security margin.
+- NTRU3 chooses 27 profiles from 103 certified candidates under an explicit
+  hybrid-inclusive classical reference and total transmitted-byte objective.
+  Its first 13 profiles remain unestimated. No global or full-KEM optimum claimed.
+
+There are eight family pages and 339 current profiles. HQC remains 27 weights with
+minimally sized supported codecs but no calibrated security frontier. Classic
+McEliece remains a 50-profile shortening path whose equal-security efficiency is
+unresolved. These limits stay visible; completing this pass does not certify all
+eight ladders. Timing and unsupported quantum references are not invented.
+
+Every new proposal approval/admission requires parameter_selection within its
+tier-design plan and a separate reviewer check. Record the objective, candidates,
+model, constraints, alternatives and tradeoffs. Automated validation enforces the
+bounded contract and exact evidence binding, not the truth of the cryptography.
+Legacy specs and reviews remain readable; missing evidence requires a new revision
+and review before future admission.
+
+A configured reviewer may test their own proposal with the explicit development-
+only CRUCIBLE_ALLOW_SELF_REVIEW=true flag. Default is false; production refuses it.
+Decisions remain labeled Development self-review and permanently test-only. They
+cannot pass independent admission or earn contribution points. Authorization,
+browser/CSRF checks and normal approval evidence still apply; agents cannot review.
+
+Scoring policy v5 enrolls the six replacements while retaining the maximum-only
+10*personal-best plus 40*highest-first formula. Raw natural tier counts produce
+unequal per-family point ceilings; the incentive policy remains provisional.
+No result is transferred to incompatible parameters or erased. Future scientific
+progress can justify a new version, preserving the frozen initial reference.
+
+See parameter-frontier-review.txt and the classical, lattice, NTRU and code-family
+review evidence. Hosting, public access and an independent scientific admission
+remain separate decisions.
 
 Purpose
 
@@ -18,8 +99,60 @@ Priorities
   More submissions must not require proportionally more unstructured review.
 - Require correctness evidence and preserve the distinction among specification,
   executable conformance, observed outcomes, and confidentiality.
+- Hold the declared correctness requirement fixed across each scheme's tier
+  ladder. Increasing difficulty must not trade away honest agreement.
 - Preserve attribution, methods, revisions, follow-ups, and intermediate results.
 - Keep choices explicit, revisable, and proportional to the evidence available.
+
+Natural tier ladders and proposal enforcement — 2026-10-15
+
+Use consecutive, scheme-specific tier counts for genuine parameter settings.
+Aim for a roughly 128-bit initial attack reference at the upper endpoint when
+that reference is supported; a natural discrete setting may overshoot. This is
+not a common security guarantee. Clearly mark an uncalibrated or partial endpoint
+instead of inventing an estimate. Include useful intermediate settings where
+mathematically justified, without padding a ladder with duplicate settings or
+implying equal work per step. Actual byte costs and estimates remain visible.
+
+Hold one correctness envelope fixed. Increasing difficulty should reflect a
+meaningful parameter change with a resource tradeoff, not merely spend unused
+correctness margin at fixed geometry. Individual costs can plateau or dip; the
+review must explain the choices and any dominated parameter settings.
+
+Replace the module modulus ladder with eleven degree/rank settings and minimal
+correctness-preserving prime moduli. Replace HQC's fixed-size weight ladder with
+27 weight settings whose rings and concatenated codes grow as needed. Retain
+six other mappings with documented limitations. Keep original versions and
+receipts immutable; no compatibility inference links the two replacements.
+
+Freeze the initial reference and distinguish later attack estimates from it.
+Theoretical progress may justify additional harder settings in a new version;
+never reinterpret an old tier, overwrite its parameters or erase its evidence.
+This release changes eligible module/HQC versions under scoring policy v4,
+without changing the maximum-only point formula. Different natural tier counts
+make the provisional raw-tier scores unequal across families; this is not a
+scientific ranking, and cross-family point calibration remains a separate decision.
+
+Every new proposal approval and admission must include a structured tier-design
+plan and a separate reviewer assessment of parameter progression, resource
+costs, fixed correctness, endpoint evidence and useful intermediate steps.
+Drafts and legacy records remain readable. Missing legacy evidence must be
+supplied and reviewed for future admission, not silently grandfathered.
+Machine checks bind exact metadata and hashes; they do not prove cryptography,
+execute submitted code, interpret mathematical strings or replace manual review.
+
+Fixed correctness across tiers — 2026-10-14
+
+The user requires correctness to remain fixed as challenge tiers rise. Use one
+upper bound on honest disagreement throughout a versioned scheme ladder; this
+does not require identical actual failure probabilities or unused decoding
+margins. Retain separate accounting for generation/resource aborts.
+
+The current module-lattice research ladder already has perfect mathematical
+correctness at every tier: its worst-case accumulated noise remains below the
+decoding threshold even at the smallest modulus. Decreasing spare margin does
+not increase the guaranteed failure probability, which stays zero. Record the
+principle in docs/correctness-policy-v0.txt; no parameter or history changes.
 
 First-only record bonuses and tier winner presentation — 2026-10-14
 

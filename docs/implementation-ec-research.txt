@@ -1,0 +1,66 @@
+Elliptic-curve DH research ladder — curve-research-v1
+===================================================
+
+Decision
+--------
+X25519 is a fixed published curve. Restricting its private-key seed or exponent
+range would create a different search challenge without giving a range of
+ordinary elliptic-curve problems. Instead this release uses 50 distinct,
+prime-order short-Weierstrass curves with full uniform nonzero scalars. It is
+explicitly NOT X25519, RFC 9180 DHKEM, or a production cryptographic library.
+The exact RFC adapter remains unchanged as a separately versioned reference.
+
+The research family has exact canonical full-point encodings and a custom
+transcript-bound SHA-256 KDF, independently versioned from every prior release.
+No IND-CPA/IND-CCA theorem is claimed. The service measures passive recovery of
+the entire shared secret from one honest public transcript.
+
+Parameter selection and evidence
+-------------------------------
+scripts/generate_ec_parameters.py deterministically derives public p and b
+from the SHAKE domain crucible/ec-research-v1/setup/tier-N. Curves are
+y^2=x^3-3x+b over p=3 mod4. The generator selects the first b with prime order q,
+excluding singular and j=0/1728 curves, anomalous q=p, and embedding degrees
+at most100. This is a disclosed deterministic search, not uniform curve
+sampling, a SafeCurves certification, or an exhaustive weak-curve exclusion.
+
+Every p and q has a PARI ECPP chain with a complete Lucas factorization proof
+at its small terminal prime. Runtime verification uses exact integer/group
+arithmetic, no probable-prime test. It checks a nonzero G with qG=O; Hasse's
+interval contains exactly one multiple of q, establishing the full group
+order. Valid canonical affine points therefore have order q. Scalars are
+uniform in1..q-1. For every honest x,r, r(xG)=x(rG), so the same framed public
+transcript and shared point produce the same key. Correctness failure is0
+under faithful arithmetic/encoding; this is separate from confidentiality.
+
+scripts/check_ec_parameters.py independently checks every prime, curve order
+and selected scalar products with Sage. tests/test_ec_research.py checks all
+tiers, malformed inputs, corrupted certificates, full scalar-range boundary
+values, artifact changes, and a public-only baby-step/giant-step recovery.
+
+Reference estimate
+------------------
+Tier t targets generic rho exponent8+120(t-1)/49. The displayed value is the
+actual log2(q)/2, not a forced endpoint or measured runtime. It omits constants,
+parallelization, curve-specific attacks and quantum computation. The public
+curve can support reusable preparation, which participants must disclose.
+All50tiers are distinct; the endpoint is a257-bit curve, not Curve25519.
+
+Source closure and operations
+----------------------------
+crucible/ec_research.py plus ec_parameters.json form the executable public
+closure; its canonical hash is pinned by the service and downloaded by CLI.
+Generation verifies this closure before and after one honest agreement test.
+Sage/PARI are offline generation/audit tools, never runtime dependencies.
+Python curve arithmetic is variable-time. The service exposes no decapsulation
+oracle. The research release remains pending independent manual admission.
+
+Primary references
+------------------
+PARI primality certificate definition:
+https://pari.math.u-bordeaux.fr/dochtml/html-stable/Arithmetic_functions.html#primecert
+Sage finite-field elliptic-curve point-counting documentation:
+https://doc.sagemath.org/html/en/reference/arithmetic_curves/sage/schemes/elliptic_curves/ell_finite_field.html
+Published X25519 and DHKEM references (not this research construction):
+https://www.rfc-editor.org/rfc/rfc7748.html
+https://www.rfc-editor.org/rfc/rfc9180.html

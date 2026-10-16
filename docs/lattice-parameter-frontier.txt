@@ -1,0 +1,139 @@
+Historical v2 review — current Frodo policy superseded 16 October 2026.
+The current ladder retains the640 endpoint; see frodo-anchor-ladder.txt. The
+592 cutoff and capped model below describe the archived frontier-research-v2.
+
+Lattice parameter-efficiency review — 16 October 2026
+===================================================
+
+Decision and claim boundary
+---------------------------
+The user requested efficient constructions at each estimated security level,
+without deliberately worsening several parameters to manufacture tiers. This
+pass removes identified waste and records the domain in which a comparison is
+valid. It does not call a bounded candidate search a globally optimal KEM.
+
+Two new immutable releases are proposed:
+  * ml-kem / packed-research-v3: 11 mathematical profiles, lossless bit packing.
+  * frodokem / frontier-research-v2: 74 natural dimensions n=8,16,...,592.
+Older sources, release IDs and receipts remain readable and are not rewritten.
+These remain local research derivatives, not independently admitted production
+cryptography. The module family is not standardized ML-KEM.
+
+Frodo: remove a planning plateau, retain natural intermediate settings
+-------------------------------------------------------------------
+The construction keeps q=32768, nbar=8, the complete Frodo640 finite noise CDF,
+128-bit native plaintext, full seeds, 256-bit salt, and the salted reencryption
+transform. Only the matrix dimension n varies. Canonical bit packing was already
+present. Every profile shares the conservative honest-failure envelope 2^-133;
+n=8 is actually perfect, and smaller n only improves the same certificate.
+The exact integer Chernoff certificate is not a confidentiality estimate.
+
+The bounded search includes all 80 natural n in 8,16,...,640. The objectives are
+public-key bytes, ciphertext bytes and matrix coefficient count; each increases
+strictly with n. It reuses the frozen pinned-estimator evidence for all 80 rows,
+not just the 50 formerly displayed. Among the modeled rows, every step through
+n=592 raises the reference. n=592 is the first candidate reaching the fixed
+128-bit planning target (uncapped lattice reference 129.064 Core-SVP log2-rop).
+Subsequent n add costs after this plotting/planning ceiling; they are omitted
+from this new ladder. The old n=640 profile is retained in its archived release.
+
+At the selected endpoint:
+                          old n640       new n592
+  public key bytes           9616           8896
+  ciphertext bytes           9752           9032
+  expanded matrix entries  409600         350464
+This saves 720 bytes on each wire object and 14.44% of matrix entries. Matrix
+entries are an operation/storage proxy, not a runtime benchmark.
+
+All n=8..128 remain playable natural warmups. The pinned estimator either fails
+or reaches its beta40 floor there, so they have no claimed numerical security
+estimate. Unknown is not the same as dominated, nor a basis for dropping useful
+intermediate dimensions. Later tiers have every natural +8 step: no invented
+interpolation, constant50-tier constraint or intentional gaps.
+
+Important qualifications:
+  * This is a fixed-q, fixed-noise, fixed-message construction search. Jointly
+    optimizing q, noise, nbar, extraction and transforms was not done.
+  * The LWE estimate uses two heuristic attack families, a Gaussian approximation
+    to the finite CDF, m=n+16, classical ADPS16 Core-SVP/GSA, and omits other attacks.
+  * Native-message enumeration uses candidate encryptions; Core-SVP costs use a
+    different unit. A capped planning reference is not a theorem equating them.
+  * Published FrodoKEM-640 includes margins and analyses outside this restricted
+    model. This pass does NOT establish that its published parameters are wasteful
+    or that replacing them with n592 is safe for actual deployment.
+  * A fuller model can change the selected frontier. Do so as a new release;
+    preserve frozen initial references and historical challenges.
+
+Module lattice: remove storage waste without changing the mathematical instance
+-----------------------------------------------------------------------------
+All 11 n/rank/q profiles and full native plaintext spaces from dimension-research-v2
+are retained. Moduli are already the smallest primes covering the fixed perfect-
+correctness support bound floor(q/4)>2*rank*n*eta^2+eta, eta=2. The improvement is
+representational: serialize coefficients in ceil(log2 q) bits rather than 16.
+This is lossless and introduces no rounding or additional decryption error.
+Profile/header/hash domains are versioned; new receipts cannot be confused with
+old ones. Public-key hashes necessarily follow the new canonical byte strings.
+
+Tier 1 public key/ciphertext shrink 59/32 ->52/18 bytes; Tier 11 shrink 1579/2048 ->
+1483/1920 bytes. Every profile improves both wire sizes. This is the smallest
+fixed-width binary field for a single coefficient; whole-vector radix-q packing
+could be smaller still. It is not an information-theoretically minimal vector
+encoding or a measured CPU optimization.
+
+The bounded review also enumerates degree/rank alternatives at each registered
+flattened dimension, degrees8..256 powers of two and rank<=127. It reports native
+message capacity, wire sizes, expanded matrix entries, and schoolbook multiply
+counts. These have competing costs: smaller degree at fixed dimension reduces
+ciphertext and polynomial arithmetic but expands more matrix coefficients and
+reduces native-message capacity. The flattened estimator cannot certify security
+equivalence between the different ring/module structures. They therefore are
+not silently substituted just because one column becomes smaller.
+
+No claim is made that the11 mathematical profiles are a complete Pareto frontier.
+A new proposal should name its construction invariants, objective weights or
+Pareto dimensions, search space, candidate evidence and exclusions. The model
+and whole KEM, including plaintext enumeration, must be considered before calling
+any n/rank replacement an improvement. Missing estimates stay missing.
+
+Reproduction and validation
+---------------------------
+  python3 scripts/lattice_parameter_frontier.py \
+      --output docs/lattice-parameter-frontier.json
+The script checks the frozen Frodo evidence digest and enumerates every candidate.
+To change the model, rerun scripts/lattice_calibrate_frodo.py with its pinned
+estimator commit and checked source archive rather than editing estimate numbers.
+
+Independent Sage quotient-ring vectors for every packed module profile:
+  sage -python scripts/lattice_module_v3_reference.py \
+      --calibration docs/lattice-module-v2-calibration.json \
+      --output tests/fixtures/module-lwe-packed-v3.json
+
+The97 focused release checks cover all 74 fresh Frodo worker exchanges, all 11
+packed-module workers, all 11 independent Sage vectors, the unchanged native
+Frodo640 byte-conformance anchor, exact correctness certificates, canonical
+encoding rejection, all 256 native Tier 1 module messages, source identity and
+complete public-only Tier 1 recovery. Separate downloaded-workspace checks run
+the module solver under Python and Frodo solver under Sage using only public
+challenge data and pinned reference files. These are research validation, not
+independent security certification.
+
+Sources checked on 16 October 2026
+-------------------------------
+FrodoKEM September2025 specification, sections6–9 and annexesA–D:
+https://frodokem.org/files/FrodoKEM_standard_proposal_20250929.pdf
+Defines the construction/parameters, packed matrices, correctness and distinct
+core-SVP, refined and reduction-based security analyses. Its published parameter
+sets have broader rationale than this bounded dimension search.
+
+FrodoKEM2025 paper and maintained project:
+https://eprint.iacr.org/2025/1861
+https://frodokem.org/
+
+Pinned salted reference implementation:
+https://github.com/microsoft/PQCrypto-LWEKE/tree/a2f9dec8917ccc3464b3378d46b140fa7353320d
+
+Pinned lattice estimator:
+https://github.com/malb/lattice-estimator/tree/53da5982597709ba0fdf94ea37a84d822310fd84
+
+FIPS203, primitive/concept source rather than this module derivative specification:
+https://csrc.nist.gov/pubs/fips/203/final

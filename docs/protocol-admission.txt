@@ -4,7 +4,7 @@ This first workflow accepts specifications and records manual review. It never
 executes uploaded algorithms, downloads an implementation URL, or automatically
 adds an approved proposal to the live challenge registry.
 
-Enforcement reviewed on 14 October 2026. Sections below distinguish implemented
+Enforcement reviewed on 16 October 2026. Sections below distinguish implemented
 workflow checks from the scientific judgments a reviewer must make. They do not
 claim automated certification. The detailed requirements crosswalk and proposed
 extensions are in scheme-reviews/admission-and-coverage-challenge.txt, section 8;
@@ -16,7 +16,7 @@ not decisions silently supplied by the validator or this documentation update.
 
 Use crucible-kem-spec-v1. The website supplies an annotated template, JSON Schema,
 and descriptions of each exact registered DH/RSA release. Specify algorithms,
-parameter/tier mappings, random distributions, encodings, correctness, security
+configuration/stage mappings, random distributions, encodings, correctness, security
 claims, and what setup is reused. Shared public parameters are legitimate when
 they are part of the specified construction. DH group reuse is retained.
 
@@ -26,8 +26,12 @@ completeness and consistency, not mathematical truth or executable conformance.
 
 2. Submit and preserve a revision
 
-The signed-in author explicitly submits the checked document. It is visible to
-its author and configured reviewers. Each revision is immutable and has a stable
+The author explicitly submits the checked document through a browser session or
+an agent connection with proposal-write permission. The CLI supports draft,
+format validation, submission, feedback and revision; the website provides its
+copyable agent handoff alongside manual upload. It is visible to its author and
+configured reviewers. Agent proposal-read permission is owner-only, including
+for reviewer accounts. Each revision is immutable and has a stable
 content hash. Retries with the same request identifier return the same receipt.
 Revising requires the current revision and hash; a new revision returns to review
 and cannot inherit an earlier approval. Earlier revisions and decisions remain
@@ -36,14 +40,26 @@ part of the record. These submissions do not affect numerical leaderboards.
 3. Review the exact artifact
 
 A configured reviewer, different from the author account, may request changes or
-approve the current revision. Approval requires all five review checks, notes,
+approve the current revision. Approval requires all seven review checks, notes,
 supporting evidence, and the implementation hash from the specification:
 
-- Specification completeness: algorithms, distributions, encoding, tier mapping,
+- Specification completeness: algorithms, distributions, encoding, stage/configuration mapping,
   reusable setup, invalid-input handling, and the precise challenge objective.
 - Correctness: argument and scope for perfect agreement, or an explicit failure
   bound and probability model. Review each admitted parameter family; repeated
   successful tests alone cannot establish a negligible failure probability.
+- Stage design: admissible configurations distinct from the versioned default
+  progression; exact stage-to-configuration mapping and stable identities; faithful
+  natural scaling, real cost tradeoffs, a strong common correctness envelope,
+  reference endpoint evidence and limitations, and useful intermediate settings.
+  Assess changes in several parameters together and whether a denser route adds
+  genuine useful choices. A multiple-of-ten/five default count is a presentation
+  preference only; scientific validity and useful settings take priority. The
+  structured tier_design plan must be present in this exact revision.
+- Parameter selection: a declared objective, fixed construction/correctness and
+  interoperability constraints, pinned security/cost model, candidate search
+  domain, comparison evidence, and tradeoffs/uncertainty for every target. The
+  tier_design.parameter_selection plan must be present in this exact revision.
 - Implementation conformance: inspect the pinned source and compare behavior to
   the specification. Record deterministic known-answer and honest round-trip tests.
 - Input and resource safety: malformed inputs, public/private data separation,
@@ -53,16 +69,150 @@ supporting evidence, and the implementation hash from the specification:
 
 These are recorded manual assessments. Approval does not certify security or
 prove that an implementation is free of defects. The API rejects stale decisions,
-self-review, incomplete approval checks, missing evidence, unknown correctness,
+unconfigured self-review, incomplete approval checks, missing evidence, unknown correctness,
 or mismatched implementation hashes.
 
 The statistical failure bound is inert text; its numeric validity, probability
 scope, proof versus heuristic status, and coverage of every admitted profile
 remain substantive review duties. Evidence strings and completed checks do not
 establish that tests ran or a theorem is true. Distinct reviewer and author
-accounts are enforced; separate people or freedom from conflicts are not proven.
+accounts are enforced outside the explicit development exception below; separate people or freedom from conflicts are not proven.
 Agent credentials currently have no proposal-review authority. Automation may
 prepare and reproduce evidence, but must not impersonate a human signoff.
+
+Configuration and stage review — 2026-10-16
+
+A configuration is an exact parameter set or a fully specified reviewed generation
+rule over a declared domain. Give it a stable identity. The default progression is
+an ordered selection of reviewed configurations; a stage is its local ordinal.
+A challenge instance is one random sample at that configuration. Alternative
+settings can belong to the same scheme without a separate catalogue entry.
+Every admitted setting, including those outside the default route, needs validity,
+correctness and implementation coverage. A prose generation rule is never executed
+by intake, and a proposed domain does not itself enable live challenges.
+
+Version configurations, default progression mappings and security evidence
+separately in the proposal and integration record. Inserting an intermediate stage
+must not change the meaning of old configuration IDs or recovery receipts. Current
+v1 intake still uses tier_meaning, supported_tiers and tier_design as wire names;
+registered manifests retain instance_size. supported_tiers and instance_size keep
+their legacy numeric configuration-selector meaning, including off-route settings;
+map displayed stages separately. These names and canonical hashes remain unchanged. There is no independent progression-edit API
+yet. See ladder-principles.txt for the accepted design direction and limits.
+
+The specification's parameter mapping must explain what grows, what costs
+change, and why the selected parameters are reasonable within the construction.
+Use the same declared correctness upper bound throughout a versioned progression;
+keep resource/generation aborts separately visible. Changing spare decoding
+margin is not itself a practical cost while the guarantee remains unchanged.
+Review generic message/seed enumeration as well as the named hard problem.
+Preserve the family, full declared sampling distributions, transform and game;
+justify coordinated parameter changes. Do not manufacture easy settings using
+leaked information, specially easy keys or selective resampling. Naturally small
+spaces can enable generic attacks; disclose them and avoid extrapolating a small
+recovery to the reference endpoint. Retain a published/approved reference endpoint
+where applicable; a new construction must justify its own reference setting.
+
+Zero failure is not required. Every admitted configuration must satisfy the same
+reviewed strong correctness envelope. Disclose stronger per-configuration bounds
+and material variation; equal actual probabilities are not required. A proof of
+a generation rule must cover its entire admitted domain. This remains manual
+review, not automatic verification of a bound.
+
+Prefer a default-stage count in multiples of ten, or five when more natural,
+provided the resulting path is useful. This is not a review gate: do not change
+parameters, duplicate configurations or discard a reference endpoint to fit a
+count. Retain reviewed off-route configurations and their credit. Do not select
+inefficient profiles solely to draw a convenient security curve.
+Meaningful adjacent profiles may have the same byte size, and not every cost
+must rise at every step. State the scope of any parameter optimization and
+explicit exceptions such as a published endpoint. Communication graphs show
+the actual registered encoding; benchmark timings require measured evidence.
+
+The template and schema provide a bounded tier_design section with seven progression fields:
+parameter_progression, cost_tradeoff, fixed_correctness, endpoint_status,
+endpoint_target, endpoint_evidence, and intermediate_steps, plus the nested
+parameter_selection plan below. Endpoint status may
+be supported-estimate, provisional, or unestimated; none grants a security claim.
+Drafts may omit the section. When supplied, every field must be complete. New
+approval and admission require it plus explicit stage-design and parameter-selection
+review checks.
+This is a substantive manual assessment, not a theorem checked by the validator.
+Existing proposals and approvals remain readable with unchanged canonical bytes
+and hashes when the section is absent. They are not silently grandfathered into
+future admission: a missing plan or check requires a new revision and review.
+The current route audit is in stage-progressions.txt; earlier assessment is in
+ladder-design-review.txt. These records disclose limitations rather than certify
+that every built-in progression already meets the new scientific guidance. Changes to
+parameter distributions or wire formats require distinct registered releases;
+old challenges and results retain their original contracts and attribution.
+
+Parameter selection review — 2026-10-16
+
+At each stated security target, choose efficient parameters naturally available
+within the proposed construction. Increasing cost is not a goal in itself. Do
+not weaken one parameter while making another unnecessarily more expensive merely
+to draw a smooth ladder. A curve of equal security targets is only meaningful
+under a stated adversary, attack model and cost convention.
+
+The nested tier_design.parameter_selection object has six bounded text fields:
+
+- objective: the actual cost to minimize, including units, workload and weighting,
+  or a Pareto tradeoff when communication, memory and computation compete.
+- constraints: the construction, security game, common correctness envelope and
+  interoperability or implementation constraints held fixed. No artificial wire
+  padding or restricted seed/message entropy solely to manufacture stages. A
+  naturally shorter secret parameter may be justified with its attack analysis;
+  it is not prohibited merely because a larger secret space exists.
+- security_model: pinned estimators, source versions, assumptions and treatment
+  of setup, reusable precomputation, classical and quantum attackers. State which
+  attacks were compared and use compatible cost units; do not equate operations
+  from unrelated models. Missing calibrated evidence must remain explicit.
+- search_domain: candidate ranges, admissibility filters, construction choices,
+  actual search coverage and excluded alternatives. Record reproducible commands,
+  data and versions in the evidence or pinned reference artifact.
+- comparison_evidence: compare the chosen point with cheaper admissible candidates
+  at each target, or give a mathematical dominance argument. Prefer a point for
+  which no inspected candidate meets the same target at strictly better stated
+  costs. This establishes only a conditional result in the inspected domain; a
+  short list or heuristic search does not prove a global optimum.
+- tradeoffs_and_uncertainty: competing objectives, estimator uncertainty,
+  unexplored alternatives and explicit exceptions such as a published endpoint.
+  An established anchor can aid interpretation without being cost-optimal.
+
+When calibrated attack estimates are unavailable, do not label the selection an
+optimum at a known security level. Give justified structural/cost comparisons and
+a provisional or unestimated endpoint; say which review remains outstanding.
+A reviewer must check each configuration or covered family's selection argument,
+rather than only the endpoint. Benchmarks are optional until available, but an unmeasured runtime must
+not be advertised as a measured improvement. Natural gaps are preferable to
+artificially inefficient intermediates. Keep the correctness upper bound fixed.
+
+The validator checks bounded fields and labels, never executes a search or
+compares arbitrary formulas. Approval and admission enforce presence of the plan
+and its manual check; truth and coverage remain reviewer responsibilities.
+Older plans without parameter_selection keep their exact canonical bytes and
+hashes, including when the optional new object is null. Historical decisions
+remain readable and exact retries remain inert. A new approval/admission requires
+a completed revision and new review; there is no silent grandfathering.
+
+Development self-review
+
+For local workflow testing only, an operator can export
+CRUCIBLE_ALLOW_SELF_REVIEW=true when starting a development server. This defaults
+to false, accepts only exact true/false, and refuses startup in production when
+true. It does not grant reviewer status: only configured account UUIDs can use
+it. Browser session, origin and CSRF checks still apply; agent credentials still
+cannot review. Own pending proposals appear in that reviewer's queue.
+
+The form and immutable review history explicitly label these decisions as
+"Development self-review". The server, not the client, records
+checks.test_only_self_review=true for approvals and change requests. All normal
+approval evidence and completeness requirements still apply. Turning the flag
+off leaves the history readable. Such an approval can test the revision workflow
+but cannot pass independent admission or earn scheme contribution credit. Submit
+a new revision for a separate reviewer when ready for actual admission. This
+exception does not change the trust boundary for executing code or activation.
 
 4. Integrate reviewed code explicitly
 
@@ -78,8 +228,16 @@ Run the read-only binding check:
 
 It requires the latest approved revision, independent review and evidence,
 matching specification hashes, the exact registered source fingerprint, matching
-release/tier coverage, unique consistent profile IDs, and valid per-profile
-shared-secret lengths (matching the fixed length where declared).
+release/stage coverage, unique consistent profile IDs, and valid per-profile
+shared-secret lengths (matching the fixed length where declared). It also requires
+the reviewed stage-design and parameter-selection plans/checks and consistent
+correctness declarations. A
+perfect ladder must declare zero failure at every profile. For a statistical
+ladder, statistical profiles must repeat the exact reviewed common failure-bound
+text; stronger perfect-zero profiles are allowed, as in Frodo's first profile.
+Use the common bound in the declaration and explain tighter profile results in
+the evidence. Expressions are never evaluated or compared mathematically: even
+equivalent spellings must be aligned, and proof coverage remains human review.
 It reads only trusted registered code; it does not generate challenges, run
 submitted attacks, fetch URLs, grant approval, or change CURRENT.
 
@@ -133,3 +291,13 @@ NIST's submission guidance distinguishes specifications, implementation, known-
 answer tests, and security analysis. Crucible's initial intake is intentionally
 smaller and makes no claim of NIST compliance or endorsement:
 https://csrc.nist.gov/Projects/Post-Quantum-Cryptography/Post-Quantum-Cryptography-Standardization/Submission-Requirements/Algo-Specs-%28PQC%29
+
+Stage counts and scoring
+
+Different schemes can have different numbers of stages. All useful natural
+configurations may appear in the default progression. Multiples of ten, or five,
+are a soft presentation preference; the scientific review does not require them.
+The existing ordinal point formula is provisional. Existing configuration credit
+stays fixed when a route is curated or renumbered. A future scoring revision must
+avoid awarding more for the same recovery merely because a route gained steps. Review or admission alone
+does not automatically change recovery-scoring enrollment.

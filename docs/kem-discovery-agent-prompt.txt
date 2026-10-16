@@ -1,0 +1,222 @@
+Explore mathematics for a potentially new KEM assumption
+
+Read the final "Current research constraints" section before starting. Its
+scalability gate and prohibition on concerted attacks supersede the original
+exploration stages below.
+
+You are conducting open-ended mathematical research for Crucible, a platform
+for proposing and testing key-encapsulation mechanisms (KEMs). Seek a promising
+source of average-case computational hardness that could support a KEM and has
+no obvious substantive equivalence to an established cryptographic assumption.
+Prefer ideas with potential resistance to quantum attacks, while treating that
+as a question to investigate. Your task is discovery and critical evaluation;
+you do not have to produce a successful construction.
+
+Give yourself room to explore. The stages below are a suggested research rhythm,
+not a rigid schedule. Follow unexpected connections, revisit discarded ideas
+when new evidence warrants it, combine approaches, and change direction. Spend
+longer where the mathematics becomes interesting. You may interleave stages or
+replace an unhelpful technique. Keep the KEM objective in view without forcing
+every early observation into a construction.
+
+1. Begin with mathematics, before a cryptographic taxonomy.
+
+Choose mathematical objects, phenomena, or constructions that you find
+structurally interesting. Read mathematical sources, work through examples,
+prove small lemmas, and run exploratory computations. Let the objects suggest
+the questions. Do not begin by enumerating familiar cryptographic families and
+making variations of each, or by producing a fixed quota of candidate schemes.
+
+Possible questions, when useful: what information does a transformation retain
+or erase? What can someone compute with an extra witness or representation that
+appears difficult without it? Can independent choices produce a common hidden
+quantity? Are there distributions that are easy to generate but difficult to
+analyze from their public description? These are invitations, not an exhaustive
+menu. An unexpected mechanism is welcome.
+
+Allow an initial exploration before a systematic cryptographic novelty audit.
+Use existing mathematics freely. Do not ignore a known connection once you see
+it, but do not abandon an idea merely because its vocabulary resembles an
+existing field. Record concise observations, experiments, and reasons to pursue
+or reject directions; avoid a polished story unsupported by actual work.
+
+2. Make a promising mechanism concrete.
+
+When a direction earns further attention, define its objects, parameter family,
+efficient sampling procedure, public distribution, secret information, and the
+precise computational task facing an adversary. Explain what creates useful
+asymmetry between legitimate participants and an outsider. A difficult search
+problem alone does not give a KEM, and a trapdoor permutation is not required.
+
+Try to specify KeyGen, Encaps, and Decaps, including randomness, encodings, output
+lengths, and failure behavior. Explain why independently run honest algorithms
+agree on the shared secret. Prove correctness where possible; otherwise isolate
+the missing statement and measure failures without silently discarding them.
+Use small executable examples when they clarify the mechanism. State any gap
+between a useful mathematical observation and a complete construction.
+
+3. Try seriously to destroy the idea.
+
+Look for public invariants, unintended leakage, simpler representations, cheap
+recovery methods, and statistical distinctions. Consider preprocessing and
+repeated instances as well as single-instance attacks. Investigate applicable
+classical and quantum algorithms. Let the candidate's structure determine the
+attacks instead of treating a generic checklist as evidence of security.
+
+Separate honest correctness, difficulty of recovering the secret, and security
+of the encapsulated key against distinguishing attacks. State the adversary's
+access and the claimed security game. Treat IND-CPA and IND-CCA as distinct
+targets; account for every assumption needed by a security transformation.
+Hashing a hidden value does not by itself establish a secure KEM.
+
+Report successful attacks, weak parameter regimes, and negative results. Tests
+on small instances can expose defects; surviving them does not justify a
+claimed number of security bits. A partial mechanism with a precise obstacle
+is a useful outcome.
+
+4. Audit novelty once there is something substantive to compare.
+
+Search primary literature using both the mathematical structure and the proposed
+security problem, including older or broken proposals. Identify the nearest
+known constructions and attempt concrete translations, reductions, and attacks.
+
+Distinguish a renamed known problem, a meaningful variant, and a potentially new
+source of hardness. A generic encoding as polynomial equations, or a generic
+implication shared by all KEMs, is not enough to establish substantive sameness.
+Explain whether a proposed connection preserves the sampled distributions,
+parameters, secret-assisted mechanism, or relevant attack cost. Do not claim
+proof of independence from all known assumptions. Say what connections you
+searched for, found, or could not rule out, with verifiable sources.
+
+5. Leave a research result someone else can inspect and continue.
+
+For any surviving candidate, provide a clear intuition, mathematical definition,
+algorithms or explicit missing mechanism, correctness evidence, security claims
+and gaps, attack results, novelty comparison, and reproducible code where useful.
+Suggest the next experiment most likely to resolve an important uncertainty.
+Keep proven statements, conjectures, measurements, and heuristic estimates
+visibly distinct. Do not invent citations or assume worst-case hardness implies
+hardness on the generated instances.
+
+Choose the output format that best explains the work. A short account of failed
+directions and a valuable lemma may be better than an elaborate weak proposal.
+If nothing survives, say so. The objective is a new, inspectable research lead
+with a credible path toward a KEM, not novelty in terminology or a compulsory
+claim of success.
+
+Current research constraints (2026-10-14; supersede conflicting text above)
+
+Restart from square one. The next search should begin with a new mathematical
+mechanism, not presume that the existing boundary-action construction is to be
+repaired. Preserve that candidate and its evidence in the research index at
+kem-discovery/research-index.txt. Carry forward the constraints below rather
+than the old construction as a default architecture.
+
+Scalability is a prerequisite for further experimental development. Before
+stress testing or implementing a new candidate, describe a parameter family
+indexed by a target security parameter lambda, its exact public distribution,
+and the proposed relationship between that parameter and computational security.
+Here lambda denotes intended security bits: the target is work exponential in
+lambda, not merely a key or secret containing lambda bits. A new assumption may
+remain conjectural, but its parameter dependence must be stated and motivated.
+Do not label a dimension, field size, secret entropy or hash length as achieved
+security. No proof or experimental security estimate may be invented.
+
+Derive a small-polynomial upper bound on the full encoded public-key size as a
+function of lambda, counting required public parameters, bases, generators,
+metadata and the bit width of field elements. The working design target is
+quadratic growth, with all logarithmic factors stated. Cubic growth requires
+explicit constants and practical byte estimates before proceeding. This is a
+screening preference, not a claim that the user has set a specific byte cap.
+An unspecified polynomial degree, large constant, growing field bit width or
+unaccounted setup object does not clear this gate. Also account for ciphertext,
+secret-key and shared-parameter size and polynomial honest computation costs.
+
+Provide size formulas and illustrative byte estimates at target lambda values
+128, 192 and 256 only when a candidate actually has a proposed parameter map.
+Label these as encoding calculations at target strengths, not measured or
+established security levels. Keep one-time setup costs separate from recurring
+costs, while reporting both. Do not hide per-key cost by declaring setup global.
+Publishing a setup witness or private word is not a valid compression of a
+public representation. Representation changes require an explicit distribution
+and explanation of what information is published.
+
+Do not perform concerted attacks against candidates or their assumptions. This
+overrides section 3 and the attack-experiment suggestions elsewhere above.
+Retain candidate definitions and evidence; make constructive changes when they
+have a stated purpose. Record security unknowns candidly. Literature comparison,
+mathematical size accounting and honest-correctness reasoning remain in scope.
+After a candidate clears the scalability gate, small correctness experiments
+may be useful; passing them is not evidence of security. Until then, do not spend
+effort on stress tests, parameter sweeps or proposal admission.
+
+The existing nonlinear boundary-action proposal remains an unsubmitted research
+record. Its measured toy costs and missing security-parameter mapping do not
+clear this gate. Preserve it without further testing or submission while a new
+design is considered. See kem-discovery/scalability-first-design-brief.txt for
+the size analysis and the next design requirements.
+
+Pipeline purpose and origin clarification (user steering, 2026-10-14)
+
+The objective is to identify worthwhile research targets for Crucible's pipeline.
+An impractical, incomplete or little-studied published proposal can merit an
+entry. Community uptake and production readiness are not prerequisites for
+research intake. A useful new construction or material variant can also merit
+review without establishing an entirely new mathematical hardness family.
+
+Keep three questions separate: whether the exact construction was previously
+identified, whether its particular hardness assumption was previously identified,
+and whether it is ready for implementation or live admission. Prior publication
+remains prior art even when that proposal was unfinished. Conversely, reusing
+an established agreement pattern does not settle the origin of a new concrete
+action family, sampler and computational problem. Record the substantive delta
+and its research value; routine packaging or a new name alone is insufficient.
+
+Permit an explicitly incomplete research-intake record while security and
+scalability remain unresolved. The earlier implementation/stress-test gate stays
+in force; research intake does not authorize experiments, live admission or
+submission. Novel construction proposals have provisional origin claims pending
+review, with known mathematical and protocol predecessors credited. This
+clarification supersedes any earlier interpretation requiring a completely new
+hardness family merely to retain a candidate in the research pipeline.
+
+Configuration and default-progression guidance (2026-10-16)
+
+When a candidate has progressed far enough to describe parameters, distinguish
+the admissible configuration space from a default progression for humans. A
+configuration is an exact parameter vector or fully specified generation rule
+within a reviewed domain, with stable identity. A stage is its ordinal on a
+versioned default route; a challenge instance is a new random sample. Different
+constructions need not have equal numbers of stages. Include useful natural
+settings without changing mathematics for a count. A default-stage count in
+multiples of ten, or five when appropriate, is a human presentation preference;
+retain reviewed settings outside that default route. There is no fixed 50 target
+or requirement of linear security spacing. Do not force an incomplete research
+idea to provide a playable ladder.
+
+Preserve the mathematical family, complete sampling distributions, KEM transform
+and game. Coordinated changes in multiple parameters can be natural; justify
+them. Do not engineer reachable stages using leaked information, specially easy
+keys, padding, selectively accepted samples or artificially restricted randomness.
+Native small spaces may permit enumeration; explain this without claiming that
+small-instance attacks extrapolate to the proposed operating point.
+
+Choose one strong common correctness envelope for admitted configurations. It can
+be negligible and nonzero; exact probabilities need not coincide. Cover the full
+claimed domain, disclose stronger individual bounds and material variation, and
+report resource/generation aborts separately. Do not invent a bound or substitute
+repeated successful trials for a correctness argument. Preserve a published or
+approved reference setting where applicable; otherwise justify the candidate's
+reference endpoint and mark unresolved security estimates as unresolved.
+
+Explain cost tradeoffs under a declared workload, objective and candidate domain.
+A limited search or favorable attack-model output is not global optimality or
+security proof. Keep configuration identity, default route revision and security
+evidence revision distinct; future findings must not rewrite earlier definitions.
+The proposal's v1 wire field names tier_design, tier_meaning and supported_tiers
+remain compatible. supported_tiers retains legacy numeric configuration selectors;
+map default stage ordinals separately. Current ordinal points are provisional,
+not a scientific objective for choosing parameters. Preserve existing configuration
+credit if the human progression is curated or renumbered. See ladder-principles.txt for the accepted
+contract. This guidance does not relax the earlier scalability gate, authorize
+concerted attacks, or authorize experiments, submission or live admission.

@@ -146,8 +146,8 @@ async function test(name, run) {await run();console.log('PASS '+name);passed++;}
     assert.match(copied,/http:\/\/127.0.0.1:8000\/api\/agent\/client/);
     assert.match(copied,/get --challenge-id 'exact-challenge-id'/);
     assert.match(copied,/Deadline:.*UTC/);
-    assert.match(copied,/init 'fixture' --tier 1 --path NEW_EMPTY_FOLDER/);
-    assert.match(app.$('#agent-followup-request').textContent,/Retrieve the newest Fixture challenge at Tier 1/);
+    assert.match(copied,/init 'fixture' --stage 1 --path NEW_EMPTY_FOLDER/);
+    assert.match(app.$('#agent-followup-request').textContent,/Retrieve the newest Fixture challenge at Stage 1/);
     assert.doesNotMatch(copied,/test-csrf|public_key|ciphertext/);
     assert.equal(app.requests.length,before);assert.equal(writes(app).length,0);
     app.sandbox.navigator.clipboard={writeText:async()=>{throw Error('blocked');}};

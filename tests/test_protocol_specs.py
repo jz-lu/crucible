@@ -13,11 +13,46 @@ from crucible import calibration, registry
 from crucible.protocol_specs import (
     SPEC_FORMAT, SPEC_MAX_BYTES, ProtocolSpec, builtin_spec, canonical_spec, template_spec,
 )
+from proposal_fixtures import tier_design
 
 
 @pytest.fixture
 def example():
     return builtin_spec("rsa-kem", "1")
+
+
+def test_legacy_specification_canonical_bytes_and_hash_remain_identical(example):
+    original = json.dumps(example, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    for candidate in (example, {**example, "tier_design": None}):
+        canonical = canonical_spec(ProtocolSpec.model_validate(candidate))
+        current = json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+        assert current == original
+        assert hashlib.sha256(current).digest() == hashlib.sha256(original).digest()
+        assert "tier_design" not in canonical
+
+
+@pytest.mark.parametrize("status", ["supported-estimate", "provisional", "unestimated"])
+def test_tier_design_is_reviewable_inert_bounded_metadata(example, status):
+    plan = tier_design()
+    plan["endpoint_status"] = status
+    plan["endpoint_evidence"] = "An unverified expression or https://example.invalid/reference stays inert text."
+    canonical = canonical_spec(ProtocolSpec.model_validate({**example, "tier_design": plan}))
+    assert canonical["tier_design"] == plan
+    assert template_spec()["tier_design"]["endpoint_status"] == "unestimated"
+    assert "tier_design" in ProtocolSpec.model_json_schema()["properties"]
+
+
+@pytest.mark.parametrize("field,value", [
+    ("parameter_progression", " "), ("cost_tradeoff", "x" * 4001),
+    ("fixed_correctness", True), ("endpoint_status", "verified-secure"),
+    ("endpoint_target", "x" * 2001), ("endpoint_evidence", None),
+    ("intermediate_steps", []), ("execute", "arbitrary code"),
+])
+def test_incomplete_or_unbounded_tier_design_is_rejected(example, field, value):
+    plan = tier_design()
+    plan[field] = value
+    with pytest.raises(ValidationError):
+        ProtocolSpec.model_validate({**example, "tier_design": plan})
 
 
 @pytest.mark.parametrize("identity", list(registry.ADAPTERS))
@@ -26,13 +61,36 @@ def test_every_builtin_is_valid_uniform_and_preserves_exact_source_provenance(id
     before = deepcopy(adapter.manifests())
     source_before = Path(inspect.getfile(adapter)).read_bytes()
     with patch.object(adapter, "generate", side_effect=AssertionError("Do not generate an instance")):
-        with patch.object(adapter, "keygen", side_effect=AssertionError("Do not generate keys")):
+        with patch.object(adapter, "keygen", side_effect=AssertionError("Do not generate keys"), create=True):
             spec = builtin_spec(*identity)
     assert spec == canonical_spec(ProtocolSpec.model_validate(spec))
     assert spec["format"] == SPEC_FORMAT
-    assert spec["name"] == registry.DETAILS[identity[0]]["name"]
+    assert spec["name"] == registry.research_schemes.details_for(adapter, registry.DETAILS[identity[0]])["name"]
     assert spec["version"] == identity[1]
     assert set(spec["algorithms"]) == {"setup", "keygen", "encapsulate", "decapsulate"}
+    if before[0].get("profile_kind") == "research-tier":
+        assert spec["parameters"]["distribution"].startswith(before[0]["distribution"])
+        assert "conditioned on agreement" in spec["parameters"]["distribution"]
+        correctness = getattr(adapter, "CORRECTNESS_SPEC", before[0]["correctness"])
+        assert spec["correctness"]["argument"] == correctness["argument"]
+        assert spec["correctness"]["failure_bound"] == correctness["failure_bound"]
+        assert spec["parameters"]["supported_tiers"]["values"] == [p["instance_size"] for p in before]
+        assert spec["implementation"]["artifact_sha256"] == before[0]["implementation"]["artifact_sha256"]
+        assert spec["implementation"]["sha256"] == hashlib.sha256(source_before).hexdigest()
+        assert before[0]["id"] in spec["parameters"]["mapping"] and before[-1]["id"] in spec["parameters"]["mapping"]
+        assert adapter.manifests() == before
+        assert Path(inspect.getfile(adapter)).read_bytes() == source_before
+        return
+    if before[0].get("profile_kind") == "standard-parameter-set":
+        assert spec["parameters"]["distribution"].startswith(before[0]["distribution"])
+        assert "conditioned on honest agreement" in spec["parameters"]["distribution"]
+        assert spec["correctness"]["argument"] == before[0]["correctness"]["argument"]
+        assert spec["implementation"]["artifact_sha256"] == before[0]["implementation"]["artifact_sha256"]
+        assert spec["implementation"]["sha256"] == hashlib.sha256(source_before).hexdigest()
+        assert all(profile["id"] in spec["parameters"]["mapping"] for profile in before)
+        assert adapter.manifests() == before
+        assert Path(inspect.getfile(adapter)).read_bytes() == source_before
+        return
     assert spec["parameters"]["distribution"] == before[0]["distribution"]
     assert spec["correctness"]["argument"] == before[0]["correctness"]["argument"]
     assert before[0]["correctness"]["scope"] in spec["correctness"]["scope"]
@@ -40,8 +98,9 @@ def test_every_builtin_is_valid_uniform_and_preserves_exact_source_provenance(id
     assert before[0]["correctness"]["evidence_status"] in spec["correctness"]["evidence"]
     if "initial_security_estimate" in before[0]:
         assert spec["security"]["claim"].startswith(before[0]["security_claim"] + " ")
-        assert calibration.MODEL["formula"] in spec["security"]["claim"]
-        assert all(limit in spec["security"]["claim"] for limit in calibration.MODEL["limitations"])
+        model = registry.INITIAL_SECURITY_MODELS[before[0]["initial_security_estimate"]["model_id"]]
+        assert model["formula"] in spec["security"]["claim"]
+        assert all(limit in spec["security"]["claim"] for limit in model["limitations"])
     else:
         # Registered archive claims remain byte-for-byte unchanged.
         assert spec["security"]["claim"] == before[0]["security_claim"]
@@ -107,8 +166,10 @@ def test_instruction_guidance_is_optional_stripped_and_not_content(example):
     example["_instructions"] = {"help": "This is inert guidance."}
     parsed = ProtocolSpec.model_validate(example)
     assert canonical_spec(parsed) == expected
-    assert parsed.model_dump(mode="json") == expected
-    assert parsed.model_dump(mode="json", by_alias=True) == expected
+    assert canonical_spec(parsed) == expected
+    serialized = parsed.model_dump(mode="json", by_alias=True)
+    assert "_instructions" not in serialized
+    assert canonical_spec(ProtocolSpec.model_validate(serialized)) == expected
     assert "_instructions" in ProtocolSpec.model_json_schema()["properties"]
     example["_instructions"]["help"] = "Different optional guidance does not change the content hash."
     assert canonical_spec(ProtocolSpec.model_validate(example)) == expected
@@ -249,3 +310,22 @@ def test_canonical_normalization_is_repeatable_independent_and_strips_whitespace
     assert builtin_spec("rsa-kem", "1")["algorithms"]["setup"] != "Changed copy"
     with pytest.raises(ValueError):
         canonical_spec(example)
+
+
+def test_parameter_selection_preserves_earlier_plan_canonical_bytes(example):
+    plan = tier_design()
+    plan.pop('parameter_selection')
+    legacy = {**example, 'tier_design': plan}
+    assert canonical_spec(ProtocolSpec.model_validate(legacy)) == legacy
+    assert canonical_spec(ProtocolSpec.model_validate({**example, 'tier_design': {
+        **plan, 'parameter_selection': None}})) == legacy
+
+
+@pytest.mark.parametrize('field,value', [('objective', ''), ('constraints', 'x' * 3001),
+    ('security_model', 'x' * 4001), ('search_domain', 7), ('comparison_evidence', None),
+    ('tradeoffs_and_uncertainty', ' '), ('unrecognized', 'must reject')])
+def test_parameter_selection_is_bounded_inert_and_complete_when_provided(example, field, value):
+    plan = tier_design()
+    plan['parameter_selection'][field] = value
+    with pytest.raises(ValueError):
+        ProtocolSpec.model_validate({**example, 'tier_design': plan})

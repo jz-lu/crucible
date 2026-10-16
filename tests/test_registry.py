@@ -23,6 +23,7 @@ def rsa_answer(actor, challenge):
 def test_catalogue_has_two_real_adapters_with_common_protocol_contract(system):
     app, _, _ = system
     entries = TestClient(app).get("/api/schemes").json()["schemes"]
+    entries = [item for item in entries if item["id"] in (kem.SCHEME_ID, rsa.SCHEME_ID)]
     assert [item["id"] for item in entries] == [kem.SCHEME_ID, rsa.SCHEME_ID]
     assert len({profile["id"] for item in entries for profile in item["profiles"]}) == 390
     for item in entries:

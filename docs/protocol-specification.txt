@@ -42,13 +42,16 @@ Required top-level fields:
 Optional top-level fields:
 
   implementation: artifact object described below, or null; defaults to null
+  tier_design: stage-progression and parameter-selection plan below, or null;
+               optional at intake, required for new approval/admission
   _instructions: object of nonblank string keys and values, at most 32 entries;
                  keys at most 100 characters, values at most 4000 characters
 
 If _instructions is supplied it must be an object, not null. This is template
 guidance only. It is validated and then removed from the stored normalized
-document and content hash. The remaining optional/default null fields are
-retained. Existing documents without _instructions are accepted.
+document and content hash. Other optional/default null fields are retained, except absent/null tier_design
+and its absent/null parameter_selection, which remain omitted to preserve older
+canonical content. Existing documents without _instructions are accepted.
 
 algorithms
 
@@ -83,14 +86,81 @@ The two supported_tiers representations are:
 
 A range includes both endpoints, has positive step, max >= min, and max lies
 on a step from min. A list has 1..1024 unique integers in increasing order.
-Every tier and step is a strict integer from 1 through 1000000000. Parsing a
-range does not expand it or make the listed tiers available as challenges.
+Every legacy numeric selector and step is a strict integer from 1 through 1000000000. Parsing a
+range does not expand it or make the listed stages available as challenges.
 
-Explain exactly how a tier selects parameters or a generation procedure.
-Specify the complete distributions, randomness source, rejection sampling and
-conditioning. Identify what is public or secret and what is reused across
-setup, keys, instances, accounts and rounds. A common tier selector does not
-establish equal security or equal attack cost between different constructions.
+These are legacy v1 wire names. supported_tiers retains numeric configuration
+selectors, including reviewed off-route settings; tier_meaning explains them.
+User-facing terminology is stage. A stage is an ordinal on this scheme's versioned
+default progression; a configuration is the stable exact parameter setting or
+fully specified reviewed generation rule it selects. A challenge instance is one sampled public key/ciphertext at that setting.
+Describe the admissible configuration domain separately from the ordered default
+route, using tier_meaning and mapping. Give stable configuration identities and
+an explicit mapping. Other reviewed settings can belong to the same scheme.
+
+Default stage ordinals run 1..N and map separately to configuration identities.
+Prefer a multiple-of-ten count, or five when appropriate, if natural settings
+support a useful route; this is not a scientific requirement. Preserve off-route
+configurations. Legacy selector values and historical documents remain valid.
+Specify complete distributions, randomness, rejection and conditioning; identify
+public, secret and reused values across setup, keys, instances, accounts and
+rounds. Equal stage numbers or fractions of a route do not establish equal
+security or attack cost. Proposed ranges/generation rules never automatically
+issue challenges or authorize unreviewed parameters.
+
+
+tier_design (legacy name for the stage-progression plan)
+
+Optional for historical documents and intake drafts. New approval/admission
+requires all seven fields below and the parameter_selection object, plus explicit
+manual stage-design and parameter-selection checks. Each field is a nonblank
+string up to 4000 characters, except endpoint_target (2000) and endpoint_status:
+
+  parameter_progression: admissible configurations, the ordered default route,
+      natural parameter scaling, preserved family/distributions/transform/game,
+      stable identities, and route revision policy. Coordinated changes in more
+      than one parameter are permitted with justification.
+  cost_tradeoff: communication/computation/memory costs and measured-versus-modeled
+      evidence; explain legitimate plateaus and competing objectives.
+  fixed_correctness: one strong common correctness envelope covering every admitted
+      setting, including off-route settings. Negligible nonzero failure is allowed;
+      disclose tighter bounds and material variation. Keep resource aborts separate.
+  endpoint_status: supported-estimate, provisional, or unestimated; not certification.
+  endpoint_target: the published/approved reference setting where applicable, or
+      a justified reference endpoint for a new construction. No standard strength
+      follows merely from being the last stage.
+  endpoint_evidence: pinned models/sources, their domain and limitations, native
+      input-space limits, uncertainty, and missing evidence.
+  intermediate_steps: useful natural settings and any omissions or coarse gaps;
+      a round-count default is a presentation preference only. Preserve useful
+      off-route configurations; linear security spacing is not required.
+
+parameter_selection contains six nonblank text fields:
+
+  objective: cost objectives, units and workload, or Pareto tradeoffs (3000 chars)
+  constraints: family, game, common correctness and implementation constraints (3000)
+  security_model: pinned attacks, estimator versions, units and assumptions (4000)
+  search_domain: candidate domain, coverage, excluded choices and filters (4000)
+  comparison_evidence: reproducible comparisons and scoped selection argument (4000)
+  tradeoffs_and_uncertainty: alternative objectives, model gaps and exceptions (4000)
+
+Reject artificial padding, leaked bits, specially easy keys, selective resampling
+or restricted entropy used solely to manufacture easy stages. Naturally small
+input spaces may permit enumeration; disclose it without extrapolating recovery
+to larger settings. Finite candidate comparisons do not establish global
+optimality. Fidelity takes priority over improving an estimator's output.
+
+Version exact configuration identity, the progression mapping and security evidence
+separately in the prose and integration record. Adding/reordering a stage must not
+redefine prior configuration IDs or recovery receipts. The current v1 service
+binds registered releases/profiles; it does not offer an arbitrary configuration
+explorer or independent progression-edit API. These fields describe reviewable
+contracts, not executable machinery. Frozen specifications remain unchanged.
+
+Scoring is a separate provisional policy. This format does not award points or
+make ordinal distance a scientific measure. Existing configuration credit stays
+fixed when a route is curated or renumbered. A denser default route must not imply
+a more valuable identical recovery; no new score formula is adopted.
 
 encoding
 
@@ -104,7 +174,7 @@ All fields are required:
 Describe canonical binary encodings, field widths, endianness, padding, framing
 and JSON/hex transport separately. shared_secret describes the derivation/KDF,
 domain separation and exact output encoding. shared_secret_bytes states a
-fixed byte length; use null when it depends on the tier or another parameter,
+fixed byte length; use null when it depends on the configuration,
 and specify the length mapping in shared_secret. Null never means 32 bytes.
 No length expression is evaluated by intake. An executable adapter must later
 provide exact, machine-usable limits for every admitted parameter profile.
@@ -155,6 +225,7 @@ implementation, when non-null, has:
 
   url: required nonblank URL, at most 2048 characters
   sha256: 64 lowercase hexadecimal characters, or null; defaults null
+  artifact_sha256: optional full implementation-closure SHA-256, or null
   runtime: nonblank string up to 1000 characters, or null; defaults null
   entrypoint: nonblank string up to 1000 characters, or null; defaults null
 
@@ -188,15 +259,16 @@ format. Their exact version may be specified; omitted version uses the current
 registered release. Unknown schemes/releases raise ValueError. No instance or
 key is generated to produce an example.
 
-Canonical content is the normalized model dump with defaults/nulls retained
-and _instructions omitted. For the stored content hash, serialize that dict
+Canonical content is the normalized model dump with defaults/nulls retained,
+_instructions omitted, and absent/null tier_design or nested parameter_selection
+omitted for historical compatibility. For the stored content hash, serialize that dict
 with sorted keys, separators (",", ":"), ensure_ascii=False and allow_nan=False;
 encode as UTF-8 and compute SHA-256. This project-specific normalization is
 not a claim of RFC 8785 compliance. canonical_spec raises ValueError for a
 nonvalidated argument, invalid Unicode or an oversized document; Pydantic
 reports model-validation failures as ValidationError.
 
-Registered examples
+Historical registered examples
 
 The finite-field Diffie-Hellman examples retain each release's actual ladder:
 release 1 has the five tiers 20,24,28,32,36; release 2 has every tier 20..36;
@@ -236,3 +308,11 @@ fingerprints; separation of public challenge data from secret answers; and
 version/provenance handling. Admission does not turn a security claim into a
 proof. No decision may silently change frozen adapters, relabel prior recovery
 receipts, or grant cross-release compatibility without explicit justification.
+
+Current progression guidance
+
+See ladder-principles.txt for the accepted design principles and
+stage-progressions.txt for the current per-scheme route audit. Existing built-in
+paths are not thereby certified faithful, optimally selected or fully calibrated;
+that audit records the outstanding limitations. Schema validation only checks
+shape, limits and consistency. Mathematical adequacy remains manual review.

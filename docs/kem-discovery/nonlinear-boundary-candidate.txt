@@ -1,0 +1,303 @@
+Retained candidate: nonlinear boundary actions
+Research record, 14 October 2026
+
+This investigation followed docs/kem-discovery-agent-prompt.txt, then changed
+scope when the user requested construction, candidate preservation, and no
+concerted attacks. The result is an explicit nonlinear candidate with an exact
+correctness argument and reproducible experiments. It is not a validated KEM,
+and a new source of average-case hardness has not been established. Retain it
+as a research lead in polynomial actions, with its relationship to existing
+assumptions unresolved.
+
+There is a concrete improvement in the construction: honest parties can agree
+without expanding their entire secret transformations or computing canonical
+equations for an algebraic variety. They exchange unordered samples of boundary
+data, transform the samples pointwise, and sort them before deriving a key.
+Only the public generators need polynomial expansion. This is a representation
+and correctness result, not evidence of secrecy.
+
+The first investigation concerned linear network responses. Before the scope
+change, it found a weakness in that baseline and produced
+network-subspace-results.json and ../../scripts/kem_discovery_networks.py.
+Those historical artifacts are preserved, including their original status.
+That work was not extended or rerun after the scope change. The current script,
+../../scripts/kem_discovery_nonlinear.py, contains construction and correctness
+checks only. Neither candidate has been registered in Crucible's catalogue.
+
+The mathematical starting point was the response of a hidden electrical
+network. For a boundary/interior decomposition of its grounded matrix,
+
+  Q = [ A  B ; B^T  D ],       R = A - B D^{-1} B^T,
+
+the boundary retains R while many internal representations may be forgotten.
+This is the Schur-complement/Kron-reduction viewpoint; its composition rules
+are established mathematics, not a proposed new hardness assumption.
+[Kron reduction, Dörfler and Bullo](https://arxiv.org/abs/1102.2950).
+
+Boundary data can also be represented as voltage/current pairs (x,y), rather
+than a response matrix. The graph y=Rx of a symmetric response matrix is a
+Lagrangian subspace. This representation makes elementary boundary operations
+linear and avoids singular matrix charts. Lam and Pylyavskyy connect electrical
+operations with symplectic groups; Jekel treats boundary behavior over arbitrary
+fields. We use these as mathematical starting points, not security results.
+[Electrical networks and Lie theory](https://arxiv.org/abs/1103.3475),
+[Layering boundary graphs and networks](https://arxiv.org/abs/1601.00247).
+
+The retained revision replaces linear subspaces and linear operations with
+finite samples of a nonlinear gradient graph and polynomial symplectic
+permutations. Nonlinear boundary relations are already studied in network
+mathematics; Johnson's work is relevant background. We do not import a real
+network's positivity, monotonicity, or recoverability theorem into a finite
+field. The prototype is an algebraic model inspired by boundary data, not a
+claim that every compiled map is a passive electrical circuit.
+[Nonlinear and signed conductors, Johnson](https://arxiv.org/abs/1203.4045).
+
+Here is the exact candidate family. Fix an odd prime p >= 5, an integer n >= 2,
+a word length L >= 1, and a sample count 2 <= M <= p^n. Arithmetic is in F_p.
+The ambient space has coordinates z=(x_1,...,x_n,y_1,...,y_n). These are research
+parameters; no function of a security parameter or security level is endorsed.
+
+For each coordinate i define two one-parameter polynomial permutations:
+
+  E_i^+(t): x_i <- x_i + t y_i^3, all other coordinates unchanged;
+  E_i^-(t): y_i <- y_i + t x_i^3, all other coordinates unchanged.
+
+Their inverses use -t. They preserve the standard symplectic form, as one can
+check directly by substituting into sum_i dx_i wedge dy_i. Assign indices
+i < floor(n/2) to Alice, and all remaining indices to Bob, using zero-based
+indices in the implementation. Every Alice elementary map commutes with every
+Bob elementary map because their coordinate pairs are disjoint. Within one
+party the upper and lower maps need not commute.
+
+The coordinate decomposition is not supplied in its factorized form. During
+parameter generation sample a polynomial automorphism
+
+  phi = P o C_F o Q,             C_F(x,y) = (x + grad F(y), y).
+
+F is a uniformly sampled nonzero homogeneous cubic in n variables: choose all
+degree-three coefficients uniformly and resample the entire polynomial only
+if every coefficient is zero. P and Q are independently sampled products of
+2n linear symplectic shears. For each layer choose its upper/lower orientation
+uniformly, v uniformly in F_p^n, and t uniformly in F_p, allowing zero values.
+The upper layer is (x,y) -> (x+t v(v^T y),y); the lower layer adds t v(v^T x)
+to y. No claim is made that this sampler is uniform on a symplectic group.
+
+Publish each G_i^+(t,z) = phi E_i^+(t) phi^{-1}(z) and G_i^-(t,z), expanded
+as ordinary polynomial coefficient lists in (z,t). Publish which generator
+indices belong to each party, but not P,Q,F or their composition circuit.
+The prototype compiles and verifies these maps using its local setup witness,
+then returns only the coefficient lists. The sender and decapsulation code
+use those lists. Python does not provide secure memory erasure; this is a
+mathematical separation of inputs, not a memory-handling implementation claim.
+
+Both phi and phi^{-1} have degree at most two. Therefore every published
+generator has coordinate degree at most 2*3*2=12 and parameter t degree at
+most two. All generators remain bijections and cross-party commutation is
+preserved by conjugation. These statements follow algebraically and do not
+depend on the empirical checks. Hiding a factorization is not a proof that it
+cannot be recovered; nonlinearity alone is not a security argument.
+
+Choose the public base set S0 by sampling M distinct x values uniformly without
+replacement from F_p^n and attaching y=grad F0(x), where
+
+  F0(x) = (1/2) sum_i x_i^2 + sum_{i=1}^{n-1} x_i^2 x_{i+1}^2.
+
+Thus y_i = x_i + 2 x_i sum_{j adjacent to i in the path} x_j^2. The prototype
+samples x values by rejecting duplicates and records the number of draws.
+These duplicate rejections are part of the specified sampling procedure,
+not discarded agreement failures. The base set is public and sorted.
+
+Let theta consist of p,n,L,M,S0 and all expanded generator maps. The underlying
+family is fully specified by this sampler. In a KEM interpretation, generate
+theta during KeyGen and include it in the public key. The experiments make one
+setup and one public key per profile. Reusing theta across receivers would be
+a different deployment choice, not something established by these results.
+
+A private word is sampled as L independent choices. Each choice selects a
+generator index uniformly from the party's family and t uniformly from F_p.
+Apply the selected generators in sample order. Include t=0, repeated indices,
+and every resulting word. Do not condition on nontriviality, apparent mixing,
+or an estimated orbit size. Write a and b for the resulting permutations.
+
+The honest algorithms are:
+
+  KeyGen:
+    Generate theta as above. Sample Alice's word a. Compute SA=a(S0).
+    Return pk=(theta,Encode(SA)) and sk=(a,pk).
+
+  Encaps(pk):
+    Read theta and SA. Sample Bob's word b independently.
+    Set ct=Encode(b(S0)); set Z=Encode(b(SA)).
+    Return (ct,KDF(theta,Encode(SA),ct,Z)).
+
+  Decaps(sk,ct):
+    Decode ct as a canonical set SB of M distinct ambient points.
+    On an invalid encoding return failure.
+    Otherwise set Z'=Encode(a(SB)) and return the same KDF with Z'.
+
+Encaps and Decaps evaluate public generators pointwise using their own private
+word. They never need the parameter-generation witness or the other party's
+word. Secret words remain compact even if their full polynomial expansions
+become large. The sample set is not the entire boundary variety; its use in
+place of a full relation changes the proposed security problem.
+
+Encode sorts the M distinct tuples lexicographically, keeps their coordinate
+order (x then y), and writes each canonical field element as a fixed-width
+big-endian integer of w=ceil(bit_length(p)/8) bytes. The point part of the public
+key and the ciphertext each have exactly 2nMw bytes. Total public-key size also
+includes theta, often overwhelmingly larger than the point part.
+
+The parameter encoding is ASCII JSON with sorted dictionary keys and no extra
+whitespace. Each of the 2n generators has 2n coordinate polynomials; each
+polynomial is a sorted list of [exponent_vector,nonzero_coefficient] pairs.
+The exponent vector has length 2n+1, with t last. The parameter identifier is
+SHA-256 of this canonical JSON. The illustrative KDF is SHAKE256 returning
+32 bytes on the concatenation
+
+  b"crucible-nonlinear-candidate-v1\x00" || identifier ||
+  Encode(SA) || ct || Z.
+
+Within a parameter profile all three point-set strings have fixed lengths.
+The domain separator is an ASCII string followed by one zero byte. No claim
+of a security reduction to SHAKE256 is made. The public-parameter reloader in
+the script reads generated evidence; it is not a validator for arbitrary
+untrusted polynomial parameter sets.
+
+Correctness lemma (proved). For every honestly generated theta and every
+pair of sampled words, Decaps returns Encaps' key with zero mathematical
+agreement failures. Each generator is a conjugate of a polynomial bijection,
+so it preserves the number of distinct points. Cross-party commutation of
+generators extends to their words. Consequently
+
+  a(SB) = a(b(S0)) = b(a(S0)) = b(SA).
+
+Sorting identical point sets produces identical encodings and therefore the
+same KDF input. There are no divisions in the secret operations, no singular
+response-matrix charts, and no reconciliation step. Encoding checks reject
+wrong lengths, out-of-range field elements, duplicate points, and noncanonical
+ordering. Arbitrary correctly encoded sets are accepted by this toy Decaps;
+membership in the honestly generated orbit is not checked. None of these
+correctness statements establishes IND-CCA security.
+
+For fixed generator degree the public coefficient representation is finite and
+polynomial in n, but the exponent of that polynomial is large. A loose support
+bound per output coordinate is 3*binomial(2n+12,12), allowing t degrees 0,1,2.
+There are 4n^2 output coordinates across the public maps. Evaluation costs are
+polynomial in the published representation length, L, M, and log p. This
+formal efficiency is a weak statement: actual coefficient expansion is already
+expensive in very small examples.
+
+Measured evidence (Python 3.14.6, seeded random.Random, not a cryptographic RNG):
+
+  n   p    L   M   seed       agreement   coefficients   theta bytes
+  2   7    4   8   20261015     16/16          3,368          54,185
+  2   101  8  16   20261016     16/16         31,350         531,713
+  3   7    4  16   20261017      8/8         406,232       8,128,897
+
+The point public-key/ciphertext sizes were respectively 32, 64, and 96 bytes;
+including parameters, public keys were 54,217, 531,777, and 8,128,993 bytes.
+All keys were 32 bytes. All 40 encapsulations agreed across these three public
+keys. There were also 140 generator expansion/inverse/identity checks and 12
+encoding rejection checks. The public parameters were serialized and reloaded
+before every profile's key generation and agreement experiments, so the
+factored setup witness was unavailable to those operations.
+
+Observed setup times were about 0.050, 0.592, and 22.440 seconds. Median combined
+Encaps/Decaps times were about 0.0134, 0.415, and 1.621 seconds. These are
+unoptimized, concurrent-run measurements on one machine, not controlled
+benchmarks. The samples use different conjugators and fields; they do not
+establish a universal scaling law. No honest failures were dropped. The small
+field sizes and word lengths are demonstration parameters, not security tiers.
+
+Reproduce from the repository root, using only Python's standard library:
+
+  python3 scripts/kem_discovery_nonlinear.py --trials 16 --output /tmp/nonlinear-7.json
+  python3 scripts/kem_discovery_nonlinear.py --seed 20261016 --p 101 --length 8 --points 16 --trials 16 --summary-only --output /tmp/nonlinear-101.json
+  python3 scripts/kem_discovery_nonlinear.py --seed 20261017 --n 3 --length 4 --points 16 --trials 8 --summary-only --output /tmp/nonlinear-n3.json
+
+The checked-in files are nonlinear-results.json, nonlinear-101-results.json,
+and nonlinear-n3-results.json. The first includes the expanded public maps and
+an example transcript. The larger two retain summary measurements, a public
+parameter digest, and an example transcript; omit --summary-only to regenerate
+their full coefficient lists. Seeds fix mathematical outputs in the recorded
+Python version, while timing fields naturally vary. Assertions must be enabled;
+do not use python -O. No application dependencies or database are involved.
+
+The proposed computational problem is precise but remains a hypothesis to
+study: sample theta,a,b exactly as above, reveal theta,SA=a(S0),SB=b(S0), and
+ask for Encode(ab(S0)). This is the common-image problem for this sampled
+action. Recovering a private word or the hidden conjugator would be sufficient
+in some settings, but neither recovery problem is the definition of the target.
+No worst-case-to-average-case reduction or distributional hardness evidence is
+claimed. Increasing n,L,p,M does not currently come with a security estimate.
+
+The intended initial security target would be IND-CPA: give an observer an
+honestly generated pk, an honest ct, and either its derived key or an independent
+uniform 32-byte string. The observer gets no decapsulation oracle. Difficulty
+of computing the entire common image is not by itself a proved statement that
+these two key distributions are indistinguishable. A suitable distributional
+assumption and a KDF/model argument would still be required. IND-CCA, malicious
+parameter handling, repeated-instance security, and quantum resistance are
+unassessed. No transformation to IND-CCA is asserted or implemented. Per the
+revised scope, no concerted cryptanalytic experiments were run on this revision.
+
+The literature comparison puts clear limits on a novelty claim:
+
+* The commuting-action agreement identity is known. Maze, Monico, and Rosenthal
+  formulate semigroup-action key exchange, including a common-image problem.
+  Our two individually noncommutative families commute with each other; their
+  elementary maps act on finite point sets. This is a concrete instance of
+  that broader design pattern, not a new agreement principle. It does not
+  establish a reduction to ordinary finite-field discrete logarithms.
+  [Semigroup actions](https://arxiv.org/abs/cs/0501017).
+
+* Hidden composition of tame polynomial transformations is also an old
+  cryptographic idea. Moh's TTM uses a secret factorization and a public
+  polynomial map. Our published objects are conjugated one-parameter maps,
+  and our secret per-message object is a word acting on a public point sample.
+  Those are real differences in inputs and mechanism, but the underlying
+  family resemblance is substantial. No distribution-preserving reduction in
+  either direction was proved. The source's historical security assertions
+  are not adopted here.
+  [Moh's original exposition](https://web.stanford.edu/class/ee380/9899fall/lect04X.html).
+
+* Ustimenko and Wroblewska study key exchange with polynomial maps whose
+  iterates have bounded degree. Their construction exchanges polynomial
+  iterates. Here only generators have bounded degree; words are evaluated
+  pointwise and their image samples are transmitted. We have not supplied a
+  translation between full maps and these samples, or between their exponent
+  distribution and our random-word distribution. Nonlinear polynomial maps
+  in a key exchange are therefore not, on their own, a novelty claim.
+  [Polynomial maps of stable degree](https://arxiv.org/abs/1304.2920).
+
+* Suzuki and Nuida improve a polynomial-map protocol that reconstructs a key
+  through constrained polynomial preimages. Our honest algorithm applies
+  permutations and uses commutation; it does not solve those preimage
+  equations. Merely writing our finite computations as polynomial equations
+  would not preserve their instance distribution or establish substantive
+  equivalence. Their correctness and security estimates do not transfer here.
+  [Polynomial-map protocol](https://arxiv.org/abs/2107.05924).
+
+The initial linear baseline has a relationship to the established linear
+decomposition literature. That connection was identified before the scope
+change and is retained only as provenance, without extending that investigation.
+[Myasnikov and Roman'kov](https://arxiv.org/abs/1412.6401).
+
+Sources were located using the actual mathematical objects: network response
+matrices, finite-field boundary behavior, electrical symplectic actions,
+nonlinear boundary relations, tame polynomial transformations, and polynomial
+key exchange. This was a targeted comparison, not an exhaustive review. No
+independence from established assumptions is proved. The strongest justified
+classification is an inspectable variant in polynomial-action research, with
+an explicit sampler and a correct agreement mechanism. Its status remains
+retained and unvalidated, rather than a new established hardness assumption.
+
+The next useful construction experiment is to reduce coefficient growth while
+keeping the setup factorization absent from public parameters. Compare a sparse
+cubic potential and a short stack of sparse nonlinear shears with the present
+dense cubic, recording exact coefficient support, generator degree, setup size,
+and honest agreement. Change one sampler feature at a time and preserve the
+existing profiles. This would resolve whether a practically sized public
+representation exists beyond these tiny examples. Smaller representations or
+greater nonlinear depth must not be reported as improved security without
+separate justification; that work is outside the current requested scope.

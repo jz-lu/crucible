@@ -4,16 +4,38 @@ Finding and attacking new crypto in the AI age.
 
 A working local foundation for shared-secret recovery challenges. The app has
 accounts, durable records, a server-owned hourly deadline, and exact answer
-verification. The current interface focuses on numerical results; the research
-records and API remain available for future work. Source is shared for collaboration.
+verification. The numerical challenge interface is joined by a minimalist Research notebook
+draft. The older research records and API remain available for future work. Source is shared for collaboration.
 The app also includes versioned KEM specifications, private proposal intake,
-immutable revisions, and manual review before trusted integration.
+immutable revisions, and manual review before trusted integration. New approvals
+and admissions require a structured tier-design plan covering parameter growth,
+costs, fixed correctness, endpoint evidence and useful intermediate steps. They
+also require an explicit parameter-selection objective, candidate domain, attack
+model and alternatives, with a separate manual assessment. See
+[the admission requirements](docs/protocol-admission.txt).
 The hosted service has not been deployed and is not ready for public operation.
 
-DH release 6 and RSA release 3 provide tiers 1–50. Their frozen classical
-reference targets rise evenly from 8 bits at Tier 1 to 128 at Tier 50:
+The expanded local catalogue has eight family pages. Research stages for
+elliptic-curve DH, plain LWE/Frodo, module lattices, NTRU Prime, HQC and Classic
+McEliece are explicitly separated from exact published reference releases.
+There are 345 current profiles: DH, RSA, elliptic-curve DH and Classic McEliece
+have 50 each; module lattices have 11; Frodo has 80; NTRU Prime and HQC have 27 each.
+Six new releases improve parameter selection or remove representation overhead.
+The available configurations and the default human progression are separate.
+Default progressions use 50 stages for DH, RSA, elliptic-curve DH and McEliece,
+10 for module lattices, 80 for Frodo, and 25 each for NTRU Prime and HQC.
+The five intermediate configurations remain accessible; no protocol parameters
+were changed to obtain rounded display counts.
+Stage numbers do not imply equal security across families.
+See [the current stage progressions](docs/stage-progressions.txt), then
+[the expansion decision record](docs/tier-expansion-decisions.txt) and its
+scheme-specific implementation evidence.
+
+DH release 7 and RSA release 4 provide stages 1–50. Their frozen classical
+reference targets rise evenly from 8 bits at Stage 1 to 128 at Stage 50:
 `8 + 120(t - 1)/49`. Actual parameter-derived references are plotted, including
-rounding. This restricted rho/NFS model is not a best-known attack estimate or a
+rounding. DH also includes interval search for its new, explicit short-exponent
+distribution. This restricted model is not a best-known attack estimate or a
 security guarantee. Existing releases, records, accounts and sign-ins remain
 unchanged; old recoveries do not automatically qualify for the new ladder.
 
@@ -22,14 +44,22 @@ Each scheme opens four graphs. Public-key and ciphertext sizes are fixed; the
 lower cards switch among computation costs and classical/quantum estimates.
 Timing and quantum estimates remain empty until supported evidence exists.
 The second tab is a participant Leaderboard; usernames link to
-profiles with score breakdowns and original recovery receipts. See
-the **First 10 milestones** candidate on profiles for standout early results and
-expandable history; it adds recognition without changing points. See
+profiles with score breakdowns and original recovery receipts. **Personal
+records** shows one highest recovered stage per scheme; **First to reach** shows
+one highest first-place result per scheme. These can be different results.
+Current releases take priority over archives, and incompatible release stages
+are never compared. Full receipt history and the legacy First 10 API remain. See
 [the provisional scoring policy](docs/scoring.txt) for the accepted formula and
-reviewed scheme-admission awards. Policy v2 gives record bonuses to first place
-only, while preserving everyone's personal-progress points. Each tier features
+reviewed scheme-admission awards. Policy v6 enrolls all eight current research
+families: 10 times the highest frozen configuration credit, plus one bonus of 40 times
+the highest first-place configuration credit, per scheme. Displayed stages can
+differ from those original weights; changing a route does not change points. Exact-profile schemes keep independent
+first places; only DH, RSA and the EC ladder inherit lower-tier places. Repeats
+and intermediate steps add no cumulative points. These are participation points,
+not equivalent security levels. Policy v2's original two-family enrollment and
+the former First 10 profile display are superseded. Each stage features
 one **Broken by** record with links to the participant and original evidence;
-unsolved tiers offer a direct path to the challenge. Shared-secret length remains
+unsolved stages offer a direct path to the challenge. Shared-secret length remains
 a protocol fact.
 
 An issued challenge makes **Use with an agent** the main action. It opens a
@@ -42,9 +72,26 @@ required. See [the agent workflow](docs/agent-workflow.txt). Code is stored as
 evidence and never executed by the server; reported compute is not independently
 verified. The browser profile lets participants revoke connected agents.
 
+## Research notebook draft
+
+Open **Research notebook** in the main navigation (`/#notebook`). Titles expand
+into tags and a claim; **Read full note** opens the conditions and full argument.
+The six initial notes are illustrative examples, not assessments of the live KEMs.
+Draft tools supports local note revisions and JSON exchange with an agent.
+
+For this checkpoint, notes are stored only in the current browser, not in accounts
+or a shared database. Export a copy to keep a portable backup. Shared storage,
+review permissions and the model-facing API are deliberately still provisional.
+Dedicated pages such as Schemes can later explain selected notes alongside their
+built-in data; there is no generic Visualizations tab. See
+[the notebook's scope and design boundaries](docs/research-notebook-draft.txt).
+
 ## Run locally
 
-Requires Python 3.11 or newer. From this checkout:
+Requires Python 3.11 or newer. The expanded catalogue also needs the reviewed
+native reference workers. On a new checkout, first follow
+[native setup](docs/native-setup.txt); these downloads and builds are explicit,
+and the server never compiles or runs submitted participant source. Then:
 
 ```sh
 ./run.sh
@@ -65,12 +112,13 @@ The launcher makes local files private to the current OS user.
 ## Try a complete challenge
 
 1. Choose a KEM from the catalogue to open its overview and graph grid.
-   View challenges opens its leaderboard at the next not-yet-recovered tier.
-   Click a nearby tier, drag the slider, or use Jump to for any supported
-   integer. Jump to starts empty; the rail and slider show the selected tier.
+   View challenges opens its leaderboard at the next not-yet-recovered stage.
+   Click a nearby stage, drag the slider, or use Jump to for any supported
+   integer. Jump to starts empty; the rail and slider show the selected stage.
    Leaving the field blank does nothing. A dot marks the next unsolved target; the return button takes you
-   there and hides while it is selected. Earlier tiers are shaded light green.
-2. Open Challenge and request your first instance. Other tiers in this scheme’s
+   there and hides while it is selected. Green marks recorded stages; lower-tier
+   inheritance is used only where that release explicitly declares it.
+2. Open Challenge and request your first instance. Other stages in this scheme’s
    current round load automatically when opened in Challenge. Reloading reuses the
    same instance; a new hourly round requires a fresh explicit start. The timer
    shows the shared UTC round boundary; joining later leaves less time.
@@ -86,8 +134,8 @@ The launcher makes local files private to the current OS user.
    file or fill the form. The small examples also have public-input solvers:
 
    ```sh
-   python3 scripts/solve_teaching.py /path/to/dh-challenge.json
-   python3 scripts/solve_rsa.py /path/to/rsa-challenge.json
+   python3 scripts/solve_teaching_frontier.py /path/to/dh-challenge.json
+   python3 scripts/solve_rsa_frontier.py /path/to/rsa-challenge.json
    ```
 
    Use only the script matching the downloaded scheme. The DH solver bounds the
@@ -95,23 +143,26 @@ The launcher makes local files private to the current OS user.
    to 36 bits. These are physical parameter limits, not challenge-tier limits.
    Larger inputs are available for participants' own methods. The examples print
    a candidate key and do not submit it.
-   Submit the full 32-byte key, method/pseudocode, and compute declaration. You can
+   Submit the full shared secret in the length declared by that challenge,
+   method/pseudocode, and compute declaration. You can
    enter these manually or import a `crucible-recovery-v1` JSON result file of at
    most 128 KiB through **Manual tools**. The template includes
-   complete instructions. A file for another tier selects its exact owned, open
+   complete instructions. A file for another stage selects its exact owned, open
    instance automatically. Import fills editable fields for review; it never
    submits an answer.
    A well-formed answer is final. Immutable methods can be reused in later rounds.
-6. A matching answer qualifies for that tier and lower-tier boards in the same
-   release, subject to the explicit release-compatibility rules. Each board keeps
+6. A matching answer qualifies for its exact stage. DH, RSA and elliptic-curve DH
+   additionally inherit lower-tier standings within the explicitly registered
+   release; other current families do not infer lower-tier recovery. Each board keeps
    the first ten distinct accounts by their earliest qualifying receipt. Inherited
-   credit is labelled "via tier N"; click it to read the actual recovery's method
+   credit is labelled "via stage N"; click it to read the actual recovery's method
    and compute details. The server verifies the key and receipt deadline; method
    and compute remain contributor-reported.
 
 The catalogue's Recovered by column identifies the earliest successful account
-at the displayed largest recovered tier. Clicking the name opens that exact
-receipt's method, pseudocode, reported compute, tier, and original release.
+at the displayed largest recovered stage. Clicking the name opens the participant
+profile; individual receipt links show the method, pseudocode, reported compute,
+stage and original release.
 The catalogue orders schemes by participant count descending, alphabetically on
 ties. This is activity ordering, not a security ranking. Its Participants
 count is the number of distinct accounts with at least one recorded recovery
@@ -119,9 +170,9 @@ attempt, correct or incorrect. It excludes challenge requests/downloads, draft
 imports and rejected requests. Accounts are counted once across profiles and
 rounds, using only the exact release and explicitly compatible source profiles
 from other releases. This is participation, not a count of verified independent
-people or successful attacks. Recorded recovery tiers do not determine order;
-each scheme retains its own recovery leaderboards. Largest recovery shows Tier N.
-Its question-mark button explains the tier reference and its limits; it is no
+people or successful attacks. Recorded recovery stages do not determine order;
+each scheme retains its own recovery leaderboards. Largest recovery shows Stage N.
+Its question-mark button explains the stage reference and its limits; it is no
 longer beside the challenge selector or below the KEM Schemes title. The
 Participants explanation is available in its header tooltip, without an extra
 paragraph below the table.
@@ -132,13 +183,13 @@ the full contract. Public inputs remain in the download; the page omits the raw
 input disclosure and opening pitch. The footer contains only the blue flame-and-key logo
 and Crucible name.
 
-My submissions labels entries with the scheme name and tier in parentheses,
-as “Tier N”, followed by the recorded method and receipt time; it omits the internal
+My submissions labels entries with the scheme name and stage in parentheses,
+as “Stage N”, followed by the recorded method and receipt time; it omits the internal
 round number. Each entry opens its own submission details, including unsuccessful
 attempts. Correct results are publicly readable at `GET /api/submissions/{id}`;
 incorrect results are visible only to their owner. The endpoint excludes submitted
 keys and private verification data, and preserves the original frozen tier/version
-even when a compatible release or smaller tier inherits leaderboard credit.
+even when a compatible release or smaller stage inherits leaderboard credit.
 
 The About us navigation link opens an empty page template. Add project copy inside
 `#about-workspace` in `web/index.html`; its collaborator comment marks the space.
@@ -166,17 +217,17 @@ score, or inference that an expired challenge is a failed investigation.
 
 Catalogues are curated in code. Arbitrary uploaded code is never executed.
 
-Scoring is not implemented, and no final formula has been adopted. The foundations
-are explicit recovery receipts, method/compute declarations, release provenance,
-and manual scheme review. Rewards for accepted new schemes, personal progress
-and first breakthroughs remain goals for deliberate incentive analysis, including
-repetition and multiple-account risks. Proposal approval does not award points.
+Scoring is implemented under the explicitly provisional policy above. Recovery
+points are derived from verified receipts; scheme contribution points require
+separate independent admission. Proposal approval alone never awards points.
+Frozen configuration credits have different meanings and point ceilings across families; the current
+formula rewards participation, not equivalent security or scientific merit.
 
 ## Propose and review a KEM
 
 The proposal workflow uses one `crucible-kem-spec-v1` JSON format for new
-proposals and descriptions of the exact registered DH/RSA releases. It covers
-setup/key generation/encapsulation/decapsulation, parameters and tier mappings,
+proposals and descriptions of exact registered releases. It covers
+setup/key generation/encapsulation/decapsulation, parameters and stage mappings,
 distributions and reused state, encodings, correctness scope and evidence,
 security claims, and optional implementation/reference links. The file and its
 canonical form must fit 48 KiB; the complete API request must fit 64 KiB.
@@ -187,6 +238,25 @@ intake. Format validation checks the document's structure and label consistency;
 it does not verify correctness, security, executable conformance, or novelty.
 The checked document is submitted explicitly by a signed-in author and stays
 private to that author and configured reviewers.
+
+Choose **Use with an agent** on the proposal page for a copyable handoff, or use
+the CLI directly:
+
+```sh
+python3 scripts/crucible_cli.py proposal init --path my-proposal
+# Fill in my-proposal/specification.json with your agent.
+python3 scripts/crucible_cli.py proposal validate --path my-proposal --json
+python3 scripts/crucible_cli.py proposal submit --path my-proposal --json
+python3 scripts/crucible_cli.py proposal show PROPOSAL_ID --json
+python3 scripts/crucible_cli.py proposal revise PROPOSAL_ID --path my-revision
+```
+
+Drafting and format checks need no account. Submission uses the same browser
+connection as the challenge workflow; connections created before proposal support
+need a new `login` to grant the additional permissions. Agent proposal access is
+owner-only, even for reviewer accounts. Manual upload is under **Manual tools**.
+The [agent workflow](docs/agent-workflow.txt) explains feedback, revisions, private
+workspaces and safe retries. Neither path executes supplied code or admits a scheme.
 
 - `GET /api/protocol/spec-schema` — JSON Schema.
 - `GET /api/protocol/spec-template` — annotated, intentionally incomplete template.
@@ -205,10 +275,16 @@ private to that author and configured reviewers.
 Each immutable revision has a canonical SHA-256. Review decisions bind to its
 exact revision, content hash, and implementation artifact hash. Independent
 reviewers record checks for specification completeness, correctness,
-implementation conformance, input/resource safety, and reproduction, with notes
-and concrete evidence. Approval requires all checks, a pinned implementation,
-and an explicit correctness claim. These are manual assessments, not automated
-proofs. Authors cannot review their own proposals. Changes requested and later
+implementation conformance, input/resource safety, reproduction, stage design and
+parameter selection, with notes and concrete evidence. Approval requires all
+checks, a pinned implementation and an explicit correctness claim. These are
+manual assessments, not automated proofs. Authors normally cannot review their
+own proposals. A configured reviewer can test their own proposal locally by
+starting development with `CRUCIBLE_ALLOW_SELF_REVIEW=true`; this defaults off
+and is rejected in production. Such decisions are visibly marked **Development
+self-review** and cannot satisfy independent admission or earn contribution
+points. Reviewer authorization and all normal evidence requirements still apply.
+Changes requested and later
 approvals remain in the audit history; every new revision returns to `submitted`
 and cannot inherit an earlier approval.
 
@@ -222,7 +298,7 @@ reviewed code as a registered adapter, an operator can run:
 ```
 
 This read-only gate checks the approved snapshot and review, source fingerprint,
-release, tier coverage, and declared fixed shared-secret length. Activating a
+release, exact configuration coverage, and declared fixed shared-secret length. Activating a
 scheme remains a separately reviewed code change. Existing teaching schemes and
 their historical records are not retroactively labelled reviewed.
 
@@ -240,96 +316,75 @@ the local file. Registering a matching name later never grants reviewer access.
 See [specification format](docs/protocol-specification.txt) and
 [review/admission procedure](docs/protocol-admission.txt) for the full contract.
 
-## Challenge tiers and the included KEMs
+## Challenge stages and the included KEMs
 
-The common selector is an integer **challenge tier**, distinct from the physical
-parameter bit length. The new candidate releases share a frozen initial target
-curve: tiers 1–25 target 8–32 reference bits in one-bit steps; tiers 26–50 target
-35.84–128 in 3.84-bit steps. Each tier maps to exact registered parameters.
+The selector is an integer **challenge stage**, distinct from parameter bits and
+estimated security. Every stage names an exact registered setting on a versioned default route.
+Other configurations remain available by stable profile ID. Existing `instance_size`
+and `--tier` selectors retain their original configuration meaning; use `--stage`
+for the displayed progression, or `--profile-id` for any exact configuration. A roughly
+128-bit upper reference is an initial aim where supported; natural stage counts,
+unestimated small profiles and explicitly provisional endpoints remain valid.
 
-| Catalogue name | Candidate release | Supported tiers | Physical parameter mapping |
+| Catalogue family | Current release | Stages | Selection or representation change |
 | --- | --- | --- | --- |
-| Finite-field Diffie–Hellman | `teaching-dh-kem` / 5 | Every integer 1–50 | Prime field size 32–3072 bits; subgroup order has ceil(field bits / 2) + 1 bits |
-| RSA over an integer modulus | `rsa-kem` / 2 | Every integer 1–50 | Balanced RSA modulus size 32–3072 bits |
+| Finite-field DH | `teaching-dh-kem` / `7` | 1–50 | Certified fields; explicit shorter exponent intervals include interval-search cost |
+| RSA | `rsa-kem` / `4` | 1–50 | Same balanced certified factors; three-byte exponent encoding removes padding |
+| Elliptic-curve DH | `dhkem-x25519` / `curve-compressed-v2` | 1–50 | Same certified curves and full scalars; compressed point encoding |
+| Module lattice | `ml-kem` / `packed-research-v3` | 1–10 (11 configurations) | Same mathematical profiles; lossless coefficient bit packing |
+| Frodo | `frodokem` / `anchor-research-v3` | 1–80 | Every dimension 8..640 by 8; preserves the published 640 anchor |
+| Streamlined NTRU Prime | `sntrup` / `3` | 1–25 (27 configurations) | Bounded byte-cost selection from 103 certified candidates using a hybrid-inclusive reference |
+| HQC | `hqc` / `growth-research-v2` | 1–25 (27 configurations) | Supported codec/ring size minimized at each chosen weight; security frontier uncalibrated |
+| Classic McEliece | `classic-mceliece` / `length-research-v1` | 1–50 | Existing shortened-code path retained; equal-security parameter efficiency unresolved |
 
-The `classical-baseline-v1` reference takes the minimum of a generic rho term
-and a normalized NFS leading term, anchored at 3072 bits → 128 reference bits.
-For RSA the rho term is one quarter of the modulus bit length; for DH it is
-one half of log2 of the actual subgroup order. This restricted model omits ECM,
-other attacks, and important cost constants. It is not a best-known attack
-estimate, equal real-world difficulty, an hourly success prediction, a security
-lower bound, or an IND-CPA/IND-CCA claim. Classical and quantum costs remain
-separate. See [the frozen model, references and limitations](docs/security-calibration.txt).
-An accepted key records one recovery; it does not by itself contradict the model.
+These 345 profiles are not a claim that all eight ladders are optimal. A bounded
+search needs a stated objective, preserved construction and correctness,
+candidate domain, attack coverage and evidence. Smaller wire objects can cost
+more decoding work. Unknown estimates cannot be treated as low security or used
+to prove dominance. A new proposal must explain these choices explicitly.
+See [the parameter review](docs/parameter-frontier-review.txt),
+[classical changes](docs/classical-parameter-frontier.txt),
+[lattice changes](docs/lattice-parameter-frontier.txt),
+[NTRU selection](docs/ntru-parameter-frontier.txt), and
+[HQC/McEliece limits](docs/code-parameter-frontier-review.txt).
 
-Both adapters output 32-byte shared secrets independently of tier and are
-unsuitable for protecting information. They use custom transcript-bound SHA-256
-KDFs and variable-time Python arithmetic. RSA does not claim standardized RSA-KEM
-conformance. Manifests and downloads retain the exact tier in `instance_size`,
-physical size in `parameter_bits`, parameters, encoding, source hash, release,
-correctness scope, and frozen initial estimate. Automation can select a challenge
-with `{"scheme_id":"teaching-dh-kem","instance_size":21}` or the corresponding
-`profile_id`; send exactly one selection form.
+The current implementations are local research constructions, not deployment
+libraries or inherited security guarantees from their named families. Published
+reference releases remain separate. Frodo keeps one common honest-failure bound
+of 2^-133 in its declared model; the other current ladders retain perfect
+mathematical honest agreement. Resource aborts and implementation faults are
+separate. Passing samples do not prove these correctness claims or confidentiality.
 
-DH release 5 uses offline-generated, embedded prime-field and subgroup parameters
-with exact recursive Pocklington certificates. The prime subgroup order divides
-p−1 and its square exceeds p; the registered generator has that exact order.
-The public group remains deliberately shared across accounts and rounds at each
-tier, while new instances use fresh secret and encapsulation exponents. This
-allows legitimate group-specific preparation and its amortization across targets.
-The generation procedure is reproducible and structured, not uniform over all
-possible groups. Source and parameter artifacts are pinned.
+Each overview has four graphs with Challenge stage on the horizontal axis.
+Public-key/ciphertext bytes come from canonical binary encodings, excluding
+JSON/hex wrappers and separately registered shared parameters. RSA now counts
+one modulus-width integer plus the three-byte exponent. Computation metrics have
+no invented timings. Classical references display only supported values;
+unsupported/quantum estimates remain empty. The red marker shows the largest
+actual recovery, not a proof that every smaller profile or instance is solved.
 
-RSA release 2 generates fresh balanced prime factors for every new key. Private
-recursive Pocklington certificates prove primality exactly, with trial division
-at the leaves; primality is proved rather than accepted probabilistically. The
-structured distribution
-is not uniform over all primes. Generation is bounded by a shared candidate cap,
-factor-pair cap, and five-second monotonic deadline checked between bounded
-operations and before returning a key. This is not a hard real-time SLA. Exhaustion
-returns no instance and can be retried explicitly; it is separate from correctness.
-Generation runs outside the database writer transaction, with identity, round,
-source and duplicate-issuance checks repeated before saving.
+Exact challenge downloads retain version, profile ID, parameter values, encoding,
+source/artifact hashes, correctness scope and any frozen initial estimate.
+Automation selects a default stage with `crucible_cli.py init teaching-dh-kem --stage 21`,
+or any exact configuration with `--profile-id`. Direct API callers resolve the
+versioned default_progression mapping from `/api/schemes` and send its exact
+`profile_id`. Legacy `instance_size` and `--tier` retain their original configuration
+selectors, which can differ from the new stage numbers; send one selection form. Shared-secret length is a protocol fact, independent of
+the displayed stage. The server verifies the complete secret before the hourly
+deadline; elapsed time is not a compute budget.
 
-Both correctness arguments establish perfect agreement for honest inputs under
-the registered arithmetic and encodings, conditioned on successful key generation.
-RSA's CRT argument includes nonunit encapsulation values. Implementation tests
-check executable behavior; neither those tests nor prime certificates certify
-confidentiality or production security. A correctness mismatch or unexpected
-adapter fault records an incident and pauses issuance, without retrying until
-an agreement succeeds. Independent admission review remains pending.
-
-Each scheme overview has a two-by-two graph grid with Challenge tier on each
-horizontal axis. The first two cards show public-key and ciphertext bytes.
-Values come
-from exact release metadata and are also in expandable keyboard-accessible tables.
-Counts use canonical binary encodings, excluding JSON/hex wrappers and registered
-shared domain parameters. DH counts one field element for each public key and
-ciphertext; RSA counts two modulus-width integers for the public key (including
-padded e), and one for ciphertext. These are representation costs, not security.
-
-The computation card offers key generation, encapsulation and decapsulation but
-has no fabricated timings. The security card shows the frozen classical reference
-for calibrated releases; quantum and unsupported archived estimates remain empty.
-All graph cards mark the largest actual recorded recovery when one exists. The
-marker emphasizes that record; it is not evidence that every lower tier or
-instance was solved. Overview notes are temporarily hidden to keep the page
-focused; protocol/source descriptions retain the underlying facts. Browsing
-never issues a challenge, and returning through the overview preserves the
-selected profile and release.
-
-Old DH releases 1–4 and RSA release 1 remain unchanged, with their original source
-hashes, ranges and parameter meanings. Earlier explicit DH compatibility remains
-an archive rule. DH 5 and RSA 2 have new profile identifiers and KDF domains;
-old bit-length tiers are not relabelled as calibrated tiers or folded into their
-new boards. The separately authorized local activity reset was completed after
-a private backup. Existing accounts, sign-ins and server secrets were preserved;
-no database, credentials, session records or backup files belong in Git.
+Previous releases keep their identifiers, artifacts and original receipts.
+Current policy does not transfer old results to the six replacements or silently
+reinterpret their stages. Earlier explicit DH compatibility remains an archive
+rule. Accounts, sessions and server secrets are preserved; database files,
+credentials and backups never belong in Git.
 
 ## Development and verification
 
-Current verification: 508 backend tests and 118 frontend groups passed, plus
-isolated browser workflows and read-only live desktop/mobile checks.
+Run the backend, browser and migration checks for the current revision. Exact
+completed validation and deployment checkpoints are recorded in
+[the running work list](docs/work-list.txt); earlier counts describe those
+historical revisions, not the current full suite.
 
 ```sh
 .venv/bin/python -m pytest -q
@@ -338,38 +393,20 @@ node tests/test_recovery_upload.cjs
 node tests/test_math.cjs
 node tests/test_round_access.cjs
 node tests/test_submission_details.cjs
+node tests/test_notebook_store.cjs
 .venv/bin/alembic check
 .venv/bin/python -m crucible.manage cleanup
 ```
 
-The latest agent-workflow checkpoint passes 732 backend/CLI cases and 143 frontend
-checks, including device authorization, revocation, immutable source snapshots,
-retry behavior, and additive migrations. Isolated Chrome and a real CLI run
-exercise approval through an accepted RSA recovery and downloadable evidence.
-
-Tests cover recovery, auth and ownership, CSRF, input privacy, concurrent
-issue/submit, idempotency, completed-body receipt timing, exact hourly boundaries,
-correctness incidents, release compatibility, ranking, research revisions,
-navigation, and result-file import. Cleanup removes expired sessions and rate
-counters, retaining research and proposal records. The previous verified
-checkpoint passed 392 backend tests and 115 frontend groups: 37 navigation/overview, 34 upload,
-11 round-access, 9 submission-detail, and 24 proposal/review groups. Isolated
-Chrome verified upload, format errors, registration with a retained draft,
-submission, requested changes, author revision, exact-hash approval, audit history,
-privacy, and desktop/320px layouts. Approval left the live catalogue unchanged.
-Earlier isolated checks cover both KEMs from public-input solving through file
-review and accepted recovery. These checks validate workflows, not cryptographic
-security. That checkpoint was deployed locally on port 8000; the calibrated batch
-above passed 508 backend tests and 118 frontend groups, and is now deployed
-locally after isolated/live browser verification. Migration 0003
-preserved all existing rows in ten application tables; sources and catalogue
-records were unchanged in that rollout. The authorized countableclouds account
-has reviewer access.
-Additional browser checks covered exact chart values, metric switching, then-empty
-timing/security templates, archived releases, participant order, moved tier help,
-and 320px/768px/
-1440px layouts. Upstream logo/theme commits through acefcb9 were merged while
-preserving local work. See the running work list for remaining work.
+Checks cover public-input recovery, auth/ownership, CSRF, answer privacy,
+concurrency, idempotency, hourly deadlines, correctness incidents, immutable
+archives, scoring, parameter-selection review and development-only self-review.
+The new adapters add independent arithmetic/native conformance, exact correctness
+certificates, canonical-encoding rejection and public CLI examples. Tests
+validate the specified workflows and evidence boundaries; they are not security
+certification. Cleanup removes expired sessions/rate counters while retaining
+research and proposal records. Historical browser and migration results remain
+in the work list.
 
 The stack is FastAPI, SQLAlchemy, Alembic, Argon2id, and plain HTML/CSS/JavaScript.
 Configuration comes from process environment; `.env.example` is documentation,
@@ -383,6 +420,7 @@ readiness**: identity/recovery policy, abuse/moderation, hosting limits, proxy
 trust, monitoring, backups, and independent admission/security review remain.
 
 - [Architecture and API](docs/architecture.txt)
+- [Private beta and public hosting direction](docs/hosting-plan.txt)
 - [Current and remaining decisions](docs/implementation-v1.txt)
 - [Correctness policy](docs/correctness-policy-v0.txt)
 - [Design principles and decisions](docs/design-record.txt)
@@ -390,7 +428,7 @@ trust, monitoring, backups, and independent admission/security review remain.
 - [Recovered-key submission files](docs/submission-files.txt)
 - [KEM specification format](docs/protocol-specification.txt)
 - [Manual protocol review and admission](docs/protocol-admission.txt)
-- [Frozen classical reference model](docs/security-calibration.txt)
+- [Frozen classical reference models](docs/security-calibration-v1.txt)
 - [Contributing](CONTRIBUTING.md)
 
 `prototype/` preserves the earlier static draft. Its illustrative records and

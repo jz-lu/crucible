@@ -1,0 +1,112 @@
+Current-policy correction — 16 October 2026
+Frodo now uses anchor-research-v3 through640 (80 natural settings), restoring the
+published reference endpoint. There are345 current profiles. See
+frodo-anchor-ladder.txt; the v2 decision below is preserved as historical reasoning.
+Scoring policyv6 changes only the Frodo enrollment. Zero failure is not required:
+a common accepted statistical correctness bound is sufficient.
+
+Parameter selection review — 16 October 2026
+
+Decision
+
+Select efficient parameters under a declared construction, correctness constraint,
+attack model and cost objective. Require alternatives and evidence; do not require
+an unsupported claim of global optimality. Correctness is fixed across a ladder
+as a common guarantee; extra security must not be manufactured by degrading that
+guarantee or padding a cost metric.
+
+There may be several defensible choices: public-key size, ciphertext size, memory
+and computation need not improve together. Unknown estimates remain unknown.
+Restricted candidate searches must name their restrictions. A parameter family
+with unresolved attack calibration cannot claim an equal-security frontier.
+
+Current dispositions
+
+  DH / 7: 50 profiles. Same certified fields, shorter explicitly bounded exponent
+    intervals, interval-search reference included. Fixed correctness 0.
+  RSA / 4: 50 profiles. Same factoring instances, compact explicit public exponent.
+    Fixed correctness 0.
+  Elliptic-curve DH / curve-compressed-v2: 50 profiles. Same curves/scalars,
+    compressed point representation; smaller wire sizes, added decoding work.
+    Fixed correctness 0.
+  Module lattice / packed-research-v3: 11 profiles. Same mathematical contracts,
+    lossless coefficient bit packing. Fixed correctness 0.
+  Frodo / frontier-research-v2: 74 profiles, n=8..592 by 8. First candidate meeting
+    the restricted planning ceiling; complete finite dimension sweep. Common
+    honest-failure envelope 2^-133. Not a deployment recommendation for n592.
+  NTRU Prime / 3: 27 profiles from 103 certified candidates, including unestimated
+    introductory profiles. Hybrid-inclusive classical free-memory reference;
+    minimizes public-key plus ciphertext cost in that domain. Published sntrup653
+    endpoint. Fixed correctness 0.
+  HQC / growth-research-v2: 27 profiles retained. Exact byte minimum across the
+    supported codec domain at each chosen weight, fixed correctness 0. Weight is
+    not security; a calibrated equal-security frontier remains unresolved.
+  Classic McEliece / length-research-v1: 50 profiles retained. Fixed(m,t) shortening
+    path, fixed correctness 0; the broader equal-security frontier is unresolved.
+
+Total: 339 current profiles in eight families. Six receive new immutable releases;
+the two unresolved code families retain their existing contracts and visible
+qualification. No global efficiency claim is made for any family.
+
+What the review found
+
+The NTRU search is a useful failure case for blindly optimizing an estimator.
+Under the nonhybrid model, a sparse (653,2311,144) candidate appeared to exceed
+130 reference bits. Adding the supported hybrid attacks reduced its reference
+to about 120.31. The selected published (653,4621,288) tuple remains about 129.23
+under that broader but still incomplete model. Independent evaluation against
+the authors' Sage estimator agrees numerically. Omitted attacks remain omitted;
+agreement with a model is not evidence that the model is complete.
+
+For McEliece, broadening m/n/t yields a much smaller tuple at a similar elementary
+Prange trial count. That is evidence against global optimality under that proxy,
+not evidence of equal actual security: low-degree structure and improved decoding
+must be checked before implementing it. HQC has a similar missing-calibration
+boundary. Preserving the existing challenge with an explicit limitation is more
+honest than silently optimizing against the wrong comparison.
+
+The Frodo stop at n592 likewise belongs to a limited planning model. Its message
+enumeration cap and lattice Core-SVP estimates use different work units. Published
+Frodo640 has a broader rationale; this pass does not establish it is wasteful.
+
+Proposal and review contract
+
+New approval/admission requires tier_design.parameter_selection: the objective,
+fixed constraints, pinned model, bounded candidate domain, comparison evidence,
+alternatives and uncertainty. It has its own review check. Draft and historical
+specifications may omit the field without changing their canonical fingerprints.
+Validation checks the structure and bounds of the evidence; reviewers must judge
+the mathematics and implementation. Submitted prose is not executed as code.
+
+Self-review is available only to configured reviewers with the explicit local
+development setting CRUCIBLE_ALLOW_SELF_REVIEW=true. Production rejects that
+setting. An own-proposal approval is permanently marked test_only_self_review;
+it cannot admit a live scheme or grant scheme contribution points. This permits
+testing the workflow without confusing it with an independent review. The local
+.local/start-server.sh launcher preserves the requested testing setting.
+
+History and scoring
+
+Keep all accounts, sign-ins, stored challenges, submissions and original adapter
+sources. A new release is a new mathematical or serialization contract: no old
+recovery is automatically reinterpreted or credited against it. Archived evidence
+remains available; current leaderboards/points use the new release enrollment.
+Consequently a user's current total can fall when a prior release is archived.
+
+Scoring policy v5 keeps the chosen formula: 10 times personal highest tier plus
+40 times highest qualifying first-recovery tier per scheme family. It supports
+all natural tiers, including Frodo's 74. Counts differ between families, so the
+provisional points are an incentive rule, not normalized cryptanalytic impact.
+
+Evidence and detailed reasoning
+
+  docs/classical-parameter-frontier.txt
+  docs/lattice-parameter-frontier.txt
+  docs/lattice-parameter-frontier.json
+  docs/ntru-parameter-frontier.txt
+  docs/ntru-frontier-estimator-calibration.json
+  docs/code-parameter-frontier-review.txt
+  docs/code-parameter-frontier-audit.json
+  docs/protocol-admission.txt
+
+No public hosting, database reset, Git commit or push is part of this pass.

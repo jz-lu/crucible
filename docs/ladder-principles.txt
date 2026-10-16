@@ -1,0 +1,111 @@
+Configuration and stage design — accepted direction, 16 October 2026
+
+The scheme defines a mathematical construction and its admissible configurations.
+A configuration is an exact parameter set, or the output of a fully specified
+reviewed generation rule within a declared domain. It has a stable identity.
+A challenge instance is one freshly sampled public key/ciphertext at that
+configuration. These are different objects.
+
+The default progression is the ordered path through reviewed configurations that
+people see first. A stage is a configuration's ordinal position on that versioned
+path. Stages help navigation; they are neither security bits nor a universal unit
+of difficulty. Different schemes can have different numbers of stages. Include
+all useful natural configurations where appropriate. Prefer a default-stage count
+in multiples of ten, or five when that fits the natural settings better, when a
+useful route can be selected without changing the cryptography. This is a human
+presentation preference, not an admissibility requirement or a fixed 50 target.
+Keep reviewed configurations omitted from the default route accessible as optional
+settings; do not lose their identities, evidence or recovery credit. A scheme can
+describe alternative tradeoff paths without multiplying catalogue entries.
+
+Principles for constructing and reviewing a progression
+
+1. Identity first. Declare the mathematical family, complete distributions, KEM
+   transform, challenge game and shared setup. Preserve the intended construction
+   as faithfully as possible. Dimension, modulus, noise and compression may need
+   coordinated adjustment. A changed distribution or transform needs explicit
+   justification; a favorable estimator result alone is insufficient. Short-
+   exponent DH remains an explicit variant requiring review under this principle,
+   not a neutral encoding change.
+
+2. Honest scaling. Use the declared construction rule at natural parameter
+   settings. Do not introduce specially easy keys, leaked bits, artificially
+   restricted randomness or selective resampling to manufacture reachable stages.
+   A genuinely smaller native input space may be inherent; disclose when generic
+   enumeration becomes the best attack. Small-parameter attacks need not
+   extrapolate to larger instances. Small-instance recovery alone is not evidence
+   against the published endpoint or its security assumption.
+
+3. Stable correctness contract. Choose an acceptable strong common failure upper
+   bound and justify that every admitted configuration meets it, including any
+   off-route configuration. Zero failure is allowed, not required; equal actual
+   probabilities are not required. Publish stronger individual bounds and material
+   variation, rather than conceal them under a loose envelope. Keep availability
+   and resource aborts separate. Do not silently change perfect to statistical
+   correctness within a frozen release. No universal numeric threshold for all
+   constructions has been adopted; the chosen bound and scope require review.
+
+4. Defensible efficiency. Specify workload and communication/computation/memory
+   objectives. Reject demonstrably inferior choices within the declared family,
+   correctness contract and attack model, allowing justified reference anchors.
+   Several tradeoffs may be legitimate. Finite searches and incomplete models do
+   not establish global optimality. Fidelity comes before optimization of a proxy.
+   Increased cost is a real tradeoff, not a goal to engineer into every step.
+
+5. Reference endpoint and stable evidence. Retain a published or approved reference
+   configuration where one exists; new proposals justify their own endpoint and
+   claims. Record exact configuration identity, progression revision and security
+   evidence revision separately. An improved estimate does not change the sampled
+   problem. Inserting a stage cannot rewrite configuration identities or past
+   receipts. A new distribution, transform or encoding needs a distinct executable
+   release. Preserve fixed instances, source identity and historical evidence.
+   The Frodo plot's old 128 ceiling is not evidence that 640 is dominated by 592.
+
+6. Useful natural progression. Choose steps after defining the family, guarantee
+   and cost rules. Favor meaningful increments and measure approachable settings
+   where possible. Neither equal counts nor linear security spacing is required.
+   Natural settings can still be coarse; report gaps and uncertainty rather than
+   fill them with artificial problems or invented solve-time estimates. A default
+   progression need not exhaust all admissible configurations. Conversely, useful
+   natural configurations need not be hidden merely to reduce the stage count.
+
+Construction sequence
+
+  Define the family, reference endpoint, invariants and challenge game.
+  Declare the common correctness envelope and resource objectives.
+  Enumerate admissible configurations or specify a reviewed generation domain.
+  Compare relevant attack and resource evidence, preserving uncertainty.
+  Select a justified default progression and explain any useful alternatives.
+  Assign stage ordinals and publish exact mappings, identities and revisions.
+
+Proposal and implementation scope
+
+These recommendations belong in the existing proposal fields and manual review:
+parameters.mapping/distribution/reuse, tier_design.parameter_progression,
+fixed_correctness, intermediate_steps, endpoint fields and parameter_selection.
+The v1 wire names tier_design, supported_tiers, tier_meaning and instance_size
+remain for compatibility. supported_tiers/instance_size retain their legacy
+numeric configuration-selector meaning; they need not equal the curated stage
+count or stage position. Record the default stage-to-configuration mapping
+separately. User-facing language is stage. Relabeling never changes a distribution.
+
+Existing review checks cover specification completeness, stage design, parameter
+selection, correctness and implementation conformance. They require substantive
+human evidence; text validation cannot certify a natural progression or proof.
+Historical documents, accepted revisions and frozen manifests retain their bytes
+and hashes. New review must assess the current guidance; no additional automatic
+mathematical certification is claimed.
+
+The current service still admits trusted registered release/profile sets. This
+contract does not add automatic execution of generation rules, an arbitrary
+configuration explorer or an independent progression-edit API. Those mechanisms
+need deliberate implementation and review. Current stage counts reflect each
+registered progression; legacy 50-point paths are not mathematical necessities.
+
+Scoring caveat
+
+Ordinal recovery points remain provisional. Adding intermediate configurations
+must not manufacture scientific value or justify a larger award for the same
+recovery. A future score policy should be independent of arbitrary route density. For this
+curation pass, existing configuration credit stays fixed even when its displayed
+stage changes; no replacement formula or retrospective score migration is adopted.

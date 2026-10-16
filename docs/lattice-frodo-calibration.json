@@ -1,0 +1,1922 @@
+{
+  "model_id": "frodo-lwe-core-svp-v1",
+  "estimator_commit": "53da5982597709ba0fdf94ea37a84d822310fd84",
+  "archive_sha256": "4236adc38031c139c8a2721804d8962d6cacd015fae37f6f5215d2ac7f011060",
+  "sage_version": "10.1",
+  "method": "LWE.estimate.rough: primal usvp and dual hybrid, ADPS16 classical Core-SVP, GSA",
+  "noise_approximation": "Gaussian with exact sampler variance 129790/16384; not an exact distribution model",
+  "samples": "m=n+16, following official estimator's Frodo convention; multiple targets and KEM transform not modeled",
+  "cap": "128, from the full 128-bit encapsulation message / shared key",
+  "limitations": [
+    "Heuristic asymptotic lattice reduction costs are not measured compute or a lower bound.",
+    "Tiny dimensions encounter a beta=40 floor or an assertion; no security claim there.",
+    "Only two attack families modeled; no quantum, side-channel or complete KEM reduction analysis.",
+    "Exact published n640 endpoint retained, rather than silently altering it to fit a target."
+  ],
+  "profiles": [
+    {
+      "tier": 1,
+      "target_bits": 8.0,
+      "n": 8,
+      "bits": null,
+      "error": "AssertionError"
+    },
+    {
+      "tier": 2,
+      "target_bits": 10.44898,
+      "n": 16,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 11.68,
+          "beta": 40
+        },
+        "dual_hybrid": {
+          "log2_rop": 13.386914233520107,
+          "beta": 40
+        }
+      },
+      "bits": 11.68
+    },
+    {
+      "tier": 3,
+      "target_bits": 12.897959,
+      "n": 136,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 12.264,
+          "beta": 42
+        },
+        "dual_hybrid": {
+          "log2_rop": 20.375824548747048,
+          "beta": 66
+        }
+      },
+      "bits": 12.264
+    },
+    {
+      "tier": 4,
+      "target_bits": 15.346939,
+      "n": 144,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 14.892,
+          "beta": 51
+        },
+        "dual_hybrid": {
+          "log2_rop": 21.781775167022026,
+          "beta": 71
+        }
+      },
+      "bits": 14.892
+    },
+    {
+      "tier": 5,
+      "target_bits": 17.795918,
+      "n": 152,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 16.936,
+          "beta": 58
+        },
+        "dual_hybrid": {
+          "log2_rop": 23.265726929037502,
+          "beta": 76
+        }
+      },
+      "bits": 16.936
+    },
+    {
+      "tier": 6,
+      "target_bits": 20.244898,
+      "n": 168,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 21.023999999999997,
+          "beta": 72
+        },
+        "dual_hybrid": {
+          "log2_rop": 26.379813955492498,
+          "beta": 88
+        }
+      },
+      "bits": 21.023999999999997
+    },
+    {
+      "tier": 7,
+      "target_bits": 22.693878,
+      "n": 176,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 23.067999999999998,
+          "beta": 79
+        },
+        "dual_hybrid": {
+          "log2_rop": 28.005184457811225,
+          "beta": 93
+        }
+      },
+      "bits": 23.067999999999998
+    },
+    {
+      "tier": 8,
+      "target_bits": 25.142857,
+      "n": 184,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 25.112,
+          "beta": 86
+        },
+        "dual_hybrid": {
+          "log2_rop": 29.653896345515122,
+          "beta": 99
+        }
+      },
+      "bits": 25.112
+    },
+    {
+      "tier": 9,
+      "target_bits": 27.591837,
+      "n": 192,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 26.863999999999997,
+          "beta": 92
+        },
+        "dual_hybrid": {
+          "log2_rop": 31.335365076530366,
+          "beta": 105
+        }
+      },
+      "bits": 26.863999999999997
+    },
+    {
+      "tier": 10,
+      "target_bits": 30.040816,
+      "n": 208,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 30.659999999999997,
+          "beta": 105
+        },
+        "dual_hybrid": {
+          "log2_rop": 34.77841139749357,
+          "beta": 117
+        }
+      },
+      "bits": 30.659999999999997
+    },
+    {
+      "tier": 11,
+      "target_bits": 32.489796,
+      "n": 216,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 32.704,
+          "beta": 112
+        },
+        "dual_hybrid": {
+          "log2_rop": 36.53588192785342,
+          "beta": 123
+        }
+      },
+      "bits": 32.704
+    },
+    {
+      "tier": 12,
+      "target_bits": 34.938776,
+      "n": 224,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 34.748,
+          "beta": 119
+        },
+        "dual_hybrid": {
+          "log2_rop": 38.318038064573805,
+          "beta": 129
+        }
+      },
+      "bits": 34.748
+    },
+    {
+      "tier": 13,
+      "target_bits": 37.387755,
+      "n": 232,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 36.5,
+          "beta": 125
+        },
+        "dual_hybrid": {
+          "log2_rop": 40.09871906485618,
+          "beta": 136
+        }
+      },
+      "bits": 36.5
+    },
+    {
+      "tier": 14,
+      "target_bits": 39.836735,
+      "n": 248,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 40.588,
+          "beta": 139
+        },
+        "dual_hybrid": {
+          "log2_rop": 43.71940029451898,
+          "beta": 148
+        }
+      },
+      "bits": 40.588
+    },
+    {
+      "tier": 15,
+      "target_bits": 42.285714,
+      "n": 256,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 42.339999999999996,
+          "beta": 145
+        },
+        "dual_hybrid": {
+          "log2_rop": 45.56819055623145,
+          "beta": 155
+        }
+      },
+      "bits": 42.339999999999996
+    },
+    {
+      "tier": 16,
+      "target_bits": 44.734694,
+      "n": 264,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 44.384,
+          "beta": 152
+        },
+        "dual_hybrid": {
+          "log2_rop": 47.397696280466725,
+          "beta": 161
+        }
+      },
+      "bits": 44.384
+    },
+    {
+      "tier": 17,
+      "target_bits": 47.183673,
+      "n": 272,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 46.428,
+          "beta": 159
+        },
+        "dual_hybrid": {
+          "log2_rop": 49.26557285413638,
+          "beta": 167
+        }
+      },
+      "bits": 46.428
+    },
+    {
+      "tier": 18,
+      "target_bits": 49.632653,
+      "n": 288,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 50.224,
+          "beta": 172
+        },
+        "dual_hybrid": {
+          "log2_rop": 53.06047059884754,
+          "beta": 181
+        }
+      },
+      "bits": 50.224
+    },
+    {
+      "tier": 19,
+      "target_bits": 52.081633,
+      "n": 296,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 52.267999999999994,
+          "beta": 179
+        },
+        "dual_hybrid": {
+          "log2_rop": 55.030195784054115,
+          "beta": 188
+        }
+      },
+      "bits": 52.267999999999994
+    },
+    {
+      "tier": 20,
+      "target_bits": 54.530612,
+      "n": 304,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 54.312,
+          "beta": 186
+        },
+        "dual_hybrid": {
+          "log2_rop": 57.02704238862748,
+          "beta": 195
+        }
+      },
+      "bits": 54.312
+    },
+    {
+      "tier": 21,
+      "target_bits": 56.979592,
+      "n": 312,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 56.06399999999999,
+          "beta": 192
+        },
+        "dual_hybrid": {
+          "log2_rop": 59.04111254202783,
+          "beta": 202
+        }
+      },
+      "bits": 56.06399999999999
+    },
+    {
+      "tier": 22,
+      "target_bits": 59.428571,
+      "n": 328,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 60.151999999999994,
+          "beta": 206
+        },
+        "dual_hybrid": {
+          "log2_rop": 63.09769359805492,
+          "beta": 216
+        }
+      },
+      "bits": 60.151999999999994
+    },
+    {
+      "tier": 23,
+      "target_bits": 61.877551,
+      "n": 336,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 62.196,
+          "beta": 213
+        },
+        "dual_hybrid": {
+          "log2_rop": 65.13366477042085,
+          "beta": 223
+        }
+      },
+      "bits": 62.196
+    },
+    {
+      "tier": 24,
+      "target_bits": 64.326531,
+      "n": 344,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 64.24,
+          "beta": 220
+        },
+        "dual_hybrid": {
+          "log2_rop": 67.17235994704333,
+          "beta": 230
+        }
+      },
+      "bits": 64.24
+    },
+    {
+      "tier": 25,
+      "target_bits": 66.77551,
+      "n": 352,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 66.28399999999999,
+          "beta": 227
+        },
+        "dual_hybrid": {
+          "log2_rop": 69.212805682205,
+          "beta": 237
+        }
+      },
+      "bits": 66.28399999999999
+    },
+    {
+      "tier": 26,
+      "target_bits": 69.22449,
+      "n": 360,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 68.32799999999999,
+          "beta": 234
+        },
+        "dual_hybrid": {
+          "log2_rop": 71.25438993764678,
+          "beta": 244
+        }
+      },
+      "bits": 68.32799999999999
+    },
+    {
+      "tier": 27,
+      "target_bits": 71.673469,
+      "n": 376,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 72.416,
+          "beta": 248
+        },
+        "dual_hybrid": {
+          "log2_rop": 75.33955906242785,
+          "beta": 258
+        }
+      },
+      "bits": 72.416
+    },
+    {
+      "tier": 28,
+      "target_bits": 74.122449,
+      "n": 384,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 74.46,
+          "beta": 255
+        },
+        "dual_hybrid": {
+          "log2_rop": 77.38273268110059,
+          "beta": 265
+        }
+      },
+      "bits": 74.46
+    },
+    {
+      "tier": 29,
+      "target_bits": 76.571429,
+      "n": 392,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 76.50399999999999,
+          "beta": 262
+        },
+        "dual_hybrid": {
+          "log2_rop": 79.7168206774543,
+          "beta": 273
+        }
+      },
+      "bits": 76.50399999999999
+    },
+    {
+      "tier": 30,
+      "target_bits": 79.020408,
+      "n": 400,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 78.548,
+          "beta": 269
+        },
+        "dual_hybrid": {
+          "log2_rop": 81.76064850235183,
+          "beta": 280
+        }
+      },
+      "bits": 78.548
+    },
+    {
+      "tier": 31,
+      "target_bits": 81.469388,
+      "n": 408,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 80.592,
+          "beta": 276
+        },
+        "dual_hybrid": {
+          "log2_rop": 83.80452239463722,
+          "beta": 287
+        }
+      },
+      "bits": 80.592
+    },
+    {
+      "tier": 32,
+      "target_bits": 83.918367,
+      "n": 424,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 84.67999999999999,
+          "beta": 290
+        },
+        "dual_hybrid": {
+          "log2_rop": 88.18413499704326,
+          "beta": 302
+        }
+      },
+      "bits": 84.67999999999999
+    },
+    {
+      "tier": 33,
+      "target_bits": 86.367347,
+      "n": 432,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 86.72399999999999,
+          "beta": 297
+        },
+        "dual_hybrid": {
+          "log2_rop": 90.22811410962957,
+          "beta": 309
+        }
+      },
+      "bits": 86.72399999999999
+    },
+    {
+      "tier": 34,
+      "target_bits": 88.816327,
+      "n": 440,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 88.768,
+          "beta": 304
+        },
+        "dual_hybrid": {
+          "log2_rop": 92.27209834444042,
+          "beta": 316
+        }
+      },
+      "bits": 88.768
+    },
+    {
+      "tier": 35,
+      "target_bits": 91.265306,
+      "n": 448,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 90.812,
+          "beta": 311
+        },
+        "dual_hybrid": {
+          "log2_rop": 94.31608642365096,
+          "beta": 323
+        }
+      },
+      "bits": 90.812
+    },
+    {
+      "tier": 36,
+      "target_bits": 93.714286,
+      "n": 456,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 92.856,
+          "beta": 318
+        },
+        "dual_hybrid": {
+          "log2_rop": 96.65202844369166,
+          "beta": 331
+        }
+      },
+      "bits": 92.856
+    },
+    {
+      "tier": 37,
+      "target_bits": 96.163265,
+      "n": 464,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 95.192,
+          "beta": 326
+        },
+        "dual_hybrid": {
+          "log2_rop": 98.69602572604529,
+          "beta": 338
+        }
+      },
+      "bits": 95.192
+    },
+    {
+      "tier": 38,
+      "target_bits": 98.612245,
+      "n": 480,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 99.27999999999999,
+          "beta": 340
+        },
+        "dual_hybrid": {
+          "log2_rop": 103.07600807952963,
+          "beta": 353
+        }
+      },
+      "bits": 99.27999999999999
+    },
+    {
+      "tier": 39,
+      "target_bits": 101.061224,
+      "n": 488,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 101.324,
+          "beta": 347
+        },
+        "dual_hybrid": {
+          "log2_rop": 105.12000766898191,
+          "beta": 360
+        }
+      },
+      "bits": 101.324
+    },
+    {
+      "tier": 40,
+      "target_bits": 103.510204,
+      "n": 496,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 103.368,
+          "beta": 354
+        },
+        "dual_hybrid": {
+          "log2_rop": 107.45600267446028,
+          "beta": 368
+        }
+      },
+      "bits": 103.368
+    },
+    {
+      "tier": 41,
+      "target_bits": 105.959184,
+      "n": 504,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 105.704,
+          "beta": 362
+        },
+        "dual_hybrid": {
+          "log2_rop": 109.50000261228523,
+          "beta": 375
+        }
+      },
+      "bits": 105.704
+    },
+    {
+      "tier": 42,
+      "target_bits": 108.408163,
+      "n": 512,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 107.74799999999999,
+          "beta": 369
+        },
+        "dual_hybrid": {
+          "log2_rop": 111.54400260227429,
+          "beta": 382
+        }
+      },
+      "bits": 107.74799999999999
+    },
+    {
+      "tier": 43,
+      "target_bits": 110.857143,
+      "n": 528,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 111.836,
+          "beta": 383
+        },
+        "dual_hybrid": {
+          "log2_rop": 115.924000960488,
+          "beta": 397
+        }
+      },
+      "bits": 111.836
+    },
+    {
+      "tier": 44,
+      "target_bits": 113.306122,
+      "n": 536,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 114.172,
+          "beta": 391
+        },
+        "dual_hybrid": {
+          "log2_rop": 118.26000035364876,
+          "beta": 405
+        }
+      },
+      "bits": 114.172
+    },
+    {
+      "tier": 45,
+      "target_bits": 115.755102,
+      "n": 544,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 116.216,
+          "beta": 398
+        },
+        "dual_hybrid": {
+          "log2_rop": 120.30400037301885,
+          "beta": 412
+        }
+      },
+      "bits": 116.216
+    },
+    {
+      "tier": 46,
+      "target_bits": 118.204082,
+      "n": 552,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 118.25999999999999,
+          "beta": 405
+        },
+        "dual_hybrid": {
+          "log2_rop": 122.64000014036287,
+          "beta": 420
+        }
+      },
+      "bits": 118.25999999999999
+    },
+    {
+      "tier": 47,
+      "target_bits": 120.653061,
+      "n": 560,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 120.59599999999999,
+          "beta": 413
+        },
+        "dual_hybrid": {
+          "log2_rop": 124.68400015233637,
+          "beta": 427
+        }
+      },
+      "bits": 120.59599999999999
+    },
+    {
+      "tier": 48,
+      "target_bits": 123.102041,
+      "n": 568,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 122.63999999999999,
+          "beta": 420
+        },
+        "dual_hybrid": {
+          "log2_rop": 127.02000005855194,
+          "beta": 435
+        }
+      },
+      "bits": 122.63999999999999
+    },
+    {
+      "tier": 49,
+      "target_bits": 125.55102,
+      "n": 576,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 124.684,
+          "beta": 427
+        },
+        "dual_hybrid": {
+          "log2_rop": 129.06400006538522,
+          "beta": 442
+        }
+      },
+      "bits": 124.684
+    },
+    {
+      "tier": 50,
+      "target_bits": 128.0,
+      "n": 640,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 141.91199999999998,
+          "beta": 486
+        },
+        "dual_hybrid": {
+          "log2_rop": 146.87600000121782,
+          "beta": 503
+        }
+      },
+      "bits": 128
+    }
+  ],
+  "candidate_estimates": [
+    {
+      "n": 8,
+      "bits": null,
+      "error": "AssertionError"
+    },
+    {
+      "n": 16,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 11.68,
+          "beta": 40
+        },
+        "dual_hybrid": {
+          "log2_rop": 13.386914233520107,
+          "beta": 40
+        }
+      },
+      "bits": 11.68
+    },
+    {
+      "n": 24,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 11.68,
+          "beta": 40
+        },
+        "dual_hybrid": {
+          "log2_rop": 13.39930501395454,
+          "beta": 40
+        }
+      },
+      "bits": 11.68
+    },
+    {
+      "n": 32,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 11.68,
+          "beta": 40
+        },
+        "dual_hybrid": {
+          "log2_rop": 13.510891901963577,
+          "beta": 41
+        }
+      },
+      "bits": 11.68
+    },
+    {
+      "n": 40,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 11.68,
+          "beta": 40
+        },
+        "dual_hybrid": {
+          "log2_rop": 13.53600692364556,
+          "beta": 41
+        }
+      },
+      "bits": 11.68
+    },
+    {
+      "n": 48,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 11.68,
+          "beta": 40
+        },
+        "dual_hybrid": {
+          "log2_rop": 13.490223908412736,
+          "beta": 40
+        }
+      },
+      "bits": 11.68
+    },
+    {
+      "n": 56,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 11.68,
+          "beta": 40
+        },
+        "dual_hybrid": {
+          "log2_rop": 13.630970663385588,
+          "beta": 41
+        }
+      },
+      "bits": 11.68
+    },
+    {
+      "n": 64,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 11.68,
+          "beta": 40
+        },
+        "dual_hybrid": {
+          "log2_rop": 13.71802871837624,
+          "beta": 41
+        }
+      },
+      "bits": 11.68
+    },
+    {
+      "n": 72,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 11.68,
+          "beta": 40
+        },
+        "dual_hybrid": {
+          "log2_rop": 13.820231464393332,
+          "beta": 40
+        }
+      },
+      "bits": 11.68
+    },
+    {
+      "n": 80,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 11.68,
+          "beta": 40
+        },
+        "dual_hybrid": {
+          "log2_rop": 14.059748929756987,
+          "beta": 41
+        }
+      },
+      "bits": 11.68
+    },
+    {
+      "n": 88,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 11.68,
+          "beta": 40
+        },
+        "dual_hybrid": {
+          "log2_rop": 14.386819981608472,
+          "beta": 41
+        }
+      },
+      "bits": 11.68
+    },
+    {
+      "n": 96,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 11.68,
+          "beta": 40
+        },
+        "dual_hybrid": {
+          "log2_rop": 14.906265310516313,
+          "beta": 41
+        }
+      },
+      "bits": 11.68
+    },
+    {
+      "n": 104,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 11.68,
+          "beta": 40
+        },
+        "dual_hybrid": {
+          "log2_rop": 15.715035493619693,
+          "beta": 44
+        }
+      },
+      "bits": 11.68
+    },
+    {
+      "n": 112,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 11.68,
+          "beta": 40
+        },
+        "dual_hybrid": {
+          "log2_rop": 16.69817219716982,
+          "beta": 50
+        }
+      },
+      "bits": 11.68
+    },
+    {
+      "n": 120,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 11.68,
+          "beta": 40
+        },
+        "dual_hybrid": {
+          "log2_rop": 17.81098305673688,
+          "beta": 55
+        }
+      },
+      "bits": 11.68
+    },
+    {
+      "n": 128,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 11.68,
+          "beta": 40
+        },
+        "dual_hybrid": {
+          "log2_rop": 19.04242200414416,
+          "beta": 60
+        }
+      },
+      "bits": 11.68
+    },
+    {
+      "n": 136,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 12.264,
+          "beta": 42
+        },
+        "dual_hybrid": {
+          "log2_rop": 20.375824548747048,
+          "beta": 66
+        }
+      },
+      "bits": 12.264
+    },
+    {
+      "n": 144,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 14.892,
+          "beta": 51
+        },
+        "dual_hybrid": {
+          "log2_rop": 21.781775167022026,
+          "beta": 71
+        }
+      },
+      "bits": 14.892
+    },
+    {
+      "n": 152,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 16.936,
+          "beta": 58
+        },
+        "dual_hybrid": {
+          "log2_rop": 23.265726929037502,
+          "beta": 76
+        }
+      },
+      "bits": 16.936
+    },
+    {
+      "n": 160,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 18.98,
+          "beta": 65
+        },
+        "dual_hybrid": {
+          "log2_rop": 24.794211131259644,
+          "beta": 82
+        }
+      },
+      "bits": 18.98
+    },
+    {
+      "n": 168,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 21.023999999999997,
+          "beta": 72
+        },
+        "dual_hybrid": {
+          "log2_rop": 26.379813955492498,
+          "beta": 88
+        }
+      },
+      "bits": 21.023999999999997
+    },
+    {
+      "n": 176,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 23.067999999999998,
+          "beta": 79
+        },
+        "dual_hybrid": {
+          "log2_rop": 28.005184457811225,
+          "beta": 93
+        }
+      },
+      "bits": 23.067999999999998
+    },
+    {
+      "n": 184,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 25.112,
+          "beta": 86
+        },
+        "dual_hybrid": {
+          "log2_rop": 29.653896345515122,
+          "beta": 99
+        }
+      },
+      "bits": 25.112
+    },
+    {
+      "n": 192,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 26.863999999999997,
+          "beta": 92
+        },
+        "dual_hybrid": {
+          "log2_rop": 31.335365076530366,
+          "beta": 105
+        }
+      },
+      "bits": 26.863999999999997
+    },
+    {
+      "n": 200,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 28.907999999999998,
+          "beta": 99
+        },
+        "dual_hybrid": {
+          "log2_rop": 33.0445578722867,
+          "beta": 111
+        }
+      },
+      "bits": 28.907999999999998
+    },
+    {
+      "n": 208,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 30.659999999999997,
+          "beta": 105
+        },
+        "dual_hybrid": {
+          "log2_rop": 34.77841139749357,
+          "beta": 117
+        }
+      },
+      "bits": 30.659999999999997
+    },
+    {
+      "n": 216,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 32.704,
+          "beta": 112
+        },
+        "dual_hybrid": {
+          "log2_rop": 36.53588192785342,
+          "beta": 123
+        }
+      },
+      "bits": 32.704
+    },
+    {
+      "n": 224,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 34.748,
+          "beta": 119
+        },
+        "dual_hybrid": {
+          "log2_rop": 38.318038064573805,
+          "beta": 129
+        }
+      },
+      "bits": 34.748
+    },
+    {
+      "n": 232,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 36.5,
+          "beta": 125
+        },
+        "dual_hybrid": {
+          "log2_rop": 40.09871906485618,
+          "beta": 136
+        }
+      },
+      "bits": 36.5
+    },
+    {
+      "n": 240,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 38.544,
+          "beta": 132
+        },
+        "dual_hybrid": {
+          "log2_rop": 41.896257522660285,
+          "beta": 142
+        }
+      },
+      "bits": 38.544
+    },
+    {
+      "n": 248,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 40.588,
+          "beta": 139
+        },
+        "dual_hybrid": {
+          "log2_rop": 43.71940029451898,
+          "beta": 148
+        }
+      },
+      "bits": 40.588
+    },
+    {
+      "n": 256,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 42.339999999999996,
+          "beta": 145
+        },
+        "dual_hybrid": {
+          "log2_rop": 45.56819055623145,
+          "beta": 155
+        }
+      },
+      "bits": 42.339999999999996
+    },
+    {
+      "n": 264,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 44.384,
+          "beta": 152
+        },
+        "dual_hybrid": {
+          "log2_rop": 47.397696280466725,
+          "beta": 161
+        }
+      },
+      "bits": 44.384
+    },
+    {
+      "n": 272,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 46.428,
+          "beta": 159
+        },
+        "dual_hybrid": {
+          "log2_rop": 49.26557285413638,
+          "beta": 167
+        }
+      },
+      "bits": 46.428
+    },
+    {
+      "n": 280,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 48.18,
+          "beta": 165
+        },
+        "dual_hybrid": {
+          "log2_rop": 51.13241454816431,
+          "beta": 174
+        }
+      },
+      "bits": 48.18
+    },
+    {
+      "n": 288,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 50.224,
+          "beta": 172
+        },
+        "dual_hybrid": {
+          "log2_rop": 53.06047059884754,
+          "beta": 181
+        }
+      },
+      "bits": 50.224
+    },
+    {
+      "n": 296,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 52.267999999999994,
+          "beta": 179
+        },
+        "dual_hybrid": {
+          "log2_rop": 55.030195784054115,
+          "beta": 188
+        }
+      },
+      "bits": 52.267999999999994
+    },
+    {
+      "n": 304,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 54.312,
+          "beta": 186
+        },
+        "dual_hybrid": {
+          "log2_rop": 57.02704238862748,
+          "beta": 195
+        }
+      },
+      "bits": 54.312
+    },
+    {
+      "n": 312,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 56.06399999999999,
+          "beta": 192
+        },
+        "dual_hybrid": {
+          "log2_rop": 59.04111254202783,
+          "beta": 202
+        }
+      },
+      "bits": 56.06399999999999
+    },
+    {
+      "n": 320,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 58.108,
+          "beta": 199
+        },
+        "dual_hybrid": {
+          "log2_rop": 61.06600632848881,
+          "beta": 209
+        }
+      },
+      "bits": 58.108
+    },
+    {
+      "n": 328,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 60.151999999999994,
+          "beta": 206
+        },
+        "dual_hybrid": {
+          "log2_rop": 63.09769359805492,
+          "beta": 216
+        }
+      },
+      "bits": 60.151999999999994
+    },
+    {
+      "n": 336,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 62.196,
+          "beta": 213
+        },
+        "dual_hybrid": {
+          "log2_rop": 65.13366477042085,
+          "beta": 223
+        }
+      },
+      "bits": 62.196
+    },
+    {
+      "n": 344,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 64.24,
+          "beta": 220
+        },
+        "dual_hybrid": {
+          "log2_rop": 67.17235994704333,
+          "beta": 230
+        }
+      },
+      "bits": 64.24
+    },
+    {
+      "n": 352,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 66.28399999999999,
+          "beta": 227
+        },
+        "dual_hybrid": {
+          "log2_rop": 69.212805682205,
+          "beta": 237
+        }
+      },
+      "bits": 66.28399999999999
+    },
+    {
+      "n": 360,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 68.32799999999999,
+          "beta": 234
+        },
+        "dual_hybrid": {
+          "log2_rop": 71.25438993764678,
+          "beta": 244
+        }
+      },
+      "bits": 68.32799999999999
+    },
+    {
+      "n": 368,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 70.372,
+          "beta": 241
+        },
+        "dual_hybrid": {
+          "log2_rop": 73.29672418136259,
+          "beta": 251
+        }
+      },
+      "bits": 70.372
+    },
+    {
+      "n": 376,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 72.416,
+          "beta": 248
+        },
+        "dual_hybrid": {
+          "log2_rop": 75.33955906242785,
+          "beta": 258
+        }
+      },
+      "bits": 72.416
+    },
+    {
+      "n": 384,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 74.46,
+          "beta": 255
+        },
+        "dual_hybrid": {
+          "log2_rop": 77.38273268110059,
+          "beta": 265
+        }
+      },
+      "bits": 74.46
+    },
+    {
+      "n": 392,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 76.50399999999999,
+          "beta": 262
+        },
+        "dual_hybrid": {
+          "log2_rop": 79.7168206774543,
+          "beta": 273
+        }
+      },
+      "bits": 76.50399999999999
+    },
+    {
+      "n": 400,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 78.548,
+          "beta": 269
+        },
+        "dual_hybrid": {
+          "log2_rop": 81.76064850235183,
+          "beta": 280
+        }
+      },
+      "bits": 78.548
+    },
+    {
+      "n": 408,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 80.592,
+          "beta": 276
+        },
+        "dual_hybrid": {
+          "log2_rop": 83.80452239463722,
+          "beta": 287
+        }
+      },
+      "bits": 80.592
+    },
+    {
+      "n": 416,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 82.636,
+          "beta": 283
+        },
+        "dual_hybrid": {
+          "log2_rop": 85.84842900908643,
+          "beta": 294
+        }
+      },
+      "bits": 82.636
+    },
+    {
+      "n": 424,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 84.67999999999999,
+          "beta": 290
+        },
+        "dual_hybrid": {
+          "log2_rop": 88.18413499704326,
+          "beta": 302
+        }
+      },
+      "bits": 84.67999999999999
+    },
+    {
+      "n": 432,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 86.72399999999999,
+          "beta": 297
+        },
+        "dual_hybrid": {
+          "log2_rop": 90.22811410962957,
+          "beta": 309
+        }
+      },
+      "bits": 86.72399999999999
+    },
+    {
+      "n": 440,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 88.768,
+          "beta": 304
+        },
+        "dual_hybrid": {
+          "log2_rop": 92.27209834444042,
+          "beta": 316
+        }
+      },
+      "bits": 88.768
+    },
+    {
+      "n": 448,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 90.812,
+          "beta": 311
+        },
+        "dual_hybrid": {
+          "log2_rop": 94.31608642365096,
+          "beta": 323
+        }
+      },
+      "bits": 90.812
+    },
+    {
+      "n": 456,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 92.856,
+          "beta": 318
+        },
+        "dual_hybrid": {
+          "log2_rop": 96.65202844369166,
+          "beta": 331
+        }
+      },
+      "bits": 92.856
+    },
+    {
+      "n": 464,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 95.192,
+          "beta": 326
+        },
+        "dual_hybrid": {
+          "log2_rop": 98.69602572604529,
+          "beta": 338
+        }
+      },
+      "bits": 95.192
+    },
+    {
+      "n": 472,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 97.23599999999999,
+          "beta": 333
+        },
+        "dual_hybrid": {
+          "log2_rop": 100.74002372764885,
+          "beta": 345
+        }
+      },
+      "bits": 97.23599999999999
+    },
+    {
+      "n": 480,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 99.27999999999999,
+          "beta": 340
+        },
+        "dual_hybrid": {
+          "log2_rop": 103.07600807952963,
+          "beta": 353
+        }
+      },
+      "bits": 99.27999999999999
+    },
+    {
+      "n": 488,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 101.324,
+          "beta": 347
+        },
+        "dual_hybrid": {
+          "log2_rop": 105.12000766898191,
+          "beta": 360
+        }
+      },
+      "bits": 101.324
+    },
+    {
+      "n": 496,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 103.368,
+          "beta": 354
+        },
+        "dual_hybrid": {
+          "log2_rop": 107.45600267446028,
+          "beta": 368
+        }
+      },
+      "bits": 103.368
+    },
+    {
+      "n": 504,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 105.704,
+          "beta": 362
+        },
+        "dual_hybrid": {
+          "log2_rop": 109.50000261228523,
+          "beta": 375
+        }
+      },
+      "bits": 105.704
+    },
+    {
+      "n": 512,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 107.74799999999999,
+          "beta": 369
+        },
+        "dual_hybrid": {
+          "log2_rop": 111.54400260227429,
+          "beta": 382
+        }
+      },
+      "bits": 107.74799999999999
+    },
+    {
+      "n": 520,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 109.79199999999999,
+          "beta": 376
+        },
+        "dual_hybrid": {
+          "log2_rop": 113.88000093699509,
+          "beta": 390
+        }
+      },
+      "bits": 109.79199999999999
+    },
+    {
+      "n": 528,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 111.836,
+          "beta": 383
+        },
+        "dual_hybrid": {
+          "log2_rop": 115.924000960488,
+          "beta": 397
+        }
+      },
+      "bits": 111.836
+    },
+    {
+      "n": 536,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 114.172,
+          "beta": 391
+        },
+        "dual_hybrid": {
+          "log2_rop": 118.26000035364876,
+          "beta": 405
+        }
+      },
+      "bits": 114.172
+    },
+    {
+      "n": 544,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 116.216,
+          "beta": 398
+        },
+        "dual_hybrid": {
+          "log2_rop": 120.30400037301885,
+          "beta": 412
+        }
+      },
+      "bits": 116.216
+    },
+    {
+      "n": 552,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 118.25999999999999,
+          "beta": 405
+        },
+        "dual_hybrid": {
+          "log2_rop": 122.64000014036287,
+          "beta": 420
+        }
+      },
+      "bits": 118.25999999999999
+    },
+    {
+      "n": 560,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 120.59599999999999,
+          "beta": 413
+        },
+        "dual_hybrid": {
+          "log2_rop": 124.68400015233637,
+          "beta": 427
+        }
+      },
+      "bits": 120.59599999999999
+    },
+    {
+      "n": 568,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 122.63999999999999,
+          "beta": 420
+        },
+        "dual_hybrid": {
+          "log2_rop": 127.02000005855194,
+          "beta": 435
+        }
+      },
+      "bits": 122.63999999999999
+    },
+    {
+      "n": 576,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 124.684,
+          "beta": 427
+        },
+        "dual_hybrid": {
+          "log2_rop": 129.06400006538522,
+          "beta": 442
+        }
+      },
+      "bits": 124.684
+    },
+    {
+      "n": 584,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 127.02,
+          "beta": 435
+        },
+        "dual_hybrid": {
+          "log2_rop": 131.4000000256587,
+          "beta": 450
+        }
+      },
+      "bits": 127.02
+    },
+    {
+      "n": 592,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 129.064,
+          "beta": 442
+        },
+        "dual_hybrid": {
+          "log2_rop": 133.44400002948208,
+          "beta": 457
+        }
+      },
+      "bits": 128
+    },
+    {
+      "n": 600,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 131.108,
+          "beta": 449
+        },
+        "dual_hybrid": {
+          "log2_rop": 135.78000001180735,
+          "beta": 465
+        }
+      },
+      "bits": 128
+    },
+    {
+      "n": 608,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 133.444,
+          "beta": 457
+        },
+        "dual_hybrid": {
+          "log2_rop": 137.8240000139593,
+          "beta": 472
+        }
+      },
+      "bits": 128
+    },
+    {
+      "n": 616,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 135.488,
+          "beta": 464
+        },
+        "dual_hybrid": {
+          "log2_rop": 140.1600000057035,
+          "beta": 480
+        }
+      },
+      "bits": 128
+    },
+    {
+      "n": 624,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 137.82399999999998,
+          "beta": 472
+        },
+        "dual_hybrid": {
+          "log2_rop": 142.49600000235634,
+          "beta": 488
+        }
+      },
+      "bits": 128
+    },
+    {
+      "n": 632,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 139.868,
+          "beta": 479
+        },
+        "dual_hybrid": {
+          "log2_rop": 144.54000000289108,
+          "beta": 495
+        }
+      },
+      "bits": 128
+    },
+    {
+      "n": 640,
+      "attacks": {
+        "usvp": {
+          "log2_rop": 141.91199999999998,
+          "beta": 486
+        },
+        "dual_hybrid": {
+          "log2_rop": 146.87600000121782,
+          "beta": 503
+        }
+      },
+      "bits": 128
+    }
+  ]
+}

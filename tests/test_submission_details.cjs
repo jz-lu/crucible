@@ -56,8 +56,8 @@ async function test(name,run) {await run();console.log('PASS '+name);passed++;}
     assert.equal(detailCalls(app)[0].options.method,'GET');
     assert.equal(app.location.hash,hash);
     assert.equal(app.$('#recovery-title').textContent,'Pinned original method');
-    assert.match(app.$('#recovery-context').textContent,/archived-solver.*Original Alpha.*Tier 30.*version 3/);
-    assert.doesNotMatch(app.$('#recovery-context').textContent,/Current Alpha|version 4|Tier 20/);
+    assert.match(app.$('#recovery-context').textContent,/archived-solver.*Original Alpha.*Stage 30.*version 3/);
+    assert.doesNotMatch(app.$('#recovery-context').textContent,/Current Alpha|version 4|Stage 20/);
     assert.equal(app.$('#recovery-eyebrow').textContent,'Recorded recovery');
     assert.equal(fact(app,'Result'),'Recovered');
     assert.match(fact(app,'Time to submit'),/12(?:\.0)?s from issue to receipt/);
@@ -82,7 +82,7 @@ async function test(name,run) {await run();console.log('PASS '+name);passed++;}
     assert.equal(row.tagName,'BUTTON');
     assert.equal(row.type,'button');
     assert.equal(row.getAttribute('aria-haspopup'),'dialog');
-    assert.match(row.querySelector('.history-item-title').textContent,/Original Alpha.*Tier 20/);
+    assert.match(row.querySelector('.history-item-title').textContent,/Original Alpha.*Stage 20/);
     row.focus();row.click();await flush();
     assert.equal(history.open,true);
     assert.equal(app.$('#recovery-dialog').open,true);

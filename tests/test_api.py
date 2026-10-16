@@ -7,7 +7,7 @@ from crucible import registry
 from crucible.app import create_app
 from crucible.config import Settings
 from crucible.db import Challenge, LoginSession, Submission, User
-from scripts.solve_teaching import recover
+from scripts.solve_teaching_frontier import recover
 
 
 class Actor:

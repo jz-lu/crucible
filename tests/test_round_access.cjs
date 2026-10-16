@@ -26,6 +26,11 @@ function service() {
     server.active.add(key); server.instances.set(id,challenge); return challenge;
   };
   server.respond = async (url, options) => {
+    if (url.pathname === '/api/auth/login' || url.pathname === '/api/auth/register') {
+      if (server.authGate) await server.authGate;
+      server.user = user;
+      return server.envelope({user,csrf_token:'signed-in-csrf'});
+    }
     if (url.pathname === '/api/session') return server.envelope({user:server.user,csrf_token:'fixture-csrf'});
     if (url.pathname === '/api/schemes') return server.envelope({schemes});
     if (url.pathname === '/api/leaderboard') return server.envelope({entries:[]});
@@ -54,8 +59,9 @@ function service() {
   };
   return server;
 }
-async function boot({hash = route(20), seed = false} = {}) {
+async function boot({hash = route(20), seed = false, account = user} = {}) {
   const server = service();
+  server.user = account;
   if (seed) server.seed();
   const app = await createApp({schemes,user,hash,responder:server.respond});
   // Keep the shared DOM fixture unchanged; only this suite needs HTTP failures.
@@ -70,7 +76,54 @@ async function boot({hash = route(20), seed = false} = {}) {
 let passed = 0;
 async function test(name, run) {await run(); console.log('PASS ' + name); passed++;}
 (async () => {
-  await test('one manual request starts a round, later Challenge tiers load automatically, and revisits reuse instances', async () => {
+  await test('Take on this stage requests only the clicked exact stage in one action and double-clicks do not duplicate it', async () => {
+    const {app,server}=await boot({hash:route(22,'leaderboard')});
+    const action=app.$('.tier-record-challenge');action.click();action.click();await flush();
+    assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-22']);assert.equal('active_round_id' in posts(app)[0],false);
+    assert.equal(server.instances.size,1);assert.equal(app.$('#challenge-active').hidden,false);
+    await app.navigate(route(22,'leaderboard'));app.$('.tier-record-challenge').click();await flush();assert.equal(posts(app).length,1);
+  });
+  await test('Take on this stage reuses existing open and answered instances without a POST', async () => {
+    for(const status of ['open','solved','incorrect']){
+      const {app,server}=await boot({hash:route(20,'leaderboard')});const instance=server.seed();instance.status=status;
+      if(status!=='open')instance.submission={status:status==='solved'?'correct':'incorrect'};
+      app.$('.tier-record-challenge').click();await flush();assert.equal(posts(app).length,0);assert.equal(app.$('#challenge-active').hidden,false);
+      assert.match(app.$('#challenge-status').textContent,status==='solved'?/Recovered/:status==='incorrect'?/Incorrect/:/Open/);
+    }
+  });
+  await test('signed-out Take on resumes its exact intended tier once after explicit sign-in', async () => {
+    const {app,server}=await boot({hash:route(23,'leaderboard'),account:null});
+    app.$('.tier-record-challenge').click();await flush();assert.equal(app.$('#auth-dialog').open,true);assert.equal(posts(app).length,0);
+    app.$('#auth-handle').value='first';app.$('#auth-password').value='test password for fixture';
+    app.$('#auth-form').dispatchEvent({type:'submit'});await flush();
+    assert.equal(app.$('#auth-dialog').open,false);assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-23']);
+    assert.equal(server.instances.size,1);assert.equal(app.$('#challenge-active').hidden,false);
+  });
+  await test('cancelled or navigated-away sign-in cannot resume a Take on request, including a late login response', async () => {
+    for(const action of ['cancel','navigate','late-cancel']){
+      const {app,server}=await boot({hash:route(21,'leaderboard'),account:null});app.$('.tier-record-challenge').click();await flush();
+      if(action==='late-cancel'){
+        const gate=deferred();server.authGate=gate.promise;app.$('#auth-form').dispatchEvent({type:'submit'});await flush();app.$('#auth-dialog').close();gate.resolve();await flush();
+      }else{
+        if(action==='cancel')app.$('#auth-dialog').close();else await app.navigate('#about');
+        app.$('#auth-form').dispatchEvent({type:'submit'});await flush();
+      }
+      assert.equal(posts(app).length,0,action);
+      if(action==='cancel') {await app.sandbox.loadChallenge();assert.equal(posts(app).length,0);}
+    }
+  });
+  await test('pending Take on authority clears on account or selection change and archived links do not issue', async () => {
+    for(const action of ['account','selection']){
+      const {app,server}=await boot({hash:route(21,'leaderboard')});const gate=deferred();server.before=async req=>{if(req.method==='GET'&&req.profile_id==='tier-21')await gate.promise;};
+      app.$('.tier-record-challenge').click();await flush();
+      if(action==='account'){server.user={id:2,handle:'second'};app.sandbox.setSession(server.envelope({user:server.user,csrf_token:'second'}));}
+      else await app.navigate(route(22,'protocol'));
+      gate.resolve();await flush();assert.equal(posts(app).length,0,action);
+    }
+    const {app}=await boot({hash:route(21,'leaderboard',previous)});app.$('.tier-record-challenge').click();await flush();
+    assert.equal(posts(app).length,0);assert.equal(app.$('#empty-title').textContent,'Archived release');
+  });
+  await test('one manual request starts a round, later Challenge stages load automatically, and revisits reuse instances', async () => {
     const {app,server} = await boot();
     assert.equal(app.$('#empty-title').textContent,'Ready?');
     assert.equal(posts(app).length,0);
