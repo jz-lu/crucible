@@ -15,7 +15,7 @@ from sqlalchemy import Float, ForeignKey, Integer, String, Text, UniqueConstrain
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column
 
-from . import registry
+from . import registry, proposal_retractions
 from .db import AdapterVersion, Base, User
 from .protocol_proposals import ProtocolProposal, ProtocolProposalRevision, ProtocolProposalReview, ReviewChecks
 
@@ -92,6 +92,8 @@ reuse; semantic novelty still requires the trusted reviewer's judgment.
             review = session.get(ProtocolProposalReview, review_id)
             if proposal is None or review is None or review.proposal_id != proposal.id:
                 raise AdmissionCreditError("Proposal and matching review are required.")
+            if proposal_retractions.get(session, proposal_retractions.SCHEME, proposal.id) is not None:
+                raise AdmissionCreditError("A retracted proposal cannot receive new admission credit.")
             if review.checks.get("test_only_self_review") is True:
                 raise AdmissionCreditError("Development self-review cannot earn scheme contribution credit.")
             if proposal.author_id == reviewer_id or review.reviewer_id != reviewer_id:

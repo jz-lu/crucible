@@ -50,6 +50,15 @@ const researchScheme = {id: 'fixture-research', version: '2', name: 'Research fi
 let passed = 0;
 async function test(name, run) { await run(); console.log('PASS ' + name); passed++; }
 (async () => {
+  await test('correctness bounds retain their evidence class and model assumptions in the protocol view', async () => {
+    const p={...profile('model-1',1),correctness:{kind:'statistical',failure_bound:'2^-128 under a stated model',per_profile_failure_bound:'2^-236',evidence_class:'heuristic-model-analytical-bound',assumptions:'<script>Not executable</script> Independent modeled rounding; not proved for concrete hashes.',argument:'Fixture derivation.',scope:'Honest key generation and encapsulation.'}};
+    const value={...schemes[0],profiles:[p],next_profile_id:p.id};
+    const app=await createApp({schemes:[value],hash:route(value,p.id,'protocol')});
+    const facts=app.$('#correctness-facts');
+    assert.match(facts.textContent,/2\^-128/);assert.match(facts.textContent,/2\^-236/);
+    assert.match(facts.textContent,/Evidence class/);assert.match(facts.textContent,/Independent modeled rounding/);
+    assert.match(facts.textContent,/not proved for concrete hashes/);assert.equal(facts.querySelector('script'),null);
+  });
   await test('catalogue is the first page and displays every API KEM without issuing challenges', async () => {
     const app = await createApp({schemes});
     assert.equal(app.$('#catalogue-workspace').hidden, false);
@@ -175,7 +184,9 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.$('#overview-challenges').href, route(current, 'alpha-3'), 'Returning through Overview preserves the selected tier');
     const requests = app.requests.length;
     await app.navigate('#scheme/fixture-alpha/6');
-    assert.equal(app.requests.length, requests);
+    assert.equal(app.requests.length, requests + 1);
+    assert.equal(app.requests.at(-1).url.pathname, '/api/protocol/benchmarks');
+    assert.equal(app.requests.at(-1).url.searchParams.get('version'), '6');
     assert.match(app.$('#overview-release').textContent, /Archived release 6/);
     assert.equal(app.$('#overview-summary').textContent, 'Archived construction.');
     assert.deepEqual(app.$('#overview-chart-public').querySelectorAll('.chart-point').map(point => point.dataset.value), ['7']);
@@ -310,7 +321,8 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     const unrecovered = {...researchScheme, largest_recovered_profile_id: null, recovered_profile_ids: [], profile_recoveries: []};
     const empty = await createApp({schemes: [unrecovered], hash: '#scheme/fixture-research/2'});
     assert.equal(empty.$('#overview-graphs').querySelectorAll('.chart-recovery-line').length, 0);
-    assert.equal(empty.$('#overview-progress').textContent, 'No recoveries yet');
+    assert.equal(empty.$('#overview-progress').textContent, '');
+    assert.equal(empty.$('#overview-progress').hidden, true);
     await empty.navigate(route(unrecovered, 'research-1'));
     assertSelectedTier(empty, 1);
     assert.equal(empty.$('#leaderboard-title').textContent, 'Unsolved');
@@ -376,7 +388,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(chart('public').closest('.overview-card').querySelectorAll('[data-overview-metric]').length, 0);
     assert.equal(chart('cipher').closest('.overview-card').querySelectorAll('[data-overview-metric]').length, 0);
     assert.equal(app.$('#overview-graphs').querySelectorAll('[data-overview-metric]').length, 5);
-    assert.deepEqual(app.$('#overview-graphs').querySelectorAll('h2').map(e=>e.textContent), ['Public-key size', 'Ciphertext size', 'Key generation', 'Initial classical reference']);
+    assert.deepEqual(app.$('#overview-graphs').querySelectorAll('h2').map(e=>e.textContent), ['Public-key size', 'Ciphertext size', 'Operation time', 'Initial classical reference']);
     assert.deepEqual(points('cipher').map(point => point.dataset.value), ['8', '9', '10', '12']);
     for (const id of ['computation', 'security']) {
       assert.equal(chart(id).querySelector('.chart-series'), null);
@@ -384,7 +396,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
       assert.deepEqual(chart(id).querySelectorAll('.chart-tick').map(label => label.textContent), ['20', '21', '90']);
       assert.match(chart(id).textContent, /No (timings|estimates) published/);
     }
-    assert.match(chart('computation').textContent, /Key generation, encapsulation, and decapsulation await a shared benchmark/);
+    assert.match(chart('computation').textContent, /Reference implementation timings use a shared measurement method/);
     for (const [id, metric] of [['computation', 'encapsulate'], ['computation', 'decapsulate'], ['security', 'quantum']]) {
       const button = chart(id).closest('.overview-card').querySelector('[data-overview-metric="' + metric + '"]');
       button.focus(); button.click(); await flush();

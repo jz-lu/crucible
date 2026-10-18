@@ -1,0 +1,179 @@
+CURATED ASSUMPTIONS SHEETS — WORKING DRAFT
+
+Purpose
+
+A quiet page for each exact scheme release exposes the mathematical questions,
+model dependencies, derived agreement arguments and remaining proof obligations.
+All eight current releases open on an authored overview of existing evidence,
+remaining assumptions and unfinished work. Summary links open one supporting
+statement in a focused reader, with scope, challenge questions, source context
+and limitations. This is not a general graph, an exhaustive dependency
+catalogue, or a security score.
+
+Current contract
+
+crucible.assumption_sheets.sheet_for(scheme_id, version) returns a fresh JSON-safe
+copy. The caller supplies the exact registered identity, normally after resolving
+registry.adapter_for(scheme_id, version). The function never loads an adapter,
+generates a challenge, fetches a URL, modifies a note or grants review authority.
+
+Top-level fields:
+  format: crucible-assumption-sheet-v1
+  schema_revision: 1 (wire shape)
+  revision: authored draft revision (Frodo is 3; other current sheets are 2; not a notebook revision)
+  scheme_id, scheme_version: exact identity; version is serialized as a string
+  curation_status: draft or uncurated
+  completeness: partial
+  introduction, limitations: explicit editorial scope and omissions
+  scope: exact-release / registered-profile-manifests
+  targets: security and correctness, with distinct descriptions and limitations
+  claims: ordered cards
+
+Each card has a stable ID within this exact sheet, title, one-line summary,
+role, supports, precise_statement, scope, challenge, sources and limitations.
+Role labels are hardness, model, derived, reduction and implementation. The
+reduction role means an OUTSTANDING PROOF OBLIGATION in the current draft, not
+an established reduction. Render it as "Proof obligation". Hardness cards pose
+scoped questions without claiming a concrete lower bound for deliberately
+attackable small configurations. A derived card states its hypotheses explicitly.
+
+supports lists security and/or correctness as the ASPECT BEING EXAMINED. It is
+not a verified implication edge. No graph traversal, automatic trust propagation,
+reviewed badge, best-security estimate or admission decision follows from it.
+
+Statements are inert text, with explicit inline math delimited by \(...\) where
+helpful. Use the existing safe math/text renderer, not arbitrary HTML. Source
+objects contain a title and direct HTTPS URL, with no credentials or controls.
+Source links identify context; they do not imply an independent application
+review. Release-specific calculations identify their actual local evidence paths
+rather than attributing Crucible's reduced-parameter bounds to a standard.
+
+Frodo reading overview (authored revision 3)
+
+The first view explains the IND-CCA goal, then separates What we have / What we
+still assume / What is missing here. Published conditional FrodoKEM proofs are
+existing evidence; the open obligation concerns their explicit application to
+Crucible's exact research profiles. The correctness calculation and endpoint
+conformance evidence retain their model and configuration scope. Completing
+implementation and theorem-application work does not discharge hardness or
+modeling assumptions, and an unsolved recovery challenge is not an IND-CCA proof.
+
+presentation.overview is optional, manually authored reading content:
+  goal, scope, boundary: nonempty prose
+  groups: exactly evidence, assumptions, gaps, in reading order
+    id, title, items: one to four {title, text, claim_id} entries
+
+Each overview reference opens one exact-sheet statement in a focused reading
+dialog, with no new fetch or inferred status. Closing it returns focus to the
+original overview link and retains the overview's scroll position. Exact claim
+links open the same reader; navigation and access revocation close and clear it.
+There is no duplicate detail-card list below the overview. Overview text uses the same inert text/math renderer
+as detail cards. The headings classify prose, not machine-verified conclusions.
+The same reading format now covers the other seven current schemes. Summaries
+are separately authored from each release's statements and local evidence:
+classical algebra and limited attack references, module noise/rounding models,
+HQC model transfer, NTRU's sampler changes, and McEliece's shortened codes.
+Every formal statement is reachable from an overview link or a related-statement
+link. Archived releases do not inherit an overview from a newer release.
+
+Frodo details
+
+Frodo uses an optional presentation object with a short lead and sections:
+  {id, title, description, claim_ids}
+Sections remain in the structured reading data and render for sheets without
+an overview. Overview sheets expose their formal content through reading links
+instead. Ordinal numbers are omitted, because a count of
+reading entries is not a count of independent assumptions. The six items are
+three distinct analytical premises, a conditional correctness result, an open
+security-proof application and an implementation requirement. LWE hardness
+plays no role in honest correctness. The smallest dimension's support proof
+also does not require noise independence. Hashes used for security and noise
+expansion used for correctness are different analytical roles of the same
+implementation, with no claimed logical independence.
+
+Each Frodo item adds purpose (available in the structured sheet) and depends_on
+(same-sheet reading links). The open security application also has
+status: open-obligation. These fields do not assert proven implications,
+exhaustive dependencies, sufficiency, independence or mathematical review.
+The exact statement and scope determine what is being claimed. Reading links
+open their target without fetching another sheet or propagating any status.
+Unknown, duplicate or omitted section references are rejected.
+
+The security-argument item explicitly separates a passive shared-secret
+recovery challenge from an IND-CCA argument. Its missing application is visible;
+the fresh-honest average failure bound alone does not discharge every theorem's
+adversarial-query and failure-handling requirements.
+
+Release and configuration scope
+
+Eight explicit current release identities are curated. Unknown and earlier
+uncurated releases return claims=[] and curation_status=uncurated. Changing the
+registry's current pointer never transfers a sheet to a new release. An empty
+sheet means uncurated, not assumption-free or secure. Existing curated identities
+remain exact historical identities if a later release supersedes them.
+
+The sheet deliberately does not duplicate profile arrays, source hashes,
+parameters, observed outcomes or configuration-level correctness records. The
+frontend already has these from the exact catalogue/manifests and should display
+the selected profile and its original facts separately. Card scope says when a
+premise only applies to some profiles, such as the module rounding model at the
+two largest degrees. Stage labels are presentation, not stable mathematical IDs.
+
+Correctness analysis describes fresh honest draws. The service's decision to
+withhold a disagreement does not strengthen the original distribution's bound.
+Resource aborts, implementation faults, mathematical disagreements and statistical
+model gaps are different observations. Disproving a modeling premise can remove
+support for a claim without demonstrating that the claim itself is false. A
+looser upper bound does not prove a violation. One genuine disagreement refutes
+perfect correctness; a statistical target requires probability evidence under
+the declared sampling distribution.
+
+Thin endpoint integration
+
+Suggested GET /api/protocol/assumptions?scheme_id=...&version=...:
+  resolve the registered exact adapter;
+  return {"sheet": sheet_for(adapter.SCHEME_ID, adapter.SCHEME_VERSION)}.
+
+Register the endpoint with the same existing private-beta/member access policy
+as the catalogue. Unknown registered curation is an explicit empty sheet; an
+unknown scheme/release can retain the application's normal 404. Loading this
+page must not issue an instance, create account state or execute research text.
+Link from the scheme overview and support an exact-release direct route. A
+future citation may additionally pin the authored sheet revision, but this first
+module is a versioned working draft, not an append-only curation database or a
+promise to serve every older draft revision.
+
+Notebook grounding: intentionally not fabricated
+
+This draft cites real primary sources and named local implementation/calculation
+evidence. It does NOT write notebook entries, invent note IDs, claim publication
+approval, or pretend these static cards were extracted from reviewed notes.
+The existing notebook already has immutable revisions and content hashes; the
+research-review system already captures exact source bundles. Later grounding
+can use an optional exact reference:
+  {note_id, revision, content_sha256}
+
+This reference must resolve to the precise claim/conditions being cited. An
+application to another scheme requires its own scoped justification and review;
+a reusable note is not automatically applicable to every tagged scheme. New
+note revisions must never silently update a curated sheet. Preserve old revision
+pins and make a replacement an explicit curation revision. No rigid theorem
+ontology, proof-language requirement or mandatory quantified JSON schema is
+introduced by this page.
+
+Before adding such references to shared pages, verify audience compatibility
+separately from reviewer access. research_reviews.source_snapshot permits a
+requester to include their own private note in a private review packet; this is
+not permission to publish its title, claim or contents. Community publication approval,
+curation acceptance, mathematical assessment and scheme admission are separate
+authorities. Imported tags/extensions cannot supply any of them. Keep future
+human/model assessments auditable against an exact sheet/source bundle, with the
+authority policy outside authored content.
+
+Validation
+
+The focused tests cover the exact eight enrolled identities; unchanged archived
+semantics; safe direct source URLs; unique card IDs and valid role/target labels;
+explicit partial/draft status; copy isolation; no execution or notebook access;
+and visibility of model-specific premises and local certificate provenance.
+They validate the presentation contract, not the mathematical truth of claims.

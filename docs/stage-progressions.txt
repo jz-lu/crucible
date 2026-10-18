@@ -1,3 +1,26 @@
+17 OCTOBER UPDATE — current HQC modeled-research-v3 route
+
+HQC now has 66 natural stages, one for each supported secret weight 1..66 with
+encryption/error weights ceil(75w/66). All new configurations are on its default
+route. The endpoint is the historical August 2025 HQC-1 construction; current
+attack-cost calibration is pending. Correctness is conditional on the explicitly
+stated surrogate model and conservative-transfer conjecture. See hqc-model-v3.txt.
+The old 27-configuration /25-stage HQC route remains archived with its evidence.
+Current totals:379 configurations and377 stages. Only NTRU's two intermediate
+configurations remain off the current default routes. Points are frozen policy
+weights, not stage numbers; v9 enrollment is documented in scoring-v9.txt.
+
+Earlier 17 October update — module-v4 supersedes module-v3
+
+The current module-lattice release is compressed-research-v4, with six stages
+through degrees8,16,32,64,128,256 and an exact ML-KEM-512 completed-operation
+endpoint. All six configurations are on the default route; prior module-v3
+progressions remain historical navigation and do not receive new challenges.
+At that checkpoint:340 configurations,336 default stages. The four additional
+configurations belong to NTRU/HQC. See module-v4-design.txt for construction,
+correctness evidence and security limits. The dated design below describes the
+preceding rollout; its module-v3 count is historical.
+
 Configurations and default stage progressions — 16 October 2026
 
 Decision

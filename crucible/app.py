@@ -17,13 +17,15 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
-from . import beta_access, generation, standard_schemes, kem, machine_auth, method_sources, people, protocol_proposals, registry, research
+from . import beta_access, generation, generation_policy, standard_schemes, kem, machine_auth, method_sources, notebook, people, protocol_proposals, registry, research, research_reviews
 from .config import ROOT, Settings, load_settings
 from .db import AdapterVersion, Base, Challenge, Database, LoginSession, Method, ProfileIncident, RateBucket, Submission, User
 from .schemas import Credentials, NewChallenge, NewMethod, NewSubmission
 from .security import mac, passwords, payload_mac, target_mac, token_hash, verify_password
-from .public_json import catalogue_response
+from .public_json import catalogue_progress, catalogue_response
 from .access_policy import AccessPolicy
+from . import benchmark_reports, assumption_sheets, agent_guidance
+from .reference_policy import METHOD as REFERENCE_METHOD
 
 
 def current_round(now):
@@ -106,6 +108,14 @@ class RequestBoundary:
                 return await JSONResponse({"detail": "Send an application/json request."}, 415)(scope, receive, send)
             try:
                 limit = 2097152 if scope["method"] == "POST" and machine_auth.source_upload_path(scope["path"]) else 65536
+                if scope["method"] == "POST":
+                    if scope["path"] == "/api/notebook/import":
+                        limit = notebook.MAX_WORKSPACE_BYTES + 1024
+                    elif scope["path"] == "/api/notebook/notes" or (
+                            scope["path"].startswith("/api/notebook/notes/") and
+                            scope["path"].endswith("/revisions") and
+                            len(scope["path"].split("/")) == 6):
+                        limit = 512 * 1024
                 if int(headers.get(b"content-length", b"0")) > limit:
                     return await JSONResponse({"detail": "Request is too large."}, 413)(scope, receive, send)
                 async with asyncio.timeout(10):
@@ -314,7 +324,8 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
 
     def submission_data(submission):
         return {"id": submission.id, "status": "correct" if submission.correct else "incorrect",
-                "received_at": submission.received_at, "method_id": submission.method_id}
+                "received_at": submission.received_at, "method_id": submission.method_id,
+                "ai_model": submission.ai_model or ""}
 
     def challenge_data(session, challenge):
         submission = session.scalar(select(Submission).where(Submission.challenge_id == challenge.id))
@@ -407,7 +418,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         return response
 
     @app.get("/api/schemes")
-    def schemes(request: Request):
+    def schemes(request: Request, progress_only: bool = False):
         catalogue = registry.catalogue()
         releases = [release for scheme in catalogue for release in [scheme, *scheme["previous_releases"]]]
         # One bounded-result query for the whole catalogue: first successful
@@ -472,7 +483,12 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             scheme["first_recovery"] = {"handle": first.handle, "received_at": first.received_at,
                 "profile_id": first.profile_id, "scheme_version": first.scheme_version,
                 "submission_id": first.receipt_id} if first else None
-        return catalogue_response(envelope(schemes=catalogue), request.headers.get("accept-encoding"))
+        document = {"catalogue_revision": registry.catalogue_revision()}
+        if progress_only:
+            document.update(projection="progress", releases=catalogue_progress(catalogue))
+        else:
+            document["schemes"] = catalogue
+        return catalogue_response(envelope(**document), request.headers.get("accept-encoding"))
 
     @app.get("/api/challenges")
     def current_challenge(profile_id: str, request: Request, scheme_id: str | None = None,
@@ -575,46 +591,36 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
 
             # Fresh-key generation holds no DB session, transaction, or account
             # lock. Cross-process duplicates still converge in the final phase.
-            attempt_id = None
-            tracked = manifest.get("profile_kind") in {"standard-parameter-set", "research-tier"}
             with app.state.generation_limiter.slot(user_id):
                 # Quota/ledger failures are infrastructure failures, not evidence
                 # of a faulty cryptographic profile. Only classify adapter errors.
                 # Revisits and saturation retries do not consume this allowance.
                 throttle(request, "generation-account", 30, 60, account_id=user_id)
-                if tracked:
-                    attempt_id = generation.start_attempt(db, manifest, user_id, round_["id"], clock())
+                # Every actual draw has the same accounting, including DH/RSA.
+                # Busy/reuse/quota rejection never creates an attempt row.
+                attempt_id = generation.start_attempt(db, manifest, user_id, round_["id"], clock())
                 try:
                     generated = adapter.generate(profile_id)
-                except generation.GenerationBusy:
-                    raise
-                except HTTPException:
-                    raise
+                    generation_policy.validate_result(manifest, generated)
                 except Exception as error:
-                    limit_types = tuple(kind for name in ("PrimeGenerationLimit", "GenerationLimit", "GenerationUnavailable", "GenerationResourceLimit")
-                                        if isinstance(kind := getattr(adapter, name, None), type))
-                    limited = bool(limit_types and isinstance(error, limit_types))
-                    if attempt_id:
-                        generation.finish_attempt(db, attempt_id, clock(), "generation_abort" if limited else "implementation_fault", "unissued")
-                    if limited:
-                        raise HTTPException(503, "Parameter generation is unavailable or exceeded its resource allowance. Please retry later.") from None
+                    outcome = generation_policy.failure_outcome(adapter, error)
+                    generation.finish_attempt(db, attempt_id, clock(), outcome, "unissued")
+                    if outcome == "generation_abort":
+                        raise HTTPException(503, "Parameter generation exceeded its resource allowance. Please retry later.") from None
                     record_incident({"reason": "adapter_execution_failed"})
                     raise HTTPException(503, "This profile encountered an implementation fault and is paused for review.") from None
             if not generated.diagnostics.get("shared_secret_matches", False):
                 # Hold all mismatches without retrying or calling a mathematical
                 # failure an implementation bug. No secrets enter this ledger.
-                if attempt_id:
-                    generation.finish_attempt(db, attempt_id, clock(), "agreement_failure_under_review", "quarantined")
+                generation.finish_attempt(db, attempt_id, clock(), "agreement_failure_under_review", "quarantined")
                 record_incident({"shared_secret_matches": False, "reason": "agreement_failure_under_review"})
                 raise HTTPException(503, "This profile failed its agreement check and is paused for review.")
-            if attempt_id:
-                generation.finish_attempt(db, attempt_id, clock(), "agreement", "generated_unissued")
+            generation.finish_attempt(db, attempt_id, clock(), "agreement", "generated_unissued")
 
             with db.transaction(write=True) as session:
                 _, final_round, existing = preflight(session, expected_user=user_id, expected_round=round_["id"])
                 if existing:
-                    if attempt_id:
-                        session.get(generation.GenerationAttempt, attempt_id).disposition = "duplicate_discarded"
+                    session.get(generation.GenerationAttempt, attempt_id).disposition = "duplicate_discarded"
                     return existing_response(session, existing, final_round)
                 issued = clock()
                 if issued >= round_["ends_at"]:
@@ -626,8 +632,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                     public_data=generated.public, manifest=manifest,
                     target_mac=target_mac(settings.secret, challenge_id, generated.target), correctness_passed=True)
                 session.add(challenge)
-                if attempt_id:
-                    session.get(generation.GenerationAttempt, attempt_id).disposition = "issued"
+                session.get(generation.GenerationAttempt, attempt_id).disposition = "issued"
                 session.flush()
                 return envelope(challenge=challenge_data(session, challenge), round_started=True,
                                 round_started_round_id=round_["id"])
@@ -677,6 +682,10 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         throttle(request, "submit", 30, 60)
         received = request.state.received_at
         payload = body.model_dump(mode="json")
+        # Preserve pre-annotation retry commitments. A supplied annotation is
+        # immutable and part of the same commitment as the answer and compute.
+        if not body.ai_model:
+            payload.pop("ai_model")
         commitment = payload_mac(settings.secret, {"challenge_id": challenge_id, **payload})
         with db.transaction(write=True) as session:
             user = user_for(request, session, mutation=True)
@@ -705,7 +714,8 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             record = Submission(id=str(uuid4()), challenge_id=challenge.id, user_id=user.id, method_id=method.id,
                 profile_id=challenge.profile_id, scheme_version=challenge.scheme_version, round_id=challenge.round_id,
                 idempotency_key=str(body.idempotency_key), payload_mac=commitment, correct=correct,
-                received_at=received, elapsed_seconds=received - challenge.issued_at, compute=body.compute.model_dump())
+                received_at=received, elapsed_seconds=received - challenge.issued_at, compute=body.compute.model_dump(),
+                ai_model=body.ai_model or None)
             session.add(record)
             session.flush()
             return envelope(submission=submission_data(record), challenge=challenge_data(session, challenge))
@@ -757,7 +767,8 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                 "is_inherited": result.profile_id != profile_id,
                 "received_at": result.received_at, "elapsed_seconds": result.elapsed_seconds,
                 "method": {"id": method.id, "name": method.name, "pseudocode": method.pseudocode},
-                "compute": result.compute, "challenge_id": result.challenge_id} for index, (result, user, method) in enumerate(records)]
+                "compute": result.compute, "ai_model": result.ai_model or "",
+                "challenge_id": result.challenge_id} for index, (result, user, method) in enumerate(records)]
             return envelope(entries=entries, scheme_id=manifest["scheme_id"], scheme_version=manifest["version"],
                             includes_compatible_versions=[version for version in source_profiles if version != manifest["version"]],
                             profile_id=profile_id)
@@ -794,6 +805,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                 "scheme_id": challenge.scheme_id, "scheme_version": challenge.scheme_version,
                 "profile_id": challenge.profile_id, "instance_size": size,
                 "received_at": result.received_at, "elapsed_seconds": result.elapsed_seconds,
+                "ai_model": result.ai_model or "",
                 "method": {"id": method.id, "name": method.name, "pseudocode": method.pseudocode,
                            "source": method_sources.source_descriptor(session, method.id)},
                 "compute": {key: compute[key] for key in ("hardware", "workers", "wall_seconds",
@@ -829,17 +841,45 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     def javascript():
         return FileResponse(ROOT / "web" / "app.js", headers={"Cache-Control": "no-cache"})
 
+    @app.get("/assumptions.js")
+    def assumptions_javascript():
+        return FileResponse(ROOT / "web" / "assumptions.js", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/proposal-retractions.js")
+    def proposal_retractions_script():
+        return FileResponse(ROOT / "web" / "proposal-retractions.js", headers={"Cache-Control": "no-cache"})
+
     @app.get("/math.js")
     def math_javascript():
         return FileResponse(ROOT / "web" / "math.js", headers={"Cache-Control": "no-cache"})
 
+    @app.get("/map/{asset_name}")
+    def research_map_asset(asset_name: str):
+        # Curated, read-only research notes; never a directory mount or a view
+        # into account-owned notebook data. Beta membership is enforced above.
+        assets = {
+            "index.html": "text/html", "notes.html": "text/html",
+            "styles.css": "text/css", "notes.css": "text/css",
+            "app.js": "text/javascript", "map-views.js": "text/javascript",
+            "notes.js": "text/javascript", "note-ui.js": "text/javascript",
+            "catalogue.js": "text/javascript", "notes-data.js": "text/javascript",
+            "catalogue.json": "application/json", "notes.json": "application/json",
+            "PIPELINE.txt": "text/plain", "NOTE-FORMAT.txt": "text/plain",
+        }
+        if asset_name not in assets:
+            raise HTTPException(404, "Map asset not found.")
+        return FileResponse(ROOT / "web" / "map" / asset_name,
+                            media_type=assets[asset_name], headers={"Cache-Control": "no-store"})
+
     @app.get("/notebook/{asset_name}")
     def notebook_asset(asset_name: str):
         assets = {"seed.js": "text/javascript", "store.js": "text/javascript",
-                  "notebook.js": "text/javascript", "notebook.css": "text/css"}
+                  "notebook.js": "text/javascript", "notebook.css": "text/css",
+                  "request-types.json": "application/json"}
         if asset_name not in assets:
             raise HTTPException(404, "Notebook asset not found.")
-        # Only these fixed UI files are exposed; notebook drafts stay in the browser.
+        # Only these fixed UI assets are exposed. Saved notebook data uses
+        # authenticated routes with per-note ownership/publication checks.
         return FileResponse(ROOT / "web" / "notebook" / asset_name,
                             media_type=assets[asset_name], headers={"Cache-Control": "no-cache"})
 
@@ -852,6 +892,73 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     # general web directory. Real-path containment also rejects escaping symlinks.
     app.mount("/vendor/katex", StaticFiles(directory=ROOT / "web" / "vendor" / "katex",
                                           follow_symlink=False), name="katex")
+
+    @app.get("/api/protocol/reference-method")
+    def reference_method():
+        return envelope(method=REFERENCE_METHOD)
+
+    @app.get(agent_guidance.PIPELINE_PATH)
+    def agent_pipeline():
+        return FileResponse(ROOT / "web" / "agent" / "pipeline.json", media_type="application/json",
+                            headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/agent/guidance/{resource_name}")
+    def agent_guidance_resource(resource_name: str):
+        resource = agent_guidance.RESOURCES.get(resource_name)
+        if resource is None:
+            raise HTTPException(404, "Agent guidance not found.")
+        path, media_type = resource
+        return FileResponse(ROOT / path, media_type=media_type, headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/protocol/proposal-guide")
+    def proposal_guide(note: bool = False, data: bool = False, evidence_sha256: str | None = None):
+        from . import display_notes
+        binding = display_notes.proposal_guide()
+        if data:
+            evidence = display_notes.evidence(binding, evidence_sha256=evidence_sha256)
+            if evidence is None:
+                raise HTTPException(404, "No matching supporting evidence is available.")
+            return envelope(**evidence)
+        if note:
+            document = display_notes.document(binding)
+            if document is None:
+                raise HTTPException(404, "No supporting note is available.")
+            return envelope(note=document)
+        return FileResponse(ROOT / "docs" / "proposal-guide.txt", media_type="text/plain",
+                            headers={"Cache-Control": "no-store", **({"Link": '</' + binding["url"] + '>; rel="describedby"'} if binding else {})})
+
+    @app.get("/api/protocol/evidence-note")
+    def protocol_evidence_note(scheme_id: str, version: str | None = None,
+                               revision: int | None = None, sha256: str | None = None,
+                               data: bool = False, evidence_sha256: str | None = None):
+        from . import display_notes
+        adapter = adapter_for(version, scheme_id)
+        binding = display_notes.for_release(adapter.SCHEME_ID, adapter.SCHEME_VERSION)
+        if data:
+            evidence = display_notes.evidence(binding, evidence_sha256=evidence_sha256, revision=revision, sha256=sha256)
+            if evidence is None:
+                raise HTTPException(404, "No matching supporting evidence is available.")
+            return envelope(**evidence)
+        document = display_notes.document(binding, revision=revision, sha256=sha256)
+        if document is None:
+            raise HTTPException(404, "No matching supporting note is available.")
+        return envelope(note=document)
+
+    @app.get("/api/protocol/assumptions")
+    def protocol_assumptions(scheme_id: str, version: str | None = None):
+        from . import display_notes
+        adapter = adapter_for(version, scheme_id)
+        return envelope(sheet=assumption_sheets.sheet_for(adapter.SCHEME_ID, adapter.SCHEME_VERSION),
+                        supporting_note=display_notes.for_release(adapter.SCHEME_ID, adapter.SCHEME_VERSION))
+
+    @app.get("/api/protocol/benchmarks")
+    def reference_benchmarks(scheme_id: str, version: str | None = None):
+        from . import display_notes
+        adapter = adapter_for(version, scheme_id)
+        # Read only explicitly selected evidence. Timing never runs in a request.
+        report = benchmark_reports.report_for(adapter)
+        return envelope(method=REFERENCE_METHOD, report=report,
+                        supporting_note=display_notes.for_report(adapter.SCHEME_ID, adapter.SCHEME_VERSION, report))
 
     @app.get("/api/protocol/source")
     def protocol_source(version: str | None = None, scheme_id: str = kem.SCHEME_ID):
@@ -871,8 +978,6 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     @app.get("/api/protocol/correctness")
     def protocol_correctness(scheme_id: str, version: str | None = None):
         adapter = adapter_for(version, scheme_id)
-        if scheme_id not in standard_schemes.SCHEMES:
-            raise HTTPException(404, "No generation ledger is registered for this release.")
         with db.transaction() as session:
             rows = session.execute(select(generation.GenerationAttempt.profile_id,
                 generation.GenerationAttempt.outcome, generation.GenerationAttempt.disposition,
@@ -883,7 +988,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                     generation.GenerationAttempt.disposition)).all()
         return {"scheme_id": scheme_id, "version": adapter.SCHEME_VERSION,
                 "policy": "hold-on-disagreement-v1",
-                "interpretation": "Counts of generation attempts, including discarded and unissued draws. Started rows may be in flight or interrupted. These observations do not validate analytical failure bounds. Issued samples are conditioned on agreement.",
+                "interpretation": "Counts of recorded generation attempts, including discarded and unissued draws. Historical unrecorded draws are not reconstructed. Started rows may be in flight or interrupted. These observations do not validate analytical failure bounds. Issued samples are conditioned on agreement.",
                 "outcomes": [dict(row._mapping) for row in rows]}
 
     @app.get("/api/protocol/artifact-source")
@@ -918,6 +1023,8 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     people.register_routes(app, db, envelope)
     research.register_routes(app, db, settings, clock, user_for, throttle)
     protocol_proposals.register_routes(app, db, settings, clock, user_for, throttle)
+    notebook.register_routes(app, db, settings, clock, user_for, throttle)
+    research_reviews.register_routes(app, db, settings, clock, user_for, throttle)
     beta_access.register_routes(app, db, settings, clock, account_for, throttle)
     policy.register(app.routes)
     return app

@@ -20,7 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base, User
-from . import beta_access
+from . import beta_access, agent_guidance
 from .security import token_hash
 
 
@@ -30,7 +30,7 @@ TOKEN_SECONDS = 30 * 86400
 POLL_INTERVAL = 2
 LEGACY_SCOPES = ("challenges:read", "challenges:write", "methods:read", "methods:write",
                  "submissions:read", "submissions:write")
-SCOPES = LEGACY_SCOPES + ("proposals:read", "proposals:write")
+SCOPES = LEGACY_SCOPES + ("proposals:read", "proposals:write", "notes:read", "notes:rate")
 ANONYMOUS_POST_PATHS = frozenset({"/api/agent/connect/start", "/api/agent/connect/poll"})
 _UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 _TOKEN = re.compile(r"Bearer (cru_[A-Za-z0-9_-]{43})", re.IGNORECASE)
@@ -87,21 +87,30 @@ def source_upload_path(path):
 
 def required_scope(method, path):
     """An explicit route/method allowlist, never a prefix-wide authorization."""
+    if agent_guidance.is_guidance_read(method, path):
+        # Every existing agent role can learn its rules. This any-of allowance
+        # applies only to the fixed documentation paths, never account data.
+        return SCOPES
     if method == "GET":
+        if path == "/api/agent/notes" or re.fullmatch(r"/api/agent/notes/[^/]{1,108}", path):
+            return "notes:read"
         if path in {"/api/schemes", "/api/leaderboard", "/api/challenges",
                     "/api/protocol/source", "/api/protocol/example", "/api/protocol/spec",
                     "/api/protocol/artifacts", "/api/protocol/artifact-source", "/api/protocol/correctness",
+                    "/api/protocol/reference-method", "/api/protocol/benchmarks", "/api/protocol/assumptions", "/api/protocol/evidence-note",
                     "/api/agent/client"} or re.fullmatch(rf"/api/challenges/{_UUID}/download", path):
             return "challenges:read"
         if path == "/api/methods" or re.fullmatch(rf"/api/methods/{_UUID}/source(?:/download)?", path):
             return "methods:read"
         if path == "/api/me/submissions" or re.fullmatch(rf"/api/submissions/{_UUID}", path):
             return "submissions:read"
-        if path in {"/api/protocol/spec-schema", "/api/protocol/spec-template",
+        if path in {"/api/protocol/spec-schema", "/api/protocol/spec-template", "/api/protocol/proposal-guide",
                     "/api/me/protocol-proposals"} or re.fullmatch(
                         rf"/api/protocol/proposals/{_UUID}(?:/revisions)?", path):
             return "proposals:read"
     if method == "POST":
+        if re.fullmatch(r"/api/agent/notes/[^/]{1,108}/rating", path):
+            return "notes:rate"
         if path == "/api/challenges":
             return "challenges:write"
         if path == "/api/methods" or source_upload_path(path):
@@ -130,7 +139,8 @@ def authorize(header, method, path, session, settings, clock, *, mutation=False)
     token = session.scalar(query)
     if token is None or token.revoked_at is not None or token.expires_at <= clock():
         raise HTTPException(401, "Invalid or expired agent credential.")
-    if not isinstance(token.scopes, list) or scope not in token.scopes:
+    accepted_scopes = scope if isinstance(scope, tuple) else (scope,)
+    if not isinstance(token.scopes, list) or not any(value in token.scopes for value in accepted_scopes):
         raise HTTPException(403, "This agent credential does not allow that action.")
     user = session.get(User, token.user_id)
     beta_access.require_access(session, settings, user, clock(), mutation=mutation)
@@ -140,7 +150,7 @@ def authorize(header, method, path, session, settings, clock, *, mutation=False)
         token = session.scalar(query.with_for_update().execution_options(populate_existing=True))
         if token is None or token.revoked_at is not None or token.expires_at <= clock():
             raise HTTPException(401, "Invalid or expired agent credential.")
-        if not isinstance(token.scopes, list) or scope not in token.scopes:
+        if not isinstance(token.scopes, list) or not any(value in token.scopes for value in accepted_scopes):
             raise HTTPException(403, "This agent credential does not allow that action.")
     return token
 

@@ -16,8 +16,8 @@ from test_people import add_user, person, registered_receipt
 def test_compact_people_preserve_ranking_and_real_components_without_unused_queries(current_system):
     app, _, _ = current_system
     alice, bob = (add_user(app, handle) for handle in ("alice", "bob"))
-    registered_receipt(app, alice, registry.code_hqc_v2, 3)
-    registered_receipt(app, bob, registry.code_hqc_v2, 1, 1)
+    registered_receipt(app, alice, registry.code_hqc_v3, 3)
+    registered_receipt(app, bob, registry.code_hqc_v3, 1, 1)
     client = TestClient(app)
     full = client.get("/api/people").json()
     queries = []
@@ -35,17 +35,17 @@ def test_compact_people_preserve_ranking_and_real_components_without_unused_quer
     assert compact["people"] == [{k: v for k, v in row.items() if k not in omitted} for row in full["people"]]
     assert all(not omitted.intersection(row) for row in compact["people"])
     # These are live aggregates, not a cached scoreboard.
-    registered_receipt(app, bob, registry.code_hqc_v2, 5, 2)
+    registered_receipt(app, bob, registry.code_hqc_v3, 5, 2)
     updated = client.get("/api/people?include_records=false").json()["people"]
-    assert updated[0]["handle"] == "bob" and updated[0]["points"] == 250
+    assert updated[0]["handle"] == "bob" and updated[0]["points"] == 185
 
 
 def test_modern_profile_skips_hidden_milestones_and_reuses_family_score_query(current_system, monkeypatch):
     app, _, _ = current_system
     alice, bob = (add_user(app, handle) for handle in ("alice", "bob"))
-    first = registered_receipt(app, alice, registry.code_hqc_v2, 1, 0)
-    registered_receipt(app, bob, registry.code_hqc_v2, 3, 1)
-    registered_receipt(app, alice, registry.code_hqc_v2, 3, 2)
+    first = registered_receipt(app, alice, registry.code_hqc_v3, 1, 0)
+    registered_receipt(app, bob, registry.code_hqc_v3, 3, 1)
+    registered_receipt(app, alice, registry.code_hqc_v3, 3, 2)
     baseline = person(app, "alice")
     calls = []
     original = scoring.score_relations
@@ -162,6 +162,12 @@ def test_catalogue_cached_metadata_does_not_cache_dynamic_recoveries(current_sys
     user = add_user(app, "alice")
     actual = registered_receipt(app, user, registry.code_hqc_v2, 3)
     after = {row["id"]: row for row in client.get("/api/schemes").json()["schemes"]}
-    assert before["hqc"]["participant_count"] == 0
-    assert after["hqc"]["participant_count"] == 1
-    assert after["hqc"]["first_recovery"]["submission_id"] == actual["submission_id"]
+    assert before["hqc"]["participant_count"] == after["hqc"]["participant_count"] == 0
+    archived = next(row for row in after["hqc"]["previous_releases"]
+                    if row["version"] == registry.code_hqc_v2.SCHEME_VERSION)
+    assert archived["participant_count"] == 1
+    assert archived["first_recovery"]["submission_id"] == actual["submission_id"]
+    current = registered_receipt(app, user, registry.code_hqc_v3, 3, 1)
+    latest = next(row for row in client.get("/api/schemes").json()["schemes"] if row["id"] == "hqc")
+    assert latest["participant_count"] == 1
+    assert latest["first_recovery"]["submission_id"] == current["submission_id"]

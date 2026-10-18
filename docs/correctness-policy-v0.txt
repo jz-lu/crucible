@@ -1,3 +1,8 @@
+Historical policy: the common numerical requirement and new approval rules are
+now in correctness-policy-v1.txt (17 October 2026). Entries below preserve the
+earlier reasoning and implementation history; statements that no common numerical
+threshold has been adopted are superseded by that document.
+
 Clarification — 16 October 2026
 Fixed correctness means one accepted upper bound, not mandatory zero failure or
 identical actual failure probabilities. Disclose per-profile bounds and material

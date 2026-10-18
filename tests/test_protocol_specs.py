@@ -13,7 +13,7 @@ from crucible import calibration, registry
 from crucible.protocol_specs import (
     SPEC_FORMAT, SPEC_MAX_BYTES, ProtocolSpec, builtin_spec, canonical_spec, template_spec,
 )
-from proposal_fixtures import tier_design
+from proposal_fixtures import correctness_review_spec, tier_design
 
 
 @pytest.fixture
@@ -23,12 +23,52 @@ def example():
 
 def test_legacy_specification_canonical_bytes_and_hash_remain_identical(example):
     original = json.dumps(example, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
-    for candidate in (example, {**example, "tier_design": None}):
+    optional_nulls = deepcopy(example)
+    optional_nulls["encoding"]["private_key"] = None
+    optional_nulls["correctness"]["justification"] = None
+    for candidate in (example, {**example, "tier_design": None}, optional_nulls):
         canonical = canonical_spec(ProtocolSpec.model_validate(candidate))
         current = json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
         assert current == original
         assert hashlib.sha256(current).digest() == hashlib.sha256(original).digest()
         assert "tier_design" not in canonical
+        assert "private_key" not in canonical["encoding"]
+        assert "justification" not in canonical["correctness"]
+
+
+def test_mathematical_justification_is_versioned_inert_evidence_not_execution(example):
+    prepared = correctness_review_spec(example)
+    prepared["correctness"]["justification"]["conditions"] = "Conditional on the named setup, exact integer arithmetic, and the stated sampling distribution."
+    prepared["correctness"]["justification"]["derivation"] = "An author-supplied expression such as __import__('os').system('false') is inert text, not evidence of truth."
+    prepared["implementation"] = None  # Specification-only intake remains valid.
+    canonical = canonical_spec(ProtocolSpec.model_validate(prepared))
+    assert canonical == prepared
+    assert canonical["correctness"]["justification"]["derivation"].startswith("An author-supplied")
+    changed = deepcopy(prepared)
+    changed["correctness"]["justification"]["conditions"] += " Additional hypothesis."
+    assert canonical_spec(ProtocolSpec.model_validate(changed)) != canonical
+    assert template_spec()["correctness"]["justification"] is None
+
+
+@pytest.mark.parametrize("field,value", [
+    ("kind", "empirical-tests"), ("kind", "verified"), ("statement", " "),
+    ("statement", "x" * 3001), ("conditions", None), ("conditions", "x" * 4001),
+    ("configuration_coverage", True), ("configuration_coverage", "x" * 4001),
+    ("derivation", []), ("derivation", "x" * 6001), ("execute", "never"),
+])
+def test_mathematical_justification_requires_bounded_explicit_fields(example, field, value):
+    prepared = correctness_review_spec(example)
+    prepared["correctness"]["justification"][field] = value
+    with pytest.raises(ValidationError):
+        ProtocolSpec.model_validate(prepared)
+
+
+@pytest.mark.parametrize("field", ["kind", "statement", "conditions", "configuration_coverage", "derivation"])
+def test_partial_mathematical_justification_is_not_silently_completed(example, field):
+    prepared = correctness_review_spec(example)
+    prepared["correctness"]["justification"].pop(field)
+    with pytest.raises(ValidationError):
+        ProtocolSpec.model_validate(prepared)
 
 
 @pytest.mark.parametrize("status", ["supported-estimate", "provisional", "unestimated"])
@@ -68,6 +108,8 @@ def test_every_builtin_is_valid_uniform_and_preserves_exact_source_provenance(id
     assert spec["name"] == registry.research_schemes.details_for(adapter, registry.DETAILS[identity[0]])["name"]
     assert spec["version"] == identity[1]
     assert set(spec["algorithms"]) == {"setup", "keygen", "encapsulate", "decapsulate"}
+    assert "justification" not in spec["correctness"]  # Never manufacture new review evidence.
+    assert "private_key" not in spec["encoding"]
     if before[0].get("profile_kind") == "research-tier":
         assert spec["parameters"]["distribution"].startswith(before[0]["distribution"])
         assert "conditioned on agreement" in spec["parameters"]["distribution"]

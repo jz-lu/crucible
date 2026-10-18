@@ -26,6 +26,20 @@ What is available
   instance for the hourly round, reuse it on refresh/download/retry. There is no
   eager whole-ladder or hourly regeneration. Participants receive distinct fresh
   instances with the same end-of-hour deadline, not one global shared instance.
+- Research notes and immutable revisions now persist in the database under their
+  account owner. New notes begin private. Publish sends a Publish request that gives
+  configured reviewers access to an exact revision; approval permits other
+  admitted participants to read it. This does not certify the research, admit a
+  scheme or award points. Private participant sharing is retired: old grants no
+  longer authorize reading and no new grants can be created. Historical audit
+  records are preserved. Later edits stay private until separately published.
+  Development-only self-review is recorded separately and cannot grant production
+  publication authority. Reviewer configuration remains separate from beta membership.
+- Notebook browser/API routes follow the membership gate and resource ownership.
+  Notebook agent exchange uses explicit JSON export/import; existing bearer tokens
+  do not grant notebook access. Import preserves revision history and provenance,
+  and cannot supply approval authority. Old browser drafts remain in place until
+  explicitly imported; no sign-in automatically uploads or assigns them.
 
 Local setup with an existing account
 
@@ -41,6 +55,10 @@ After stopping the local server and backing up its state, apply migrations:
   .venv/bin/python -m crucible.manage migrate
 
 Migration 0009 adds access records; it does not enroll or delete existing users.
+Migration 0010 adds optional AI-model attribution to numerical submissions;
+migration 0011 adds notebook records. Neither assigns existing browser drafts to
+accounts or changes historical results. Database backups now cover saved server
+notes and sharing decisions; export unimported browser drafts separately.
 Inspect accounts, then explicitly grant each participant who should retain entry:
 
   .venv/bin/python -m scripts.beta_access list
@@ -159,7 +177,8 @@ Remaining release gates:
   backups including the persistent server key, and a rehearsed restore.
 - Real email delivery, account recovery and ORCID linking as separate identity
   work. No mailbox or ORCID identifier should replace existing account UUIDs.
-- Shared research notebook persistence/API, authorization and review workflow.
-  The current notebook remains browser-local with JSON import/export.
+- Notebook integration with proposals and change requests, scoped agent API access,
+  and scientific review beyond permission to share a note. Test database recovery
+  with notebook revisions/import provenance and sharing decisions included.
 - Explicit per-record publication rules and author decisions before any public
   launch. Beta-only contributions must not become public by changing one setting.

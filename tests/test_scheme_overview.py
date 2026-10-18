@@ -1,5 +1,6 @@
 """Overview summaries describe exact releases without changing their contracts."""
 import hashlib
+import json
 from contextlib import ExitStack
 from copy import deepcopy
 from unittest.mock import patch
@@ -109,7 +110,11 @@ def test_api_overview_preserves_archived_manifests_source_pins_and_byte_metrics_
             # The frozen contract remains exact, including an older release's
             # historical scoring flag. Only the catalogue overlays live policy.
             assert adapter.manifests() == originals[identity]
-            display_fields = {"stage_number", "native_parameter_label", "progression_id", "stage_label", "stage_position", "stage_context"}
+            display_fields = {"stage_number", "native_parameter_label", "progression_id", "stage_label", "stage_position", "stage_context", "exact_parameter_json"}
+            for profile in registry.descriptor(adapter)["profiles"]:
+                if "exact_parameter_json" in profile:
+                    assert json.loads(profile["exact_parameter_json"]) == {
+                        key: profile[key] for key in ("algorithms", "parameters", "encoding", "kdf") if key in profile}
             assert [{k: v for k, v in p.items() if k not in display_fields}
                     for p in registry.descriptor(adapter)["profiles"]] == originals[identity]
             presented = deepcopy(originals[identity])

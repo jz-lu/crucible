@@ -49,6 +49,7 @@ def private_app(tmp_path):
  '/api/schemes','/api/people','/api/people/participant','/api/leaderboard',
  '/api/protocol/source','/api/protocol/artifacts','/api/protocol/artifact-source',
  '/api/protocol/spec','/api/protocol/spec-schema','/api/protocol/spec-template',
+ '/api/protocol/proposal-guide',
  '/api/protocol/correctness','/api/protocol/example','/api/contributions','/api/targets',
  '/api/submissions/00000000-0000-0000-0000-000000000000',
  '/api/methods/00000000-0000-0000-0000-000000000000/source/download',

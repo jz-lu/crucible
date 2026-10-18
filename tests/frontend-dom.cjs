@@ -48,6 +48,7 @@ class Element extends Events {
   append(...items) { for (const item of items) { if (item instanceof Element) item.parentElement = this; this.childNodes.push(item instanceof Element ? item : String(item)); } }
   prepend(...items) { const previous = this.childNodes; this.childNodes = []; this.append(...items, ...previous); }
   replaceChildren(...items) { for (const child of this.children) child.parentElement = null; this.childNodes = []; this.append(...items); }
+  remove() { if (this.parentElement) { this.parentElement.childNodes = this.parentElement.childNodes.filter(child => child !== this); this.parentElement = null; } }
   querySelectorAll(selector) {
     const selectors = selector.split(',').map(item => item.trim()); const result = [];
     const visit = node => { for (const child of node.children) { if (selectors.some(item => matches(child, item))) result.push(child); visit(child); } };
@@ -79,7 +80,7 @@ function parseHTML(source) {
   document.body = document.querySelector('body'); document.activeElement = document.body; return document;
 }
 async function flush() { for (let i = 0; i < 6; i++) await new Promise(resolve => setImmediate(resolve)); }
-async function createApp({schemes, user = null, hash = '#challenge', responder} = {}) {
+async function createApp({schemes, user = null, hash = '#challenge', responder, notebook} = {}) {
   const web = path.resolve(__dirname, '../web');
   const document = parseHTML(fs.readFileSync(path.join(web, 'index.html'), 'utf8'));
   const window = new Events(); window.scrollTo = () => {}; document.defaultView = window;
@@ -88,6 +89,7 @@ async function createApp({schemes, user = null, hash = '#challenge', responder} 
   const location = {get hash() { return current; }, set hash(value) { if (value === current) return; stack.splice(position + 1); stack.push(value); position++; applyHash(value, true); }, get pathname() { return '/'; }, get search() { return ''; }, get href() { return 'http://127.0.0.1:8000/' + current; }};
   const history = {replaceState: (_, __, url) => { applyHash(url, false); stack[position] = current; }, pushState: (_, __, url) => { applyHash(url, false); stack.splice(position + 1); stack.push(current); position++; }, back: () => { if (position) { applyHash(stack[--position], false); window.dispatchEvent({type: 'popstate'}); window.dispatchEvent({type: 'hashchange'}); } }};
   window.location = location; window.history = history;
+  if (notebook) window.CrucibleNotebook = notebook;
   const requests = []; const epoch = Date.now() / 1000;
   const envelope = payload => ({server_time: epoch, round: {id: Math.floor(epoch / 3600), starts_at: Math.floor(epoch / 3600) * 3600, ends_at: (Math.floor(epoch / 3600) + 1) * 3600}, ...payload});
   const fetch = async (input, options = {}) => {
@@ -100,12 +102,13 @@ async function createApp({schemes, user = null, hash = '#challenge', responder} 
       else if (url.pathname === '/api/challenges') data = envelope({challenge: null});
       else if (url.pathname === '/api/leaderboard') data = envelope({entries: []});
       else if (url.pathname === '/api/targets') data = envelope({targets: []});
+      else if (url.pathname === '/api/protocol/benchmarks') data = envelope({method: {id: 'reference-operations-v1', version: 1}, report: null});
       else throw new Error('Unexpected mocked request: ' + url.pathname);
     }
-    return {ok: true, status: 200, json: async () => data};
+    return {ok: true, status: 200, json: async () => data, text: async () => typeof data === 'string' ? data : JSON.stringify(data)};
   };
   const sandbox = {document, window, location, history, fetch, URL, URLSearchParams, AbortController, Blob, TextEncoder, console, navigator: {}, crypto: {randomUUID: () => 'test-uuid'}, setTimeout: () => 1, clearTimeout: () => {}, setInterval: () => 1};
-  vm.createContext(sandbox); vm.runInContext(fs.readFileSync(path.join(web, 'app.js'), 'utf8'), sandbox, {filename: 'app.js'}); await flush();
+  vm.createContext(sandbox); for (const file of ['assumptions.js', 'proposal-retractions.js', 'app.js']) vm.runInContext(fs.readFileSync(path.join(web, file), 'utf8'), sandbox, {filename:file}); await flush();
   return {document, window, location, history, requests, sandbox, envelope, $: selector => { const element = document.querySelector(selector); if (!element) throw new Error('Missing element: ' + selector); return element; }, navigate: async next => { location.hash = next; await flush(); }};
 }
 module.exports = {createApp, flush};

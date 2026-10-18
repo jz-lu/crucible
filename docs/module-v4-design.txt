@@ -1,0 +1,102 @@
+MODULE-LATTICE v4 DESIGN — 17 OCTOBER 2026
+
+Identity: ml-kem / compressed-research-v4.
+Implementation: crucible/lattice_module_v4.py and module_compressed_v4_core.py.
+
+Why this path
+
+Use the published ML-KEM-512 tuple as the endpoint: q=3329, rank 2, eta1=3,
+eta2=2, du=10, dv=4, with degree 256. Hold all those settings except degree fixed,
+and take the six power-of-two degrees 8,16,32,64,128,256. This retains a simple
+structural relationship to the endpoint while making the transmitted objects
+and arithmetic smaller at earlier configurations. It is a restricted design
+choice, not a proof of global parameter or performance optimality.
+
+Six natural settings are preferable to artificial intermediate settings added
+to meet a cosmetic tier count. A tier is an ordinal configuration selector,
+not a security-bit estimate. No cross-scheme equality of tiers is implied.
+ML-KEM-768 is not a separate selected deployment or comparison reference.
+
+The endpoint uses FIPS 203 algorithms, transforms and encodings for completed
+operations. Independent NIST ACVP vectors check key generation, encapsulation,
+decapsulation and key validation; this is conformance evidence, not FIPS
+certification. The bounded reference sampler and isolated generator may abort
+for resource reasons; these outcomes are separately accounted for.
+
+Lower degrees are nonstandard research constructions. They use a generalized
+incomplete NTT, the full native n-bit message space and explicit parameter/purpose
+hash separation. The smaller rings have different factorization structure and
+may admit additional attacks. They inherit neither the endpoint's NIST category 1
+assessment nor a full-KEM security guarantee. No uncalibrated attack-cost curve
+is fabricated. Generic enumeration of native messages remains an explicit attack
+route. The 32-byte output format does not establish 256-bit security.
+
+Parameters, wire sizes and correctness evidence
+
+Tier  Degree  Public key  Ciphertext  Chosen per-configuration failure bound
+  1       8     56 bytes    24 bytes  0: deterministic support argument
+  2      16     80 bytes    48 bytes  0: deterministic support argument
+  3      32    128 bytes    96 bytes  <=2^-367: conservative analytical bound
+  4      64    224 bytes   192 bytes  <=2^-193: conservative analytical bound
+  5     128    416 bytes   384 bytes  <=2^-236: explicit compression model
+  6     256    800 bytes   768 bytes  <=2^-128: explicit compression model
+
+Sizes count actual encoded bytes, excluding JSON/hex transport. The public key
+has 3n+32 bytes and ciphertext 3n bytes. All profiles return a 32-byte shared key.
+The old module-v3 source, parameters and receipts retain their old meaning;
+this new release does not relabel them or reuse their benchmarks.
+
+Common correctness requirement and margins
+
+Every configuration must meet the common <=2^-128 honest-agreement ceiling
+under its reviewed premises. This is an upper bound, not an identical failure
+rate. Zero is allowed where naturally proved; it is no longer imposed on every
+configuration. The old q=24593 endpoint enlarged the modulus to cover worst-case
+noise support. That extra size did not establish stronger security.
+
+For v4, exact integer rounding gives |delta_u|<=2 and |delta_v|<=104. An honest
+decoding error requires an integer residual of absolute value at least 832.
+After allowing worst-case v rounding, the analyzed remaining tail starts at 728.
+For degrees 8/16, the full residual support is at most 21*rank*n+106<832.
+For degrees 32/64, the proof uses independent expanded CBD noise but leaves
+u-rounding dependent and bounds it conservatively. It does not assume uniform
+compression errors. For degrees 128/256, the reported target additionally models
+u-rounding errors as independent errors from uniform coefficients, independent
+of the relevant secrets and noise. v-rounding remains worst-case bounded.
+
+Exact rational Chernoff and union calculations prove the bound within that
+specified experiment. They do not prove the model's applicability to fixed
+SHA3/SHAKE executions. The endpoint's computed exponent is approximately
+128.041429812; an integer comparison certifies the conservative 2^-128 ceiling.
+The published ML-KEM-512 estimate is approximately 2^-138.8 under its published
+analysis. We retain this distinction and do not copy it to reduced degrees.
+
+Failure means a mismatch or honest rejection in one fresh honest exchange,
+averaged over the specified key and encapsulation randomness. This is not a
+worst-key or adaptive IND-CCA correctness statement. Generation aborts are
+separate; disagreement is retained and quarantined, never silently retried.
+Implementation and model acceptance remain manual review obligations.
+
+Exact evidence and sources
+
+Local derivation: docs/mlkem-correctness-candidates.txt.
+Exact certificates: docs/mlkem-correctness-candidates.json.
+Reproduction: scripts/mlkem_correctness_certificate.py --verify
+  docs/mlkem-correctness-candidates.json.
+
+FIPS 203, Table 1 (failure estimates), Table 2 (parameters), Table 3 (byte lengths):
+https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf
+
+Pinned NIST ACVP-Server v1.1.0.41 vectors, with source digests recorded in
+tests/fixtures/module-compressed-v4-acvp.json:
+https://github.com/usnistgov/ACVP-Server/tree/v1.1.0.41/gen-val/json-files
+
+Barbosa et al., CCS 2025: distinguishes verified numerical bounds for the
+heuristic compression experiment from stronger correctness statements.
+https://www.cryptojedi.org/papers/frodoec-20250831.pdf
+
+Duriez and Tommasini, September 2026 preprint: a relevant dependency-preserving
+ML-KEM-768 result under an explicit ideal randomness model. Its proof and
+artifacts have not been independently validated here, and no result from it
+is inherited by this 512/reduced-degree ladder.
+https://arxiv.org/abs/2609.09983

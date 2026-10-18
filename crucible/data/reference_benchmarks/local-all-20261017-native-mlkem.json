@@ -1,0 +1,1283 @@
+{
+  "environment": {
+    "architecture": "arm64",
+    "cpu_affinity": "not pinned",
+    "cpu_model": "arm",
+    "os": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+    "python": "CPython 3.14.6",
+    "single_threaded": true
+  },
+  "format": "crucible-reference-benchmark-v1",
+  "harness": {
+    "files": {
+      "scripts/reference_benchmark.py": "dfb282ab263983155a2698340a480090bd5291960057853ad518fc69c8f26d1e",
+      "scripts/reference_benchmark_adapters.py": "a5fd6b57c246143afc7bb0aca352a99e4cd3ba62e525c8ce2b08d8e1d3124878",
+      "scripts/reference_benchmark_native.c": "e4aa9f3342a2f00edee07d2752343cab7e1adbd3edf68e073094e4ce284649db",
+      "scripts/reference_benchmark_native.py": "ee375adcc9128c79e954fc902e18b68db08e5677df327f7c189392723b4bb5eb",
+      "scripts/reference_benchmark_worker.py": "1513cf7699daf2914edc60411df9827ee52503d7103e906e8b6ef515f173e1a3"
+    },
+    "sha256": "0fef1a7a55c897c0fbf857ceda619f42d7fe92aa2a9f96725a5ea3fe7afca46f"
+  },
+  "measured_at": "2026-10-17T11:53:09.549665+00:00",
+  "method_id": "reference-operations-v1",
+  "policy": {
+    "excludes": [
+      "process startup",
+      "artifact verification",
+      "HTTP",
+      "JSON",
+      "database",
+      "final equality check"
+    ],
+    "includes": [
+      "required operation checks",
+      "RNG",
+      "canonical cryptographic encoding",
+      "KDF"
+    ],
+    "input_distribution": "fresh independent honest keypair and encapsulation per trial; valid ciphertext decapsulation",
+    "profile_timeout_seconds": 120.0,
+    "quartiles": "inclusive linear interpolation; summaries retain completed operations from partial trials",
+    "trials": 20,
+    "warmups": 3
+  },
+  "records": [
+    {
+      "artifact_sha256": "a16965f1a80448e42b58428c079e3fae5a2fca5a0e33e2e9200fd2e33d5129ac",
+      "benchmark_artifact": {
+        "adapter_artifact_sha256": "a16965f1a80448e42b58428c079e3fae5a2fca5a0e33e2e9200fd2e33d5129ac",
+        "binary_sha256": "10920ae78dc714065fbe3d3ac6b3287781e5755a8086600e35fffd4ac4c9891f",
+        "build_options": [
+          "-std=c99",
+          "-O1",
+          "-DBENCH_FAMILY=0"
+        ],
+        "compiler": "Apple clang version 14.0.3 (clang-1403.0.22.14.1)",
+        "files": {
+          "driver/reference_benchmark_native.c": "e4aa9f3342a2f00edee07d2752343cab7e1adbd3edf68e073094e4ce284649db",
+          "include/oqs/aes.h": "4bf812c6c36110dd6290bd835f18c3cc44837d48e4c8f7037a2c08bbe16d3fb8",
+          "include/oqs/aes_ops.h": "d956af1540dd44db8450a4d1e2e81c2130bc96539f749deb61daf3a23afb94b0",
+          "include/oqs/common.h": "b6340af7d9a36c2be20b8c300a20ea39b7abfe95e6fa67129fbe1a59b2cc4027",
+          "include/oqs/kem.h": "9ad7af3e2ea7375d86b19f30d38575898295d34aab9be73441b110a6701d3b2a",
+          "include/oqs/kem_classic_mceliece.h": "7e8329674fbec9bcfcc20b1f2c11bdb1fd4053b6b5227b8665573ba80b9ac7e2",
+          "include/oqs/kem_frodokem.h": "e1945fa8d3216eb6f48d22532329a5d83c6d4595f59ff4ab66bd6f6cb4f98273",
+          "include/oqs/kem_hqc.h": "a4cd3f9e985f9ddfed8b72b07e1e01b960a452eed1d91e3fbca6fecc8e5d6daf",
+          "include/oqs/kem_ml_kem.h": "f817b1342868d07d8b43a7c22ed282708b5af38943cc9becd2bd00ab7230a1fb",
+          "include/oqs/oqs.h": "e30ddec1ebde02891ab9a25d567f0ffca4b9e07ee8b89ab44bb27737b4f10a8a",
+          "include/oqs/oqsconfig.h": "2cf61441933a85d2162fe3e6fb104b262a95cba2621ee8681d4f7034687221d1",
+          "include/oqs/rand.h": "e38e720b1680d51f6f87b9a2985b97e1530b476cc5f9c68dc62e4d7682915457",
+          "include/oqs/rand_nist.h": "db8bea44ea9fb292d052e2aa579ddd1c112e596312d68d30c676b28668df2a2a",
+          "include/oqs/sha2.h": "6a4b5a446683a2ef20948d31fc524bc223116b9dac2c6702442c5c68b2b96528",
+          "include/oqs/sha2_ops.h": "1ae19feb318f6ade47ef8558299484798cbf413fca29cc164a26162dcce3d78b",
+          "include/oqs/sha3.h": "7ef22ba43a56fb50d4a24785c355c65fb9d42d2757fccf592a4a938307fcb197",
+          "include/oqs/sha3_ops.h": "f59ea832f559630c381d8fb0f2243b7f435f66c6539e9af3a828bf53f67d5e53",
+          "include/oqs/sha3x4.h": "e622731ecd9b2b2ca54d129a385221565361a69b285bc76a81c6cbf132ebac08",
+          "include/oqs/sha3x4_ops.h": "407af0a256131cb7875bd04e25897b9205ff9c2ff20968814abfde9aff909655",
+          "include/oqs/sig.h": "9d0117a246f97f79e3d76c5d6527a2a560c65addb8b82cd3712687db7717b8b9",
+          "include/oqs/sig_stfl.h": "910977e30eb84f5935d6e12cdc54cf57ec041d75fd5b8aca528682d4030bfe6c",
+          "libraries/liboqs.a": "7b550ba37b718917e4d7bbc973dfd47a24d0a6a4e75b8205e6161d21b199718c",
+          "shims/aes.h": "4dd64053bce5a7cbf1191a631295fe3b6900c834f931854641c4dd9274d0ed6d",
+          "shims/aes256ctr.h": "37ef06179e7a7ca8cffe6c35d6b4bc60c60df950e35294d140f3b5b70ffec9ef",
+          "shims/compat.h": "383f190d0a8cfb33efde6342c36f424db36b0439e32b34c952de33fde8512807",
+          "shims/crypto_declassify.h": "2af200424f69e3cf0582f1f0e93a6517fca8ad154115e11dba5472586ba48403",
+          "shims/fips202.c": "dff37ba4f0a0f29e79802769d3750f513e872be37d7b18b767219ff9f5e63dea",
+          "shims/fips202.h": "fda29adc8452c3af88ed7e8a92371f520f9c9bbc8ffd7143c6544319db05098e",
+          "shims/fips202x4.c": "d80abcf2eeee6b5a8bb2da6e0b1dea598e341eed6d03c6fc930c0c152518e429",
+          "shims/fips202x4.h": "a38cd77a23250306eb2ea843e76d65a4079b25caffea35469872fba33c0b2da9",
+          "shims/randombytes.h": "09171d2fb670e4eb37720f53e9a7df77d35ba7fbf9b3f93464f62171709a7af2",
+          "shims/sha2.h": "1d55e8e01fcfb47b6663c2aa04552b4468133b8d069702c66683b620473c31cc"
+        },
+        "format": "crucible-native-benchmark-artifact-v1",
+        "measurement_scope": "Native core operation calls with OS randomness; driver buffer allocation and initialization excluded. Different from Python API allocation overhead. ML-KEM uses the pinned liboqs AArch64 backend; it is architecture optimized.",
+        "parameters_sha256": "63a511563fe452244b1e15dce96c04e3123806ef315fb84144f9f790fccd6f2b",
+        "profile_id": "ml-kem-fips203-oqs016-v1-ml-kem-512",
+        "scheme_id": "ml-kem",
+        "scheme_version": "fips203-oqs016-v1",
+        "sha256": "ae94eba5cfe484941411f7e82151188f94be1d4232c64fee9cb8c2d239ab9a83",
+        "target": "mlkem"
+      },
+      "completed_trials": 20,
+      "end_to_end_seconds": 0.3895809169916902,
+      "exit_code": 0,
+      "implementation": {
+        "label": "Pinned liboqs ML-KEM AArch64 backend",
+        "language": "C",
+        "performance_level": "architecture-optimized"
+      },
+      "notes": [
+        "Native core operation calls with OS randomness; driver buffer allocation and initialization excluded. Different from Python API allocation overhead. ML-KEM uses the pinned liboqs AArch64 backend; it is architecture optimized."
+      ],
+      "operations": {
+        "decapsulate": {
+          "count": 20,
+          "max_ns": 11000,
+          "median_ns": 8000.0,
+          "min_ns": 8000,
+          "q1_ns": 8000.0,
+          "q3_ns": 9000.0,
+          "samples_ns": [
+            8000,
+            10000,
+            8000,
+            8000,
+            9000,
+            9000,
+            8000,
+            8000,
+            10000,
+            9000,
+            10000,
+            8000,
+            8000,
+            8000,
+            8000,
+            8000,
+            8000,
+            8000,
+            8000,
+            11000
+          ]
+        },
+        "encapsulate": {
+          "count": 20,
+          "max_ns": 9000,
+          "median_ns": 7000.0,
+          "min_ns": 6000,
+          "q1_ns": 6750.0,
+          "q3_ns": 7000.0,
+          "samples_ns": [
+            6000,
+            9000,
+            7000,
+            7000,
+            7000,
+            7000,
+            7000,
+            6000,
+            7000,
+            7000,
+            8000,
+            7000,
+            6000,
+            7000,
+            7000,
+            7000,
+            6000,
+            6000,
+            7000,
+            8000
+          ]
+        },
+        "keygen": {
+          "count": 20,
+          "max_ns": 7000,
+          "median_ns": 5500.0,
+          "min_ns": 5000,
+          "q1_ns": 5000.0,
+          "q3_ns": 6000.0,
+          "samples_ns": [
+            5000,
+            6000,
+            6000,
+            6000,
+            5000,
+            5000,
+            6000,
+            5000,
+            6000,
+            7000,
+            7000,
+            7000,
+            5000,
+            6000,
+            5000,
+            6000,
+            5000,
+            5000,
+            5000,
+            5000
+          ]
+        }
+      },
+      "outcomes": {
+        "measured": {
+          "agreement": 20
+        },
+        "warmup": {
+          "agreement": 3
+        }
+      },
+      "parameters_sha256": "63a511563fe452244b1e15dce96c04e3123806ef315fb84144f9f790fccd6f2b",
+      "profile_id": "ml-kem-fips203-oqs016-v1-ml-kem-512",
+      "protocol_error": false,
+      "requested_trials": 20,
+      "scheme_id": "ml-kem",
+      "setup_seconds": 8e-06,
+      "source_changed": false,
+      "source_sha256": "48b7f2fa901240dc960873eaa1c24beb79c34bc1b5f58818e5dcdfd75e1dc9c6",
+      "status": "complete",
+      "timed_out": false,
+      "trials": [
+        {
+          "index": 0,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 9000,
+            "encapsulate": 8000,
+            "keygen": 51000
+          }
+        },
+        {
+          "index": 1,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 10000,
+            "encapsulate": 7000,
+            "keygen": 5000
+          }
+        },
+        {
+          "index": 2,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 9000,
+            "encapsulate": 8000,
+            "keygen": 7000
+          }
+        },
+        {
+          "index": 0,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 8000,
+            "encapsulate": 6000,
+            "keygen": 5000
+          }
+        },
+        {
+          "index": 1,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 10000,
+            "encapsulate": 9000,
+            "keygen": 6000
+          }
+        },
+        {
+          "index": 2,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 8000,
+            "encapsulate": 7000,
+            "keygen": 6000
+          }
+        },
+        {
+          "index": 3,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 8000,
+            "encapsulate": 7000,
+            "keygen": 6000
+          }
+        },
+        {
+          "index": 4,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 9000,
+            "encapsulate": 7000,
+            "keygen": 5000
+          }
+        },
+        {
+          "index": 5,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 9000,
+            "encapsulate": 7000,
+            "keygen": 5000
+          }
+        },
+        {
+          "index": 6,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 8000,
+            "encapsulate": 7000,
+            "keygen": 6000
+          }
+        },
+        {
+          "index": 7,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 8000,
+            "encapsulate": 6000,
+            "keygen": 5000
+          }
+        },
+        {
+          "index": 8,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 10000,
+            "encapsulate": 7000,
+            "keygen": 6000
+          }
+        },
+        {
+          "index": 9,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 9000,
+            "encapsulate": 7000,
+            "keygen": 7000
+          }
+        },
+        {
+          "index": 10,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 10000,
+            "encapsulate": 8000,
+            "keygen": 7000
+          }
+        },
+        {
+          "index": 11,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 8000,
+            "encapsulate": 7000,
+            "keygen": 7000
+          }
+        },
+        {
+          "index": 12,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 8000,
+            "encapsulate": 6000,
+            "keygen": 5000
+          }
+        },
+        {
+          "index": 13,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 8000,
+            "encapsulate": 7000,
+            "keygen": 6000
+          }
+        },
+        {
+          "index": 14,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 8000,
+            "encapsulate": 7000,
+            "keygen": 5000
+          }
+        },
+        {
+          "index": 15,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 8000,
+            "encapsulate": 7000,
+            "keygen": 6000
+          }
+        },
+        {
+          "index": 16,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 8000,
+            "encapsulate": 6000,
+            "keygen": 5000
+          }
+        },
+        {
+          "index": 17,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 8000,
+            "encapsulate": 6000,
+            "keygen": 5000
+          }
+        },
+        {
+          "index": 18,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 8000,
+            "encapsulate": 7000,
+            "keygen": 5000
+          }
+        },
+        {
+          "index": 19,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 11000,
+            "encapsulate": 8000,
+            "keygen": 5000
+          }
+        }
+      ],
+      "version": "fips203-oqs016-v1",
+      "warmup_completed": 3,
+      "warmup_requested": 3,
+      "worker_failure": null
+    },
+    {
+      "artifact_sha256": "a16965f1a80448e42b58428c079e3fae5a2fca5a0e33e2e9200fd2e33d5129ac",
+      "benchmark_artifact": {
+        "adapter_artifact_sha256": "a16965f1a80448e42b58428c079e3fae5a2fca5a0e33e2e9200fd2e33d5129ac",
+        "binary_sha256": "10920ae78dc714065fbe3d3ac6b3287781e5755a8086600e35fffd4ac4c9891f",
+        "build_options": [
+          "-std=c99",
+          "-O1",
+          "-DBENCH_FAMILY=0"
+        ],
+        "compiler": "Apple clang version 14.0.3 (clang-1403.0.22.14.1)",
+        "files": {
+          "driver/reference_benchmark_native.c": "e4aa9f3342a2f00edee07d2752343cab7e1adbd3edf68e073094e4ce284649db",
+          "include/oqs/aes.h": "4bf812c6c36110dd6290bd835f18c3cc44837d48e4c8f7037a2c08bbe16d3fb8",
+          "include/oqs/aes_ops.h": "d956af1540dd44db8450a4d1e2e81c2130bc96539f749deb61daf3a23afb94b0",
+          "include/oqs/common.h": "b6340af7d9a36c2be20b8c300a20ea39b7abfe95e6fa67129fbe1a59b2cc4027",
+          "include/oqs/kem.h": "9ad7af3e2ea7375d86b19f30d38575898295d34aab9be73441b110a6701d3b2a",
+          "include/oqs/kem_classic_mceliece.h": "7e8329674fbec9bcfcc20b1f2c11bdb1fd4053b6b5227b8665573ba80b9ac7e2",
+          "include/oqs/kem_frodokem.h": "e1945fa8d3216eb6f48d22532329a5d83c6d4595f59ff4ab66bd6f6cb4f98273",
+          "include/oqs/kem_hqc.h": "a4cd3f9e985f9ddfed8b72b07e1e01b960a452eed1d91e3fbca6fecc8e5d6daf",
+          "include/oqs/kem_ml_kem.h": "f817b1342868d07d8b43a7c22ed282708b5af38943cc9becd2bd00ab7230a1fb",
+          "include/oqs/oqs.h": "e30ddec1ebde02891ab9a25d567f0ffca4b9e07ee8b89ab44bb27737b4f10a8a",
+          "include/oqs/oqsconfig.h": "2cf61441933a85d2162fe3e6fb104b262a95cba2621ee8681d4f7034687221d1",
+          "include/oqs/rand.h": "e38e720b1680d51f6f87b9a2985b97e1530b476cc5f9c68dc62e4d7682915457",
+          "include/oqs/rand_nist.h": "db8bea44ea9fb292d052e2aa579ddd1c112e596312d68d30c676b28668df2a2a",
+          "include/oqs/sha2.h": "6a4b5a446683a2ef20948d31fc524bc223116b9dac2c6702442c5c68b2b96528",
+          "include/oqs/sha2_ops.h": "1ae19feb318f6ade47ef8558299484798cbf413fca29cc164a26162dcce3d78b",
+          "include/oqs/sha3.h": "7ef22ba43a56fb50d4a24785c355c65fb9d42d2757fccf592a4a938307fcb197",
+          "include/oqs/sha3_ops.h": "f59ea832f559630c381d8fb0f2243b7f435f66c6539e9af3a828bf53f67d5e53",
+          "include/oqs/sha3x4.h": "e622731ecd9b2b2ca54d129a385221565361a69b285bc76a81c6cbf132ebac08",
+          "include/oqs/sha3x4_ops.h": "407af0a256131cb7875bd04e25897b9205ff9c2ff20968814abfde9aff909655",
+          "include/oqs/sig.h": "9d0117a246f97f79e3d76c5d6527a2a560c65addb8b82cd3712687db7717b8b9",
+          "include/oqs/sig_stfl.h": "910977e30eb84f5935d6e12cdc54cf57ec041d75fd5b8aca528682d4030bfe6c",
+          "libraries/liboqs.a": "7b550ba37b718917e4d7bbc973dfd47a24d0a6a4e75b8205e6161d21b199718c",
+          "shims/aes.h": "4dd64053bce5a7cbf1191a631295fe3b6900c834f931854641c4dd9274d0ed6d",
+          "shims/aes256ctr.h": "37ef06179e7a7ca8cffe6c35d6b4bc60c60df950e35294d140f3b5b70ffec9ef",
+          "shims/compat.h": "383f190d0a8cfb33efde6342c36f424db36b0439e32b34c952de33fde8512807",
+          "shims/crypto_declassify.h": "2af200424f69e3cf0582f1f0e93a6517fca8ad154115e11dba5472586ba48403",
+          "shims/fips202.c": "dff37ba4f0a0f29e79802769d3750f513e872be37d7b18b767219ff9f5e63dea",
+          "shims/fips202.h": "fda29adc8452c3af88ed7e8a92371f520f9c9bbc8ffd7143c6544319db05098e",
+          "shims/fips202x4.c": "d80abcf2eeee6b5a8bb2da6e0b1dea598e341eed6d03c6fc930c0c152518e429",
+          "shims/fips202x4.h": "a38cd77a23250306eb2ea843e76d65a4079b25caffea35469872fba33c0b2da9",
+          "shims/randombytes.h": "09171d2fb670e4eb37720f53e9a7df77d35ba7fbf9b3f93464f62171709a7af2",
+          "shims/sha2.h": "1d55e8e01fcfb47b6663c2aa04552b4468133b8d069702c66683b620473c31cc"
+        },
+        "format": "crucible-native-benchmark-artifact-v1",
+        "measurement_scope": "Native core operation calls with OS randomness; driver buffer allocation and initialization excluded. Different from Python API allocation overhead. ML-KEM uses the pinned liboqs AArch64 backend; it is architecture optimized.",
+        "parameters_sha256": "f7006650f78a459034aac25d6f3e963b0a378de897b7b5686d6a4044e6c05422",
+        "profile_id": "ml-kem-fips203-oqs016-v1-ml-kem-768",
+        "scheme_id": "ml-kem",
+        "scheme_version": "fips203-oqs016-v1",
+        "sha256": "ad231e47dea6e61ccf4708071438ac4fba5d32c0ad28f2f1173c7a5bbe0bb215",
+        "target": "mlkem"
+      },
+      "completed_trials": 20,
+      "end_to_end_seconds": 0.09990958299022168,
+      "exit_code": 0,
+      "implementation": {
+        "label": "Pinned liboqs ML-KEM AArch64 backend",
+        "language": "C",
+        "performance_level": "architecture-optimized"
+      },
+      "notes": [
+        "Native core operation calls with OS randomness; driver buffer allocation and initialization excluded. Different from Python API allocation overhead. ML-KEM uses the pinned liboqs AArch64 backend; it is architecture optimized."
+      ],
+      "operations": {
+        "decapsulate": {
+          "count": 20,
+          "max_ns": 17000,
+          "median_ns": 15000.0,
+          "min_ns": 15000,
+          "q1_ns": 15000.0,
+          "q3_ns": 16000.0,
+          "samples_ns": [
+            15000,
+            15000,
+            15000,
+            15000,
+            15000,
+            16000,
+            15000,
+            15000,
+            15000,
+            15000,
+            17000,
+            15000,
+            15000,
+            16000,
+            16000,
+            16000,
+            16000,
+            16000,
+            16000,
+            16000
+          ]
+        },
+        "encapsulate": {
+          "count": 20,
+          "max_ns": 15000,
+          "median_ns": 13000.0,
+          "min_ns": 12000,
+          "q1_ns": 12000.0,
+          "q3_ns": 13000.0,
+          "samples_ns": [
+            12000,
+            13000,
+            13000,
+            13000,
+            13000,
+            12000,
+            13000,
+            13000,
+            13000,
+            13000,
+            15000,
+            13000,
+            13000,
+            13000,
+            13000,
+            12000,
+            12000,
+            12000,
+            12000,
+            12000
+          ]
+        },
+        "keygen": {
+          "count": 20,
+          "max_ns": 23000,
+          "median_ns": 11000.0,
+          "min_ns": 10000,
+          "q1_ns": 11000.0,
+          "q3_ns": 11000.0,
+          "samples_ns": [
+            11000,
+            11000,
+            10000,
+            11000,
+            11000,
+            11000,
+            11000,
+            10000,
+            11000,
+            10000,
+            23000,
+            11000,
+            11000,
+            11000,
+            11000,
+            11000,
+            11000,
+            11000,
+            11000,
+            11000
+          ]
+        }
+      },
+      "outcomes": {
+        "measured": {
+          "agreement": 20
+        },
+        "warmup": {
+          "agreement": 3
+        }
+      },
+      "parameters_sha256": "f7006650f78a459034aac25d6f3e963b0a378de897b7b5686d6a4044e6c05422",
+      "profile_id": "ml-kem-fips203-oqs016-v1-ml-kem-768",
+      "protocol_error": false,
+      "requested_trials": 20,
+      "scheme_id": "ml-kem",
+      "setup_seconds": 1e-05,
+      "source_changed": false,
+      "source_sha256": "48b7f2fa901240dc960873eaa1c24beb79c34bc1b5f58818e5dcdfd75e1dc9c6",
+      "status": "complete",
+      "timed_out": false,
+      "trials": [
+        {
+          "index": 0,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 16000,
+            "encapsulate": 14000,
+            "keygen": 66000
+          }
+        },
+        {
+          "index": 1,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 16000,
+            "encapsulate": 13000,
+            "keygen": 11000
+          }
+        },
+        {
+          "index": 2,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 16000,
+            "encapsulate": 13000,
+            "keygen": 12000
+          }
+        },
+        {
+          "index": 0,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 15000,
+            "encapsulate": 12000,
+            "keygen": 11000
+          }
+        },
+        {
+          "index": 1,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 15000,
+            "encapsulate": 13000,
+            "keygen": 11000
+          }
+        },
+        {
+          "index": 2,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 15000,
+            "encapsulate": 13000,
+            "keygen": 10000
+          }
+        },
+        {
+          "index": 3,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 15000,
+            "encapsulate": 13000,
+            "keygen": 11000
+          }
+        },
+        {
+          "index": 4,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 15000,
+            "encapsulate": 13000,
+            "keygen": 11000
+          }
+        },
+        {
+          "index": 5,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 16000,
+            "encapsulate": 12000,
+            "keygen": 11000
+          }
+        },
+        {
+          "index": 6,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 15000,
+            "encapsulate": 13000,
+            "keygen": 11000
+          }
+        },
+        {
+          "index": 7,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 15000,
+            "encapsulate": 13000,
+            "keygen": 10000
+          }
+        },
+        {
+          "index": 8,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 15000,
+            "encapsulate": 13000,
+            "keygen": 11000
+          }
+        },
+        {
+          "index": 9,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 15000,
+            "encapsulate": 13000,
+            "keygen": 10000
+          }
+        },
+        {
+          "index": 10,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 17000,
+            "encapsulate": 15000,
+            "keygen": 23000
+          }
+        },
+        {
+          "index": 11,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 15000,
+            "encapsulate": 13000,
+            "keygen": 11000
+          }
+        },
+        {
+          "index": 12,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 15000,
+            "encapsulate": 13000,
+            "keygen": 11000
+          }
+        },
+        {
+          "index": 13,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 16000,
+            "encapsulate": 13000,
+            "keygen": 11000
+          }
+        },
+        {
+          "index": 14,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 16000,
+            "encapsulate": 13000,
+            "keygen": 11000
+          }
+        },
+        {
+          "index": 15,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 16000,
+            "encapsulate": 12000,
+            "keygen": 11000
+          }
+        },
+        {
+          "index": 16,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 16000,
+            "encapsulate": 12000,
+            "keygen": 11000
+          }
+        },
+        {
+          "index": 17,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 16000,
+            "encapsulate": 12000,
+            "keygen": 11000
+          }
+        },
+        {
+          "index": 18,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 16000,
+            "encapsulate": 12000,
+            "keygen": 11000
+          }
+        },
+        {
+          "index": 19,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 16000,
+            "encapsulate": 12000,
+            "keygen": 11000
+          }
+        }
+      ],
+      "version": "fips203-oqs016-v1",
+      "warmup_completed": 3,
+      "warmup_requested": 3,
+      "worker_failure": null
+    },
+    {
+      "artifact_sha256": "a16965f1a80448e42b58428c079e3fae5a2fca5a0e33e2e9200fd2e33d5129ac",
+      "benchmark_artifact": {
+        "adapter_artifact_sha256": "a16965f1a80448e42b58428c079e3fae5a2fca5a0e33e2e9200fd2e33d5129ac",
+        "binary_sha256": "10920ae78dc714065fbe3d3ac6b3287781e5755a8086600e35fffd4ac4c9891f",
+        "build_options": [
+          "-std=c99",
+          "-O1",
+          "-DBENCH_FAMILY=0"
+        ],
+        "compiler": "Apple clang version 14.0.3 (clang-1403.0.22.14.1)",
+        "files": {
+          "driver/reference_benchmark_native.c": "e4aa9f3342a2f00edee07d2752343cab7e1adbd3edf68e073094e4ce284649db",
+          "include/oqs/aes.h": "4bf812c6c36110dd6290bd835f18c3cc44837d48e4c8f7037a2c08bbe16d3fb8",
+          "include/oqs/aes_ops.h": "d956af1540dd44db8450a4d1e2e81c2130bc96539f749deb61daf3a23afb94b0",
+          "include/oqs/common.h": "b6340af7d9a36c2be20b8c300a20ea39b7abfe95e6fa67129fbe1a59b2cc4027",
+          "include/oqs/kem.h": "9ad7af3e2ea7375d86b19f30d38575898295d34aab9be73441b110a6701d3b2a",
+          "include/oqs/kem_classic_mceliece.h": "7e8329674fbec9bcfcc20b1f2c11bdb1fd4053b6b5227b8665573ba80b9ac7e2",
+          "include/oqs/kem_frodokem.h": "e1945fa8d3216eb6f48d22532329a5d83c6d4595f59ff4ab66bd6f6cb4f98273",
+          "include/oqs/kem_hqc.h": "a4cd3f9e985f9ddfed8b72b07e1e01b960a452eed1d91e3fbca6fecc8e5d6daf",
+          "include/oqs/kem_ml_kem.h": "f817b1342868d07d8b43a7c22ed282708b5af38943cc9becd2bd00ab7230a1fb",
+          "include/oqs/oqs.h": "e30ddec1ebde02891ab9a25d567f0ffca4b9e07ee8b89ab44bb27737b4f10a8a",
+          "include/oqs/oqsconfig.h": "2cf61441933a85d2162fe3e6fb104b262a95cba2621ee8681d4f7034687221d1",
+          "include/oqs/rand.h": "e38e720b1680d51f6f87b9a2985b97e1530b476cc5f9c68dc62e4d7682915457",
+          "include/oqs/rand_nist.h": "db8bea44ea9fb292d052e2aa579ddd1c112e596312d68d30c676b28668df2a2a",
+          "include/oqs/sha2.h": "6a4b5a446683a2ef20948d31fc524bc223116b9dac2c6702442c5c68b2b96528",
+          "include/oqs/sha2_ops.h": "1ae19feb318f6ade47ef8558299484798cbf413fca29cc164a26162dcce3d78b",
+          "include/oqs/sha3.h": "7ef22ba43a56fb50d4a24785c355c65fb9d42d2757fccf592a4a938307fcb197",
+          "include/oqs/sha3_ops.h": "f59ea832f559630c381d8fb0f2243b7f435f66c6539e9af3a828bf53f67d5e53",
+          "include/oqs/sha3x4.h": "e622731ecd9b2b2ca54d129a385221565361a69b285bc76a81c6cbf132ebac08",
+          "include/oqs/sha3x4_ops.h": "407af0a256131cb7875bd04e25897b9205ff9c2ff20968814abfde9aff909655",
+          "include/oqs/sig.h": "9d0117a246f97f79e3d76c5d6527a2a560c65addb8b82cd3712687db7717b8b9",
+          "include/oqs/sig_stfl.h": "910977e30eb84f5935d6e12cdc54cf57ec041d75fd5b8aca528682d4030bfe6c",
+          "libraries/liboqs.a": "7b550ba37b718917e4d7bbc973dfd47a24d0a6a4e75b8205e6161d21b199718c",
+          "shims/aes.h": "4dd64053bce5a7cbf1191a631295fe3b6900c834f931854641c4dd9274d0ed6d",
+          "shims/aes256ctr.h": "37ef06179e7a7ca8cffe6c35d6b4bc60c60df950e35294d140f3b5b70ffec9ef",
+          "shims/compat.h": "383f190d0a8cfb33efde6342c36f424db36b0439e32b34c952de33fde8512807",
+          "shims/crypto_declassify.h": "2af200424f69e3cf0582f1f0e93a6517fca8ad154115e11dba5472586ba48403",
+          "shims/fips202.c": "dff37ba4f0a0f29e79802769d3750f513e872be37d7b18b767219ff9f5e63dea",
+          "shims/fips202.h": "fda29adc8452c3af88ed7e8a92371f520f9c9bbc8ffd7143c6544319db05098e",
+          "shims/fips202x4.c": "d80abcf2eeee6b5a8bb2da6e0b1dea598e341eed6d03c6fc930c0c152518e429",
+          "shims/fips202x4.h": "a38cd77a23250306eb2ea843e76d65a4079b25caffea35469872fba33c0b2da9",
+          "shims/randombytes.h": "09171d2fb670e4eb37720f53e9a7df77d35ba7fbf9b3f93464f62171709a7af2",
+          "shims/sha2.h": "1d55e8e01fcfb47b6663c2aa04552b4468133b8d069702c66683b620473c31cc"
+        },
+        "format": "crucible-native-benchmark-artifact-v1",
+        "measurement_scope": "Native core operation calls with OS randomness; driver buffer allocation and initialization excluded. Different from Python API allocation overhead. ML-KEM uses the pinned liboqs AArch64 backend; it is architecture optimized.",
+        "parameters_sha256": "0a37f828d5fccaaff71d198d0f16b2f2b70fe0b13be10dd799f7f7c8f15839de",
+        "profile_id": "ml-kem-fips203-oqs016-v1-ml-kem-1024",
+        "scheme_id": "ml-kem",
+        "scheme_version": "fips203-oqs016-v1",
+        "sha256": "0f4e1b7fe20661accd579f266b62948500f5cf0f6e843f40a8b497e054819f61",
+        "target": "mlkem"
+      },
+      "completed_trials": 20,
+      "end_to_end_seconds": 0.10158245798083954,
+      "exit_code": 0,
+      "implementation": {
+        "label": "Pinned liboqs ML-KEM AArch64 backend",
+        "language": "C",
+        "performance_level": "architecture-optimized"
+      },
+      "notes": [
+        "Native core operation calls with OS randomness; driver buffer allocation and initialization excluded. Different from Python API allocation overhead. ML-KEM uses the pinned liboqs AArch64 backend; it is architecture optimized."
+      ],
+      "operations": {
+        "decapsulate": {
+          "count": 20,
+          "max_ns": 27000,
+          "median_ns": 26000.0,
+          "min_ns": 25000,
+          "q1_ns": 25750.0,
+          "q3_ns": 26000.0,
+          "samples_ns": [
+            26000,
+            26000,
+            26000,
+            26000,
+            26000,
+            26000,
+            26000,
+            27000,
+            26000,
+            25000,
+            26000,
+            26000,
+            26000,
+            25000,
+            25000,
+            27000,
+            25000,
+            25000,
+            26000,
+            26000
+          ]
+        },
+        "encapsulate": {
+          "count": 20,
+          "max_ns": 23000,
+          "median_ns": 22000.0,
+          "min_ns": 21000,
+          "q1_ns": 22000.0,
+          "q3_ns": 22000.0,
+          "samples_ns": [
+            22000,
+            22000,
+            22000,
+            21000,
+            21000,
+            22000,
+            21000,
+            23000,
+            22000,
+            22000,
+            22000,
+            23000,
+            22000,
+            22000,
+            22000,
+            23000,
+            22000,
+            22000,
+            22000,
+            22000
+          ]
+        },
+        "keygen": {
+          "count": 20,
+          "max_ns": 20000,
+          "median_ns": 19000.0,
+          "min_ns": 18000,
+          "q1_ns": 18000.0,
+          "q3_ns": 19000.0,
+          "samples_ns": [
+            18000,
+            19000,
+            19000,
+            19000,
+            19000,
+            19000,
+            19000,
+            20000,
+            18000,
+            18000,
+            18000,
+            20000,
+            19000,
+            18000,
+            18000,
+            19000,
+            19000,
+            19000,
+            19000,
+            18000
+          ]
+        }
+      },
+      "outcomes": {
+        "measured": {
+          "agreement": 20
+        },
+        "warmup": {
+          "agreement": 3
+        }
+      },
+      "parameters_sha256": "0a37f828d5fccaaff71d198d0f16b2f2b70fe0b13be10dd799f7f7c8f15839de",
+      "profile_id": "ml-kem-fips203-oqs016-v1-ml-kem-1024",
+      "protocol_error": false,
+      "requested_trials": 20,
+      "scheme_id": "ml-kem",
+      "setup_seconds": 1.3e-05,
+      "source_changed": false,
+      "source_sha256": "48b7f2fa901240dc960873eaa1c24beb79c34bc1b5f58818e5dcdfd75e1dc9c6",
+      "status": "complete",
+      "timed_out": false,
+      "trials": [
+        {
+          "index": 0,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 26000,
+            "encapsulate": 23000,
+            "keygen": 71000
+          }
+        },
+        {
+          "index": 1,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 26000,
+            "encapsulate": 22000,
+            "keygen": 18000
+          }
+        },
+        {
+          "index": 2,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 25000,
+            "encapsulate": 21000,
+            "keygen": 18000
+          }
+        },
+        {
+          "index": 0,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 26000,
+            "encapsulate": 22000,
+            "keygen": 18000
+          }
+        },
+        {
+          "index": 1,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 26000,
+            "encapsulate": 22000,
+            "keygen": 19000
+          }
+        },
+        {
+          "index": 2,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 26000,
+            "encapsulate": 22000,
+            "keygen": 19000
+          }
+        },
+        {
+          "index": 3,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 26000,
+            "encapsulate": 21000,
+            "keygen": 19000
+          }
+        },
+        {
+          "index": 4,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 26000,
+            "encapsulate": 21000,
+            "keygen": 19000
+          }
+        },
+        {
+          "index": 5,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 26000,
+            "encapsulate": 22000,
+            "keygen": 19000
+          }
+        },
+        {
+          "index": 6,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 26000,
+            "encapsulate": 21000,
+            "keygen": 19000
+          }
+        },
+        {
+          "index": 7,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 27000,
+            "encapsulate": 23000,
+            "keygen": 20000
+          }
+        },
+        {
+          "index": 8,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 26000,
+            "encapsulate": 22000,
+            "keygen": 18000
+          }
+        },
+        {
+          "index": 9,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 25000,
+            "encapsulate": 22000,
+            "keygen": 18000
+          }
+        },
+        {
+          "index": 10,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 26000,
+            "encapsulate": 22000,
+            "keygen": 18000
+          }
+        },
+        {
+          "index": 11,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 26000,
+            "encapsulate": 23000,
+            "keygen": 20000
+          }
+        },
+        {
+          "index": 12,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 26000,
+            "encapsulate": 22000,
+            "keygen": 19000
+          }
+        },
+        {
+          "index": 13,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 25000,
+            "encapsulate": 22000,
+            "keygen": 18000
+          }
+        },
+        {
+          "index": 14,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 25000,
+            "encapsulate": 22000,
+            "keygen": 18000
+          }
+        },
+        {
+          "index": 15,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 27000,
+            "encapsulate": 23000,
+            "keygen": 19000
+          }
+        },
+        {
+          "index": 16,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 25000,
+            "encapsulate": 22000,
+            "keygen": 19000
+          }
+        },
+        {
+          "index": 17,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 25000,
+            "encapsulate": 22000,
+            "keygen": 19000
+          }
+        },
+        {
+          "index": 18,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 26000,
+            "encapsulate": 22000,
+            "keygen": 19000
+          }
+        },
+        {
+          "index": 19,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 26000,
+            "encapsulate": 22000,
+            "keygen": 18000
+          }
+        }
+      ],
+      "version": "fips203-oqs016-v1",
+      "warmup_completed": 3,
+      "warmup_requested": 3,
+      "worker_failure": null
+    }
+  ],
+  "run_id": "af4d1b56-d1eb-483c-a866-2084bdb87203"
+}

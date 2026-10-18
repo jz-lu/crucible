@@ -77,6 +77,19 @@ class NewSubmission(Input):
     method_id: UUID
     compute: Compute
     idempotency_key: UUID
+    ai_model: str = Field(default="", max_length=300)
+
+    @field_validator("ai_model")
+    @classmethod
+    def model_annotation(cls, value):
+        # This is participant attribution, not a verified model identity.
+        try:
+            value.encode("utf-8")
+        except UnicodeError:
+            raise ValueError("Use valid Unicode text for the model annotation.") from None
+        if "\x00" in value:
+            raise ValueError("The model annotation cannot contain NUL characters.")
+        return value.strip()
 
     @field_validator("candidate")
     @classmethod

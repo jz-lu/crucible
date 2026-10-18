@@ -1,0 +1,201 @@
+Crucible research landscape — catalogue and integration design
+Reviewed 2026-10-17
+
+This is the dated map-design record. Its original collections, scoring snapshot
+and prospective mechanisms are historical context, not the current execution
+contract. Agents start at GET /api/agent/pipeline; use /api/schemes and the
+current scoring policy for live release identities and eligibility. The bundled
+notes now also include release/display evidence; read notes.json for membership.
+
+SCOPE
+
+The map is available at /map/index.html through Research notebook → Scheme map.
+It uses the existing beta admission boundary. Its curated, read-only research
+notes are kept in this directory in the global notebook format; they are not
+inserted into anyone's private notebook. Scoring and accounts are unchanged.
+
+The map is a view over research notes. Literature notes describe existing work;
+original research and procedural notes share the same global format. External
+research does not need to be proposed to Crucible again. Curators verify sources,
+identify the construction and edition, and give it a defensible location. That
+is distinct from reviewing an original Crucible proposal or making a playable
+challenge. A paper's existence is not a certification of its security.
+
+CURRENT COLLECTIONS
+
+All: 13 KEM records. Parameter variants remain nested beneath constructions.
+The active Notes view has 26 notes: 13 KEM descriptions, one comparison, one
+procedural note and 11 literature research leads or attack analyses. PKE, key
+agreement and theoretical ingredients can be notes without becoming KEM entries.
+This first literature seed is not an exhaustive survey; its evidence limits are
+recorded in each note. Negative results can inform research without appearing as
+broken scheme cards in the map.
+
+Scored: eight entries, from the dated snapshot of crucible-points-v6 in
+catalogue.json. Eligibility refers to the listed exact implementation versions
+and profile prefixes, not every parameter set ever published under that name.
+This map neither adds scoring releases nor changes existing points.
+
+Highlighted: the same existing eight entries, retained as the initial focus.
+The collections are nested: Highlighted is inside Scored, which is inside All.
+The two narrower views coincide today because no extra scored implementations
+have been admitted. Do not invent eligibility simply to make their counts differ.
+
+The eight are ML-KEM, FrodoKEM, Streamlined NTRU Prime, Classic McEliece, HQC,
+RSA encapsulation, finite-field DH and elliptic-curve DH. Local challenge releases
+are not automatically conformant implementations of a named standard.
+
+Other KEM records: Saber, NTRU, NTRU LPRime, BIKE, RQC.
+
+Historical broken constructions remain excluded. Adding an entry requires a
+specified KEM, not an assumed conversion from a PKE paper or key agreement.
+
+WHAT THE RESEARCH DISTINCTION CHANGES
+
+Discovery: find a mechanism for public-key advantage, with an exact assumption
+and distribution. Exotic mathematics is neither necessary nor sufficient.
+Development: improve an existing mechanism's construction, parameter choices,
+correctness, cost, or implementation, explaining any change in assumptions.
+Analysis: establish a proof, attack, benchmark, limitation or independent check.
+This matters even when no construction changes.
+
+These are overlapping research questions, not a ranking or mandatory sequence.
+Costs, independent analysis, correctness and malicious-input behavior remain
+separate questions; avoid collapsing them into a single maturity number.
+
+FAMILIES AND RELATIONSHIPS
+
+Broad areas are browsing regions, not independent security foundations. Plain
+LWE and module LWE remain distinct families, with a comparison link. Different
+rank-metric distributions must not be treated as interchangeable.
+
+The visible layout gives each entry one primary home. Related-entry links cross
+those boundaries. Each link states its meaning and cites its sources: comparison,
+construction lineage or a shared project must not be mistaken for a reduction.
+No graph distance or number of families is used as a robustness score.
+
+A new construction merits a separate record when it adds a meaningful research
+question or changes the mathematical bet. Parameter sets normally live beneath
+the same record. Separate implementations retain their own identities. Splitting or
+renaming records must not itself generate new scoring credit.
+
+TWO SOURCES OF ENTRIES
+
+1. Literature: external specification/paper, exact edition, authors and stable
+   identifiers, source-backed summary, assumption overview and relations.
+   No community proposal is required. Source metadata can be curated and corrected.
+2. Crucible discoveries: an author's notebook work, with its provenance and review
+   history. Do not label known literature a Crucible discovery. A reviewed record
+   may link to multiple notes, implementations and external predecessors.
+
+Both sources can enter the same map. Map inclusion, challenge implementation,
+scoring admission and highlighting are distinct operations. All is inclusive but
+curated, not a catalogue of every claimed hard problem or every paper.
+
+RECORDS TO KEEP SEPARATE
+
+Assumption record: exact distribution, attacker task, public information,
+permitted queries, parameter regime, and relationships to known problems.
+The current catalogue's assumption labels are explicitly only overviews.
+
+Construction record: algorithms, secret/public information, correctness argument,
+failure conditions, malformed-input behavior and the precise security game.
+A theoretical PKE result is not automatically a fully specified KEM.
+
+Release/configuration record: immutable implementation and specification versions,
+canonical parameter identifiers, natural progression, serialization and verifier.
+A challenge targets an exact release and game, not a mutable family label.
+
+Evidence record: exact target, code/method, resources, environment, results,
+limitations, and review status. Distinguishing, private-key recovery, shared-secret
+recovery and an oracle-dependent attack must remain separate achievements.
+
+Selection decision: which release is highlighted, why it adds value relative to
+nearby entries, decision maker, supporting notes, effective dates, and appeal or
+audit record. A review of the selection process is a valid procedural note.
+
+SCORING AND CONTINUITY
+
+Scoring admission can be broader than highlighting. It still needs a runnable
+challenge, a correct verifier, stable parameter definitions, resource expectations
+and review of the published attack surface. Nothing in this draft performs that
+review or creates any new scored implementation.
+
+The agreed direction is to retain legitimately earned credit and eligibility
+history, even when attention moves. This is not yet implemented by this map.
+Stop issuing an obsolete release if appropriate; preserve its results and rules.
+Auditable corrections for invalid results/verifiers are separate from changing
+research priorities. Do not promise to award new work indefinitely on a retired
+or known-broken release.
+
+A highlighted-challenge bonus should be prospective, with its rate and time
+window recorded before work begins. Removing highlighting must not take away an
+earned bonus. No bonus percentage is settled or activated here. Store immutable
+awards and rule versions rather than recalculating history from current labels.
+
+When a construction or progression changes: publish a new release, give advance
+notice where possible, let started rounds finish under their recorded rules, and
+explain which evidence transfers and why. Never silently carry a solved stage
+across distributions merely because its number matches. Maintain the construction
+identity and history while allowing its implementations to evolve.
+
+NOTEBOOK AND PRIVACY
+
+The durable notebook contains literature descriptions as well as original work
+and deliberation. A literature note is not a new-scheme proposal. Private notes remain
+private. Community visibility requires the configured reviewer's approval,
+initially countableclouds; approval to share is separate from mathematical review.
+
+A live integration should reference note_id, exact revision, content hash, author
+and approval record. A later edit must not silently replace reviewed evidence.
+Keep attachments immutable by hash with size/type limits and durable storage;
+never execute uploaded research code in the web process. Backups and restore
+checks are part of durability, independent of GitHub project hosting.
+
+Map projections must respect notebook access control. Public or beta-visible
+records must not leak private note titles, snippets, tags, counts, author links
+or artifact URLs. External source metadata may be independently public, but it
+does not make a private research note public. Approval decisions need immutable
+attribution and timestamps. Withdrawn visibility must propagate to projections.
+
+Every entry is now pinned to a local descriptive note revision. No local note
+is presented as a saved server note or an approved publication/decision. The old
+candidate-template.json is an unconnected design artifact, not an API request or
+a required publication workflow, and is no longer offered in the map interface.
+
+IMPLEMENTATION
+
+notes.json holds 26 notes in the existing global format; catalogue.json holds
+organization and bindings for 13 KEM entries. build.py validates their content
+hashes and emits catalogue.js and notes-data.js. Notes are read at notes.html;
+the map at index.html remains a separate projection. See NOTE-FORMAT.txt.
+app.js uses text nodes, no remote requests, authentication or mutation endpoints.
+The generated payload lets index.html work directly with file://. The CSP rejects
+external scripts and connections. Source links are navigated only when clicked.
+
+The notebook's Scheme map uses the network visualization. Table, branch and card
+experiments remain implementation artifacts, not additional navigation choices.
+Graph position and distance make no security or independence claims.
+
+Each eligible entry carries a Scored badge, separate from the red highlighting
+marker. The badge denotes points eligibility in the dated policy snapshot.
+
+Details stay closed until selected, with a compact dialog linking to the full
+note and, when available, the challenge. Source prose remains in notes.
+
+RESEARCH REVIEW
+
+Continue this research on a note offers a full agent task download. Proposals &
+reviews contains exact-revision requests. The reviewer assesses a question using frozen
+sources; source checks, mathematical checks and reproduction are separate fields.
+Private requests are visible to the requester and configured reviewers only.
+Requests can recommend map, scoring, highlighting or procedural decisions but
+cannot activate those changes. Formal scheme admission remains a separate gate.
+See NOTE-FORMAT.txt and docs/research-notebook-draft.txt for limits and routes.
+
+VALIDATION LIMITS
+
+Data integrity, revision hashes, notebook permissions and review workflows have
+automated checks. Interface checks exercise mocked requests rather than making
+research decisions on behalf of real participants. Source checks are scoped in
+each note; they are not a comprehensive cryptanalytic audit or proof review.

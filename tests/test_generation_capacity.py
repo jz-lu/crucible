@@ -289,7 +289,7 @@ def test_busy_and_existing_instance_reuse_do_not_consume_generation_quota(limite
 @pytest.mark.parametrize("failure_stage", ["quota", "ledger"])
 def test_setup_database_failure_does_not_quarantine_profile(limited_capacity_app, monkeypatch, failure_stage):
     system = limited_capacity_app
-    adapter = dh_v7 if failure_stage == "quota" else registry.adapter_for("dhkem-x25519")
+    adapter = dh_v7  # DH now uses the same durable attempt ledger as every family.
     calls = []
 
     def generate(profile_id):

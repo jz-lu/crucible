@@ -20,6 +20,7 @@ Contract
   "format": "crucible-recovery-v1",
   "challenge_id": "copy the exact identifier from your template",
   "candidate": "replace with the complete recovered key in hexadecimal",
+  "ai_model": "Optional AI model name and version used to implement this result",
   "method": {
     "name": "A short descriptive name",
     "pseudocode": "Describe the algorithm, key derivation, and preparation."
@@ -47,7 +48,7 @@ challenge.public.encoding.shared_secret_bytes.
 Rules
 
 - Only the listed fields and optional _instructions are accepted. All result fields
-  are required except compute.notes. _instructions, if present, must be an object
+  are required except ai_model and compute.notes. _instructions, if present, must be an object
   whose values are text; it is ignored after parsing.
 - format must be exactly crucible-recovery-v1.
 - challenge_id must identify an open, unanswered instance owned by the signed-in
@@ -55,6 +56,13 @@ Rules
   The browser resolves the exact owned instance and selects its tier automatically.
 - candidate contains exactly twice the declared shared-key byte count in hexadecimal
   characters, with no spaces or 0x prefix. Uppercase hex is accepted and normalized.
+- ai_model: optional text, at most 300 Unicode characters including surrounding
+  whitespace, which is trimmed. Name the AI model(s) and version(s) that helped
+  implement the result, if known. Do not infer a model from the agent application.
+  Multiple models may be named in this one field. Omitted or blank means not
+  reported; null, NUL characters and invalid Unicode are rejected.
+  "None — human-written" can explicitly report no AI
+  implementation assistance. This annotation is self-reported and earns no points.
 - method.name: nonblank text, at most 100 characters.
 - method.pseudocode: nonblank text, at most 15,000 characters; use \n for line breaks.
   The method object must also fit in a 65,536-byte JSON request, including escapes.
@@ -73,7 +81,7 @@ leaves the existing fields, target and selected tier intact. A successful import
 updates the exact target, scheme/tier label and shared-key length together. Importing does not consume an attempt. The server
 still enforces account ownership, the exact shared-key length, one final answer,
 and receipt before the shared hourly deadline. Importing cannot extend that time.
-Method and compute declarations remain contributor-reported, whether typed or
+Method, AI-model and compute declarations remain contributor-reported, whether typed or
 uploaded. Pseudocode is stored as text and is not executed by the website.
 
 Automation and the existing HTTP API
@@ -81,7 +89,7 @@ Automation and the existing HTTP API
 The upload maps to the same API calls as manual entry:
 1. POST /api/methods with the file's method object; retain the returned method.id.
 2. POST /api/challenges/{challenge_id}/submit with candidate, that method_id,
-   compute, and a freshly generated UUID idempotency_key.
+   compute, optional ai_model, and a freshly generated UUID idempotency_key.
 
 Retain the exact submission body and idempotency_key for retries. Do not create a
 different answer or retry identifier when the outcome of a request is unknown.
@@ -90,6 +98,7 @@ X-CSRF-Token and an allowed Origin on writes; see docs/architecture.txt. The fil
 is an import format, not a new unauthenticated upload endpoint. It deliberately
 contains no credentials or persisted browser state.
 
-A dedicated token-based client API and richer automation are future work. The
-versioned file structure provides a stable starting point without changing the
-existing numerical submission rules.
+For token-based CLI automation, see docs/agent-workflow.txt. The CLI supports
+run --ai-model "Model name and version" and preserves the annotation in its
+frozen result and submission payload. Existing files that omit ai_model remain
+valid, and existing frozen submissions retain their original retry identity.

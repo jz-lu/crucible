@@ -1,0 +1,304 @@
+CRUCIBLE — PIPELINE AND MISSION AUDIT
+18 October 2026
+
+Judgment
+
+Crucible has a substantial foundation for trustworthy research records. It can
+preserve an idea, its revisions, evidence, critique and the exact decision about
+its use. That is valuable infrastructure. The repository does not establish that
+it is already attracting sustained independent scrutiny or producing useful new
+cryptography. Those outcomes need evidence from researchers using it.
+
+The main gap is the path from an interesting idea to someone qualified spending
+time on it. The challenge game has visible rewards and clear outcomes. Reviewing
+an argument, reproducing a result or finding a fatal objection has less visible
+recognition and less operational support. More proposals alone could make this
+gap worse. The next investment should make a small number of proposals easier
+to assess and give useful scrutiny a visible, attributable result.
+
+Audience and review intent confirmed by the owner
+
+The first audience is cryptographers and expert reviewers. A broad public
+challenge community is also desired. These audiences can reinforce one another,
+but a public recovery competition is not itself expert validation.
+
+There are two review levels:
+
+  Note revision -> safety/content review -> community-readable revision
+  Exact evidence -> substantive review -> specified official inclusion
+
+The second covers scheme maps, curated displays, highlights and numerical
+challenges, with checks appropriate to the destination. Publication does not
+require mathematical endorsement. A private note can go directly into a private
+official-inclusion request; publishing it first is not a mandatory extra gate.
+Optional source checks and the operational work of implementing an approved
+change do not create additional universal levels of scientific certification.
+
+Moderator withdrawal after publication, with a recorded reason and restricted
+audit history, was explicitly authorized and has been implemented.
+
+What the implementation already does well
+
+- Immutable note revisions, canonical hashes, exact proposal links and frozen
+  review packets prevent later edits from silently inheriting an earlier review.
+- Permission checks distinguish authors, readers and configured reviewers.
+  Private sharing, community sharing, scientific retraction, official review,
+  trusted integration and scoring enrollment have distinct effects.
+- Scheme specifications require algorithms, encodings, correctness reasoning,
+  assumptions and evidence. Conditional and conjectural work can be represented
+  honestly. Incomplete mechanisms can remain notes without pretending to be KEMs.
+- Challenge receipts verify a scoped recovery. Source/native identities, known
+  answer tests, explicit modeling assumptions and exact parameter exports make
+  artifacts inspectable. Numerical stages are navigation, not security levels.
+- The eight current families and 379 configurations provide a substantial
+  calibration and educational corpus. Existing uncertain estimates, conditional
+  correctness and incomplete timing evidence have explicit qualifications.
+
+Code anchors: crucible/notebook.py, proposal_notes.py, research_reviews.py,
+protocol_specs.py, protocol_proposals.py, protocol_admission.py, registry.py;
+docs/proposal-guide.txt, correctness-policy-v1.txt, scoring-v9.txt.
+
+Repairs made in this audit
+
+1. Misleading scheme-review badges. The older notebook scheme panel omitted
+   development self-review/effectiveness markers that the newer request panel
+   used. It could present a development decision without its qualification after
+   self-review was disabled. Both paths now preserve and display those markers,
+   including historical retraction state. A regression demonstrated the missing
+   field before the fix. Files: proposal_notes.py, notebook.py, notebook.js.
+
+2. Review queue ordering. Pending publication and ordinary research-request
+   queues used random UUID order. New requests could precede older ones without
+   a deliberate priority decision. They now order by submission time with an ID
+   tie-breaker and validate cursor anchors. Tests deliberately reverse the UUID
+   and timestamp order and traverse one item per page. The curated compact index
+   retains its own stable ID order; it is not the pending review work queue.
+
+3. Research write serialization. Mutating research-request actions now acquire
+   the account row lock used by the notebook/proposal paths, before request locks.
+   This closes an inconsistency affecting account-wide quotas and retry keys
+   across distinct requests. SQLite regressions pass; this audit did not execute
+   a PostgreSQL concurrency run, so that remains a release check.
+
+4. Post-publication moderation. Configured reviewers can withdraw an approved
+   exact revision with a nonblank reason, pinned content hash and retry key.
+   Migration 0017 adds a separate receipt table; it rewrites no original evidence.
+   Community search, lists, timeline counts, private sharing and frozen
+   third-party review packets respect the withdrawal. Ordinary readers get a
+   neutral notice; the author and authorized reviewers retain restricted records.
+   Corrected revisions can be submitted separately. Historical approval is
+   explicitly labeled historical in the browser. Existing downloaded copies
+   cannot be recalled; independently authored copies need their own action.
+   No real research note was withdrawn during verification.
+
+5. Notebook links after authentication. Browser verification found that signing
+   in while already on a notebook link cleared its contents without restoring
+   the view. The account transition now reloads the current notebook route;
+   signing out clears content and shows the sign-in instruction. An integration
+   regression failed before the fix and passes after it. File: web/app.js.
+
+6. Guidance drift. README/architecture/hosting guidance now distinguishes current
+   behavior from dated plans: implemented beta gating and proposal-note links,
+   current release/correctness references, equal family scoring ceilings, and
+   conditional RSA timing points. The proposal guide, review dialog and versioned
+   agent contract state the two-level review model. Moderator withdrawal is
+   documented with its actual access effects. Historical records stay intact.
+
+7. Verification reliability. Code-family native tests can select isolated source
+   builds rather than requiring test dependencies inside the registered runtime.
+   The exact-parameter overview assertion now checks the new exact JSON field.
+   Two RSA codec/conformance tests get a larger generation budget locally, so a
+   legitimate bounded runtime abort does not masquerade as an encoding defect.
+   Production generation limits and their tests are unchanged. No cryptographic
+   adapter or registered native worker was modified by this audit.
+
+The checkout contained extensive pre-existing work and continued changing during
+the audit, notably notebook navigation/private sharing and historical migration
+fixtures. Those changes were preserved and are not attributed to this audit.
+
+Priorities for earning expert attention
+
+P1 — Make one candidate easy to judge
+
+Choose one promising construction or one consequential unresolved claim. Give
+it a short, curated entry containing: the exact claim and assumptions; its closest
+known construction; the claimed improvement; the strongest current objection;
+one explicit question for a reviewer; and a pinned reproduction artifact where
+applicable. Link the full note and history instead of duplicating them.
+
+For a proposed construction, explain why studying it could improve privacy,
+efficiency, resilience or understanding. A new name or parameter list is not
+enough. An honest rejection or useful reduction can be a successful outcome.
+Use NIST's submission structure as a checklist of useful evidence, not a claim
+that Crucible is conducting NIST standardization: complete specification,
+performance, test vectors and security analysis make a proposal assessable.
+Source: NIST, Algorithm Specifications and Submission Requirements:
+https://csrc.nist.gov/Projects/Post-Quantum-Cryptography/Post-Quantum-Cryptography-Standardization/Submission-Requirements/Algo-Specs-%28PQC%29
+
+P1 — Give each official-inclusion request an accountable next step
+
+The code records scoped recommendations, but an operator must still implement
+the change. Introduce a small operational record of owner, requested destination,
+next action, review scope and resulting display/release link. A recommendation
+should be visibly distinguishable from a change that actually shipped. Track
+waiting time; avoid silently accumulating an unowned queue. This is coordination
+around the existing two levels, not an extra approval gate.
+
+Ask willing experts for a bounded contribution: check one reduction step, one
+failure-bound premise or one reproduction. Supply prerequisites and a rough
+time estimate. Do not advertise unlimited review capacity. No outreach was sent
+as part of this audit.
+
+P1 — Recognize the scrutiny the mission needs
+
+Current policy gives each family up to 500 personal recovery points and 2,000
+first-record points, plus a separately reviewed 1,000-point new-family award.
+It does not give equivalent recognition to independent reproduction, useful
+criticism, reviewer work or lemmas. This is an incentive mismatch, not evidence
+that current participants are behaving badly.
+
+Start with attributed contribution records beside the exact claim: reproduced,
+found an error, narrowed an assumption, supplied a comparison, or completed a
+scoped review. Each should link evidence and a concrete effect. Avoid awarding
+points for raw note or review volume; that would reward cheap submissions and
+make verification harder. Keep the existing recovery score meaningful while
+testing whether contribution recognition attracts repeat expert participation.
+Changing the scoring economy was not done silently in this audit.
+
+P2 — Support research timescales alongside the public game
+
+Hourly rounds and per-account instances are useful for an interactive challenge.
+They create deadline, instance-variance and compute-access concerns for multi-day
+experiments and comparisons. Offer a separate small set of long-lived, versioned
+research instances with published generation procedures, reference solvers and
+reproduction records. Keep their result categories distinct from hourly records.
+
+The LWE Challenge is a useful comparison: it presents persistent instances for
+studying practical hardness and comparing solvers, and distinguishes trivial
+examples from hall-of-fame results. Its own account of a corrected generation
+problem illustrates why generation and reproducibility deserve public evidence.
+This is a design comparison, not evidence that its format will automatically
+attract Crucible reviewers. Source: Lattice Challenge, LWE Challenge:
+https://www.latticechallenge.org/lwe_challenge/challenge.php
+
+P2 — Give the two audiences clear entry points
+
+The present front page leads with a KEM catalogue and recovery records. The
+expert entry should answer "what needs my expertise now?" with a few specific
+open questions. The public entry should offer a short reproducible challenge,
+explain what a recovery establishes, and show how to graduate into reproducing
+or checking a real research result. Both should lead to the same underlying
+evidence, rather than create parallel copies of the science.
+
+The intentionally minimal About page does not yet communicate stewardship,
+research purpose or review expectations. Draft those facts with real named
+responsibilities before broad outreach. Production currently requires beta
+membership; community-readable notes are not public internet publications.
+A later public reading policy needs an explicit decision, not a silent removal
+of the existing access gate.
+
+Critiques to prepare for
+
+"A leaderboard is not a security argument." Correct. Recovering one instance
+demonstrates that scoped recovery; failure to recover does not establish hardness.
+An accepted key does not verify claimed compute, reproducibility of the uploaded
+method or general security. In particular, passive recovery does not establish
+chosen-ciphertext security. NIST's general KEM evaluation target is IND-CCA2;
+Crucible should expose the actual game and missing attack surfaces at the point
+where results are compared. Source: NIST, Security Evaluation Criteria:
+https://csrc.nist.gov/Projects/Post-Quantum-Cryptography/Post-Quantum-Cryptography-Standardization/Evaluation-Criteria/Security-%28Evaluation-Criteria%29
+
+"Novel proposals will swamp the experts." Plausible. Mechanized formatting and
+AI-assisted drafting lower submission cost more than they lower mathematical
+review cost. Bounded intake, explicit questions, comparisons to prior work and
+transparent triage matter more than a larger catalogue. Human-written labels
+and polished prose are not correctness evidence. Do not make expert attention
+depend on popularity alone; a small, important counterexample may look obscure.
+
+"What does approved mean, and who is independent?" State the destination,
+revision, reviewer, checks, limitations and outstanding objections. A different
+account is not proof of independence, expertise or absence of conflicts. Record
+relevant affiliations/conflicts and provide a reasonable correction/appeal route.
+Safety moderation must not become a way to suppress unwelcome technical critique.
+
+"The 2^-128 requirement looks more certain than its premises." Conditional and
+conjectural correctness is explicitly permitted. Preserve that qualification
+next to the claim. Distinguish an algebraic proof, analytical bound, model-based
+estimate and conjecture. Tests cannot establish a rare-event bound of that size;
+requiring the numeric label without assessing premises would offer little value.
+
+"Toy recoveries and equal point ceilings invite misleading comparisons." Stage
+numbers, byte counts and scores do not put different attack models on a common
+security scale. Show the exact release, problem, resources, success criterion,
+preprocessing and missing estimates. The existing source-bound displays are a
+good foundation; qualify prominent summaries as carefully as their disclosures.
+
+"Why trust the operator or one machine's implementation?" Hash pins establish
+identity, not unbiased generation or cross-platform reproducibility. Independent
+reproduction of the generator and solver is a practical next step. Public seeds,
+commitments or multi-party generation may later help selected flagship instances;
+they need a stated threat model and are not a universal prerequisite for notes.
+
+"Where is the social benefit?" Make it observable: a reproducible attack that
+prevents misplaced confidence, an efficient construction under honest assumptions,
+an independently checked argument, or an accessible research contribution.
+Submission counts, unrecovered stages and points are insufficient outcome metrics.
+Protect negative results and credit corrections; do not incentivize premature
+deployment of speculative cryptography as a way to demonstrate impact.
+
+A proposed six-week pilot
+
+Weeks 1–2: select one candidate and one bounded attack/reproduction task. Prepare
+the review entry and artifact, name a willing coordinator, and invite a small
+number of suitable reviewers through an owner-approved outreach plan. Include
+an accessible public exercise that teaches the same underlying question.
+
+Weeks 3–6: aim for two independent scoped assessments, one independently reproduced
+result, and a documented consequence: revise, reject, include or leave a precise
+open question. These are proposed pilot targets, not observed accomplishments or
+a scientific voting threshold. Record actual reviewer effort and reasons for
+declining. A justified rejection is progress.
+
+Measure time to first substantive external response, independent reproductions,
+objections resolved or explicitly left open, reviewer hours per useful decision,
+implementation of recommended changes, and reviewers who return voluntarily.
+Separate educational participation from research contribution. If the pilot
+does not earn expert time, improve the question and evidence before increasing
+submission volume or adding more configurations.
+
+Verification and limits
+
+- Complete backend run: 2,869 passed, 2 skipped, and 2 generated-guidance
+  freshness failures in 579.51 seconds. The guide had changed during the audit.
+  Regenerating its evidence appended proposal-advice revision 5; a comparison
+  verified that every earlier curated-note revision was unchanged. The two
+  failing checks and all affected areas then passed in a 135-test rerun.
+- Both skips are optional sntrup comparisons requiring the original 2020 full
+  vector archive/reference library, which are absent from this installation.
+  They are not represented as passes. Available Sage checks did run.
+- All 21 frontend regression scripts passed, including 106 notebook checks.
+  The account-transition regression exercises the main app and notebook together.
+- Registered source/native closure validation and display-note --check passed.
+  Isolated PQ dependency rebuilding passed its 14 native KAT groups and 180 NIST
+  ACVP cases. No installed runtime worker or cryptographic adapter was replaced.
+- Migration upgrade/downgrade/re-upgrade checks preserve old account, note,
+  publication, proposal and review columns byte-for-byte, and Alembic's metadata
+  comparison passes. The local development database was observed already at 0017.
+- Desktop browser verification used synthetic accounts and a separate local
+  database: moderator withdrawal, historical approval wording, retained audit
+  content and the reader's neutral notice. The notice also rendered legibly at
+  the iPhone SE emulated viewport, 375 by 667 CSS pixels.
+- An initial sandboxed baseline was not a usable release result: loopback test
+  sockets were blocked and runtime-only installs lacked native test sources.
+  The complete run above allowed localhost sockets and used isolated, verified
+  build dependencies. A FastAPI/Starlette test-client deprecation warning remains.
+
+Logs and dependency builds for this session are under
+/private/tmp/crucible-audit-20261018/ (backend-final.log, final-affected.log,
+frontend-final.log, native-build.log and codec-builds.log). This temporary path
+is verification provenance for this workstation, not a portable dependency.
+
+Tests and this audit are not an independent cryptographic security evaluation.
+No production deployment, public launch, scoring redesign, real-note withdrawal
+or external outreach was performed. The audit did not measure live adoption or
+claim that any current speculative construction is ready for real-world use.

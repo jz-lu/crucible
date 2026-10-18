@@ -1,0 +1,140 @@
+McEliece parameter follow-up — 2026-10-17
+=======================================
+
+Decision
+--------
+Keep classic-mceliece@length-research-v1 live as an explicitly experimental
+shortened-code path. Do not describe it as an optimized, equally spaced security
+ladder or a current approximately-128-bit endpoint. Do not rewrite m/n/t merely
+to improve the old Prange proxy. The code/correctness evidence supports retaining
+this research target; the security/parameter-selection evidence does not yet
+satisfy the project's stronger ideal of efficient choices at each security level.
+
+This is a scientific limitation, not a newly found implementation failure.
+Structural attacks concern confidentiality, not the distance argument establishing
+honest error correction. This review does not certify deployment suitability.
+
+What the current code actually establishes
+-----------------------------------------
+crucible/code_parameters.py: fixed m=12,t=64 and 50 lengths n=840..3488.
+crucible/code_native.py: full-rank systematic public matrices, honest weight-64
+errors, unchanged decoder/KEM transform. The degree-64 binary irreducible Goppa
+distance bound gives unique decoding of these honest errors, conditional on valid
+generation and exact implementation. The endpoint matches the published 348864
+construction in the existing conformance checks.
+
+scripts/audit_code_parameter_frontiers.py verifies the shortest byte-aligned n
+attaining each historical elementary trial target while m and t remain fixed.
+It does not optimize an actual attack cost. Rechecking its McEliece function gave:
+
+  (m,n,t)        public key B   ciphertext B   log2 elementary Prange trials
+  (12,840,64)          6912              96              8.616932
+  (12,1680,64)        87552              96             74.416635
+  (12,3488,64)       261120              96            142.783229
+  (7,120,4)            336               4              8.648178
+
+The last tuple is only the existing unimplemented diagnostic. Its smaller sizes
+and slightly larger trial proxy refute global cost optimality under that proxy;
+they do not establish equal-security dominance. Different elimination costs,
+low-degree algebraic attacks and improved decoding prevent that inference.
+These are nominal full-rank systematic encoding sizes, not measurements.
+
+What changed in the primary literature
+-------------------------------------
+1. Ghoshal–Ishai–Jain–Sun, ePrint 2026/1630, revised 2026-08-27, gives a
+   provable quasipolynomial public-code distinguisher and heuristic extensions
+   to decryption/equivalent-key recovery. A code distinguisher is not by itself
+   recovery of the challenge's shared secret. The key-recovery extensions have
+   different assumptions and should be tracked as separate claims.
+   https://eprint.iacr.org/2026/1630
+
+2. Weis, ePrint 2026/1984, revised 2026-10-06, improves GIJS structural recovery
+   and reports a recovered TII toy key (m=8,t=9,n=214). The abstract distinguishes
+   single-run work from multi-run recovery, different memory charging models,
+   and four heuristic assumptions. Full-size cost estimates are conditional;
+   they are not measured runtimes or universal security upper bounds.
+   https://eprint.iacr.org/2026/1984
+
+3. Saarinen, ePrint 2026/1986, revised 2026-09-24, reports recovery of TII-254
+   at (m=8,t=12,n=223), with an independently checkable artifact. Its reported
+   27.2 GPU-hours cover two final Krylov sequences, excluding other stages.
+   Do not present that figure as total attack time. The historical challenge's
+   label 254 is not an established 254-bit security level.
+   https://eprint.iacr.org/2026/1986
+
+4. Saarinen, ePrint 2026/1786, revised 2026-09-15, provides conditional itemized
+   arithmetic and memory estimates. It explicitly excludes address generation
+   and memory traffic. Its outputs must not be merged numerically with a model
+   charging for memory access without reconciliation.
+   https://eprint.iacr.org/2026/1786
+
+5. Yu et al., ePrint 2026/633, posted 2026-04-01, gives progressive sieving-ISD
+   and a DOOM variant with a binary-sieve heuristic. This is further reason that
+   elementary Prange trial counts cannot stand for best-known decoding cost.
+   Single-target decoding, many-target decoding and key recovery need distinct
+   game/accounting labels; not every DOOM saving applies to a particular draw.
+   https://eprint.iacr.org/2026/633
+
+These are primary-author reports/preprints, not independent validation by this
+audit. I checked the current IACR abstracts/revision metadata; full-paper PDFs
+were unavailable through the browsing tool for this pass. No attack code was
+executed, and no full-size structural estimate was reproduced.
+
+Concrete safe improvement now
+-----------------------------
+Preserve the current live presentation: the audit catalogue has no initial
+security model, no numerical security estimates for all 50 profiles, and candid
+shortening/structural-attack caveats. There is no stale numerical security curve
+to remove. Preserve measured size/timing graphs and frozen challenge manifests.
+
+Replace the vague presentation-only limitation "Recent structural cryptanalysis
+matters" with a dated, sourced note, for example:
+  "Recent structural key-recovery methods require a new assessment of these
+   configurations. The published endpoint is a reference anchor; this page
+   does not yet provide current attack-cost estimates."
+Link the primary reports above from the scheme's current-release research review.
+Also say "Fixed-field, fixed-degree shortening study; joint parameter efficiency
+unresolved" where describing the selection. Existing progression metadata already
+says substantially this, so do not add repetitive warnings or extra UI machinery.
+
+Bounded next candidate study, before another cryptographic release
+----------------------------------------------------------------
+Use a declared finite initial domain: m=7..12, t=2..64, byte-aligned n with
+mt<n<=min(3488,2^m). This gives 45,497 integer tuples. It deliberately includes
+the existing anchor and small alternatives; it is not a claim to cover every
+useful Goppa construction. Preserve full-support sampling and the existing KEM
+transform instead of truncating randomness to manufacture intermediate levels.
+
+First make an offline table of algebraic prerequisites and canonical byte costs:
+  r=mt, k=n-r; public-key bytes r*ceil(k/8); ciphertext bytes ceil(r/8).
+Each candidate still needs specified irreducible field/extension polynomials,
+full-rank systematic-key generation, and exact generalized sampling/decoding.
+The integer inequalities alone are not an implementation/admission certificate.
+
+Then record separate, source-pinned attack analyses: improved ISD on (n,k,t),
+and applicable structural key-recovery methods including GIJS/holdout. State
+success probability, work units, memory limits/access charges and preprocessing.
+The TII CryptographicEstimators SDEstimator is a possible generic-decoding input,
+not a complete Goppa-key security estimator:
+  https://github.com/Crypto-TII/CryptographicEstimators
+Audit exact algorithm coverage before use; do not assume it contains the latest
+sieving or structural methods. Missing or inapplicable estimates remain unknown,
+never infinity. Do not optimize into unanalysed low-degree/low-rate corners.
+
+Only compare candidates under compatible games and resource models. Report a
+cost/security tradeoff set, not one universal optimum. Recover public toy cases
+to check the small-parameter formulas and inspect exceptions to heuristic rank
+assumptions; toy success does not prove their full-size extension. A public-key
+structural attack producing an equivalent decoder can be relevant to shared-key
+recovery, but its full cost still has to be charged within the challenge rules.
+
+After that selection review, implement only a small justified candidate subset
+in a new frozen release. Reusing the current native implementation by changing
+three macros would be unsafe: field arithmetic, extension polynomials, Benes
+networks, decoder bounds, support sampling, padding and serialized secret-key
+layouts currently rely on m=12,t=64. Require independent honest/malformed-input
+tests, source closure pins and endpoint conformance before activation. Retain the
+old release and its evidence. No arbitrary stage-count target should drive this.
+
+This pass changed no live data, cryptographic source, parameter tuple, benchmark
+binding, score or admission state. The implementation hardening is independent.

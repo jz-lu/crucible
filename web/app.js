@@ -12,14 +12,14 @@ const state = {
   submitBusy: false, pendingAttempt: null, roundRefreshing: false,
   challengeRequest: 0, leaderboardRequest: 0, submissionChallenge: null,
   leaderboardDataKey: null, leaderboardPendingKey: null,
-  historyRequest: 0, recoveryRequest: 0, catalogueRequest: 0, sessionRevision: 0,
+  historyRequest: 0, recoveryRequest: 0, catalogueRequest: 0, catalogueRevision: null, sessionRevision: 0,
   peopleRequest: 0, personRequest: 0, personHandle: null, personDataKey: null,
   people: [], peoplePagination: null,
   connectCode: null, connectRequest: 0, connection: null, connectBusy: false,
   agentTokenRequest: 0,
   agentTokens: [], agentTokenPagination: null,
   agentInstructionsKey: null, challengeStartIntent: null, profileMetadataPending: null,
-  screen: 'catalogue', schemeId: null, schemeVersion: null,
+  screen: 'catalogue', reviewSection: 'publication', schemeId: null, schemeVersion: null,
   overviewMetrics: {computation: 'keygen', security: 'classical'},
   importBusy: false, recoveryImportRequest: 0, submissionFormRevision: 0,
   autoIssueAttempts: new Set(), autoIssuePaused: new Map()
@@ -28,7 +28,12 @@ let toastTimer;
 let roundRetryAt = 0;
 let sessionSynchronization = null;
 let notebookWorkspace = null;
+let reviewNotebookWorkspace = null;
 let notebookAssets = null;
+let notebookShowRequest = 0;
+let assumptionsWorkspace = null;
+const referenceTimings = new Map();
+const REFERENCE_TIMING_MAX_AGE_MS = 60000;
 const protectedRequests = new Set();
 const dialogTriggers = new WeakMap();
 const authDialog = $('#auth-dialog');
@@ -51,6 +56,17 @@ const proposals = {
   agentRevision: null, agentRouteKey: null, agentKeys: {draft: null, revision: null}
 };
 
+function normalizeAIModel(value = '', label = 'AI model(s)') {
+  if (typeof value !== 'string' || [...value].length > 300) {
+    throw new Error(`${label} must be text of at most 300 characters.`);
+  }
+  // With the Unicode flag, the surrogate range matches only unpaired surrogates.
+  if (/[\u0000\uD800-\uDFFF]/u.test(value)) {
+    throw new Error(`${label} must be valid Unicode text without null characters.`);
+  }
+  return value.trim();
+}
+
 // Versioned data contract: imports never execute code or submit an answer.
 function readRecoveryDocument(text) {
   if (typeof text !== 'string' || new TextEncoder().encode(text).length > RECOVERY_FILE_MAX_BYTES) {
@@ -60,7 +76,7 @@ function readRecoveryDocument(text) {
   try { value = JSON.parse(text.replace(/^\uFEFF/, '')); }
   catch { throw new Error('This file is not valid JSON. Use the downloadable template, without Markdown code fences.'); }
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The result must be a JSON object.');
-  const allowed = ['format', 'challenge_id', 'candidate', 'method', 'compute', '_instructions'];
+  const allowed = ['format', 'challenge_id', 'candidate', 'method', 'compute', 'ai_model', '_instructions'];
   if (Object.keys(value).some(key => !allowed.includes(key))) throw new Error('The result contains an unrecognized field. Use the template’s field names.');
   if (value.format !== 'crucible-recovery-v1') throw new Error('Set format to "crucible-recovery-v1", as in the template.');
   if (typeof value.challenge_id !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(value.challenge_id)) throw new Error('challenge_id must be the exact identifier from a downloaded challenge or result template.');
@@ -106,6 +122,7 @@ function parseRecoveryFile(text, challenge) {
   }
   return {
     format: value.format, challenge_id: value.challenge_id, candidate: value.candidate.toLowerCase(), method,
+    ai_model: normalizeAIModel(value.ai_model, 'ai_model'),
     compute: {
       hardware: string(compute.hardware, 'compute.hardware', 500),
       workers: compute.workers, wall_seconds: compute.wall_seconds,
@@ -121,26 +138,28 @@ function recoveryTemplate(challenge) {
   return {
     format: 'crucible-recovery-v1', challenge_id: challenge.id, candidate: '',
     method: {name: '', pseudocode: ''},
+    ai_model: '',
     compute: {hardware: '', workers: 1, wall_seconds: null, precomputation: '', peak_memory: '', notes: ''},
     _instructions: {
       file: 'Save one UTF-8 JSON object as a .json file, at most 131072 bytes (128 KiB), including these instructions. No Markdown fences or JSON comments. Escape line breaks inside strings as \\n.',
-      fields: 'Required: format, challenge_id, candidate, method.name, method.pseudocode, compute.hardware, compute.workers, compute.wall_seconds, compute.precomputation, compute.peak_memory. Optional: compute.notes and this _instructions object. No other fields are accepted.',
+      fields: 'Required: format, challenge_id, candidate, method.name, method.pseudocode, compute.hardware, compute.workers, compute.wall_seconds, compute.precomputation, compute.peak_memory. Optional: ai_model, compute.notes and this _instructions object. No other fields are accepted.',
       instructions: 'You may keep or remove _instructions. If kept, it must be an object of text values. It is guidance only, ignored when submitting; editing it cannot change validation rules.',
-      format: 'Keep format exactly "crucible-recovery-v1". Empty strings and the null attack-time placeholder must be filled in before import.',
+      format: 'Keep format exactly "crucible-recovery-v1". Required text fields and the null attack-time placeholder must be filled in before import.',
       challenge_id: 'Use the exact challenge.id from the downloaded challenge contract or this template. The website looks up that instance and selects its scheme, release, and parameter profile automatically, even if another profile is displayed. It must belong to the signed-in account, still be open, and have no final answer. Do not replace this ID with a stage number or parameter-set name.',
       candidate: `The complete ${keyBytes}-byte shared secret: exactly ${keyBytes * 2} hexadecimal characters. Uppercase or lowercase accepted; no spaces, line breaks, or 0x prefix.`,
       'method.name': 'Required nonblank text, at most 100 Unicode characters; a short descriptive name for the attack.',
       'method.pseudocode': 'Required nonblank text, at most 15000 Unicode characters. Describe the algorithm, key derivation, and preparation. The method object must also fit within a 65536-byte JSON request, including escapes. Pseudocode is stored as text, never executed.',
+      ai_model: 'Optional participant-reported text, at most 300 Unicode characters before trimming outer whitespace. Name the AI model(s) that implemented this result, including exact versions when known. Do not guess a model or version. Omit or leave empty when not reported; blank does not establish that no AI was used. Null and null characters are not accepted; text must be valid Unicode.',
       'compute.hardware': 'Required nonblank text, at most 500 Unicode characters. Describe the CPU/GPU model and configuration used.',
       'compute.workers': 'Required JSON number: an integer from 1 through 1000000. State the number of parallel workers; do not quote the number or use a boolean.',
       'compute.wall_seconds': 'Required finite JSON number from 0 through 315576000; fractions are allowed. Report attack wall-clock time in seconds, not the time since the challenge was downloaded. Replace null; do not quote the number.',
       'compute.precomputation': 'Required nonblank text, at most 2000 Unicode characters. Describe preparation, its cost, and reused data, or write "None".',
       'compute.peak_memory': 'Required nonblank text, at most 300 Unicode characters. Give an estimate with units, or write "Not measured".',
       'compute.notes': 'Optional text, at most 2000 Unicode characters. Include measurement uncertainty or other relevant details. An omitted or empty string is allowed; null is not.',
-      text: 'Text limits apply before trimming outer whitespace. Required text cannot consist only of whitespace. Keep method and compute declarations accurate; they are contributor-reported.',
+      text: 'Text limits apply before trimming outer whitespace. Required text cannot consist only of whitespace. Keep method, AI model and compute declarations accurate; they are participant-reported.',
       deadline: `This instance closes at ${utcDate(challenge.ends_at)}. The complete final answer must reach the server strictly before that deadline. Importing a file does not extend the deadline or submit an answer.`,
       submission: 'Review the imported fields, then explicitly submit. Each instance accepts one well-formed final answer, whether correct or incorrect. If a submission outcome is uncertain, retry the same answer; do not replace it with another file.',
-      publication: 'A correct recovery may publish your handle, method, pseudocode, and compute declaration on the leaderboard. Do not include passwords, API tokens, or other credentials.'
+      publication: 'A correct recovery may publish your handle, method, pseudocode, AI model annotation, and compute declaration with the result. Do not include passwords, API tokens, or other credentials.'
     }
   };
 }
@@ -219,6 +238,32 @@ function initialSecurityEstimate(scheme, profile) {
   return typeof model?.id === 'string' && model.id && estimate?.model_id === model.id &&
     Number.isFinite(estimate.bits) && estimate.bits >= 0 ? estimate.bits : null;
 }
+function securityReferences(scheme, metric) {
+  const evidence = scheme?.security_references;
+  const value = evidence?.metrics?.[metric];
+  return evidence?.format === 'crucible-security-references-v1' && evidence.scheme_id === scheme.id &&
+    String(evidence.version) === String(scheme.version) && Array.isArray(value?.models) && Array.isArray(value?.estimates) ? value : null;
+}
+function securityReference(scheme, profile, metric) {
+  // Frozen release references remain intact. Later literature evidence is
+  // separately identified, and applies only to the explicitly named profile.
+  const frozen = metric === 'classical' ? initialSecurityEstimate(scheme, profile) : null;
+  if (frozen !== null) return {bits: frozen, model: scheme.initial_security_model};
+  const evidence = securityReferences(scheme, metric);
+  const estimates = (evidence?.estimates || []).filter(item => item?.profile_id === profileId(profile));
+  if (estimates.length !== 1) return null;
+  const estimate = estimates[0];
+  const models = evidence.models.filter(model => model?.id === estimate.model_id);
+  return models.length === 1 && ['id', 'label', 'unit'].every(key => typeof models[0][key] === 'string' && models[0][key].trim()) && typeof estimate.bits === 'number' && Number.isFinite(estimate.bits) && estimate.bits >= 0 ?
+    {bits: estimate.bits, model: models[0]} : null;
+}
+function supportingNoteLink(note) {
+  if (typeof note?.id !== 'string' || !note.id.startsWith('curated:') || !Number.isSafeInteger(note.revision) ||
+      note.revision < 1 || !/^[a-f0-9]{64}$/.test(note.content_sha256 || '')) return null;
+  const link = node('a', 'Supporting research note →', 'text-button');
+  link.href = '#notebook?' + new URLSearchParams({note: note.id, revision: note.revision, sha256: note.content_sha256});
+  return link;
+}
 function estimateBits(value) { return value.toLocaleString('en-US', {maximumFractionDigits: 1}); }
 function attackReferenceModel(scheme) {
   const model = scheme?.initial_security_model;
@@ -230,6 +275,8 @@ function tierNote(scheme, profile) {
   if (intermediateConfiguration(profile)) return context?.before_stage != null && context?.after_stage != null ? `Between Stages ${context.before_stage} and ${context.after_stage}. ${profile.native_parameter_label || 'A reviewed intermediate configuration.'}` : 'A reviewed configuration outside the default progression.';
   const estimate = initialSecurityEstimate(scheme, profile);
   if (estimate !== null) return `${attackReferenceModel(scheme) ? 'Initial classical attack reference' : 'Initial classical estimate'}: ≈${estimateBits(estimate)} bits.`;
+  const published = securityReference(scheme, profile, 'classical');
+  if (published) return `Published classical attack reference: ${estimateBits(published.bits)} (${published.model.unit}). See Protocol for its scope.`;
   return researchTiers(scheme, profile) ? 'Stages follow this scheme’s default progression through reviewed configurations. Security estimates are not yet available.' : 'Stages follow this scheme’s default progression through reviewed configurations.';
 }
 function availableReleases() { return state.schemes.flatMap(scheme => [scheme, ...(scheme.previous_releases || [])]); }
@@ -244,6 +291,23 @@ function schemeRoute(scheme, profile, view = 'leaderboard') {
 function overviewRoute(scheme, profile = null) {
   return '#scheme/' + encodeURIComponent(scheme.id) + '/' + encodeURIComponent(scheme.version) +
     (profile ? '?' + new URLSearchParams({profile: profileId(profile)}) : '');
+}
+function assumptionsRoute(scheme, profile = null, claim = null) {
+  const query = new URLSearchParams();
+  if (profile) query.set('profile', profileId(profile));
+  if (claim) query.set('claim', claim);
+  return '#scheme/' + encodeURIComponent(scheme.id) + '/' + encodeURIComponent(scheme.version) + '/assumptions' + (query.size ? '?' + query : '');
+}
+function renderAssumptions(scheme, profile, query) {
+  $('#assumptions-back').href = overviewRoute(scheme, profile);
+  setText('#assumptions-title', scheme.name);
+  setText('#assumptions-context', `Release ${scheme.version}${profile ? ' · ' + profileLabel(profile, scheme) : ''}`);
+  if (!assumptionsWorkspace) assumptionsWorkspace = window.CrucibleAssumptions.create({
+    root: $('#assumptions-content'), api, route: assumptionsRoute,
+    isVisible: () => hasAccess() && state.screen === 'assumptions',
+    account: () => state.user?.id || null
+  });
+  assumptionsWorkspace.show(scheme, profile, query.get('claim'));
 }
 function navigate(hash) {
   if (window.location.hash === hash) applyRoute();
@@ -298,12 +362,16 @@ function renderAccessGate() {
   document.title = 'Private beta — Crucible';
 }
 function clearProtectedState() {
+  referenceTimings.clear();
+  assumptionsWorkspace?.clear();
+  notebookWorkspace?.setAccount(null);
+  reviewNotebookWorkspace?.setAccount(null);
   const reloadShell = state.protectedLoaded;
   state.protectedLoaded = false;
   state.ready = false;
   for (const controller of protectedRequests) controller.abort();
   for (const key of ['catalogueRequest', 'challengeRequest', 'leaderboardRequest', 'historyRequest', 'recoveryRequest', 'peopleRequest', 'personRequest', 'connectRequest']) state[key]++;
-  state.schemes = []; state.people = []; state.profile = null; state.challenge = null; state.methods = [];
+  state.schemes = []; state.catalogueRevision = null; state.people = []; state.profile = null; state.challenge = null; state.methods = [];
   state.schemeId = null; state.schemeVersion = null; state.personHandle = null; state.personDataKey = null;
   state.pendingAttempt = null; state.submissionChallenge = null; state.connection = null; state.round = null;
   state.challengeStartIntent = null; state.challengeLoading = false;
@@ -328,15 +396,60 @@ async function loadAuthorizedCatalogue() {
   const data = await api('/api/schemes');
   if (!hasAccess() || revision !== state.sessionRevision || request !== state.catalogueRequest) return false;
   state.schemes = data.schemes || [];
+  state.catalogueRevision = data.catalogue_revision || null;
   state.ready = true;
   state.protectedLoaded = true;
   applyRoute();
   return true;
 }
-async function showNotebook(query) {
-  const account = state.user?.id;
+function reviewerRoute(section = 'publication', values = {}) {
+  return '#reviews?' + new URLSearchParams({section, ...values});
+}
+function proposalPageActive() {
+  return state.screen === 'propose' || (state.screen === 'reviews' && state.reviewSection === 'schemes' && state.canReviewProposals);
+}
+function renderReviewAccountLink() {
+  $('#profile-review-link').hidden = !ownsViewedProfile() || !state.canReviewProposals || !hasAccess();
+}
+function renderReviewPage(query) {
+  const params = new URLSearchParams(query);
+  const allowed = hasAccess() && Boolean(state.user) && state.canReviewProposals;
+  $('#review-account-back').href = state.user ? personRoute(state.user.handle) : '#people';
+  $('#review-navigation').hidden = !allowed;
+  $('#review-access-message').hidden = allowed;
+  for (const section of ['publication', 'schemes', 'research']) {
+    const link = $('#review-nav-' + section), selected = state.reviewSection === section;
+    if (selected) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+  }
+  $('#review-notebook-workspace').hidden = !allowed || state.reviewSection === 'schemes';
+  $('#proposal-workspace').hidden = !allowed || state.reviewSection !== 'schemes';
+  if (!allowed) {
+    reviewNotebookWorkspace?.setAccount(null);
+    reviewNotebookWorkspace?.hide();
+    return;
+  }
+  if (state.reviewSection === 'schemes') {
+    params.set('review', '1');
+    enterProposalPage(params, true);
+  } else {
+    if (state.reviewSection === 'publication') {
+      params.set('review', '1');
+      for (const key of ['research', 'research_review', 'research_request']) params.delete(key);
+    } else {
+      params.set('research', '1'); params.set('research_review', '1');
+      for (const key of ['review', 'note', 'revision']) params.delete(key);
+    }
+    showNotebook(params, true);
+  }
+}
+async function showNotebook(query, reviewing = false) {
+  const account = state.user?.id, section = state.reviewSection, request = ++notebookShowRequest;
+  const target = $(reviewing ? '#review-notebook-workspace' : '#notebook-workspace');
+  const current = () => request === notebookShowRequest && hasAccess() && account === state.user?.id &&
+    (reviewing ? state.screen === 'reviews' && state.canReviewProposals && state.reviewSection === section && section !== 'schemes' : state.screen === 'notebook');
+  if (!current()) return;
   if (!window.CrucibleNotebook) {
-    setLoading($('#notebook-workspace'), 'Loading notebook…');
+    setLoading(target, reviewing ? 'Loading review workspace…' : 'Loading notebook…');
     notebookAssets ||= (async () => {
       await new Promise((resolve, reject) => {
         const stylesheet = node('link'); stylesheet.rel = 'stylesheet'; stylesheet.href = '/notebook/notebook.css';
@@ -354,11 +467,14 @@ async function showNotebook(query) {
       }
     })().catch(error => { notebookAssets = null; throw error; });
     try { await notebookAssets; }
-    catch (error) { if (hasAccess() && state.screen === 'notebook') showInlineError($('#notebook-workspace'), error.message, () => showNotebook(query)); return; }
+    catch (error) { if (current()) showInlineError(target, error.message, () => showNotebook(query, reviewing)); return; }
   }
-  if (!hasAccess() || account !== state.user?.id || state.screen !== 'notebook') return;
-  notebookWorkspace ||= window.CrucibleNotebook.mount($('#notebook-workspace'), {navigate});
-  notebookWorkspace.show(new URLSearchParams(window.location.hash.split('?')[1] || query));
+  if (!current()) return;
+  const options = {navigate, api, account: () => hasAccess() && (!reviewing || state.canReviewProposals) ? state.user : null,
+    currentReleases: () => hasAccess() ? state.schemes : [], reviewOnly: reviewing};
+  if (reviewing) reviewNotebookWorkspace ||= window.CrucibleNotebook.mount(target, options);
+  else notebookWorkspace ||= window.CrucibleNotebook.mount(target, options);
+  await (reviewing ? reviewNotebookWorkspace : notebookWorkspace).show(new URLSearchParams(query || window.location.hash.split('?')[1] || ''));
 }
 $('#access-sign-in').addEventListener('click', () => { setAuthMode('login'); openAuth($('#access-sign-in')); });
 $('#access-register').addEventListener('click', () => { setAuthMode('register'); openAuth($('#access-register')); });
@@ -402,7 +518,7 @@ $('#access-continue').addEventListener('click', async () => {
   catch (error) { globalError(error.message); }
 });
 function workspaceSelector(screen) {
-  return {access: '#access-workspace', scheme: '#workspace', overview: '#overview-workspace', notebook: '#notebook-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
+  return {access: '#access-workspace', scheme: '#workspace', overview: '#overview-workspace', assumptions: '#assumptions-workspace', notebook: '#notebook-workspace', reviews: '#review-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
 }
 function applyRoute(focus = false) {
   captureInvitation();
@@ -420,10 +536,24 @@ function applyRoute(focus = false) {
     hash = '#challenge';
     window.history.replaceState(null, '', hash);
   }
-  const [path, query = ''] = hash.split('?');
+  let [path, query = ''] = hash.split('?');
+  const legacyParams = new URLSearchParams(query);
+  if ((path === '#propose' && legacyParams.get('review') === '1') ||
+      (path === '#notebook' && (legacyParams.get('review') === '1' || legacyParams.get('research_review') === '1'))) {
+    const section = path === '#propose' ? 'schemes' : legacyParams.get('research_review') === '1' ? 'research' : 'publication';
+    legacyParams.delete('review'); legacyParams.delete('research'); legacyParams.delete('research_review');
+    legacyParams.set('section', section); path = '#reviews'; query = legacyParams.toString();
+    window.history.replaceState(null, '', path + '?' + query);
+  }
+  const reviewParams = new URLSearchParams(query);
+  if (path === '#reviews') {
+    const section = reviewParams.get('section');
+    state.reviewSection = ['publication', 'schemes', 'research'].includes(section) ? section : 'publication';
+    if (section !== state.reviewSection) { reviewParams.set('section', state.reviewSection); query = reviewParams.toString(); window.history.replaceState(null, '', '#reviews?' + query); }
+  }
   let scheme, profile, handle, view = 'leaderboard';
-  let screen = path === '#connect' ? 'connect' : path === '#people' ? 'people' : path === '#propose' ? 'propose' : path === '#about' ? 'about' : path === '#notebook' ? 'notebook' : path === '#research' ? 'research' : 'catalogue';
-  let invalid = !['#challenge', '#notebook', '#research', '#about', '#propose', '#people', '#connect'].includes(path);
+  let screen = path === '#connect' ? 'connect' : path === '#people' ? 'people' : path === '#propose' ? 'propose' : path === '#reviews' ? 'reviews' : path === '#about' ? 'about' : path === '#notebook' ? 'notebook' : path === '#research' ? 'research' : 'catalogue';
+  let invalid = !['#challenge', '#notebook', '#research', '#about', '#propose', '#reviews', '#people', '#connect'].includes(path);
   const personMatch = path.match(/^#person\/([^/]+)$/);
   if (personMatch) {
     try {
@@ -448,7 +578,7 @@ function applyRoute(focus = false) {
       }
     } catch { /* A malformed link must never select a different protocol. */ }
   }
-  const overviewMatch = path.match(/^#scheme\/([^/]+)\/([^/]+)$/);
+  const overviewMatch = path.match(/^#scheme\/([^/]+)\/([^/]+)(\/assumptions)?$/);
   if (overviewMatch) {
     try {
       const id = decodeURIComponent(overviewMatch[1]);
@@ -456,7 +586,7 @@ function applyRoute(focus = false) {
       scheme = availableReleases().find(item => item.id === id && String(item.version) === version);
       const params = new URLSearchParams(query);
       profile = scheme?.profiles?.find(item => profileId(item) === params.get('profile'));
-      if (scheme && (!params.has('profile') || profile)) { screen = 'overview'; invalid = false; }
+      if (scheme && (!params.has('profile') || profile)) { screen = overviewMatch[3] ? 'assumptions' : 'overview'; invalid = false; }
     } catch { /* Unknown or malformed releases fail closed to the catalogue. */ }
   }
   state.screen = screen;
@@ -468,8 +598,8 @@ function applyRoute(focus = false) {
   state.connectBusy = false;
   state.connectCode = screen === 'connect' ? connectionCode(new URLSearchParams(query).get('code')) : null;
   resetAgentSettings();
-  state.schemeId = ['scheme', 'overview'].includes(screen) ? scheme.id : null;
-  state.schemeVersion = ['scheme', 'overview'].includes(screen) ? String(scheme.version) : null;
+  state.schemeId = ['scheme', 'overview', 'assumptions'].includes(screen) ? scheme.id : null;
+  state.schemeVersion = ['scheme', 'overview', 'assumptions'].includes(screen) ? String(scheme.version) : null;
   state.profile = screen === 'scheme' ? profile : null;
   if (state.challengeStartIntent && !challengeStartSelectionMatches(state.challengeStartIntent, view)) state.challengeStartIntent = null;
   const changed = previous !== selectionKey();
@@ -483,7 +613,8 @@ function applyRoute(focus = false) {
     $('#leaderboard-content').replaceChildren();
   }
   showWorkspace(screen);
-  if (previousScreen === 'propose' && screen !== 'propose') leaveProposalPage();
+  if (['propose', 'reviews'].includes(previousScreen) && (screen !== previousScreen || screen === 'reviews')) leaveProposalPage();
+  if (screen === 'reviews') renderReviewPage(query);
   if (screen === 'propose') enterProposalPage(new URLSearchParams(query), previousScreen !== 'propose');
   const routeError = 'That KEM, version, or profile is unavailable. Choose a published KEM below.';
   if (invalid) globalError(routeError);
@@ -497,6 +628,7 @@ function applyRoute(focus = false) {
   }
   if (screen === 'catalogue') renderCatalogue();
   if (screen === 'overview') renderOverview(scheme, profile);
+  if (screen === 'assumptions') renderAssumptions(scheme, profile, new URLSearchParams(query));
   if (screen === 'people') loadPeople();
   if (screen === 'person') loadPerson(handle);
   if (screen === 'connect') loadConnection();
@@ -504,9 +636,12 @@ function applyRoute(focus = false) {
     showNotebook(query);
   }
   document.title = ['scheme', 'overview'].includes(screen) ? scheme.name + (screen === 'overview' ? ' overview' : '') + ' — Crucible' : screen === 'person' ? handle + ' — Crucible' : screen === 'people' ? 'Leaderboard — Crucible' : screen === 'research' ? 'Research — Crucible' : screen === 'about' ? 'About us — Crucible' : screen === 'propose' ? 'Propose a scheme — Crucible' : 'Schemes — Crucible';
+  if (screen === 'assumptions') document.title = `Assumptions · ${scheme.name} — Crucible`;
   if (screen === 'connect') document.title = 'Connect an agent — Crucible';
   if (screen === 'notebook') document.title = 'Research notebook — Crucible';
-  if (focus && previousScreen !== screen) $(workspaceSelector(screen)).focus();
+  if (screen === 'reviews') document.title = 'Review center — Crucible';
+  renderReviewAccountLink();
+  if (focus && previousScreen !== screen) $(workspaceSelector(screen)).focus({preventScroll: screen === 'catalogue'});
 }
 function sharedKeyBytes(challenge) {
   const bytes = challenge?.public?.encoding?.shared_secret_bytes;
@@ -526,7 +661,7 @@ function absorbClock(data) {
   }
   updateClock();
 }
-async function api(path, body) {
+async function api(path, body, {raw = false, method = body === undefined ? 'GET' : 'POST'} = {}) {
   const protectedRequest = !/^\/api\/(?:session(?:\?|$)|auth\/|access\/)/.test(path);
   if (protectedRequest && !hasAccess()) {
     const error = new Error('Sign in with an active beta membership to continue.');
@@ -539,7 +674,7 @@ async function api(path, body) {
   try {
     let response;
     try { response = await fetch(path, {
-      method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
+      method, credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
       headers: body === undefined ? {Accept: 'application/json'} : {
         Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': state.csrf
       },
@@ -550,7 +685,7 @@ async function api(path, body) {
       throw error;
     }
     let data;
-    try { data = await response.json(); } catch {
+    try { data = raw && response.ok ? await response.text() : await response.json(); } catch {
       if (controller.signal.aborted || response.ok) {
         const error = new Error(controller.signal.aborted ? 'The server took too long to respond. Please try again.' : 'The server returned an unreadable response. Please try again.');
         error.status = 0;
@@ -576,7 +711,7 @@ async function api(path, body) {
     if (protectedRequest && !hasAccess()) {
       const error = new Error('Beta access is no longer active.'); error.status = 403; throw error;
     }
-    absorbClock(data);
+    if (!raw) absorbClock(data);
     return data;
   } finally { clearTimeout(timeout); protectedRequests.delete(controller); }
 }
@@ -594,7 +729,11 @@ function setSession(data) {
   state.canManageBetaAccess = Boolean(state.user && data.capabilities?.manage_beta_access);
   state.canReviewProposals = Boolean(state.user && data.capabilities?.review_protocol_proposals);
   state.canSelfReviewProposals = Boolean(state.canReviewProposals && data.capabilities?.self_review_protocol_proposals);
+  notebookWorkspace?.setAccount(hasAccess() ? state.user : null);
+  reviewNotebookWorkspace?.setAccount(hasAccess() && state.canReviewProposals ? state.user : null);
   if (previousId !== state.user?.id) {
+    referenceTimings.clear();
+    assumptionsWorkspace?.clear();
     state.invitationDelivery = null;
     $('#access-code').value = '';
     state.challengeStartIntent = null;
@@ -646,9 +785,12 @@ function setSession(data) {
     return;
   }
   absorbClock(data);
+  renderReviewAccountLink();
+  if (state.screen === 'reviews' && state.ready && (previousId !== state.user?.id || previousReview !== state.canReviewProposals || previousSelfReview !== state.canSelfReviewProposals)) renderReviewPage(window.location.hash.split('?')[1] || '');
   if (previousId !== state.user?.id && state.ready) {
     if (state.screen === 'connect') loadConnection();
     if (state.screen === 'person') renderAgentSettings();
+    if (state.screen === 'notebook') showNotebook();
   }
 }
 function globalError(message) {
@@ -746,6 +888,10 @@ async function synchronizeSession() {
       if (state.screen === 'person') await loadPerson(state.personHandle, {preserve: true});
       if (revision !== state.sessionRevision) return;
       globalError('');
+      if (state.screen === 'overview' && !document.hidden) {
+        const scheme = selectedScheme();
+        if (scheme) loadReferenceTimings(scheme);
+      }
       if (state.screen === 'scheme') {
         // Do not await a child that may itself request a session refresh on 401.
         if (changed && state.view === 'challenge') loadChallenge();
@@ -765,24 +911,53 @@ function catalogueDisplayKey(scheme) {
     scheme.participant_count, scheme.largest_recovered_profile_id, scheme.next_profile_id,
     scheme.first_recovery, recoveredProfileIds(scheme)]);
 }
+function mergeCatalogueProgress(data) {
+  if (data.projection !== 'progress' || !state.catalogueRevision || data.catalogue_revision !== state.catalogueRevision || !Array.isArray(data.releases)) return null;
+  if (data.releases.some(row => !row || typeof row.id !== 'string' || typeof row.version !== 'string')) return null;
+  const key = release => JSON.stringify([release.id, release.version]);
+  const known = state.schemes.flatMap(scheme => [scheme, ...(scheme.previous_releases || [])]);
+  const rows = new Map(data.releases.map(row => [key(row), row]));
+  if (rows.size !== data.releases.length || rows.size !== known.length || known.some(release => !rows.has(key(release)))) return null;
+  const fields = ['participant_count', 'recovered_profile_ids', 'largest_recovered_profile_id', 'next_profile_id', 'profile_recoveries', 'first_recovery'];
+  if (data.releases.some(row => fields.some(field => field !== 'profile_recoveries' && !Object.hasOwn(row, field)))) return null;
+  const update = release => {
+    const result = {...release}, row = rows.get(key(release));
+    // Only dynamic fields can replace metadata. In particular, a partial reply
+    // cannot supply parameter sets, protocol links or a new release identity.
+    for (const field of fields) { if (Object.hasOwn(row, field)) result[field] = row[field]; else delete result[field]; }
+    return result;
+  };
+  return state.schemes.map(scheme => ({...update(scheme), previous_releases: (scheme.previous_releases || []).map(update)}));
+}
 async function refreshProfiles({background = false} = {}) {
   if (!hasAccess()) return false;
   const request = ++state.catalogueRequest;
+  const oldRevision = state.catalogueRevision;
   const oldCatalogue = JSON.stringify(state.schemes.map(catalogueDisplayKey));
   const oldSelection = catalogueDisplayKey(selectedScheme());
   let data;
-  try { data = await api('/api/schemes'); }
+  let merged;
+  try {
+    data = await api('/api/schemes' + (background && state.catalogueRevision ? '?progress_only=true' : ''));
+    if (request !== state.catalogueRequest) return false;
+    if (data.projection === 'progress') {
+      merged = mergeCatalogueProgress(data);
+      if (!merged) data = await api('/api/schemes');
+    }
+  }
   catch (error) {
     if (request !== state.catalogueRequest) return false;
     throw error;
   }
   if (request !== state.catalogueRequest) return false;
-  state.schemes = data.schemes || [];
+  state.schemes = merged || data.schemes || [];
+  state.catalogueRevision = data.catalogue_revision || null;
+  const metadataChanged = oldRevision !== state.catalogueRevision;
   const scheme = selectedScheme();
   const selectionChanged = oldSelection !== catalogueDisplayKey(scheme);
-  if (state.screen === 'catalogue' && (!background || oldCatalogue !== JSON.stringify(state.schemes.map(catalogueDisplayKey)))) renderCatalogue();
-  if (['scheme', 'overview'].includes(state.screen) && !scheme) return applyRoute();
-  if (state.screen === 'overview' && (!background || selectionChanged)) {
+  if (state.screen === 'catalogue' && (!background || metadataChanged || oldCatalogue !== JSON.stringify(state.schemes.map(catalogueDisplayKey)))) renderCatalogue();
+  if (['scheme', 'overview', 'assumptions'].includes(state.screen) && !scheme) return applyRoute();
+  if (state.screen === 'overview' && (!background || metadataChanged || selectionChanged)) {
     const openCards = Object.keys(OVERVIEW_CARDS).filter(id => $('#overview-chart-' + id)?.querySelector('details')?.open);
     const context = new URLSearchParams(window.location.hash.split('?')[1] || '').get('profile');
     renderOverview(scheme, scheme.profiles.find(profile => profileId(profile) === context));
@@ -795,9 +970,9 @@ async function refreshProfiles({background = false} = {}) {
     // Metadata refresh is not navigation. Preserve editors, disclosure state,
     // in-flight connections, and a slider/jump input currently being edited.
     const editing = [$('#size-slider'), $('#profile-select')].includes(document.activeElement);
-    if (!background || selectionChanged || state.profileMetadataPending === selectionKey()) {
+    if (!background || metadataChanged || selectionChanged || state.profileMetadataPending === selectionKey()) {
       if (editing) state.profileMetadataPending = selectionKey();
-      else renderProfiles(null, {details: !background && state.view === 'protocol'});
+      else renderProfiles(null, {details: (!background || metadataChanged || state.profileMetadataPending === selectionKey()) && state.view === 'protocol'});
     }
   }
   return true;
@@ -876,7 +1051,7 @@ function renderCatalogue() {
       record.href = schemeRoute(scheme, largest, 'leaderboard');
       record.setAttribute('aria-label', `View recoveries for ${profileLabel(largest, scheme)}`);
       progress.append(record);
-    } else progress.append(node('span', 'No recoveries yet', 'kem-record-empty'));
+    }
     const firstCell = node('td');
     firstCell.dataset.label = 'Recovered by';
     if (largest && scheme.first_recovery?.profile_id === profileId(largest)) {
@@ -903,7 +1078,9 @@ const AGENT_SCOPE_LABELS = {
   'submissions:read': 'Read your submission receipts',
   'submissions:write': 'Submit recovered keys on your behalf',
   'proposals:read': 'Read your private proposals and reviewer feedback',
-  'proposals:write': 'Submit your proposals and revisions for human review'
+  'proposals:write': 'Submit your proposals and revisions for human review',
+  'notes:read': 'Read published and curated research notes and their reading priorities',
+  'notes:rate': 'Rate other authors’ notes on your behalf, influencing reading priorities and author points'
 };
 function agentScopeList(scopes) {
   const list = node('ul', undefined, 'agent-scope-list');
@@ -1069,7 +1246,7 @@ function agentInstructions(challenge) {
   const folder = './crucible-attack-' + challenge.id.slice(0, 8);
   const schemeId = challenge.public?.scheme_id || state.schemeId;
   const selection = namedParameters(selectedScheme(), state.profile) || intermediateConfiguration(state.profile) ? '--profile-id ' + quote(profileId()) : '--stage ' + instanceSize(state.profile);
-  return `Retrieve my selected ${selectedScheme()?.name || schemeId} challenge ${namedParameters(selectedScheme(), state.profile) ? 'for' : 'at'} ${profileLabel(state.profile, selectedScheme())}.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running. If login is needed, run ${client} login and let me approve in my browser.\n\nFetch this exact instance into a fresh folder:\n${client} get --challenge-id ${quote(challenge.id)} --path ${quote(folder)}\nDeadline: ${utcDate(challenge.ends_at)}. Follow the workspace README for the attack and submission workflow.\n\nNext time I can just ask: “${agentFollowupRequest()}”\nFor those future requests, use ${client} init ${quote(schemeId)} ${selection} --path NEW_EMPTY_FOLDER. No website visit needed while connected.`;
+  return `Retrieve my selected ${selectedScheme()?.name || schemeId} challenge ${namedParameters(selectedScheme(), state.profile) ? 'for' : 'at'} ${profileLabel(state.profile, selectedScheme())}.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running. If login is needed, run ${client} login and let me approve in my browser.\n\nBefore work, read and follow the model pipeline contract at ${origin}/api/agent/pipeline: run ${client} guide. It identifies the supported workflows, exact source contracts and permission boundaries. The workspace saves a copy as pipeline.json; never put credentials in prompts or research files.\n\nFetch this exact instance into a fresh folder:\n${client} get --challenge-id ${quote(challenge.id)} --path ${quote(folder)}\nDeadline: ${utcDate(challenge.ends_at)}. Follow the workspace README for the attack and submission workflow. Record the AI model(s) that implemented the result in ai_model, with exact versions when known; never guess. Leave it blank when not reported.\n\nNext time I can just ask: “${agentFollowupRequest()}”\nFor those future requests, use ${client} init ${quote(schemeId)} ${selection} --path NEW_EMPTY_FOLDER. No website visit needed while connected.`;
 }
 function agentInstructionsKey() {
   return state.user && state.challenge ? JSON.stringify([state.user.id, state.challenge.id]) : null;
@@ -1264,12 +1441,13 @@ function renderPerson(person) {
     const breakdown = node('details', undefined, 'person-score-breakdown');
     breakdown.append(node('summary', 'Points breakdown'));
     const values = node('dl', undefined, 'person-score-parts');
-    for (const [label, key] of [['Personal progress', 'progress'], ['First-record bonus', 'early_recovery'], ['Accepted proposals', 'scheme_contributions']]) {
+    for (const [label, key] of [['Personal progress', 'progress'], ['First-record bonus', 'early_recovery'], ['Accepted proposals', 'scheme_contributions'], ['Research notes', 'note_contributions']]) {
       const part = node('div'); part.append(node('dt', label), node('dd', peopleNumber(person.score_breakdown[key]))); values.append(part);
     }
     breakdown.append(values);
-    breakdown.append(node('p', 'For each eligible scheme, your highest configuration weight earns 10 × that weight; your highest first-record weight earns a further 40 × that weight. Weights stay attached to configurations when the default progression changes. Each explicitly admitted new scheme earns 1,000 points.'));
+    breakdown.append(node('p', 'Each eligible scheme offers up to 500 personal-progress points and 2,000 points for your best first record. Configuration weights are fixed by the points policy; equal points do not imply equal attack difficulty. Each explicitly admitted new scheme earns 1,000 points.'));
     breakdown.append(node('p', 'Intermediate stages and repeated solves do not accumulate extra points. Archived releases keep their records and are labelled when they are not scored. This is the provisional points policy.'));
+    breakdown.append(node('p', 'Research-note contributions earn 1 or 2 points per supporting account through agent ratings. Changed or removed ratings update that credit. These points do not certify a claim or admit a scheme.'));
     target.append(breakdown);
   }
   target.append(renderFirstRecords(person));
@@ -1302,6 +1480,7 @@ function renderPerson(person) {
   target.append(recent);
   state.personDataKey = JSON.stringify(person);
   renderAgentSettings();
+  renderReviewAccountLink();
 }
 async function loadPerson(handle, {preserve = false} = {}) {
   const request = ++state.personRequest;
@@ -1338,6 +1517,206 @@ async function refreshRecoveryViews() {
   if (state.screen === 'person') refreshes.push(loadPerson(state.personHandle, {preserve: true}));
   await Promise.allSettled(refreshes);
 }
+function referenceTimingKey(scheme) { return JSON.stringify([scheme.id, String(scheme.version)]); }
+function referenceTimingState(scheme) { return referenceTimings.get(referenceTimingKey(scheme)); }
+function measuredTiming(result) {
+  return result?.status === 'measured' && Number.isSafeInteger(result.samples) && result.samples > 0 &&
+    result.failure_count === 0 && [result.median_seconds, result.q1_seconds, result.q3_seconds].every(value => typeof value === 'number' && Number.isFinite(value) && value >= 0) &&
+    result.q1_seconds <= result.median_seconds && result.median_seconds <= result.q3_seconds;
+}
+function conditionalTiming(result) {
+  return result?.status === 'partial' && result.sample_scope === 'successful-key-generation' &&
+    Number.isSafeInteger(result.samples) && result.samples > 0 &&
+    [result.outcomes?.warmup?.abort, result.outcomes?.measured?.abort].every(value => Number.isSafeInteger(value) && value >= 0) &&
+    [result.median_seconds, result.q1_seconds, result.q3_seconds].every(value => typeof value === 'number' && Number.isFinite(value) && value >= 0) &&
+    result.q1_seconds <= result.median_seconds && result.median_seconds <= result.q3_seconds;
+}
+function plottedTiming(result) { return measuredTiming(result) || conditionalTiming(result); }
+function timingAbortLabel(result) {
+  return `${result.outcomes.measured.abort} measured-trial key-generation aborts; ${result.outcomes.warmup.abort} warmup aborts`;
+}
+function timingResult(scheme, profile, operation) {
+  return referenceTimingState(scheme)?.report?.results.find(result => result.profile_id === profileId(profile) && result.operation === operation);
+}
+function timingNumber(value) { return value.toLocaleString('en-US', {maximumSignificantDigits: 4}); }
+function timingDuration(seconds) {
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) return '—';
+  return timingNumber(seconds < 1 ? seconds * 1000 : seconds) + (seconds < 1 ? ' ms' : ' s');
+}
+function validTimingReport(report, method, scheme) {
+  if (report === null) return true;
+  if (!report || report.scheme_id !== scheme.id || String(report.scheme_version) !== String(scheme.version) ||
+      report.method_id !== method.id || report.status !== 'local-pilot' || !Array.isArray(report.results) ||
+      !(/^[a-f0-9]{64}$/.test(report.implementation?.artifact_sha256 || '') ||
+        (report.implementation?.artifact_sha256 === null && /^[a-f0-9]{64}$/.test(report.implementation?.source_sha256 || '')))) return false;
+  const keys = new Set();
+  for (const result of report.results) {
+    if (!result || typeof result.profile_id !== 'string' || !['keygen', 'encapsulate', 'decapsulate'].includes(result.operation) ||
+        !['measured', 'failed', 'timeout', 'partial'].includes(result.status) ||
+        !Number.isSafeInteger(result.samples) || result.samples < 0 || !Number.isSafeInteger(result.failure_count) || result.failure_count < 0 ||
+        (result.status === 'measured' && !measuredTiming(result))) return false;
+    const key = JSON.stringify([result.profile_id, result.operation]);
+    if (keys.has(key)) return false;
+    keys.add(key);
+  }
+  return true;
+}
+async function loadReferenceTimings(scheme, {refresh = false} = {}) {
+  if (!hasAccess()) return;
+  const key = referenceTimingKey(scheme), existing = referenceTimings.get(key);
+  if (existing && (existing.status === 'loading' || (!refresh && Date.now() - existing.checkedAt < REFERENCE_TIMING_MAX_AGE_MS))) return;
+  // Reports may be published after the catalogue release. Recheck on a revisit
+  // or the visible page's session poll, while keeping its current graph steady.
+  const entry = {status: 'loading', method: existing?.method || null, report: existing?.report || null, supportingNote: existing?.supportingNote || null, error: null, checkedAt: null};
+  referenceTimings.set(key, entry);
+  const current = () => hasAccess() && referenceTimings.get(key) === entry;
+  const visible = () => current() && state.screen === 'overview' && selectedScheme() && referenceTimingKey(selectedScheme()) === key;
+  if (refresh && visible()) renderOverviewChart(selectedScheme(), 'computation');
+  try {
+    const data = await api('/api/protocol/benchmarks?' + new URLSearchParams({scheme_id: scheme.id, version: scheme.version}));
+    if (!current()) return;
+    if (!data.method || typeof data.method.id !== 'string' || !Number.isSafeInteger(data.method.version) ||
+        !validTimingReport(data.report, data.method, scheme)) throw new Error('The reference timing report could not be loaded.');
+    entry.method = data.method; entry.report = data.report; entry.supportingNote = data.supporting_note || null; entry.status = 'loaded';
+  } catch (error) { if (current()) { entry.status = 'error'; entry.report = null; entry.error = error.message; } }
+  if (!current()) return;
+  entry.checkedAt = Date.now();
+  const unchanged = existing?.status === 'loaded' && entry.status === 'loaded' &&
+    JSON.stringify([existing.method, existing.report, existing.supportingNote]) === JSON.stringify([entry.method, entry.report, entry.supportingNote]);
+  if (visible() && (refresh || !unchanged)) renderOverviewChart(selectedScheme(), 'computation');
+}
+function renderReferenceMethod(target, method) {
+  if (!method) return;
+  if (typeof method.summary === 'string') target.append(node('p', method.summary));
+  const facts = node('dl', undefined, 'detail-list reference-method-facts');
+  for (const [label, value] of [
+    ['Method', method.id + ' · version ' + method.version], ['Workload', method.workload],
+    ['Included', Array.isArray(method.includes) ? method.includes.join('; ') : null],
+    ['Excluded', Array.isArray(method.excludes) ? method.excludes.join('; ') : null],
+    ['Statistics', method.statistics], ['Correctness checks', method.correctness], ['Limits', method.limits],
+    ['Interpretation', method.interpretation], ['TLS context', method.tls_context]
+  ]) if (typeof value === 'string' && value) addFact(facts, label, value);
+  const baseline = method.baseline;
+  if (baseline && typeof baseline.name === 'string') {
+    const sizes = [['public key', baseline.public_key_bytes], ['ciphertext', baseline.ciphertext_bytes], ['shared secret', baseline.shared_secret_bytes]]
+      .filter(([, bytes]) => Number.isSafeInteger(bytes) && bytes > 0).map(([label, bytes]) => `${label} ${bytes.toLocaleString('en-US')} bytes`);
+    addFact(facts, baseline.name, sizes.join(' · ') + (baseline.note ? '. ' + baseline.note : ''));
+  }
+  target.append(facts);
+  const sources = node('ul', undefined, 'reference-sources');
+  for (const source of Array.isArray(method.sources) ? method.sources : []) {
+    const url = safeArtifactLink(source?.url);
+    if (!url || typeof source.title !== 'string') continue;
+    const link = node('a', source.title); link.href = url.href;
+    const item = node('li'); item.append(link); sources.append(item);
+  }
+  if (sources.childElementCount) target.append(sources);
+}
+function renderTimingDetails(target, scheme, metric) {
+  const entry = referenceTimingState(scheme), report = entry?.report;
+  const details = node('details', undefined, 'overview-values reference-timing-details');
+  details.append(node('summary', 'Method and results'));
+  const content = node('div', undefined, 'reference-timing-content');
+  const metadata = node('div');
+  const supportingNote = supportingNoteLink(entry?.supportingNote);
+  if (supportingNote) content.append(supportingNote);
+  content.append(node('p', 'NIST/TLS-informed methodology. These are implementation operation timings, not a TLS handshake, a security estimate, or NIST certification.'));
+  if (entry?.status === 'error') content.append(node('p', 'Timings unavailable. ' + entry.error, 'form-error'));
+  if (report) {
+    content.append(node('p', 'Local pilot · not independently reproduced.', 'reference-pilot-note'));
+    const facts = node('dl', undefined, 'detail-list reference-method-facts');
+    const implementation = report.implementation || {}, environment = report.environment || {}, sampling = report.sampling || {};
+    for (const [label, value] of [
+      ['Implementation', implementation.label], ['Language', implementation.language], ['Performance level', implementation.performance_level],
+      ['CPU', environment.cpu], ['OS', environment.os], ['Runtime', environment.runtime], ['Compiler', environment.compiler],
+      ['Threads', environment.threads], ['CPU affinity', environment.cpu_affinity],
+      ['Warmups per configuration', sampling.warmups], ['Requested measured trials', sampling.trials],
+      ['Configuration time budget', typeof sampling.profile_timeout_seconds === 'number' ? timingDuration(sampling.profile_timeout_seconds) : null],
+      ['Measured', report.measured_at], ['Report', report.id],
+      ['Implementation closure SHA-256', implementation.artifact_sha256], ['Source SHA-256', implementation.source_sha256]
+    ]) if (typeof value === 'string' || typeof value === 'number') addFact(facts, label, String(value));
+    metadata.append(facts);
+    for (const note of Array.isArray(report.notes) ? report.notes : []) if (typeof note === 'string') metadata.append(node('p', note));
+  }
+  const table = node('table'), head = node('thead'), headings = node('tr');
+  table.append(node('caption', OVERVIEW_METRICS[metric].label + ' · ' + scheme.name + ' · release ' + scheme.version));
+  for (const label of [namedParameters(scheme) ? 'Parameter set' : 'Configuration', 'Result', 'Samples', 'Median', 'Middle 50%']) {
+    const th = node('th', label); th.scope = 'col'; headings.append(th);
+  }
+  head.append(headings); table.append(head);
+  const body = node('tbody');
+  const profiles = overviewProfiles(scheme), reportedProfiles = profiles.filter(profile => timingResult(scheme, profile, metric));
+  if (report) {
+    const complete = reportedProfiles.filter(profile => measuredTiming(timingResult(scheme, profile, metric))).length;
+    const incomplete = reportedProfiles.length - complete, unattempted = profiles.length - reportedProfiles.length;
+    const counts = [`${complete} complete`];
+    if (incomplete) counts.push(`${incomplete} incomplete`);
+    if (unattempted) counts.push(`${unattempted} not attempted`);
+    content.append(node('p', `${reportedProfiles.length} of ${profiles.length} configurations attempted. ${counts.join(' · ')}.`, 'reference-timing-coverage'));
+  }
+  for (const profile of reportedProfiles) {
+    const result = timingResult(scheme, profile, metric), measured = plottedTiming(result), conditional = conditionalTiming(result), row = node('tr');
+    const status = result ? {measured: 'Measured', failed: 'Run failed', timeout: 'Timed out', partial: 'Partial run'}[result.status] : entry?.status === 'loading' ? 'Loading' : entry?.status === 'error' ? 'Unavailable' : 'Not measured';
+    const label = node('th', profileLabel(profile, scheme)); label.scope = 'row'; label.title = profileId(profile);
+    row.append(label, node('td', conditional ? 'Successful exchanges only · ' + timingAbortLabel(result) : status + (result?.failure_count ? ` · ${result.failure_count} failed` : '')),
+      node('td', result ? result.samples : '—'), node('td', measured ? timingDuration(result.median_seconds) : '—'),
+      node('td', measured ? timingDuration(result.q1_seconds) + '–' + timingDuration(result.q3_seconds) : '—'));
+    body.append(row);
+  }
+  if (!reportedProfiles.length) {
+    const row = node('tr'), cell = node('td', entry?.status === 'loading' ? 'Loading measurements…' : entry?.status === 'error' ? 'Measurements unavailable.' : 'Not measured.');
+    cell.colSpan = 5; row.append(cell); body.append(row);
+  }
+  table.append(body);
+  const scroll = node('div', undefined, 'overview-values-scroll');
+  scroll.tabIndex = 0; scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Reference timing results');
+  scroll.append(table); content.append(scroll);
+  const actions = node('div', undefined, 'reference-timing-actions');
+  const refresh = node('button', entry?.status === 'loading' ? 'Loading…' : entry?.status === 'error' ? 'Try again' : 'Refresh results', 'text-button');
+  refresh.type = 'button'; refresh.disabled = entry?.status === 'loading';
+  refresh.addEventListener('click', () => loadReferenceTimings(scheme, {refresh: true}));
+  const download = node('a', 'Download method and results', 'text-button');
+  download.href = '/api/protocol/benchmarks?' + new URLSearchParams({scheme_id: scheme.id, version: scheme.version});
+  download.download = 'crucible-reference-timings.json';
+  actions.append(refresh, download); content.append(actions, metadata);
+  renderReferenceMethod(content, entry?.method);
+  details.append(content); target.append(details);
+}
+function renderSecurityModels(target, scheme, metric, plottedModels) {
+  const evidence = securityReferences(scheme, metric);
+  const content = node('div', undefined, 'reference-timing-content');
+  const supportingNote = supportingNoteLink(scheme.evidence_note);
+  if (supportingNote) content.append(supportingNote);
+  if (typeof evidence?.explanation === 'string') content.append(node('p', evidence.explanation));
+  const models = new Map(plottedModels);
+  for (const model of evidence?.models || []) if (typeof model?.id === 'string' && model.id && !models.has(model.id)) models.set(model.id, model);
+  if (!models.size && metric === 'classical' && scheme.initial_security_model?.id) models.set(scheme.initial_security_model.id, scheme.initial_security_model);
+  for (const model of models.values()) {
+    const section = node('section', undefined, 'security-model-details');
+    section.append(node('h3', model.label || model.name || model.id));
+    for (const key of ['scope', 'description', 'summary', 'formula', 'assumptions', 'limitations']) {
+      const value = model[key];
+      if (typeof value === 'string' && value) section.append(node('p', value));
+      else if (Array.isArray(value)) {
+        const list = node('ul');
+        for (const item of value) if (typeof item === 'string') list.append(node('li', item));
+        if (list.childElementCount) section.append(list);
+      }
+    }
+    const sources = node('ul', undefined, 'reference-sources');
+    for (const source of model.sources || model.references || []) {
+      const url = safeArtifactLink(source?.url);
+      if (!url || typeof source.title !== 'string') continue;
+      const link = node('a', source.title); link.href = url.href;
+      const item = node('li'); item.append(link); sources.append(item);
+    }
+    if (sources.childElementCount) section.append(sources);
+    content.append(section);
+  }
+  const assumptions = node('a', 'View the scheme’s assumptions →', 'text-button');
+  assumptions.href = assumptionsRoute(scheme);
+  content.append(assumptions); target.append(content);
+}
 const OVERVIEW_METRICS = {
   public_key_bytes: {label: 'Public key', title: 'Public-key size', unit: 'Bytes', kind: 'encoding'},
   ciphertext_bytes: {label: 'Ciphertext', title: 'Ciphertext size', unit: 'Bytes', kind: 'encoding'},
@@ -1359,7 +1738,11 @@ function overviewProfiles(scheme) {
     .slice().sort((a, b) => stagePosition(a) - stagePosition(b));
 }
 function overviewValue(scheme, profile, metric) {
-  if (metric === 'classical') return initialSecurityEstimate(scheme, profile);
+  if (['classical', 'quantum'].includes(metric)) return securityReference(scheme, profile, metric)?.bits ?? null;
+  if (OVERVIEW_METRICS[metric]?.kind === 'timing') {
+    const result = timingResult(scheme, profile, metric);
+    return plottedTiming(result) ? result.median_seconds : null;
+  }
   return ['public_key_bytes', 'ciphertext_bytes'].includes(metric) ? profileBytes(scheme, profile, metric) : null;
 }
 function svgNode(tag, attributes = {}, text) {
@@ -1370,14 +1753,33 @@ function svgNode(tag, attributes = {}, text) {
 }
 function renderOverviewChart(scheme, cardId) {
   const metric = state.overviewMetrics[cardId] || OVERVIEW_CARDS[cardId][0];
-  const descriptor = OVERVIEW_METRICS[metric];
+  const descriptor = {...OVERVIEW_METRICS[metric]};
   const target = $('#overview-chart-' + cardId);
+  const detailsOpen = target.querySelector('details')?.open === true;
+  const timing = descriptor.kind === 'timing' ? referenceTimingState(scheme) : null;
   const card = target.closest('.overview-card');
   const profiles = overviewProfiles(scheme);
   const named = namedParameters(scheme);
   const exact = exactProfileRecords(scheme);
   const axisLabel = named ? 'Parameter set' : 'Challenge stage';
-  const values = profiles.map((profile, index) => ({tier: named ? index : stagePosition(profile), intermediate: intermediateConfiguration(profile), label: profileLabel(profile, scheme), profileId: profileId(profile), value: overviewValue(scheme, profile, metric)}));
+  const security = ['classical', 'quantum'].includes(metric);
+  const evidence = security ? securityReferences(scheme, metric) : null;
+  const polynomialQuantum = metric === 'quantum' && evidence?.models?.some(model => model?.id === 'shor-polynomial-quantum-v1');
+  const values = profiles.map((profile, index) => ({tier: named ? index : stagePosition(profile), intermediate: intermediateConfiguration(profile), label: profileLabel(profile, scheme), profileId: profileId(profile), value: overviewValue(scheme, profile, metric), model: security ? securityReference(scheme, profile, metric)?.model : null, conditional: descriptor.kind === 'timing' && conditionalTiming(timingResult(scheme, profile, metric)), timingResult: descriptor.kind === 'timing' ? timingResult(scheme, profile, metric) : null}));
+  const referenceModels = new Map(values.filter(point => point.model).map(point => [point.model.id, point.model]));
+  const singleModel = referenceModels.size === 1 ? [...referenceModels.values()][0] : null;
+  const literatureOnly = security && singleModel && (metric !== 'classical' || !profiles.some(profile => initialSecurityEstimate(scheme, profile) !== null));
+  if (literatureOnly) {
+    descriptor.title = metric === 'quantum' ? 'Quantum attack reference' : 'Classical attack reference';
+    descriptor.unit = singleModel.unit;
+  } else if (polynomialQuantum) {
+    descriptor.title = 'Quantum recovery';
+    descriptor.unit = 'Resource estimate pending';
+  }
+  if (descriptor.kind === 'timing' && values.some(point => point.value !== null) && Math.max(...values.map(point => point.value || 0)) < 1) {
+    descriptor.unit = 'Milliseconds';
+    for (const point of values) if (point.value !== null) point.value *= 1000;
+  }
   const indexedLabels = named && (profiles.length > 3 || values.some(point => point.label.length > 16));
   const measured = values.filter(point => point.value !== null);
   const minTier = values[0]?.tier, maxTier = values.at(-1)?.tier;
@@ -1390,7 +1792,7 @@ function renderOverviewChart(scheme, cardId) {
   const recoveredTier = !named ? recoveredPoints[0]?.tier : null;
   const recoveredLabel = !recoveredPoints.length ? '' : !named ? 'Largest recovered · ' + recoveredPoints[0].label :
     'Recovered · ' + (recoveredPoints.length > 3 ? `${recoveredPoints.length} parameter sets` : recoveredPoints.map(point => point.label).join(', '));
-  setText('#overview-title-' + cardId, descriptor.title);
+  setText('#overview-title-' + cardId, cardId === 'computation' ? 'Operation time' : descriptor.title);
   for (const button of card.querySelectorAll('[data-overview-metric]')) button.setAttribute('aria-pressed', String(button.dataset.overviewMetric === metric));
   const svg = svgNode('svg', {viewBox: '0 0 480 240', role: 'img', 'aria-labelledby': 'graph-title-' + cardId + ' graph-description-' + cardId, class: 'overview-svg'});
   svg.append(svgNode('title', {id: 'graph-title-' + cardId}, descriptor.title + ' by ' + axisLabel.toLowerCase()));
@@ -1412,7 +1814,7 @@ function renderOverviewChart(scheme, cardId) {
   }
   svg.append(svgNode('path', {d: `M${left} ${top}V${bottom}H${right}`, class: 'chart-axis'}));
   if (measured.length) {
-    for (const value of [0, ceiling]) svg.append(svgNode('text', {x: left - 9, y: y(value) + 4, 'text-anchor': 'end', class: 'chart-tick'}, value.toLocaleString('en-US')));
+    for (const value of [0, ceiling]) svg.append(svgNode('text', {x: left - 9, y: y(value) + 4, 'text-anchor': 'end', class: 'chart-tick'}, descriptor.kind === 'timing' ? timingNumber(value) : value.toLocaleString('en-US')));
   }
   if (values.length) {
     const defaultValues = values.filter(point => !point.intermediate);
@@ -1425,21 +1827,23 @@ function renderOverviewChart(scheme, cardId) {
   }
   svg.append(svgNode('text', {x: (left + right) / 2, y: 235, 'text-anchor': 'middle', class: 'chart-axis-title'}, axisLabel));
   if (measured.length) {
-    let path = '', connected = false;
+    let path = '', connected = false, previousModel = null;
     for (const point of values) {
-      if (point.value === null) { connected = false; continue; }
-      path += `${connected ? 'L' : 'M'}${x(point.tier).toFixed(2)} ${y(point.value).toFixed(2)} `;
+      if (point.value === null || point.conditional) { connected = false; continue; }
+      path += `${connected && (!security || previousModel === point.model?.id) ? 'L' : 'M'}${x(point.tier).toFixed(2)} ${y(point.value).toFixed(2)} `;
       connected = true;
+      previousModel = point.model?.id;
     }
     if (!named) svg.append(svgNode('path', {d: path.trim(), class: 'chart-series'}));
     for (const point of measured) {
-      const dot = svgNode('circle', {cx: x(point.tier), cy: y(point.value), r: named ? 4 : values.length > 60 ? 1.6 : 2.8, class: 'chart-point', 'data-tier': point.tier, 'data-profile-id': point.profileId, 'data-value': point.value});
-      dot.append(svgNode('title', {}, `${point.label}: ${point.value.toLocaleString('en-US')} ${descriptor.unit.toLowerCase()}`));
+      const dot = svgNode('circle', {cx: x(point.tier), cy: y(point.value), r: named || measured.length === 1 ? 4 : values.length > 60 ? 1.6 : 2.8, class: 'chart-point' + (point.conditional ? ' chart-point-conditional' : ''), 'data-tier': point.tier, 'data-profile-id': point.profileId, 'data-value': point.value});
+      dot.append(svgNode('title', {}, `${point.label}: ${descriptor.kind === 'timing' ? timingNumber(point.value) : point.value.toLocaleString('en-US')} ${descriptor.unit.toLowerCase()}${point.conditional ? '; median of ' + point.timingResult.samples + ' successful exchanges only; ' + timingAbortLabel(point.timingResult) : ''}`));
       svg.append(dot);
     }
   } else {
-    svg.append(svgNode('text', {x: (left + right) / 2, y: 106, 'text-anchor': 'middle', class: 'chart-empty-label'}, ['security', 'baseline'].includes(descriptor.kind) ? 'No estimates published' : descriptor.kind === 'timing' ? 'No timings published' : 'No values published'));
-    svg.append(svgNode('text', {x: (left + right) / 2, y: 128, 'text-anchor': 'middle', class: 'chart-empty-detail'}, 'Awaiting evidence'));
+    const timingLabel = timing?.status === 'loading' ? 'Loading timings' : timing?.status === 'error' ? 'Timings unavailable' : 'No timings published';
+    svg.append(svgNode('text', {x: (left + right) / 2, y: 106, 'text-anchor': 'middle', class: 'chart-empty-label'}, polynomialQuantum ? 'Polynomial-time quantum attack' : ['security', 'baseline'].includes(descriptor.kind) ? 'No estimates published' : descriptor.kind === 'timing' ? timingLabel : 'No values published'));
+    svg.append(svgNode('text', {x: (left + right) / 2, y: 128, 'text-anchor': 'middle', class: 'chart-empty-detail'}, polynomialQuantum ? 'Shor’s algorithm · not a zero-cost estimate' : descriptor.kind === 'timing' ? timing?.status === 'loading' ? 'Fetching the reference report' : timing?.status === 'error' ? 'Retry in Method and results' : 'No completed measurements for this operation' : evidence?.explanation ? 'See model and values below' : 'Awaiting evidence'));
   }
   for (const point of recoveredPoints) {
     const marker = svgNode('line', {x1: x(point.tier), y1: top, x2: x(point.tier), y2: bottom, class: 'chart-recovery-line', 'data-tier': point.tier, 'data-profile-id': point.profileId});
@@ -1451,7 +1855,7 @@ function renderOverviewChart(scheme, cardId) {
     const label = node('p', recoveredLabel, 'overview-recovery-note');
     target.append(label);
   }
-  const note = descriptor.kind === 'timing' ? 'Key generation, encapsulation, and decapsulation await a shared benchmark and measurement method.' :
+  const note = literatureOnly ? `${singleModel.label}. ${measured.length} of ${values.length} configurations. Published attack-model reference, not full-KEM security bits; see model and values.` : descriptor.kind === 'timing' ? timing?.report ? 'Median wall time · ' + [timing.report.implementation?.language, timing.report.implementation?.performance_level].filter(Boolean).join(' · ') + '. ' + (named ? '' : 'Lines join adjacent measured configurations. ') + 'See method and results for the environment and spread.' : 'Reference implementation timings use a shared measurement method. Missing measurements are left empty.' :
     descriptor.kind === 'baseline' ? (measured.length ? attackReferenceModel(scheme) ? 'A stated classical attack reference, not a security lower bound. Other attacks may be faster.' : 'Frozen classical reference; not a measured security guarantee.' : 'No initial classical estimate is published for this release.') :
     descriptor.kind === 'security' ? 'An estimate needs a stated security game, attack model, and source. Recovery records are not estimates.' :
     'Canonical encoded bytes. Excludes JSON and shared domain parameters. ' + (named ? 'Dots mark distinct parameter sets; no interpolation is implied.' : 'Dots mark reviewed configurations; intermediate configurations sit between the surrounding stages.');
@@ -1461,12 +1865,24 @@ function renderOverviewChart(scheme, cardId) {
     target.append(legend);
   }
   target.append(node('p', note, 'overview-chart-note'));
+  if (descriptor.kind === 'timing' && timing?.report) {
+    const incomplete = profiles.filter(profile => { const result = timingResult(scheme, profile, metric); return result && !plottedTiming(result); });
+    if (values.some(point => point.conditional)) target.append(node('p', 'Hollow points: medians conditional on successful key generation. Aborted attempts are retained in Method and results; these points are not joined by lines.', 'overview-chart-note chart-conditional-note'));
+    if (incomplete.length) target.append(node('p', `${incomplete.length} incomplete ${incomplete.length === 1 ? 'run' : 'runs'} left empty: ${incomplete.map(profile => profileLabel(profile, scheme)).join(', ')}. Recorded aborts or incomplete trials are listed in Method and results.`, 'overview-chart-note chart-coverage-note'));
+  } else if (security && measured.length && measured.length < values.length && !literatureOnly) {
+    target.append(node('p', `${measured.length} of ${values.length} configurations have a reference. Gaps are not interpolated; see model and values.`, 'overview-chart-note'));
+  }
   const badge = $('#overview-badge-' + cardId);
-  badge.textContent = measured.length ? (descriptor.kind === 'baseline' ? attackReferenceModel(scheme) ? 'Attack reference' : 'Initial model' : 'Published values') : 'Not reported';
+  badge.textContent = literatureOnly ? 'Published reference' : descriptor.kind === 'timing' ? timing?.report ? 'Local pilot' : timing?.status === 'loading' ? 'Loading' : timing?.status === 'error' ? 'Unavailable' : 'Not measured' : measured.length ? (descriptor.kind === 'baseline' ? attackReferenceModel(scheme) ? 'Attack reference' : 'Initial model' : 'Published values') : 'Not reported';
   badge.classList.toggle('is-empty', !measured.length);
-  if ((descriptor.kind === 'encoding' || descriptor.kind === 'baseline') && values.length) {
+  if ((descriptor.kind === 'encoding' || security) && values.length) {
     const details = node('details', undefined, 'overview-values');
-    details.append(node('summary', 'View values'));
+    details.append(node('summary', security ? 'Model and values' : 'View values'));
+    if (security) renderSecurityModels(details, scheme, metric, referenceModels);
+    else {
+      const supportingNote = supportingNoteLink(scheme.evidence_note);
+      if (supportingNote) { const source = node('p', undefined, 'overview-chart-note'); source.append(supportingNote); details.append(source); }
+    }
     const table = node('table');
     const caption = node('caption', descriptor.title + ' · version ' + scheme.version);
     const head = node('thead'), row = node('tr');
@@ -1485,6 +1901,8 @@ function renderOverviewChart(scheme, cardId) {
     scroll.setAttribute('aria-label', descriptor.title + ' values by ' + axisLabel.toLowerCase());
     scroll.append(table); details.append(scroll); target.append(details);
   }
+  if (descriptor.kind === 'timing') renderTimingDetails(target, scheme, metric);
+  if (detailsOpen && target.querySelector('details')) target.querySelector('details').open = true;
 }
 function renderOverview(scheme, contextProfile = null) {
   setText('#overview-title', scheme.name);
@@ -1496,25 +1914,29 @@ function renderOverview(scheme, contextProfile = null) {
   const archived = String(current?.version) !== String(scheme.version);
   setText('#overview-release', `${archived ? 'Archived release ' + scheme.version + ' · ' : ''}${namedParameters(scheme) ? profiles.length : scheme.default_progression?.stage_count ?? profiles.length} ${namedParameters(scheme) ? 'parameter set' + (profiles.length === 1 ? '' : 's') : 'challenge stages'}`);
   const entry = contextProfile || profiles.find(profile => profileId(profile) === scheme.next_profile_id) || profiles[0];
+  $('#overview-assumptions').href = assumptionsRoute(scheme, contextProfile);
   const challengeLink = $('#overview-challenges');
   challengeLink.hidden = !entry;
   challengeLink.href = entry ? schemeRoute(scheme, entry) : '#challenge';
   const record = profiles.find(profile => profileId(profile) === scheme.largest_recovered_profile_id);
-  setText('#overview-progress', record ? `${namedParameters(scheme) ? 'Recovered parameter set' : 'Largest recovery'} · ${profileLabel(record, scheme)}` : 'No recoveries yet');
+  setText('#overview-progress', record ? `${namedParameters(scheme) ? 'Recovered parameter set' : 'Largest recovery'} · ${profileLabel(record, scheme)}` : '');
+  $('#overview-progress').hidden = !record;
   const grid = $('#overview-graphs');
   if (!grid.childElementCount) {
     for (const id of Object.keys(OVERVIEW_CARDS)) {
       const card = node('article', undefined, 'overview-card');
+      if (id === 'computation') card.classList.add('overview-computation');
       card.setAttribute('aria-labelledby', 'overview-title-' + id);
       const heading = node('div', undefined, 'overview-card-heading');
       const title = node('h2'); title.id = 'overview-title-' + id;
       const badge = node('span', undefined, 'overview-badge'); badge.id = 'overview-badge-' + id;
       heading.append(title, badge);
       card.append(heading);
+      if (id === 'computation') card.append(node('p', 'Reference implementation timings', 'reference-timing-caption'));
       const metrics = OVERVIEW_CARDS[id];
       if (metrics.length > 1) {
         const options = node('div', undefined, 'overview-metric-options');
-        options.setAttribute('role', 'group'); options.setAttribute('aria-label', 'Choose metric for ' + id + ' chart');
+        options.setAttribute('role', 'group'); options.setAttribute('aria-label', id === 'computation' ? 'Choose operation to time' : 'Choose metric for ' + id + ' chart');
         for (const metric of metrics) {
           const button = node('button', OVERVIEW_METRICS[metric].label);
           button.type = 'button'; button.dataset.overviewMetric = metric;
@@ -1531,6 +1953,7 @@ function renderOverview(scheme, contextProfile = null) {
       card.append(chart); grid.append(card);
     }
   }
+  loadReferenceTimings(scheme);
   for (const id of Object.keys(OVERVIEW_CARDS)) renderOverviewChart(scheme, id);
   const overview = scheme.overview || {};
   for (const field of ['strengths', 'limitations']) {
@@ -1776,6 +2199,14 @@ function renderProtocol() {
     const scope = [model.summary, model.scope].filter(value => typeof value === 'string' && value.trim()).join(' ');
     if (scope) addFact(facts, attackReferenceModel(scheme) ? 'Reference scope' : 'Estimate scope', configurationProse(scope));
   }
+  for (const metric of ['classical', 'quantum']) {
+    if (metric === 'classical' && estimate !== null) continue;
+    const reference = securityReference(scheme, profile, metric);
+    if (!reference) continue;
+    addFact(facts, `Published ${metric} attack reference`, `${estimateBits(reference.bits)} (${reference.model.unit})`);
+    addFact(facts, `${metric === 'classical' ? 'Classical' : 'Quantum'} reference model`, reference.model.label);
+    addFact(facts, 'Reference scope', reference.model.scope);
+  }
   setText('#protocol-size-caveat', 'An incorrect answer locks that instance. An expired instance without an accepted recovery is simply unsolved here; it is not evidence of a security bound. ' +
     (namedParameters(scheme, profile) ? 'This named parameter set is a distinct target. A recovery is not inherited by other parameter sets, and no stage or security estimate is implied.' : estimate === null ? 'A configuration selects exact scheme parameters, not an estimate of security bits.' :
       attackReferenceModel(scheme) ? 'This configuration has a stated classical attack reference, not a security lower bound; other attacks may be faster.' : 'This configuration selects parameters using a frozen initial classical reference. The estimate is not a measured security guarantee; actual attack costs may differ.'));
@@ -1794,12 +2225,17 @@ function renderProtocol() {
   setText('#parameter-measurement-basis', basisText);
   $('#parameter-measurement-basis').hidden = false;
   addFact(facts, 'Shared-key output', profile.shared_secret_bytes == null ? null : `${profile.shared_secret_bytes} bytes`);
-  setText('#parameter-json', JSON.stringify({algorithms: profile.algorithms, parameters: profile.parameters, encoding: profile.encoding, kdf: profile.kdf}, null, 2));
+  // Exact public integers may exceed JavaScript Number's precision. The server
+  // supplies display-only JSON text for those profiles; frozen manifests stay intact.
+  setText('#parameter-json', typeof profile.exact_parameter_json === 'string' ? profile.exact_parameter_json : JSON.stringify({algorithms: profile.algorithms, parameters: profile.parameters, encoding: profile.encoding, kdf: profile.kdf}, null, 2));
   const claim = profile.correctness || {};
   addFact(correctness, 'Claim type', claim.kind);
   addFact(correctness, 'Failure bound', claim.failure_bound);
+  addFact(correctness, 'Configuration bound', claim.per_profile_failure_bound);
+  addFact(correctness, 'Evidence class', {'deterministic-support-proof': 'Deterministic support proof', 'conditional-analytical-bound': 'Conditional analytical bound', 'heuristic-model-analytical-bound': 'Bound in a heuristic model'}[claim.evidence_class] || configurationProse(claim.evidence_class));
   addFact(correctness, 'Argument', scheme?.protocol?.correctness_argument_math || configurationProse(claim.argument), true);
   addFact(correctness, 'Scope', configurationProse(claim.scope));
+  addFact(correctness, 'Assumptions', configurationProse(claim.assumptions));
   addFact(correctness, 'Evidence status', configurationProse(claim.evidence_status));
 }
 function renderChallenge() {
@@ -2137,6 +2573,7 @@ function renderRecovery(entry, context) {
   addFact(facts, 'Result', incorrect ? 'Incorrect' : 'Recovered');
   addFact(facts, 'Answer received', utcDate(entry.received_at));
   addFact(facts, 'Time to submit', duration(entry.elapsed_seconds) + ' from issue to receipt, including delays');
+  addFact(facts, 'AI model(s)', typeof entry.ai_model === 'string' && entry.ai_model.trim() ? entry.ai_model.trim() : 'Not reported');
   addFact(facts, 'Reported attack time', compute.wall_seconds == null ? null : duration(compute.wall_seconds));
   addFact(facts, 'Hardware', compute.hardware);
   addFact(facts, 'Parallel workers', compute.workers);
@@ -2144,7 +2581,7 @@ function renderRecovery(entry, context) {
   addFact(facts, 'Peak memory', compute.peak_memory);
   if (compute.notes) addFact(facts, 'Notes', compute.notes);
   content.replaceChildren(node('pre', entry.method?.pseudocode || 'No pseudocode recorded.', 'code-block'), facts,
-    node('p', 'Method and resources are contributor-reported. The server checks the submitted key, not the accuracy of these claims.', 'panel-footnote'));
+    node('p', 'Method, AI model attribution and resources are participant-reported. The server checks the submitted key, not the accuracy of these claims. An unreported model does not establish that no AI was used.', 'panel-footnote'));
   if (typeof entry.method?.source?.download_url === 'string') {
     try {
       const source = new URL(entry.method.source.download_url, siteOrigin());
@@ -2390,7 +2827,7 @@ async function importRecoveryFile(file) {
       '#method-pseudocode': result.method.pseudocode, '#hardware': result.compute.hardware,
       '#workers': result.compute.workers, '#wall-seconds': result.compute.wall_seconds,
       '#precomputation': result.compute.precomputation, '#peak-memory': result.compute.peak_memory,
-      '#compute-notes': result.compute.notes
+      '#compute-notes': result.compute.notes, '#ai-model': result.ai_model
     };
     for (const [selector, value] of Object.entries(fields)) $(selector).value = String(value);
     state.submissionFormRevision++;
@@ -2500,6 +2937,7 @@ $('#submission-form').addEventListener('submit', async event => {
       if (!new RegExp(`^[0-9a-fA-F]{${keyBytes * 2}}$`).test($('#candidate').value)) {
         throw new Error(`Enter the complete ${keyBytes}-byte key as exactly ${keyBytes * 2} hexadecimal characters.`);
       }
+      const aiModel = normalizeAIModel($('#ai-model').value);
       let methodId = $('#method-select').value;
       if (methodId === 'new') {
         const name = $('#method-name').value.trim();
@@ -2518,7 +2956,7 @@ $('#submission-form').addEventListener('submit', async event => {
       if (!compute.hardware || !compute.precomputation || !compute.peak_memory) throw new Error('Complete the hardware, preparation, and memory fields.');
       state.pendingAttempt = {
         challengeId: challenge.id,
-        payload: {candidate: $('#candidate').value.toLowerCase(), method_id: methodId, compute, idempotency_key: crypto.randomUUID()}
+        payload: {candidate: $('#candidate').value.toLowerCase(), method_id: methodId, compute, ai_model: aiModel, idempotency_key: crypto.randomUUID()}
       };
     }
     lockSubmissionFields(true);
@@ -2595,9 +3033,8 @@ async function copyInstance() {
   $('#copy-instance').disabled = true;
   try {
     // Copy and Download must use the same authoritative challenge contract.
-    const contract = await api('/api/challenges/' + encodeURIComponent(id) + '/download');
+    const payload = await api('/api/challenges/' + encodeURIComponent(id) + '/download', undefined, {raw: true});
     if (state.challenge?.id !== id || state.user?.id !== accountId) return;
-    const payload = JSON.stringify(contract, null, 2);
     try { await navigator.clipboard.writeText(payload); toast('Challenge JSON copied. It contains the same information as the download.'); }
     catch {
       toast('Clipboard access is unavailable. Use Download challenge JSON to save the same information.');
@@ -2727,7 +3164,7 @@ function proposalAgentPrompt(record) {
   const initialize = record ? `proposal revise ${quote(record.id)}` : 'proposal init';
   const base = record ? `\nExpected base: revision ${record.revision}, content SHA-256 ${record.content_sha256}. If the fetched revision or hash differs, show me the change before editing.\n` : '\n';
   const login = `${client} login`;
-  return `${record ? 'Help me revise my KEM proposal' : 'Help me prepare a new KEM proposal'} for Crucible.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running.\nBefore private access or submission, run ${login} if needed and let me approve the proposal permissions in my browser. Existing connections need login once to add those permissions.\n\nPrepare a fresh workspace:\n${client} ${initialize} --path ${quote(folder)}\n${base}\nFollow its README, template and schema. Explain what it adds over the closest existing scheme. Describe the exact algorithms and sampling distributions, correctness bound and scope, security assumptions, and identified implementation/evidence. Complete the template’s tier_design plan: describe the supported configuration space or reviewed generation rule, with stable configuration identities, and a default progression through natural parameter settings. Its positions are stages; their count is scheme-specific and equal stage numbers do not imply equal security. Preserve the construction and sampling distributions, explaining any coordinated parameter changes. Hold a common correctness requirement across the progression; negligible nonzero failure is allowed, and material per-configuration differences must be disclosed. State the endpoint target, evidence and status (supported-estimate, provisional or unestimated), retaining meaningful published or justified endpoints; justify useful intermediate stages. Prefer a default stage count in multiples of ten, with multiples of five as a fallback when the reviewed configurations support it; preserve endpoints and useful intermediate configurations, and never invent settings or compromise correctness or fidelity to meet a count. Complete parameter_selection: justify efficient admissible configurations under a stated cost objective, constraints, pinned security model and candidate domain; document comparison evidence, tradeoffs and uncertainty without claiming global optimality. Never add padding or restrict entropy just to manufacture stages. Keep unknowns explicit. Ask me for missing information; do not invent proofs, benchmarks or security claims.\n\nCheck the specification:\n${client} proposal validate --path ${quote(folder)}\nShow me the specification and validation result. Only when I ask you to submit, run:\n${client} proposal submit --path ${quote(folder)}\nReturn the private proposal link from the receipt. Submission requests human review; it does not approve or activate the scheme.`;
+  return `${record ? 'Help me revise my KEM proposal' : 'Help me prepare a new KEM proposal'} for Crucible.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running.\nBefore private access or submission, run ${login} if needed and let me approve the proposal permissions in my browser. Existing connections need login once to add those permissions.\n\nBefore work, read and follow the model pipeline contract at ${origin}/api/agent/pipeline: run ${client} guide. It identifies the supported workflows, exact source contracts and permission boundaries. The workspace saves a copy as pipeline.json; never put credentials in prompts or research files.\n\nPrepare a fresh workspace:\n${client} ${initialize} --path ${quote(folder)}\n${base}\nRead the proposal guide saved in that workspace (also at ${origin}/api/protocol/proposal-guide), then follow its README, template and schema. Explain what it adds over the closest existing scheme. Describe complete reproducible algorithms and sampling distributions, public and private encodings, correctness bound and scope, security assumptions, and identified implementation/evidence. Complete correctness.justification with a precise statement, conditions, configuration coverage and supporting reasoning; distinguish proved, modeled and conjectural steps. Empirical tests are supplemental. Formal verification is optional and conditional guarantees must state their conditions. Reference implementation measurement policy: ${origin}/api/protocol/reference-method. Timings describe the identified implementation, not a full TLS handshake or a security guarantee. Complete the template’s tier_design plan: describe the supported configuration space or reviewed generation rule, with stable configuration identities, and a default progression through natural parameter settings. Its positions are stages; their count is scheme-specific and equal stage numbers do not imply equal security. Preserve the construction and sampling distributions, explaining any coordinated parameter changes. For approval, state a precise correctness guarantee: zero honest disagreement or failure probability at most 2^-128 for every admitted configuration, with probability scope and assumptions. Also state the security notion, claimed guarantee and applicable parameters, with all underlying assumptions. If security depends on a correctness bound, identify that dependency and its required threshold. A claim may depend on conjectures or a heuristic model; distinguish the conditional argument from the evidence for each premise, independently motivate those premises and identify unproved steps for stress testing. Use justification.kind conjectural-claim where appropriate. Unknown correctness is acceptable in an early draft but needs a stated guarantee before approval. The common correctness target remains at most 2^-128; the claim may be conditional, but the target is not optional. For a statistical claim, declare correctness.failure_bound_exponent as an integer at least 128, consistent with the bound and assumptions. Perfect correctness states failure_bound "0" and omits the exponent; correctness.policy_id is optional. A proof gap undermines justification; a rigorous demonstration that actual failure probability exceeds the target refutes the guarantee. A looser upper bound alone is not a refutation. Report generation aborts separately. State the endpoint target, evidence and status (supported-estimate, provisional or unestimated), retaining meaningful published or justified endpoints; justify useful intermediate stages. Prefer a default stage count in multiples of ten, with multiples of five as a fallback when the reviewed configurations support it; preserve endpoints and useful intermediate configurations, and never invent settings or compromise correctness or fidelity to meet a count. Complete parameter_selection: justify efficient admissible configurations under a stated cost objective, constraints, pinned security model and candidate domain; document comparison evidence, tradeoffs and uncertainty without claiming global optimality. Never add padding or restrict entropy just to manufacture stages. Keep unknowns explicit. Ask me for missing information; do not invent proofs, benchmarks or security claims. Spend a separate, deliberate pass on citations: read the primary sources, check exact versions and claim scope, and identify the supporting section, theorem or page in the relevant argument. Cite existing Crucible notes by their exact revision link and content hash, with permission for any private material. Separate mathematical ingredients from a published complete KEM and from inherited security claims. Mark inaccessible or unverified sources and originality uncertainty explicitly; never invent citations or add unrelated ones for appearance.\n\nCheck the specification:\n${client} proposal validate --path ${quote(folder)}\nShow me the specification and validation result. Only when I ask you to submit, run:\n${client} proposal submit --path ${quote(folder)}\nSubmission creates a private research note containing the exact specification and its readable explanation; revisions preserve the earlier notes and reviews. Return the note link and review link from the receipt. Submission requests human review; it does not approve or activate the scheme.`;
 }
 function resetProposalAgentInstructions(kind = null) {
   for (const name of kind ? [kind] : Object.keys(PROPOSAL_AGENT_UI)) {
@@ -2773,14 +3210,16 @@ async function copyProposalAgentInstructions(kind) {
 const SPECIFICATION_LABELS = {
   setup: 'Setup', keygen: 'Key generation', encapsulate: 'Encapsulation', decapsulate: 'Decapsulation',
   tier_meaning: 'Meaning of a stage', supported_tiers: 'Supported stages', mapping: 'Parameter mapping',
-  distribution: 'Sampling distribution', reuse: 'Parameter reuse', public_key: 'Public key',
+  distribution: 'Sampling distribution', reuse: 'Parameter reuse', public_key: 'Public key', private_key: 'Private key',
   ciphertext: 'Ciphertext', shared_secret: 'Shared secret', shared_secret_bytes: 'Shared-secret bytes',
   kind: 'Claim type', failure_bound: 'Failure bound', argument: 'Argument', scope: 'Scope', evidence: 'Evidence',
+  policy_id: 'Common correctness policy', failure_bound_exponent: 'Failure probability at most 2 to the negative exponent',
   notion: 'Security notion', model: 'Attack model', claim: 'Claim', assumptions: 'Assumptions',
   url: 'URL', sha256: 'SHA-256', runtime: 'Runtime', entrypoint: 'Entry point',
   parameter_progression: 'Parameter progression', cost_tradeoff: 'Resource costs', fixed_correctness: 'Common correctness requirement',
   endpoint_status: 'Endpoint status', endpoint_target: 'Endpoint target', endpoint_evidence: 'Endpoint evidence', intermediate_steps: 'Intermediate steps', parameter_selection: 'Parameter selection',
   objective: 'Cost objective', constraints: 'Fixed constraints', security_model: 'Security and cost model',
+  statement: 'Mathematical statement', conditions: 'Conditions', configuration_coverage: 'Configuration coverage', derivation: 'Derivation',
   search_domain: 'Candidate search domain', comparison_evidence: 'Candidate comparison evidence', tradeoffs_and_uncertainty: 'Tradeoffs and uncertainty'
 };
 function proposalError(error) {
@@ -2826,6 +3265,7 @@ function proposalStatusLabel(status) {
 function previewValue(key, value) {
   if (value === null || value === undefined) return key === 'shared_secret_bytes' ? 'See shared-secret encoding' : 'Not provided';
   if (key === 'endpoint_status') return {'supported-estimate': 'Supported estimate', provisional: 'Provisional', unestimated: 'Unestimated'}[value] || String(value);
+  if (key === 'kind' && ['mathematical-proof', 'analytical-bound', 'model-based-analysis', 'conjectural-claim'].includes(value)) return {'mathematical-proof': 'Mathematical proof', 'analytical-bound': 'Analytical bound', 'model-based-analysis': 'Model-based analysis', 'conjectural-claim': 'Conjectural claim'}[value];
   if (key === 'supported_tiers' && value && typeof value === 'object') {
     if (value.kind === 'range') return `${value.min}–${value.max} · step ${value.step}`;
     if (value.kind === 'list' && Array.isArray(value.values)) return value.values.join(', ');
@@ -2843,8 +3283,10 @@ function renderSpecification(target, spec) {
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       const facts = node('dl', undefined, 'detail-list proposal-facts');
       for (const [field, content] of Object.entries(value)) {
-        if (field === 'parameter_selection' && content && typeof content === 'object') {
-          for (const [choice, description] of Object.entries(content)) addFact(facts, SPECIFICATION_LABELS[choice] || choice, previewValue(choice, description));
+        if (['parameter_selection', 'justification'].includes(field) && content && typeof content === 'object' && !Array.isArray(content)) {
+          for (const [choice, description] of Object.entries(content)) addFact(facts,
+            field === 'justification' && choice === 'kind' ? 'Justification type' : SPECIFICATION_LABELS[choice] || choice,
+            previewValue(choice, description));
         } else addFact(facts, SPECIFICATION_LABELS[field] || field, previewValue(field, content));
       }
       section.append(facts);
@@ -2875,13 +3317,10 @@ function renderProposalDraft() {
   setText('#submit-proposal', proposals.submitting ? 'Submitting…' : !state.user ? 'Sign in to submit' : proposals.pending ? 'Retry submission' : proposals.revisingId ? 'Submit revised specification' : 'Submit proposal');
   $('#proposal-sign-in').hidden = Boolean(state.user);
   $('#refresh-proposals').hidden = !state.user || (proposals.reviewMode && !state.canReviewProposals);
-  $('#proposal-review-link').hidden = !state.canReviewProposals;
-  $('#proposal-review-link').href = proposals.reviewMode ? '#propose' : '#propose?review=1';
-  setText('#proposal-review-link', proposals.reviewMode ? 'My proposals →' : 'Review proposals →');
   if (proposals.receipt) {
     proposalStatus('Submitted for review. ');
     const link = node('a', 'View your proposal', 'text-button');
-    link.href = '#propose?proposal=' + encodeURIComponent(proposals.receipt.id);
+    link.href = proposals.receipt.source_note?.url || '#propose?proposal=' + encodeURIComponent(proposals.receipt.id);
     $('#proposal-status').append(link);
   }
 }
@@ -2957,10 +3396,15 @@ function enterProposalPage(params, entering) {
     proposals.validating = false;
     proposalStatus('Choose the file again to finish checking it.');
   }
+  $('#proposal-page-back').hidden = reviewMode;
+  $('#proposal-context').hidden = reviewMode;
+  $('#proposal-detail-back').href = reviewMode ? reviewerRoute('schemes') : '#notebook?compose=proposal';
+  setText('#proposal-detail-back', reviewMode ? '← Scheme proposals' : '← New proposal note');
+  $('#proposal-workspace').classList.toggle('proposal-review-workspace', reviewMode);
   $('#proposal-draft').hidden = Boolean(id) || reviewMode;
   $('#proposal-detail').hidden = !id;
   $('#proposal-revision-context').hidden = !revise;
-  setText('#proposal-title', revise ? 'Revise your proposal' : reviewMode ? 'Review proposals' : 'Propose a scheme');
+  setText('#proposal-title', revise ? 'Revise your proposal' : reviewMode ? 'Scheme proposals' : 'Propose a scheme');
   setText('#proposal-history-title', reviewMode ? 'Review queue' : 'My proposals');
   renderProposalDraft();
   const listKey = JSON.stringify([state.user?.id, reviewMode]);
@@ -2974,6 +3418,7 @@ function enterProposalPage(params, entering) {
     clearProposalReview();
   }
   renderProposalAgentControls();
+  if (params.get("agent") === "1" && !id && !reviewMode) showProposalAgentInstructions("draft");
 }
 async function importProposal(file) {
   if (!file || proposals.submitting || proposals.pending || state.screen !== 'propose') return;
@@ -3067,7 +3512,7 @@ async function loadProposals(cursor = null) {
   if (reviewing && !state.canReviewProposals) return showEmpty(target, 'The review queue is available to configured reviewers.');
   if (!after) setLoading(target, reviewing ? 'Loading the review queue…' : 'Loading your proposals…');
   $('#refresh-proposals').disabled = true;
-  const current = () => request === proposals.listRequest && account === state.user?.id && state.screen === 'propose' && proposals.reviewMode === reviewing;
+  const current = () => request === proposals.listRequest && account === state.user?.id && proposalPageActive() && proposals.reviewMode === reviewing;
   try {
     const result = await api(reviewing ? '/api/protocol/review-queue' + (after ? '?' + new URLSearchParams({after}) : '') : '/api/me/protocol-proposals');
     if (!current()) return;
@@ -3076,8 +3521,8 @@ async function loadProposals(cursor = null) {
     if (!result.proposals.length && !after) return showEmpty(target, reviewing ? 'No proposals awaiting your review.' : 'No submitted proposals yet.');
     for (const record of result.proposals) {
       const link = node('a', undefined, 'proposal-list-entry');
-      link.href = '#propose?' + (reviewing ? 'review=1&' : '') + 'proposal=' + encodeURIComponent(record.id);
-      link.append(node('span', record.specification.name, 'proposal-list-name'), node('span', 'Revision ' + record.revision + ' · ' + proposalStatusLabel(record.status) + (reviewing && record.author?.handle ? ' · ' + record.author.handle : '') + ' · ' + utcDate(record.created_at), 'proposal-list-meta'));
+      link.href = reviewing ? reviewerRoute('schemes', {proposal: record.id}) : '#propose?proposal=' + encodeURIComponent(record.id);
+      link.append(node('span', record.specification.name, 'proposal-list-name'), node('span', 'Revision ' + record.revision + ' · ' + (record.retracted ? 'Retracted' : proposalStatusLabel(record.status)) + (reviewing && record.author?.handle ? ' · ' + record.author.handle : '') + ' · ' + utcDate(record.created_at), 'proposal-list-meta'));
       target.append(link);
     }
     if (reviewing && typeof result.next_after === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(result.next_after)) {
@@ -3099,7 +3544,7 @@ async function loadProposalDetail(id) {
   if (!account) return showEmpty(target, 'Sign in to view your submitted proposal.');
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) return showEmpty(target, 'This proposal link is invalid.');
   setLoading(target, 'Loading your submitted specification…');
-  const current = () => request === proposals.detailRequest && account === state.user?.id && state.screen === 'propose' && proposals.detailId === id;
+  const current = () => request === proposals.detailRequest && account === state.user?.id && proposalPageActive() && proposals.detailId === id;
   try {
     const result = await api('/api/protocol/proposals/' + encodeURIComponent(id));
     if (!current()) return;
@@ -3108,18 +3553,25 @@ async function loadProposalDetail(id) {
     proposals.detailRecord = record;
     proposals.detailOwn = result.author?.id === account;
     renderSpecification(target, record.specification);
-    target.prepend(node('p', 'Revision ' + record.revision + ' · ' + proposalStatusLabel(record.status) + ' · ' + utcDate(record.created_at), 'proposal-status'));
+    if (record.source_note?.id) {
+      const source = node('a', 'Read proposal note →', 'text-button');
+      source.href = '#notebook?' + new URLSearchParams({note:record.source_note.id, revision:String(record.source_note.revision)});
+      target.prepend(source);
+    }
+    target.prepend(node('p', 'Revision ' + record.revision + ' · ' + (record.retracted ? 'Retracted' : proposalStatusLabel(record.status)) + ' · ' + utcDate(record.created_at), 'proposal-status'));
+    window.CrucibleRetractions.mount(target, {record, kind:'scheme', api, current, onSuccess:async () => { await loadProposalDetail(id); if (proposalPageActive()) loadProposals(); }});
     const testOnlyReview = (result.reviews || []).some(review => review.revision === record.revision && review.checks?.test_only_self_review === true);
-    target.append(node('p', testOnlyReview ? 'Development self-review only. This decision does not satisfy independent admission review or earn scheme contribution points.' : record.status === 'approved' ? 'A manual reviewer approved this revision for trusted integration. Approval does not activate a live challenge or certify security.' : 'Format checked only. This submitted specification has not been approved or activated as a live challenge.', 'panel-footnote'),
+    target.append(node('p', record.retracted ? 'The proposer withdrew this request. Earlier evidence and review decisions remain in the history.' : testOnlyReview ? 'Development self-review only. This decision does not satisfy independent admission review or earn scheme contribution points.' : record.status === 'approved' ? 'A manual reviewer approved this revision for trusted integration. Approval does not activate a live challenge or certify security.' : 'Format checked only. This submitted specification has not been approved or activated as a live challenge.', 'panel-footnote'),
       node('p', 'Content SHA-256 · ' + record.content_sha256, 'proposal-digest'));
     renderProposalAudit(target, result);
     const own = result.author?.id === account;
-    proposals.agentRevision = own ? record : null;
+    proposals.agentRevision = own && !record.retracted ? record : null;
     renderProposalAgentControls();
     $('#proposal-detail-actions').hidden = !own && !(state.canReviewProposals && result.author?.id);
-    $('#revise-proposal').hidden = !own;
-    $('#revise-proposal').href = '#propose?revise=' + encodeURIComponent(record.id);
-    if ((!own || state.canSelfReviewProposals) && result.author?.id && state.canReviewProposals && (record.status === 'submitted' || proposals.reviewPending?.id === record.id)) showProposalReview(record, true);
+    $('#revise-proposal').hidden = !own || record.retracted;
+    $('#revise-proposal').href = record.source_note?.id ? '#notebook?note=' + encodeURIComponent(record.source_note.id) : '#propose?revise=' + encodeURIComponent(record.id);
+    $('#revise-proposal').textContent = record.source_note ? 'Revise proposal note →' : 'Upload a revised specification →';
+    if (proposals.reviewMode && !record.retracted && (!own || state.canSelfReviewProposals) && result.author?.id && state.canReviewProposals && (record.status === 'submitted' || proposals.reviewPending?.id === record.id)) showProposalReview(record, true);
   } catch (error) { if (current()) showInlineError(target, error.message, () => loadProposalDetail(id)); }
 }
 async function loadProposalRevision(id) {
@@ -3130,13 +3582,14 @@ async function loadProposalRevision(id) {
   clearProposalReview();
   setText('#proposal-revision-context', 'Loading the revision to replace…');
   renderProposalDraft();
-  const current = () => request === proposals.detailRequest && account === state.user?.id && state.screen === 'propose' && proposals.revisingId === id && !proposals.detailId;
+  const current = () => request === proposals.detailRequest && account === state.user?.id && proposalPageActive() && proposals.revisingId === id && !proposals.detailId;
   if (!account) { setText('#proposal-revision-context', 'Sign in to upload a revised specification.'); return; }
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) { setText('#proposal-revision-context', 'This proposal link is invalid.'); return; }
   try {
     const result = await api('/api/protocol/proposals/' + encodeURIComponent(id));
     if (!current()) return;
     if (!validProposal(result.proposal, id) || result.author?.id !== account) throw new Error('Only the proposer can upload a revised specification.');
+    if (result.proposal.retracted) throw new Error('This proposal was retracted. Start a new proposal to pursue a revised idea.');
     proposals.revisionBase = result.proposal;
     setText('#proposal-revision-context', `Replacing revision ${result.proposal.revision} of ${result.proposal.specification.name}. The earlier revision and reviews remain recorded. A new revision returns to review pending.`);
   } catch (error) { if (current()) { proposalError(error); setText('#proposal-revision-context', 'The revision could not be loaded. Reopen this proposal to retry.'); } }
@@ -3156,6 +3609,11 @@ function renderProposalAudit(target, result) {
     const content = node('div');
     renderSpecification(content, revision.specification);
     content.append(node('p', 'Content SHA-256 · ' + revision.content_sha256, 'proposal-digest'));
+    if (revision.source_note?.id) {
+      const source = node('a', 'Read the note submitted with this revision →', 'text-button');
+      source.href = '#notebook?' + new URLSearchParams({note:revision.source_note.id, revision:String(revision.source_note.revision)});
+      content.append(source);
+    }
     item.append(content);
     history.append(item);
     for (const review of reviews.filter(review => review.revision === revision.revision)) {
@@ -3179,7 +3637,7 @@ function renderProposalAudit(target, result) {
       more.disabled = true;
       try {
         const earlier = await api('/api/protocol/proposals/' + encodeURIComponent(id) + '/revisions?' + new URLSearchParams({before_revision: result.next_before_revision}));
-        if (request !== proposals.detailRequest || account !== state.user?.id || state.screen !== 'propose' || proposals.detailId !== id) return;
+        if (request !== proposals.detailRequest || account !== state.user?.id || !proposalPageActive() || proposals.detailId !== id) return;
         renderProposalAudit(history, earlier);
         more.hidden = true;
       } catch (error) { if (request === proposals.detailRequest && account === state.user?.id) { more.textContent = 'Try loading earlier revisions again'; more.title = error.message; } }
@@ -3207,6 +3665,7 @@ function clearProposalReview() {
   $('#proposal-review-status').hidden = true;
 }
 function showProposalReview(record, initialize = false) {
+  if (state.screen !== 'reviews' || state.reviewSection !== 'schemes' || !proposals.reviewMode || !state.canReviewProposals) return;
   $('#proposal-review-form').hidden = false;
   $('#proposal-self-review-notice').hidden = !proposals.detailOwn;
   const approvalOption = $('#proposal-decision').querySelector('[value="approved"]');
@@ -3231,7 +3690,7 @@ function showProposalReview(record, initialize = false) {
   if (pending && pending.id !== record.id) {
     setText('#proposal-review-status', 'A previous review is awaiting confirmation. ');
     const link = node('a', 'Return to that proposal and retry.', 'text-button');
-    link.href = '#propose?review=1&proposal=' + encodeURIComponent(pending.id);
+    link.href = reviewerRoute('schemes', {proposal: pending.id});
     $('#proposal-review-status').append(link);
     $('#proposal-review-status').hidden = false;
   }
@@ -3239,7 +3698,7 @@ function showProposalReview(record, initialize = false) {
 async function submitProposalReview(event) {
   event.preventDefault();
   const record = proposals.detailRecord;
-  if (!record || proposals.reviewBusy || !state.canReviewProposals || $('#proposal-review-form').hidden || (proposals.reviewPending && proposals.reviewPending.id !== record.id)) return;
+  if (!proposalPageActive() || !proposals.reviewMode || !record || proposals.reviewBusy || !state.canReviewProposals || $('#proposal-review-form').hidden || (proposals.reviewPending && proposals.reviewPending.id !== record.id)) return;
   const account = state.user?.id;
   const request = ++proposals.reviewRequest;
   const checks = Object.fromEntries([...document.querySelectorAll('[data-proposal-check]')].map(input => [input.dataset.proposalCheck, input.checked === true]));
@@ -3252,6 +3711,13 @@ async function submitProposalReview(event) {
     if (!['approved', 'changes_requested'].includes(decision) || !notes || !evidence) return setError('#proposal-review-error', 'Choose a decision and include notes and supporting evidence.');
     if (decision === 'approved' && !hasProposalTierDesign(record.specification)) return setError('#proposal-review-error', 'Approval requires a default-progression plan in this specification. Ask the proposer to submit a new revision with the completed plan.');
     if (decision === 'approved' && !hasProposalParameterSelection(record.specification)) return setError('#proposal-review-error', 'Approval requires a parameter-selection plan: objective, constraints, pinned model, search domain, candidate comparisons and uncertainty. Submit a completed revision first.');
+    const correctness = record.specification.correctness;
+    const meetsCorrectnessTarget = correctness?.kind === 'perfect' && correctness.failure_bound === '0' ||
+      correctness?.kind === 'statistical' && Number.isInteger(correctness.failure_bound_exponent) &&
+      correctness.failure_bound_exponent >= 128 && correctness.failure_bound_exponent <= 1_000_000;
+    if (decision === 'approved' && !meetsCorrectnessTarget) return setError('#proposal-review-error', 'Approval requires an explicit correctness claim of perfect agreement or failure probability at most 2^-128. For a statistical claim, declare failure_bound_exponent as an integer at least 128. Assumptions may remain conjectural; weaker or unknown claims remain drafts.');
+    const justification = correctness?.justification;
+    if (decision === 'approved' && (!['mathematical-proof', 'analytical-bound', 'model-based-analysis', 'conjectural-claim'].includes(justification?.kind) || !['statement', 'conditions', 'configuration_coverage', 'derivation'].every(key => typeof justification?.[key] === 'string' && justification[key].trim()) || typeof record.specification.encoding?.private_key !== 'string' || !record.specification.encoding.private_key.trim())) return setError('#proposal-review-error', 'Approval requires an explicit correctness claim, supporting reasoning and assumptions covering every admitted configuration, plus the private-key representation. Conjectural dependencies must be identified; proof of every assumption is not required. Ask for a completed revision first.');
     if (decision === 'approved' && (!checks.parameter_selection || !checks.tier_design || !Object.values(checks).every(Boolean) || !/^[a-f0-9]{64}$/.test(implementation || '') || [...evidence].length < 20 || record.specification.correctness.kind === 'unknown')) return setError('#proposal-review-error', 'Approval requires all review checks, an explicit correctness claim, an identified implementation artifact, and a documented reproduction record.');
     proposals.reviewPending = {id: record.id, payload: {
       expected_revision: record.revision, content_sha256: record.content_sha256, decision,
@@ -3269,7 +3735,7 @@ async function submitProposalReview(event) {
     if (!validProposal(result.proposal, pending.id) || result.review?.revision !== pending.payload.expected_revision ||
         result.review?.content_sha256 !== pending.payload.content_sha256 || result.review?.decision !== pending.payload.decision) throw new Error('The review receipt could not be confirmed.');
     proposals.reviewPending = null;
-    if (state.screen === 'propose') {
+    if (proposalPageActive()) {
       if (proposals.detailId === pending.id) loadProposalDetail(pending.id);
       loadProposals();
     }
@@ -3277,7 +3743,7 @@ async function submitProposalReview(event) {
     if (request !== proposals.reviewRequest || account !== state.user?.id) return;
     const uncertain = !error.status || error.status >= 500;
     if (!uncertain) proposals.reviewPending = null;
-    if (state.screen === 'propose' && proposals.detailId === pending.id) {
+    if (proposalPageActive() && proposals.detailId === pending.id) {
       setError('#proposal-review-error', error.message + (error.fieldErrors?.length ? ' ' + error.fieldErrors.map(item => item.path + ': ' + item.message).join(' ') : ''));
       setText('#proposal-review-status', uncertain ? 'The review could not be confirmed. Retry to recover the same decision receipt.' : 'The review was not recorded. Reopen the proposal if its revision has changed.');
       $('#proposal-review-status').hidden = false;
@@ -3285,7 +3751,7 @@ async function submitProposalReview(event) {
   } finally {
     if (request === proposals.reviewRequest) {
       proposals.reviewBusy = false;
-      if (state.screen === 'propose' && proposals.detailId === pending.id && proposals.detailRecord) showProposalReview(proposals.detailRecord);
+      if (proposalPageActive() && proposals.detailId === pending.id && proposals.detailRecord) showProposalReview(proposals.detailRecord);
     }
   }
 }
@@ -3318,23 +3784,30 @@ $('#download-proposal').addEventListener('click', () => {
 function showWorkspace(name) {
   if (!hasAccess()) name = 'access';
   if (!RESEARCH_ENABLED && name === 'research') name = 'catalogue';
+  if (name !== 'notebook') notebookWorkspace?.hide();
+  if (name !== 'reviews' || state.reviewSection === 'schemes') reviewNotebookWorkspace?.hide();
+  if (name !== 'assumptions') assumptionsWorkspace?.clear();
   const enteringResearch = !research.visible && name === 'research';
   research.visible = name === 'research';
   $('#access-workspace').hidden = name !== 'access';
   $('.primary-nav').hidden = name === 'access';
+  $('#nav-people').hidden = name === 'access';
   $('#catalogue-workspace').hidden = name !== 'catalogue';
   $('#workspace').hidden = name !== 'scheme';
   $('#overview-workspace').hidden = name !== 'overview';
+  $('#assumptions-workspace').hidden = name !== 'assumptions';
   $('#notebook-workspace').hidden = name !== 'notebook';
+  $('#review-workspace').hidden = name !== 'reviews';
+  $('#review-notebook-workspace').hidden = name !== 'reviews' || state.reviewSection === 'schemes' || !state.canReviewProposals;
   $('#research-workspace').hidden = !research.visible;
   $('#about-workspace').hidden = name !== 'about';
-  $('#proposal-workspace').hidden = name !== 'propose';
+  $('#proposal-workspace').hidden = name !== 'propose' && !(name === 'reviews' && state.reviewSection === 'schemes' && state.canReviewProposals);
   $('#people-workspace').hidden = name !== 'people';
   $('#person-workspace').hidden = name !== 'person';
   $('#connect-workspace').hidden = name !== 'connect';
   for (const kind of ['challenge', 'people', 'notebook', 'research', 'about']) {
     const button = $('#nav-' + kind);
-    const selected = kind === 'challenge' ? ['catalogue', 'scheme', 'overview', 'propose'].includes(name) : kind === 'people' ? ['people', 'person'].includes(name) : kind === name;
+    const selected = kind === 'challenge' ? ['catalogue', 'scheme', 'overview', 'assumptions', 'propose'].includes(name) : kind === 'people' ? ['people', 'person'].includes(name) : kind === name;
     button.classList.toggle('selected', selected);
     if (selected) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');

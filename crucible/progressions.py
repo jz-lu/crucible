@@ -29,6 +29,22 @@ def _ids(prefix, count):
 
 
 _DEFAULTS = {
+    ("hqc", "modeled-research-v3"): _Progression(
+        _ids("hqc-modeled-research-v3-tier-", 66),
+        "All 66 secret weights w=1..66, with encryption/error weights ceil(75w/66). Each pair has the smallest supported code/ring passing its conditional correctness certificate.",
+        "The 2025 HQC construction with full messages, seeds and salt; 45 supported RS/RM codecs and the smallest primitive-prime ring above each code length.",
+        "The exact August 2025 HQC-1 parameter and wire-format reference at n=17669 and weights 66/75/75.",
+        "Published historical endpoint with conditionally analyzed reduced configurations; current security calibration remains pending.",
+        "The independent-noise surrogate's conservative transfer to correlated HQC noise is conjectural, especially for reduced settings. Communication minimality holds only in this fixed-weight codec search. The October 2026 revision and recent cryptanalysis prevent inheriting a current 128-bit security claim.",
+    ),
+    ("ml-kem", "compressed-research-v4"): _Progression(
+        _ids("module-lwe-v4-tier-", 6),
+        "Six natural power-of-two ring degrees: 8, 16, 32, 64, 128 and 256. All configurations remain on the default route.",
+        "Vary degree only; retain ML-KEM-512's rank 2, modulus 3329, CBD noise parameters and ciphertext compression. Reduced degrees have explicit parameter/purpose hash domains.",
+        "Exact FIPS 203 ML-KEM-512 at degree 256, with its published category-1 assessment.",
+        "Standard endpoint with explicitly reduced research configurations and model-qualified correctness evidence.",
+        "Lower degrees are not standardized ML-KEM and inherit no security category. Their attack costs remain unestimated. The common correctness target is conditional on the stated evidence model; six stages do not imply equal difficulty increments or global parameter optimality.",
+    ),
     ("teaching-dh-kem", "7"): _Progression(
         _ids("dh-v7-tier-", 50),
         "The 50 existing certified groups, ordered by increasing field size. "

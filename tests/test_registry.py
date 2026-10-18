@@ -34,7 +34,7 @@ def test_catalogue_has_two_real_adapters_with_common_protocol_contract(system):
         assert all(release["recovered_profile_ids"] == [] for release in item["previous_releases"])
         assert item["next_profile_id"] == item["profiles"][0]["id"]
         assert set(item["protocol"]) == {"construction", "assumption", "public_input", "shared_secret",
-                                          "correctness", "source_url", "example_url", "construction_math",
+                                          "correctness", "correctness_url", "source_url", "example_url", "construction_math",
                                           "public_input_math", "correctness_argument_math"}
         assert item["protocol"]["construction"] == registry.DETAILS[item["id"]]["construction"]
         assert item["protocol"]["public_input"] == registry.DETAILS[item["id"]]["public_input"]

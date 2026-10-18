@@ -1,0 +1,1414 @@
+{
+  "configurations": [
+    {
+      "candidate_anchor": "ML-KEM-512",
+      "evidence": [
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 8,
+          "q": 3329,
+          "rank": 1,
+          "support_bound": 274,
+          "target_bits": 128
+        },
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 8,
+          "q": 3329,
+          "rank": 1,
+          "support_bound": 274,
+          "target_bits": 128
+        }
+      ],
+      "n": 8,
+      "rank": 1
+    },
+    {
+      "candidate_anchor": "ML-KEM-512",
+      "evidence": [
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 8,
+          "q": 3329,
+          "rank": 2,
+          "support_bound": 442,
+          "target_bits": 128
+        },
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 8,
+          "q": 3329,
+          "rank": 2,
+          "support_bound": 442,
+          "target_bits": 128
+        }
+      ],
+      "n": 8,
+      "rank": 2
+    },
+    {
+      "candidate_anchor": "ML-KEM-512",
+      "evidence": [
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 16,
+          "q": 3329,
+          "rank": 1,
+          "support_bound": 442,
+          "target_bits": 128
+        },
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 16,
+          "q": 3329,
+          "rank": 1,
+          "support_bound": 442,
+          "target_bits": 128
+        }
+      ],
+      "n": 16,
+      "rank": 1
+    },
+    {
+      "candidate_anchor": "ML-KEM-512",
+      "evidence": [
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 16,
+          "q": 3329,
+          "rank": 2,
+          "support_bound": 778,
+          "target_bits": 128
+        },
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 16,
+          "q": 3329,
+          "rank": 2,
+          "support_bound": 778,
+          "target_bits": 128
+        }
+      ],
+      "n": 16,
+      "rank": 2
+    },
+    {
+      "candidate_anchor": "ML-KEM-512",
+      "evidence": [
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 32,
+          "q": 3329,
+          "rank": 1,
+          "support_bound": 778,
+          "target_bits": 128
+        },
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 32,
+          "q": 3329,
+          "rank": 1,
+          "support_bound": 778,
+          "target_bits": 128
+        }
+      ],
+      "n": 32,
+      "rank": 1
+    },
+    {
+      "candidate_anchor": "ML-KEM-512",
+      "evidence": [
+        {
+          "approximate_chernoff_bits": 367.936412683,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 367,
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "2^-367",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 32,
+          "q": 3329,
+          "rank": 2,
+          "rational_bound_sha256": "59aee9aa2717e086be3bd2f233083370109161945bb38f1acf32aae6ac98532e",
+          "support_bound": 1450,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 1000000,
+            "numerator": 1953861
+          }
+        },
+        {
+          "approximate_chernoff_bits": 565.786726038,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 565,
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "2^-565",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 32,
+          "q": 3329,
+          "rank": 2,
+          "rational_bound_sha256": "7f0a6ee8b9054dc6686a05e7720dc44959e528dffa6598bbc0903fca07344ce1",
+          "support_bound": 1450,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 500000,
+            "numerator": 1146051
+          }
+        }
+      ],
+      "n": 32,
+      "rank": 2
+    },
+    {
+      "candidate_anchor": "ML-KEM-512",
+      "evidence": [
+        {
+          "approximate_chernoff_bits": 366.936412683,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 366,
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "2^-366",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 64,
+          "q": 3329,
+          "rank": 1,
+          "rational_bound_sha256": "2708d733a9ae2a9eb5d0fd3a5a907bf51b6c422ee7eee72407c4fe6441c293d0",
+          "support_bound": 1450,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 1000000,
+            "numerator": 1953861
+          }
+        },
+        {
+          "approximate_chernoff_bits": 564.786726038,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 564,
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "2^-564",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 64,
+          "q": 3329,
+          "rank": 1,
+          "rational_bound_sha256": "dda06bcb86e8c6e270a9b84f5fa66db74642f8b63be230a96b15ccecce02ffc5",
+          "support_bound": 1450,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 500000,
+            "numerator": 1146051
+          }
+        }
+      ],
+      "n": 64,
+      "rank": 1
+    },
+    {
+      "candidate_anchor": "ML-KEM-512",
+      "evidence": [
+        {
+          "approximate_chernoff_bits": 193.401610204,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 193,
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "2^-193",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 64,
+          "q": 3329,
+          "rank": 2,
+          "rational_bound_sha256": "38aa97ceb4f55018cf6f555ddf456c5eabe8d870c5254d16f92fb03ef1e1de00",
+          "support_bound": 2794,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 1000000,
+            "numerator": 1444871
+          }
+        },
+        {
+          "approximate_chernoff_bits": 383.238092894,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 383,
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "2^-383",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 64,
+          "q": 3329,
+          "rank": 2,
+          "rational_bound_sha256": "40fe8b2f12b4b9304a6ab6c334c8de0774f04a334c9c9a364f6092189260665a",
+          "support_bound": 2794,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 100000,
+            "numerator": 181361
+          }
+        }
+      ],
+      "n": 64,
+      "rank": 2
+    },
+    {
+      "candidate_anchor": "ML-KEM-512",
+      "evidence": [
+        {
+          "approximate_chernoff_bits": 192.401610204,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 192,
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "2^-192",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 128,
+          "q": 3329,
+          "rank": 1,
+          "rational_bound_sha256": "a85e6efaf0c8f07af156a05f3978c7c447d45e0e67c20a4d6ede73b3fd5ba7d6",
+          "support_bound": 2794,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 1000000,
+            "numerator": 1444871
+          }
+        },
+        {
+          "approximate_chernoff_bits": 382.238092894,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 382,
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "2^-382",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 128,
+          "q": 3329,
+          "rank": 1,
+          "rational_bound_sha256": "ab21cef30edc6250fc0ec41f11276842a19e5b7d9aeba074503d3f8ee3af7375",
+          "support_bound": 2794,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 100000,
+            "numerator": 181361
+          }
+        }
+      ],
+      "n": 128,
+      "rank": 1
+    },
+    {
+      "candidate_anchor": "ML-KEM-512",
+      "evidence": [
+        {
+          "approximate_chernoff_bits": 95.410255226,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 95,
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "2^-95",
+          "meets_target": false,
+          "mode": "conservative-compression",
+          "n": 128,
+          "q": 3329,
+          "rank": 2,
+          "rational_bound_sha256": "66562f71f7aaf54585e382a2480b67656495b872b17b08fc7924ff725ce68af3",
+          "support_bound": 5482,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 100000,
+            "numerator": 121471
+          }
+        },
+        {
+          "approximate_chernoff_bits": 236.062499352,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 236,
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "2^-236",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 128,
+          "q": 3329,
+          "rank": 2,
+          "rational_bound_sha256": "01e77a3a8256d42d9098a726aa780621a5925d752f129d73d66d3fde27fe3437",
+          "support_bound": 5482,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 500000,
+            "numerator": 752321
+          }
+        }
+      ],
+      "n": 128,
+      "rank": 2
+    },
+    {
+      "candidate_anchor": "ML-KEM-512",
+      "evidence": [
+        {
+          "approximate_chernoff_bits": 94.410255226,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 94,
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "2^-94",
+          "meets_target": false,
+          "mode": "conservative-compression",
+          "n": 256,
+          "q": 3329,
+          "rank": 1,
+          "rational_bound_sha256": "c5aa64526217a4af50e5f1ce8f837ad61c306d1b7a2642b486f9b34009ba8f70",
+          "support_bound": 5482,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 100000,
+            "numerator": 121471
+          }
+        },
+        {
+          "approximate_chernoff_bits": 235.062499352,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 235,
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "2^-235",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 256,
+          "q": 3329,
+          "rank": 1,
+          "rational_bound_sha256": "2133aca42008c3ec7cf4dc413f2a5f87eb75350da8ca541d48d28b74a557c463",
+          "support_bound": 5482,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 500000,
+            "numerator": 752321
+          }
+        }
+      ],
+      "n": 256,
+      "rank": 1
+    },
+    {
+      "candidate_anchor": "ML-KEM-512",
+      "evidence": [
+        {
+          "approximate_chernoff_bits": 43.212684933,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 43,
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "2^-43",
+          "meets_target": false,
+          "mode": "conservative-compression",
+          "n": 256,
+          "q": 3329,
+          "rank": 2,
+          "rational_bound_sha256": "f585e65196b6a0d4c249b3fa91f3f6502533ce700577cbb71f32d38bff093144",
+          "support_bound": 10858,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 1000000,
+            "numerator": 1104167
+          }
+        },
+        {
+          "approximate_chernoff_bits": 128.041429812,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 128,
+          "du": 10,
+          "dv": 4,
+          "eta1": 3,
+          "eta2": 2,
+          "failure_bound": "2^-128",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 256,
+          "q": 3329,
+          "rank": 2,
+          "rational_bound_sha256": "a73397f3b27873ad70119003b4d2df0821d91299e5af24bc417ce8085206555c",
+          "support_bound": 10858,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 500000,
+            "numerator": 640523
+          }
+        }
+      ],
+      "n": 256,
+      "rank": 2
+    },
+    {
+      "candidate_anchor": "ML-KEM-768",
+      "evidence": [
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 8,
+          "q": 3329,
+          "rank": 1,
+          "support_bound": 202,
+          "target_bits": 128
+        },
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 8,
+          "q": 3329,
+          "rank": 1,
+          "support_bound": 202,
+          "target_bits": 128
+        }
+      ],
+      "n": 8,
+      "rank": 1
+    },
+    {
+      "candidate_anchor": "ML-KEM-768",
+      "evidence": [
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 8,
+          "q": 3329,
+          "rank": 2,
+          "support_bound": 298,
+          "target_bits": 128
+        },
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 8,
+          "q": 3329,
+          "rank": 2,
+          "support_bound": 298,
+          "target_bits": 128
+        }
+      ],
+      "n": 8,
+      "rank": 2
+    },
+    {
+      "candidate_anchor": "ML-KEM-768",
+      "evidence": [
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 8,
+          "q": 3329,
+          "rank": 3,
+          "support_bound": 394,
+          "target_bits": 128
+        },
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 8,
+          "q": 3329,
+          "rank": 3,
+          "support_bound": 394,
+          "target_bits": 128
+        }
+      ],
+      "n": 8,
+      "rank": 3
+    },
+    {
+      "candidate_anchor": "ML-KEM-768",
+      "evidence": [
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 16,
+          "q": 3329,
+          "rank": 1,
+          "support_bound": 298,
+          "target_bits": 128
+        },
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 16,
+          "q": 3329,
+          "rank": 1,
+          "support_bound": 298,
+          "target_bits": 128
+        }
+      ],
+      "n": 16,
+      "rank": 1
+    },
+    {
+      "candidate_anchor": "ML-KEM-768",
+      "evidence": [
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 16,
+          "q": 3329,
+          "rank": 2,
+          "support_bound": 490,
+          "target_bits": 128
+        },
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 16,
+          "q": 3329,
+          "rank": 2,
+          "support_bound": 490,
+          "target_bits": 128
+        }
+      ],
+      "n": 16,
+      "rank": 2
+    },
+    {
+      "candidate_anchor": "ML-KEM-768",
+      "evidence": [
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 16,
+          "q": 3329,
+          "rank": 3,
+          "support_bound": 682,
+          "target_bits": 128
+        },
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 16,
+          "q": 3329,
+          "rank": 3,
+          "support_bound": 682,
+          "target_bits": 128
+        }
+      ],
+      "n": 16,
+      "rank": 3
+    },
+    {
+      "candidate_anchor": "ML-KEM-768",
+      "evidence": [
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 32,
+          "q": 3329,
+          "rank": 1,
+          "support_bound": 490,
+          "target_bits": 128
+        },
+        {
+          "argument": "deterministic-support",
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "0",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 32,
+          "q": 3329,
+          "rank": 1,
+          "support_bound": 490,
+          "target_bits": 128
+        }
+      ],
+      "n": 32,
+      "rank": 1
+    },
+    {
+      "candidate_anchor": "ML-KEM-768",
+      "evidence": [
+        {
+          "approximate_chernoff_bits": 638.551234963,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 638,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-638",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 32,
+          "q": 3329,
+          "rank": 2,
+          "rational_bound_sha256": "76f2f079e193e35fa2055128c8d24ef654abd95af3dec4dd8cd11eb9abe82ee0",
+          "support_bound": 874,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 500000,
+            "numerator": 1359141
+          }
+        },
+        {
+          "approximate_chernoff_bits": 836.507837726,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 836,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-836",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 32,
+          "q": 3329,
+          "rank": 2,
+          "rational_bound_sha256": "4aabe4a9fbe028272f08c5beb324d8d56e0a95231438ea5ae81461fbb2d62e38",
+          "support_bound": 874,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 500000,
+            "numerator": 1359141
+          }
+        }
+      ],
+      "n": 32,
+      "rank": 2
+    },
+    {
+      "candidate_anchor": "ML-KEM-768",
+      "evidence": [
+        {
+          "approximate_chernoff_bits": 440.556112618,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 440,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-440",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 32,
+          "q": 3329,
+          "rank": 3,
+          "rational_bound_sha256": "3ca2a32c168ddba7c2a5f0aecca6622748bfacd55e39f7d67a45aafeb0dc6d42",
+          "support_bound": 1258,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 125000,
+            "numerator": 306321
+          }
+        },
+        {
+          "approximate_chernoff_bits": 732.967305815,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 732,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-732",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 32,
+          "q": 3329,
+          "rank": 3,
+          "rational_bound_sha256": "48c5833eb331c90448d1bdb549a0ceef7fa57b70de64d0acf008eef2134727d9",
+          "support_bound": 1258,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 500000,
+            "numerator": 1359141
+          }
+        }
+      ],
+      "n": 32,
+      "rank": 3
+    },
+    {
+      "candidate_anchor": "ML-KEM-768",
+      "evidence": [
+        {
+          "approximate_chernoff_bits": 637.551234963,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 637,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-637",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 64,
+          "q": 3329,
+          "rank": 1,
+          "rational_bound_sha256": "384c30470a2fd16251d012100d0e578061756b828bb2bbbcdc04eebeb5cb4093",
+          "support_bound": 874,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 500000,
+            "numerator": 1359141
+          }
+        },
+        {
+          "approximate_chernoff_bits": 835.507837726,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 835,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-835",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 64,
+          "q": 3329,
+          "rank": 1,
+          "rational_bound_sha256": "25b2796e00cee5e2274ee825d14e6106c621e403c5f120b5ccaa68c98793797c",
+          "support_bound": 874,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 500000,
+            "numerator": 1359141
+          }
+        }
+      ],
+      "n": 64,
+      "rank": 1
+    },
+    {
+      "candidate_anchor": "ML-KEM-768",
+      "evidence": [
+        {
+          "approximate_chernoff_bits": 322.55575716,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 322,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-322",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 64,
+          "q": 3329,
+          "rank": 2,
+          "rational_bound_sha256": "568b73be25792155ea7fe07a23dd123a3e237bb32dd1bfadc9255172a192f582",
+          "support_bound": 1642,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 50000,
+            "numerator": 94301
+          }
+        },
+        {
+          "approximate_chernoff_bits": 628.748620553,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 628,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-628",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 64,
+          "q": 3329,
+          "rank": 2,
+          "rational_bound_sha256": "fccaeca267b7e7c0dc2b5da3c7c6da1823a6d7ac91a3beaef27b3334089a4f2b",
+          "support_bound": 1642,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 40000,
+            "numerator": 106677
+          }
+        }
+      ],
+      "n": 64,
+      "rank": 2
+    },
+    {
+      "candidate_anchor": "ML-KEM-768",
+      "evidence": [
+        {
+          "approximate_chernoff_bits": 212.475555455,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 212,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-212",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 64,
+          "q": 3329,
+          "rank": 3,
+          "rational_bound_sha256": "859f05a75acf4b2fdcd57793b60747c24ec5f9a7141c9f5e735a20fbd6391ad9",
+          "support_bound": 2410,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 500000,
+            "numerator": 758407
+          }
+        },
+        {
+          "approximate_chernoff_bits": 484.216285414,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 484,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-484",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 64,
+          "q": 3329,
+          "rank": 3,
+          "rational_bound_sha256": "3bdf6cfd2969a5c86aa134faebaca1d420d891e844a17663724d1fbfdf6c0b18",
+          "support_bound": 2410,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 1000000,
+            "numerator": 2176183
+          }
+        }
+      ],
+      "n": 64,
+      "rank": 3
+    },
+    {
+      "candidate_anchor": "ML-KEM-768",
+      "evidence": [
+        {
+          "approximate_chernoff_bits": 321.55575716,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 321,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-321",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 128,
+          "q": 3329,
+          "rank": 1,
+          "rational_bound_sha256": "e0bf0c214b4f2e80fe4af31388c1a7530f6d22d19c62e0d7b08875f43d4f71b2",
+          "support_bound": 1642,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 50000,
+            "numerator": 94301
+          }
+        },
+        {
+          "approximate_chernoff_bits": 627.748620553,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 627,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-627",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 128,
+          "q": 3329,
+          "rank": 1,
+          "rational_bound_sha256": "da2edabebfc5b071709bf8af4874050671afc7edf016a87f4c3049f86fb953e2",
+          "support_bound": 1642,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 40000,
+            "numerator": 106677
+          }
+        }
+      ],
+      "n": 128,
+      "rank": 1
+    },
+    {
+      "candidate_anchor": "ML-KEM-768",
+      "evidence": [
+        {
+          "approximate_chernoff_bits": 156.983432828,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 156,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-156",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 128,
+          "q": 3329,
+          "rank": 2,
+          "rational_bound_sha256": "83a374b56f1755fa16bdd9a20baed453e683bdb594997b2922f712c218258b5d",
+          "support_bound": 3178,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 125000,
+            "numerator": 170937
+          }
+        },
+        {
+          "approximate_chernoff_bits": 395.09675435,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 395,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-395",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 128,
+          "q": 3329,
+          "rank": 2,
+          "rational_bound_sha256": "63b70a91eb8e9695e692742eabcc10af16331183b3917d48ea706e1eccb9d421",
+          "support_bound": 3178,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 1000000,
+            "numerator": 1931753
+          }
+        }
+      ],
+      "n": 128,
+      "rank": 2
+    },
+    {
+      "candidate_anchor": "ML-KEM-768",
+      "evidence": [
+        {
+          "approximate_chernoff_bits": 102.285452267,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 102,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-102",
+          "meets_target": false,
+          "mode": "conservative-compression",
+          "n": 128,
+          "q": 3329,
+          "rank": 3,
+          "rational_bound_sha256": "fc7ca25cc8f42fc94068692963ee6d8810473bb92a19caece42cf43a51d16fc8",
+          "support_bound": 4714,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 1000000,
+            "numerator": 1233067
+          }
+        },
+        {
+          "approximate_chernoff_bits": 288.519421279,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 288,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-288",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 128,
+          "q": 3329,
+          "rank": 3,
+          "rational_bound_sha256": "16198bcd3f29b2cfbf7b2a18a8b3355af454e0fab12ffc50100f5cef174b7f22",
+          "support_bound": 4714,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 500000,
+            "numerator": 831349
+          }
+        }
+      ],
+      "n": 128,
+      "rank": 3
+    },
+    {
+      "candidate_anchor": "ML-KEM-768",
+      "evidence": [
+        {
+          "approximate_chernoff_bits": 155.983432828,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 155,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-155",
+          "meets_target": true,
+          "mode": "conservative-compression",
+          "n": 256,
+          "q": 3329,
+          "rank": 1,
+          "rational_bound_sha256": "58ac01d0fbca1eaff6ad6d34ed23a711f06b98e194ed560b9e66ce249a7f70ea",
+          "support_bound": 3178,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 125000,
+            "numerator": 170937
+          }
+        },
+        {
+          "approximate_chernoff_bits": 394.09675435,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 394,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-394",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 256,
+          "q": 3329,
+          "rank": 1,
+          "rational_bound_sha256": "077f32e1aec75a2b2eebc019ec3944e246bdb46b7e0c4c0f35552853bdca0afa",
+          "support_bound": 3178,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 1000000,
+            "numerator": 1931753
+          }
+        }
+      ],
+      "n": 256,
+      "rank": 1
+    },
+    {
+      "candidate_anchor": "ML-KEM-768",
+      "evidence": [
+        {
+          "approximate_chernoff_bits": 73.812486267,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 73,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-73",
+          "meets_target": false,
+          "mode": "conservative-compression",
+          "n": 256,
+          "q": 3329,
+          "rank": 2,
+          "rational_bound_sha256": "40d35a808fb502f10958337aceb2da71477ee0d6766a8bb781115a42e97adbb4",
+          "support_bound": 6250,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 100000,
+            "numerator": 117053
+          }
+        },
+        {
+          "approximate_chernoff_bits": 224.572187387,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 224,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-224",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 256,
+          "q": 3329,
+          "rank": 2,
+          "rational_bound_sha256": "3f47ebd641be9fc317bf5c42c7033cc391521b9a8038f060d0bb7f85e11bb953",
+          "support_bound": 6250,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 1000000,
+            "numerator": 1511617
+          }
+        }
+      ],
+      "n": 256,
+      "rank": 2
+    },
+    {
+      "candidate_anchor": "ML-KEM-768",
+      "evidence": [
+        {
+          "approximate_chernoff_bits": 46.260631949,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 46,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-46",
+          "meets_target": false,
+          "mode": "conservative-compression",
+          "n": 256,
+          "q": 3329,
+          "rank": 3,
+          "rational_bound_sha256": "6ff42babe677d474172fed75a34e2823d96f88a19fe5889eeebaf7857c2a2dcf",
+          "support_bound": 9322,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 1000000,
+            "numerator": 1110881
+          }
+        },
+        {
+          "approximate_chernoff_bits": 153.75704437,
+          "argument": "exact-rational-chernoff-union-bound",
+          "certified_dyadic_bits": 153,
+          "du": 10,
+          "dv": 4,
+          "eta1": 2,
+          "eta2": 2,
+          "failure_bound": "2^-153",
+          "meets_target": true,
+          "mode": "independent-uniform-u-compression",
+          "n": 256,
+          "q": 3329,
+          "rank": 3,
+          "rational_bound_sha256": "2d3027faebfa47e57dbec55cb90eb387cbd8eea3a5a9b70653d902dedb4db101",
+          "support_bound": 9322,
+          "target_bits": 128,
+          "threshold_after_v_compression": 728,
+          "witness": {
+            "denominator": 1000000,
+            "numerator": 1346709
+          }
+        }
+      ],
+      "n": 256,
+      "rank": 3
+    }
+  ],
+  "model_warning": "Independent-uniform-u-compression is an extra unproved modeling assumption; exact arithmetic certifies the modeled experiment, not its equivalence to the implemented KEM.",
+  "schema": "crucible-mlkem-correctness-candidates-v1",
+  "script_sha256": "97cf0a4a18337d328ec70d5da83ced73258b60d9cc26a98f741c69fa2266d77c",
+  "status": "candidate-not-admission",
+  "u_compression_error_counts": {
+    "-2": 128,
+    "-1": 1024,
+    "0": 1024,
+    "1": 1024,
+    "2": 129
+  },
+  "v_compression_absolute_bound": 104
+}

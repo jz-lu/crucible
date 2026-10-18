@@ -1,0 +1,102 @@
+CRUCIBLE — PROVISIONAL POINTS POLICY v8
+Decision date: 17 October 2026
+Policy ID: crucible-points-v8
+
+Each enrolled scheme offers the same maximum recovery award: 2,500 points.
+Personal progress contributes at most 500; one best first-record bonus contributes
+at most 2,000. This is an incentive convention, not a statement that equal stages,
+configurations, point values or endpoints have equal security or research value.
+
+The earlier raw-index formula rewarded longer ladders more: an 80-configuration
+family could offer 4,000 points while the six-configuration module family offered
+only 300. Those maxima reflected parameter enumeration rather than chosen
+incentives. v8 intentionally recomputes scores from the existing verified receipts.
+Receipts, timestamps, methods, winners, accounts and contribution credits are not
+rewritten or deleted. The API reports the current scoring policy ID.
+
+FIXED CONFIGURATION WEIGHTS
+
+For the initial v8 enrollment, configuration i out of N receives personal weight:
+
+  W(i) = floor(500 * i / N).
+
+Here i is the original immutable configuration ordinal within the exact enrolled
+release. It is not the current displayed stage. The resulting integer weights
+are frozen policy data in crucible/scoring.py. Runtime scoring does not calculate
+N from the registry, browser navigation, available challenges or participant
+activity. Every current configuration has a positive weight; the last has 500.
+Rounding down introduces small unequal integer increments, without rounding a
+partial progression upward. These weights are deliberately provisional.
+
+Enrollment                        Exact release               Configurations
+Finite-field DH                   7                          50
+RSA                               4                          50
+Elliptic-curve DH                  curve-compressed-v2        50
+Module lattice                    compressed-research-v4       6
+FrodoKEM                          anchor-research-v3          80
+Streamlined NTRU Prime            3                          27
+HQC                               growth-research-v2          27
+Classic McEliece                  length-research-v1          50
+
+NTRU and HQC each have 25 displayed default stages but 27 enrolled configurations.
+Their off-route configurations retain their own explicit weights. For example,
+NTRU configuration 17 has weight 314 and HQC configuration 24 has weight 444.
+Renaming stages, hiding an intermediate option or changing a displayed default
+does not change any weight. A new configuration or release is not automatically
+eligible. Extending/replacing enrollment or repricing existing configurations
+requires an explicit subsequent policy revision; never silently stretch this
+table to a new endpoint. Old release receipts remain archived unless a future
+policy explicitly defines and reviews a compatible mapping and deduplication.
+
+HOW A PARTICIPANT'S SCORE IS CALCULATED
+
+For each enrolled scheme family:
+  Personal progress = the greatest W among their verified recoveries.
+  First-record bonus = four times the greatest W at which they were first,
+                       or zero when they have no first record.
+  Scheme total = personal progress + that one first-record bonus.
+
+Only first place earns a bonus. Repeated hourly solves do not accumulate points.
+Solving every intermediate configuration does not add their weights together.
+With the same final personal best and first-record best, step-by-step and direct
+progress have the same score. A first at an earlier configuration can retain its
+bonus when the participant subsequently reaches a higher configuration second.
+
+Examples for a 50-configuration family (where W(i)=10*i):
+  First at configuration 19, then second at 20: 200 + 4*190 = 960.
+  Second at 20 with no previous first: 200.
+  First at the final configuration: 500 + 4*500 = 2,500.
+For the module family the frozen six weights are 83, 166, 250, 333, 416, 500.
+For Frodo the first weight is 6 and the final weight is 500.
+Those unequal entry awards do not imply equal entry difficulty. Equal ceilings
+remove the accidental preference for longer ladders; actual effort calibration,
+identity abuse and assessment of independent algorithmic novelty remain open.
+
+Existing record semantics are unchanged. DH, RSA and the elliptic-curve release
+reserve lower first places under their registered inheritance rule. Module,
+Frodo, NTRU, HQC and McEliece only rank actual recoveries of the exact profile;
+recovering a higher profile does not create a lower-profile recovery or first.
+Ordering remains server receipt time, then receipt identifier. A family earns
+only one maximum bonus, including under inheritance. First-ten recognition,
+where requested through compatibility APIs, creates no additional award.
+
+Only successful, internally consistent receipts within the issued challenge's
+deadline qualify. Profile IDs, exact release and original integer configuration
+ordinal must match the explicit enrollment. Incorrect, inconsistent, expired or
+unregistered results cannot receive points or reserve a first place. Claimed
+compute expenditure does not affect scores. Published and archived reference
+releases do not independently multiply a current family's recovery total.
+
+SCHEME CONTRIBUTIONS AND RANKING
+
+The separate new-family admission award remains 1,000 points. Its existing
+independent review, trusted integration, unique-credit ledger and anti-alias
+requirements are unchanged. Draft submission, approval alone and testing-only
+self-review do not create an admission award. There are no seeded awards for
+the built-in families.
+
+The user leaderboard sums recovery awards and admitted-scheme contributions.
+Equal totals share competition rank; handles break display-order ties. The API
+retains progress, early_recovery and scheme_contributions field names. A zero
+bonus has no contributing tier, rank or receipt. No migration is required:
+scores are derived from stored evidence using the current versioned policy.

@@ -1,3 +1,6 @@
+from crucible import research_reviews  # Register scoped research assessments.
+from crucible import proposal_retractions  # Register terminal author withdrawals.
+from crucible import proposal_notes  # noqa: F401 — durable scheme-review sources
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
@@ -13,6 +16,7 @@ from crucible import machine_auth  # Register scoped agent credentials and brows
 from crucible import generation  # Register non-secret generation outcome evidence.
 from crucible import method_sources  # Register immutable uploaded method source bundles.
 from crucible import beta_access  # Register invitations, membership and verified mailboxes.
+from crucible import notebook  # Register durable notes, immutable revisions and publication decisions.
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

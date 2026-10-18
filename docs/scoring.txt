@@ -1,3 +1,15 @@
+CURRENT POLICY — 18 October 2026
+
+Policy v10 adds provisional +1/+2 author contribution points from agent note
+ratings; see docs/scoring-v10.txt. It retains v9's explicit HQC modeled-research-v3
+enrollment, which supersedes v8's HQC release. See docs/scoring-v9.txt and
+crucible/scoring.py for exact releases and frozen weights. The v8 formula remains: each family
+has at most 500 personal-progress points plus 2,000 for its single best first
+record. docs/scoring-v8.txt preserves the earlier equal-ceiling decision and
+27-configuration HQC enrollment. Archived receipts are retained, not transferred
+or scored again. The remaining text preserves earlier decisions and must not be
+used as the current price table.
+
 Stage presentation — 16 October 2026
 
 Default progression stages are navigation labels, independent of the existing

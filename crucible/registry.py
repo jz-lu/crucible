@@ -7,6 +7,8 @@ registrations must satisfy it; no submitted source is imported or executed.
 from urllib.parse import urlencode
 from copy import deepcopy
 from functools import lru_cache
+import hashlib
+import json
 import re
 
 from . import calibration, calibration_v2, dh_v3, dh_v4, dh_v5, dh_v6, kem, rsa, rsa_v2, rsa_v3
@@ -16,6 +18,8 @@ from . import ec_research, code_hqc, code_mceliece, ntru_tiers, lattice_frodo, l
 from . import lattice_module_v2, code_hqc_v2, ladder_designs
 from . import dh_v7, rsa_v4, ec_compressed, lattice_module_v3, lattice_frodo_v2, ntru_frontier, lattice_frodo_v3
 from . import progressions
+from . import lattice_module_v4, code_hqc_v3
+from . import security_references, display_notes
 
 ADAPTERS = {
     (dh_v6.SCHEME_ID, dh_v6.SCHEME_VERSION): dh_v6,
@@ -43,6 +47,10 @@ for _adapter in (dh_v7, rsa_v4, ec_compressed, lattice_module_v3, lattice_frodo_
     CURRENT[_adapter.SCHEME_ID] = _adapter.SCHEME_VERSION
 ADAPTERS[(lattice_frodo_v3.SCHEME_ID, lattice_frodo_v3.SCHEME_VERSION)] = lattice_frodo_v3
 CURRENT[lattice_frodo_v3.SCHEME_ID] = lattice_frodo_v3.SCHEME_VERSION
+ADAPTERS[(lattice_module_v4.SCHEME_ID, lattice_module_v4.SCHEME_VERSION)] = lattice_module_v4
+CURRENT[lattice_module_v4.SCHEME_ID] = lattice_module_v4.SCHEME_VERSION
+ADAPTERS[(code_hqc_v3.SCHEME_ID, code_hqc_v3.SCHEME_VERSION)] = code_hqc_v3
+CURRENT[code_hqc_v3.SCHEME_ID] = code_hqc_v3.SCHEME_VERSION
 INITIAL_SECURITY_MODELS = {
     lattice_frodo_v3.INITIAL_SECURITY_MODEL["id"]: lattice_frodo_v3.INITIAL_SECURITY_MODEL,
     ntru_frontier.INITIAL_SECURITY_MODEL["id"]: ntru_frontier.INITIAL_SECURITY_MODEL,
@@ -189,8 +197,24 @@ def _presentation_profiles(adapter, provider, source_sha256):
 
 def presentation_manifests(adapter):
     """A fresh copy of immutable display data; never used to generate keys."""
-    return deepcopy(_presentation_profiles(adapter, adapter.manifests,
-                                           getattr(adapter, "IMPLEMENTATION_SHA256", None)))
+    profiles = deepcopy(_presentation_profiles(adapter, adapter.manifests,
+                                               getattr(adapter, "IMPLEMENTATION_SHA256", None)))
+    for profile in profiles:
+        fields = {key: profile[key] for key in ("algorithms", "parameters", "encoding", "kdf") if key in profile}
+        if _has_unsafe_json_integer(fields):
+            profile["exact_parameter_json"] = json.dumps(fields, indent=2, ensure_ascii=False)
+    return profiles
+
+
+def _has_unsafe_json_integer(value):
+    """Browser JSON.parse rounds integers beyond Number's exact range."""
+    if type(value) is int:
+        return abs(value) > 2**53 - 1
+    if isinstance(value, dict):
+        return any(_has_unsafe_json_integer(item) for item in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(_has_unsafe_json_integer(item) for item in value)
+    return False
 
 
 def overview_for(scheme_id, version, *, first_manifest=None):
@@ -288,9 +312,11 @@ def example_path(adapter):
         ("teaching-dh-kem", "7"): "scripts/solve_teaching_frontier.py",
         ("rsa-kem", "4"): "scripts/solve_rsa_frontier.py",
         ("ml-kem", "packed-research-v3"): "scripts/lattice_solve_module_v3_tier1.py",
+        ("ml-kem", "compressed-research-v4"): "scripts/lattice_solve_module_v4_tier1.py",
         ("frodokem", "frontier-research-v2"): "scripts/lattice_solve_frodo_v2_tier1.py",
         ("frodokem", "anchor-research-v3"): "scripts/lattice_solve_frodo_v3_tier1.py",
         ("sntrup", "3"): "scripts/ntru_frontier_solve_tier1.py",
+        ("hqc", "modeled-research-v3"): "scripts/hqc_model_solve_tier1.py",
     }
     return overrides.get((adapter.SCHEME_ID, adapter.SCHEME_VERSION), DETAILS[adapter.SCHEME_ID]["example"])
 
@@ -392,6 +418,8 @@ def descriptor(adapter):
                                "progression": progression["rule"], "endpoint": progression["endpoint"]}
                               if progression else ladder_designs.for_release(adapter.SCHEME_ID, adapter.SCHEME_VERSION)),
             "initial_security_model": deepcopy(getattr(adapter, "INITIAL_SECURITY_MODEL", INITIAL_SECURITY_MODELS.get((first.get("initial_security_estimate") or {}).get("model_id")))),
+            "security_references": security_references.for_release(adapter.SCHEME_ID, adapter.SCHEME_VERSION),
+            "evidence_note": display_notes.for_release(adapter.SCHEME_ID, adapter.SCHEME_VERSION),
             "profile_metrics": {profile["id"]: profile_metrics(profile) for profile in profiles},
             "profile_metrics_basis": {
                 "unit": "bytes",
@@ -416,8 +444,8 @@ def descriptor(adapter):
                 "correctness": (overview["correctness"] if standard or research_tier else "Perfect honest agreement: failure probability 0 for the registered parameters and specified arithmetic and encoding. Independent implementation review is pending."),
                 "source_url": f"/api/protocol/source?{selector}",
                 "example_url": f"/api/protocol/example?{selector}",
-                **({"artifacts_url": f"/api/protocol/artifacts?{selector}",
-                    "correctness_url": f"/api/protocol/correctness?{selector}"} if standard or research_tier else {}),
+                "correctness_url": f"/api/protocol/correctness?{selector}",
+                **({"artifacts_url": f"/api/protocol/artifacts?{selector}"} if standard or research_tier else {}),
             }}
 
 
@@ -429,6 +457,22 @@ def catalogue():
             if scheme_id == identifier and version != CURRENT[identifier]]
         result.append(scheme)
     return result
+
+
+def catalogue_revision():
+    """Identify immutable presentation metadata, never changing recovery records.
+
+    As with presentation_manifests, deploy metadata edits by restarting workers.
+    Adapter/provider replacement and changing the current release invalidate the
+    fingerprint. Independent workers with identical catalogues produce one ID.
+    """
+    return _catalogue_revision(metadata_identity(), tuple(CURRENT.items()))
+
+
+@lru_cache(maxsize=4)
+def _catalogue_revision(identity, current):
+    document = json.dumps(catalogue(), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(document.encode()).hexdigest()
 
 
 def comparison_versions(scheme_id, version, profile_id):

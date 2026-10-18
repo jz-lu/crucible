@@ -1,0 +1,130 @@
+REFERENCE OPERATION MEASUREMENTS — EVERY VALID CONFIGURATION
+
+Run from the repository root, with its existing Python environment:
+  PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m scripts.reference_benchmark \
+    --targets module-v4 --selection all --profile-timeout 120 \
+    --output .local/reference-module-v4.json
+
+The runner never accesses the application, accounts or database, never publishes
+evidence, and refuses to replace an existing output. It accepts only explicit
+built-in targets: dh, rsa, ec, frodo, module (historical packed v3), module-v4,
+hqc (historical growth v2), hqc-v3, mceliece, ntru and mlkem. Native operation drivers are separate from
+challenge generation workers and measure the three operations individually.
+Native preparation uses existing, exact pinned build inputs; no downloads or
+proposal code execution. See scripts/reference_native_benchmarks.txt for paths,
+prepare-only mode and native commands. Keep one family per published report;
+the static reader intentionally limits a report to 256 profile rows / 4 MiB.
+
+PUBLISHED COVERAGE (2026-10-17; HQC v3 replacement included)
+All 379 configurations of the eight current scheme releases have raw evidence:
+  Finite-field DH: 50; RSA: 50; compressed elliptic curves: 50;
+  compressed module-LWE v4: 6; Frodo research: 80;
+  Streamlined NTRU Prime frontier: 27; HQC modeled v3: 66; McEliece length: 50.
+376 profiles completed every warmup and measured exchange. Three RSA profiles
+remain explicitly partial because of the reference key generator's existing
+resource bounds. Their completed successful-exchange medians can be shown as
+hollow markers, with sample and abort counts, conditional on key generation
+succeeding. They are not complete-run points and do not connect graph lines.
+No new native or v4 trial disagreed, errored or timed out.
+This is a dated coverage record. The report index and /api/protocol/benchmarks
+are authoritative for the current published reports and their exact releases.
+
+Separate published raw evidence also covers all three standardized ML-KEM sets.
+Only ML-KEM-512 is the intended endpoint reference for the current module ladder;
+measuring ML-KEM-768/1024 does not add new reference tabs or change the ladder.
+Historical packed-v3 reports and earlier evidence files are retained unchanged.
+Every publication is selected by exact scheme version, file and SHA-256 in
+crucible/data/reference_benchmarks/index.json. Native reports were collected in
+a coordinated quiet window; v4's final report was repeated after the last
+adapter error-classification fix and during a separate quiet window.
+
+ENVIRONMENT AND IMPLEMENTATION DISTINCTIONS
+Actual receipts report arm64, CPU label "arm", macOS 26.5.1 and CPython 3.14.6.
+The environment did not expose a more specific CPU model; none is inferred.
+Native drivers/source files use Apple clang 14.0.3 (clang-1403.0.22.14.1),
+-O1 for HQC/McEliece/ML-KEM drivers and -O2 for NTRU. The compiler/flags describe
+the timing driver and source built with it; prebuilt static libraries have their
+own pinned binary identity, not a claim that these flags rebuilt the library.
+
+ML-KEM uses liboqs' AArch64 optimized backend and is labelled
+architecture-optimized. HQC/McEliece/NTRU use their adapted reference C cores
+with native library primitives. Python ladders use their reference Python APIs.
+This is one common measurement procedure, not equal implementation effort or
+proof of mathematical efficiency. A faster optimized C implementation must not
+be described as demonstrating a faster underlying scheme than Python code.
+
+The full run measures every available profile, with three warmup exchanges and
+twenty measured exchanges; warmup durations are excluded from timing summaries.
+Both phases retain their outcomes and every completed operation duration.
+The runner also retains its quick --selection pilot mode (first/middle/last).
+Use --selection all for published curves. Run sequentially and keep the machine
+otherwise idle. Separate per-family files allow completed families to be reviewed
+and published without waiting for the slowest family.
+
+Each profile runs in a fresh Python child or native executable, with a 120-second parent
+wall deadline and process-group kill, CPU limit and disabled core dumps.
+The earlier sparse pilot used 30 seconds. The longer collection allowance does
+not change any scheme's own generation limits or resample away unsuccessful runs.
+Linux also receives a 2 GiB address-space limit. Darwin has no address-space
+limit here. This is a trusted-code benchmark boundary, not an untrusted-code
+sandbox. The worker never emits key material, ciphertexts, seeds or exception
+text. The parent accepts a strict, bounded numeric JSON-lines event protocol.
+
+Each exchange uses a fresh honest keypair and encapsulation. Key generation,
+encapsulation and valid-ciphertext decapsulation are timed separately using
+the high-resolution monotonic clock. Required checks, RNG, cryptographic
+encoding and KDF remain inside the operation; setup, imports, public artifact
+verification, process startup, database/HTTP/JSON and final agreement comparison
+remain outside. Native driver buffer allocation and library initialization are
+also setup; Python APIs may allocate within their timed calls. This difference
+is explicit in each native receipt. Setup and end-to-end elapsed time are
+reported separately.
+Public profile validation/cache initialization occurs during setup; this is
+steady-state reference operation cost, not cold application request latency.
+Generating precomputed public parameter tables is not measured. setup_seconds
+is worker initialization/verification time, not a total parameter-generation cost.
+
+A deadline or abort retains completed operation samples, including operations
+from an unfinished exchange. Missing durations are never invented and failures
+are not silently resampled. A partial row must not be presented as a completed
+twenty-trial measurement. A narrowly qualified partial row may show conditional
+medians when all requested trials finished, every completed exchange agreed,
+and every unsuccessful trial was a resource abort before key generation returned.
+The reader derives this scope from raw outcomes and operation prefixes; it does
+not infer it from a report label. Each operation median then covers exactly the
+successful exchanges, with warmup and measured abort counts retained separately.
+Aborted-attempt durations are absent from these historical receipts, so the
+conditional key-generation median is not overall attempt or issuance latency.
+Incomplete collections, other-operation aborts, errors and disagreements remain
+unplotted. Hollow conditional points do not extend complete-run line segments.
+Quantiles use inclusive linear interpolation, with
+raw measured samples retained. The interquartile range is sample spread, not a
+confidence interval; twenty trials do not characterize rare tail behavior.
+Warmup and measured disagreement/error counts
+remain explicit. Honest agreement samples do not prove negligible failure
+probability or security; see correctness-policy-v1.txt. The earlier
+correctness-audit-reference.txt records a historical suite audit.
+
+Reports bind the exact adapter source, public parameters, artifact closure
+where defined, harness files, Python/runtime and host OS/architecture/CPU label.
+Closure checks occur before and after the measurement. Native receipts also bind
+the exact parameter profile, driver source, compiler, flags, source/header/static
+library inventory and final executable digest. Published receipts never trigger
+compilation, source execution or artifact-verification workers on an HTTP read.
+The reader recomputes summaries/outcomes from raw samples and fails closed on
+stale adapter, parameter, driver or artifact bindings. Hashes of JSON objects
+use UTF-8 json.dumps(sort_keys=True,separators=(',',':'),ensure_ascii=True).
+The harness digest hashes its relative-path-to-file-digest map. No hostname or
+personal home path is stored in the evidence. If the sandbox denies CPU model
+inspection the architecture is the available CPU label; do not infer a model.
+
+Measurements declare single-thread execution but do not pin a core or control
+CPU frequency, temperature, scheduler load or virtualization. Python reference
+timings are not optimized native deployment performance and cannot establish
+that one mathematical scheme is inherently faster than another. Sparse pilot
+points are observations, not an interpolated parameter-ladder benchmark.
+
+Publication is a separate review step: inspect outcomes, provenance, bounds,
+method and environment, then select immutable raw evidence by file digest.
+Never let an uploaded arbitrary report or arbitrary executable become a public
+benchmark solely because its JSON schema validates.

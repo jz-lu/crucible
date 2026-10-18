@@ -49,9 +49,13 @@ Optional top-level fields:
 
 If _instructions is supplied it must be an object, not null. This is template
 guidance only. It is validated and then removed from the stored normalized
-document and content hash. Other optional/default null fields are retained, except absent/null tier_design
-and its absent/null parameter_selection, which remain omitted to preserve older
-canonical content. Existing documents without _instructions are accepted.
+document and content hash. Absent/null tier_design, its parameter_selection,
+implementation.artifact_sha256, encoding.private_key and correctness.justification
+remain omitted to preserve older canonical content. Other optional/default null
+fields are retained. Existing documents without the new review fields are still
+valid drafts and readable historical records; they need a new revision and review
+to satisfy current approval/admission requirements. Built-in descriptions do not
+automatically acquire a proof or reviewed status.
 
 algorithms
 
@@ -64,10 +68,15 @@ All four fields are required nonblank strings, at most 6000 characters each:
 
 Specify whether invalid public keys/ciphertexts cause explicit rejection,
 return a replacement/rejection key, or have some other specified result.
-Describe all relevant checks, byte framing and KDF domains. These are prose or
-pseudocode, never evaluated expressions. The validator requires a nonblank
-description but cannot determine whether it is complete or mathematically
-correct; the reviewer must assess that.
+Describe all relevant checks, byte framing and KDF domains. Supply pseudocode
+sufficient for independent implementation: exact arithmetic and distributions,
+retries/termination, private state and lifetime, and every rejection branch. Define
+helpers or cite an exact standard/version/section and its conventions; a bare
+instruction such as "decode" is insufficient. A published standard may specify
+an unchanged operation, but authors must identify any adaptation and why the cited
+operation applies. No programming language or proof assistant is mandated.
+The text is never executed. The validator requires nonblank descriptions but
+cannot determine completeness or mathematical truth; reviewers assess both.
 
 parameters
 
@@ -164,12 +173,21 @@ a more valuable identical recovery; no new score formula is adopted.
 
 encoding
 
-All fields are required:
+Required fields:
 
   public_key: string, at most 3000 characters
   ciphertext: string, at most 3000 characters
   shared_secret: string, at most 3000 characters
   shared_secret_bytes: strict integer 1..4096, or null
+
+Optional at intake and required for new approval/admission:
+
+  private_key: nonblank string of at most 3000 characters, or null
+
+Describe private components and their canonical encoding, or an exact internal
+representation when serialization is not defined. Include state lifetime and
+secrets used for implicit rejection. This is a format description; never upload
+actual private-key material as part of a proposal.
 
 Describe canonical binary encodings, field widths, endianness, padding, framing
 and JSON/hex transport separately. shared_secret describes the derivation/KDF,
@@ -188,9 +206,14 @@ Required fields:
   argument: nonblank string, at most 6000 characters
   scope: nonblank string, at most 3000 characters
 
-Optional field:
+Optional fields:
 
   evidence: nonblank string of at most 3000 characters, or null; defaults null
+  justification: claim, assumptions and supporting reasoning below, or null; defaults null;
+                 required for new approval/admission
+  policy_id: "crucible-honest-agreement-128-v1", or null; optional
+  failure_bound_exponent: strict integer 0..1000000, or null; optional at intake,
+                          required >=128 for new statistical approval/admission
 
 Perfect requires the literal bound "0". Statistical requires a stated bound
 string. Unknown requires null. These label-consistency checks do not verify the
@@ -199,9 +222,70 @@ bound. State what is unknown rather than supplying a fabricated argument.
 The scope must identify admitted parameters, honest keys/ciphertexts, the
 probability space and any conditioning, and mathematical/implementation
 assumptions. Honest encapsulation/decapsulation agreement is distinct from
-security against an adversary. Evidence may describe proofs, test vectors,
-tests or review status, but intake never treats the description as proof that
-those tests ran or that the implementation is certified.
+security against an adversary. argument remains the explanatory summary; evidence
+holds supplemental empirical results/reproduction references. Historical evidence
+text is preserved. Tests alone cannot establish an extremely small failure rate.
+A new approval requires a claimed bound at most 2^-128 (or perfect agreement)
+and reasoning with its explicit premises; those premises may remain conjectural.
+A weaker or unknown correctness claim is accepted only as a draft.
+
+correctness.justification, when supplied, has exactly these required fields:
+
+  kind: "mathematical-proof", "analytical-bound", "model-based-analysis"
+        or "conjectural-claim"
+  statement: exact agreement theorem/failure bound (up to 3000 characters)
+  conditions: explicit hypotheses and probability model (up to 4000)
+  configuration_coverage: entire admitted domain and case coverage (up to 4000)
+  derivation: proof/bound, cited theorem, or rationale identifying unproved steps
+              for a conjectural guarantee (up to 6000)
+
+The statement must agree with kind/failure_bound in correctness. Conditions must
+identify fixed parameters, public setup, honest inputs, all randomness and
+conditioning, RNG/hash idealizations and implementation/mathematical hypotheses.
+Conditional guarantees are allowed when their conditions are explicit. Explain
+why the result covers every supported configuration, including off-route settings
+and the entire domain of any generation rule. Account for all relevant rounding,
+decoding and rejection events and parameter-dependent inequalities.
+
+A concise derivation can cite a pinned paper/standard version and exact theorem
+or section, with references and an explanation of its applicability to the
+submitted construction. Formal machine checking is optional. Empirical success,
+a theorem title alone or an unsupported "negligible" claim is insufficient.
+The kind label is an author assertion, not proof status. Intake checks shape;
+manual review assesses the claim, reasoning and dependencies. Identified unproved
+steps can remain conjectural; unclear or misrepresented claims need revision.
+
+Model-based analyses are eligible for manual review. Define the modeled experiment,
+derive its bound, identify each unproved bridge to the concrete algorithm and
+justify applicability to every admitted configuration. Keep that evidence class
+and its assumptions visible; exact calculation within a model is not proof of
+the concrete algorithm. Published analysis does not automatically cover reduced
+or otherwise changed configurations.
+
+Conjectural claims may be approved for research when they state the required
+correctness goal, independently motivated assumptions and the reasoning connecting
+them. Tautologically assuming that the target already holds is not a meaningful
+justification; identify independently assessable mathematical/algorithmic premises.
+Distinguish proved, modeled and conjectural steps; approval does not prove the premises.
+Unknown correctness remains draft-only. Both a correctness guarantee and a scoped
+security claim are required for manual approval; neither must prove all premises.
+
+correctness.policy_id remains optional; its recognized value identifies the
+required claimed 2^-128 correctness goal. For new statistical approval/admission,
+failure_bound_exponent must be a conservative integer b>=128 declaring delta<=2^-b
+under the stated premises. Round fractional exponents down and review consistency
+with the bound text, reasoning and parameter coverage. The server checks the
+declaration, not its mathematical truth. Weaker exponents or omitted declarations
+are valid drafts, not approvable claims. Perfect/unknown claims omit the exponent;
+unknown correctness stays draft-only. Historical omitted fields preserve canonical
+hashes. See correctness-policy-v1.txt for scope, abort treatment and refutation
+distinctions. A looser upper bound or a broken assumption is not by itself proof
+that actual failure probability exceeds the goal; neither is one failing sample.
+
+Reference implementation conformance and safe execution are separate review
+obligations. An algebraic proof does not establish that code implements it, and
+successful tests do not establish a negligible failure probability. Published
+reference timings are separate performance evidence, not correctness evidence.
 
 security
 
@@ -214,8 +298,10 @@ All four fields are required nonblank strings:
 
 State the objective/game, adversarial/oracle access, classical or quantum model,
 setup/precomputation and cost assumptions, the actual claim and supporting
-assumptions. Explicitly say when no claim or reduction is provided. Free text
-is an author's statement, never an executable admission policy or a verified
+assumptions. An unfinished draft may identify an absent claim, but new approval
+requires an explicit scoped security guarantee. A conditional or conjectural claim
+is allowed; state when no reduction is supplied and identify the unproved steps.
+Free text is an author's statement, never an executable admission policy or a verified
 security category. Recovering a challenge secret is evidence of that recovery;
 it is not a lower bound on a scheme's security.
 

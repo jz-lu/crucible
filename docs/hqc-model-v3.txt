@@ -1,0 +1,192 @@
+HQC MODELED RESEARCH LADDER — 2026-10-17
+
+Scope and decision
+
+Release hqc/modeled-research-v3 adds 66 natural weight settings and a published
+reference endpoint. It leaves the earlier weight-research-v1, growth-research-v2
+and 20250822-oqs016-v1 releases, receipts, sources and measurements intact.
+A receipt for another release is not evidence for this distribution.
+
+Every tuple claims average honest disagreement at most 2^-128, CONDITIONAL on
+an explicit correctness-model premise and faithful implementation. A precise
+conditional claim is not an unconditional correctness theorem. Independent
+scientific admission and current security calibration remain pending.
+
+The final tuple is exactly the public construction of the HQC specification
+dated 2025-08-22, HQC-1: n=17669, w=66, wr=we=75, RS(46,16), tripled RM(1,7),
+2241-byte public key and 4433-byte ciphertext. Complete deterministic native
+keypair/encapsulation/decapsulation transcripts are compared with the retained
+unmodified source. The lower tuples are research adaptations, not published
+HQC parameter sets. All retain 16-byte messages, 32-byte seeds, 16-byte salts,
+32-byte shared-secret outputs and the 2025 salted transform and field encoding.
+
+Why use a dated published endpoint?
+
+The current 2026-10-12 specification changes the weights, default secret-key
+format and GF(256) representation. It explicitly says its extra weight
+compensates recent cryptanalysis as well as taking advantage of refined failure
+analysis. We have an auditable pinned 2025 implementation and tested decoder
+parameter domain. This pass does not silently represent it as the latest
+construction or inherit the latest security assessment. The endpoint's historic
+NIST category 1 association is context, not a freshly established 128-bit bound.
+No numerical security curve is fabricated for the lower settings.
+
+The current specification's Model 2 gives an approximately 2^-127.9 conditional
+DFR bound for its updated HQC-1. This does not establish a failure probability
+above 2^-128: an upper bound failing our threshold is not a lower bound on the
+actual failure probability. It does mean that table alone does not certify our
+common threshold. The 2025 endpoint is re-evaluated using the CURRENT document's
+explicitly retained conservative Model 1, not admitted by copying an old label.
+
+Natural parameter and cost selection
+
+For w=1,...,66 set wr=we=ceil(75w/66), retaining the 2025 HQC-1 weight balance.
+For each weight pair examine all 45 codecs:
+  RS(16+2delta,16), delta 1,...,15;
+  RM(1,7), repeated r=1,2,3;
+  code length L=(16+2delta)*128r.
+For each codec let n be the smallest prime greater than L for which
+ord_n(2)=n-1. This gives only the two intended irreducible factors of X^n-1
+and retains small, natural truncation. Check primality and order exactly.
+Among those meeting the exact conditional correctness calculation, choose the
+smallest sum of public-key and ciphertext bytes; ties prefer smaller public
+key, ciphertext, repetition count, delta, then n.
+
+This is a bounded communication minimization at each FIXED WEIGHT PAIR. It is
+not proof of minimum cost at an established security level, a full attack-model
+Pareto frontier, or monotonicity of attack cost. In particular sparse-code
+attacks, their memory costs and truncation effects require separate analysis.
+The 2026 MAGE-Stern work makes a simple Prange-trial proxy insufficient as a full
+security estimate. The fixed weight ratio is a documented published-family
+choice, not the result of exhaustive optimization over unequal weights.
+
+Increasing weights thus buys a harder-looking research distribution at growing
+communication cost without spending the common claimed correctness target.
+Several nearby weights share an encoding size. The optimizer can change codec
+family in either direction: repetition count 3 at tier 48 and 2 at tier 49 is
+intentional; the total communication cost still increases. Timing need not be
+monotone. There is no padding or delay added to force attractive graphs.
+
+An exploratory unrestricted ring search was rejected before native building:
+it reduced communication by truncating a substantial fraction of the encoded
+vector. The published argument treating truncation as negligible would then
+need new analysis. The final table always uses the minimal primitive ring.
+
+Exact calculation and assumptions
+
+Let a be the exact parity-one probability of a coordinate of the product of
+independent uniform supports with weights w and wr:
+  a = sum over odd j of C(w,j) C(n-w,wr-j) / C(n,wr).
+The honest residual x*r2+r1*y+e then has exact one-coordinate marginal
+  p = 2a(1-a)(1-we/n) + (a^2+(1-a)^2)we/n.
+This marginal alone does NOT determine the decoder failure probability.
+
+Model 1 substitutes independent Bernoulli(p) error coordinates. Actual cyclic
+products have correlations and fixed total parity, so their joint distribution
+is NOT literally IID, even with ideal random XOFs. The key additional claim is
+that the complete adjusted Model 1 calculation conservatively bounds the actual
+decoder-failure event for this particular tuple. The current specification
+motivates conservativity by negative dependencies and simulation. Transferring
+this conservativity to our reduced tuples is an explicit unproved conjectural
+premise; neither the rational certificate nor ordinary test samples proves it.
+The fixed-seed SHAKE implementation is additionally modeled by the specified
+ideal sampling/expansion behavior. Failures are averaged over uniform 128-bit
+messages and fresh keys, not bounded for each individual malicious message.
+
+Inside that model the calculation follows 2026 specification Sections 6.1.1,
+6.1.2 (Proposition 6.1.4), 6.1.3 (Theorem 6.1), 6.1.5 and 6.2.3:
+
+1. Use the improved RM union bound with the two-way tie half-factor AND the
+   multiway-tie correction, capped by the number of words of each weight.
+   The all-one word and complementary pairs are included by that cap.
+2. Bound the outer RS failure by its binomial tail beyond delta bad symbols.
+3. Add the deterministic tie-rule coupling correction
+   C(n1,17)*P_tie^17. Any 16 coordinates of a uniform RS message are independent;
+   the current specification isolates the remaining coupling this way.
+4. Multiply by (1+n/2^32)^(2wr+we), a conservative density-ratio upper bound
+   for the retained slightly biased 32-bit encapsulation sampler. The key
+   sampler uses uniform rejection; the bias correction is not omitted.
+
+The calculator first verifies, by finite integer comparisons for all three RM
+codes, that its error majorant is nondecreasing with error weight. It may then
+round p UP to a dyadic 64-bit grid. Inner failure and tie probabilities are
+rounded UP to a dyadic 256-bit grid. All remaining binomial sums, products and
+the final comparison with 2^-128 are exact rational/integer calculations.
+Floating log2 values are display only, never admission decisions.
+
+Every selected tuple has its own regenerated certificate in
+crucible/data/hqc_model_profiles.json. The narrowest modeled margin is tier 58,
+log2(bound) about -128.044352. The endpoint gives about -132.890370 including
+sampler bias and a deterministic-tie correction below 2^-148.53. The same Model 1
+calculation on the NEW 2026 weights at the old ring/code gives about -117.355887;
+that is explicitly a comparison of models/parameters, not a cryptanalytic
+counterexample. The newer Model 2 comparison is retained beside it in the JSON.
+
+Implementation and safety boundaries
+
+Native sources come from the exact liboqs commit
+5a1a854b0dc9f2141bdc771c555ee60c37950183, archive SHA256
+83c6e6cff490638312e1e20ed5de593fb5d7bfab162235f6238f519d6a1feafb.
+The builder verifies the archive and extracted inventory before copying. Only
+parameters.h and api.h are specialized: dimensions, weights, generator
+coefficients, lengths, Barrett/rejection constants and unused claim macros.
+The RS/RM algorithms, field 0x11d, tables and FFT domain are unchanged.
+Delta<=15 and r<=3 stay in the previously validated native domain.
+
+The new build stays beneath this checkout's .local directory. It never writes
+old .native* trees. The runtime binds parameter/certificate/calculator/build
+sources and all workers to an artifact digest, and checks it before and after
+generation. Generation is a bounded subprocess, not execution of uploaded code.
+The prebuilt liboqs.a hash is recorded as a trusted input; source inventory
+checks alone do not establish a reproducible source-to-library build.
+
+A worker performs exactly one unconditioned encapsulation and decapsulation.
+A valid decapsulation that yields a different secret is returned as an honest
+correctness observation, without retry or resampling. A nonzero native API
+error exits unsuccessfully and is not converted into a mathematical
+counterexample. Encaps' original secret remains the recovery target.
+
+Reproduce
+
+  python scripts/hqc_model_parameters.py --output /tmp/hqc-model-check.json
+  cmp /tmp/hqc-model-check.json crucible/data/hqc_model_profiles.json
+  python scripts/build_hqc_model.py --base-native VERIFIED_NATIVE_PQ \
+    --output .local/native-hqc-model
+  CRUCIBLE_HQC_TEST_BASE_NATIVE=VERIFIED_NATIVE_PQ \
+    python -m pytest tests/test_hqc_model.py
+
+The server does not search parameters, compute rare-event bounds, compile native
+code or download dependencies while issuing challenges. Changed parameters,
+sources or binaries require an explicit new artifact; old timing records and
+receipts cannot be relabeled as the new source.
+
+Validation record
+
+An independent read-only reviewer re-evaluated all 66 exact certificates,
+checked primitive/minimal ring selection, endpoint bytes and all 1397 earlier
+cheaper candidate exclusions. The native build checks one honest exchange for
+every tuple. All 111 dedicated checks passed (the final two worker fault fixtures were run
+separately after benchmark collection). The suite additionally checks every tuple's sizes
+and honest exchange, all distinct codec boundaries under UndefinedBehaviorSanitizer,
+the complete exact 2025 endpoint transcript, public-input-only recovery of tier 1,
+source tampering and one-shot honest failure handling. These tests do not
+estimate a 2^-128 failure rate, establish the conjectural bridge, prove the C
+implementation, or replace a constant-time/side-channel security review.
+
+Primary sources
+
+HQC team, 2025-08-22 specification: construction, samplers, published HQC-1
+parameters and security discussion.
+https://pqc-hqc.org/doc/hqc_specifications_2025_08_22.pdf
+
+HQC team, 2026-10-12 specification: current Model 1/Model 2 analysis, improved
+RM bound, deterministic ties, sampler bias, changed parameters and cryptanalysis.
+https://pqc-hqc.org/doc/hqc_specifications_2026_10_12.pdf
+
+Carrier, Hatey, Luzzi and Tillich, Multilevel Amortized Gaussian Elimination in
+Information-Set Decoding: Applications to HQC and PCG, 2026/1498.
+https://eprint.iacr.org/2026/1498
+
+Pinned implementation and upstream metadata:
+https://github.com/open-quantum-safe/liboqs/tree/5a1a854b0dc9f2141bdc771c555ee60c37950183/src/kem/hqc
+https://github.com/open-quantum-safe/liboqs/blob/5a1a854b0dc9f2141bdc771c555ee60c37950183/docs/algorithms/kem/hqc.yml

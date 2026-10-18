@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Research notes · Crucible</title>
+  <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="notes.css">
+  <script src="catalogue.js" defer></script><script src="notes-data.js" defer></script><script src="note-ui.js" defer></script><script src="notes.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to notes</a>
+  <header class="header site-map-header">
+    <a class="brand" href="/"><img src="/assets/crucible-logo.png" width="38" height="54" alt=""><span>Crucible</span></a>
+    <nav class="map-site-nav" aria-label="Main navigation">
+      <a href="/#challenge">Schemes</a><a href="/#people">Leaderboard</a>
+      <a href="/#notebook" aria-current="page">Research notebook</a>
+      <a href="/#about">About us</a>
+    </nav>
+  </header>
+  <main id="main" class="notes-main">
+    <nav class="notebook-view-nav" aria-label="Notebook views"><a href="/#notebook">Notes</a><a href="index.html" aria-current="page">Map</a></nav>
+    <section id="note-library">
+      <div class="page-title"><div><p class="eyebrow">The ideas underneath</p><h1>Map research notes</h1></div><a class="quiet-link" href="NOTE-FORMAT.txt">About the format ↗</a></div>
+      <p class="intro">KEM descriptions, theoretical research leads, comparisons and working questions. Each note has its own scope, sources and tags.</p>
+      <div class="note-toolbar">
+        <label class="search"><span class="sr-only">Search notes</span><input id="note-search" type="search" placeholder="Find a note or an idea…" autocomplete="off"></label>
+        <label class="note-filter"><span>Type</span><select id="note-role"><option value="">All types</option><option value="scheme-description">Scheme descriptions</option><option value="research-lead">Research leads</option><option value="attack-analysis">Attack analysis</option><option value="comparison">Comparisons</option><option value="procedure">Procedure</option></select></label>
+        <label class="note-filter"><span>Tag</span><select id="note-tag"><option value="">All tags</option></select></label>
+      </div>
+      <div class="note-count-row"><p id="note-count" role="status" aria-live="polite"></p><button id="clear-filters" class="text-button" type="button" hidden>Clear filters</button></div>
+      <div id="note-list" class="note-list"></div>
+    </section>
+    <section id="note-reader" hidden aria-label="Full research note"></section>
+  </main>
+  <footer><span>Crucible · Research notes</span><span>Curated map notes</span><a href="notes.json" download>Download notes ↓</a></footer>
+  <noscript><p>This notebook view needs JavaScript. <a href="notes.json">Read or download the notes</a>.</p></noscript>
+</body>
+</html>

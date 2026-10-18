@@ -1,0 +1,156 @@
+REFERENCE IMPLEMENTATION TIMINGS — METHOD v1
+
+Purpose
+
+Show the cost of implementing a proposal, separately from the challenge's attack
+cost and security claims. The authoritative website policy is METHOD in
+crucible/reference_policy.py, served at /api/protocol/reference-method. The
+computation graph's Method and results disclosure presents this policy and the
+provenance of any published local pilot. No web request runs a benchmark.
+Run and reproduction instructions are in reference-benchmarks.txt.
+
+Reference choice
+
+Use fresh KeyGen, Encaps and Decaps as separately timed operations. ML-KEM-512
+(FIPS203) is the selected published category-1 challenge endpoint:800-byte public
+key,768-byte ciphertext,32-byte shared secret. There is no separate768 comparison
+reference. Reduced research configurations do not inherit its security assessment.
+The exact implementation and measured environment determine timing, not these
+standard byte lengths. Timing a KEM does not time an entire TLS exchange: other
+hybrid components, signatures, certificates and network costs remain separate.
+Neither NIST nor TLS standards define a single reference CPU or a universal
+millisecond acceptance limit.
+
+Use identified local hardware, sequential trials, 3 warmups and 20 measurement
+trials. The initial first/middle/last pilot used 30 seconds per configuration;
+the full run allows 120 seconds and covers every valid configuration. These are
+modest collection choices, not statistical certification, production capacity targets or
+admission limits. Keep CPU affinity, runtime/compiler, thread count, source and
+build hashes, exact parameters, raw samples, setup duration and trial outcomes.
+The recorded setup duration is worker initialization, not generation of the
+precomputed public parameters. Use linear-interpolated quartiles and the median;
+quartiles are sample spread, not confidence intervals. Do not substitute averages of
+multiple operations, fill graph gaps or report discarded failures as successes.
+Compare like environments. Reference Python and optimized C have very different
+overheads: neither their ratio nor a sparse pilot establishes a scheme ranking.
+
+Safety and publication
+
+The offline runner accepts only explicit trusted registered adapters and their
+reviewed benchmark drivers. User-supplied specifications, URLs and pseudocode
+are inert data. There is no command field or arbitrary module import in intake.
+Maintainers review the mathematics, implement the algorithms, check correctness,
+input handling, dependencies and resource behavior, and only then benchmark.
+Wall-time/process limits bound trusted jobs; they do not isolate hostile code.
+An eventual execution service needs a separately reviewed isolation boundary.
+
+Reports are immutable evidence outside frozen protocol manifests. Publication
+requires a maintainer to select a report and its SHA-256 in the static index.
+The API validates the selected file and binds records to exact registered source
+and parameter identities; unselected, stale or malformed files do not become
+graph points. This is a local review mechanism, not an independent attestation.
+Benchmark agreement observations never change a scheme's correctness status.
+
+First selected pilot, 17 October 2026
+
+The immutable local-pilot-20261017.json covers first/middle/final configurations
+of five Python reference families on Apple M5 / CPython 3.14.6. The CPU model was
+verified on the measuring host after collection; that provenance is retained.
+Fourteen configurations completed all 3 warmups and 20 measured exchanges.
+RSA's largest configuration reached the deadline after 13 measured exchanges;
+its partial samples are retained and its timing graph point remains absent.
+All completed exchanges agreed. This does not prove their correctness bounds.
+Native HQC, NTRU, McEliece and the standardized ML-KEM baseline need separately
+reviewed operation drivers; that pilot did not yet measure their timings. A subsequent native pass is recorded below.
+
+Full configuration sweep, 17 October 2026
+
+The selected local-all-20261017T111711Z reports cover all 241 configurations of
+the five supported Python families: 50 DH, 50 RSA, 50 elliptic-curve DH, 11 module
+lattice and 80 Frodo. Each requests 3 warmups and 20 measured trials within a
+120-second collection budget on Apple M5 / CPython 3.14.6. This includes settings
+outside a family's default human progression. No new parameters were generated.
+
+238 configurations completed. Three RSA configurations are partial: four total
+generation aborts occurred under the implementation's unchanged internal limits.
+All 5,539 completed exchanges (including warmups) agreed; no unexpected errors
+or disagreements were observed. Partial runs retain their outcomes and samples;
+at initial publication they did not contribute plotted timing points. This is evidence from this run,
+not an experimental proof of a negligible correctness failure probability.
+The original sparse pilot remains available as historical evidence.
+
+Proposal obligations
+
+Specify setup, key generation, encapsulation and decapsulation in enough detail
+to implement: domains, distributions, encodings (including private keys),
+validation, KDF/transcript, failure/rejection behavior and parameter mapping.
+Claim perfect agreement or an honest-failure bound at most 2^-128, covering the
+parameter domain with explicit premises and reasoning. Conditional, model-based
+and conjectural claims are eligible; identify unproved steps. Separate generation
+aborts from disagreement, and explain conditioning.
+Then bind conformance vectors, invalid-input tests and execution review to the
+exact implementation. Finite round trips cannot certify a negligible failure
+probability. Correctness, implementation safety and IND-CCA confidentiality are
+distinct review questions. See correctness-audit-reference.txt for the current
+eight families' evidence and gaps. A benchmark failure warrants investigation;
+one failing sample does not itself establish an actual failure probability above
+the target. A loose upper bound or a challenged assumption likewise does not
+alone refute the target. See correctness-policy-v1.txt for the distinction.
+
+Correctness bounds and the ML-KEM distinction
+
+New approval/admission requires a claimed honest-failure bound at most 2^-128
+or perfect agreement. Statistical claims declare an exponent of at least 128;
+policy_id remains optional. Explicit unproved premises are allowed, with
+independent motivation and reasoning; this is not unconditional certification.
+See correctness-policy-v1.txt for probability scope, generation aborts, evidence distinctions and the prospective
+approval rules. Stronger individual bounds remain visible. The old module-lattice
+research release's conditional-zero contract is preserved with its original data;
+its larger modulus was chosen for that worst-case support guarantee, not evidence
+that it was more secure than standard ML-KEM. It must not be silently relabelled
+as the new, standard-aligned construction. New parameter and transform choices
+receive their own release, evidence and fresh timings.
+
+Sources checked 17 October 2026
+
+https://csrc.nist.gov/pubs/sp/800/227/final
+https://csrc.nist.gov/pubs/fips/203/final
+https://www.rfc-editor.org/rfc/rfc10024.html
+https://bench.cr.yp.to/call-kem.html
+https://bench.cr.yp.to/results-kem.html
+
+Current extension — 17 October 2026; presentation updated 18 October
+
+The selected report index now includes all current configurations: six module-v4
+Python profiles and pinned native operation drivers for HQC66, McEliece50 and
+NTRU27, alongside the earlier DH50, RSA50, EC50 and Frodo80 measurements.
+There are 379 configurations attempted, 376 complete and three RSA partial.
+No observed disagreement or unexpected error; partial RSA generation aborts
+remain visible. The existing 19/20, 19/20 and 18/20 successful measured exchanges
+at RSA configurations 47, 48 and 50 supply conditional medians, now eligible for
+hollow graph markers. All three warmups succeeded in each case; the measured
+abort counts were 1, 1 and 2. No runs were repeated or selected for success to
+fill these gaps. The five-second key-generation bound and raw receipts are
+unchanged. This is finite implementation evidence only.
+The separate published-ML-KEM raw report retains all three standard sets, but
+the website method uses only ML-KEM-512 as its selected endpoint reference.
+
+Each current profile has requested3 warmups and20 measured fresh exchanges.
+Native runs include OS randomness inside operation calls; buffer allocation and
+startup are outside. Python timing can include allocations inside its API. Native
+ML-KEM uses the pinned AArch64 optimized backend, unlike the readable Python
+research implementation. Compare like implementations and scopes; these are not
+a fair cross-family performance ranking. Compiler, source, library, binary and
+parameter identities are retained. See reference-benchmarks.txt and
+scripts/reference_native_benchmarks.txt for detailed receipts and reproduction.
+
+Hollow markers and the results table show medians conditional on key generation
+succeeding, with successful sample counts and abort counts. These are not total
+attempt latency: the historical worker did not record aborted-attempt durations.
+Other partial observations, errors, timeouts and disagreements remain unplotted.
+Timing curves join adjacent complete-run medians on ordered research progressions.
+Missing, partial and failed observations break the line; hollow markers do not
+extend the line, and no intermediate value is recorded or predicted. Named sets
+stay discrete. The browser rechecks reports
+after60 seconds on visible overview polling or revisit so new publications do
+not remain hidden behind an indefinitely cached empty/older report.

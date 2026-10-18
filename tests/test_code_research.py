@@ -1,6 +1,7 @@
 """Real parameter variation, honest correctness and public-only first-tier attacks."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import struct
@@ -12,8 +13,9 @@ from crucible import code_hqc,code_mceliece,code_native,code_parameters
 from scripts.code_solve_hqc_tier1 import solve as solve_hqc
 from scripts.code_solve_mceliece_tier1 import solve as solve_mceliece
 ROOT=Path(__file__).resolve().parents[1]
-SOURCE=ROOT/'.native-pq/source'/('liboqs-'+code_native.COMMIT)
-NATIVE=ROOT/'.native-pq'
+NATIVE=Path(os.environ.get('CRUCIBLE_CODE_TEST_BASE_NATIVE',ROOT/'.native-pq'))
+SOURCE=NATIVE/'source'/('liboqs-'+code_native.COMMIT)
+CODE_ROOT=Path(os.environ.get('CRUCIBLE_CODE_TEST_ROOT',ROOT/'.native-code'))
 MODULES=(code_hqc,code_mceliece)
 PROFILES=[(module,identifier) for module in MODULES for identifier in module._adapter.profiles]
 
@@ -62,7 +64,7 @@ def test_mceliece_sampler_matches_published_general_parameter_rule():
     for tier,n in enumerate(code_parameters.MC_LENGTHS,1):
         tau=code_parameters.mceliece_sampling_batch(n)
         assert 4096*64/tau<=n<4096*128/tau
-        source=(ROOT/'.native-code/source'/f'mceliece-{tier}'/'encrypt.c').read_text()
+        source=(CODE_ROOT/'source'/f'mceliece-{tier}'/'encrypt.c').read_text()
         assert 'SYS_T * 2' not in source
         assert f'uint16_t nums[ {tau} ]' in source
 
@@ -107,7 +109,7 @@ def test_runtime_common_source_tamper_blocks_generation(monkeypatch):
     with pytest.raises(code_native.Unavailable):code_hqc.generate(next(iter(code_hqc._adapter.profiles)))
 
 def compile_test(tmp_path,family,tier,harness):
-    directory=ROOT/'.native-code/source'/f'{family}-{tier}'
+    directory=CODE_ROOT/'source'/f'{family}-{tier}'
     flags=['-DCODE_FAMILY=1','-DHQC_ARCH_REF=1','-DPQCHQC_NAMESPACE_PREFIX=PQCHQC_HQC1_C_','-DUSE_OQS_RANDOMBYTES'] if family=='hqc' else ['-DCODE_FAMILY=2','-Dold_gas_syntax']
     output=tmp_path/harness
     command=['cc','-std=c99','-O1',*flags,'-I',str(directory),'-I',str(NATIVE/'build/include'),'-I',str(SOURCE/'src/common/pqclean_shims'),str(ROOT/'scripts'/harness),*([str(SOURCE/'src/common/rand/rand_nist.c')] if harness=='code_conformance.c' else []),*[str(p) for p in sorted(directory.glob('*.c'))],str(NATIVE/'build/lib/liboqs.a'),'-o',str(output)]

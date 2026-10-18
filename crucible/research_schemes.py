@@ -44,12 +44,18 @@ SCHEMES = {
         "summary": "Explore a binary Goppa-code length ladder with the original decoder.",
         "construction": "Research tiers keep the m=12 field and t=64 Goppa degree while varying byte-aligned code length. The original decoding construction and KEM transform remain; the final length is the published 348864 endpoint. Smaller lengths are separately identified research parameters.",
         "strengths": ["A large-public-key, compact-ciphertext comparison with HQC.", "Goppa distance gives perfect honest correctness under valid generation and exact implementation."],
-        "limitations": ["Elementary Prange trial counts exclude per-trial work, improved decoding and structural attacks; they are not security-bit estimates.", "Recent structural cryptanalysis matters. This research target is not a deployment recommendation."],
+        "limitations": ["Elementary Prange trial counts exclude per-trial work, improved decoding and structural attacks; they are not security-bit estimates.", "October 2026 review: recent structural key-recovery methods require a fresh assessment of these configurations. The published endpoint is a reference anchor; current attack costs remain unestimated. This is a research target, not a deployment recommendation."],
     },
 }
 
 
 RELEASE_DETAILS = {
+    ("hqc", "modeled-research-v3"): {
+        "summary": "A weight and code progression through the August 2025 HQC-1 reference.",
+        "construction": "Sixty-six configurations retain the 2025 HQC construction, full messages, seeds and salt. For each secret weight w=1..66, encryption/error weights follow ceil(75w/66); a bounded search chooses the smallest supported communication footprint meeting the conditional 2^-128 correctness goal. The last tuple matches the August 2025 HQC-1 reference. Earlier releases remain archived.",
+        "strengths": ["A complete path to a published parameter anchor, with actual key and ciphertext sizes shown.", "Exact rational certificates and a reproducible 45-codec search replace the earlier worst-case zero-failure restriction."],
+        "limitations": ["The correctness model requires a conjectural conservative transfer from an independent-noise surrogate to actual correlated HQC noise; the arithmetic certificate alone does not establish that premise.", "The endpoint is historical. October 2026 parameters and attack analyses differ; current security costs remain unestimated. This is not a current NIST-category or IND-CCA certification.", "Minimum communication applies only to the declared fixed-weight codec search, not equal-security optimization over every HQC construction."],
+    },
     ("ml-kem", "dimension-research-v2"): {
         "summary": "Explore growing module-LWE dimensions alongside the published ML-KEM reference.",
         "construction": "Eleven research settings grow the polynomial degree and module rank, from degree 8 at rank 1 to degree 256 at rank 3. Each uses the smallest prime modulus satisfying the same worst-case zero-failure bound. Native message capacity grows with the degree; full noise and seed distributions are retained. This lossless construction is not FIPS 203 ML-KEM.",
@@ -66,6 +72,12 @@ RELEASE_DETAILS = {
 
 
 RELEASE_DETAILS.update({
+    ("ml-kem", "compressed-research-v4"): {
+        "summary": "Six natural ring sizes ending at standard ML-KEM-512.",
+        "construction": "Keep ML-KEM-512's modulus 3329, rank 2, noise settings and ciphertext compression. Vary the polynomial degree through 8, 16, 32, 64, 128 and 256. The final configuration uses the exact FIPS 203 algorithms and encodings; smaller degrees use explicit parameter/purpose-separated hashes and are research variants.",
+        "strengths": ["The endpoint matches independent NIST test vectors for ML-KEM-512.", "A shared honest-failure target of at most 2^-128 replaces the unnecessary zero-failure constraint; each configuration has explicit evidence and assumptions."],
+        "limitations": ["Reduced degrees may introduce additional algebraic weaknesses and have no calibrated attack-cost estimate or inherited NIST category.", "The upper two configurations' stated target uses a heuristic compression model. Exact probability calculations establish the bound within that model, not its applicability to the concrete hash-based implementation.", "Variable-time Python reference timings are implementation-specific; this is not a certified deployment library or a global efficiency optimum."],
+    },
     ("sntrup", "3"): {
         "summary": "Certified NTRU Prime choices selected under a bounded hybrid-inclusive attack reference.",
         "construction": "Twenty-seven certified tuples retain the Streamlined NTRU Prime transform and perfect-correctness constraints. The finite search compares public-key plus ciphertext bytes under the declared classical non-hybrid and hybrid attack reference; tiny settings remain unestimated. The endpoint is the published sntrup653 parameter tuple, with an explicitly specified full-distribution research sampler.",

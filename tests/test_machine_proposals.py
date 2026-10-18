@@ -39,7 +39,9 @@ def test_new_connection_can_validate_submit_revise_and_replay_its_private_propos
     browser = Actor(app, "author")
     agent, credential = connect(app, browser)
     assert credential["scopes"] == list(machine_auth.SCOPES)
-    assert set(credential["scopes"]) - set(machine_auth.LEGACY_SCOPES) == {"proposals:read", "proposals:write"}
+    assert set(credential["scopes"]) - set(machine_auth.LEGACY_SCOPES) == {
+        "proposals:read", "proposals:write", "notes:read", "notes:rate",
+    }
     assert agent.get("/api/protocol/spec-schema").status_code == 200
     template = agent.get("/api/protocol/spec-template")
     assert template.status_code == 200

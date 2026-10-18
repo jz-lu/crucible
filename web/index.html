@@ -13,6 +13,8 @@
     <link rel="stylesheet" href="/styles.css">
     <script src="/vendor/katex/katex.min.js" defer></script>
     <script src="/math.js" defer></script>
+    <script src="/assumptions.js" defer></script>
+    <script src="/proposal-retractions.js" defer></script>
     <script src="/app.js" defer>
     </script>
   </head>
@@ -32,9 +34,6 @@
           <button id="nav-challenge" class="nav-button selected" type="button" aria-current="page">
             Schemes
           </button>
-          <button id="nav-people" class="nav-button" type="button">
-            Leaderboard
-          </button>
           <button id="nav-notebook" class="nav-button" type="button">
             Research notebook
           </button>
@@ -47,6 +46,9 @@
           </button>
         </nav>
         <div class="account-actions">
+          <button id="nav-people" class="nav-button" type="button" hidden>
+            Leaderboard
+          </button>
           <button id="history-button" class="text-button" type="button" hidden>
             My submissions
           </button>
@@ -95,7 +97,6 @@
             <h1 id="catalogue-title">KEM Schemes</h1>
           </div>
           <div class="catalogue-actions">
-            <a class="text-button" href="#propose">Propose a scheme <span aria-hidden="true">→</span></a>
             <button id="refresh-catalogue" class="text-button" type="button">
               Refresh <span aria-hidden="true">↻</span>
             </button>
@@ -109,6 +110,17 @@
           </div>
         </div>
       </section>
+      <section id="review-workspace" class="review-workspace" aria-labelledby="review-title" tabindex="-1" hidden>
+        <a id="review-account-back" class="text-button scheme-back" href="#people">← My account</a>
+        <div class="catalogue-heading"><h1 id="review-title">Review center</h1></div>
+        <nav id="review-navigation" class="review-navigation" aria-label="Review queues" hidden>
+          <a id="review-nav-publication" href="#reviews?section=publication">Publish requests</a>
+          <a id="review-nav-schemes" href="#reviews?section=schemes">Scheme proposals</a>
+          <a id="review-nav-research" href="#reviews?section=research">Proposed changes</a>
+        </nav>
+        <p id="review-access-message" class="empty-state">The review center is available to configured reviewers.</p>
+      </section>
+      <section id="review-notebook-workspace" aria-label="Reviewer queue" hidden></section>
       <section id="notebook-workspace" aria-label="Research notebook" tabindex="-1" hidden></section>
       <section id="people-workspace" class="people-workspace" aria-labelledby="people-title" tabindex="-1" hidden>
         <div class="catalogue-heading">
@@ -121,7 +133,7 @@
       </section>
       <section id="person-workspace" class="person-workspace" aria-labelledby="person-title" tabindex="-1" hidden>
         <a class="text-button scheme-back" href="#people">← Leaderboard</a>
-        <div class="catalogue-heading"><h1 id="person-title">Profile</h1></div>
+        <div class="catalogue-heading"><h1 id="person-title">Profile</h1><a id="profile-review-link" class="button button-quiet" href="#reviews?section=publication" hidden>Review center →</a></div>
         <div id="person-content" aria-live="polite"></div>
         <details id="agent-connections" class="agent-connections" hidden>
           <summary>Connected agents</summary>
@@ -150,6 +162,7 @@
           <div class="overview-entry">
             <a id="overview-challenges" class="button button-primary" href="#challenge">View challenges <span aria-hidden="true">→</span></a>
             <p id="overview-progress"></p>
+            <a id="overview-assumptions" class="overview-assumptions-link" href="#challenge">View assumptions <span aria-hidden="true">↗</span></a>
           </div>
         </div>
         <div id="overview-graphs" class="overview-graphs"></div>
@@ -159,6 +172,16 @@
           <section aria-labelledby="overview-correctness-title"><h2 id="overview-correctness-title">Correctness</h2><p id="overview-correctness"></p></section>
           <section aria-labelledby="overview-security-title"><h2 id="overview-security-title">Security scope</h2><p id="overview-security"></p></section>
         </div>
+      </section>
+      <section id="assumptions-workspace" class="assumptions-workspace" aria-labelledby="assumptions-title" tabindex="-1" hidden>
+        <a id="assumptions-back" class="text-button scheme-back" href="#challenge">← Scheme overview</a>
+        <header class="assumptions-heading">
+          <p class="eyebrow">Assumptions</p>
+          <h1 id="assumptions-title"></h1>
+          <p class="assumptions-intro">What supports the scheme, and what remains unresolved.</p>
+          <p id="assumptions-context" class="assumptions-context"></p>
+        </header>
+        <div id="assumptions-content" aria-live="polite"></div>
       </section>
       <section id="workspace" class="workspace" aria-labelledby="scheme-title" tabindex="-1" hidden>
         <nav class="scheme-breadcrumbs" aria-label="Scheme navigation"><a id="scheme-all" class="text-button" href="#challenge">All schemes</a><span aria-hidden="true">/</span><a id="scheme-back" class="text-button" href="#challenge">Overview</a></nav>
@@ -610,20 +633,34 @@
         </section>
       </section>
       <section id="proposal-workspace" class="proposal-workspace" aria-labelledby="proposal-title" tabindex="-1" hidden>
-        <a class="text-button scheme-back" href="#challenge">← All KEMs</a>
+        <a id="proposal-page-back" class="text-button scheme-back" href="#challenge">← All KEMs</a>
         <div class="catalogue-heading">
           <div>
-            <h1 id="proposal-title">Propose a scheme</h1>
-            <p>Describe a KEM in a standard specification. Review comes before live challenges.</p>
+            <h1 id="proposal-title">Scheme review</h1>
+            <p id="proposal-context">Proposals are research notes with a KEM specification. Submit a saved revision for scheme review.</p>
           </div>
-          <a id="proposal-review-link" class="text-button" href="#propose?review=1" hidden>Review proposals →</a>
         </div>
         <div id="proposal-draft">
+          <p><a class="text-button" href="#notebook?compose=proposal">Write a proposal note →</a></p>
           <p id="proposal-revision-context" class="proposal-status" hidden></p>
           <div class="agent-handoff-action">
             <button id="proposal-use-agent" class="button button-primary" type="button" aria-controls="proposal-agent-instructions" aria-expanded="false">Use with an agent <span aria-hidden="true">→</span></button>
-            <p class="field-hint">Prepare the specification with your agent, then submit it for human review.</p>
+            <p class="field-hint">Agent submissions create a private proposal note and submit that revision for human review.</p>
           </div>
+          <details class="manual-tools proposal-guidelines">
+            <summary>Proposal guidelines</summary>
+            <div class="proposal-guidelines-content">
+              <p>Start with a precise construction and the claims someone else could investigate.</p>
+              <ul>
+                <li><strong>Specify the algorithms.</strong> Include sampling distributions, encodings, invalid inputs and any shared setup.</li>
+                <li><strong>Separate claims from assumptions.</strong> State the security game, supporting arguments and open questions. New mathematical directions are welcome; a numerical security estimate is not required.</li>
+                <li><strong>Claim honest agreement.</strong> Decapsulation should fail with probability at most 2⁻¹²⁸. Name any models or conjectures the claim depends on; tests alone cannot establish this bound.</li>
+                <li><strong>Choose useful configurations.</strong> Explain the cost–security tradeoffs, correctness coverage and evidence for the endpoint. Stages follow natural parameter choices.</li>
+                <li><strong>Make it reviewable.</strong> Give precise sources and reproducible evidence. Human review and implementation checks precede a live challenge.</li>
+              </ul>
+              <a class="text-button" href="/api/protocol/proposal-guide" target="_blank" rel="noopener">Full guide for people and agents ↗</a>
+            </div>
+          </details>
           <details id="proposal-manual-tools" class="manual-tools">
             <summary>Manual tools</summary>
             <div class="proposal-import">
@@ -641,7 +678,7 @@
               <h4 id="proposal-agent-title">Give this to your agent</h4>
               <button id="copy-proposal-agent" class="button button-quiet" type="button">Copy prompt</button>
             </div>
-            <p class="field-hint">No sign-in needed to prepare. Connect before reading private proposals or submitting.</p>
+            <p class="field-hint">The CLI saves the guide, template and schema in your workspace. A private beta requires a connection; submission always needs your approval.</p>
             <p class="agent-followup">Next time, ask: <strong id="proposal-agent-followup"></strong></p>
             <pre id="proposal-agent-text" class="code-block" tabindex="0" aria-label="Proposal instructions to give your agent"></pre>
           </section>
@@ -658,7 +695,7 @@
           </section>
         </div>
         <section id="proposal-detail" class="proposal-detail" aria-label="Submitted specification" hidden>
-          <a class="text-button" href="#propose">← New proposal</a>
+          <a id="proposal-detail-back" class="text-button" href="#notebook?compose=proposal">← New proposal note</a>
           <div id="proposal-detail-content" aria-live="polite"></div>
           <div id="proposal-detail-actions" class="recovery-import-actions" hidden>
             <button id="proposal-revise-agent" class="button button-primary" type="button" aria-controls="proposal-revise-agent-instructions" aria-expanded="false" hidden>Revise with an agent <span aria-hidden="true">→</span></button>
@@ -681,9 +718,9 @@
             <p id="proposal-review-artifact" class="proposal-digest"></p>
             <fieldset id="proposal-review-fields">
               <legend>Checks performed</legend>
-              <label class="proposal-check"><input type="checkbox" data-proposal-check="specification_complete"> Specification and parameter distribution are complete</label>
-              <label class="proposal-check"><input type="checkbox" data-proposal-check="correctness"> Correctness argument and its scope reviewed</label>
-              <label class="proposal-check"><input type="checkbox" data-proposal-check="tier_design"> Default progression, faithful configurations, resource costs, a common correctness bound, endpoint evidence or provisional status, and useful intermediate stages reviewed</label>
+              <label class="proposal-check"><input type="checkbox" data-proposal-check="specification_complete"> Algorithms are reproducible; distributions, encodings, validation rules, scoped security guarantee and its assumptions are explicit</label>
+              <label class="proposal-check"><input type="checkbox" data-proposal-check="correctness"> Correctness claim of failure at most 2⁻¹²⁸, parameter coverage and assumptions reviewed; unproved steps and known objections assessed</label>
+              <label class="proposal-check"><input type="checkbox" data-proposal-check="tier_design"> Default progression, faithful configurations, resource costs, the declared correctness envelope, endpoint evidence or provisional status, and useful intermediate stages reviewed</label>
               <label class="proposal-check"><input type="checkbox" data-proposal-check="parameter_selection"> Parameter selection objective, constraints, security model, candidate comparisons and tradeoffs reviewed</label>
               <label class="proposal-check"><input type="checkbox" data-proposal-check="implementation_conformance"> Implementation conforms to the specification</label>
               <label class="proposal-check"><input type="checkbox" data-proposal-check="input_resource_safety"> Input validation and resource limits reviewed</label>
@@ -860,6 +897,16 @@
               <pre id="selected-method-code" class="code-block">
               </pre>
             </details>
+            <div class="form-field">
+              <label for="ai-model">
+                AI model(s)
+                <span class="optional">Optional</span>
+              </label>
+              <input id="ai-model" name="ai_model" maxlength="600" aria-describedby="ai-model-hint" placeholder="Model name and version, if known" autocomplete="off">
+              <p id="ai-model-hint" class="field-hint">
+                Which model(s) implemented this result? Participant-reported, up to 300 characters. Leave blank if not reported.
+              </p>
+            </div>
           </fieldset>
           <fieldset class="form-section">
             <legend>
@@ -913,7 +960,7 @@
             </div>
           </fieldset>
           <p class="form-footnote">
-            Correct recoveries may publish your handle, method, pseudocode, and compute declaration on the leaderboard.
+            Correct recoveries may publish your handle, method, pseudocode, AI model annotation, and compute declaration with the result.
           </p>
           <p id="submission-error" class="form-error" role="alert" hidden>
           </p>

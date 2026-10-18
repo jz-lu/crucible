@@ -10,9 +10,9 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-from . import registry
+from . import registry, correctness_policy, proposal_retractions
 from .protocol_proposals import ProtocolProposal, ProtocolProposalRevision, ProtocolProposalReview
-from .protocol_specs import ProtocolSpec, canonical_spec
+from .protocol_specs import ProtocolSpec, canonical_spec, correctness_review_gaps
 
 
 CHECKS = ('specification_complete', 'correctness', 'tier_design', 'parameter_selection', 'implementation_conformance',
@@ -31,8 +31,11 @@ def _hash(value):
 
 def check_admission(session, proposal_id, scheme_id, version):
     """Return an auditable binding report; persist no state and run no attacks."""
-    record = session.get(ProtocolProposal, proposal_id)
+    record = session.scalar(select(ProtocolProposal).where(ProtocolProposal.id == proposal_id)
+        .with_for_update().execution_options(populate_existing=True))
     _require(record is not None, 'Proposal not found.')
+    _require(proposal_retractions.get(session, proposal_retractions.SCHEME, record.id) is None,
+             'This proposal was retracted by its author; it cannot receive new admission.')
     _require(record.status == 'approved', 'The current proposal revision needs manual approval.')
     revision = session.scalar(select(ProtocolProposalRevision).where(
         ProtocolProposalRevision.proposal_id == record.id,
@@ -57,6 +60,8 @@ def check_admission(session, proposal_id, scheme_id, version):
     _require(specification['tier_design'].get('parameter_selection') is not None,
              'A parameter-selection plan and explicit review of it are required; revise and review historical proposals before new admission.')
     _require(specification['correctness']['kind'] != 'unknown', 'A reviewed correctness claim is required.')
+    gaps = correctness_review_gaps(specification)
+    _require(not gaps, ' '.join(gaps))
     implementation = specification.get('implementation') or {}
     source_hash = implementation.get('sha256')
     _require(bool(source_hash) and review.implementation_sha256 == source_hash,
@@ -138,6 +143,10 @@ def check_admission(session, proposal_id, scheme_id, version):
             _require(bound == specification['correctness']['failure_bound'],
                      'Every statistical profile must declare the exact reviewed common failure bound; stronger results may be recorded separately as evidence.')
     return {'status': 'binding-check-passed', 'proposal_id': record.id, 'revision': record.revision,
+            'correctness_policy_id': specification['correctness'].get('policy_id'),
+            'correctness_policy_advisory': False,
+            'correctness_claim_target_exponent': correctness_policy.FAILURE_EXPONENT,
+            'correctness_evidence_kind': specification['correctness']['justification']['kind'],
             'content_sha256': digest, 'review_id': review.id, 'implementation_sha256': actual_hash,
             'scheme_id': scheme_id, 'version': version, 'profiles_checked': len(profiles),
-            'scope': 'Manual review, configuration and default-progression review, common correctness declarations and artifact/metadata bindings checked. Statistical expressions and proof coverage remain human review duties. No execution, security certification, or activation performed.'}
+            'scope': 'Manual research review, configuration declarations and artifact/metadata bindings checked. Correctness guarantees remain claims under their stated dependencies, which may be conjectural. The common claimed failure goal of <=2^-128 or zero is declared; mathematical truth and model adequacy are not established by this binding check. Reviewers assess consistency and any rigorous contradiction; a proof gap alone is not a refutation. No execution, correctness/security certification, or activation performed.'}

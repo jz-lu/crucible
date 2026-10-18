@@ -1,0 +1,183 @@
+CURRENT CORRECTNESS EVIDENCE AUDIT — 17 OCTOBER 2026
+
+Scope: the eight current research releases selected by crucible/registry.py.
+This is a source/evidence inventory and mathematical-scope review, not a fresh
+independent proof audit, formal verification, or attestation that every listed
+test was rerun today. Historical reports remain evidence of their dated runs.
+
+Conclusion
+
+All eight releases state support for honest agreement. Six claim perfect
+agreement under their stated mathematical/implementation premises. Frodo claims
+a conditional statistical bound, with one perfect small profile. Module-v4
+combines deterministic support arguments, conditional analytical bounds and an
+explicit heuristic compression model across its six configurations. These claims
+meet the required claimed <=2^-128 goal under their stated premises; this inventory
+does not validate those premises or certify an executable.
+None has an end-to-end machine-checked proof that the exact executable, compiler,
+runtime, RNG and hardware implement the claim. All retain independent admission
+or implementation-review gaps. "Every scheme is rigorously verified" would
+therefore overstate the evidence. Round trips and benchmark samples cannot close
+that gap or establish a negligible probability such as 2^-133 experimentally.
+
+The common experiment is fresh KeyGen; honest Encaps; honest Decaps. Define
+disagreement or honest rejection as failure, and separately define permitted
+generation/resource aborts. A claim delta conditional on successful generation
+does not prove unconditional availability. Abort probabilities are not universally
+bounded by the existing proofs. Never resample disagreement into apparent success.
+
+1. Finite-field DH / teaching-dh-kem@7 — mathematical identity, conditional zero
+
+For the registered prime-order groups and nonzero honest x,r in the declared
+interval, (g^x)^r=(g^r)^x. Both sides encode/hash the same transcript. Valid prime
+and subgroup certificates also ensure honest inputs pass validation. Hash
+collision resistance is unnecessary for equal-input agreement.
+
+Evidence: crucible/dh_v7.py (validate_profile, keygen/encapsulate/decapsulate and
+correctness manifest); tests/test_classical_frontier.py and the independent
+transcript/model checks in test_classical_frontier_audit.py. Public prime
+certificates are executable checks, not formal verification of this interpreter.
+Gap: independent current-source implementation/admission review remains pending.
+
+2. RSA / rsa-kem@4 — CRT/Fermat argument, conditional zero
+
+Distinct certified primes and ed=1 mod (p-1)(q-1) give (z^e)^d=z mod N for every
+z, including nonunits (prove separately modulo p and q, then use CRT). Matching
+encodings/KDF give equal keys. The structured prime sampler is not uniform over
+all primes, but that distinction does not invalidate this agreement identity.
+
+Evidence: crucible/rsa_v4.py, tests/test_classical_frontier.py and
+test_classical_frontier_audit.py; inherited certification/sampling tests in
+test_rsa_v3.py are supporting evidence, not a replacement source audit.
+Gap: the five-second bounded search may abort; no zero-abort claim follows.
+Current executable correctness and independent admission are not certified.
+
+3. Elliptic-curve DH / dhkem-x25519@curve-compressed-v2 — group identity,
+   certified public parameters, conditional zero
+
+The registered custom prime-order curves are not X25519. Public ECPP/Lucas
+certificates plus a nonidentity point with qG=O and the Hasse interval establish
+the intended order. For honest nonzero scalars, r(xG)=x(rG); compressed encoding,
+decoding and transcript hashing must faithfully preserve that equality.
+
+Evidence: crucible/ec_compressed.py, scripts/check_ec_parameters.py,
+docs/implementation-ec-research.txt, tests/test_classical_frontier.py and
+test_classical_frontier_audit.py. Some documents concern the predecessor's
+uncompressed representation; the current compressed release needs its own tests.
+Gap: arithmetic/encoding implementation is tested, not formally verified;
+independent implementation/admission review remains pending.
+
+4. Module lattice / ml-kem@compressed-research-v4 — mixed evidence,
+   common <=2^-128 ceiling under explicit premises
+
+The six settings vary ring degree8,16,32,64,128,256 while fixing rank2,q3329,
+CBD3/CBD2 and ciphertext compression10/4. Completed endpoint operations match
+FIPS203 ML-KEM-512. Reduced rings and their parameter-separated hash domains
+are research constructions, not standardized ML-KEM or inherited security claims.
+
+Degrees8/16 have deterministic support bounds. Degrees32/64 have conservative
+conditional bounds <=2^-367 and <=2^-193 without a uniform-compression premise.
+Degrees128/256 have modeled bounds <=2^-236 and <=2^-128 using independent
+uniform-input u-compression errors; this is explicitly a heuristic bridge to the
+concrete algorithm. All probabilistic calculations retain ideal independent
+expanded CBD noise. v-compression uses a deterministic bound, not another
+independence assumption. The endpoint also has published FIPS203 failure analysis.
+
+Evidence: crucible/module_compressed_v4_core.py, crucible/lattice_module_v4.py,
+docs/mlkem-correctness-candidates.txt and its exact certificate JSON, the rational
+certificate checker, independent schoolbook arithmetic comparisons and NIST
+ACVP vectors in tests/test_module_compressed_v4_core.py. The bounded matrix
+sampler can abort; those events are availability failures, not honest disagreement.
+Gap: exact model computation does not prove model adequacy. Finite conformance
+vectors are not an exhaustive implementation proof; independent admission and
+implementation review remain pending. Historical module-v3 source/manifests and
+its separate deterministic-support argument remain intact.
+
+5. Frodo / frodokem@anchor-research-v3 — conditional statistical certificate
+
+The declared common bound is at most 2^-133 under independent finite-CDF noise
+in an ideal-XOF model. For each of 64 coordinates, the analysis bounds
+E'' + sum(S'*E-E'*S), then uses a union bound at the decoding threshold 4096.
+An exact rational/integer Chernoff calculation avoids floating-point optimism.
+The n=8 profile has the stronger deterministic bound
+2*n*12^2+12=2316<4096 and is perfect on the stated support.
+
+Evidence: docs/lattice-frodo-correctness.json, docs/frodo-anchor-ladder.txt,
+crucible/lattice_frodo_v3.py, tests/test_lattice_parameter_frontier.py and
+tests/test_frodo_anchor_ladder.py. The n=640 anchor has pinned native conformance
+fixtures. Older frontier documents selecting n=592 are superseded by this
+release's restored 80-profile n=8..640 domain.
+Gap: the certificate is conditional on its independent-noise/ideal-XOF model;
+it is not an unconditional theorem about every SHAKE-seeded executable run.
+Finite honest samples cannot validate a 2^-133 tail, and native-anchor agreement
+does not itself prove every smaller profile's executable behavior.
+
+6. NTRU Prime / sntrup@3 — published algebraic argument with parameter
+   certificates, conditional zero
+
+The claimed NTRU Prime 2020 Theorem 4 bound |3fm+gr|<=8w<q/2 prevents centered
+lifting loss. Mod-3 recovery and the confirmation/encoding layer then agree.
+Pinned tuples require prime p,q, irreducibility, 2p>=3w and q>=16w+1 plus the
+implementation-domain restrictions; key generation must finish successfully.
+
+Evidence: crucible/ntru_frontier.py, docs/ntru-parameter-frontier.txt,
+tests/test_ntru_frontier.py (independent Python decapsulation, published-anchor
+vectors, sampler/parameter/artifact checks). Native source substitutions and
+sampler faithfulness are part of the implementation obligation.
+Gap: no independent end-to-end implementation or constant-time certification;
+bounded generation availability is separate from the algebraic theorem.
+
+7. HQC / hqc@growth-research-v2 — deterministic concatenated-code bound,
+   conditional zero for this research family
+
+The honest error weight is at most E=2w^2+w. Repeated RM(1,7) distance is 64r;
+a wrongly decoded symbol requires at least 32r flipped bits, including ties.
+E<32r(delta+1) therefore limits outer-symbol errors to delta, within the retained
+RS(16+2delta,16) decoder's radius. Truncation cannot increase error weight.
+All 27 frozen profiles satisfy the inequality. This is not a blanket claim about
+published HQC profiles or later HQC revisions.
+
+Evidence: crucible/code_hqc_v2.py, docs/hqc-growth.txt, certified parameter data,
+tests/test_hqc_growth.py and the separate native decoder-boundary harness.
+Gap: the proof relies on the actual nearest-codeword/RS decoder implementing the
+declared decoding guarantee; boundary tests do not prove all possible inputs.
+Independent admission and full implementation review remain pending.
+
+8. Classic McEliece / classic-mceliece@length-research-v1 — Goppa-code
+   distance/decoding argument, conditional zero
+
+The specified irreducible binary Goppa construction has distance at least
+2t+1=129 for t=64, so every honest weight-64 error has a unique decoding target.
+Shortened support length varies while the field, extension and decoder are fixed.
+Unique decodability alone is not an executable proof: the retained decoder and
+KEM encodings/transform must return that target on the entire admitted domain.
+
+Evidence: crucible/code_native.py, crucible/code_mceliece.py, docs/code-research.txt,
+tests/test_code_research.py, sampler checks and the published-endpoint KAT.
+Gap: native decoder/general-parameter substitutions and successful systematic
+key generation remain premises. No independent end-to-end admission certificate.
+
+Implications for proposals and benchmark publication
+
+Require a precise failure experiment, full parameter coverage and a claimed
+bound at most 2^-128 (or perfect agreement), with named premises and supporting
+reasoning. Conditional, model-based and motivated conjectural justifications are
+eligible; prior proof of every premise is not required. Report generation aborts
+separately and bind implementation evidence to exact source/build identities. Reviewers
+must distinguish: abstract theorem; parameter certificate; numerical bound;
+conformance/negative tests; empirical samples; and manual review status.
+
+A family proof may cover many configurations without redundant per-stage papers.
+Statistical claims may rest on explicit unproved assumptions; distinguish a
+rigorous calculation inside a model from conjectural links to the actual scheme.
+Do not force artificial zero-failure constructions merely for a badge.
+Metadata validation and reviewer checkboxes alone do not verify a proof.
+Benchmark agreement checks add finite implementation observations only. Their
+results must not promote a correctness or confidentiality claim automatically.
+
+A demonstrated actual failure probability above 2^-128 refutes the target for its
+stated scope. A loose upper bound, missing argument or counterexample to a premise
+undermines the justification without necessarily proving the actual target false.
+One observed failing instance is not by itself a probability bound; statistical
+correctness allows rare failures. See correctness-policy-v1.txt for these review
+distinctions. This audit adds no automated refutation or attack pipeline.

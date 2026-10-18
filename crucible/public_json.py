@@ -9,6 +9,16 @@ import math
 from starlette.responses import JSONResponse, Response
 
 
+PROGRESS_FIELDS = ("participant_count", "recovered_profile_ids", "largest_recovered_profile_id",
+                   "next_profile_id", "profile_recoveries", "first_recovery")
+
+
+def catalogue_progress(catalogue):
+    """Small public projection; no protocol metadata or private challenge data."""
+    return [{key: release[key] for key in ("id", "version", *PROGRESS_FIELDS) if key in release}
+            for scheme in catalogue for release in (scheme, *scheme["previous_releases"])]
+
+
 def accepts_gzip(header):
     explicit, wildcard = [], []
     for item in (header or "").split(","):

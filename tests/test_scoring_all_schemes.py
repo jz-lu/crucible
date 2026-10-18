@@ -1,4 +1,4 @@
-"""Policy v5 enrolls eight exact releases without inventing inherited solves."""
+"""Policy v9 pins configuration weights without inventing inherited solves."""
 from copy import deepcopy
 import json
 
@@ -30,7 +30,7 @@ def test_all_eight_frozen_enrollments_match_registered_profiles_and_limits():
         assert not scoring.eligible_record(scheme_id, release["version"],
             f'{release["profile_prefix"]}{release["max_tier"]+1}', release["max_tier"]+1)
         assert not scoring.eligible_record(scheme_id, "future-release", profiles[0]["id"], 1)
-    assert scoring.FAMILY_RELEASES["hqc"]["max_tier"] == 27
+    assert scoring.FAMILY_RELEASES["hqc"]["max_tier"] == 66
 
 
 def test_existing_receipts_gain_points_derivationally_without_rewriting_history(current_system, monkeypatch):
@@ -45,11 +45,11 @@ def test_existing_receipts_gain_points_derivationally_without_rewriting_history(
         previous_policy.setattr(scoring, "FAMILY_RELEASES", {name: all_releases[name] for name in INHERITED[:2]})
         assert person(app, "alice")["points"] == 100
     updated = person(app, "alice")
-    assert updated["points"] == 400
-    assert updated["score_breakdown"] == {"progress": 80, "early_recovery": 320, "scheme_contributions": 0}
+    assert updated["points"] == 770
+    assert updated["score_breakdown"] == {"progress": 154, "early_recovery": 616, "scheme_contributions": 0, "note_contributions": 0}
     assert updated["correct_submission_count"] == updated["schemes_recovered"] == 8
     assert {record["submission_id"] for record in updated["records"]} == {row["submission_id"] for row in rows}
-    assert all(record["score"]["total"] == 50 for record in updated["records"])
+    assert sum(record["score"]["total"] for record in updated["records"]) == 770
     with app.state.db.transaction() as session:
         after = {row.id: (row.received_at, row.payload_mac, row.challenge_id) for row in session.scalars(select(Submission))}
     assert after == before
@@ -66,7 +66,10 @@ def test_exact_profiles_rank_separately_but_have_only_one_family_total(current_s
     bob_high = registered_receipt(app, bob, adapter, 3, 3)
     registered_receipt(app, alice, adapter, 3, 4)
     registered_receipt(app, bob, adapter, 1, 5)
-    for name, points, winner, highest in (("alice", 150, high, high), ("bob", 70, low, bob_high)):
+    high_weight, low_weight = {"ml-kem": (250, 83), "frodokem": (18, 6), "sntrup": (55, 18),
+                               "hqc": (22, 7), "classic-mceliece": (30, 10)}[scheme_id]
+    for name, points, winner, highest in (("alice", 5 * high_weight, high, high),
+                                        ("bob", high_weight + 4 * low_weight, low, bob_high)):
         data = person(app, name)
         assert data["points"] == points
         assert len(data["records"]) == 1
@@ -109,9 +112,9 @@ def test_exact_progress_and_bonus_are_maxima_not_per_profile_sums(current_system
     registered_receipt(app, user, adapter, 5, 6)
     registered_receipt(app, user, adapter, 1, 7)
     data = person(app, "alice")
-    assert data["points"] == 250
-    assert data["score_breakdown"] == {"progress": 50, "early_recovery": 200, "scheme_contributions": 0}
-    assert sum(row["score"]["total"] for row in data["records"] if row["score"]) == 250
+    assert data["points"] == 185
+    assert data["score_breakdown"] == {"progress": 37, "early_recovery": 148, "scheme_contributions": 0, "note_contributions": 0}
+    assert sum(row["score"]["total"] for row in data["records"] if row["score"]) == 185
 
 
 def test_published_endpoint_and_unenrolled_releases_never_take_current_bonus(current_system, monkeypatch):
@@ -145,34 +148,34 @@ def test_invalid_json_tier_cannot_earn_points_or_occupy_first_place(current_syst
     assert person(app, "alice")["points"] == 0
     assert person(app, "alice")["records"] == []
     assert person(app, "alice")["first_records"] == []
-    assert person(app, "bob")["points"] == 50
+    assert person(app, "bob")["points"] == 35
 
 
 def test_hqc_unregistered_tier_and_mismatched_manifest_cannot_inflate(current_system):
     app, _, _ = current_system
     user = add_user(app, "alice")
-    for tick, tier in enumerate((28, 50)):
+    for tick, tier in enumerate((67, 100)):
         def bind(result, session, tier=tier):
             challenge = session.get(Challenge, result.challenge_id)
-            challenge.profile_id = result.profile_id = f"hqc-growth-research-v2-tier-{tier}"
-        receipt(app, user, tier, tick, scheme="hqc", version="growth-research-v2", mutate=bind)
+            challenge.profile_id = result.profile_id = f"hqc-modeled-research-v3-tier-{tier}"
+        receipt(app, user, tier, tick, scheme="hqc", version="modeled-research-v3", mutate=bind)
     assert person(app, "alice")["points"] == 0
-    registered_receipt(app, user, registry.code_hqc_v2, 27, 3)
-    assert person(app, "alice")["points"] == 1350
+    registered_receipt(app, user, registry.code_hqc_v3, 66, 3)
+    assert person(app, "alice")["points"] == 2500
 
 
 def test_valid_same_tier_receipt_supplies_personal_record_after_malformed_boolean(current_system):
     app, _, _ = current_system
     user = add_user(app, "alice")
-    bad = registered_receipt(app, user, registry.code_hqc_v2, 1, 0)
+    bad = registered_receipt(app, user, registry.code_hqc_v3, 1, 0)
     with app.state.db.transaction(write=True) as session:
         result = session.get(Submission, bad["submission_id"])
         challenge = session.get(Challenge, result.challenge_id)
         challenge.manifest = {"instance_size": True}
         flag_modified(challenge, "manifest")
-    good = registered_receipt(app, user, registry.code_hqc_v2, 1, 1)
+    good = registered_receipt(app, user, registry.code_hqc_v3, 1, 1)
     data = person(app, "alice")
-    assert data["points"] == 50
+    assert data["points"] == 35
     assert [row["submission_id"] for row in data["records"]] == [good["submission_id"]]
     assert [row["submission_id"] for row in data["first_records"]] == [good["submission_id"]]
 
@@ -234,9 +237,35 @@ def test_natural_tier_above_fifty_gets_full_first_bonus_without_cumulative_steps
     registered_receipt(app, alice, adapter, 80, 2)
     registered_receipt(app, bob, adapter, 80, 3)
     data = person(app, 'alice')
-    assert data['score_breakdown'] == {'progress': 800, 'early_recovery': 3200, 'scheme_contributions': 0}
-    assert data['points'] == 4000
+    assert data['score_breakdown'] == {'progress': 500, 'early_recovery': 2000, 'scheme_contributions': 0, 'note_contributions': 0}
+    assert data['points'] == 2500
     assert data['records'][0]['score']['early_recovery_submission_id'] == highest['submission_id']
     assert data['first_records'][0]['tier'] == 80
     assert lower['submission_id'] != highest['submission_id']
-    assert person(app, 'bob')['points'] == 800
+    assert person(app, 'bob')['points'] == 500
+
+
+def test_hqc_replacement_keeps_archived_receipts_without_transfer_or_double_award(current_system):
+    app, _, _ = current_system
+    alice, bob = (add_user(app, handle) for handle in ("alice", "bob"))
+    archived = registered_receipt(app, alice, registry.code_hqc_v2, 27, 0)
+    with app.state.db.transaction() as session:
+        row = session.get(Submission, archived["submission_id"])
+        before = (row.received_at, row.payload_mac, row.challenge_id, row.scheme_version)
+    old_profile = person(app, "alice")
+    assert old_profile["points"] == 0
+    assert old_profile["first_records"] == []
+    assert old_profile["records"][0]["submission_id"] == archived["submission_id"]
+    assert not old_profile["records"][0]["scoring_eligible"]
+    assert all(not row["counts_toward_bonus"] for row in history(app, "alice")["milestones"])
+    current = registered_receipt(app, bob, registry.code_hqc_v3, 66, 1)
+    registered_receipt(app, alice, registry.code_hqc_v3, 66, 2)
+    alice_now, bob_now = person(app, "alice"), person(app, "bob")
+    assert alice_now["points"] == 500 and bob_now["points"] == 2500
+    assert len(alice_now["records"]) == len(bob_now["records"]) == 1
+    assert alice_now["score_breakdown"]["early_recovery"] == 0
+    assert bob_now["records"][0]["score"]["early_recovery_submission_id"] == current["submission_id"]
+    assert archived["submission_id"] in {row["submission_id"] for row in alice_now["recent_recoveries"]}
+    with app.state.db.transaction() as session:
+        row = session.get(Submission, archived["submission_id"])
+        assert (row.received_at, row.payload_mac, row.challenge_id, row.scheme_version) == before

@@ -25,7 +25,10 @@ SECRET = 'PRIVATE_ERROR_VALUE_DO_NOT_ECHO'
 def proposal_server(tmp_path):
     state = {'requests': [], 'records': {}, 'initial': {}, 'history': {}, 'retries': {},
              'reviews': {}, 'writes': [], 'disconnect_once': False, 'forbidden': False,
-             'bad_validation_hash': False, 'token': TOKEN, 'owner': 'alice'}
+             'bad_validation_hash': False, 'token': TOKEN, 'owner': 'alice',
+             'beta_required': False, 'reference_status': None,
+             'pipeline': {'format': 'crucible-agent-pipeline-v1', 'purpose': 'Fixture model contract'},
+             'guide': (Path(__file__).resolve().parents[1] / 'docs/proposal-guide.txt').read_bytes()}
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args): pass
         def do_GET(self): self.respond()
@@ -34,6 +37,14 @@ def proposal_server(tmp_path):
             body = json.dumps(value).encode()
             self.send_response(status)
             self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            try: self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError): pass
+        def reply_guide(self):
+            body = state['guide']
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.send_header('Content-Length', str(len(body)))
             self.end_headers()
             try: self.wfile.write(body)
@@ -63,10 +74,17 @@ def proposal_server(tmp_path):
             body = json.loads(self.rfile.read(int(self.headers['Content-Length']))) if self.command == 'POST' else None
             state['requests'].append({'path': self.path, 'body': body, 'auth': self.headers.get('Authorization'),
                                       'origin': self.headers.get('Origin')})
+            if path in {'/api/protocol/spec-template', '/api/protocol/spec-schema', cli.PROPOSAL_GUIDE, cli.AGENT_PIPELINE, cli.PROPOSALS + '/validate'}:
+                if state['reference_status']:
+                    return self.reply({'detail': SECRET + TOKEN}, state['reference_status'])
+                if state['beta_required'] and self.headers.get('Authorization') != 'Bearer ' + state['token']:
+                    return self.reply({'detail': SECRET + TOKEN}, 401)
             if path == '/api/protocol/spec-template': return self.reply(template_spec())
             if path == '/api/protocol/spec-schema': return self.reply(ProtocolSpec.model_json_schema())
+            if path == cli.PROPOSAL_GUIDE: return self.reply_guide()
+            if path == cli.AGENT_PIPELINE: return self.reply(state['pipeline'], state.get('pipeline_status', 200))
             if path == cli.PROPOSALS + '/validate':
-                if self.headers.get('Origin') != state['origin']:
+                if self.headers.get('Origin') != state['origin'] and self.headers.get('Authorization') != 'Bearer ' + state['token']:
                     return self.reply({'detail': SECRET}, 403)
                 value = self.validate(body['specification'])
                 if value is None: return
@@ -149,7 +167,13 @@ def test_init_and_format_validation_need_no_account_and_execute_no_reference(pro
     state, config, root = proposal_server
     config.unlink()
     assert invoke(proposal_server, 'init', '--path', root) == 0
-    assert {'specification.json','schema.json','template.json','.crucible-proposal.json','README.md'} <= {p.name for p in root.iterdir()}
+    assert {'specification.json','schema.json','template.json','proposal-guide.txt','.crucible-proposal.json','README.md'} <= {p.name for p in root.iterdir()}
+    assert (root/'proposal-guide.txt').read_bytes() == state['guide']
+    assert (root/'proposal-guide.txt').stat().st_mode & 0o077 == 0
+    assert cli.load_json(root/'pipeline.json') == state['pipeline']
+    assert (root/'pipeline.json').stat().st_mode & 0o077 == 0
+    assert 'read and follow pipeline.json' in (root/'README.md').read_text()
+    assert 'Start with proposal-guide.txt' in (root/'README.md').read_text()
     assert invoke(proposal_server, 'validate', '--path', root) == 1
     error = json.loads(capsys.readouterr().out.splitlines()[-1])['error']
     assert error['code'] == 'http_422'
@@ -172,6 +196,101 @@ def test_validation_sanitizes_unknown_property_names_and_server_messages(proposa
     output = capsys.readouterr().out
     assert SECRET not in output and TOKEN not in output
     assert '<unknown-field>' in output and 'schema.json' in output
+
+
+def test_beta_preparation_and_validation_retry_with_same_origin_credentials(proposal_server, capsys):
+    state, _, root = proposal_server
+    state['beta_required'] = True
+    prepared(proposal_server)
+    for path in ('/api/protocol/spec-template', '/api/protocol/spec-schema', cli.PROPOSAL_GUIDE, cli.AGENT_PIPELINE):
+        attempts = [row for row in state['requests'] if row['path'] == path]
+        assert [row['auth'] for row in attempts] == [None, 'Bearer ' + TOKEN]
+    assert (root/'proposal-guide.txt').read_bytes() == state['guide']
+    state['requests'].clear()
+    assert invoke(proposal_server, 'validate', '--path', root) == 0
+    assert [row['auth'] for row in state['requests']] == [None, 'Bearer ' + TOKEN]
+    assert state['requests'][0]['body'] == state['requests'][1]['body']
+    assert state['records'] == {} and state['writes'] == []
+    assert TOKEN not in capsys.readouterr().out
+
+
+def test_beta_init_without_a_connection_requests_login_without_partial_files(proposal_server, capsys):
+    state, config, root = proposal_server
+    state['beta_required'] = True
+    config.unlink()
+    assert invoke(proposal_server, 'init', '--path', root) == 1
+    error = json.loads(capsys.readouterr().out)['error']
+    assert error['code'] == 'login_required'
+    assert len(state['requests']) == 1 and state['requests'][0]['auth'] is None
+    assert not root.exists()
+
+
+def test_beta_revocation_is_not_retried_indefinitely_or_echoed(proposal_server, capsys):
+    state, _, root = proposal_server
+    state.update(beta_required=True, token='cru_' + 'b' * 43)
+    assert invoke(proposal_server, 'init', '--path', root) == 1
+    output = capsys.readouterr().out
+    assert json.loads(output)['error']['code'] == 'http_401'
+    assert TOKEN not in output and SECRET not in output
+    assert [row['auth'] for row in state['requests']] == [None, 'Bearer ' + TOKEN]
+    assert not root.exists()
+
+
+@pytest.mark.parametrize('status', [403, 429, 503])
+def test_reference_denials_and_server_errors_do_not_trigger_credential_retry(proposal_server, capsys, status):
+    state, _, root = proposal_server
+    state['reference_status'] = status
+    assert invoke(proposal_server, 'init', '--path', root) == 1
+    assert json.loads(capsys.readouterr().out)['error']['code'] == 'http_' + str(status)
+    assert len(state['requests']) == 1 and state['requests'][0]['auth'] is None
+    assert not root.exists()
+
+
+@pytest.mark.parametrize('body', [b'', b'\xffinvalid', b'unsafe\x1b[31m', b'x' * (cli.MAX_PROPOSAL_GUIDE + 1)])
+def test_invalid_guide_cannot_leave_a_partial_workspace(proposal_server, capsys, body):
+    state, _, root = proposal_server
+    state['guide'] = body
+    assert invoke(proposal_server, 'init', '--path', root) == 1
+    assert json.loads(capsys.readouterr().out)['error']['code'] == 'client_error'
+    assert not root.exists()
+    assert state['records'] == {} and state['writes'] == []
+
+
+@pytest.mark.parametrize('status,document', [(200, {'format': 'wrong'}), (403, {'detail': SECRET}), (503, {'detail': SECRET})])
+def test_pipeline_errors_never_leave_partial_proposal_files(proposal_server, capsys, status, document):
+    state, _, root = proposal_server
+    state.update(pipeline_status=status, pipeline=document)
+    assert invoke(proposal_server, 'init', '--path', root) == 1
+    assert not root.exists() and state['records'] == {} and state['writes'] == []
+    assert SECRET not in capsys.readouterr().out
+
+
+def test_legacy_proposal_server_explicitly_reports_missing_pipeline(proposal_server, capsys):
+    state, _, root = proposal_server
+    state['pipeline_status'] = 404
+    assert invoke(proposal_server, 'init', '--path', root) == 0
+    assert json.loads(capsys.readouterr().out)['pipeline_status'] == 'unavailable-legacy-server'
+    assert not (root/'pipeline.json').exists()
+    assert 'No central model contract was downloaded' in (root/'README.md').read_text()
+
+
+def test_revise_downloads_current_guide_without_changing_the_original_workspace(proposal_server, capsys):
+    state, _, root = proposal_server
+    _, record = submitted(proposal_server)
+    old_guide = (root/'proposal-guide.txt').read_bytes()
+    old_pipeline = (root/'pipeline.json').read_bytes()
+    state['pipeline']['purpose'] = 'Updated contract for revision work'
+    state['guide'] = b'CRUCIBLE PROPOSAL GUIDELINES\nA newer guide for this revision.\n'
+    revised = root.with_name('revised-with-guide')
+    assert invoke(proposal_server, 'revise', record['id'], '--path', revised) == 0
+    assert (revised/'proposal-guide.txt').read_bytes() == state['guide']
+    assert (root/'proposal-guide.txt').read_bytes() == old_guide
+    assert cli.load_json(revised/'pipeline.json') == state['pipeline']
+    assert (root/'pipeline.json').read_bytes() == old_pipeline
+    metadata = cli.load_json(revised/'.crucible-proposal.json')
+    assert metadata['expected_revision'] == record['revision']
+    assert metadata['content_sha256'] == record['content_sha256']
+    assert 'Start with proposal-guide.txt' in (revised/'README.md').read_text()
 
 
 def test_tier_design_errors_keep_useful_paths_without_echoing_values(proposal_server, capsys):

@@ -71,6 +71,7 @@ class Submission(Base):
     received_at: Mapped[float] = mapped_column(Float)
     elapsed_seconds: Mapped[float] = mapped_column(Float)
     compute: Mapped[dict] = mapped_column(JSON)
+    ai_model: Mapped[str | None] = mapped_column(String(300), nullable=True)
 
 
 class RateBucket(Base):

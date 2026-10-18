@@ -222,3 +222,33 @@ SELECTIONS[("frodokem", "anchor-research-v3")] = {
     "limitations": "This fixes one natural parameter path, not a global efficiency optimum. The lattice estimator omits attacks and full-KEM effects; its work units differ from candidate-message encryptions.",
 }
 ENDPOINTS[("frodokem", "anchor-research-v3")] = "Published Frodo640 parameter anchor at Stage 80. Its lattice attack reference is not a full-KEM security level; a capped plot is not a reason to discard the endpoint."
+
+DESIGNS[("ml-kem", "compressed-research-v4")] = {
+    "progression": "Six power-of-two polynomial degrees, with ML-KEM-512's rank, modulus, noise parameters and compression fixed.",
+    "cost": "More coefficients and polynomial work as degree grows; the endpoint has exactly 800-byte public keys and 768-byte ciphertexts.",
+    "correctness_bound": "2^-128 under the explicitly stated model; stronger bounds at smaller degrees",
+    "qualification": "The endpoint is exact FIPS 203 ML-KEM-512. Reduced degrees have separate hash domains and no inherited security level. The upper two bounds use a heuristic uniform-input compression model; this is not a proof of that model's applicability.",
+}
+SELECTIONS[("ml-kem", "compressed-research-v4")] = {
+    "status": "Published endpoint; natural reduced degrees",
+    "objective": "Preserve the published ML-KEM-512 construction and compression at the endpoint, with a shared honest-failure ceiling instead of mandatory zero failure.",
+    "domain": "Degrees 8,16,32,64,128,256; fixed rank2, q3329, eta1=3, eta2=2, du10,dv4. Reduced degrees use full native message spaces and explicit parameter/purpose hash separation.",
+    "evidence": "FIPS 203; docs/mlkem-correctness-candidates.txt; exact rational certificates; independent NIST ACVP endpoint vectors.",
+    "limitations": "An explicit family-aligned path, not a global efficiency optimum or monotonic security proof. Small rings may have additional algebraic weaknesses. Model acceptance and implementation conformance remain separate reviews.",
+}
+ENDPOINTS[("ml-kem", "compressed-research-v4")] = "FIPS 203 ML-KEM-512 at Stage 6: published category1 assessment, byte-conformance tests, no independent implementation certification. Reduced degrees inherit no security estimate."
+
+DESIGNS[("hqc", "modeled-research-v3")] = {
+    "progression": "66 secret weights from 1 through 66, retaining the 2025 HQC-1 encryption/error-weight balance and full message, seed and salt spaces.",
+    "cost": "Smallest public-key plus ciphertext footprint among supported codecs passing the conditional failure bound at each weight pair; costs grow in natural steps.",
+    "correctness_bound": "2^-128 under the explicitly stated independent-noise surrogate and conservative-transfer conjecture",
+    "qualification": "A conditional arithmetic certificate is not proof of the model's applicability. The endpoint exactly matches August 2025 HQC-1; its current security calibration remains pending.",
+}
+SELECTIONS[("hqc", "modeled-research-v3")] = {
+    "status": "Conditional correctness frontier; historical published endpoint",
+    "objective": "Minimize public-key plus ciphertext bytes at each fixed weight pair under the explicit conservative correctness acceptance rule.",
+    "domain": "45 supported RS/RM codecs; the smallest primitive-prime ring above each code; secret weights 1..66 with wr=we=ceil(75w/66).",
+    "evidence": "docs/hqc-model-v3.txt; scripts/hqc_model_parameters.py; exact rational certificates and native conformance checks.",
+    "limitations": "No optimized cost at equal estimated security is claimed. Current attacks and correlated-noise model transfer remain distinct open assessments; large ring truncations and unsupported decoder extensions are excluded.",
+}
+ENDPOINTS[("hqc", "modeled-research-v3")] = "Exact August 2025 HQC-1 reference at n=17669 and weights 66/75/75. Historical category-1 submission; October 2026 parameters differ and current security calibration is pending."

@@ -8,9 +8,10 @@ Enforcement reviewed on 16 October 2026. Sections below distinguish implemented
 workflow checks from the scientific judgments a reviewer must make. They do not
 claim automated certification. The detailed requirements crosswalk and proposed
 extensions are in scheme-reviews/admission-and-coverage-challenge.txt, section 8;
-the immediate catalogue trial recommendation is in section 9. Numerical failure
-thresholds and general statistical-failure handling remain unresolved policy,
-not decisions silently supplied by the validator or this documentation update.
+the immediate catalogue trial recommendation is in section 9. The current common
+correctness goal is a claimed honest disagreement probability at most 2^-128;
+conditional claims and their premises are reviewed under correctness-policy-v1.txt.
+See proposal-guide.txt for a concise entry point for people and agents.
 
 1. Describe the scheme
 
@@ -20,9 +21,13 @@ configuration/stage mappings, random distributions, encodings, correctness, secu
 claims, and what setup is reused. Shared public parameters are legitimate when
 they are part of the specified construction. DH group reuse is retained.
 
-Specification-only proposals are allowed. A reference implementation and exact
-SHA-256 fingerprint are required for approval. Format validation checks structural
-completeness and consistency, not mathematical truth or executable conformance.
+Specification-only proposals are allowed. The team can assess the pseudocode and
+claim, assumptions and supporting reasoning first, then create or inspect a reference implementation.
+Final approval still requires its exact SHA-256 fingerprint and the implementation
+review checks; there is no new partial-approval status. Publish reference timings
+only after implementation review, separately from correctness/security claims.
+Format validation checks structural completeness and consistency, not mathematical
+truth or executable conformance. Intake never executes contributed code.
 
 2. Submit and preserve a revision
 
@@ -43,14 +48,36 @@ A configured reviewer, different from the author account, may request changes or
 approve the current revision. Approval requires all seven review checks, notes,
 supporting evidence, and the implementation hash from the specification:
 
-- Specification completeness: algorithms, distributions, encoding, stage/configuration mapping,
-  reusable setup, invalid-input handling, and the precise challenge objective.
-- Correctness: argument and scope for perfect agreement, or an explicit failure
-  bound and probability model. Review each admitted parameter family; repeated
-  successful tests alone cannot establish a negligible failure probability.
+- Specification completeness: independently implementable pseudocode for all four
+  algorithms, exact sampling/conditioning, encodings including private-key state,
+  arithmetic, helpers, retries/termination, stage/configuration mapping, reusable
+  setup, KDF framing/domains and every invalid-input branch. Pin standard/theorem
+  versions and sections where operations are incorporated by reference; identify
+  adaptations. Require an explicit security notion, scoped guarantee and its
+  assumptions, with unknown evidence labelled; no invented numerical bit estimate
+  is required for a new asymptotic claim. When security uses a correctness bound,
+  record that dependency and any required failure threshold explicitly. No
+  particular programming language or
+  proof assistant is required.
+- Correctness: review a precise claimed guarantee (perfect agreement or an explicit
+  statistical failure bound at most 2^-128), probability scope, parameter coverage
+  and underlying assumptions. correctness.justification records statement, conditions, coverage
+  and reasoning. Model-based and conjectural claims are eligible when the premises
+  and unproved steps are explicit and independently motivated. Unknown correctness
+  and weaker bounds are draft-only. For new approval/admission, statistical claims
+  require a conservative integer failure_bound_exponent >=128, consistent with the
+  declared bound and its scope; perfect claims state bound "0" and omit the exponent.
+  policy_id is optional. This is a required claimed goal, not proof certification.
+  A reviewer can assess the claim without proving every assumption. Identify
+  dependencies and what could support or refute them; never turn a conjecture
+  into a verified badge. Assumptions must identify independently assessable
+  properties, not merely assume the target conclusion. Empirical tests cannot
+  establish a negligible failure rate. Report generation aborts and conditioning separately. See
+  correctness-policy-v1.txt for the full claims-and-assumptions policy and the
+  difference between refuting the actual target and undermining its justification.
 - Stage design: admissible configurations distinct from the versioned default
   progression; exact stage-to-configuration mapping and stable identities; faithful
-  natural scaling, real cost tradeoffs, a strong common correctness envelope,
+  natural scaling, real cost tradeoffs, the scheme's declared correctness envelope,
   reference endpoint evidence and limitations, and useful intermediate settings.
   Assess changes in several parameters together and whether a denser route adds
   genuine useful choices. A multiple-of-ten/five default count is a presentation
@@ -69,8 +96,12 @@ supporting evidence, and the implementation hash from the specification:
 
 These are recorded manual assessments. Approval does not certify security or
 prove that an implementation is free of defects. The API rejects stale decisions,
-unconfigured self-review, incomplete approval checks, missing evidence, unknown correctness,
-or mismatched implementation hashes.
+unconfigured self-review, incomplete approval checks, missing evidence, unknown
+correctness, absent claim reasoning/private-key representation, or
+mismatched implementation hashes. Historical documents remain readable and keep
+their canonical hashes. These new fields are optional for drafts, but an old
+approval lacking them cannot pass a new admission check; it needs a new revision
+and review. Existing built-ins are not retroactively marked as rigorously reviewed.
 
 The statistical failure bound is inert text; its numeric validity, probability
 scope, proof versus heuristic status, and coverage of every admitted profile
@@ -253,11 +284,12 @@ unbypassable activation control. The activating maintainer must verify the repor
 and record the decision for the exact artifact/profile set. Admission credit and
 recovery-scoring enrollment are separate explicit decisions.
 
-The current fingerprint covers the registered adapter source file. Before using
-an adapter backed by additional source files, native binaries or dependencies,
-the integration review must pin that behavior-affecting artifact set and build
-recipe too; a wrapper-file hash is insufficient. This is a required review scope,
-not a claim that a multi-file digest mechanism is already implemented.
+The source fingerprint covers the registered adapter source file. Adapters whose
+manifests declare artifact_sha256 also need the reviewed full implementation
+closure hash and an inspectable, verified artifact manifest; the admission check
+binds that closure. Integration review must ensure it actually covers every
+behavior-affecting source, native binary, dependency and build recipe. A wrapper
+hash or an incomplete closure cannot establish that scope by itself.
 
 The live service currently pauses a profile on any agreement mismatch and does
 not implement a general statistical-failure ledger or issuance policy. Keep this

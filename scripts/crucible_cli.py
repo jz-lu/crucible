@@ -18,7 +18,7 @@ import sys
 import tempfile
 import time
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 from uuid import UUID, uuid4
 import webbrowser
@@ -31,13 +31,19 @@ MAX_CHALLENGE_RESPONSE = 8 * 1024 * 1024
 # Up to 50 bounded specifications plus reviewer notes/evidence per history page.
 MAX_PROPOSAL_RESPONSE = 8 * 1024 * 1024
 MAX_SPECIFICATION = 48 * 1024
+MAX_PROPOSAL_GUIDE = 64 * 1024
+PROPOSAL_GUIDE = "/api/protocol/proposal-guide"
+MAX_AGENT_PIPELINE = 64 * 1024
+MAX_NOTE_LIST_RESPONSE = 8 * 1024 * 1024
+AGENT_PIPELINE = "/api/agent/pipeline"
+AGENT_GUIDANCE = "/api/agent/guidance/"
 PROPOSALS = "/api/protocol/proposals"
 METHOD_TODO = "CRUCIBLE_METHOD_TODO"
 
 # Only schema field names can appear in validation diagnostics. Unknown JSON
 # keys and arbitrary server messages can contain submitted secrets or terminals
 # controls, so they are never copied into the client error output.
-PROPOSAL_FIELDS = frozenset("specification format name version summary algorithms setup keygen encapsulate decapsulate parameters tier_meaning supported_tiers kind min max step values mapping distribution reuse encoding public_key ciphertext shared_secret shared_secret_bytes correctness failure_bound argument scope evidence security notion model claim assumptions tier_design parameter_progression cost_tradeoff fixed_correctness endpoint_status endpoint_target endpoint_evidence intermediate_steps parameter_selection objective constraints security_model search_domain comparison_evidence tradeoffs_and_uncertainty implementation url sha256 artifact_sha256 runtime entrypoint references title _instructions idempotency_key expected_revision content_sha256 range list".split())
+PROPOSAL_FIELDS = frozenset("specification format name version summary algorithms setup keygen encapsulate decapsulate parameters tier_meaning supported_tiers kind min max step values mapping distribution reuse encoding public_key ciphertext shared_secret shared_secret_bytes correctness failure_bound policy_id failure_bound_exponent justification statement conditions configuration_coverage derivation private_key argument scope evidence security notion model claim assumptions tier_design parameter_progression cost_tradeoff fixed_correctness endpoint_status endpoint_target endpoint_evidence intermediate_steps parameter_selection objective constraints security_model search_domain comparison_evidence tradeoffs_and_uncertainty implementation url sha256 artifact_sha256 runtime entrypoint references title _instructions idempotency_key expected_revision content_sha256 range list".split())
 
 
 def proposal_field_errors(raw):
@@ -198,6 +204,12 @@ class Client:
         response_limit = MAX_RESPONSE
         if parts.path == "/api/schemes":
             response_limit = MAX_CATALOGUE_RESPONSE
+        elif parts.path == "/api/agent/notes":
+            response_limit = MAX_NOTE_LIST_RESPONSE
+        elif parts.path == PROPOSAL_GUIDE:
+            response_limit = MAX_PROPOSAL_GUIDE
+        elif parts.path == AGENT_PIPELINE or parts.path.startswith(AGENT_GUIDANCE):
+            response_limit = MAX_AGENT_PIPELINE
         elif parts.path == "/api/challenges" or re.fullmatch(r"/api/challenges/[A-Za-z0-9_-]+(?:/(?:download|submit))?", parts.path):
             # Submission receipts include the complete public challenge too.
             response_limit = MAX_CHALLENGE_RESPONSE
@@ -229,6 +241,11 @@ class Client:
                     raw_error = error.read(65537)
                     if len(raw_error) <= 65536:
                         details["field_errors"] = proposal_field_errors(raw_error)
+            if parts.path == "/api/agent/notes" or parts.path.startswith("/api/agent/notes/"):
+                messages.update({403: "Note access needs notes:read or notes:rate permissions. Reconnect if needed; self-votes and ineligible accounts are not allowed.",
+                                 404: "That exact published note revision is unavailable.",
+                                 409: "Your account's rating changed. Use notes show to read the current version and reassess before changing it.",
+                                 422: "Check the note ID, exact revision/hash, rating value and expected version."})
             # Never echo a request body, candidate, token, or arbitrary server error text.
             raise ClientError(messages.get(error.code, "The server could not complete the request."),
                               "http_" + str(error.code), details) from None
@@ -313,10 +330,12 @@ def download_challenge(client, identifier):
     return package
 
 
-def workspace(client, package, destination):
+def workspace(client, package, destination, *, pipeline=None, pipeline_checked=False):
     root = Path(destination).expanduser().absolute()
     if root.exists() and (not root.is_dir() or any(root.iterdir())):
         raise ClientError("Choose a new or empty workspace directory; existing files are never overwritten.")
+    if not pipeline_checked:
+        pipeline = agent_pipeline(client, allow_legacy=True)
     challenge = package["challenge"]
     query = "?" + urlencode({"scheme_id": challenge["scheme_id"], "version": challenge["scheme_version"]})
     specification = client.request("/api/protocol/spec" + query)
@@ -374,6 +393,8 @@ def workspace(client, package, destination):
                 raise ClientError("Public source closure is oversized or differs from the challenge's pinned artifacts.")
             source_files[name] = content
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if pipeline is not None:
+        save_json(root / "pipeline.json", pipeline)
     save_json(root / "challenge.json", package)
     save_json(root / "protocol.json", specification)
     private_write(root / "reference" / "protocol.py", source)
@@ -395,14 +416,16 @@ raise SystemExit("Implement the attack using the public challenge inputs first."
     private_write(root / "method.md", "# Local attack\n\n" + METHOD_TODO +
                   ": describe your actual algorithm, key derivation, preparation, and reused data before running.\n")
     save_json(root / "result.json", {"format": "crucible-recovery-v1", "challenge_id": challenge["id"],
-        "candidate": "", "method": {"name": "Local attack", "pseudocode": ""},
+        "candidate": "", "ai_model": "", "method": {"name": "Local attack", "pseudocode": ""},
         "compute": {"hardware": "", "workers": 1, "wall_seconds": None,
                     "precomputation": "Not reported", "peak_memory": "Not measured", "notes": ""},
         "_instructions": {"workflow": "Implement attack/solve.py and describe the method in method.md. Run with the client to generate this result, then submit explicitly.",
                           "candidate": "Print the complete shared secret in hex from your solver, or one JSON object with only candidate.",
+                          "ai_model": "Optional text, at most 300 characters: name and version of the AI model(s) that helped implement this result. Outer whitespace is trimmed. Leave blank or omit if unreported; null, NUL and invalid Unicode are rejected. Report only what you know; this is self-reported and does not affect points.",
                           "compute": "Only the local command's wall time is measured. Declare external work, workers and precomputation accurately.",
                           "deadline": "Complete submissions must reach the server strictly before challenge.ends_at; a retry never changes the answer."}})
     private_write(root / "README.md", "# Crucible attack workspace\n\n"
+        + pipeline_readme(client, pipeline) +
         "Edit attack/solve.py and method.md, then run your own command through the client.\n"
         "The solver reads challenge.json and prints one hexadecimal shared secret (or JSON with candidate).\n"
         "Protocol source under reference/ is for inspection; it is never automatically executed.\n"
@@ -411,6 +434,7 @@ raise SystemExit("Implement the attack using the public challenge inputs first."
         "Declared first-party source and parameter files are hash-checked under reference/source/.\n"
         "Its digest is verified against the challenge; this does not install or independently audit those dependencies.\n"
         "Run: python /path/to/crucible_cli.py run -- python attack/solve.py\n"
+        "Optionally add --ai-model \"Model name and version\" before -- to credit the AI model(s) that helped implement this result.\n"
         "Submit explicitly: python /path/to/crucible_cli.py submit result.json\n"
         "Use --source attack/helper.py to include additional selected UTF-8 source files.\n"
         "The defaults are attack/solve.py and method.md. Credentials, results and local state are excluded.\n"
@@ -421,6 +445,7 @@ raise SystemExit("Implement the attack using the public challenge inputs first."
     manifest = package.get("scheme_manifest", {})
     named = manifest.get("profile_kind") == "standard-parameter-set"
     return {"status": "ready", "path": str(root), "challenge_id": challenge["id"],
+            "pipeline_status": "saved" if pipeline is not None else "unavailable-legacy-server",
             "scheme_id": challenge["scheme_id"], "profile_id": manifest.get("profile_id", manifest.get("id")),
             "profile_label": manifest.get("profile_label", manifest.get("name")),
             "selection_kind": "parameter-set" if named else "tier",
@@ -429,7 +454,7 @@ raise SystemExit("Implement the attack using the public challenge inputs first."
 
 
 def init_workspace(client, args):
-    schemes = client.request("/api/schemes", auth=False).get("schemes", [])
+    schemes = public_reference(client, "/api/schemes").get("schemes", [])
     scheme = next((item for item in schemes if item.get("id") == args.scheme), None)
     if scheme is None:
         raise ClientError("Unknown scheme; use schemes to list available identifiers.")
@@ -458,6 +483,9 @@ def init_workspace(client, args):
     selected_id = profile.get("profile_id", profile.get("id"))
     if not isinstance(selected_id, str) or not selected_id:
         raise ClientError("The selected parameter profile has no valid identifier.")
+    # Obtain the model contract before issuing an hourly challenge. A failed
+    # contract read must not silently issue an instance or create local files.
+    pipeline = agent_pipeline(client, allow_legacy=True)
     query = urlencode({"scheme_id": scheme["id"], "scheme_version": scheme["version"], "profile_id": selected_id})
     current = client.request("/api/challenges?" + query).get("challenge")
     if current is None:
@@ -469,7 +497,7 @@ def init_workspace(client, args):
             or package["challenge"].get("scheme_version") != scheme["version"]
             or downloaded.get("profile_id", downloaded.get("id")) != selected_id):
         raise ClientError("The server returned a challenge for a different parameter profile.")
-    result = workspace(client, package, args.path)
+    result = workspace(client, package, args.path, pipeline=pipeline, pipeline_checked=True)
     if "stage_number" in profile:
         result.update(stage=profile["stage_number"], stage_label=profile.get("stage_label"),
                       progression_id=profile.get("progression_id"))
@@ -504,6 +532,7 @@ def run_solver(args):
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     if not command:
         raise ClientError("Provide a local solver command after --.")
+    ai_model = normalize_ai_model(args.ai_model)
     if (root / ".crucible" / "submission.json").exists():
         raise ClientError("A submission is already frozen for this workspace. Retry it without changing the answer.")
     package = load_json(root / "challenge.json", MAX_CHALLENGE_RESPONSE)
@@ -545,14 +574,28 @@ def run_solver(args):
                   "workers": args.workers, "wall_seconds": elapsed,
                   "precomputation": args.precomputation or "Not reported; prior and external work are not measured by this runner.",
                   "peak_memory": "Not measured", "notes": "Wall time measures this local command, including startup. Workers are declared, not observed. Remote compute and previous attempts are not included."}}
+    if ai_model:
+        result["ai_model"] = ai_model
     result = validate_result(result, package)
     save_json(root / "result.json", result)
     return {"status": "result_written", "path": str(root / "result.json"), "wall_seconds": elapsed,
             "challenge_id": metadata["challenge_id"], "submitted": False}
 
 
+def normalize_ai_model(value):
+    if not isinstance(value, str) or len(value) > 300:
+        raise ClientError("ai_model must be text of at most 300 characters.")
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        raise ClientError("ai_model must contain valid Unicode text.") from None
+    if "\x00" in value:
+        raise ClientError("ai_model cannot contain NUL characters.")
+    return value.strip()
+
+
 def validate_result(result, package):
-    if result.get("format") != "crucible-recovery-v1" or set(result) - {"format", "challenge_id", "candidate", "method", "compute", "_instructions"}:
+    if result.get("format") != "crucible-recovery-v1" or set(result) - {"format", "challenge_id", "candidate", "method", "compute", "ai_model", "_instructions"}:
         raise ClientError("Use the crucible-recovery-v1 result format.")
     if result.get("challenge_id") != package.get("challenge", {}).get("id"):
         raise ClientError("The result belongs to a different challenge; open its exact workspace.")
@@ -582,8 +625,10 @@ def validate_result(result, package):
     texts = {field: value for field, value in compute.items() if field not in {"workers", "wall_seconds"}}
     cleaned = fields(texts, {"hardware": 500, "precomputation": 2000, "peak_memory": 300, "notes": 2000},
                      ["hardware", "precomputation", "peak_memory"])
+    ai_model = normalize_ai_model(result.get("ai_model", ""))
     return {"format": "crucible-recovery-v1", "challenge_id": result["challenge_id"],
-            "candidate": candidate.lower(), "method": method, "compute": {**cleaned, "workers": workers, "wall_seconds": wall}}
+            "candidate": candidate.lower(), "method": method, "compute": {**cleaned, "workers": workers, "wall_seconds": wall},
+            **({"ai_model": ai_model} if ai_model else {})}
 
 
 def source_bundle(root, selected):
@@ -671,7 +716,8 @@ def submit(client, args):
         save_json(pending_path, pending)
     if not pending.get("payload"):
         pending["payload"] = {"candidate": result["candidate"], "compute": result["compute"],
-                              "method_id": pending["method_id"], "idempotency_key": pending["idempotency_key"]}
+                              "method_id": pending["method_id"], "idempotency_key": pending["idempotency_key"],
+                              **({"ai_model": result["ai_model"]} if result.get("ai_model") else {})}
         # The exact answer and retry ID are durable before the first answer write.
         save_json(pending_path, pending)
     response = client.request("/api/challenges/" + safe_id(result["challenge_id"]) + "/submit", pending["payload"])
@@ -761,8 +807,86 @@ def save_specification(path, value):
 
 
 def proposal_result(client, receipt, *, replayed):
-    return {"status": "recorded", "proposal": proposal_summary(receipt), "replayed": replayed,
-            "proposal_url": client.server + "/#propose?proposal=" + proposal_id(receipt.get("id"))}
+    result = {"status": "recorded", "proposal": proposal_summary(receipt), "replayed": replayed,
+              "proposal_url": client.server + "/#propose?proposal=" + proposal_id(receipt.get("id"))}
+    source = receipt.get("source_note")
+    if isinstance(source, dict) and isinstance(source.get("revision"), int) and source["revision"] >= 1:
+        result["note_url"] = client.server + "/#notebook?note=" + proposal_id(source.get("id")) + "&revision=" + str(source["revision"])
+    return result
+
+
+def public_reference(client, path, body=None, *, raw=False):
+    """Read public resources, or use beta credentials after one 401.
+
+    This helper is only for read-only resources and format validation. Proposal
+    writes retain their existing authenticated, durable idempotent workflow.
+    """
+    try:
+        return client.request(path, body, auth=False, raw=raw)
+    except ClientError as error:
+        if error.code != "http_401":
+            raise
+    return client.request(path, body, auth=True, raw=raw)
+
+
+def proposal_reference(client, path, body=None, *, raw=False):
+    return public_reference(client, path, body, raw=raw)
+
+
+def agent_pipeline(client, *, allow_legacy=False):
+    try:
+        document = public_reference(client, AGENT_PIPELINE)
+    except ClientError as error:
+        if allow_legacy and error.code == "http_404":
+            return None
+        raise
+    if (not isinstance(document, dict) or document.get("format") != "crucible-agent-pipeline-v1"
+            or len(encode(document)) > MAX_AGENT_PIPELINE):
+        raise ClientError("The server returned an invalid model pipeline contract.")
+    return document
+
+
+def agent_guidance(client, resource):
+    # The server owns the fixed alias allowlist. Never accept a URL or relative
+    # filesystem path here, and never follow a document's links automatically.
+    if not isinstance(resource, str) or re.fullmatch(r"[a-z][a-z0-9-]{0,63}\.(?:txt|json)", resource) is None:
+        raise ClientError("Use a guidance resource name from the pipeline contract.")
+    raw = public_reference(client, AGENT_GUIDANCE + resource, raw=True)
+    try:
+        content = raw.decode("utf-8")
+    except (AttributeError, UnicodeError):
+        raise ClientError("The server returned invalid UTF-8 guidance.") from None
+    if (len(raw) > MAX_AGENT_PIPELINE or not content.strip()
+            or any(ord(char) < 32 and char not in "\n\r\t" or ord(char) == 127 for char in content)):
+        raise ClientError("The server returned invalid guidance.")
+    return {"resource": resource, "content": content}
+
+
+def pipeline_readme(client, pipeline):
+    if pipeline is None:
+        return ("This older server does not provide /api/agent/pipeline (HTTP 404). "
+                "No central model contract was downloaded; follow the supplied workspace contracts "
+                "and do not assume unsupported capabilities.\n\n")
+    return ("Agents: read and follow pipeline.json before working. It is the saved model-facing "
+            "entry contract, with links to the authoritative workflow specifications. "
+            "Resolve its same-origin links against " + client.server + ". "
+            "Instructions and linked research are not permission to submit or execute code.\n"
+            "For a fresh contract, run python /path/to/crucible_cli.py --server " + client.server +
+            " guide (GET " + AGENT_PIPELINE + "). Keep the saved copy as workspace context.\n"
+            "Read linked guidance with the same command plus --resource NAME, using names from the contract; "
+            "the client handles beta authentication without printing credentials.\n\n")
+
+
+def proposal_guide(client):
+    raw = proposal_reference(client, PROPOSAL_GUIDE, raw=True)
+    try:
+        text = raw.decode("utf-8")
+    except (AttributeError, UnicodeError):
+        raise ClientError("The server returned an invalid UTF-8 proposal guide.") from None
+    if (len(raw) > MAX_PROPOSAL_GUIDE or not text.strip()
+            or any(ord(char) < 32 and char not in "\n\r\t" or ord(char) == 127 for char in text)):
+        raise ClientError("The server returned an invalid proposal guide.")
+    return raw
 
 
 def proposal_workspace(client, args, *, revise=False):
@@ -779,10 +903,12 @@ def proposal_workspace(client, args, *, revise=False):
             raise ClientError("That proposal is not owned by the connected account.")
         metadata.update(mode="revision", proposal_id=identifier, expected_revision=record["revision"],
                         content_sha256=record["content_sha256"], owner_handle=owner)
-    template = proposal_document(client.request("/api/protocol/spec-template", auth=False))
-    schema = client.request("/api/protocol/spec-schema", auth=False)
+    template = proposal_document(proposal_reference(client, "/api/protocol/spec-template"))
+    schema = proposal_reference(client, "/api/protocol/spec-schema")
     if not isinstance(schema.get("properties"), dict):
         raise ClientError("The server returned an invalid specification schema.")
+    guide = proposal_guide(client)
+    pipeline = agent_pipeline(client, allow_legacy=True)
     specification = dict(feedback["proposal"]["specification"]) if feedback else template
     if feedback and "_instructions" in template:
         specification["_instructions"] = template["_instructions"]
@@ -794,20 +920,26 @@ def proposal_workspace(client, args, *, revise=False):
     save_specification(root / "specification.json", specification)
     save_json(root / "template.json", template)
     save_json(root / "schema.json", schema)
+    private_write(root / "proposal-guide.txt", guide)
+    if pipeline is not None:
+        save_json(root / "pipeline.json", pipeline)
     save_json(root / ".crucible-proposal.json", metadata)
     if feedback:
         save_json(root / "feedback.json", feedback)
     private_write(root / ".gitignore", ".crucible/\n.crucible-proposal.json\nproposal-receipt.json\nfeedback.json\n.env\n")
     private_write(root / "README.md", "# Crucible scheme proposal\n\n"
+        + pipeline_readme(client, pipeline) +
+        "Start with proposal-guide.txt: the server's current proposal guidelines and research advice, downloaded with this workspace.\n"
         "Edit specification.json; template.json contains detailed field guidance and schema.json is the format contract.\n"
         "Describe a KEM: complete algorithms, full randomness/distributions, parameter mappings, encodings, KDF and rejection behavior.\n"
         "Explain its merit, the closest existing schemes and what new attack evidence it could contribute. Cite primary sources.\n"
-        "State correctness assumptions, bounds and evidence precisely; separate conjectures from proved or measured claims.\n"
+        "Spend a separate, deliberate pass on citations: read the primary sources, check exact versions and claim scope, and identify the supporting section, theorem or page in the relevant argument. Cite existing Crucible notes by their exact revision link and content hash, with permission for any private material. Separate mathematical ingredients from a published complete KEM and from inherited security claims. Mark inaccessible or unverified sources and originality uncertainty explicitly; never invent citations or add unrelated ones for appearance.\n"
+        "State an explicit correctness guarantee and scoped security claim, with all assumptions and parameter coverage. For correctness, claim perfect agreement or failure probability at most 2^-128 for every admitted configuration and give the reasoning conditional on the stated premises. Use justification.kind conjectural-claim or model-based-analysis when appropriate; motivate unproved assumptions and identify what could support or refute them. Weaker or unknown correctness claims are draft-only. Statistical claims must declare failure_bound_exponent as an integer at least 128 consistent with the bound; perfect correctness states failure_bound 0 and omits the exponent. policy_id stays optional. The target is required; proving every assumption is not. Distinguish gaps in justification from rigorous refutations of the actual failure bound; a looser upper bound alone does not refute it. Tests do not prove assumptions; report generation aborts separately.\n"
         "Complete the tier_design plan before approval: define the valid configuration space and an ordered default progression of stages, mapped to stable configuration identifiers; describe actual parameter growth and costs, a common correctness requirement (negligible nonzero failure is allowed), endpoint evidence and useful steps or explicit gaps. Round default counts to multiples of ten, or five, only when useful configurations and endpoints can be preserved; other reviewed configurations remain available. Counts are not security levels. Legacy supported_tiers and instance_size identify configurations, not necessarily stage positions. Preserve configuration identity and revise the progression explicitly when changing its route. Complete its parameter_selection object with a cost objective, fixed constraints, pinned security/cost model, candidate domain, comparison evidence and tradeoffs/uncertainty. Choose efficient or non-dominated parameters within that domain; preserve the original construction and full native distributions; never manufacture stages with padding or entropy restriction alone. Drafts may omit the plan; approval requires explicit manual review of both progression design and parameter selection.\n"
         "Document reduced-parameter divergences; do not inherit a published scheme's security or correctness claims without justification.\n"
         "References, pseudocode and implementation URLs are inert text: this client never fetches or executes them.\n"
         "Validate: python /path/to/crucible_cli.py proposal validate --path .\n"
-        "Validation sends the document to this workspace's server without account credentials; it checks format only.\n"
+        "Draft resources and format validation try public access first; a private beta requires a configured connection and proposal permissions. Validation checks format only.\n"
         "Submit explicitly: python /path/to/crucible_cli.py proposal submit --path .\n"
         "Submissions remain private to the author and configured reviewers, pending manual review and separate implementation admission.\n"
         "A proposal submission does not create a live challenge or earn admission points.\n"
@@ -819,11 +951,12 @@ def proposal_workspace(client, args, *, revise=False):
         "Revise: python /path/to/crucible_cli.py proposal revise PROPOSAL_ID --path ../revision-2\n"
         "Revision workspaces include feedback.json and bind the current revision/hash. A stale base is rejected by the server.\n")
     return {"status": "ready", "path": str(root), "server": client.server, "mode": metadata["mode"],
+            "pipeline_status": "saved" if pipeline is not None else "unavailable-legacy-server",
             **({"proposal_id": metadata["proposal_id"], "expected_revision": metadata["expected_revision"]} if revise else {})}
 
 
 def validated_proposal(client, specification):
-    response = client.request(PROPOSALS + "/validate", {"specification": proposal_document(specification)}, auth=False)
+    response = proposal_reference(client, PROPOSALS + "/validate", {"specification": proposal_document(specification)})
     canonical = proposal_document(response.get("specification"))
     digest = hashlib.sha256(encode(canonical)).hexdigest()
     if response.get("content_sha256") != digest or response.get("validation", {}).get("status") != "format-valid":
@@ -923,6 +1056,48 @@ def proposal_read(client, args):
     return response
 
 
+def notes_command(client, args):
+    """Explicit pins and compare-and-set versions make identical retries safe."""
+    if args.notes_action == "list":
+        query = {"order": args.order, "limit": args.limit}
+        for name, value in (("q", args.search), ("tag", args.tag), ("after", args.after)):
+            if value is not None:
+                query[name] = value
+        return client.request("/api/agent/notes?" + urlencode(query))
+    identifier = args.note_id
+    if (not 1 <= len(identifier) <= 108 or any(ord(c) < 32 for c in identifier)
+            or identifier != identifier.strip()):
+        raise ClientError("Use the exact saved note ID.")
+    if identifier.startswith("curated:"):
+        if not identifier[8:].strip():
+            raise ClientError("Use the complete curated note ID.")
+    else:
+        try:
+            if str(UUID(identifier)) != identifier:
+                raise ValueError
+        except ValueError:
+            raise ClientError("Use a full note UUID or curated: note ID.") from None
+    path = "/api/agent/notes/" + quote(identifier, safe="")
+    if args.revision is not None and not 1 <= args.revision <= 100:
+        raise ClientError("--revision must be between 1 and 100.")
+    if args.sha256 is not None and not re.fullmatch(r"[0-9a-f]{64}", args.sha256):
+        raise ClientError("--sha256 must be the exact note content hash.")
+    if args.notes_action == "rate":
+        if not 0 <= args.expected_version <= 2147483646:
+            raise ClientError("Use the current your_rating.version as --expected-version.")
+        return client.request(path + "/rating", {"value": args.value, "revision": args.revision,
+            "content_sha256": args.sha256, "expected_version": args.expected_version})
+    query = {key: value for key, value in (("revision", args.revision), ("content_sha256", args.sha256)) if value is not None}
+    result = client.request(path + ("?" + urlencode(query) if query else ""))
+    saved = result.get("note")
+    if (not isinstance(saved, dict) or saved.get("id") != identifier or not isinstance(saved.get("content"), dict)
+            or (args.revision is not None and saved.get("revision") != args.revision)
+            or (args.sha256 is not None and saved.get("content_sha256") != args.sha256)
+            or hashlib.sha256(encode(saved["content"])).hexdigest() != saved.get("content_sha256")):
+        raise ClientError("The server returned a different note or an invalid content hash.")
+    return result
+
+
 def parser():
     command = argparse.ArgumentParser(description=__doc__)
     def common(target, suppress=False):
@@ -932,12 +1107,14 @@ def parser():
         target.add_argument("--json", action="store_true", default=argparse.SUPPRESS if suppress else False, help="Print one machine-readable record")
     common(command)
     commands = command.add_subparsers(dest="action", required=True)
-    for name in ("login", "schemes", "init", "get", "run", "submit"):
+    for name in ("login", "guide", "schemes", "init", "get", "run", "submit"):
         item = commands.add_parser(name)
         common(item, True)
         if name == "login":
             item.add_argument("--label", default="Crucible CLI")
             item.add_argument("--no-browser", action="store_true")
+        if name == "guide":
+            item.add_argument("--resource", help="Read a guidance file named in the model pipeline contract")
         if name in {"init", "get", "run", "submit"}:
             item.add_argument("--path", default=".", help="Local challenge workspace directory")
         if name == "init":
@@ -952,6 +1129,7 @@ def parser():
             item.add_argument("--hardware")
             item.add_argument("--workers", type=int, default=1)
             item.add_argument("--precomputation")
+            item.add_argument("--ai-model", default="", help="Optional self-reported AI model name/version used to implement this result; maximum 300 characters")
             item.add_argument("command", nargs=argparse.REMAINDER)
         if name == "submit":
             item.add_argument("result", nargs="?", default="result.json")
@@ -969,6 +1147,25 @@ def parser():
         if name == "show":
             item.add_argument("--limit", type=int, choices=range(1, 51), default=20, metavar="1..50")
             item.add_argument("--before-revision", type=int)
+    notes = commands.add_parser("notes", help="Read and rate published research notes for agent reading priority")
+    common(notes, True)
+    actions = notes.add_subparsers(dest="notes_action", required=True)
+    for name in ("list", "show", "rate"):
+        item = actions.add_parser(name)
+        common(item, True)
+        if name == "list":
+            item.add_argument("--order", choices=("priority", "recent"), default="priority")
+            item.add_argument("--limit", type=int, choices=range(1, 51), default=25, metavar="1..50")
+            item.add_argument("--search")
+            item.add_argument("--tag")
+            item.add_argument("--after")
+        else:
+            item.add_argument("note_id")
+            item.add_argument("--revision", type=int, required=name == "rate")
+            item.add_argument("--sha256", required=name == "rate")
+        if name == "rate":
+            item.add_argument("value", type=int, choices=(0, 1, 2), help="1: genuinely useful; 2: every research agent should read; 0: remove your vote")
+            item.add_argument("--expected-version", type=int, required=True, help="your_rating.version from notes show; retain for an identical retry")
     return command
 
 
@@ -990,7 +1187,9 @@ def main(argv=None):
             server = origin(args.server or config.get("default_server") or DEFAULT_SERVER)
         client = Client(server, args.config)
         if args.action == "login": result = login(client, args)
-        elif args.action == "schemes": result = client.request("/api/schemes", auth=False)
+        elif args.action == "guide": result = agent_guidance(client, args.resource) if args.resource else agent_pipeline(client)
+        elif args.action == "schemes": result = public_reference(client, "/api/schemes")
+        elif args.action == "notes": result = notes_command(client, args)
         elif args.action == "init": result = init_workspace(client, args)
         elif args.action == "get": result = workspace(client, download_challenge(client, args.challenge_id), args.path)
         elif args.action == "run": result = run_solver(args)
@@ -1003,6 +1202,8 @@ def main(argv=None):
         else: result = submit(client, args)
         if args.json:
             print(json.dumps(result, ensure_ascii=False, allow_nan=False))
+        elif args.action == "guide" and args.resource:
+            print(result["content"], end="" if result["content"].endswith("\n") else "\n")
         elif args.action == "schemes":
             for scheme in result.get("schemes", []):
                 print(scheme["id"] + " — " + scheme["name"])

@@ -49,7 +49,10 @@ def test_dh_public_example_and_rng_uses_declared_interval(monkeypatch):
 
 
 @pytest.mark.parametrize('tier',[1,25,50])
-def test_rsa_compact_encoding_honest_and_malformed(tier):
+def test_rsa_compact_encoding_honest_and_malformed(tier, monkeypatch):
+    # Conformance is conditional on successful bounded generation. Exercise the
+    # encoding with headroom for a busy host; resource limits have their own tests.
+    monkeypatch.setattr(rsa_v4, 'MAX_GENERATION_SECONDS', 60.0)
     profile=rsa_v4._profile(f'rsa-v4-tier-{tier}')
     pk,sk=rsa_v4.keygen(profile.id);ct,key=rsa_v4.encapsulate(profile.id,pk)
     assert len(pk)==profile.width+3 and pk[-3:]==b'\x01\x00\x01'

@@ -12,16 +12,20 @@ CURRENT_PATHS = [
     ("teaching-dh-kem", "7", 50, 50),
     ("rsa-kem", "4", 50, 50),
     ("dhkem-x25519", "curve-compressed-v2", 50, 50),
-    ("ml-kem", "packed-research-v3", 10, 11),
+    ("ml-kem", "compressed-research-v4", 6, 6),
     ("frodokem", "anchor-research-v3", 80, 80),
     ("sntrup", "3", 25, 27),
-    ("hqc", "growth-research-v2", 25, 27),
+    ("hqc", "modeled-research-v3", 66, 66),
     ("classic-mceliece", "length-research-v1", 50, 50),
 ]
+
+HISTORICAL_PATHS = [("ml-kem", "packed-research-v3", 10, 11), ("hqc", "growth-research-v2", 25, 27)]
 
 # Reviewed revision-1 membership: changing an order or selection is an explicit
 # progression revision, not an incidental consequence of a presentation edit.
 REVISION_ONE_MEMBERSHIP = {
+    ("hqc", "modeled-research-v3"): "32c9987251f1cb961a42fae866cca5fef5332aafcf6e93bb0358eb0124fa6e47",
+    ("ml-kem", "compressed-research-v4"): "5d7d7cbade1db320fae79d0ed496befc8c87c44eac29b4d03f39e402a4a95cfe",
     ("teaching-dh-kem", "7"): "8587b3bf4721aadd798d9672c7084aff20413ad3f0ef8be04b617eb722559cd1",
     ("rsa-kem", "4"): "3be4c1bcccb5186e056e51ad77c7042f8c7e7d35046f958e8925f69e274ef79f",
     ("dhkem-x25519", "curve-compressed-v2"): "4e9bef54726bc1ae3ab0925251524a21cb6c1f65656debb8c81f9325e86def0e",
@@ -33,7 +37,7 @@ REVISION_ONE_MEMBERSHIP = {
 }
 
 
-@pytest.mark.parametrize("scheme_id,version,count,config_count", CURRENT_PATHS)
+@pytest.mark.parametrize("scheme_id,version,count,config_count", CURRENT_PATHS + HISTORICAL_PATHS)
 def test_current_paths_preserve_every_configuration_and_frozen_manifest(scheme_id, version, count, config_count):
     adapter = registry.adapter_for(scheme_id, version)
     profiles = registry.presentation_manifests(adapter)
@@ -68,17 +72,18 @@ def test_every_current_release_has_one_declared_path_without_a_global_stage_quot
     assert {(s, v) for s, v, _, _ in CURRENT_PATHS} == set(registry.CURRENT.items())
     counts = {progressions.for_release(s, v, registry.presentation_manifests(registry.adapter_for(s, v)))["stage_count"]
               for s, v, _, _ in CURRENT_PATHS}
-    assert counts == {10, 25, 50, 80}
-    assert sum(c for _, _, _, c in CURRENT_PATHS) == 345
+    assert counts == {6, 25, 50, 66, 80}
+    assert sum(c for _, _, _, c in CURRENT_PATHS) == 379
 
 
-@pytest.mark.parametrize("scheme_id,omitted", [
-    ("ml-kem", ["module-lwe-v3-tier-7"]),
-    ("sntrup", ["sntrup-v3-tier-17", "sntrup-v3-tier-24"]),
-    ("hqc", ["hqc-growth-research-v2-tier-24", "hqc-growth-research-v2-tier-26"]),
+@pytest.mark.parametrize("scheme_id,version,omitted", [
+    ("ml-kem", "packed-research-v3", ["module-lwe-v3-tier-7"]),
+    ("ml-kem", "compressed-research-v4", []),
+    ("sntrup", "3", ["sntrup-v3-tier-17", "sntrup-v3-tier-24"]),
+    ("hqc", "growth-research-v2", ["hqc-growth-research-v2-tier-24", "hqc-growth-research-v2-tier-26"]),
 ])
-def test_curated_defaults_keep_intermediate_configurations_accessible(scheme_id, omitted):
-    adapter = registry.adapter_for(scheme_id)
+def test_curated_defaults_keep_intermediate_configurations_accessible(scheme_id, version, omitted):
+    adapter = registry.adapter_for(scheme_id, version)
     profiles = registry.presentation_manifests(adapter)
     result = progressions.for_release(scheme_id, adapter.SCHEME_VERSION, profiles)
     assert result["additional_configuration_ids"] == omitted
@@ -86,9 +91,9 @@ def test_curated_defaults_keep_intermediate_configurations_accessible(scheme_id,
         assert registry.manifest_for(identifier, scheme_id, adapter.SCHEME_VERSION)["id"] == identifier
 
 
-@pytest.mark.parametrize("scheme_id,expected_omissions", [("ml-kem", [7]), ("sntrup", [17, 24])])
-def test_curated_reference_selection_is_reproducible_without_treating_unknown_as_easy(scheme_id, expected_omissions):
-    adapter = registry.adapter_for(scheme_id)
+@pytest.mark.parametrize("scheme_id,version,expected_omissions", [("ml-kem", "packed-research-v3", [7]), ("sntrup", "3", [17, 24])])
+def test_curated_reference_selection_is_reproducible_without_treating_unknown_as_easy(scheme_id, version, expected_omissions):
+    adapter = registry.adapter_for(scheme_id, version)
     profiles = registry.presentation_manifests(adapter)
     estimated = [i for i, p in enumerate(profiles) if p.get("initial_security_estimate") is not None]
     protected = {0, len(profiles) - 1, estimated[0]}
@@ -111,7 +116,7 @@ def test_curated_reference_selection_is_reproducible_without_treating_unknown_as
 
 def test_hqc_default_uses_native_weight_spacing_without_inventing_security_estimates():
     from fractions import Fraction
-    profiles = registry.presentation_manifests(registry.adapter_for("hqc"))
+    profiles = registry.presentation_manifests(registry.adapter_for("hqc", "growth-research-v2"))
     assert all(p.get("initial_security_estimate") is None for p in profiles)
     weights = list(range(1, 28))
     omitted = []
@@ -125,7 +130,10 @@ def test_hqc_default_uses_native_weight_spacing_without_inventing_security_estim
 def test_archived_and_named_reference_releases_do_not_gain_invented_stages():
     current = set(registry.CURRENT.items())
     for identity in registry.ADAPTERS:
-        if identity not in current:
+        if identity in {(s, v) for s, v, _, _ in HISTORICAL_PATHS}:
+            profiles = registry.presentation_manifests(registry.adapter_for(*identity))
+            assert progressions.for_release(*identity, profiles)["membership_sha256"] == REVISION_ONE_MEMBERSHIP[identity]
+        elif identity not in current:
             assert progressions.for_release(*identity, profiles=[]) is None
     assert progressions.for_release("unknown", "1", []) is None
 
@@ -175,7 +183,10 @@ def test_progression_claims_do_not_hide_unresolved_scientific_design():
     for identifier in ("teaching-dh-kem", "rsa-kem", "dhkem-x25519", "classic-mceliece"):
         assert "historical sampling" in path(identifier)["rule"]
         assert "not a required stage count" in path(identifier)["rule"]
-    assert "Partial progression" in path("hqc")["status"]
+    assert "historical endpoint" in path("hqc")["status"]
+    assert "conjectural" in path("hqc")["limitations"]
+    assert "current 128-bit security claim" in path("hqc")["limitations"]
     assert "joint parameter efficiency unresolved" in path("classic-mceliece")["status"]
-    assert "joint parameter optimization unresolved" in path("ml-kem")["status"]
+    assert "model-qualified correctness" in path("ml-kem")["status"]
+    assert "attack costs remain unestimated" in path("ml-kem")["limitations"]
     assert "actual failure probabilities need not be equal" in path("frodokem")["limitations"]

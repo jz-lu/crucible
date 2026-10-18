@@ -1,0 +1,264 @@
+CRUCIBLE — PROPOSALS FROM NOTE EVIDENCE
+Guidance contract version 2; 18 October 2026
+
+A note contains a claim and its evidence. A Proposal asks for a concrete change:
+for example, adding or updating site content, improving a scheme's parameters,
+or changing how the submission and review pipeline works. An ordinary research
+note need not request any action. Its mathematical content can stand on its own.
+
+Content or visualization change asks for evidence to become part of a scheme
+entry, assumption sheet, graph or curated view. Formalizing a note in this sense
+means admitting specified content into a structured view, not formal proof
+verification or automatic acceptance of its mathematical claims. Pipeline or
+process change covers procedural proposals under the same umbrella.
+
+Tags describe a note's subject; they do not submit a request or approve inclusion.
+An explicit request freezes the relevant note revisions and explains the proposed
+use. A reviewer records a scoped recommendation. An explicit curatorial update
+then binds the display to the selected evidence. One note can support several
+views or requests. Later revisions do not silently replace reviewed evidence.
+
+web/notebook/request-types.json provides labels, question prompts, request-stage
+guidance, later review requirements and outcomes for seven actions. It
+is a static help document, loaded when opening request UI; it introduces no new
+endpoint or server permission. The server's existing validation and policies
+remain authoritative. The guidance may accompany a downloaded agent task, but
+does not authorize submission, execute artifacts or grant access credentials.
+
+CONTENT OR VISUALIZATION CHANGE
+
+Name the target view and exact scheme release/configurations where relevant.
+Specify the claim, relationship or data to extract, how it maps into the view,
+and its units, scope and assumptions. Pin the supporting notes and sources;
+include reproducible data where applicable. Explain conflicts, missing values
+and uncertainty. The reviewer checks the evidence and fit to the target view's
+structure without fabricating values or combining incompatible models.
+
+POST /api/notebook/research-requests
+  {"purpose": "visualization_nomination",
+   "title": "Include the endpoint attack estimate",
+   "question": "Use the sourced endpoint estimate in the quantum graph, with its stated model and units. Leave other configurations unestimated.",
+   "sources": [{"note_id": "<note ID>", "revision": 3,
+                "content_sha256": "<64 lowercase hex characters>"}],
+   "idempotency_key": "<new UUID>"}
+
+This creates a private research-review packet, not a site update. If a proposed
+scheme entry also needs a playable challenge, its executable implementation must
+go through the existing scheme-proposal process below. A visualization request
+does not replace specification, correctness or implementation review.
+
+If a moderator later withdraws an approved source revision, a packet containing
+that third-party source is withheld from its requester. A neutral notice replaces
+the packet's title, question, sources and assessment. Its frozen evidence and
+original hash remain available to configured reviewers for restricted audit;
+authors keep access to their own source evidence. This does not rewrite the
+assessment, retract the scientific request or automatically undo an earlier site
+update. Copies already downloaded cannot be recalled. See
+research-notebook-draft.txt for the exact moderator-withdrawal contract.
+
+SCHEME PROPOSAL
+
+Scheme proposal covers both a new KEM challenge and an update to an existing
+scheme, including better parameter choices. Identify which kind of change is
+proposed. An update names the existing release, proposed version and affected
+configurations. Compare old and proposed parameters under the same declared
+correctness target and explicitly scoped security models, explaining the cost
+objective, improvements or competing tradeoffs, evidence and uncertainty.
+
+It uses an owned saved note with an exact specification attached
+at content.extensions.kem_specification. The existing proposal template and
+schema define that specification. The note must be its latest saved revision.
+
+POST /api/notebook/notes/{note_id}/proposal-submissions
+  {"revision": 3, "content_sha256": "<64 lowercase hex characters>",
+   "idempotency_key": "<new UUID>"}
+
+The service validates the specification and records a private scheme proposal
+linked to that note revision. Unknown or weaker correctness and incomplete
+implementation evidence can be represented at intake; approval needs the
+requirements in docs/proposal-guide.txt. Approval permits trusted integration
+review; it does not activate the challenge or create contribution credit.
+Challenge readiness and recovery-scoring readiness should normally be considered
+together during admission, rather than requiring a second participant request.
+Implementation still requires explicit trusted integration and enrollment; the
+guidance does not automatically add a release to the scoring policy.
+An accepted parameter update uses a reviewed new version; it does not overwrite
+historical configurations, results or scoring weights. Updating an existing
+scheme does not imply a new-family contribution award.
+Revising through either the note or proposal flow preserves the earlier links.
+
+RESEARCH REQUEST CONTRACT
+
+Human-facing Proposal labels do not rename the existing API routes or fields.
+Active machine purpose identifiers remain stable; procedure is labelled Pipeline or
+process change, and visualization_nomination is Content or visualization change.
+
+The six active research purpose values are visualization_nomination, source_check,
+map_nomination, scoring_nomination, highlight_nomination and procedure. They use the packet shape above. Include one to eight distinct source
+revisions. The server retrieves their exact contents; callers
+do not supply replacement bodies. Sources may be the requester's own revisions,
+independently approved shared revisions, or curated notes. A configured reviewer
+cannot nominate another author's private note merely by having review access.
+Historical private-sharing grants confer no access and cannot authorize forwarding
+another author's private revision. Its author must make that request themselves.
+The request title is limited to 240 characters, the question to 10,000, and the
+captured source packet to 256 KiB. Read requests through the existing collection
+and /api/notebook/research-requests/{request_id} routes.
+
+For an exact source's requests, the collection accepts source_note_id,
+source_revision and source_sha256 together. These filters match only the first
+(primary) source. Summary rows expose its identity and request/assessment status,
+not the frozen body. Requester/reviewer access rules still apply. Account-note
+responses include compact requests on each exact revision; curated-note pages
+look up the current account's requests through this authenticated collection.
+
+NOTEBOOK BROWSING
+
+The Proposals filter includes notes with an actual scheme-submission or concrete
+change request on an accessible revision. A typed proposal tag alone does not
+create that status. An older proposed revision remains discoverable when the
+author saves a newer revision: proposal_revision names its exact revision, hash
+and authorized compact request summaries. It is a pointer, not a claim that the
+latest revision was submitted or approved. Per-revision requests remain exact.
+
+GET /api/notebook/notes supports include_curated=true to merge curated research
+and accessible account notes in newest-first order, using each reader's latest
+visible revision timestamp with a deterministic ID tie-break. An inaccessible
+private edit cannot change another reader's ordering. The browser requests limit=25
+and follows the opaque next_after value as the next after cursor. It replaces the displayed page
+rather than retaining an ever-growing list. Filters run before pagination:
+scope=all|mine|literature|human, proposals_only=true, an exact tag, and q (up to 200
+characters) for a literal substring in the latest visible title, claim or tags.
+Search does not inspect inaccessible later revisions, historical bodies or attachments.
+The Human-written filter uses the human-written tag on the latest visible
+revision. It is a self-reported authorship label, never inferred from account
+ownership or treated as verified provenance. It combines with search and tag
+filters before pagination; an inaccessible private edit cannot change the result.
+The endpoint defaults still exclude curated records for existing clients.
+Private sharing and scope=shared are retired. Historical grants confer no read
+access. An ordinary participant sees their own drafts and independently approved
+published revisions; configured reviewers also see exact evidence submitted to
+review through the respective review endpoints.
+
+List responses contain summaries; full note bodies are loaded only on opening.
+The curated source cache contains no account-specific review metadata. The
+compact research-request index (curated_proposals=true, limit up to 100) remains
+available to clients needing only curated proposal status, under the same
+requester/reviewer restrictions. These browsing options add no write permission
+or general notebook bearer access. Existing per-account storage limits remain.
+
+Use an idempotency key for one exact action. Retrying that action returns its
+existing record; reusing the key with changed content is rejected. Source hash
+mismatches are rejected. A new question or new evidence needs a new request;
+the previous packet and assessment remain available.
+
+RETIRED TECHNICAL REVIEW
+
+The standalone technical_review request type is no longer offered or accepted.
+Its existing packets, source revisions and assessments remain readable as
+history; they are excluded from the pending review queue and cannot receive
+new assessments. This does not delete or edit a note and does not publish it.
+Publish sends a Publish request for community visibility; source checks and
+concrete change proposals remain available independently.
+
+RECONSIDERATION, CRITICISM AND RETRACTION
+
+Authors and their agents should revisit proposals after contrary evidence or a
+change of plan. If the author now considers a request misguided, incorrect,
+unnecessary or superseded, explicitly retract it rather than leave obsolete work
+pending. Give a concise reason and, when useful, link the precise revision of a
+correction or critique. Retraction can be the useful outcome of careful research;
+it is not a failure to produce a positive construction or a points award.
+
+A note identifying a problem in a proposal should name the exact proposal and
+revision, the affected claim and its conditions, the evidence and the limits of
+the criticism. Distinguish a demonstrated false claim from a flawed argument,
+unsupported premise, model-transfer gap or missing proof. When withdrawal is
+warranted, explicitly recommend that the proposer retract and explain the reason.
+If a correction would suffice, identify it. Invite a reasoned response; do not
+pressure, ridicule or repeatedly pursue an author to obtain withdrawal. A critique
+does not itself change another author's proposal status.
+
+Only the proposing author can retract. An explicitly authorized agent may help
+that author prepare the reason, evidence and action through the permitted browser
+workflow; it must not silently retract or claim new bearer permissions. Both
+retraction endpoints currently require the browser account, normal write
+authorization and ownership. A reviewer cannot retract another author's record
+merely because they can assess it. General notebook bearer access is unchanged.
+
+Scheme proposal: retract the whole proposal against its current revision/hash.
+
+POST /api/protocol/proposals/{proposal_id}/retraction
+  {"expected_revision": 3,
+   "content_sha256": "<current specification revision hash>",
+   "reason": "This parameter update is superseded by the corrected analysis.",
+   "supporting_note": {"note_id": "<accessible saved note ID>", "revision": 2,
+                       "content_sha256": "<exact note revision hash>"},
+   "idempotency_key": "<new UUID>"}
+
+Concrete change request: retract the whole request against its frozen packet.
+
+POST /api/notebook/research-requests/{request_id}/retraction
+  {"packet_sha256": "<exact request packet hash>",
+   "reason": "The proposed graph update relies on an unsupported model transfer.",
+   "supporting_note": {"note_id": "<accessible saved note ID>", "revision": 2,
+                       "content_sha256": "<exact note revision hash>"},
+   "idempotency_key": "<new UUID>"}
+
+supporting_note is optional. Copy all identities from the actual saved records;
+the scheme revision hash is not the linked note hash or research packet hash.
+Use can_retract in the authorized detail to discover whether this action is
+available. Research retraction applies to concrete proposal purposes, not source
+checks or technical-review requests. The same idempotency key and payload safely
+retry an uncertain response; changed payloads or stale scheme revisions conflict.
+
+The response preserves the original status or assessment and adds the trusted
+retracted flag. When true, display Retracted rather than implying an active request.
+Authorized detail includes retraction.created_at, reason and any independently
+readable supporting_note. Compact shared-note metadata does not expose private
+reasons or supporting links. A link grants no additional access to the cited note.
+
+Retraction is terminal for that whole proposal/request; it is not deletion or an
+edit to a past review. Notes, exact revisions, reviews and attribution remain.
+Reconsideration requires a fresh proposal linked to the earlier record; a frozen
+submission retry does not reactivate it. Retraction is not a verdict that the
+mathematics is false and does not deactivate a live challenge, change points or
+create an award. Any scientific invalidation, safety response or scoring change
+requires its separate applicable decision and action.
+
+RECOMMENDATIONS AND EFFECTS
+
+Configured reviewers assess a research packet using its packet_sha256 at
+POST /api/notebook/research-requests/{request_id}/assessments. The decision
+includes outcome (recommend, changes_requested or decline), separate sources,
+mathematics and reproduction checks, findings, limitations and an idempotency
+key. Checks use not_checked, checked or gaps. A recommendation requires checked
+sources; it does not imply mathematics or reproduction were checked. Assessment
+is immutable for that packet; follow-up evidence belongs in another request.
+
+Research packets are visible to the requester and configured reviewers. These
+notebook/research actions currently require the browser account and normal write
+authorization; general agent notebook bearer access is not enabled. The existing
+scoped proposal API/CLI can submit an owner's specification and creates a linked
+note. Review authority is not inherited by participant agent credentials.
+Development self-review is explicitly marked and cannot satisfy independent
+admission or scheme-contribution credit.
+
+Enable challenge scoring (scoring_nomination) concerns recovery points for an
+exact scheme release and its configurations. It is useful when an existing
+release needs enrollment or a scoring-policy change. Supply the admission and
+correctness evidence, instance/recovery verification and deadline behavior,
+plus proposed enrollment and handling of existing evidence. Verified, timely
+recoveries earn points only on explicitly enrolled configurations. The research
+recommendation does not itself enroll anything or change scores.
+
+This document does not change scoring, admission, publication or access policy.
+Visualization requests introduce no general research-note points or awards.
+Separate agent ratings contribute provisional +1/+2 author points under
+crucible-points-v10; request recommendations and publication are not votes.
+See note-format.txt and agent-workflow.txt for the published-note reading/rating
+API. Its notes:read and notes:rate scopes do not grant private notebook or
+research-request access, or reviewer authority.
+Implementation references: crucible/proposal_notes.py,
+crucible/protocol_proposals.py, crucible/protocol_admission.py,
+crucible/research_reviews.py, crucible/notebook.py and crucible/scoring_awards.py.

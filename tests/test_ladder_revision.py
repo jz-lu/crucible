@@ -27,6 +27,14 @@ def test_every_current_family_explains_a_fixed_correctness_requirement():
         if scheme_id == "frodokem":
             assert design["correctness_bound"] == "2^-133"
             assert bounds == {"0", "At most 2^-133 for every profile (conservative common bound; per-profile calculation in evidence)."}
+        elif scheme_id == "ml-kem":
+            assert design["correctness_bound"].startswith("2^-128 under")
+            assert "model" in design["correctness_bound"]
+            assert bounds == {"0", "2^-128"}
+        elif scheme_id == "hqc":
+            assert "conservative-transfer conjecture" in design["correctness_bound"]
+            assert bounds == {"<=2^-128 under the declared conditional model"}
+            assert all(p["correctness"]["failure_bound_exponent"] == 128 for p in adapter.manifests())
         else:
             assert bounds == {design["correctness_bound"]}
         assert "not optimized minima" in description["profile_metrics_basis"]["encoding"]
@@ -35,9 +43,11 @@ def test_every_current_family_explains_a_fixed_correctness_requirement():
 
 
 @pytest.mark.parametrize("old,new,count", [
-    (registry.lattice_module_v2, registry.lattice_module_v3, 11),
+    (registry.lattice_module_v2, registry.lattice_module_v4, 6),
+    (registry.lattice_module_v3, registry.lattice_module_v4, 6),
     (registry.lattice_frodo, registry.lattice_frodo_v3, 80),
-    (registry.code_hqc, registry.code_hqc_v2, 27),
+    (registry.code_hqc, registry.code_hqc_v3, 66),
+    (registry.code_hqc_v2, registry.code_hqc_v3, 66),
 ])
 def test_new_ladders_do_not_alias_old_profiles_or_inherit_recoveries(old, new, count):
     assert registry.adapter_for(old.SCHEME_ID) is new
@@ -50,15 +60,20 @@ def test_new_ladders_do_not_alias_old_profiles_or_inherit_recoveries(old, new, c
         assert registry.comparison_versions(new.SCHEME_ID, new.SCHEME_VERSION, profile["id"]) == [new.SCHEME_VERSION]
     assert not any(scoring.manifest_eligible(p) for p in old.manifests())
     assert registry.CURRENT[old.SCHEME_ID] != old.SCHEME_VERSION
-    assert registry.descriptor(old)["ladder_design"] == ladder_designs.for_release(old.SCHEME_ID, old.SCHEME_VERSION)
+    old_description = registry.descriptor(old)
+    old_design = ladder_designs.for_release(old.SCHEME_ID, old.SCHEME_VERSION)
+    assert {k:v for k,v in old_description["ladder_design"].items() if k not in {"progression","endpoint"}} == {
+        k:v for k,v in old_design.items() if k not in {"progression","endpoint"}}
     assert registry.descriptor(old)["protocol"]["construction"] != registry.descriptor(new)["protocol"]["construction"]
 
 
 @pytest.mark.parametrize("old,new", [
-    (registry.lattice_module_v2, registry.lattice_module_v3),
+    (registry.lattice_module_v2, registry.lattice_module_v4),
+    (registry.lattice_module_v3, registry.lattice_module_v4),
     (registry.lattice_frodo, registry.lattice_frodo_v3),
     (registry.lattice_frodo_v2, registry.lattice_frodo_v3),
-    (registry.code_hqc, registry.code_hqc_v2),
+    (registry.code_hqc, registry.code_hqc_v3),
+    (registry.code_hqc_v2, registry.code_hqc_v3),
 ])
 def test_old_receipts_stay_exact_and_do_not_reserve_new_first_places(current_system, old, new):
     app, _, _ = current_system
@@ -71,7 +86,7 @@ def test_old_receipts_stay_exact_and_do_not_reserve_new_first_places(current_sys
                   deepcopy(challenge.public_data), challenge.scheme_version, challenge.profile_id)
     current = registered_receipt(app, bob, new, 1, 1)
     assert person(app, "alice")["points"] == 0
-    assert person(app, "bob")["points"] == 50
+    assert person(app, "bob")["points"] == {"ml-kem": 415, "frodokem": 30, "hqc": 35}[new.SCHEME_ID]
     assert person(app, "bob")["first_records"][0]["submission_id"] == current["submission_id"]
     assert archived["submission_id"] in {r["submission_id"] for r in person(app, "alice")["recent_recoveries"]}
     client = TestClient(app)
@@ -89,6 +104,6 @@ def test_old_receipts_stay_exact_and_do_not_reserve_new_first_places(current_sys
 
 def test_proposal_template_teaches_ladder_requirements_and_approval_gate():
     instructions = template_spec()["_instructions"]["tier_design"]
-    assert "common correctness envelope" in instructions
+    assert "one explicit common correctness claim with its dependencies" in instructions
     assert "message/seed enumeration" in instructions
     assert "new approval/admission requires it" in instructions

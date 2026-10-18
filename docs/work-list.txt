@@ -1,4 +1,349 @@
-Current checkpoint — Private beta foundation, 16 October 2026
+Pipeline consistency and mission audit — 2026-10-18
+
+The confirmed review model has two levels: safety/content moderation for
+community sharing, and substantive review for the specified official display,
+highlight or numerical challenge. Source checks remain optional. The proposal
+guide and model-facing contract now state that distinction explicitly.
+
+Configured moderators can withdraw an approved exact revision with a reason and
+restricted audit history (migration 0017). Private grants and frozen third-party
+review packets cannot bypass withdrawal. No real note was withdrawn in this
+audit. Development-review markers, oldest-first review queues and research
+account-lock consistency were corrected. Notebook links now reload their view
+after signing in instead of remaining blank. Historical publication decisions
+are qualified after withdrawal. Documentation drift was corrected and generated
+proposal advice appended a new revision without rewriting prior evidence.
+
+All 21 frontend suites passed. The full backend run passed 2,869 checks with two
+optional sntrup reference checks skipped; two generated-guidance freshness
+failures were fixed and passed in the 135-test affected-area rerun. Registry,
+generated-evidence and migration preservation checks passed. See
+pipeline-audit-20261018.txt for exact validation limits, the mission assessment,
+likely expert critiques and a proposed pilot. Expert reviewers are the primary
+audience; a broad public challenge community is also desired.
+
+Notebook timeline and header position — 2026-10-18
+
+Timeline is a sibling of Scheme map at #notebook?view=timeline. It loads a
+read-only aggregate on entering, without downloading note bodies. The cumulative
+graph counts each currently visible note once, by recorded creation date in UTC;
+edits and retracted proposals do not add or remove notes. Account notes use their
+server creation/import time; curated notes use their first recorded revision.
+This is the current visible corpus, not a history of site-wide publication:
+sharing changes can change past-looking counts. It covers the whole notebook,
+independently of list search/filters, and clears on account or route changes.
+
+Leaderboard now sits immediately before My submissions in the right-hand account
+group, with matching account-navigation colors. This supersedes the earlier
+after-My-submissions position; signed-out access remains available.
+
+Author-controlled proposal retraction — 2026-10-18
+
+Scheme and concrete-change proposals now have an explicit author withdrawal,
+with a reason, optional exact supporting-note pin, timestamp and frozen target
+identity. Retraction is terminal for that request and preserves the note and
+review history. The pending review queues exclude it; new reviews, revisions,
+admission and new scheme-credit actions cannot reuse it. Earlier awards and live
+schemes are unchanged. Retraction does not declare a mathematical refutation.
+The browser action is author-only and preserves existing access/CSRF rules;
+participant bearer scopes are not broadened. Compact note badges expose state,
+not private withdrawal reasons or inaccessible supporting-note identities.
+The original review outcome remains a separate historical field.
+
+Guidelines encourage authors and explicitly authorized agents to retract requests
+they no longer support. Notes identifying flaws should scope the claim, explain
+evidence and uncertainty, and recommend withdrawal when warranted. Criticism
+never automatically withdraws someone else's proposal. No live proposal has
+been retracted by this implementation pass, including Compact Transfer Actions.
+
+RSA timing gaps — 2026-10-18
+
+Existing measurements at configurations47,48,50 contain19,19,18 successful
+exchanges, plus1,1,2 bounded key-generation aborts. All planned trials ran;
+these are not missing measurements or cryptographic disagreement. Hollow points
+now display the medians conditional on successful key generation, with no
+connecting line through them. Method and results retains sample/abort counts,
+quartiles and partial status. They are not full attempt latency because abort
+latencies were not recorded. Other failed/timeout/partial-operation runs remain
+unplotted. No raw benchmark data, crypto parameters or generation limits changed.
+Current display evidence appends immutable note revisions covering the reader's
+conditional interpretation and updated proposal guidance.
+
+Notebook browsing and navigation — 2026-10-18
+
+At this earlier checkpoint, Leaderboard was after My submissions in the header;
+the Timeline/header update above supersedes that position. Signed-out access
+remained available, and the beta access screen continued to hide navigation.
+The notebook uses 25-note pages and server-side search/filters across the whole
+accessible collection. Previous/Next retains cursor history, not earlier page
+bodies. Lists use scalar summaries; curated sources are validated and cached,
+with account-specific request status fetched separately. Existing personal
+storage limits remain; this is collection browsing, not unlimited per-user intake.
+
+Proposals is a notebook filter and a collapsed-entry badge derived from actual
+requests. A proposal on an earlier revision remains visible and links to its
+exact submitted revision/hash; later revisions do not inherit submission status.
+Privacy checks precede filtering and pagination. Authored tags cannot create a
+review status. Focused backend and frontend regressions cover pagination, global
+search, historical proposals, private revisions and stale account/query responses.
+
+Module-lattice explanations now define centered-binomial noise (CBD3/CBD2),
+compression and the number-theoretic transform where introduced. Proposal advice
+now covers pipeline/process and content changes as well as new schemes, improved
+parameters and scoring enrollment. Their curated evidence notes append immutable
+revisions, preserving earlier hashes. No accounts, submissions or proposal data
+are migrated or deleted by this update.
+
+Model-facing pipeline contract — 2026-10-18
+
+One versioned JSON entry point at /api/agent/pipeline describes the mission,
+evidence and provenance rules, task-specific reading plans, workflow boundaries,
+and current limitations. The contract guides model judgment without prescribing
+a rigid research-note outline. Selected examples remain evidence examples, not
+fabricated scientific approvals or a binding catalogue of acceptable topics.
+
+Fixed documentation resources are available under /api/agent/guidance/. Existing
+agent credentials can read only these explicit documentation paths regardless of
+their task scope; account data, notebook operations and review authority keep
+their existing restrictions. Beta membership and revocation still apply.
+CLI workspaces and notebook prompts/task downloads point to the same contract.
+No new human navigation tab, research acceptance rule, scoring formula or account
+data migration is introduced. The old map pipeline document is labelled as a
+dated design record, and current note/benchmark guidance corrects stale summaries.
+
+Notes as proposals for concrete changes — 2026-10-18
+
+Notes now have a compact Proposals & reviews section and a Propose a change
+action. Submitted notes carry the broad Proposal label; requested changes include
+content/visualizations, schemes or parameter updates, and pipeline/process changes.
+Visualization proposals name the target view, exact extraction, scope/units,
+evidence and uncertainty. Scheme proposals keep their specification review;
+parameter updates identify the earlier release, justify improvements/tradeoffs,
+and require reviewed versions while preserving earlier results. Enabling challenge
+scoring remains distinct. No general note-points feature or scoring rule added.
+The shared request guidance also accompanies downloaded agent research tasks.
+
+Submitted requests label their exact primary note revision. The saved packet and
+review remain immutable; new revisions do not inherit earlier request status.
+Private research status is visible only to its requester and configured reviewers.
+Curated notes retrieve the current account's status separately from static content.
+A recommendation does not itself publish a note or update a visualization. Explicit
+curation still binds displayed information to the reviewed evidence.
+
+Notebook proposal entry — 2026-10-17
+
+Removed the standalone Propose a scheme link from the Schemes page. Creation
+stays in Research notebook → Notebook tools → New proposal note, with existing
+agent preparation and review routes preserved.
+
+Notes-backed displays, security references and proposal advice — 2026-10-17
+
+The Schemes navigation retains focus without scrolling the page automatically.
+Header navigation and account controls now share font size/weight on desktop and
+mobile. Proposal advice is also linked from the notebook proposal composer.
+Supplemental security evidence adds exact endpoint-only literature references for
+ML-KEM-512 (classical and quantum Core-SVP) and Frodo640 (quantum lattice work).
+Existing frozen curves remain intact; sparse model domains and incomplete RSA
+benchmark runs remain explicit gaps, with explanations in the graph disclosures.
+DH/RSA/EC quantum views explain the polynomial-time route without inventing a
+numerical cost. Graphs expose the scope, sources and limitations of each model.
+
+Current scheme graphs and assumptions are backed by exact curated-note revisions
+in the existing notebook. Supporting links stay inside detail disclosures.
+Machine-readable bindings retain content hashes and exact-release scope. The
+note maintenance check guards against source-data drift; timing-note bindings
+also check the current report hash. Live recovery outcomes retain receipt evidence.
+
+Proposal guidelines appear beside the agent workflow; CLI init/revise saves the
+same guide with its template/schema. A private beta's preparation endpoints now
+retry authentication once on401 using only the configured same-origin credential.
+No new cryptographic parameters, measurements, account history or admission
+claims are introduced. No commit/push requested. See display-evidence.txt.
+
+Scheme action layout — 2026-10-17
+
+Map popup actions share a row in the order Open challenge, Read research note,
+View assumptions. On scheme overviews, View assumptions sits below View
+challenges, including when there is no recovery text. The
+View challenges label is enlarged to 16px; mobile actions remain left aligned.
+
+Consistent assumption overviews — 2026-10-17
+
+All eight current schemes now use the concise evidence / assumptions / open-work
+overview and focused supporting-statement reader. The seven additional overviews
+are authored for their exact releases, preserving each construction's particular
+correctness premises and security gaps. Historical uncurated releases remain
+explicitly uncurated. Frodo stays at authored revision 3; the other current sheets
+advance to revision 2. Map actions now read Open challenge, Read research note,
+View assumptions, in that order. Cryptographic parameters and history are intact.
+Removed the No recoveries yet placeholder from catalogue cells and scheme
+overviews; recorded recoveries keep their existing links and labels.
+
+Assumptions navigation and reading panel — 2026-10-17
+
+Scheme map popups now link to View assumptions for schemes in the live catalogue,
+pinning the exact current release rather than an old map snapshot. Literature-only
+nodes keep their research-note action. Frodo overview links open a single focused
+supporting statement with sources and related statements; Back to overview or
+Escape closes it without losing the reader's place. Removed the duplicate detail
+card list from overview pages. Deep links, access revocation and navigation retain
+their release and privacy boundaries.
+
+Frodo security reading overview — 2026-10-17
+
+Lead with the full IND-CCA goal, then existing evidence, remaining assumptions,
+and unfinished work for Crucible's exact research configurations. Credit the
+published conditional proof explicitly. Link concise statements to the existing
+formal detail cards; keep mathematical sources and scope available on expansion.
+Hardness/model premises remain conditional even after finite review tasks are
+completed. Revision 3 is authored for Frodo first; other sheets retain their
+existing details. No cryptographic parameters or account history changed.
+
+Frodo assumptions clarification — 2026-10-17
+
+Reorganized Frodo's reading sheet into premises, a derived correctness result,
+and proof/implementation obligations. Split security hash models from the
+correctness noise-sampling model; visible purpose sentences explain each role.
+Added scoped reading links and an explicit open full-KEM proof application.
+No claim of independent assumptions or automatic proof propagation. The
+correctness result explicitly does not require LWE hardness; the smallest
+profile also avoids noise independence. Authored sheet revision 2; cryptographic
+parameters, challenges and other schemes' authored content are unchanged.
+
+Assumptions visualization draft — 2026-10-17
+
+A dedicated assumptions page is linked from each scheme overview and directly
+addressable at #scheme/{id}/{version}/assumptions, optionally with profile and
+claim query parameters. All eight current releases have short expandable lists;
+archived releases explicitly remain uncurated. Sources, scope, investigation
+routes and limitations are hidden until a statement opens. No new top-level tab.
+
+Hardness problems, model premises, mathematical consequences, implementation
+requirements and outstanding proof obligations remain distinct. Curated text is
+partial and manually authored; no notebook records are fabricated or published.
+The read-only JSON endpoint follows existing beta admission and challenges:read
+agent access. See docs/assumptions-sheets.txt for the contract and future exact-note
+revision/audience requirements. Frozen cryptographic parameters are unchanged.
+
+Next discussion: evaluate the human presentation, then decide how reviewed notes
+will back these curated statements. Do not infer graph edges, truth or full KEM
+security from tags, inclusion, test passes or a challenge recovery.
+
+Current checkpoint — Suite audit fixes and HQC reference path, 17 October 2026
+
+- Keep deployment-ready, accounts, sign-ins, submissions and parallel notebook
+  work intact. No commit, push or public deployment requested in this pass.
+- Exact JSON copy preserves the downloaded text. Protocol display uses exact
+  server-rendered parameter text when JavaScript numbers would round integers.
+- All registered families, including DH/RSA, now record generation attempts.
+  Explicit resource limits are retryable; malformed results, bad provenance and
+  unexplained worker faults hold the configuration. False honest agreement has
+  its own review outcome. No blind resampling and no secret diagnostic leaks.
+- Current points policy v9 offers the same 500 progress / 2,000 best-first cap
+  per family, using frozen weights. Repeats and intermediate steps do not add
+  awards. HQC's new enrollment is explicit; historical receipts are not erased,
+  transferred or counted twice. The 1,000-point admitted-scheme award is retained.
+- HQC modeled-research-v3 has 66 natural configurations, exact conditional
+  <=2^-128 arithmetic certificates and the August 2025 HQC-1 endpoint. Native
+  endpoint conformance, all configurations, codec boundaries and output failures
+  passed checks. The surrogate model's transfer to actual correlated noise is
+  conjectural; the historical endpoint has no current 128-bit security label.
+- All 66 new HQC configurations have separate local timing measurements. Earlier
+  reports remain selected for their releases. Current suite totals: 379 configs,
+  377 default stages; 376 complete timing records and three partial RSA records.
+- Background catalogue refresh sends dynamic records, with a full reload on
+  metadata revision changes. Exact releases, editor state and private access
+  boundaries are preserved. This reduces transfer/browser parsing, not native
+  challenge generation cost.
+- McEliece retains its honest shortened-code research presentation. A dated
+  primary-source review identifies the broader m/n/t and modern attack-cost work
+  still needed; changing parameters using only elementary Prange trials would
+  not be justified. No new numerical security curve was fabricated.
+- Added current-release inventory to distinguish historical family selection
+  from live research derivatives. Independent implementation review, correctness
+  model applicability, full attack calibration and Linux native builds remain
+  explicit next work; this checkpoint is a stronger local research beta.
+
+Previous checkpoint — Required claimed correctness goal and complete timing coverage, 17 October 2026
+
+- Clarification, 17 October 2026: retain the required claimed correctness goal
+  <=2^-128 at every admitted configuration, or perfect agreement. Explicit,
+  independently motivated unproved assumptions remain eligible for stress testing.
+  Statistical approval/admission requires failure_bound_exponent >=128; policy_id
+  is optional. Unknown or weaker correctness stays draft-only. This supersedes
+  the short-lived interpretation that removed the numerical claimed goal.
+- Require a scoped security claim and distinguish proven reasoning, modeled
+  bounds and conjectural premises. Do not equate review with proof of assumptions.
+  Preserve implementation, artifact, conformance and execution safeguards.
+- Distinguish refutation of the actual target from a challenged premise or proof
+  gap. A looser upper bound and one failing sample do not alone prove the actual
+  failure probability exceeds the target. Assumptions must be independently
+  meaningful, not a restatement of the desired result. No new visualizer or
+  theoretical attack pipeline is introduced by this policy clarification.
+- Accept labelled model-based-analysis and conjectural-claim under manual review.
+  Assess the
+  calculation and its model separately; empirical success cannot establish the
+  small failure bound. Schema fields and review checks are not certification.
+- Replace the current module-lattice research ladder with six natural degrees
+  8,16,32,64,128,256, fixing rank2,q3329,CBD3/CBD2,compression10/4. Completed
+  endpoint operations match ML-KEM-512; lower settings remain nonstandard and
+  unestimated. Degrees128/256 explicitly use a heuristic compression model.
+  Do not display a separate ML-KEM-768 deployment reference.
+- Keep archived module-v3 source, routes and receipts exact. New module-v4
+  identities do not inherit recoveries or points. Preserve accounts and sign-ins.
+- Make operation controls more visible and retain assumptions/evidence classes
+  beside correctness bounds. Keep the existing four graph cards.
+- Publish all340 current configuration attempts across eight families:337 complete
+  and3 RSA partial. All report3 warmups/20 measured trials requested; record actual
+  counts and aborts. Native-v-Python and optimization differences remain explicit.
+- Connect adjacent completed timing medians, breaking lines at missing/incomplete
+  configurations. Reports refresh after60 seconds on visible-page polling/revisit;
+  metric changes do not issue redundant requests. Frodo stages46–50 verified
+  present in all three live graphs.
+- Distinguish corrupt worker/provenance outcomes from retryable resource limits:
+  integrity faults pause the configuration for review, with no secret diagnostics.
+- Next: independently review implementations and model applicability, investigate
+  remaining research-ladder qualifications (especially HQC's uncalibrated endpoint),
+  and collect reproducible timing runs on a dedicated deployment-like machine.
+  No public deployment, account/history reset, commit or push in this pass.
+
+Previous checkpoint — reference timing pilot and first full Python sweep
+
+Current checkpoint — Reference timings and correctness review, 17 October 2026
+
+- Continue on deployment-ready, preserving the parallel notebook/proposal work.
+  Keep the four scheme graph cards; put the shared measurement policy and exact
+  local-run evidence behind the computation card's Method and results disclosure.
+- New proposal approval/admission requires an explicit mathematical correctness
+  justification (statement, conditions, parameter coverage and derivation), plus
+  a reproducible private-key representation. Historical hashes and reviews remain
+  unchanged. Submitted pseudocode/source is inert; schema completeness is not proof.
+- Audit all eight current families without upgrading their claims: mathematical
+  agreement arguments exist, but independent implementation review remains pending.
+  Correctness, implementation safety, confidentiality and timing are distinct.
+- Offline bounded operation benchmarks identify source, parameters, dependency
+  closure, harness and environment; retain warmup failures and partial operations.
+  Publication is explicit via a static hash-pinned index, never an upload side effect.
+- Initial Apple M5 / CPython 3.14.6 pilot samples three configurations in each of
+  five Python families. Fourteen completed; largest RSA timed out and stays off the
+  graph. Show measured dots without interpolation and disclose actual sampling.
+- Full sweep now covers all 241 configurations of those five families, including
+  non-default intermediate settings: 238 complete and three RSA partial, with
+  four generation aborts under unchanged internal limits. No observed disagreement
+  or unexpected error. Use 3 warmups, 20 trials, and 120-second collection budgets;
+  preserve the sparse pilot. Graph only complete records; disclose every outcome.
+- Clarify that module-lattice research parameters do not converge to standard
+  ML-KEM-768. A proposed common <=2^-128 honest-mismatch ceiling is documented for
+  discussion, with evidence/conditioning distinctions; not yet a numeric admission
+  gate. No cryptographic parameters or existing correctness claims are changed.
+- NIST SP 800-227/FIPS 203 and RFC 10024 inform the method and ML-KEM-768 reference
+  sizes. These standards do not define a universal CPU, millisecond cutoff, or
+  benchmark certification. Timings exclude the rest of a TLS handshake.
+- Next measurement work: pinned separate native operation drivers for HQC/NTRU/
+  McEliece and ML-KEM, broader sampling on a stable dedicated machine, and independent
+  implementation review. No cryptographic releases, accounts or history are reset.
+
+Previous checkpoint — Private beta foundation, 16 October 2026
 
 - Implement explicit membership, recipient-bound invitations with mailbox proof,
   revocation/suspension, audit events and one browser/agent access policy. Existing

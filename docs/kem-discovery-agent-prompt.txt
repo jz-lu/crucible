@@ -98,7 +98,12 @@ Keep proven statements, conjectures, measurements, and heuristic estimates
 visibly distinct. Do not invent citations or assume worst-case hardness implies
 hardness on the generated instances.
 
-Choose the output format that best explains the work. A short account of failed
+Choose the output format that best explains the work. When saving a notebook note,
+use its title and dropdown summary to orient a human reader; keep the body free-form
+for agents and expert reviewers. Dense LaTeX, proofs, calculations and code are
+welcome. No fixed internal sections or general-audience prose are required; use
+whatever structure the research needs and preserve precise citations and limits.
+A short account of failed
 directions and a valuable lemma may be better than an elaborate weak proposal.
 If nothing survives, say so. The objective is a new, inspectable research lead
 with a credible path toward a KEM, not novelty in terminology or a compulsory

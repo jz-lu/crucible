@@ -2,10 +2,17 @@
 
 Finding and attacking new crypto in the AI age.
 
+Agent entry point: `GET /api/agent/pipeline`, or `python3 scripts/crucible_cli.py guide`.
+The [model-facing contract](web/agent/pipeline.json) defines the mission, task-specific
+reading plan, evidence rules and supported workflows. CLI workspaces include a
+copy; notebook handoffs link to it. In private beta, guidance requires membership
+or an existing scoped connection and does not grant notebook or review authority.
+
 A working local foundation for shared-secret recovery challenges. The app has
 accounts, durable records, a server-owned hourly deadline, and exact answer
-verification. The numerical challenge interface is joined by a minimalist Research notebook
-draft. The older research records and API remain available for future work. Source is shared for collaboration.
+verification. The numerical challenge interface is joined by an account-backed
+Research notebook with private revisions and reviewed sharing. The older research
+records and API remain available for future work. Source is shared for collaboration.
 The app also includes versioned KEM specifications, private proposal intake,
 immutable revisions, and manual review before trusted integration. New approvals
 and admissions require a structured tier-design plan covering parameter growth,
@@ -18,15 +25,25 @@ The hosted service has not been deployed and is not ready for public operation.
 The expanded local catalogue has eight family pages. Research stages for
 elliptic-curve DH, plain LWE/Frodo, module lattices, NTRU Prime, HQC and Classic
 McEliece are explicitly separated from exact published reference releases.
-There are 345 current profiles: DH, RSA, elliptic-curve DH and Classic McEliece
-have 50 each; module lattices have 11; Frodo has 80; NTRU Prime and HQC have 27 each.
-Six new releases improve parameter selection or remove representation overhead.
+There are 379 current profiles: DH, RSA, elliptic-curve DH and Classic McEliece
+have 50 each; module lattices have 6; Frodo has 80; NTRU Prime has 27; HQC has 66.
+Versioned releases improve parameter selection or remove representation overhead.
 The available configurations and the default human progression are separate.
 Default progressions use 50 stages for DH, RSA, elliptic-curve DH and McEliece,
-10 for module lattices, 80 for Frodo, and 25 each for NTRU Prime and HQC.
-The five intermediate configurations remain accessible; no protocol parameters
+6 for module lattices, 80 for Frodo, 25 for NTRU Prime and 66 for HQC.
+The two NTRU intermediate configurations remain accessible; no protocol parameters
 were changed to obtain rounded display counts.
 Stage numbers do not imply equal security across families.
+The module progression ends at ML-KEM-512; smaller rings are research settings
+with unestimated security. New approvals require a claimed honest-failure bound
+of at most 2^-128 (or perfect agreement) and a scoped security claim, with their
+assumptions and reasoning. Explicit, independently motivated conjectural premises
+are eligible for stress testing; approval does not prove them. See [the correctness policy](docs/correctness-policy-v1.txt) and
+[the module design](docs/module-v4-design.txt).
+HQC's new conditional-correctness path ends at the August 2025 published
+construction; it does not inherit a current 128-bit security assessment. See
+[the current-release review](docs/scheme-reviews/current-releases-20261017.txt)
+for the exact constructions, endpoint meanings and remaining scientific limits.
 See [the current stage progressions](docs/stage-progressions.txt), then
 [the expansion decision record](docs/tier-expansion-decisions.txt) and its
 scheme-specific implementation evidence.
@@ -42,7 +59,10 @@ unchanged; old recoveries do not automatically qualify for the new ladder.
 The KEM Schemes catalogue orders schemes by participant count, not security.
 Each scheme opens four graphs. Public-key and ciphertext sizes are fixed; the
 lower cards switch among computation costs and classical/quantum estimates.
-Timing and quantum estimates remain empty until supported evidence exists.
+Operation timings now cover all 379 current configurations. Three RSA profiles
+show hollow points for medians conditional on successful key generation, with
+generation aborts disclosed and no line through those points. Quantum estimates remain empty
+where unsupported; timings identify their implementation, hardware and scope.
 The second tab is a participant Leaderboard; usernames link to
 profiles with score breakdowns and original recovery receipts. **Personal
 records** shows one highest recovered stage per scheme; **First to reach** shows
@@ -50,10 +70,12 @@ one highest first-place result per scheme. These can be different results.
 Current releases take priority over archives, and incompatible release stages
 are never compared. Full receipt history and the legacy First 10 API remain. See
 [the provisional scoring policy](docs/scoring.txt) for the accepted formula and
-reviewed scheme-admission awards. Policy v6 enrolls all eight current research
-families: 10 times the highest frozen configuration credit, plus one bonus of 40 times
-the highest first-place configuration credit, per scheme. Displayed stages can
-differ from those original weights; changing a route does not change points. Exact-profile schemes keep independent
+reviewed scheme-admission awards. Policy v10 retains v9's eight current research
+families with fixed per-configuration weights and adds provisional +1/+2 author
+points from agent note ratings. Recovery credit remains up to 500 points for personal
+progress and 2,000 for one best first record per scheme. Weights are incentive
+choices, not equal-security measurements; changing navigation cannot reprice
+them. Old HQC receipts remain archived and do not transfer to its new release. Exact-profile schemes keep independent
 first places; only DH, RSA and the EC ladder inherit lower-tier places. Repeats
 and intermediate steps add no cumulative points. These are participation points,
 not equivalent security levels. Policy v2's original two-family enrollment and
@@ -72,18 +94,40 @@ required. See [the agent workflow](docs/agent-workflow.txt). Code is stored as
 evidence and never executed by the server; reported compute is not independently
 verified. The browser profile lets participants revoke connected agents.
 
-## Research notebook draft
+## Research notebook
 
 Open **Research notebook** in the main navigation (`/#notebook`). Titles expand
 into tags and a claim; **Read full note** opens the conditions and full argument.
-The six initial notes are illustrative examples, not assessments of the live KEMs.
-Draft tools supports local note revisions and JSON exchange with an agent.
+Saved notes now belong to your account and persist in the server database. Each
+edit appends an immutable revision. New notes and revisions are private; request
+sharing review to let a configured reviewer consider the exact revision. Approval
+lets other signed-in participants read that revision, subject to beta membership
+when the beta gate is enabled. Earlier and later private drafts stay private.
+Sharing approval does not certify the mathematics, admit a scheme or award points.
+The existing development-only self-review option is labelled and does not grant
+sharing authority in production.
 
-For this checkpoint, notes are stored only in the current browser, not in accounts
-or a shared database. Export a copy to keep a portable backup. Shared storage,
-review permissions and the model-facing API are deliberately still provisional.
-Dedicated pages such as Schemes can later explain selected notes alongside their
-built-in data; there is no generic Visualizations tab. See
+Configured moderators can withdraw an approved exact revision with a recorded
+reason. Other readers see a neutral withdrawal notice; the author and reviewers
+retain restricted audit history. Private-recipient access and frozen third-party
+review packets cannot bypass the withdrawal. Corrections use a new revision.
+
+**Agent files** exports your own notes and imports JSON additions
+or appended revisions. Existing browser drafts are never uploaded automatically:
+choose **Review browser drafts for import**, then explicitly import them into the
+signed-in account. The browser copy stays untouched. Original history and imported
+metadata are preserved as provenance; imported labels cannot grant review status.
+The old example notes are illustrative, not assessments of live KEMs.
+
+Notebook HTTP access currently uses authenticated browser sessions; agent exchange
+uses files, without notebook bearer-token scopes. Scheme proposals and concrete
+change requests already pin exact notebook revisions and hashes; review does not
+silently follow later edits. Community sharing review concerns safety and content
+moderation. Substantive review for an official display or numerical challenge is
+the second review level, with evidence appropriate to the requested use. See
+[the proposal guide](docs/proposal-guide.txt). Public-launch publication rules
+remain a separate decision. Back up the server database and persistent key;
+server backups cannot recover browser drafts that have not been imported. See
 [the notebook's scope and design boundaries](docs/research-notebook-draft.txt).
 
 ## Run locally
@@ -223,7 +267,8 @@ Catalogues are curated in code. Arbitrary uploaded code is never executed.
 Scoring is implemented under the explicitly provisional policy above. Recovery
 points are derived from verified receipts; scheme contribution points require
 separate independent admission. Proposal approval alone never awards points.
-Frozen configuration credits have different meanings and point ceilings across families; the current
+Frozen configuration credits have different meanings across families, with equal
+500-point personal and 2,000-point first-record ceilings retained in policy v10. The
 formula rewards participation, not equivalent security or scientific merit.
 
 ## Propose and review a KEM
@@ -280,7 +325,9 @@ exact revision, content hash, and implementation artifact hash. Independent
 reviewers record checks for specification completeness, correctness,
 implementation conformance, input/resource safety, reproduction, stage design and
 parameter selection, with notes and concrete evidence. Approval requires all
-checks, a pinned implementation and an explicit correctness claim. These are
+checks, a pinned implementation and a correctness claim meeting the 2^-128 goal
+(or perfect agreement). Statistical claims declare an exponent of at least 128;
+unknown or weaker claims remain drafts. These are
 manual assessments, not automated proofs. Authors normally cannot review their
 own proposals. A configured reviewer can test their own proposal locally by
 starting development with `CRUCIBLE_ALLOW_SELF_REVIEW=true`; this defaults off
@@ -334,13 +381,13 @@ unestimated small profiles and explicitly provisional endpoints remain valid.
 | Finite-field DH | `teaching-dh-kem` / `7` | 1–50 | Certified fields; explicit shorter exponent intervals include interval-search cost |
 | RSA | `rsa-kem` / `4` | 1–50 | Same balanced certified factors; three-byte exponent encoding removes padding |
 | Elliptic-curve DH | `dhkem-x25519` / `curve-compressed-v2` | 1–50 | Same certified curves and full scalars; compressed point encoding |
-| Module lattice | `ml-kem` / `packed-research-v3` | 1–10 (11 configurations) | Same mathematical profiles; lossless coefficient bit packing |
+| Module lattice | `ml-kem` / `compressed-research-v4` | 1–6 | Fixed ML-KEM-512 settings; degree 8..256, explicit correctness model; standard endpoint |
 | Frodo | `frodokem` / `anchor-research-v3` | 1–80 | Every dimension 8..640 by 8; preserves the published 640 anchor |
 | Streamlined NTRU Prime | `sntrup` / `3` | 1–25 (27 configurations) | Bounded byte-cost selection from 103 certified candidates using a hybrid-inclusive reference |
-| HQC | `hqc` / `growth-research-v2` | 1–25 (27 configurations) | Supported codec/ring size minimized at each chosen weight; security frontier uncalibrated |
+| HQC | `hqc` / `modeled-research-v3` | 1–66 | Conditional correctness; restricted codec search through historical HQC-1 reference; current security unestimated |
 | Classic McEliece | `classic-mceliece` / `length-research-v1` | 1–50 | Existing shortened-code path retained; equal-security parameter efficiency unresolved |
 
-These 345 profiles are not a claim that all eight ladders are optimal. A bounded
+These 379 profiles are not a claim that all eight ladders are optimal. A bounded
 search needs a stated objective, preserved construction and correctness,
 candidate domain, attack coverage and evidence. Smaller wire objects can cost
 more decoding work. Unknown estimates cannot be treated as low security or used
@@ -348,23 +395,38 @@ to prove dominance. A new proposal must explain these choices explicitly.
 See [the parameter review](docs/parameter-frontier-review.txt),
 [classical changes](docs/classical-parameter-frontier.txt),
 [lattice changes](docs/lattice-parameter-frontier.txt),
-[NTRU selection](docs/ntru-parameter-frontier.txt), and
-[HQC/McEliece limits](docs/code-parameter-frontier-review.txt).
+[NTRU selection](docs/ntru-parameter-frontier.txt),
+[HQC's revised model and endpoint](docs/hqc-model-v3.txt), and
+[McEliece's current review](docs/mceliece-parameter-review-20261017.txt).
 
 The current implementations are local research constructions, not deployment
 libraries or inherited security guarantees from their named families. Published
 reference releases remain separate. Frodo keeps one common honest-failure bound
-of 2^-133 in its declared model; the other current ladders retain perfect
-mathematical honest agreement. Resource aborts and implementation faults are
+of 2^-133 in its declared model. Module-v4 uses deterministic, conditional and
+modeled bounds within its common 2^-128 claim. HQC-v3 claims 2^-128 under its
+explicit independent-noise surrogate and conjectural conservative transfer to
+actual correlated errors; the remaining current ladders claim
+perfect mathematical honest agreement under their stated premises. Resource aborts and implementation faults are
 separate. Passing samples do not prove these correctness claims or confidentiality.
 
 Each overview has four graphs with Challenge stage on the horizontal axis.
 Public-key/ciphertext bytes come from canonical binary encodings, excluding
 JSON/hex wrappers and separately registered shared parameters. RSA now counts
-one modulus-width integer plus the three-byte exponent. Computation metrics have
-no invented timings. Classical references display only supported values;
+one modulus-width integer plus the three-byte exponent. Computation metrics use
+explicitly selected reference-implementation reports; unmeasured configurations
+remain gaps. The graph's Method and results disclosure identifies the machine,
+implementation, sample counts and provisional local-pilot status. These timings
+are not full TLS handshake latency or security estimates. Classical references display only supported values;
 unsupported/quantum estimates remain empty. The red marker shows the largest
 actual recovery, not a proof that every smaller profile or instance is solved.
+
+Each scheme overview also links to a quiet **Assumptions** page. Its expandable
+statements distinguish hardness questions, model premises, derived correctness,
+and remaining proof obligations for that exact release. These are partial
+curated drafts, with sources and scope; they are not security certifications or
+automatically published notebook notes. Read-only structured sheets are available
+at `/api/protocol/assumptions?scheme_id=…&version=…`, behind the same beta boundary
+as the scheme catalogue. See [the sheet contract](docs/assumptions-sheets.txt).
 
 Exact challenge downloads retain version, profile ID, parameter values, encoding,
 source/artifact hashes, correctness scope and any frozen initial estimate.
@@ -391,12 +453,7 @@ historical revisions, not the current full suite.
 
 ```sh
 .venv/bin/python -m pytest -q
-node tests/test_frontend.cjs
-node tests/test_recovery_upload.cjs
-node tests/test_math.cjs
-node tests/test_round_access.cjs
-node tests/test_submission_details.cjs
-node tests/test_notebook_store.cjs
+for test in tests/test_*.cjs; do node "$test" || exit 1; done
 .venv/bin/alembic check
 .venv/bin/python -m crucible.manage cleanup
 ```
@@ -424,10 +481,13 @@ readiness**: identity/recovery policy, abuse/moderation, hosting limits, proxy
 trust, monitoring, backups, and independent admission/security review remain.
 
 - [Architecture and API](docs/architecture.txt)
+- [Pipeline and mission audit, 18 October 2026](docs/pipeline-audit-20261018.txt)
 - [Private beta setup and release gates](docs/private-beta-setup.txt)
 - [Private beta and public hosting direction](docs/hosting-plan.txt)
 - [Current and remaining decisions](docs/implementation-v1.txt)
-- [Correctness policy](docs/correctness-policy-v0.txt)
+- [Correctness policy](docs/correctness-policy-v1.txt)
+- [Reference timing method and publication](docs/reference-timings.txt)
+- [Current correctness evidence and review gaps](docs/correctness-audit-reference.txt)
 - [Design principles and decisions](docs/design-record.txt)
 - [Running work list](docs/work-list.txt)
 - [Recovered-key submission files](docs/submission-files.txt)
