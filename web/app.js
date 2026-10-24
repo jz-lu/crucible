@@ -749,6 +749,10 @@ async function showNotebook(query, reviewing = false) {
   const current = () => request === notebookShowRequest && hasAccess() && account === state.user?.id && csrf === state.csrf &&
     (reviewing ? state.screen === 'reviews' && state.canReviewProposals && state.reviewSection === section && section !== 'schemes' : state.screen === 'notebook');
   if (!current()) return;
+  // Resolve the tiny action-link index alongside notebook assets, rather than
+  // competing with the map's six assets after its controller becomes available.
+  // The graph can still render if this independent, session-bound read fails.
+  if (!reviewing && params.get('view') === 'map') void loadMapCatalogue().catch(() => {});
   // Only the cold, ordinary first page has a query known before notebook code
   // arrives. Share that authorized read with its eventual consumer; all other
   // views and filters continue to decide their own requests inside the notebook.

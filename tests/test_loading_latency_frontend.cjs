@@ -68,6 +68,44 @@ async function test(name, run) {await run(); passed++; console.log('PASS '+name)
     assert.equal(options.currentReleases()[0].id,'fixture');
     assert.equal(vm.runInContext('state.catalogueLoaded',app.sandbox),false);
   });
+  await test('a direct map overlaps its tiny index with held notebook assets only after fresh access', async () => {
+    const session=deferred(), index=deferred();let mounted=0, options;
+    const app=await createApp({schemes:[scheme],hash:'#notebook?view=map',responder:url=>{
+      if(url.pathname==='/api/session')return session.promise;
+      if(url.pathname==='/api/schemes')return index.promise;
+    }});
+    const assets=()=>app.document.querySelectorAll('link,script').filter(element=>(element.src||element.href||'').startsWith('/notebook/'));
+    assert.equal(app.requests.length,1);assert.equal(assets().length,0,'No protected work before access resolves');
+    session.resolve(app.envelope({user,csrf_token:'first',access:{mode:'beta',allowed:true,status:'active'}}));await flush();
+    assert.equal(assets().length,4);
+    assert.deepEqual(app.requests.filter(r=>r.url.pathname==='/api/schemes').map(r=>r.url.searchParams.get('projection')),['map'],
+      'Tiny index starts before any notebook asset has loaded');
+    app.window.CrucibleNotebook={mount(target,value){mounted++;options=value;return {
+      show:async()=>{void value.prepareMapCatalogue();},hide(){},setAccount(){}};}};
+    assets().forEach(asset=>asset.onload());await flush();
+    assert.equal(mounted,1,'Rendering does not wait for the independent index');
+    assert.equal(app.requests.filter(r=>r.url.pathname==='/api/schemes').length,1,'Controller shares the same read');
+    index.resolve(app.envelope({projection:'map',schemes:[{id:'fixture',version:'1'}]}));await flush();
+    assert.equal(options.currentReleases()[0].id,'fixture');
+    assert.equal(app.requests.some(r=>r.options.method==='POST'||r.url.pathname==='/api/challenges'),false);
+  });
+  await test('rotation during cold map assets discards the old index and mounts only the current session', async () => {
+    const old=deferred(),fresh=deferred();let calls=0,mounted=0,options;
+    const app=await createApp({schemes:[scheme],user,hash:'#notebook?view=map',responder:url=>{
+      if(url.pathname==='/api/schemes')return ++calls===1?old.promise:fresh.promise;
+    }});
+    app.sandbox.setSession(app.envelope({user,csrf_token:'rotated'}));
+    await app.sandbox.loadAuthorizedWorkspace();await flush();assert.equal(calls,2);
+    old.resolve(app.envelope({projection:'map',schemes:[{id:'old-session',version:'0'}]}));await flush();
+    app.window.CrucibleNotebook={mount(target,value){mounted++;options=value;return {show:async()=>{},hide(){},setAccount(){}};}};
+    const assets=app.document.querySelectorAll('link,script').filter(element=>(element.src||element.href||'').startsWith('/notebook/'));
+    assert.equal(assets.length,4,'Rotation reuses code downloads without reusing old rights');
+    assets.forEach(asset=>asset.onload());await flush();
+    assert.equal(mounted,1);assert.equal(options.currentReleases().length,0);
+    fresh.resolve(app.envelope({projection:'map',schemes:[{id:'fixture',version:'1'}]}));await flush();
+    assert.equal(options.currentReleases()[0].id,'fixture');
+    assert.equal(app.requests.some(r=>r.options.method==='POST'),false);
+  });
   await test('a warm challenge paints its exact round immediately while actions wait for fresh status', async () => {
     let app, hold=false;const late=deferred();
     app=await createApp({schemes:[scheme],user,hash:route,responder:(url,options,envelope)=>{
