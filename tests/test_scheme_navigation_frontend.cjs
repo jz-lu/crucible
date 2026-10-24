@@ -195,5 +195,33 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     pending.resolve(app.envelope(detail(a)));await flush();assert.equal(app.$('#overview-workspace').hidden,false);
     assert.equal(app.requests.some(r=>r.url.pathname==='/api/challenges'),false);
   });
+  await test('stage browsing paints its heading without building hidden protocol or formatting math', async () => {
+    const app=await createApp({hash:route(a,'leaderboard'),responder:responder()});
+    assert.equal(app.$('#scheme-title').textContent,'Scheme A');
+    assert.doesNotMatch(app.$('#protocol-construction').textContent,/Scheme A full construction/);
+    assert.equal(app.$('#parameter-facts').textContent.trim(),'');
+    let mathCalls=0;app.window.CrucibleMath={render(node,value){mathCalls++;node.textContent=value;}};
+    await app.navigate(route(b,'leaderboard'));
+    assert.equal(app.$('#scheme-title').textContent,'Scheme B');assert.equal(mathCalls,0);
+    app.$('#tab-protocol').click();await flush();
+    assert.equal(app.$('#protocol-construction').textContent,'Scheme B full construction');
+    assert.match(app.$('#parameter-json').textContent,/9007199254740993/);assert.ok(mathCalls>0);
+    const before=mathCalls;app.$('#tab-leaderboard').click();await flush();
+    await app.navigate(route(a,'leaderboard'));assert.equal(mathCalls,before);
+    app.$('#scheme-specifics').open=true;app.$('#scheme-specifics').dispatchEvent({type:'toggle'});await flush();
+    assert.equal(app.$('#scheme-construction-short').textContent,'Scheme A full construction');
+    assert.equal(app.requests.some(r=>r.options.method==='POST'),false);
+  });
+  await test('record links prefetch only exact known releases, deduplicate and discard session-stale responses', async () => {
+    const pending=deferred();
+    const app=await createApp({responder:responder(url=>url.searchParams.get('projection')==='release'?pending.promise:undefined)});
+    const link=app.$('#kem-catalogue').querySelector('.kem-progress');
+    link.dispatchEvent({type:'focus'});link.dispatchEvent({type:'pointerenter'});await flush();
+    assert.equal(reads(app,'release').length,1);assert.equal(reads(app,'release')[0].get('version'),'2');
+    app.sandbox.setSession(active(app.envelope,'rotated'));await flush();
+    pending.resolve(app.envelope(detail(a)));await flush();
+    assert.equal(vm.runInContext('releaseDetails.size',app.sandbox),0);
+    assert.equal(app.requests.some(r=>r.url.pathname==='/api/challenges'||r.options.method==='POST'),false);
+  });
   console.log(`\n${passed} compact scheme navigation checks passed.`);
 })().catch(error => { console.error(error); process.exitCode = 1; });

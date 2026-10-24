@@ -153,6 +153,7 @@ class RequestBoundary:
 
 def create_app(settings: Settings | None = None, *, clock=time.time, initialize=False):
     registry.validate_registry()
+    registry.warm_navigation_metadata()
     settings = settings or load_settings()
     db = Database(settings.database_url)
     if initialize:  # Explicit test fixture only. Normal startup uses Alembic.

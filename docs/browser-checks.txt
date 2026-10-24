@@ -27,14 +27,20 @@ serves the real checked-out web assets and enforces session/membership rules.
 Only the fixture subprocess limits the registry to portable DH release 4, using
 the established portable authentication-test pattern. Production registration,
 artifact verification and database schema are unchanged. No KEM is generated.
-Mail/GitHub are disabled. Browser requests outside this loopback origin fail.
+Mail is disabled. GitHub's external identity exchange is replaced only inside
+the test fixture; a browser test intercepts the provider navigation and returns
+to the real local callback. State, binding, session rotation and page loading
+run through the real application. No request reaches GitHub. Other browser
+requests outside this loopback origin fail.
 
-The eight checks cover cached navigation while a real response is held, brand
+The checks cover cached navigation while a real response is held, brand
 navigation without a document reload, anonymous/revoked private reads, a late
 private response across an account change, concurrent map asset requests without
 duplicate CSS, rendered SVG and keyboard dialog behavior, mobile note layout and
 focus, neutral initial-access/route previews while real responses are held, and
-real stalled notebook/map script deadlines followed by retry while
+successful GitHub return without a redundant continuation request, a usable
+landing page while unused math assets are absent and subsequent equation
+hydration, and real stalled notebook/map script deadlines followed by retry while
 the original requests remain stalled. Controlled response
 holds establish ordering; no sub-100ms timing threshold depends on runner load.
 The stalled-script case intentionally waits for the real 15-second deadline.

@@ -59,9 +59,9 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(details, 0);
     assert.deepEqual(app.requests.slice(start).map(request => request.url.pathname), ['/api/session', '/api/schemes']);
     await app.navigate(route(1, 'protocol'));
-    assert.equal(details, 0, 'The same profile already has its immutable protocol details');
+    assert.equal(details, 1, 'The first visible protocol entry renders its previously deferred details');
     await app.navigate(route(2, 'protocol'));
-    assert.equal(details, 1, 'A genuinely changed selection still renders its exact protocol');
+    assert.equal(details, 2, 'A genuinely changed selection still renders its exact protocol');
   });
 
   await test('an external recovery updates the visible unsolved record once, without writes', async () => {

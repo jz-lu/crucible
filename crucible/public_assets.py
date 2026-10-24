@@ -7,6 +7,7 @@ No notebook, map, API, or user-owned files are included in this inventory.
 from dataclasses import dataclass
 from functools import cached_property, lru_cache
 import base64
+import gzip
 import hashlib
 import mimetypes
 from pathlib import Path
@@ -52,6 +53,41 @@ def read(path):
     return _read(str(path), stat.st_mtime_ns, stat.st_size, stat.st_ino)
 
 
+@lru_cache(maxsize=32)
+def _gzip(body):
+    # Production snapshots retain these bytes; this small cache also avoids
+    # recompressing unchanged public files on every development request.
+    return gzip.compress(body, compresslevel=4, mtime=0)
+
+
+def _encoding(header, *, gzip_available):
+    """Choose a public representation; identity is the implicit fallback.
+
+    Explicit identity preferences compete with gzip. An explicit exclusion
+    overrides '*'; conflicting duplicates and malformed weights fail closed
+    for that coding. See RFC 9110 section 12.5.3.
+    """
+    qualities = {}
+    for item in header.split(','):
+        parts = [part.strip() for part in item.split(';')]
+        coding = parts[0].lower()
+        if coding not in {'gzip', 'identity', '*'}:
+            continue
+        quality = 1.0
+        if len(parts) > 1:
+            name, _, value = parts[1].partition('=')
+            valid = (len(parts) == 2 and name.strip().lower() == 'q'
+                     and re.fullmatch(r'(?:0(?:\.[0-9]{0,3})?|1(?:\.0{0,3})?)', value.strip()))
+            quality = float(value.strip()) if valid else 0.0
+        qualities[coding] = min(quality, qualities.get(coding, 1.0))
+    compressed = qualities.get('gzip', qualities.get('*', 0.0))
+    identity = qualities.get('identity', 0.0 if qualities.get('*') == 0 else 1.0)
+    if (gzip_available and compressed > 0
+            and ('identity' not in qualities or compressed >= identity)):
+        return 'gzip'
+    return 'identity' if identity > 0 else None
+
+
 @dataclass(frozen=True)
 class Asset:
     body: bytes
@@ -64,6 +100,16 @@ class Asset:
     @cached_property
     def etag(self):
         return '"' + hashlib.sha256(self.body).hexdigest() + '"'
+
+    @cached_property
+    def gzip_body(self):
+        if self.media_type in {'text/html', 'text/css', 'text/javascript'}:
+            return _gzip(self.body)
+        return None
+
+    @cached_property
+    def gzip_etag(self):
+        return '"' + hashlib.sha256(self.gzip_body).hexdigest() + '-gzip"'
 
 
 class PublicAssets:
@@ -100,6 +146,11 @@ class PublicAssets:
         for url, asset in assets.items():
             html = html.replace('"' + url + '"', '"' + url + '?v=' + asset.version + '"')
         assets['/'] = Asset(html.encode(), 'text/html')
+        for asset in assets.values():
+            # Compress after CSS/font URLs and the HTML shell are finalized.
+            # Requests only select an existing representation.
+            if asset.gzip_body is not None:
+                _ = asset.gzip_etag
         return assets
 
     def response(self, request, path=None):
@@ -107,16 +158,29 @@ class PublicAssets:
         asset = (self._snapshot if self.frozen else self.snapshot()).get(path)
         if asset is None:
             return Response(status_code=404, headers={'Cache-Control': 'no-store'})
+        encoding = _encoding(','.join(request.headers.getlist('accept-encoding')),
+                             gzip_available=asset.gzip_body is not None)
+        if encoding is None:
+            return Response(status_code=406, headers={
+                'Cache-Control': 'no-store', 'Vary': 'Accept-Encoding',
+            })
+        body = asset.gzip_body if encoding == 'gzip' else asset.body
+        etag = asset.gzip_etag if encoding == 'gzip' else asset.etag
         versioned = path != '/' and request.query_params.get('v') == asset.version
         headers = {
             'Cache-Control': 'private, max-age=31536000, immutable' if versioned else 'private, no-cache',
-            'ETag': asset.etag,
+            'ETag': etag,
+            'Vary': 'Accept-Encoding',
         }
+        if encoding == 'gzip':
+            headers['Content-Encoding'] = 'gzip'
         validators = [part.strip().removeprefix('W/') for part in request.headers.get('if-none-match', '').split(',')]
-        if '*' in validators or asset.etag in validators:
+        if '*' in validators or etag in validators:
             return Response(status_code=304, headers=headers)
-        headers['Content-Length'] = str(len(asset.body))
-        return Response(asset.body if request.method != 'HEAD' else b'',
+        # Range remains unsupported: these routes return a complete 200, never
+        # identity byte offsets against a compressed representation.
+        headers['Content-Length'] = str(len(body))
+        return Response(body if request.method != 'HEAD' else b'',
                         media_type=asset.media_type, headers=headers)
 
 

@@ -139,7 +139,7 @@
     "crucible/rsa_v3.py": "679b213ee8d2e873aea2ad01a983d126e48941a8fe9c96d11209b7dde6727ba0",
     "crucible/rsa_v4.py": "480a63ab827d6c575457ebd3aad8d577d20ceaded0555174329a5bd9c4e6a5d0",
     "crucible/schemas.py": "3937effe022b9fbbbe3315b89ea7bdf6e51c65253b18b58a78acefef35223ac2",
-    "crucible/scoring.py": "be624c5ef963cad01d09a7edf5131ef26b2ddc1d58a5c795a65a0d9f461a3b6a",
+    "crucible/scoring.py": "7d0a651633470bc0a7dbc57ac062ee5a0a6b95a3058b6647f6a6091577ab82c7",
     "crucible/scoring_awards.py": "f62081c37939b16f11977ea2f4424ef1c2daf2aedabc23446dfb103b34356814",
     "crucible/security.py": "5051644bf0056f0ef57f196233f7d71b9826aea5ed4c4618d0591dec13ce740f",
     "crucible/security_references.py": "4714afbf86165b872a8b1704c07caad27296a5f8127009fca519f9f2a705d22c",

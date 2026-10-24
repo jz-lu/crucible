@@ -348,6 +348,16 @@ def register_routes(app, db, settings, clock, identity, issue_session, session_p
                     flow.status = "complete"
                 linked.github_login, linked.last_login_at = github_login, clock()
                 flow.github_user_id, flow.github_login = github_id, github_login
+                if flow.invitation_id is None and flow.invitation_encrypted is None:
+                    # Successful existing-account sign-in can enter its page
+                    # immediately. Invitation flows still use the continuation
+                    # endpoint to recover their browser-bound invitation token.
+                    try:
+                        destination = Start(return_route=flow.return_route).return_route
+                    except ValueError:
+                        destination = "#challenge"
+                    response = RedirectResponse("/" + destination, status_code=303,
+                        headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
                 session.delete(previous)
                 raw = issue_session(response, session, user.id)
                 flow.result_session_hash = token_hash(raw)

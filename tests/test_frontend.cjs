@@ -232,8 +232,10 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     const buttons = () => app.$('#parameter-set-options').querySelectorAll('button');
     assert.deepEqual(buttons().map(button => button.textContent), ['ML-KEM-512', 'ML-KEM-768', 'ML-KEM-1024']);
     assert.deepEqual(buttons().filter(button => button.classList.contains('is-recovered')).map(button => button.textContent), ['ML-KEM-768']);
+    app.$('#tab-protocol').click(); await flush();
     assert.match(app.$('#parameter-facts').textContent, /Parameter setML-KEM-1024/);
     assert.doesNotMatch(app.$('#parameter-facts').textContent, /Stage 3/);
+    app.$('#tab-leaderboard').click(); await flush();
     assertAdvanceVisibility(app, true);
     app.$('#advance-size').click(); await flush();
     assert.equal(app.location.hash, route(namedScheme, 'named-512'));

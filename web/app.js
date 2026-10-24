@@ -885,8 +885,8 @@ function applyRoute(focus = false) {
   else if ($('#global-message-text').textContent === routeError) globalError('');
   if (screen === 'scheme') {
     $('#scheme-back').href = overviewRoute(scheme, profile);
-    renderProfiles(null, {details: changed || previousScreen !== 'scheme'});
     renderView(view);
+    renderProfiles(null, {details: changed || previousScreen !== 'scheme' || (view === 'protocol' && previousView !== view)});
     if (view === 'challenge' && (changed || previousScreen !== 'scheme' || previousView !== view)) loadChallenge();
     if (view === 'leaderboard' && (changed || previousView !== view || previousScreen !== 'scheme')) loadLeaderboard();
   }
@@ -1281,7 +1281,7 @@ async function refreshProfiles({background = false} = {}) {
     const editing = [$('#size-slider'), $('#profile-select')].includes(document.activeElement);
     if (!background || metadataChanged || selectionChanged || state.profileMetadataPending === selectionKey()) {
       if (editing) state.profileMetadataPending = selectionKey();
-      else renderProfiles(null, {details: (!background || metadataChanged || state.profileMetadataPending === selectionKey()) && state.view === 'protocol'});
+      else renderProfiles(null, {details: (!background || metadataChanged || state.profileMetadataPending === selectionKey()) && (state.view === 'protocol' || $('#scheme-specifics').open)});
     }
   }
   return true;
@@ -1297,7 +1297,8 @@ function participantCount(scheme) {
 }
 function prepareSchemeLink(link, scheme) {
   const prepare = () => {
-    if (!hasAccess() || !state.catalogueLoaded || navigator.connection?.saveData || releaseLoads.size >= 2) return;
+    if (!hasAccess() || !state.catalogueLoaded || navigator.connection?.saveData || releaseLoads.size >= 2 ||
+        !availableReleases().some(item => item.id === scheme.id && String(item.version) === String(scheme.version))) return;
     void loadRelease(scheme.id, String(scheme.version)).catch(() => {});
   };
   link.addEventListener('pointerenter', prepare); link.addEventListener('focus', prepare);
@@ -1366,6 +1367,7 @@ function renderCatalogue() {
     if (largest) {
       const record = node('a', profileLabel(largest, scheme), 'kem-progress');
       record.href = schemeRoute(scheme, largest, 'leaderboard');
+      prepareSchemeLink(record, scheme);
       record.setAttribute('aria-label', `View recoveries for ${profileLabel(largest, scheme)}`);
       progress.append(record);
     }
@@ -1704,6 +1706,7 @@ function personalRecordTable(records) {
     const name = node('span', undefined, 'person-record-scheme');
     const link = node('a', record.scheme_name || record.scheme_id, 'person-scheme-link');
     link.href = overviewRoute({id: record.scheme_id, version: record.scheme_version});
+    prepareSchemeLink(link, {id: record.scheme_id, version: record.scheme_version});
     name.append(link);
     if (!record.is_current) name.append(node('span', 'Archived · release ' + record.scheme_version, 'person-record-release'));
     const result = node('button', recordProfileLabel(record), 'person-record-result');
@@ -2320,6 +2323,7 @@ function renderIntermediateConfigurations(scheme, current) {
   if (restoreFocus) buttons.find(button => button.getAttribute('aria-pressed') === 'true')?.focus();
 }
 function renderProfiles(previewProfile = null, {details = true} = {}) {
+  if (!previewProfile) renderSchemeHeading();
   if (!previewProfile) state.profileMetadataPending = null;
   const input = $('#profile-select');
   const scheme = selectedScheme();
@@ -2359,7 +2363,7 @@ function renderProfiles(previewProfile = null, {details = true} = {}) {
     $('#advance-size').setAttribute('aria-label', `Go to next unsolved parameter set ${frontier ? profileLabel(frontier, scheme) : ''}`);
     setError('#profile-error', '');
     setText('#profile-note', tierNote(scheme, current));
-    if (!previewProfile && details) renderProtocol();
+    if (!previewProfile && details && (state.view === 'protocol' || $('#scheme-specifics').open)) renderProtocol();
     return;
   }
   const intermediate = intermediateConfiguration(current);
@@ -2435,7 +2439,7 @@ function renderProfiles(previewProfile = null, {details = true} = {}) {
   if (restoreFocus) choices.find(button => button.getAttribute('aria-pressed') === 'true')?.focus();
   setError('#profile-error', '');
   setText('#profile-note', tierNote(scheme, current));
-  if (!previewProfile && details) renderProtocol();
+  if (!previewProfile && details && (state.view === 'protocol' || $('#scheme-specifics').open)) renderProtocol();
 }
 function configurationProse(value) {
   // Legacy descriptions refer to immutable configurations, not today's stage order.
@@ -2459,14 +2463,21 @@ function addFact(list, label, value, typeset = false) {
   row.append(node('dt', label), description);
   list.append(row);
 }
+function renderSchemeHeading() {
+  const scheme = selectedScheme();
+  if (!scheme) return;
+  setText('#scheme-title', scheme.name);
+  setText('#scheme-summary', scheme.summary);
+  $('#scheme-beta').hidden = scheme.review_status !== 'local-beta';
+  setText('#scheme-beta', (researchTiers(scheme, state.profile) ? 'Research stages · ' : '') + 'Local beta. Independent admission review pending.' + (scheme.scoring_eligible === false ? ' These profiles are not scored.' : ''));
+}
+$('#scheme-specifics').addEventListener('toggle', () => {
+  if ($('#scheme-specifics').open && hasAccess() && state.screen === 'scheme') renderProtocol();
+});
 function renderProtocol() {
   const profile = state.profile;
   const scheme = selectedScheme();
   if (scheme) {
-    setText('#scheme-title', scheme.name);
-    setText('#scheme-summary', scheme.summary);
-    $('#scheme-beta').hidden = scheme.review_status !== 'local-beta';
-    setText('#scheme-beta', (researchTiers(scheme, profile) ? 'Research stages · ' : '') + 'Local beta. Independent admission review pending.' + (scheme.scoring_eligible === false ? ' These profiles are not scored.' : ''));
     setText('#protocol-version', scheme.version ? `${scheme.name} · version ${scheme.version}` : scheme.name);
     const protocol = scheme.protocol || {};
     mathText($('#protocol-construction'), protocol.construction_math || configurationProse(protocol.construction) || 'The parameter contract below defines this KEM. Consult its registered specification for the full construction.');

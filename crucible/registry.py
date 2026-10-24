@@ -7,6 +7,7 @@ registrations must satisfy it; no submitted source is imported or executed.
 from urllib.parse import urlencode
 from copy import deepcopy
 from functools import lru_cache
+from types import MappingProxyType
 import hashlib
 import json
 import re
@@ -497,7 +498,8 @@ def progress_catalogue():
     response envelopes still come from each request; the full catalogue and
     exact manifest/generation APIs retain their existing paths and checks.
     """
-    return deepcopy(_progress_catalogue(metadata_identity(), tuple(CURRENT.items())))
+    return [_navigation_copy(scheme) for scheme in
+            _navigation_metadata(metadata_identity(), tuple(CURRENT.items()))[0]]
 
 
 def navigation_catalogue():
@@ -509,8 +511,26 @@ def navigation_catalogue():
     return progress_catalogue()
 
 
+def _navigation_freeze(value):
+    if isinstance(value, dict):
+        return MappingProxyType({key: _navigation_freeze(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_navigation_freeze(item) for item in value)
+    if value is None or type(value) in {str, int, float, bool}:
+        return value
+    raise TypeError("Navigation metadata must contain only JSON values")
+
+
+def _navigation_copy(value):
+    if isinstance(value, MappingProxyType):
+        return {key: _navigation_copy(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_navigation_copy(item) for item in value]
+    return value
+
+
 @lru_cache(maxsize=4)
-def _progress_catalogue(identity, current):
+def _navigation_metadata(identity, current):
     # Derive labels/order from the same descriptors as the full response once,
     # rather than maintaining a second interpretation of default progressions.
     def compact(release):
@@ -522,8 +542,19 @@ def _progress_catalogue(identity, current):
                      "stage_context", "profile_label", "profile_kind", "profile_order", "native_parameter_label")
                     if key in profile}
                     for profile in release["profiles"]]}
-    return [{**compact(scheme), "previous_releases": [compact(release) for release in scheme["previous_releases"]]}
-            for scheme in catalogue()]
+    # Build the complete presentation once for both its unchanged fingerprint
+    # and compact index. Do not retain the large full catalogue or live records.
+    complete = catalogue()
+    document = json.dumps(complete, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    revision = hashlib.sha256(document.encode()).hexdigest()
+    navigation = [{**compact(scheme), "previous_releases": [compact(release) for release in scheme["previous_releases"]]}
+                  for scheme in complete]
+    return _navigation_freeze(navigation), revision
+
+
+def warm_navigation_metadata():
+    """Prepare immutable presentation data before accepting the first request."""
+    _navigation_metadata(metadata_identity(), tuple(CURRENT.items()))
 
 
 def catalogue_revision():
@@ -533,13 +564,7 @@ def catalogue_revision():
     Adapter/provider replacement and changing the current release invalidate the
     fingerprint. Independent workers with identical catalogues produce one ID.
     """
-    return _catalogue_revision(metadata_identity(), tuple(CURRENT.items()))
-
-
-@lru_cache(maxsize=4)
-def _catalogue_revision(identity, current):
-    document = json.dumps(catalogue(), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    return hashlib.sha256(document.encode()).hexdigest()
+    return _navigation_metadata(metadata_identity(), tuple(CURRENT.items()))[1]
 
 
 def comparison_versions(scheme_id, version, profile_id):
