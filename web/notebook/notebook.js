@@ -223,6 +223,7 @@
     filter.input.addEventListener('change', () => { visibility = filter.input.value; changeQuery(); });
     toolbar.append(searchLabel, filter.wrap, mark('filter', el('span')), mark('count', el('span', 'nb-count')));
     const list = mark('list', el('div', 'nb-list')); list.id = reviewOnly ? 'nb-review-note-list' : 'nb-note-list';
+    list.tabIndex = -1; list.setAttribute('aria-label', reviewOnly ? 'Publish requests' : 'Research notes');
     const pagination = mark('pagination', el('nav', 'nb-pagination')); pagination.setAttribute('aria-label', 'Note pages');
     pagination.append(mark('prev', button('Previous page', previousPage, 'nb-button')),
       mark('page', el('span', 'nb-page')),
@@ -263,6 +264,7 @@
     function url(id, revision) { return '#notebook?' + new URLSearchParams({note:id, ...(revision ? {revision:String(revision)} : {})}); }
     function openNote(id, revision) { navigate(reviewOnly ? reviewUrl('publication', {note:id, ...(revision ? {revision:String(revision)} : {})}) : url(id, revision)); }
     async function show(nextParams = new URLSearchParams()) {
+      const readerHadFocus = !q('full').hidden && document.activeElement?.closest('.nb-full') === q('full');
       if (typeof account === 'function') setAccount(account());
       active = true; params = new URLSearchParams(nextParams);
       if (reviewOnly) { params.delete('view'); if (params.get('section') === 'research' || params.has('research') || params.has('research_request')) { params.set('research', '1'); params.set('research_review', '1'); params.delete('review'); } else params.set('review', '1'); }
@@ -282,7 +284,7 @@
       if (nextReviewMode && !reviewMode) { visibility = 'all'; filter.input.value = 'all'; search = ''; tag = ''; }
       reviewMode = nextReviewMode; filter.wrap.hidden = reviewMode; searchLabel.hidden = reviewMode; notice('');
       if (!reviewMode && params.has('tag')) { tag = params.get('tag'); search = ''; visibility = 'all'; filter.input.value = 'all'; resetPages(); }
-      if (!reviewMode && params.get('filter') === 'proposals') { visibility = params.get('filter'); filter.input.value = visibility; resetPages(); }
+      if (!reviewMode && ['all', 'mine', 'human', 'proposals', 'research', 'trash'].includes(params.get('filter'))) { visibility = params.get('filter'); filter.input.value = visibility; resetPages(); }
       if (suspendedDialog) { q('dialog').showModal(); suspendedDialog = false; }
       const id = params.get('note'), inResearch = params.has('research') || params.has('research_request'); q('library').hidden = inVisualization || Boolean(id) || inResearch; q('full').hidden = inVisualization || (!id && !inResearch);
       q('new').disabled = !accountId; q('files').disabled = !accountId;
@@ -290,6 +292,9 @@
       if (inMap) { await showMap(); return; }
       if (inTimeline) { await showTimeline(); return; }
       if (inResearch) { if (params.has('research_request')) await readResearchRequest(params.get('research_request')); else await listResearchRequests(); return; }
+      // A reader's Back control is now hidden. Move keyboard focus to a stable
+      // visible control before any background list refresh can complete.
+      if (!id && readerHadFocus && !q('dialog').open) (reviewOnly ? list : notesView).focus({preventScroll:true});
       if (id) await loadNote(id); else await loadList();
       if (!reviewOnly && active && params.get('compose') === 'proposal' && !q('dialog').open) editNote(null, true);
     }
@@ -433,7 +438,19 @@
       try { return await task; } finally { if (curatedPromise === task) curatedPromise = null; }
     }
     function resetPages() { pageCursors = [null]; pageIndex = 0; nextAfter = null; listLoaded = false; }
-    function changeQuery() { clearTimeout(searchTimer); searchTimer = null; resetPages(); previewId = null; loadList(); }
+    function changeQuery() {
+      clearTimeout(searchTimer); searchTimer = null; resetPages(); previewId = null;
+      if (!reviewOnly && window.location.hash.split('?')[0] === '#notebook') {
+        // Keep explicit list filters consistent with the address when changing
+        // a linked view. A later return must not silently restore the old filter.
+        params.delete('filter'); params.delete('tag');
+        if (visibility !== 'all') params.set('filter', visibility);
+        if (tag) params.set('tag', tag);
+        const query = params.toString();
+        window.history.replaceState(null, '', '#notebook' + (query ? '?' + query : ''));
+      }
+      loadList();
+    }
     function previousPage() { if (pageIndex > 0) { pageIndex--; previewId = null; loadList(); } }
     function nextPage() { if (nextAfter) { pageCursors = pageCursors.slice(0, pageIndex + 1); pageCursors.push(nextAfter); pageIndex++; previewId = null; loadList(); } }
     async function loadList() {

@@ -148,6 +148,24 @@ test('a response authorized for Alice cannot reappear after logout and Bob signs
   await expect(page.locator('#account-handle')).toHaveText('browser_bob');
 });
 
+test('notebook Back restores visible focus and changing linked filters survives navigation', async ({page}) => {
+  await signIn(page); await notebookReady(page);
+  await page.locator('#nb-note-list .nb-title').filter({hasText: 'Alice browser-only private note'}).click();
+  await page.getByRole('button', {name: 'Read full note →', exact: true}).click();
+  const back = page.getByRole('button', {name: '← Research notebook', exact: true});
+  await back.focus(); await back.press('Enter');
+  await expect(page.locator('[data-nb="notes-view"]')).toBeFocused();
+  await expect(page.locator('[data-nb="full"]')).toBeHidden();
+  await page.goto('/#notebook?filter=proposals');
+  const filter = page.locator('#notebook-workspace [name="visibility"]');
+  await expect(filter).toHaveValue('proposals');
+  await filter.selectOption('all');
+  await expect(page).toHaveURL(/\/#notebook$/);
+  await page.locator('#nav-about').click(); await page.locator('#nav-notebook').click();
+  await expect(filter).toHaveValue('all');
+  await expect(page.locator('#nb-note-list')).toContainText('Alice browser-only private note');
+});
+
 test('the map downloads concurrently, keeps one stylesheet, and supports a native keyboard dialog', async ({page}) => {
   const names = new Set(['catalogue.js', 'note-ui.js', 'map-views.js', 'app.js', 'index.html', 'styles.css']);
   const started = [], release = gate();

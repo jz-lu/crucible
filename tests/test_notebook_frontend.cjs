@@ -107,6 +107,27 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
    assert.doesNotMatch(app.q('full').textContent,/Argument as text/);assert.doesNotMatch(app.q('list').textContent,/Private claim/);
   }
  });
+ await test('returning from a reader leaves keyboard focus visible through a list refresh',async()=>{
+  const late=deferred();let delay=false;
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?(delay?late.promise:{notes:[note()]}):undefined});
+  app.root.hidden=false;
+  await app.show('note-one');const back=app.q('full').querySelector('.nb-back');back.focus();delay=true;back.click();await flush();
+  assert.equal(app.q('full').hidden,true);assert.equal(app.document.activeElement,app.q('notes-view'));
+  assert.equal(Boolean(app.document.activeElement.closest('[hidden]')),false);
+  late.resolve({notes:[note()]});await app.whenNavigated();assert.equal(app.document.activeElement,app.q('notes-view'));
+ });
+ await test('changing a linked notebook filter updates its route and survives reentry',async()=>{
+  const app=await boot({initialParams:new URLSearchParams('filter=proposals')});
+  app.history.replaceState(null,'','#notebook?filter=proposals');
+  await filterNotes(app,'all');assert.equal(app.location.hash,'#notebook');
+  app.controller.hide();await app.controller.show(new URLSearchParams(app.location.hash.split('?')[1]||''));
+  assert.equal(app.root.querySelector('[name="visibility"]').value,'all');
+  assert.equal(listQuery(app.requests.at(-1).url).has('proposals_only'),false);
+  await filterNotes(app,'human');assert.equal(app.location.hash,'#notebook?filter=human');
+  await app.controller.show(new URLSearchParams('filter=mine'));
+  assert.equal(app.root.querySelector('[name="visibility"]').value,'mine');
+  assert.equal(listQuery(app.requests.at(-1).url).get('scope'),'mine');
+ });
  await test('cached list queries never substitute notes from another filter or search',async()=>{
   const late=deferred();let delay=false;
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?(delay?late.promise:{notes:[note()]}):undefined});
