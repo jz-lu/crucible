@@ -149,20 +149,25 @@ test('a response authorized for Alice cannot reappear after logout and Bob signs
 });
 
 test('the map downloads concurrently, keeps one stylesheet, and supports a native keyboard dialog', async ({page}) => {
-  await signIn(page); await notebookReady(page);
-  const names = new Set(['catalogue.js', 'notes-data.js', 'note-ui.js', 'map-views.js', 'app.js', 'index.html', 'styles.css']);
+  const names = new Set(['catalogue.js', 'note-ui.js', 'map-views.js', 'app.js', 'index.html', 'styles.css']);
   const started = [], release = gate();
+  const noteRequests = [];
+  page.on('request', request => {
+    if (new URL(request.url()).pathname === '/map/notes-data.js') noteRequests.push(request.url());
+  });
   await page.route(url => url.origin === 'http://127.0.0.1:8029' && url.pathname.startsWith('/map/') && names.has(url.pathname.slice(5)), async route => {
     started.push(new URL(route.request().url()).pathname);
     await release.promise;
     await route.continue();
   });
   try {
+    await signIn(page); await notebookReady(page);
     await page.getByRole('button', {name: 'Scheme map', exact: true}).click();
     // All requests must be started before any response is released. This fails
     // the old serial waterfall without relying on a fragile millisecond budget.
-    await expect.poll(() => new Set(started).size).toBe(7);
+    await expect.poll(() => new Set(started).size).toBe(6);
     await expect(page.locator('#landscape svg')).not.toBeVisible();
+    expect(noteRequests).toHaveLength(0);
   } finally {release.resolve();}
   const graph = page.locator('#landscape svg');
   await expect(graph).toBeVisible();
@@ -175,8 +180,12 @@ test('the map downloads concurrently, keeps one stylesheet, and supports a nativ
   const dialog = page.locator('#mobile-details');
   await expect(dialog).toBeVisible();
   await expect(dialog).toHaveAttribute('aria-labelledby', 'mobile-detail-title');
+  expect(noteRequests).toHaveLength(0);
   await page.keyboard.press('Tab');
   expect(await dialog.evaluate(element => element.contains(element.getRootNode().activeElement))).toBe(true);
+  await dialog.getByRole('link', {name: 'Read research note', exact: true}).click();
+  await expect(dialog.locator('.map-note')).toBeVisible();
+  expect(noteRequests).toHaveLength(1);
   await page.keyboard.press('Escape');
   await expect(dialog).not.toBeVisible();
   await expect(node).toBeFocused();
@@ -210,9 +219,6 @@ test('mobile note navigation fits the viewport and moves keyboard focus into the
 for (const workspace of ['notebook', 'map']) test(`a stalled ${workspace} script times out visibly and a fresh retry loads it`, async ({page}) => {
   await page.goto('/#about');
   await signIn(page, 'alice', {navigate: false});
-  if (workspace === 'map') {
-    await page.locator('#nav-notebook').click(); await notebookReady(page);
-  }
   const seen = gate(), release = gate(); let calls = 0;
   await page.route(url => url.origin === 'http://127.0.0.1:8029' && url.pathname === (workspace === 'map' ? '/map/app.js' : '/notebook/notebook.js'), async route => {
     calls++;
@@ -220,7 +226,10 @@ for (const workspace of ['notebook', 'map']) test(`a stalled ${workspace} script
     else await route.continue();
   });
   try {
-    if (workspace === 'map') await page.getByRole('button', {name: 'Scheme map', exact: true}).click();
+    if (workspace === 'map') {
+      await page.locator('#nav-notebook').click(); await notebookReady(page);
+      await page.getByRole('button', {name: 'Scheme map', exact: true}).click();
+    }
     else await page.locator('#nav-notebook').click();
     await seen.promise;
     const target = page.locator(workspace === 'map' ? '[data-nb="map"]' : '#notebook-workspace');

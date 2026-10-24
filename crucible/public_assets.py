@@ -1,8 +1,10 @@
-"""Version only already-public UI assets; account/research responses stay no-store.
+"""Separate public UI caching from protected bundled-asset compression.
 
 The HTML shell always revalidates. Its content-addressed asset URLs let the
 browser reuse identical code across visits without serving old code on deploy.
-No notebook, map, API, or user-owned files are included in this inventory.
+No notebook, map, API, or user-owned files enter the public inventory. A separate
+fixed protected inventory compresses bundled map/notebook files only; admission
+still runs for every request and responses remain no-store.
 """
 from dataclasses import dataclass
 from functools import cached_property, lru_cache
@@ -32,6 +34,24 @@ PUBLIC_FILES = (
     '/styles.css', '/app.js', '/bootstrap.js', '/math.js', '/assumptions.js',
     '/proposal-retractions.js', '/assets/crucible-logo.png',
 )
+
+PROTECTED_FILES = {
+    '/map/' + name: media for name, media in {
+        'index.html': 'text/html', 'notes.html': 'text/html',
+        'styles.css': 'text/css', 'notes.css': 'text/css',
+        'app.js': 'text/javascript', 'map-views.js': 'text/javascript',
+        'notes.js': 'text/javascript', 'note-ui.js': 'text/javascript',
+        'catalogue.js': 'text/javascript', 'notes-data.js': 'text/javascript',
+        'catalogue.json': 'application/json', 'notes.json': 'application/json',
+        'PIPELINE.txt': 'text/plain', 'NOTE-FORMAT.txt': 'text/plain',
+    }.items()
+} | {
+    '/notebook/' + name: media for name, media in {
+        'seed.js': 'text/javascript', 'store.js': 'text/javascript',
+        'notebook.js': 'text/javascript', 'notebook.css': 'text/css',
+        'request-types.json': 'application/json',
+    }.items()
+}
 
 # Minimal Linux images do not always have a system MIME database. The browser
 # must receive the same declared types for our fixed UI inventory on every host.
@@ -194,6 +214,44 @@ class PublicMathFiles(StaticFiles):
         if scope['method'] not in {'GET', 'HEAD'}:
             return Response(status_code=405)
         return self.assets.response(Request(scope), '/vendor/katex/' + path)
+
+
+class ProtectedAssets:
+    """Compress fixed, shared source bytes; never cache rights or account data.
+
+    These routes remain outside is_public_ui and behind the normal member
+    admission. No ETag/304 storage is introduced: a new request always checks
+    access and receives the selected complete representation with no-store.
+    """
+    def __init__(self, web_root):
+        self.root = Path(web_root).resolve()
+
+    def response(self, request):
+        path = request.url.path
+        media = PROTECTED_FILES.get(path)
+        headers = {'Cache-Control': 'no-store', 'Vary': 'Accept-Encoding'}
+        if media is None:
+            return Response(status_code=404, headers=headers)
+        if request.method not in {'GET', 'HEAD'}:
+            return Response(status_code=405, headers=headers)
+        source = (self.root / path.lstrip('/')).resolve()
+        directory = self.root / path.split('/')[1]
+        if not source.is_relative_to(directory):
+            return Response(status_code=404, headers=headers)
+        try:
+            body = read(source)
+        except OSError:
+            return Response(status_code=404, headers=headers)
+        encoding = _encoding(','.join(request.headers.getlist('accept-encoding')),
+                             gzip_available=len(body) >= 1024)
+        if encoding is None:
+            return Response(status_code=406, headers=headers)
+        if encoding == 'gzip':
+            body = _gzip(body)
+            headers['Content-Encoding'] = 'gzip'
+        headers['Content-Length'] = str(len(body))
+        return Response(body if request.method == 'GET' else b'',
+                        media_type=media, headers=headers)
 
 
 def is_public_ui(path):

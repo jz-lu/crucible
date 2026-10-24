@@ -602,6 +602,10 @@ async function loadAuthorizedWorkspace() {
   if (routeNeedsCatalogue() && !state.catalogueLoaded) {
     showRouteLoading();
     const catalogue = loadAuthorizedCatalogue();
+    const [path, query = ''] = window.location.hash.split('?');
+    if (path === '#notebook' && new URLSearchParams(query).get('view') === 'map') {
+      void ensureNotebookAssets().catch(() => {});
+    }
     // Deep links can overlap the two independent reads. The response revision
     // must match navigation before a complete release can reach a renderer.
     const target = routeRelease();
@@ -688,6 +692,23 @@ function loadNotebookAsset(path, stylesheet = false) {
   (stylesheet ? document.querySelector('head') : document.body).append(element);
   return task;
 }
+function ensureNotebookAssets() {
+  if (!hasAccess()) return Promise.reject(new Error('Sign in to open the notebook.'));
+  if (window.CrucibleNotebook && (!notebookAssetLoads.size || notebookAssetsReady)) return Promise.resolve();
+  return notebookAssets ||= (async () => {
+      // These scripts define independent globals; dependencies are read only
+      // after this readiness barrier. Independent execution also lets a retry
+      // succeed while a removed, timed-out script request is still stalled.
+      const results = await Promise.allSettled([
+        loadNotebookAsset('/notebook/notebook.css', true),
+        ...['/notebook/seed.js', '/notebook/store.js', '/notebook/notebook.js'].map(src => loadNotebookAsset(src))
+      ]);
+      const failed = results.find(result => result.status === 'rejected');
+      if (failed) throw failed.reason;
+      if (!hasAccess()) throw new Error('Sign in to open the notebook.');
+      notebookAssetsReady = true;
+    })().catch(error => { notebookAssets = null; throw error; });
+}
 async function showNotebook(query, reviewing = false) {
   const account = state.user?.id, csrf = state.csrf, section = state.reviewSection, request = ++notebookShowRequest;
   const params = new URLSearchParams(query || window.location.hash.split('?')[1] || '');
@@ -711,24 +732,12 @@ async function showNotebook(query, reviewing = false) {
   };
   if (!window.CrucibleNotebook || (!notebookAssetsReady && notebookAssetLoads.size)) {
     setLoading(target, reviewing ? 'Loading review workspace…' : 'Loading notebook…');
-    notebookAssets ||= (async () => {
-      // These scripts define independent globals; dependencies are read only
-      // after this readiness barrier. Independent execution also lets a retry
-      // succeed while a removed, timed-out script request is still stalled.
-      const results = await Promise.allSettled([
-        loadNotebookAsset('/notebook/notebook.css', true),
-        ...['/notebook/seed.js', '/notebook/store.js', '/notebook/notebook.js'].map(src => loadNotebookAsset(src))
-      ]);
-      const failed = results.find(result => result.status === 'rejected');
-      if (failed) throw failed.reason;
-      if (!hasAccess()) throw new Error('Sign in to open the notebook.');
-      notebookAssetsReady = true;
-    })().catch(error => { notebookAssets = null; throw error; });
-    try { await notebookAssets; }
+    try { await ensureNotebookAssets(); }
     catch (error) { if (current()) showInlineError(target, error.message, () => showNotebook(query, reviewing)); return; }
   }
   if (!current()) return;
   const options = {navigate, api: notebookAPI, account: () => hasAccess() && (!reviewing || state.canReviewProposals) ? state.user : null,
+    prepareMapCatalogue: () => hasAccess() && !state.catalogueLoaded ? loadAuthorizedCatalogue() : Promise.resolve(),
     currentReleases: () => hasAccess() ? state.schemes : [], session: () => state.csrf, reviewOnly: reviewing};
   if (reviewing) reviewNotebookWorkspace ||= window.CrucibleNotebook.mount(target, options);
   else notebookWorkspace ||= window.CrucibleNotebook.mount(target, options);
@@ -4396,7 +4405,11 @@ $('#download-proposal').addEventListener('click', () => {
 function showWorkspace(name) {
   if (!hasAccess()) name = 'access';
   if (!RESEARCH_ENABLED && name === 'research') name = 'catalogue';
-  if (name !== 'notebook') notebookWorkspace?.hide();
+  const [pendingPath, pendingQuery = ''] = window.location.hash.split('?');
+  const preparingMap = name === 'loading' && hasAccess() && pendingPath === '#notebook' && new URLSearchParams(pendingQuery).get('view') === 'map';
+  // Catalogue arrival must not detach the connected map being prepared for
+  // this same destination. Other routes and access loss still cancel it.
+  if (name !== 'notebook' && !preparingMap) notebookWorkspace?.hide();
   if (name !== 'reviews' || state.reviewSection === 'schemes') reviewNotebookWorkspace?.hide();
   if (name !== 'assumptions') assumptionsWorkspace?.clear();
   const enteringResearch = !research.visible && name === 'research';

@@ -367,6 +367,35 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.match(app.q('full').textContent,/Approved original.*Published/);assert.doesNotMatch(app.q('full').textContent,/PRIVATE FUTURE/);
  });
 
+ await test('map preparation starts after the visible list and is reused without a second mount',async()=>{
+  let mounts=0,shows=0,hides=0;const late=deferred();
+  const app=await boot({mapFactory:()=>{mounts++;return late.promise;}});
+  assert.equal(mounts,0);await app.advanceTimers(299);assert.equal(mounts,0);
+  await app.advanceTimers(300);assert.equal(mounts,1);assert.equal(app.q('map').hidden,true);
+  app.q('map-view').dispatchEvent({type:'pointerenter'});app.q('map-view').dispatchEvent({type:'focus'});
+  assert.equal(mounts,1,'Intent shares the same preparation');
+  late.resolve({show:()=>shows++,hide:()=>hides++,destroy:()=>{}});await flush();
+  assert.equal(shows,0);assert.equal(hides,1);assert.equal(app.q('library').hidden,false);
+  app.q('map-view').click();await app.whenNavigated();
+  assert.equal(mounts,1);assert.equal(shows,1);assert.equal(app.q('map').hidden,false);
+ });
+ await test('map intent prepares immediately, stays hidden and cannot outlive its account',async()=>{
+  let mounts=0,destroyed=0;const late=deferred();
+  const app=await boot({mapFactory:()=>{mounts++;return late.promise;}});
+  app.q('map-view').dispatchEvent({type:'focus'});assert.equal(mounts,1);
+  app.setAccount(null);late.resolve({show:()=>{throw Error('Revoked map shown');},hide:()=>{},destroy:()=>destroyed++});await flush();
+  assert.equal(destroyed,1);assert.equal(app.q('map').textContent,'');
+  await app.advanceTimers(300);assert.equal(mounts,1);
+ });
+ await test('leaving the notebook cancels queued background preparation',async()=>{
+  let mounts=0;const app=await boot({mapFactory:async()=>{mounts++;return null;}});
+  app.controller.hide();await app.advanceTimers(300);assert.equal(mounts,0);
+ });
+ await test('review workspace never schedules or accepts map preparation',async()=>{
+  let mounts=0;const app=await boot({reviewOnly:true,mapFactory:async()=>{mounts++;return null;},respond:url=>url.startsWith('/api/notebook/review-queue?')?{notes:[],next_after:null}:undefined});
+  await app.advanceTimers(300);assert.equal(mounts,0);
+ });
+
  await test('map receives a current catalogue callback rather than a frozen release snapshot',async()=>{
   let releases=[{id:'frodokem',version:'first'}],context;
   const app=await boot({currentReleases:()=>releases,mapFactory:async(_,current,options)=>{
@@ -401,7 +430,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const loading=app.controller.show(new URLSearchParams('view=map'));
   await app.controller.show();
   late.resolve({show:()=>{throw Error('Stale map shown');},hide:()=>{},destroy:()=>disposed++});await loading;
-  assert.equal(disposed,1);assert.equal(app.q('map').hidden,true);assert.equal(app.q('library').hidden,false);
+  assert.equal(disposed,0,'Completed preparation stays hidden for the next map visit');assert.equal(app.q('map').hidden,true);assert.equal(app.q('library').hidden,false);
  });
  await test('account changes dispose a map and ignore its delayed initialization',async()=>{
   const late=deferred();let disposed=0;

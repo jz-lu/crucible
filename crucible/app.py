@@ -22,7 +22,7 @@ from .db import AdapterVersion, Base, Challenge, Database, LoginSession, Method,
 from .schemas import Credentials, NewChallenge, NewMethod, NewSubmission
 from .security import mac, passwords, payload_mac, target_mac, token_hash, verify_password
 from .public_json import catalogue_progress, catalogue_response
-from .public_assets import CONTENT_SECURITY_POLICY, PublicAssets, PublicMathFiles, is_public_ui
+from .public_assets import CONTENT_SECURITY_POLICY, ProtectedAssets, PublicAssets, PublicMathFiles, is_public_ui
 from .access_policy import AccessPolicy
 from . import benchmark_reports, assumption_sheets, agent_guidance
 from .reference_policy import METHOD as REFERENCE_METHOD
@@ -167,6 +167,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     policy = AccessPolicy()
     app.state.access_policy = policy
     public_assets = PublicAssets(ROOT / "web", frozen=settings.production)
+    protected_assets = ProtectedAssets(ROOT / "web")
     app.add_middleware(RequestBoundary, settings=settings, clock=clock, db=db, policy=policy)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.hosts)
 
@@ -929,34 +930,16 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         return public_assets.response(request)
 
     @app.get("/map/{asset_name}")
-    def research_map_asset(asset_name: str):
+    def research_map_asset(asset_name: str, request: Request):
         # Curated, read-only research notes; never a directory mount or a view
         # into account-owned notebook data. Beta membership is enforced above.
-        assets = {
-            "index.html": "text/html", "notes.html": "text/html",
-            "styles.css": "text/css", "notes.css": "text/css",
-            "app.js": "text/javascript", "map-views.js": "text/javascript",
-            "notes.js": "text/javascript", "note-ui.js": "text/javascript",
-            "catalogue.js": "text/javascript", "notes-data.js": "text/javascript",
-            "catalogue.json": "application/json", "notes.json": "application/json",
-            "PIPELINE.txt": "text/plain", "NOTE-FORMAT.txt": "text/plain",
-        }
-        if asset_name not in assets:
-            raise HTTPException(404, "Map asset not found.")
-        return FileResponse(ROOT / "web" / "map" / asset_name,
-                            media_type=assets[asset_name], headers={"Cache-Control": "no-store"})
+        return protected_assets.response(request)
 
     @app.get("/notebook/{asset_name}")
-    def notebook_asset(asset_name: str):
-        assets = {"seed.js": "text/javascript", "store.js": "text/javascript",
-                  "notebook.js": "text/javascript", "notebook.css": "text/css",
-                  "request-types.json": "application/json"}
-        if asset_name not in assets:
-            raise HTTPException(404, "Notebook asset not found.")
+    def notebook_asset(asset_name: str, request: Request):
         # Only these fixed UI assets are exposed. Saved notebook data uses
         # authenticated routes with per-note ownership/publication checks.
-        return FileResponse(ROOT / "web" / "notebook" / asset_name,
-                            media_type=assets[asset_name], headers={"Cache-Control": "no-cache"})
+        return protected_assets.response(request)
 
     @app.get("/assets/crucible-logo.png")
     def logo(request: Request):

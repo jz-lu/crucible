@@ -491,6 +491,7 @@
   "native_test_batches": {
     "access-ui": [
       "test_public_assets.py",
+      "test_protected_assets.py",
       "test_browser_admission.py",
       "test_catalogue_progress_access.py"
     ],

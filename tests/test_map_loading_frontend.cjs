@@ -9,8 +9,8 @@ vm.runInNewContext(fs.readFileSync(harnessPath, 'utf8') + '\nmodule.exports.pars
 const {createApp, parseHTML, flush} = helper.module.exports;
 const source = fs.readFileSync(path.join(__dirname, '../web/notebook/notebook.js'), 'utf8');
 const template = '<html><head><script src="should-not-load.js"></script></head><body><header>Not imported</header><main><p class="intro">Removed intro</p><div id="landscape"></div><a href="notes.html">Notes</a></main><dialog></dialog></body></html>';
-const scripts = ['catalogue.js', 'notes-data.js', 'note-ui.js', 'map-views.js', 'app.js'];
-const globals = ['CRUCIBLE_LANDSCAPE', 'CRUCIBLE_NOTES', 'NoteUI', 'LandscapeViews', 'CrucibleResearchMap'];
+const scripts = ['catalogue.js', 'note-ui.js', 'map-views.js', 'app.js'];
+const globals = ['CRUCIBLE_LANDSCAPE', 'NoteUI', 'LandscapeViews', 'CrucibleResearchMap'];
 const deferred = () => {let resolve, reject; const promise = new Promise((a,b) => {resolve=a;reject=b;}); return {promise,resolve,reject};};
 
 async function boot() {
@@ -42,7 +42,7 @@ async function boot() {
     assert.ok(shadow.querySelector('main'));assert.ok(shadow.querySelector('dialog'));
     assert.equal(shadow.querySelector('script'),null);assert.equal(shadow.querySelector('header'),null);
     assert.equal(shadow.querySelector('.intro'),null);
-    assert.equal(options.currentReleases(),releases);calls.mount++;
+    assert.equal(options.currentReleases(),releases);calls.mount++;calls.options=options;
     return {show:()=>calls.show++,hide:()=>calls.hide++,destroy:()=>calls.destroy++};
   }};
   const pendingScripts=()=>app.document.querySelector('head').querySelectorAll('script').filter(node=>node.src?.startsWith('/map/'));
@@ -60,7 +60,7 @@ async function boot() {
 let passed=0;
 async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
 (async()=>{
-  await test('all seven protected assets start before any result and no unstyled map mounts',async()=>{
+  await test('all six graph assets start before any result and no unstyled map mounts',async()=>{
     const app=await boot(),loading=app.show();
     assert.deepEqual(Array.from(app.pendingScripts(),script=>script.src),scripts.map(name=>'/map/'+name));
     assert.ok(app.pendingScripts().every(script=>script.async===true),'independent execution cannot be held behind a removed timed-out script');
@@ -75,6 +75,15 @@ async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
     assert.equal(app.calls.mount,1);assert.equal(app.calls.show,1);assert.equal(app.surface().hidden,false);
     assert.equal(app.surface(),surface);assert.equal(detachments,0,'keep the loaded shadow stylesheet continuously connected');
     assert.doesNotMatch(app.q('map').textContent,/Loading scheme map/);assert.equal(app.timers.size,0);
+  });
+  await test('note bodies load on demand, retry independently and reject a changed owner',async()=>{
+    const app=await boot(),loading=app.show();app.respond();app.finishScripts();app.stylesheet().onload();await loading;
+    assert.equal(app.window.CRUCIBLE_NOTES,undefined);
+    const first=app.calls.options.loadNotes();const rejected=assert.rejects(first,/asset unavailable/);
+    let script=app.pendingScripts().find(node=>node.src==='/map/notes-data.js');assert.ok(script);
+    script.onerror();await rejected;assert.equal(app.calls.mount,1,'Body failure does not tear down the graph');
+    const retry=app.calls.options.loadNotes();script=app.pendingScripts().find(node=>node.src==='/map/notes-data.js?asset_attempt=2');assert.ok(script);
+    app.rotate();app.window.CRUCIBLE_NOTES={notes:[]};script.onload();await assert.rejects(retry,/no longer active/);
   });
   await test('HTML and CSS completing first cannot mount before the last independent script',async()=>{
     const app=await boot(),loading=app.show();app.respond();app.stylesheet().onload();
@@ -91,12 +100,12 @@ async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
     const app=await boot(),loading=app.show();const failed=app.pendingScripts()[1];
     failed.onerror();app.respond();app.stylesheet().onload();await flush();
     assert.doesNotMatch(app.q('map').textContent,/could not be loaded/,'do not start an overlapping retry');
-    scripts.filter(name=>name!=='notes-data.js').forEach(app.finishScript);await loading;
+    scripts.filter(name=>name!=='note-ui.js').forEach(app.finishScript);await loading;
     assert.match(app.q('map').textContent,/could not be loaded/);assert.equal(app.surface(),undefined);
     const successful=app.pendingScripts();const retry=app.show();
-    assert.equal(app.pendingScripts().length,5);assert.ok(successful.every(script=>app.pendingScripts().includes(script)));
-    assert.equal(app.pendingScripts().find(script=>!successful.includes(script)).src,'/map/notes-data.js?asset_attempt=2');
-    app.finishScript('notes-data.js');app.respond();app.stylesheet().onload();await retry;
+    assert.equal(app.pendingScripts().length,4);assert.ok(successful.every(script=>app.pendingScripts().includes(script)));
+    assert.equal(app.pendingScripts().find(script=>!successful.includes(script)).src,'/map/note-ui.js?asset_attempt=2');
+    app.finishScript('note-ui.js');app.respond();app.stylesheet().onload();await retry;
     assert.equal(app.calls.mount,1);assert.equal(app.timers.size,0);
   });
   await test('stylesheet failure leaves no surface and retries without downloading successful scripts',async()=>{
@@ -113,13 +122,14 @@ async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
     const retry=app.show();assert.equal(app.reads.length,2);app.respond();app.stylesheet().onload();await retry;
     assert.equal(app.calls.mount,1);
   });
-  await test('a late abandoned route cannot remove or mount the newer map surface',async()=>{
-    const app=await boot(),old=app.show(),oldSurface=app.surface(),oldStyle=app.stylesheet();
-    await app.controller.show();const latest=app.show(),newSurface=app.surface(),newStyle=app.stylesheet();
-    assert.notEqual(newSurface,oldSurface);assert.equal(app.pendingScripts().length,5,'share in-flight scripts');
-    app.respond(0);oldStyle.onload();app.finishScripts();await old;
-    assert.equal(app.calls.mount,0);assert.equal(app.surface(),newSurface);assert.equal(newSurface.hidden,true);
-    app.respond(1);newStyle.onload();await latest;assert.equal(app.calls.mount,1);
+  await test('pending preparation survives switching notebook views without showing a hidden map',async()=>{
+    const app=await boot(),old=app.show(),oldSurface=app.surface(),style=app.stylesheet();
+    await app.controller.show();
+    assert.equal(app.q('map').hidden,true);
+    const latest=app.show();
+    assert.equal(app.surface(),oldSurface);assert.equal(app.reads.length,1);
+    app.respond();style.onload();app.finishScripts();await Promise.all([old,latest]);
+    assert.equal(app.calls.mount,1);assert.equal(app.surface(),oldSurface);
   });
   for(const change of ['sign-out','session rotation'])await test(change+' during loading prevents a delayed map from appearing',async()=>{
     const app=await boot(),loading=app.show(),style=app.stylesheet();

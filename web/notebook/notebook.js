@@ -36,13 +36,36 @@
   const latestRevision = note => note.revisions?.reduce((last, revision) => !last || revision.revision > last.revision ? revision : last, null);
 
   let researchMapAssets = null;
-  const researchMapAssetAttempts = new Map(); // Six fixed script/style paths.
+  const researchMapAssetAttempts = new Map(); // Fixed script/style paths only.
+  const researchMapScripts = new Map();
   function researchMapAssetURL(name) {
     const attempt = (researchMapAssetAttempts.get(name) || 0) + 1;
     researchMapAssetAttempts.set(name, attempt);
     return '/map/' + name + (attempt > 1 ? '?asset_attempt=' + attempt : '');
   }
-  async function mountResearchMap(host, current, {currentReleases} = {}) {
+  function loadResearchMapScript(name, global) {
+    if (window[global]) return Promise.resolve();
+    if (researchMapScripts.has(name)) return researchMapScripts.get(name);
+    const script = el('script'); script.src = researchMapAssetURL(name); script.async = true;
+    const task = new Promise((resolve, reject) => {
+      let settled = false;
+      const timer = setTimeout(() => finish(new Error('Map asset unavailable.')), 15000);
+      function finish(error) {
+        if (settled) return;
+        settled = true; clearTimeout(timer); script.onload = script.onerror = null;
+        if (error) {
+          script.remove();
+          if (researchMapScripts.get(name) === task) researchMapScripts.delete(name);
+          reject(error);
+        } else resolve();
+      }
+      script.onload = () => finish(window[global] ? null : new Error('Map asset unavailable.'));
+      script.onerror = () => finish(new Error('Map asset unavailable.'));
+    });
+    researchMapScripts.set(name, task); document.querySelector('head').append(script);
+    return task;
+  }
+  async function mountResearchMap(host, current, {currentReleases, canRead = current} = {}) {
     if (!current()) return null;
     // Start the stylesheet, template and independent scripts together. The surface
     // must be connected for its shadow stylesheet to load, but stays hidden
@@ -70,21 +93,10 @@
       } finally { clearTimeout(timeout); }
     })();
     researchMapAssets ||= (async () => {
-      const scripts = [['catalogue.js', 'CRUCIBLE_LANDSCAPE'], ['notes-data.js', 'CRUCIBLE_NOTES'], ['note-ui.js', 'NoteUI'], ['map-views.js', 'LandscapeViews'], ['app.js', 'CrucibleResearchMap']];
-      const results = await Promise.allSettled(scripts.map(([name, global]) => {
-        if (window[global]) return Promise.resolve();
-        return new Promise((resolve, reject) => {
-          const script = el('script'); script.src = researchMapAssetURL(name); script.async = true;
-          const timer = setTimeout(() => finish(new Error('Map asset unavailable.')), 15000);
-          function finish(error) {
-            clearTimeout(timer); script.onload = script.onerror = null;
-            if (error) { script.remove(); reject(error); } else resolve();
-          }
-          script.onload = () => finish(window[global] ? null : new Error('Map asset unavailable.'));
-          script.onerror = () => finish(new Error('Map asset unavailable.'));
-          document.querySelector('head').append(script);
-        });
-      }));
+      // Full research-note bodies are unnecessary for graph layout. Their
+      // separate download starts only when an inline note is requested.
+      const scripts = [['catalogue.js', 'CRUCIBLE_LANDSCAPE'], ['note-ui.js', 'NoteUI'], ['map-views.js', 'LandscapeViews'], ['app.js', 'CrucibleResearchMap']];
+      const results = await Promise.allSettled(scripts.map(([name, global]) => loadResearchMapScript(name, global)));
       // Global factories are independent; mount below waits for all of them.
       // Wait for every attempt to settle before retrying failed dependencies.
       // Successfully loaded globals are reused on a subsequent try.
@@ -108,7 +120,12 @@
       }
       if (!current()) { surface.remove(); return null; }
       shadow.append(document.importNode(main, true), document.importNode(dialog, true));
-      const controller = window.CrucibleResearchMap.mount(shadow, {currentReleases});
+      const controller = window.CrucibleResearchMap.mount(shadow, {currentReleases, loadNotes: async () => {
+        if (!canRead()) throw new Error('Map no longer active.');
+        await loadResearchMapScript('notes-data.js', 'CRUCIBLE_NOTES');
+        if (!canRead()) throw new Error('Map no longer active.');
+        return window.CRUCIBLE_NOTES;
+      }});
       // Moving a connected shadow root restarts its no-store stylesheet fetch.
       // Keep the prepared surface in place and remove only the loading content.
       for (const child of [...host.childNodes]) if (child !== surface) child.remove();
@@ -120,13 +137,13 @@
     } catch (error) { surface.remove(); throw error; }
   }
 
-  function mount(root, {navigate, api: requestAPI, account, session = () => null, currentReleases = () => [], mapFactory = mountResearchMap, reviewOnly = false}) {
+  function mount(root, {navigate, api: requestAPI, account, session = () => null, currentReleases = () => [], mapFactory = mountResearchMap, prepareMapCatalogue = () => {}, reviewOnly = false}) {
     if (root.notebookController) return root.notebookController;
     let currentAccount = typeof account === 'function' ? account() : account;
     let accountId = currentAccount?.id == null ? null : String(currentAccount.id);
     let active = false, epoch = 0, request = 0, dialogEpoch = 0, notes = [], nextAfter = null;
     let params = new URLSearchParams(), search = '', tag = '', visibility = 'all', previewId = null;
-    let mapController = null, mapRequest = 0, timelineRequest = 0, listLoaded = false, cardAction = 0;
+    let mapController = null, mapPreparation = null, mapIdle = null, mapRequest = 0, timelineRequest = 0, listLoaded = false, cardAction = 0;
     let curatedNotes = [], curatedLoaded = false, curatedPromise = null;
     let pageCursors = [null], pageIndex = 0, searchTimer = null;
     let currentSession = session(), readEpoch = 0, listStamp = null, listRefreshing = false;
@@ -177,6 +194,7 @@
     const visualizations = el('div', 'nb-visualizations');
     visualizations.append(el('span', 'nb-view-label', 'Visualizations'));
     const mapView = mark('map-view', button('Scheme map', () => navigate('#notebook?view=map'), 'nb-view nb-visualization-view'));
+    for (const event of ['pointerenter', 'focus']) mapView.addEventListener(event, () => { void prepareMap().catch(() => {}); });
     const timelineView = mark('timeline-view', button('Timeline', () => navigate('#notebook?view=timeline'), 'nb-view nb-visualization-view'));
     function viewIcon(parts) {
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -230,7 +248,7 @@
       const next = value?.id == null ? null : String(value.id);
       const nextSession = session();
       if (next === accountId && nextSession === currentSession) return;
-      currentSession = nextSession; invalidateReads();
+      currentSession = nextSession; invalidateReads(); cancelMapPreparation();
       accountId = next; epoch++; request++; mapRequest++; timelineRequest++; listLoaded = false;
       q('timeline').replaceChildren();
       curatedNotes = []; curatedLoaded = false; curatedPromise = null; resetPages(); clearTimeout(searchTimer); searchTimer = null;
@@ -238,7 +256,7 @@
       q('search').value = ''; q('filter').replaceChildren(); q('page').textContent = ''; humanHint.hidden = true;
       closeDialog(true); q('dialog-body').replaceChildren(); q('list').replaceChildren(); q('full').replaceChildren(); q('count').textContent = ''; q('pagination').hidden = true; notice('');
     }
-    function hide() { clearTimeout(searchTimer); searchTimer = null; active = false; request++; mapRequest++; timelineRequest++; q('timeline').replaceChildren(); mapController?.hide(); if (q('dialog').open) { suspendedDialog = true; q('dialog').close(); } }
+    function hide() { cancelMapPreparation(); clearTimeout(searchTimer); searchTimer = null; active = false; request++; mapRequest++; timelineRequest++; q('timeline').replaceChildren(); mapController?.hide(); if (q('dialog').open) { suspendedDialog = true; q('dialog').close(); } }
     const reviewUrl = (section, extra = {}) => '#reviews?' + new URLSearchParams({section, ...extra});
     function pageGuard() { const current = guard(), token = request; return () => current() && token === request; }
     function backToNotes() { return button(reviewOnly ? '← Publish requests' : '← Research notebook', () => navigate(reviewOnly ? reviewUrl('publication') : '#notebook'), 'nb-link nb-back'); }
@@ -252,7 +270,7 @@
       const inTimeline = params.get('view') === 'timeline', inVisualization = inMap || inTimeline;
       const inShared = !inVisualization && params.get('shared') === '1' && !params.has('note');
       if (inShared || params.get('filter') === 'shared') { params.delete('shared'); params.delete('state'); params.delete('filter'); visibility = 'all'; filter.input.value = 'all'; }
-      request++; mapRequest++; timelineRequest++;
+      request++; timelineRequest++;
       for (const [control, selected] of [[notesView, !inVisualization], [mapView, inMap], [timelineView, inTimeline]]) {
         if (selected) control.setAttribute('aria-current', 'page'); else control.removeAttribute('aria-current');
       }
@@ -275,15 +293,49 @@
       if (id) await loadNote(id); else await loadList();
       if (!reviewOnly && active && params.get('compose') === 'proposal' && !q('dialog').open) editNote(null, true);
     }
-    async function showMap() {
-      if (mapController) { mapController.show(); return; }
+    function cancelMapPreparation() {
+      if (mapIdle !== null) clearTimeout(mapIdle);
+      mapIdle = null; mapRequest++; mapPreparation = null;
+      if (!mapController) q('map').replaceChildren();
+    }
+    function scheduleMap() {
+      if (reviewOnly || mapController || mapPreparation || mapIdle !== null || !accountId) return;
+      // One small background preparation after the visible list has arrived.
+      // No full note bodies, challenge instances or participant data are read.
+      mapIdle = setTimeout(() => {
+        mapIdle = null;
+        if (active && identity() === accountId && document.visibilityState !== 'hidden' && !window.navigator?.connection?.saveData && !params.has('note') && !params.has('view')) void prepareMap().catch(() => {});
+      }, 300);
+    }
+    function prepareMap() {
+      if (reviewOnly || !active || !accountId || identity() !== accountId) return Promise.resolve(null);
+      if (mapController) return Promise.resolve(mapController);
+      if (mapPreparation) return mapPreparation;
+      if (mapIdle !== null) clearTimeout(mapIdle); mapIdle = null;
       const owner = accountId, generation = epoch, token = ++mapRequest;
-      const current = () => active && accountId === owner && identity() === owner && epoch === generation && token === mapRequest && params.get('view') === 'map';
-      q('map').replaceChildren(el('p', 'nb-empty', 'Loading scheme map…'));
+      const current = () => active && accountId === owner && identity() === owner && epoch === generation && token === mapRequest;
+      // The shell shares its existing bounded catalogue read; actions resolve
+      // against that current catalogue when the map is opened.
+      void Promise.resolve(prepareMapCatalogue()).catch(() => {});
+      const task = (async () => {
+        const controller = await mapFactory(q('map'), current, {currentReleases,
+          canRead: () => active && accountId === owner && identity() === owner && epoch === generation});
+        if (!current()) { controller?.destroy(); return null; }
+        mapController = controller;
+        if (params.get('view') !== 'map') mapController?.hide();
+        return controller;
+      })();
+      mapPreparation = task;
+      task.finally(() => { if (mapPreparation === task) mapPreparation = null; }).catch(() => {});
+      return task;
+    }
+    async function showMap() {
+      const owner = accountId, generation = epoch;
+      const current = () => active && accountId === owner && identity() === owner && epoch === generation && params.get('view') === 'map';
+      if (!mapController && !q('map').querySelector('.nb-empty')) q('map').prepend(el('p', 'nb-empty', 'Loading scheme map…'));
       try {
-        const controller = await mapFactory(q('map'), current, {currentReleases});
-        if (!current()) { controller?.destroy(); return; }
-        mapController = controller; mapController?.show();
+        const controller = await prepareMap();
+        if (current()) controller?.show();
       } catch (error) {
         if (current()) q('map').replaceChildren(el('p', 'nb-error', 'The map could not be loaded.'), button('Try again', showMap, 'nb-button'));
       }
@@ -421,6 +473,7 @@
         const page = {notes: result.notes, next_after: result.next_after || null};
         if (visibility !== 'trash') rememberRead(key, page);
         listRefreshing = false; paint(page);
+        if (!reviewOnly && visibility !== 'trash') scheduleMap();
         for (const control of q('list').querySelectorAll('.nb-card-actions button')) control.disabled = false;
       } catch (error) {
         if (!current() || request !== token || generation !== readEpoch) return;

@@ -1,8 +1,9 @@
 /* Read-only network view, mounted inside the research notebook. */
 (() => {
   'use strict';
-  function mount(root, {currentReleases = () => []} = {}) {
-    const data = window.CRUCIBLE_LANDSCAPE, notes = window.CRUCIBLE_NOTES;
+  function mount(root, {currentReleases = () => [], loadNotes = async () => window.CRUCIBLE_NOTES} = {}) {
+    const data = window.CRUCIBLE_LANDSCAPE;
+    let notes = window.CRUCIBLE_NOTES || null;
     const {el, body, tag, noteHref} = window.NoteUI;
     const $ = selector => root.querySelector(selector);
     const schemes = new Map(data.schemes.map(s => [s.id, s]));
@@ -11,10 +12,10 @@
     const assumptions = new Map(data.assumptions.map(a => [a.id, a]));
     const highlights = new Map(data.highlights.map(h => [h.scheme, h.reason]));
     const scored = new Map(data.scoring_snapshot.releases.map(r => [r.scheme, r]));
-    const noteById = new Map(notes.notes.map(n => [n.id, n]));
+    let noteById = notes ? new Map(notes.notes.map(n => [n.id, n])) : null;
     const map = $('#landscape'), modal = $('#mobile-details'), detail = $('#mobile-inspector');
     const search = $('#search'), state = {filter:'all', query:'', selected:null};
-    let visible = true, destroyed = false, resizeTimer, renderedWidth = 0;
+    let visible = true, destroyed = false, resizeTimer, renderedWidth = 0, rendered = false, detailRequest = 0;
     const descriptions = {
       all:'Documented KEMs, each backed by a research note.',
       scored:'KEMs with an enrolled challenge release, from the current map snapshot.',
@@ -32,7 +33,7 @@
     function render() {
       if (destroyed) return;
       // Measure before clearing the graph, so layout never observes an empty map.
-      renderedWidth = map.clientWidth;
+      renderedWidth = map.clientWidth; rendered = true;
       const entries = matching(); map.replaceChildren(); map.classList.add('alternative-view');
       $('.workspace').dataset.view = 'network';
       if (entries.length) window.LandscapeViews.render('network', map, entries, {
@@ -50,6 +51,7 @@
       $('#filter-description').textContent = descriptions[state.filter];
     }
     function popup(title, content) {
+      detailRequest++;
       $('#mobile-detail-title').textContent = title;
       detail.replaceChildren(content);
       if (!modal.open) modal.showModal();
@@ -80,6 +82,24 @@
         actions.append(challenge, read, parameters);
       } else actions.append(read);
       card.append(actions); popup('Scheme', card);
+    }
+    function withNotes(renderNote) {
+      if (destroyed || !visible) return;
+      if (notes) { renderNote(); return; }
+      popup('Research note', el('p', '', 'Loading research note…'));
+      const token = detailRequest;
+      Promise.resolve().then(loadNotes).then(value => {
+        if (destroyed || !visible || token !== detailRequest || !modal.open) return;
+        if (!Array.isArray(value?.notes)) throw new Error('Research notes unavailable.');
+        notes = value; noteById = new Map(notes.notes.map(note => [note.id, note]));
+        renderNote();
+      }).catch(() => {
+        if (destroyed || !visible || token !== detailRequest || !modal.open) return;
+        const message = el('div'); message.append(el('p', '', 'The research note could not be loaded.'));
+        const retry = el('button', 'related-button', 'Try again'); retry.type = 'button';
+        retry.addEventListener('click', () => withNotes(renderNote)); message.append(retry);
+        popup('Research note', message);
+      });
     }
     function openNote(id, revision) {
       const note = noteById.get(id), content = note?.revisions.find(r => r.revision === revision);
@@ -124,8 +144,8 @@
       if (!match) return;
       event.preventDefault();
       let parts; try { parts = (match[1] || '').split('/').map(decodeURIComponent); } catch { return; }
-      if (parts[0] === 'note') openNote(parts[1], Number(parts[2]));
-      else notesWithTag(parts[0] === 'tag' ? parts[1] : '');
+      if (parts[0] === 'note') withNotes(() => openNote(parts[1], Number(parts[2])));
+      else withNotes(() => notesWithTag(parts[0] === 'tag' ? parts[1] : ''));
     }
     function centerNetwork() {
       const bounds = map.getBoundingClientRect();
@@ -145,6 +165,7 @@
           event.clientY < bounds.top || event.clientY > bounds.bottom) modal.close();
     });
     modal.addEventListener('close', () => {
+      detailRequest++;
       const previous = state.selected; state.selected = null;
       if (!destroyed) {
         for (const node of map.querySelectorAll('[data-scheme]')) {
@@ -159,10 +180,10 @@
     const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (map.clientWidth > 0 && map.clientWidth !== renderedWidth) onResize(); }) : null;
     observer?.observe(map);
     return {
-      show() { if (!destroyed) { visible = true; render(); } },
-      hide() { visible = false; if (modal.open) modal.close(); },
+      show() { if (!destroyed) { visible = true; if (!rendered || map.clientWidth !== renderedWidth) render(); } },
+      hide() { visible = false; detailRequest++; if (modal.open) modal.close(); },
       destroy() {
-        destroyed = true; visible = false; clearTimeout(resizeTimer); observer?.disconnect();
+        destroyed = true; visible = false; detailRequest++; clearTimeout(resizeTimer); observer?.disconnect();
         window.removeEventListener('resize', onResize); root.removeEventListener('click', onClick);
         if (modal.open) modal.close();
       }

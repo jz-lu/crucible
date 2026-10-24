@@ -57,3 +57,31 @@ assert.equal($('#map-count').textContent, '1 KEM');
 controller.destroy();
 assert.equal(listeners.size, 0);
 console.log('PASS network-only map, compact popup, inline research note, retained filters, viewport centering/reduced motion and lifecycle cleanup');
+
+(async () => {
+  const bundle = sandbox.CRUCIBLE_NOTES; vm.runInContext('window.CRUCIBLE_NOTES = null', sandbox);
+  let pending, reads=0;
+  const lazy = sandbox.CrucibleResearchMap.mount(document, {loadNotes:()=>{reads++;return new Promise((resolve,reject)=>{pending={resolve,reject};});}});
+  lazy.show();assert.equal($('#map-count').textContent,'13 KEMs');assert.equal(reads,0,'Map layout does not request research bodies');
+  const svg=$('.network-svg');lazy.hide();lazy.show();assert.equal($('.network-svg'),svg,'Warm return retains the existing SVG');
+  const open=()=>{$('[data-scheme="ml-kem"]').click();Array.from($('#mobile-inspector').querySelectorAll('a')).find(link=>link.textContent==='Read research note').click();};
+  open();await new Promise(setImmediate);assert.equal(reads,1);assert.match($('#mobile-inspector').textContent,/Loading research note/);
+  pending.reject(new Error('Unavailable'));await new Promise(setImmediate);
+  assert.match($('#mobile-inspector').textContent,/could not be loaded/);
+  $('#mobile-inspector').querySelector('button').click();await new Promise(setImmediate);assert.equal(reads,2);
+  pending.resolve(bundle);await new Promise(setImmediate);assert.match($('#mobile-inspector').textContent,/Conditions & scope/);
+  lazy.hide();lazy.show();open();assert.equal(reads,2,'One successful note bundle is reused within this owner');lazy.destroy();
+
+  for (const change of ['hide','destroy','different popup','close']) {
+    let complete;
+    const stale=sandbox.CrucibleResearchMap.mount(document,{loadNotes:()=>new Promise(resolve=>{complete=resolve;})});
+    stale.show();open();await new Promise(setImmediate);
+    if(change==='different popup')$('[data-scheme="saber"]').click();
+    else if(change==='close')$('#mobile-details').close();else stale[change]();
+    complete(bundle);await new Promise(setImmediate);
+    if(change==='different popup')assert.equal($('#mobile-detail-title').textContent,'Scheme');
+    else assert.equal($('#mobile-details').open,false);
+    assert.doesNotMatch($('#mobile-inspector').textContent,/Conditions & scope/,'A late body cannot reopen or replace a different context');stale.destroy();
+  }
+  console.log('PASS lazy note-body loading, failed-read retry, retained SVG and late response ownership');
+})().catch(error=>{console.error(error);process.exitCode=1;});
