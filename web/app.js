@@ -1775,6 +1775,7 @@ function personalRecordTable(records) {
     if (!record.is_current) name.append(node('span', 'Archived · release ' + record.scheme_version, 'person-record-release'));
     const result = node('button', recordProfileLabel(record), 'person-record-result');
     result.type = 'button'; result.disabled = !record.submission_id;
+    if (record.submission_id) result.dataset.submissionId = record.submission_id;
     result.setAttribute('aria-label', 'View result for ' + recoveryRecordLabel(record));
     result.setAttribute('aria-haspopup', 'dialog');
     result.addEventListener('click', () => openSubmissionDetails(record.submission_id, result));
@@ -1809,6 +1810,7 @@ function renderFirstRecords(person) {
     if (!record.is_current) name.append(node('span', 'Archived · release ' + record.scheme_version, 'person-record-release'));
     const result = node('button', recordProfileLabel(record), 'milestone-result milestone-achievement');
     result.type = 'button';
+    result.dataset.submissionId = record.submission_id;
     result.setAttribute('aria-haspopup', 'dialog');
     result.setAttribute('aria-label', `${record.scheme_name || record.scheme_id}: first to reach ${recordProfileLabel(record)}. View result.`);
     result.addEventListener('click', () => openSubmissionDetails(record.submission_id, result));
@@ -1857,6 +1859,7 @@ function renderPerson(person) {
     for (const record of person.recent_recoveries) {
       const item = node('button', undefined, 'history-item');
       item.type = 'button'; item.disabled = !record.submission_id;
+      if (record.submission_id) item.dataset.submissionId = record.submission_id;
       item.setAttribute('aria-haspopup', 'dialog');
       item.setAttribute('aria-label', 'View result for ' + recoveryRecordLabel(record));
       const copy = node('span', undefined, 'history-item-copy');
@@ -1898,8 +1901,23 @@ async function loadPerson(handle, {preserve = false} = {}) {
     if (preserve && state.personDataKey === JSON.stringify(data.person) && renderedReads.get(target)?.child === target.firstChild) return;
     const disclosureKey = element => element.id || element.className;
     const expanded = preserve ? new Set([...target.querySelectorAll('details')].filter(element => element.open).map(disclosureKey)) : new Set();
+    // Read focus now, after the request: a user may have opened a dialog or
+    // moved elsewhere while it was pending. Match records by identity, not row.
+    const focused = preserve && document.activeElement?.closest('#person-content') === target &&
+      ![...document.querySelectorAll('dialog')].some(dialog => dialog.open) ? document.activeElement : null;
+    const focusedSection = focused?.closest('details');
+    const focusKey = focusedSection ? disclosureKey(focusedSection) : null;
     paint(data.person);
     if (preserve) for (const element of target.querySelectorAll('details')) element.open = expanded.has(disclosureKey(element));
+    if (focusKey) {
+      const section = [...target.querySelectorAll('details')].find(element => disclosureKey(element) === focusKey);
+      const receipt = focused.dataset.submissionId;
+      const href = focused.tagName === 'A' ? focused.getAttribute('href') : null;
+      const replacement = section?.open && (receipt ?
+        [...section.querySelectorAll('[data-submission-id]')].find(element => element.dataset.submissionId === receipt && !element.disabled) :
+        href ? [...section.querySelectorAll('a')].find(element => element.getAttribute('href') === href) : null);
+      (replacement || section?.querySelector('summary') || $('#person-workspace')).focus({preventScroll: true});
+    }
   } catch (error) {
     if (current()) {
       readRefreshError(key, target, error, () => loadPerson(handle), cached || preserve);
