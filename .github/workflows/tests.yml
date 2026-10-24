@@ -150,7 +150,7 @@ jobs:
           POSTGRES_PASSWORD: synthetic-only
           POSTGRES_DB: crucible_metadata_test
         ports:
-          - 5433:5432
+          - 127.0.0.1:5433:5432
         options: >-
           --health-cmd "pg_isready -U crucible_metadata -d crucible_metadata_test"
           --health-interval 5s --health-timeout 5s --health-retries 10
