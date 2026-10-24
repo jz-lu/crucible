@@ -1064,13 +1064,26 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
     })); } catch {
       const error = new Error(controller.signal.aborted ? 'The server took too long to respond. Please try again.' : 'The server could not be reached. Check your connection and try again.');
       error.status = 0;
+      error.code = controller.signal.aborted ? 'response_timeout' : 'network_unreachable';
       throw error;
     }
     let data;
-    try { data = raw && response.ok ? await response.text() : await response.json(); } catch {
+    const bodyInUse = response.bodyUsed === true || response.body?.locked === true;
+    try { data = raw && response.ok ? await response.text() : await response.json(); } catch (failure) {
       if (controller.signal.aborted || response.ok) {
-        const error = new Error(controller.signal.aborted ? 'The server took too long to respond. Please try again.' : 'The server returned an unreadable response. Please try again.');
+        // Fetch can resolve at the headers and fail later while reading its
+        // body. Distinguish that interruption from bad JSON or a service page;
+        // never log the body or replay a request whose outcome may be unknown.
+        const interrupted = !bodyInUse && ['TypeError', 'AbortError'].includes(failure?.name);
+        const html = /^text\/html(?:\s*;|\s*$)/i.test(response.headers?.get?.('Content-Type') || '');
+        const error = new Error(controller.signal.aborted ? 'The server took too long to respond. Please try again.' :
+          interrupted ? 'The connection was interrupted before the response finished. Please try again.' :
+          html && !bodyInUse ? 'The server returned an unexpected page. Please try again.' :
+          'The server returned an unreadable response. Please try again.');
         error.status = 0;
+        error.code = controller.signal.aborted ? 'response_timeout' : interrupted ? 'response_interrupted' :
+          bodyInUse ? 'response_already_read' : html ? (response.redirected ? 'unexpected_response_redirect' : 'unexpected_response_page') :
+          failure?.name === 'SyntaxError' ? 'invalid_json_response' : 'response_unreadable';
         throw error;
       }
       data = {};
@@ -3186,6 +3199,8 @@ async function openSubmissionDetails(id, trigger) {
   }
 }
 function renderView(view, focus = false) {
+  const departingRecordFocus = view === 'challenge' && document.activeElement?.closest('#panel-leaderboard');
+  const previousFocus = departingRecordFocus ? document.activeElement : null;
   state.view = view;
   for (const tab of document.querySelectorAll('[data-view]')) {
     const selected = tab.dataset.view === view;
@@ -3194,6 +3209,10 @@ function renderView(view, focus = false) {
     $('#panel-' + tab.dataset.view).hidden = !selected;
     if (selected && focus) tab.focus();
   }
+  // A Record action can change tabs without changing the outer workspace.
+  // Hand off only the focus hidden by this transition, never header/dialog focus.
+  if (previousFocus && (document.activeElement === previousFocus || document.activeElement === document.body) &&
+      (!previousFocus.isConnected || previousFocus.closest('[hidden]'))) $('#tab-challenge').focus();
 }
 function activateView(view, focus = false) {
   const scheme = selectedScheme();

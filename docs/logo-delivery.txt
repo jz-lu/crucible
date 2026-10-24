@@ -1,0 +1,41 @@
+Logo delivery
+=============
+
+The PNG is a display-sized derivative of the existing Crucible artwork, not a
+new illustration. Header and footer dimensions, crop, transparency and colors
+are unchanged. The 189 x 192 image covers the 54 CSS-pixel header frame at 3x
+pixel density. The same content-addressed URL serves the header, footer and
+favicon; no new public endpoint or cache permission was added.
+
+Original committed PNG: 1246 x 1263, 421,760 bytes
+SHA256: 4cfbbd535f167beeb1a1ab1c3476f26208574c333bb9927d83ef4f376d1f77c7
+Display PNG: 189 x 192, 17,875 bytes (95.8% fewer bytes)
+SHA256: 43b53d53bc88c993eb2b896546fbcf3229f42da84a4aae24081ecf0019b53762
+
+Conversion, using sips-316 on macOS 26.5.1:
+  git show d9b9ca8b16df94271d96f15f4d9fffdb5dec1fbb:web/assets/crucible-logo.png > original.png
+  /usr/bin/sips -Z 192 original.png --out display.png
+The original remains recoverable from Git. Other image-tool versions may encode
+the same pixels differently; the hashes above identify the reviewed bytes.
+
+The early bootstrap keeps image frames reserved and reveals each mark after its
+complete image decode. No animation or artificial delay is added. Failed images
+leave the text wordmark available; a valid completed load remains the fallback
+if decode() is unavailable or rejects. If bootstrap itself cannot load, normal
+image rendering remains available. Authentication/bootstrap response behavior
+is unchanged.
+
+Controlled Chrome streaming reproduced a partial flame from the original PNG
+before download completion. With the derivative and decode gate, 10%, 25%, 50%
+and 75% delivery stayed hidden in the same frame; 100% painted the complete mark.
+Actual-browser checks also cover interrupted image/reload recovery and a late
+bootstrap after the image has completed. These are synthetic loading checks,
+not measurements of hosted latency.
+
+The exact-hash critical inline style also uses the same base font, line height
+and text color as styles.css, in addition to the existing canvas background.
+It adds no layout, hidden page, animation, inline script or relaxed CSP source.
+An interrupted stylesheet can still leave the page without its complete layout;
+these fallback rules preserve base typography and color, not full styling.
+They apply only after this HTML commits. A browser's blank canvas before the
+document arrives is outside this evidence; no claim of fixing that is made.

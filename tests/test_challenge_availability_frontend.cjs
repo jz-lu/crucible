@@ -44,6 +44,15 @@ async function test(name,run){await run();console.log('PASS '+name);count++;}
     const app=await boot({admission:yes});app.$('.tier-record-challenge').click();await flush();
     assert.equal(reads(app).length,1);assert.equal(postCount(app),1);assert.equal(app.$('#challenge-active').hidden,false);
   });
+  await test('Take on transfers only departing Record focus to the selected Challenge tab',async()=>{
+    const app=await boot({admission:yes});const action=app.$('.tier-record-challenge');
+    action.focus();action.click();await flush();
+    assert.equal(app.$('#panel-leaderboard').hidden,true);
+    assert.equal(app.document.activeElement,app.$('#tab-challenge'));
+    const moved=await boot({admission:yes});const second=moved.$('.tier-record-challenge');
+    second.focus();second.click();moved.$('#nav-about').focus();await flush();
+    assert.equal(moved.document.activeElement,moved.$('#nav-about'));
+  });
   await test('exact profile denial overrides stale release permission and cancels explicit intent',async()=>{
     const app=await boot({admission:yes,exact:no});app.$('.tier-record-challenge').click();await flush();
     assert.equal(postCount(app),0);assert.equal(app.$('#issue-button').disabled,true);

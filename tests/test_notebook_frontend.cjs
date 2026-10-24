@@ -30,6 +30,7 @@ const curatedSummary = source => {
  return{id:'curated:'+source.id,source_kind:'curated-research',owner:null,can_edit:false,can_review:false,...r,revisions:[r],revision_count:source.revisions.length};
 };
 const listQuery = url => new URLSearchParams(url.split('?')[1]);
+const cardActions = app => app.q('list').querySelectorAll('.nb-card-actions').flatMap(group=>group.querySelectorAll('button'));
 function summaryPage(url,records){
  const query=listQuery(url),term=(query.get('q')||'').toLowerCase(),tag=query.get('tag');
  const filtered=records.filter(record=>{const r=record.revisions.find(rev=>rev.revision===record.revision)?.content||record.revisions.at(-1).content;return(query.get('scope')!=='mine'||record.owner?.id===user.id)&&(query.get('scope')!=='shared'||record.private_shared===true)&&(query.get('scope')!=='literature'||r.tags.includes('literature'))&&(query.get('scope')!=='human'||r.tags.includes('human-written'))&&(!query.has('proposals_only')||record.proposal_revision?.requests.some(row=>['scheme_admission','visualization_nomination','procedure','scoring_nomination','map_nomination','highlight_nomination'].includes(row.kind)))&&(!tag||r.tags.includes(tag))&&(!term||[r.title,r.claim,...r.tags].join(' ').toLowerCase().includes(term));});
@@ -38,7 +39,7 @@ function summaryPage(url,records){
 }
 async function filterNotes(app,value){const select=app.root.querySelector('[name="visibility"]');select.value=value;select.dispatchEvent({type:'change'});await flush();}
 async function searchNotes(app,value){app.q('search').value=value;app.q('search').dispatchEvent({type:'input'});await app.advanceTimers(250);}
-async function boot({account=user,respond,stored=null,mapFactory,currentReleases,session,digest,reviewOnly=false,researchWorkspace=emptyResearch,initialParams=new URLSearchParams()}={}) {
+async function boot({account=user,respond,stored=null,mapFactory,currentReleases,session,digest,reviewOnly=false,researchWorkspace=emptyResearch,initialParams=new URLSearchParams(),onMount}={}) {
   const app=await createApp({schemes:[],hash:'#about'});let current=account;const requests=[],storage=[];
   const timers=new Map();let timerId=0;
   app.sandbox.setTimeout=(fn,delay=0)=>{const id=++timerId;timers.set(id,{fn,delay});return id;};
@@ -54,6 +55,7 @@ async function boot({account=user,respond,stored=null,mapFactory,currentReleases
   const navigate=route=>{app.history.pushState(null,'',route);navigationTask=controller.show(new URLSearchParams(route.split('?')[1]||''));return navigationTask;};
   controller=app.sandbox.window.CrucibleNotebook.mount(root,{api,account:()=>current,navigate,mapFactory,currentReleases,session,reviewOnly});
   const q=name=>root.querySelector(`[data-nb="${name}"]`);
+  onMount?.({root,q});
   await controller.show(initialParams);
   return{...app,root,controller,q,requests,storage,advanceTimers,whenNavigated:()=>navigationTask,setAccount:value=>{current=value;controller.setAccount(value);},show:async(id,rev)=>controller.show(new URLSearchParams(id?{note:id,...(rev?{revision:String(rev)}:{})}:{}))};
 }
@@ -145,12 +147,79 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.equal(app.root.querySelector('[name="visibility"]').value,'mine');
   assert.equal(listQuery(app.requests.at(-1).url).get('scope'),'mine');
  });
- await test('cached list queries never substitute notes from another filter or search',async()=>{
+ await test('a pending filter retains the old page with disabled actions, then uses only its server result',async()=>{
   const late=deferred();let delay=false;
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?(delay?late.promise:{notes:[note()]}):undefined});
   delay=true;const changing=filterNotes(app,'human');await flush();
-  assert.doesNotMatch(app.q('list').textContent,/Private claim/);assert.match(app.q('list').textContent,/Loading notes/);
+  assert.match(app.q('list').textContent,/Private claim/);assert.doesNotMatch(app.q('list').textContent,/Loading notes/);
+  assert.equal(app.q('list').getAttribute('aria-busy'),'true');
+  assert.ok(cardActions(app).length);assert.ok(cardActions(app).every(control=>control.disabled));
   late.resolve({notes:[]});await changing;await flush();assert.match(app.q('list').textContent,/No matching notes/);
+  assert.doesNotMatch(app.q('list').textContent,/Private claim/);assert.equal(app.q('list').getAttribute('aria-busy'),null);
+ });
+ await test('search wording and focus stay stable from construction through a held filter and its result',async()=>{
+  let initial;const late=deferred();let delay=false;
+  const app=await boot({onMount:({q})=>{initial=q('search').placeholder;},respond:url=>url.startsWith('/api/notebook/notes?')?(delay?late.promise:{notes:[note()]}):undefined});
+  assert.equal(initial,'Search titles, summaries or tags…');assert.equal(app.q('search').placeholder,initial);
+  const search=app.q('search');search.focus();delay=true;await filterNotes(app,'human');
+  assert.equal(app.q('search'),search);assert.equal(search.placeholder,initial);assert.equal(app.document.activeElement,search);
+  late.resolve({notes:[]});await flush();assert.equal(search.placeholder,initial);assert.equal(app.document.activeElement,search);
+ });
+ await test('empty pages apply only to their exact query, never to a newly requested filter',async()=>{
+  let pending=deferred(),hold=false;
+  const app=await boot({initialParams:new URLSearchParams('filter=human'),respond:url=>url.startsWith('/api/notebook/notes?')?(hold?pending.promise:{notes:[]}):undefined});
+  assert.match(app.q('list').textContent,/No matching notes/);hold=true;await filterNotes(app,'mine');
+  assert.doesNotMatch(app.q('list').textContent,/No matching notes|No notes yet/);assert.ok(app.q('list').querySelector('.nb-reading'));
+  pending.resolve({notes:[note()]});await flush();assert.match(app.q('list').textContent,/Private claim/);
+  pending=deferred();await filterNotes(app,'human');assert.match(app.q('list').textContent,/No matching notes/);
+  assert.equal(app.q('list').getAttribute('aria-busy'),'true');pending.resolve({notes:[]});await flush();
+ });
+ await test('expanding retained rows cannot reactivate paging or edits before the requested page arrives',async()=>{
+  const late=deferred();const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?(listQuery(url).has('after')?late.promise:{notes:[note()],next_after:'page:25'}):undefined});
+  app.q('more').click();await flush();assert.equal(listQuery(app.requests.at(-1).url).get('after'),'page:25');
+  app.q('list').querySelector('.nb-title').click();await flush();
+  assert.equal(app.q('prev').disabled,true);assert.equal(app.q('more').disabled,true);
+  assert.ok(cardActions(app).length);assert.ok(cardActions(app).every(control=>control.disabled));
+  late.resolve({notes:[note({id:'next-page',content:content('Next page result')})],next_after:null});await flush();
+  assert.match(app.q('list').textContent,/Next page result/);assert.equal(app.q('prev').disabled,false);assert.equal(app.q('more').disabled,true);
+ });
+ await test('replaced or failed filter rows hand focus to the stable list only when those rows own it',async()=>{
+  for(const failure of [false,true]){
+   const late=deferred();let delay=false;
+   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?(delay?late.promise:{notes:[note()]}):undefined});
+   delay=true;await filterNotes(app,'human');app.q('list').querySelector('.nb-title').focus();
+   if(failure)late.reject(Object.assign(Error('Filter unavailable'),{status:503}));else late.resolve({notes:[]});
+   await flush();assert.equal(app.document.activeElement,app.q('list'));assert.equal(app.document.activeElement.isConnected,true);
+  }
+  const late=deferred();let delay=false;
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?(delay?late.promise:{notes:[note()]}):undefined});
+  delay=true;await filterNotes(app,'human');app.q('notes-view').focus();late.resolve({notes:[]});await flush();assert.equal(app.document.activeElement,app.q('notes-view'));
+ });
+ await test('rapid filter and route changes cannot substitute a late page or clear the newer pending state',async()=>{
+  const human=deferred(),mine=deferred();let delay=false;
+  const app=await boot({respond:url=>{if(!url.startsWith('/api/notebook/notes?'))return;const scope=listQuery(url).get('scope');return delay&&scope==='human'?human.promise:delay&&scope==='mine'?mine.promise:{notes:[note()]};}});
+  delay=true;await filterNotes(app,'human');const current=app.controller.show(new URLSearchParams('filter=mine'));await flush();
+  human.resolve({notes:[note({id:'late',content:content('Late human result')})]});await flush();
+  assert.doesNotMatch(app.q('list').textContent,/Late human result/);assert.equal(app.q('list').getAttribute('aria-busy'),'true');
+  mine.resolve({notes:[note({content:content('Mine response')})]});await current;
+  assert.match(app.q('list').textContent,/Mine response/);assert.doesNotMatch(app.q('list').textContent,/Late human result/);assert.equal(app.q('list').getAttribute('aria-busy'),null);
+  app.controller.hide();delay=false;await app.controller.show(new URLSearchParams('filter=human'));assert.equal(listQuery(app.requests.at(-1).url).get('scope'),'human');
+ });
+ await test('failed or forbidden new filters never present retained rows as completed matches',async()=>{
+  for(const status of [503,403]){
+   const late=deferred();let delay=false;
+   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?(delay?late.promise:{notes:[note()]}):undefined});
+   delay=true;await filterNotes(app,'human');assert.match(app.q('list').textContent,/Private claim/);
+   late.reject(Object.assign(Error('Filter unavailable'),{status}));await flush();
+   assert.doesNotMatch(app.q('list').textContent,/Private claim/);assert.match(app.q('list').textContent,/Filter unavailable/);assert.equal(app.q('list').getAttribute('aria-busy'),null);
+  }
+ });
+ await test('a filter read cannot retain or restore another account or rotated session page',async()=>{
+  const late=deferred();let delay=false,session='one';
+  const app=await boot({session:()=>session,respond:url=>url.startsWith('/api/notebook/notes?')?(delay?late.promise:{notes:[note()]}):undefined});
+  delay=true;await filterNotes(app,'human');session='two';app.setAccount(user);
+  assert.equal(app.q('list').textContent,'');assert.equal(app.q('list').getAttribute('aria-busy'),null);
+  late.resolve({notes:[note({content:content('OLD SESSION DATA')})]});await flush();assert.equal(app.q('list').textContent,'');
  });
  await test('same-account session rotation clears notebook readers and rejects a pending cached refresh',async()=>{
   const late=deferred();let delay=false,session='one';
@@ -1078,6 +1147,48 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   await filterNotes(app,'mine');await searchNotes(app,'my research');app.q('timeline-view').click();await flush();
   assert.equal(visits,2);assert.equal(app.requests.at(-1).url,'/api/notebook/timeline');
   app.q('notes-view').click();await flush();assert.equal(app.q('search').value,'my research');
+ });
+ await test('a warm Timeline paints before its fresh read and unchanged aggregates preserve DOM and focus',async()=>{
+  const late=deferred();let delay=false;
+  const app=await boot({initialParams:new URLSearchParams('view=timeline'),respond:url=>url==='/api/notebook/timeline'?(delay?late.promise:timeline()):undefined});
+  await app.show();delay=true;const pending=app.controller.show(new URLSearchParams('view=timeline'));
+  const svg=app.q('timeline').querySelector('svg');assert.ok(svg);assert.equal(app.q('timeline').querySelector('.nb-reading'),null);assert.equal(app.q('timeline').getAttribute('aria-busy'),'true');
+  app.q('timeline-view').focus();late.resolve(timeline({server_time:99999999}));await pending;
+  assert.equal(app.q('timeline').querySelector('svg'),svg);assert.equal(app.document.activeElement,app.q('timeline-view'));assert.equal(app.q('timeline').getAttribute('aria-busy'),null);
+  assert.equal(app.requests.filter(row=>row.url==='/api/notebook/timeline').length,2);assert.equal(app.requests.some(row=>row.url==='/map/notes.json'),false);
+ });
+ await test('fresh Timeline changes replace cached counts only after the authoritative response',async()=>{
+  const late=deferred();let delay=false;
+  const app=await boot({initialParams:new URLSearchParams('view=timeline'),respond:url=>url==='/api/notebook/timeline'?(delay?late.promise:timeline()):undefined});
+  await app.show();delay=true;const pending=app.controller.show(new URLSearchParams('view=timeline'));
+  assert.equal(app.q('timeline').querySelector('.nb-timeline-total').textContent,'3 notes');
+  late.resolve(timeline({total:4,points:[{date:'2026-10-18',created:4,total:4}]}));await pending;
+  assert.equal(app.q('timeline').querySelector('.nb-timeline-total').textContent,'4 notes');
+ });
+ await test('cached Timeline survives a temporary read failure with an explicit refresh error',async()=>{
+  const late=deferred();let delay=false;
+  const app=await boot({initialParams:new URLSearchParams('view=timeline'),respond:url=>url==='/api/notebook/timeline'?(delay?late.promise:timeline()):undefined});
+  await app.show();delay=true;const pending=app.controller.show(new URLSearchParams('view=timeline'));const svg=app.q('timeline').querySelector('svg');
+  late.reject(Object.assign(Error('Temporary failure'),{status:503}));await pending;
+  assert.equal(app.q('timeline').querySelector('svg'),svg);assert.match(app.q('notice').textContent,/could not be refreshed/);assert.equal(app.q('timeline').getAttribute('aria-busy'),null);
+ });
+ await test('forbidden Timeline refreshes remove cached counts and cannot restore them on re-entry',async()=>{
+  const first=deferred(),second=deferred();let calls=0;
+  const app=await boot({initialParams:new URLSearchParams('view=timeline'),respond:url=>url==='/api/notebook/timeline'?(++calls===1?timeline():calls===2?first.promise:second.promise):undefined});
+  await app.show();const denied=app.controller.show(new URLSearchParams('view=timeline'));assert.ok(app.q('timeline').querySelector('svg'));
+  first.reject(Object.assign(Error('Permission revoked'),{status:403}));await denied;
+  assert.equal(app.q('timeline').querySelector('svg'),null);assert.equal(app.q('timeline').getAttribute('aria-busy'),null);
+  await app.show();const fresh=app.controller.show(new URLSearchParams('view=timeline'));assert.equal(app.q('timeline').querySelector('svg'),null);assert.ok(app.q('timeline').querySelector('.nb-reading'));
+  second.resolve(timeline());await fresh;
+ });
+ await test('Timeline shares mutation and session invalidation and rejects stale in-flight aggregates',async()=>{
+  const old=deferred(),fresh=deferred();let calls=0,session='one';
+  const app=await boot({session:()=>session,initialParams:new URLSearchParams('view=timeline'),respond:url=>url==='/api/notebook/timeline'?(++calls===1?timeline():calls===2?old.promise:fresh.promise):undefined});
+  await app.show();const pending=app.controller.show(new URLSearchParams('view=timeline'));assert.ok(app.q('timeline').querySelector('svg'));
+  app.controller.invalidateReads();await app.show();const next=app.controller.show(new URLSearchParams('view=timeline'));assert.equal(app.q('timeline').querySelector('svg'),null);
+  old.resolve(timeline({total:999,points:[{date:'2026-10-18',created:999,total:999}]}));await pending;assert.doesNotMatch(app.q('timeline').textContent,/999/);
+  session='two';app.setAccount(user);fresh.resolve(timeline());await next;
+  assert.equal(app.q('timeline').textContent,'');assert.equal(app.q('timeline').getAttribute('aria-busy'),null);
  });
  await test('an empty timeline has an explicit empty state without a fabricated curve',async()=>{
   const app=await boot({initialParams:new URLSearchParams('view=timeline'),respond:url=>url==='/api/notebook/timeline'?timeline({total:0,points:[]}):undefined});

@@ -64,6 +64,65 @@ stay visible. This is presentation continuity, not a reduction in network time.
 Held-response browser checks compare typography and geometry at desktop and
 mobile widths; ownership tests cover navigation, access loss and late responses.
 
+Notebook continuity
+-------------------
+
+Changing a notes filter retains the previous nonempty, admitted list while the
+new server query runs. Those rows are a previous view, not a locally computed
+answer: pagination and mutation controls wait for the fresh result. Empty states
+are shown only for their matching query. Exact cached query pages can paint
+immediately. Search wording is fixed before the first response, and replacement
+rows receive focus only when the departing rows still owned it. Notes search
+remains server-side across the full visible collection, not just the loaded page.
+
+Timeline uses the existing bounded account/session read cache (12 entries,
+2 MB total, five-minute TTL). A warm visit paints its cached aggregate and still
+requests fresh data; an unchanged result preserves the existing SVG. Revocation,
+account/CSRF changes and writes retain their existing invalidation rules. No
+private note bodies, account permissions or server-side sessions are cached by
+this change, and no browser persistence was introduced.
+
+Controlled Chrome comparison at 200 ms simulated RTT / 10 Mbps, using isolated
+synthetic accounts: warm Timeline became visible at a median 15 ms rather than
+214 ms; its fresh response still arrived around 213 ms. A changed notes filter
+kept prior rows visible at 15 ms instead of leaving a blank list until 231 ms;
+fresh requested results arrived around 212 ms. These are continuity measurements,
+not hosted latency guarantees or evidence that cached rows answer a new filter.
+
+Authored-note summaries join publication, withdrawal and active deletion status
+in their existing page query, omitting unused import provenance and status reason
+columns. Uniqueness constraints keep these joins one-to-one. An isolated owner
+or reader overview fell from eight SELECTs to five, with identical summary data;
+an all-curated page already used three. Hosted beta admission adds its separate
+fresh access check. Bodies, complete revision history and durable export data
+remain unchanged. Tests cover visibility, status, repeated deletion/restoration,
+pagination, SQL shape and omission of private bodies from summary responses.
+
+Brand decoding and interrupted responses
+---------------------------------------
+
+The same logo artwork now uses a 17,875-byte derivative instead of 421,760 bytes,
+large enough for the header at 3x pixel density. Its existing frame reserves space;
+an incomplete image becomes visible only after decoding, with no reveal animation.
+Already complete images are not re-hidden if bootstrap arrives late. The exact
+static CSP-hashed fallback also supplies the normal body background, color and
+system font when the main stylesheet is interrupted. See logo-delivery.txt for
+asset provenance. A white canvas before the document arrives is not under the
+page's control; a hosted cause for the reported flash has not been established.
+
+API errors distinguish a response body interrupted after headers from malformed
+JSON and an unexpected HTML service page. Deadlines and explicit retry remain;
+requests, especially writes, are never automatically replayed by this handling.
+Synthetic Chrome streams reproduce each classification. This does not establish
+which condition caused a particular hosted error after repeated reloads.
+
+Remaining architectural limit: during a rolling deployment, a cache miss for an
+old ?v= asset URL can reach a newer process and receive its current bytes with
+revalidation required. No CSP/304 mismatch was found. Exact version retention
+would require a deliberate asset publication design; rejecting old URLs would
+break in-flight pages and is not a suitable quick fix. No such serving change
+is included in this checkpoint.
+
 Metadata SQL
 ------------
 

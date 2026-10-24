@@ -180,6 +180,10 @@ button {
   object-fit: cover;
 }
 
+.decode-brand-marks .brand-mark:not([data-logo-ready=true]) {
+  visibility: hidden;
+}
+
 .brand>span {
   font: 700 32px/1 var(--wordmark);
   letter-spacing: -.2px;

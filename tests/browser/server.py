@@ -13,7 +13,7 @@ from uuid import uuid4
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from crucible import beta_access, dh_v4, github_auth, notebook, registry
+from crucible import beta_access, dh_v3, dh_v4, github_auth, kem, notebook, registry
 from crucible.app import create_app
 from crucible.config import Settings
 from crucible.db import LoginSession, User
@@ -25,9 +25,11 @@ PASSWORD = "Synthetic browser fixture password"
 
 
 def main():
-    # Same test-only subset used by portable GitHub/password recovery tests.
+    # Keep the current portable release and its declared record-comparison
+    # sources together. Record pages must be able to resolve v2/v3 receipts.
     # Native pin checks are not bypassed or altered in application code.
-    registry.ADAPTERS = {(dh_v4.SCHEME_ID, dh_v4.SCHEME_VERSION): dh_v4}
+    registry.ADAPTERS = {(adapter.SCHEME_ID, adapter.SCHEME_VERSION): adapter
+                         for adapter in (kem, dh_v3, dh_v4)}
     registry.CURRENT = {dh_v4.SCHEME_ID: dh_v4.SCHEME_VERSION}
     with tempfile.TemporaryDirectory(prefix="crucible-browser-checks-") as tmp:
         settings = Settings("sqlite:///" + tmp + "/fixture.db", secrets.token_bytes(32),

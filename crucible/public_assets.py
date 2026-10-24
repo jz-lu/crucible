@@ -22,7 +22,12 @@ from starlette.staticfiles import StaticFiles
 
 # Paint the canvas before the render-blocking stylesheets arrive. Only this
 # fixed, server-owned style is allowed inline; scripts and user CSS stay blocked.
-FIRST_PAINT_STYLE = 'html{background:#f6f9fd;color-scheme:light}body{margin:0;background:#f6f9fd}[hidden]{display:none!important}'
+FIRST_PAINT_STYLE = (
+    'html{background:#f6f9fd;color-scheme:light}'
+    'body{margin:0;background:#f6f9fd;color:#2d4563;'
+    "font:14px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
+    '-webkit-font-smoothing:antialiased}[hidden]{display:none!important}'
+)
 _style_hash = base64.b64encode(hashlib.sha256(FIRST_PAINT_STYLE.encode()).digest()).decode()
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; script-src 'self'; style-src 'self' 'sha256-" + _style_hash
