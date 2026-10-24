@@ -225,6 +225,22 @@ def presentation_record_profiles(adapter):
                                           getattr(adapter, "IMPLEMENTATION_SHA256", None))
 
 
+def presentation_issuance_profiles(adapter):
+    """Immutable policy attributes for display, never execution/build admission.
+
+    Settings are deliberately absent from this cache. Issuance checks the exact
+    resolved manifest; a release summary needs only these distinct scalar pairs.
+    """
+    return _presentation_issuance_profiles(adapter, adapter.manifests,
+                                           getattr(adapter, "IMPLEMENTATION_SHA256", None))
+
+
+@lru_cache(maxsize=64)
+def _presentation_issuance_profiles(adapter, provider, source_sha256):
+    return tuple(dict.fromkeys((bool(profile.get("educational")), profile.get("profile_kind"))
+                 for profile in _presentation_profiles(adapter, provider, source_sha256)))
+
+
 @lru_cache(maxsize=64)
 def _presentation_record_profiles(adapter, provider, source_sha256):
     return tuple((profile["id"], profile.get("instance_size", profile.get("parameter_bits")),

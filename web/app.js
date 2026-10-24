@@ -9,7 +9,7 @@ const state = {
   access: null, sessionResolved: false, invitationToken: null, invitationBusy: false, invitationDelivery: null,
   returnRoute: null, protectedLoaded: false, canManageBetaAccess: false,
   user: null, csrf: '', canReviewProposals: false, canSelfReviewProposals: false, schemes: [], profile: null, challenge: null,
-  methods: [], view: 'leaderboard', authMode: 'login', round: null,
+  generationAdmission: null, methods: [], view: 'leaderboard', authMode: 'login', round: null,
   timeOffset: 0, ready: false, catalogueLoaded: false, challengeLoading: false, issueBusy: false,
   submitBusy: false, pendingAttempt: null, roundRefreshing: false,
   challengeRequest: 0, leaderboardRequest: 0, submissionChallenge: null,
@@ -456,7 +456,7 @@ function clearProtectedState() {
   navigationProjection = false; workspaceLoadRequest++;
   for (const controller of protectedRequests) controller.abort();
   for (const key of ['catalogueRequest', 'challengeRequest', 'leaderboardRequest', 'historyRequest', 'recoveryRequest', 'peopleRequest', 'personRequest', 'connectRequest']) state[key]++;
-  state.schemes = []; state.catalogueRevision = null; state.people = []; state.profile = null; state.challenge = null; state.methods = [];
+  state.schemes = []; state.catalogueRevision = null; state.generationAdmission = null; state.people = []; state.profile = null; state.challenge = null; state.methods = [];
   state.schemeId = null; state.schemeVersion = null; state.personHandle = null; state.personDataKey = null;
   state.pendingAttempt = null; state.submissionChallenge = null; state.connection = null; state.round = null;
   state.challengeStartIntent = null; state.challengeLoading = false;
@@ -497,7 +497,7 @@ async function loadAuthorizedCatalogue() {
   try { return await task; }
   finally { if (catalogueLoad === task) catalogueLoad = null; }
 }
-const RELEASE_PROGRESS_FIELDS = ['participant_count', 'recovered_profile_ids', 'largest_recovered_profile_id', 'next_profile_id', 'profile_recoveries', 'first_recovery'];
+const RELEASE_PROGRESS_FIELDS = ['generation_admission', 'participant_count', 'recovered_profile_ids', 'largest_recovered_profile_id', 'next_profile_id', 'profile_recoveries', 'first_recovery'];
 function installNavigation(data) {
   if (!Array.isArray(data.schemes) || (data.projection && data.projection !== 'navigation')) throw new Error('Scheme navigation could not be loaded.');
   const revision = data.catalogue_revision || null;
@@ -896,6 +896,7 @@ function applyRoute(focus = false) {
     state.challengeRequest++;
     state.leaderboardRequest++;
     state.challenge = null;
+    state.generationAdmission = null;
     state.challengeLoading = false;
     $('#challenge-error').hidden = true;
     $('#leaderboard-content').replaceChildren();
@@ -1064,7 +1065,7 @@ function setSession(data) {
     state.recoveryRequest++;
     state.autoIssueAttempts.clear();
     state.autoIssuePaused.clear();
-    state.challenge = null;
+    state.challenge = null; state.generationAdmission = null;
     state.challengeRequest++;
     state.leaderboardRequest++;
     state.methods = [];
@@ -1233,7 +1234,7 @@ async function synchronizeSession() {
 function catalogueDisplayKey(scheme) {
   return JSON.stringify(scheme && [scheme.id, scheme.version, scheme.name, scheme.display_group,
     scheme.participant_count, scheme.largest_recovered_profile_id, scheme.next_profile_id,
-    scheme.first_recovery, recoveredProfileIds(scheme)]);
+    scheme.first_recovery, recoveredProfileIds(scheme), scheme.generation_admission]);
 }
 function mergeCatalogueProgress(data) {
   if (data.projection !== 'progress' || !state.catalogueRevision || data.catalogue_revision !== state.catalogueRevision || !Array.isArray(data.releases)) return null;
@@ -1242,13 +1243,13 @@ function mergeCatalogueProgress(data) {
   const known = state.schemes.flatMap(scheme => [scheme, ...(scheme.previous_releases || [])]);
   const rows = new Map(data.releases.map(row => [key(row), row]));
   if (rows.size !== data.releases.length || rows.size !== known.length || known.some(release => !rows.has(key(release)))) return null;
-  const fields = ['participant_count', 'recovered_profile_ids', 'largest_recovered_profile_id', 'next_profile_id', 'profile_recoveries', 'first_recovery'];
-  if (data.releases.some(row => fields.some(field => field !== 'profile_recoveries' && !Object.hasOwn(row, field)))) return null;
+  const fields = ['generation_admission', 'participant_count', 'recovered_profile_ids', 'largest_recovered_profile_id', 'next_profile_id', 'profile_recoveries', 'first_recovery'];
+  if (data.releases.some(row => fields.some(field => !['profile_recoveries', 'generation_admission'].includes(field) && !Object.hasOwn(row, field)))) return null;
   const update = release => {
     const result = {...release}, row = rows.get(key(release));
     // Only dynamic fields can replace metadata. In particular, a partial reply
     // cannot supply parameter sets, protocol links or a new release identity.
-    for (const field of fields) { if (Object.hasOwn(row, field)) result[field] = row[field]; else delete result[field]; }
+    for (const field of fields) { if (Object.hasOwn(row, field)) result[field] = row[field]; else if (field !== 'generation_admission') delete result[field]; }
     return result;
   };
   return state.schemes.map(scheme => ({...update(scheme), previous_releases: (scheme.previous_releases || []).map(update)}));
@@ -1259,6 +1260,7 @@ async function refreshProfiles({background = false} = {}) {
   const oldRevision = state.catalogueRevision;
   const oldCatalogue = JSON.stringify(state.schemes.map(catalogueDisplayKey));
   const oldSelection = catalogueDisplayKey(selectedScheme());
+  const oldAdmission = JSON.stringify(selectedScheme()?.generation_admission);
   const route = window.location.hash;
   let data;
   let merged;
@@ -1288,6 +1290,7 @@ async function refreshProfiles({background = false} = {}) {
     }
   }
   const selectionChanged = oldSelection !== catalogueDisplayKey(scheme);
+  if (oldAdmission !== JSON.stringify(scheme?.generation_admission)) state.generationAdmission = null;
   if (state.screen === 'catalogue' && (!background || metadataChanged || oldCatalogue !== JSON.stringify(state.schemes.map(catalogueDisplayKey)))) renderCatalogue();
   if (['scheme', 'overview', 'assumptions'].includes(state.screen) && !scheme) return applyRoute();
   if (state.screen === 'overview' && (!background || metadataChanged || selectionChanged)) {
@@ -1300,6 +1303,8 @@ async function refreshProfiles({background = false} = {}) {
     const profile = scheme.profiles.find(item => profileId(item) === profileId());
     if (!profile) return applyRoute();
     state.profile = profile;
+    renderChallenge();
+    renderRecordChallengeAction();
     // Metadata refresh is not navigation. Preserve editors, disclosure state,
     // in-flight connections, and a slider/jump input currently being edited.
     const editing = [$('#size-slider'), $('#profile-select')].includes(document.activeElement);
@@ -2273,6 +2278,8 @@ function renderOverview(scheme, contextProfile = null) {
   const challengeLink = $('#overview-challenges');
   challengeLink.hidden = !entry;
   challengeLink.href = entry ? schemeRoute(scheme, entry) : '#challenge';
+  $('#overview-generation-status').hidden = archived || !generationUnavailable(scheme);
+  setText('#overview-generation-status', generationUnavailable(scheme) ? generationMessage(scheme) : '');
   const record = profiles.find(profile => profileId(profile) === scheme.largest_recovered_profile_id);
   setText('#overview-progress', record ? `${namedParameters(scheme) ? 'Recovered parameter set' : 'Largest recovery'} · ${profileLabel(record, scheme)}` : '');
   $('#overview-progress').hidden = !record;
@@ -2601,6 +2608,40 @@ function renderProtocol() {
   addFact(correctness, 'Assumptions', configurationProse(claim.assumptions));
   addFact(correctness, 'Evidence status', configurationProse(claim.evidence_status));
 }
+function generationAdmission(scheme = selectedScheme()) {
+  const observed = state.generationAdmission;
+  if (scheme?.id === state.schemeId && String(scheme.version) === state.schemeVersion && observed?.selection === selectionKey()) return observed.value;
+  return scheme?.generation_admission || null;
+}
+function generationUnavailable(scheme = selectedScheme()) {
+  const admission = generationAdmission(scheme);
+  return admission != null && admission.admitted !== true &&
+    !(admission.admitted === null && admission.reason === 'profile_specific');
+}
+function generationMessage(scheme = selectedScheme()) {
+  return generationAdmission(scheme)?.reason === 'archived_release' ?
+    'New instances use the current release. Existing challenges and recovery records remain available.' :
+    'New instances for this release are not enabled in this beta. Existing challenges and recovery records remain available.';
+}
+function renderRecordChallengeAction() {
+  const target = document.querySelector('#record-challenge-action');
+  if (!target || state.screen !== 'scheme') return;
+  const scheme = selectedScheme(), profile = state.profile;
+  if (!scheme || !profile) return;
+  const unavailable = generationUnavailable(scheme);
+  const label = unavailable ? 'View existing challenges →' : namedParameters(scheme, profile) ? 'Take on this parameter set →' :
+    intermediateConfiguration(profile) ? 'Take on this configuration →' : 'Take on this stage →';
+  const challenge = node('a', label, 'button ' + (unavailable ? 'button-secondary' : 'button-primary') + ' tier-record-challenge');
+  challenge.href = schemeRoute(scheme, profile, 'challenge');
+  challenge.addEventListener('click', event => takeOnChallenge(scheme, profile, event));
+  const key = JSON.stringify([selectionKey(), generationAdmission(scheme), label]);
+  if (target.dataset.generation === key) return;
+  target.dataset.generation = key; target.replaceChildren();
+  const invitation = target.parentElement?.querySelector('.tier-record-invitation');
+  if (invitation) invitation.textContent = 'No accepted recoveries yet.' + (unavailable ? '' : ' Set the first record for ' + profileLabel(profile, scheme) + '.');
+  if (unavailable) target.append(node('p', generationMessage(scheme), 'field-hint'));
+  target.append(challenge);
+}
 function renderChallenge() {
   if (state.agentInstructionsKey !== agentInstructionsKey()) resetAgentInstructions();
   $('#use-agent').disabled = !state.user || !state.challenge;
@@ -2611,13 +2652,23 @@ function renderChallenge() {
   $('#challenge-empty').hidden = state.challengeLoading || Boolean(state.challenge);
   $('#challenge-active').hidden = state.challengeLoading || !state.challenge;
   $('#challenge-details').hidden = state.challengeLoading || !state.challenge;
-  $('#issue-button').disabled = !state.ready || !state.profile || state.issueBusy || roundRemaining() === 0;
+  const unavailable = generationUnavailable();
+  $('#scheme-clock').hidden = unavailable && !state.challenge;
+  $('#challenge-instance-rule').hidden = unavailable && !state.challenge;
+  $('#issue-button').disabled = !state.ready || !state.profile || state.issueBusy || state.challengeLoading || roundRemaining() === 0 ||
+    (unavailable && generationAdmission()?.reason !== 'archived_release');
   if (!state.challenge) {
     const current = state.schemes.find(scheme => scheme.id === state.schemeId);
     if (current && String(current.version) !== state.schemeVersion) {
       setText('#empty-title', 'Archived release');
       setText('#empty-description', 'Existing recoveries remain available here. New instances use the current release.');
       setText('#issue-button', 'Open current challenges →');
+      return;
+    }
+    if (unavailable) {
+      setText('#empty-title', 'Challenges not enabled');
+      setText('#empty-description', generationMessage());
+      setText('#issue-button', 'Not enabled in this beta');
       return;
     }
     setText('#empty-title', state.user ? 'Ready?' : 'A fresh instance, just for you.');
@@ -2664,7 +2715,7 @@ function takeOnChallenge(scheme, profile, event) {
       profileId() !== profileId(profile)) return;
   const route = schemeRoute(scheme, profile, 'challenge');
   // Only this deliberate action grants one request; a copied URL carries no authority.
-  state.challengeStartIntent = currentChallengeRelease() ? {
+  state.challengeStartIntent = currentChallengeRelease() && !generationUnavailable(scheme) ? {
     schemeId: scheme.id, schemeVersion: String(scheme.version), profileId: profileId(profile),
     accountId: state.user?.id || null, awaitingSignIn: !state.user
   } : null;
@@ -2697,7 +2748,7 @@ async function loadChallenge({retry = false, allowAutomatic = true} = {}) {
     state.autoIssuePaused.delete(challengeAccessScope());
   }
   $('#challenge-error').hidden = true;
-  state.challenge = null;
+  state.challenge = null; state.generationAdmission = null;
   if (state.screen !== 'scheme' || !state.user || !selected) {
     state.challengeLoading = false;
     renderChallenge();
@@ -2713,6 +2764,9 @@ async function loadChallenge({retry = false, allowAutomatic = true} = {}) {
     if (!stillSelected()) return;
     if (data.round?.id !== state.round?.id) { state.challengeStartIntent = null; return; }
     state.challenge = data.challenge || null;
+    if (Object.hasOwn(data, 'generation_admission')) {
+      state.generationAdmission = {selection, value: {admitted: data.generation_admission?.admitted === true, reason: data.generation_admission?.reason}};
+    }
     access = data;
   } catch (error) {
     if (!stillSelected()) return;
@@ -2726,6 +2780,7 @@ async function loadChallenge({retry = false, allowAutomatic = true} = {}) {
       renderChallenge();
     }
   }
+  if (stillSelected() && generationUnavailable()) { state.challengeStartIntent = null; return; }
   const intent = state.challengeStartIntent;
   if (stillSelected() && access && challengeStartSelectionMatches(intent) &&
       !intent.awaitingSignIn && intent.accountId === state.user?.id) {
@@ -2750,8 +2805,9 @@ async function issueChallenge({activeRoundId} = {}) {
     const profile = current.profiles.find(item => profileId(item) === current.next_profile_id) || current.profiles[0];
     return navigate(schemeRoute(current, profile, 'challenge'));
   }
+  if (generationUnavailable()) { state.challengeStartIntent = null; renderChallenge(); return; }
   if (!state.user) return automatic ? undefined : openAuth($('#issue-button'));
-  if (state.issueBusy || !state.profile || state.screen !== 'scheme') return;
+  if (state.issueBusy || state.challengeLoading || !state.profile || state.screen !== 'scheme') return;
   const scope = challengeAccessScope();
   const attempt = challengeAccessAttempt();
   if (automatic && (state.view !== 'challenge' || !currentChallengeRelease() ||
@@ -2833,7 +2889,7 @@ async function loadLeaderboard({preserve = false} = {}) {
   }
   state.leaderboardPendingKey = dataKey;
   const key = 'record:' + dataKey, cached = cachedRead(key);
-  const paint = data => paintRead(key, target, data, data => {
+  const paint = data => paintRead(key, target, {...data, generation_admission: generationAdmission()}, data => {
     if (!data.entries.length) {
       setText('#leaderboard-title', 'Unsolved');
       card.setAttribute('data-state', 'unsolved');
@@ -2842,13 +2898,10 @@ async function loadLeaderboard({preserve = false} = {}) {
       $('#leaderboard-scope').hidden = true;
       $('#leaderboard-footnote').hidden = true;
       const empty = node('div', undefined, 'tier-record-open');
-      empty.append(node('p', 'No accepted recoveries yet. Set the first record for ' + profileLabel(state.profile, selectedScheme()) + '.', 'tier-record-invitation'));
-      const challenge = node('a', named ? 'Take on this parameter set →' : intermediateConfiguration(state.profile) ? 'Take on this configuration →' : 'Take on this stage →', 'button button-primary tier-record-challenge');
-      const scheme = selectedScheme(), profile = state.profile;
-      challenge.href = schemeRoute(scheme, profile, 'challenge');
-      challenge.addEventListener('click', event => takeOnChallenge(scheme, profile, event));
-      empty.append(challenge);
+      empty.append(node('p', 'No accepted recoveries yet.' + (generationUnavailable() ? '' : ' Set the first record for ' + profileLabel(state.profile, selectedScheme()) + '.'), 'tier-record-invitation'));
+      const action = node('div'); action.id = 'record-challenge-action'; empty.append(action);
       target.replaceChildren(empty);
+      renderRecordChallengeAction();
       state.leaderboardDataKey = dataKey;
       return;
     }
