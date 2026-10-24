@@ -38,23 +38,24 @@ function summaryPage(url,records){
 }
 async function filterNotes(app,value){const select=app.root.querySelector('[name="visibility"]');select.value=value;select.dispatchEvent({type:'change'});await flush();}
 async function searchNotes(app,value){app.q('search').value=value;app.q('search').dispatchEvent({type:'input'});await app.advanceTimers(250);}
-async function boot({account=user,respond,stored=null,mapFactory,currentReleases,session,reviewOnly=false,researchWorkspace=emptyResearch,initialParams=new URLSearchParams()}={}) {
+async function boot({account=user,respond,stored=null,mapFactory,currentReleases,session,digest,reviewOnly=false,researchWorkspace=emptyResearch,initialParams=new URLSearchParams()}={}) {
   const app=await createApp({schemes:[],hash:'#about'});let current=account;const requests=[],storage=[];
   const timers=new Map();let timerId=0;
   app.sandbox.setTimeout=(fn,delay=0)=>{const id=++timerId;timers.set(id,{fn,delay});return id;};
   app.sandbox.clearTimeout=id=>timers.delete(id);
   const advanceTimers=async(ms=250)=>{for(const[id,timer]of [...timers])if(timer.delay<=ms){timers.delete(id);await timer.fn();}await flush();};
   app.sandbox.window.localStorage={getItem:key=>{storage.push(['get',key]);return stored;},setItem:()=>{throw Error('Never write local storage');},removeItem:()=>{throw Error('Never remove local storage');}};
-  app.sandbox.crypto.subtle=require('node:crypto').webcrypto.subtle;
+  app.sandbox.crypto.subtle=digest?{digest}:require('node:crypto').webcrypto.subtle;
   app.sandbox.window.confirm=()=>true;app.sandbox.crypto.randomUUID=(()=>{let i=0;return()=>`key-${++i}`;})();
   for(const file of ['store.js','seed.js','notebook.js'])vm.runInContext(fs.readFileSync(path.join(rootPath,'web/notebook',file),'utf8'),app.sandbox,{filename:file});
   const root=app.$('#notebook-workspace');
   const api=async(url,body,options)=>{requests.push({url,body,options});if(respond){const result=await respond(url,body,options);if(result!==undefined)return url==='/map/notes.json'?vm.runInContext('('+JSON.stringify(result)+')',app.sandbox):result;}if(url==='/notebook/request-types.json')return requestTypes;if(url.startsWith('/api/notebook/research-requests?source_note_id='))return{requests:[],next_after:null};if(url==='/map/notes.json')return vm.runInContext('('+JSON.stringify(researchWorkspace)+')',app.sandbox);if(url.startsWith('/api/notebook/notes?'))return summaryPage(url,researchWorkspace.notes.map(curatedSummary));if(url.startsWith('/api/notebook/notes/note-one'))return{note:note()};throw Error('Unexpected '+url);};
-  let controller;const navigate=route=>{app.history.pushState(null,'',route);controller.show(new URLSearchParams(route.split('?')[1]||''));};
+  let controller,navigationTask=Promise.resolve();
+  const navigate=route=>{app.history.pushState(null,'',route);navigationTask=controller.show(new URLSearchParams(route.split('?')[1]||''));return navigationTask;};
   controller=app.sandbox.window.CrucibleNotebook.mount(root,{api,account:()=>current,navigate,mapFactory,currentReleases,session,reviewOnly});
   const q=name=>root.querySelector(`[data-nb="${name}"]`);
   await controller.show(initialParams);
-  return{...app,root,controller,q,requests,storage,advanceTimers,setAccount:value=>{current=value;controller.setAccount(value);},show:async(id,rev)=>controller.show(new URLSearchParams(id?{note:id,...(rev?{revision:String(rev)}:{})}:{}))};
+  return{...app,root,controller,q,requests,storage,advanceTimers,whenNavigated:()=>navigationTask,setAccount:value=>{current=value;controller.setAccount(value);},show:async(id,rev)=>controller.show(new URLSearchParams(id?{note:id,...(rev?{revision:String(rev)}:{})}:{}))};
 }
 function fill(app,title='New mathematical claim'){for(const [key,value]of Object.entries(content(title)))if(key!=='tags')app.root.querySelector(`[name="${key}"]`).value=value;app.root.querySelector('[name="tags"]').value='algebra';}
 const byText=(root,label)=>root.querySelectorAll('button').find(n=>n.textContent===label);
@@ -356,9 +357,9 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[own],next_after:null}:url.startsWith('/api/notebook/notes/note-one')?{note:own}:undefined});
   await filterNotes(app,'mine');
   assert.match(app.q('list').textContent,/PRIVATE FUTURE.*Private/);assert.doesNotMatch(app.q('list').textContent,/Approved original/);
-  app.q('list').querySelector('.nb-title').click();byText(app.q('list'),'Read full note →').click();await flush();
+  app.q('list').querySelector('.nb-title').click();byText(app.q('list'),'Read full note →').click();await app.whenNavigated();
   assert.equal(app.requests.at(-1).url,'/api/notebook/notes/note-one');
-  byText(app.q('full'),'Read community revision 1 →').click();await flush();
+  byText(app.q('full'),'Read community revision 1 →').click();await app.whenNavigated();
   assert.equal(app.requests.at(-1).url,'/api/notebook/notes/note-one?revision=1');
   assert.match(app.q('full').textContent,/Approved original.*Published/);assert.doesNotMatch(app.q('full').textContent,/PRIVATE FUTURE/);
  });
@@ -868,21 +869,28 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[saved],next_after:null}:url.startsWith('/api/notebook/notes/note-one')?{note:saved}:undefined});
   assert.match(app.q('list').textContent,/New private draft/);assert.equal(app.q('list').querySelector('.nb-request-label').textContent,'Proposal');
   await filterNotes(app,'proposals');
-  app.q('list').querySelector('.nb-title').click();byText(app.q('list'),'Read full note →').click();await flush();
+  app.q('list').querySelector('.nb-title').click();byText(app.q('list'),'Read full note →').click();await app.whenNavigated();
   const query=new URLSearchParams(app.location.hash.split('?')[1]);
   assert.equal(query.get('note'),'note-one');assert.equal(query.get('revision'),'1');assert.equal(query.get('sha256'),old.content_sha256);
   assert.match(app.q('full').textContent,/Submitted mathematical claim/);assert.doesNotMatch(app.q('full').textContent,/New private draft/);
   assert.ok(app.requests.some(request=>request.url==='/api/notebook/notes/note-one?revision=1'));
  });
  await test('server-indexed curated proposals open historical revisions without preloading the curated catalogue',async()=>{
+  const digestStarted=deferred(),releaseDigest=deferred();
   const source=curatedFixture('curated-first','Curated older proposal',2),summary=curatedSummary(source);
   summary.proposal_revision={revision:1,content_sha256:curatedHash(source.revisions[0]),requests:[proposalRecord('curated-proposal')]};
-  const app=await boot({researchWorkspace:{...emptyResearch,notes:[source]},respond:url=>{
+  const app=await boot({digest:async(...args)=>{digestStarted.resolve();await releaseDigest.promise;return require('node:crypto').webcrypto.subtle.digest(...args);},researchWorkspace:{...emptyResearch,notes:[source]},respond:url=>{
    if(url.startsWith('/api/notebook/notes?'))return summaryPage(url,[summary]);
    if(url.startsWith('/api/notebook/research-requests?source_note_id='))return{requests:[curatedRequest(source,1)],next_after:null};
   }});
   assert.equal(app.q('list').querySelector('.nb-request-label').textContent,'Proposal');assert.equal(app.requests.some(r=>r.url==='/map/notes.json'||r.url.includes('curated_proposals=')),false);
-  await filterNotes(app,'proposals');app.q('list').querySelector('.nb-title').click();byText(app.q('list'),'Read full note →').click();await flush();
+  await filterNotes(app,'proposals');app.q('list').querySelector('.nb-title').click();byText(app.q('list'),'Read full note →').click();
+  // WebCrypto completes on a worker, not after a fixed number of event-loop turns.
+  // Hold it explicitly to verify the reader waits for the exact-revision digest.
+  await digestStarted.promise;
+  assert.equal(app.q('full').querySelector('.nb-note-status'),null);
+  assert.match(app.q('full').textContent,/Loading note/);
+  releaseDigest.resolve();await app.whenNavigated();
   const query=new URLSearchParams(app.location.hash.split('?')[1]);assert.equal(query.get('note'),'curated:curated-first');assert.equal(query.get('revision'),'1');assert.equal(query.get('sha256'),curatedHash(source.revisions[0]));
   assert.match(app.q('full').querySelector('.nb-note-status').textContent,/Proposal/);assert.match(app.q('full').textContent,/Curated older proposal 1/);
   assert.equal(app.requests.filter(r=>r.url==='/map/notes.json').length,1);assert.equal(source.revisions[0].requests,undefined);
