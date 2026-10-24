@@ -84,8 +84,12 @@ console.log('PASS network-only map, compact popup, inline research note, retaine
   const svg=$('.network-svg');lazy.hide();lazy.show();assert.equal($('.network-svg'),svg,'Warm return retains the existing SVG');
   const open=()=>{$('[data-scheme="ml-kem"]').click();Array.from($('#mobile-inspector').querySelectorAll('a')).find(link=>link.textContent==='Read research note').click();};
   open();await new Promise(setImmediate);assert.equal(reads,1);assert.match($('#mobile-inspector').textContent,/Loading research note/);
+  const quiet=$('#mobile-inspector').querySelector('.map-reading');
+  assert.equal(quiet.getAttribute('aria-busy'),'true');
+  assert.ok(quiet.querySelector('[role="status"]').classList.contains('sr-only'),'Shadow-root note loading uses its own visually-hidden style');
   pending.reject(new Error('Unavailable'));await new Promise(setImmediate);
   assert.match($('#mobile-inspector').textContent,/could not be loaded/);
+  assert.equal($('#mobile-inspector').querySelector('.map-reading'),null,'Errors remain visible and clear the busy placeholder');
   $('#mobile-inspector').querySelector('button').click();await new Promise(setImmediate);assert.equal(reads,2);
   pending.resolve(bundle);await new Promise(setImmediate);assert.match($('#mobile-inspector').textContent,/Conditions & scope/);
   lazy.hide();lazy.show();open();assert.equal(reads,2,'One successful note bundle is reused within this owner');lazy.destroy();

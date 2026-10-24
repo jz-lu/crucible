@@ -68,6 +68,9 @@ async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
     assert.equal(app.reads[0].options.cache,'no-store');assert.ok(app.reads[0].options.signal);
     assert.equal(app.stylesheet().href,'/map/styles.css');assert.equal(app.surface().isConnected,true);
     assert.equal(app.surface().hidden,true);assert.match(app.q('map').textContent,/Loading scheme map/);
+    const quiet=app.q('map').querySelector('.nb-reading');
+    assert.equal(quiet.getAttribute('aria-busy'),'true');
+    assert.ok(quiet.querySelector('[role="status"]').classList.contains('nb-sr-only'));
     const surface=app.surface();let parent=surface.parentElement,detachments=0;
     Object.defineProperty(surface,'parentElement',{get:()=>parent,set:value=>{if(parent&&!value)detachments++;parent=value;}});
     app.respond();app.finishScripts();await flush();assert.equal(app.calls.mount,0,'stylesheet still pending');
@@ -75,6 +78,7 @@ async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
     assert.equal(app.calls.mount,1);assert.equal(app.calls.show,1);assert.equal(app.surface().hidden,false);
     assert.equal(app.surface(),surface);assert.equal(detachments,0,'keep the loaded shadow stylesheet continuously connected');
     assert.doesNotMatch(app.q('map').textContent,/Loading scheme map/);assert.equal(app.timers.size,0);
+    assert.equal(app.q('map').querySelector('.nb-reading'),null);
   });
   await test('note bodies load on demand, retry independently and reject a changed owner',async()=>{
     const app=await boot(),loading=app.show();app.respond();app.finishScripts();app.stylesheet().onload();await loading;

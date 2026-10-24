@@ -52,6 +52,18 @@ body {
   display: none!important;
 }
 
+.sr-only,.access-workspace[aria-busy=true] #access-description {
+  position: absolute!important;
+  width: 1px!important;
+  height: 1px!important;
+  padding: 0!important;
+  margin: -1px!important;
+  overflow: hidden!important;
+  clip-path: inset(50%)!important;
+  white-space: nowrap!important;
+  border: 0!important;
+}
+
 .access-workspace {
   width: min(100%, 520px);
   max-width: 520px;
@@ -63,6 +75,18 @@ body {
 }
 .access-workspace h1 { font: 600 36px/1.15 var(--display); color: var(--ink); }
 .access-workspace p { margin: 14px 0; }
+.access-workspace .access-heading { margin-bottom: 0; }
+.access-workspace .access-heading-space { display: none; }
+.access-workspace[aria-busy=true] {
+  width: 100%; max-width: none; margin: 0; padding: 31px 0 0;
+  border: 0; border-radius: 0; background: transparent;
+}
+.access-workspace[aria-busy=true] .access-heading { margin-bottom: 24px; }
+.access-workspace[aria-busy=true] h1 { font: 700 32px/1.15 var(--display); letter-spacing: -.3px; min-height: 1.15em; }
+.access-workspace[aria-busy=true] .access-heading-space { display: flex; visibility: hidden; }
+.access-workspace:not([data-catalogue-pending=true]) .catalogue-preview thead { visibility: hidden; }
+body[data-access-pending=true] .primary-nav,body[data-access-pending=true] .account-actions { display: flex!important; visibility: hidden; }
+body[data-access-pending=true] .account-actions > [hidden]:not(#auth-button) { display: block!important; }
 .access-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
 #access-code-form { display: grid; gap: 12px; margin-top: 20px; }
 #access-code { width: 100%; min-width: 0; letter-spacing: .16em; }
@@ -1447,19 +1471,25 @@ input::placeholder,textarea::placeholder {
 }
 
 /* Neutral geometry keeps first loads composed without displaying private data. */
-#route-loading { padding-top: 40px; }
-.route-loading-status { margin: 12px 0 24px; color: var(--muted); font-size: 14px; }
+#route-loading { padding-top: 31px; }
+#route-loading > h1 { font: 700 32px/1.15 var(--display); letter-spacing: -.3px; color: var(--ink); margin-bottom: 24px; }
 .loading-preview { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
 .loading-preview-row { min-height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 20px 24px; }
 .loading-preview-row + .loading-preview-row { border-top: 1px solid var(--line); }
-.loading-preview-row span { display: block; height: 12px; width: 34%; border-radius: 4px; background: var(--line); animation: loading-preview-pulse 1.8s ease-in-out infinite; }
+.loading-preview-row span { display: block; height: 12px; width: 34%; border-radius: 4px; background: var(--line); }
 .loading-preview-row span + span { width: 16%; }
 .loading-preview-row:nth-child(2) span:first-child { width: 43%; }
 .loading-preview-row:nth-child(3) span:first-child { width: 28%; }
 .loading-preview-compact { border: 0; margin-top: 24px; background: transparent; }
 .loading-preview-compact .loading-preview-row { min-height: 32px; padding: 9px 0; border: 0; }
 .loading-preview-compact .loading-preview-row span { height: 10px; }
-@keyframes loading-preview-pulse { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+.catalogue-preview.loading-preview { border-radius: 6px; }
+.catalogue-help-space { flex: 0 0 24px; width: 24px; height: 24px; visibility: hidden; }
+.catalogue-preview td { height: 76px; }
+.catalogue-placeholder { display: block; height: 13px; max-width: 100%; width: 56%; background: var(--line); opacity: .55; border-radius: 3px; }
+.catalogue-preview td:first-child .catalogue-placeholder { width: 64%; }
+.catalogue-preview tr:nth-child(2n) td:first-child .catalogue-placeholder { width: 48%; }
+.catalogue-preview td:last-child .catalogue-placeholder { width: 22px; }
 
 @keyframes spin {
   to {
@@ -1863,6 +1893,11 @@ input::placeholder,textarea::placeholder {
 .tier-record-notes .panel-footnote { margin-top: 9px; }
 
 @media(max-width:700px) {
+  .access-workspace[aria-busy=true],#route-loading { padding-top: 26px; }
+  .access-workspace[aria-busy=true] h1,#route-loading > h1 { font-size: 29px; }
+  .access-workspace[aria-busy=true] .access-heading { margin-bottom: 21px; }
+  .catalogue-preview td { height: auto; }
+  .catalogue-preview td:first-child { min-height: 25px; display: flex; align-items: center; }
   .tier-record { padding: 24px 20px; border-radius: 9px; }
   .tier-record .tier-record-heading { align-items: center; }
   .tier-record .tier-record-heading h3 { font-size: 17px; }

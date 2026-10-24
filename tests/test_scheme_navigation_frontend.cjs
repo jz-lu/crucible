@@ -44,8 +44,9 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     const gate = deferred();
     const app = await createApp({hash: '#challenge', responder: responder(url => url.pathname === '/api/schemes' ? gate.promise : undefined)});
     assert.equal(app.$('#access-workspace').hidden, true);
-    assert.equal(app.$('#route-loading').hidden, false);
-    assert.match(app.$('#route-loading').textContent, /KEM Schemes/);
+    assert.equal(app.$('#route-loading').hidden, true);
+    assert.equal(app.$('#catalogue-workspace').hidden, false);
+    assert.equal(app.$('#kem-catalogue').getAttribute('aria-busy'), 'true');
     assert.equal(reads(app, 'navigation').length, 1); assert.equal(reads(app, 'release').length, 0);
     gate.resolve(app.envelope(navigation())); await flush();
     assert.equal(app.$('#route-loading').hidden, true);
@@ -60,10 +61,13 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     })});
     assert.equal(reads(app, 'navigation').length, 1); assert.equal(reads(app, 'release').length, 1);
     assert.equal(app.$('#workspace').hidden, true);
+    app.$('#route-loading').focus();
     full.resolve(app.envelope(detail(a))); await flush();
     assert.equal(app.$('#workspace').hidden, true);
     nav.resolve(app.envelope(navigation())); await flush();
     assert.equal(app.$('#workspace').hidden, false);
+    assert.equal(app.document.activeElement, app.$('#workspace'));
+    assert.equal(app.$('#route-loading').getAttribute('aria-busy'), 'false');
     assert.match(app.$('#parameter-json').textContent, /9007199254740993/);
     assert.equal(app.requests.some(r => r.url.pathname === '/api/challenges'), false);
   });

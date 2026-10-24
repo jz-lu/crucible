@@ -105,7 +105,9 @@
     function withNotes(renderNote) {
       if (destroyed || !visible) return;
       if (notes) { renderNote(); return; }
-      popup('Research note', el('p', '', 'Loading research note…'));
+      const pending = el('div', 'map-reading'); pending.setAttribute('aria-busy', 'true');
+      const status = el('p', 'sr-only', 'Loading research note…'); status.setAttribute('role', 'status');
+      pending.append(status); popup('Research note', pending);
       const token = detailRequest;
       Promise.resolve().then(loadNotes).then(value => {
         if (destroyed || !visible || token !== detailRequest || !modal.open) return;

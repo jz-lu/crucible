@@ -19,7 +19,7 @@
     <script src="/app.js" defer>
     </script>
   </head>
-  <body>
+  <body data-access-pending="true">
     <a class="skip-link" href="#catalogue-workspace">
       Skip to main content
     </a>
@@ -55,7 +55,7 @@
           </button>
           <a id="account-handle" class="account-handle" href="#people" hidden>
           </a>
-          <button id="auth-button" class="button button-small button-quiet" type="button" disabled>
+          <button id="auth-button" class="button button-small button-quiet" type="button" disabled hidden>
             Sign in
           </button>
           <button id="logout-button" class="text-button" type="button" hidden>
@@ -73,12 +73,23 @@
         </button>
       </div>
       <section id="access-workspace" class="access-workspace" aria-labelledby="access-title" aria-busy="true" tabindex="-1">
-        <h1 id="access-title">Crucible</h1>
+        <div class="catalogue-heading access-heading">
+          <h1 id="access-title" aria-hidden="true"></h1>
+          <div class="catalogue-actions access-heading-space" aria-hidden="true"><span class="text-button">Refresh ↻</span></div>
+        </div>
         <p id="access-description" role="status">Checking access…</p>
-        <div id="access-loading-preview" class="loading-preview loading-preview-compact" aria-hidden="true">
-          <div class="loading-preview-row"><span></span><span></span></div>
-          <div class="loading-preview-row"><span></span><span></span></div>
-          <div class="loading-preview-row"><span></span><span></span></div>
+        <div id="access-loading-preview" class="kem-table-wrap catalogue-preview loading-preview" aria-hidden="true">
+          <table class="kem-table">
+            <thead><tr><th>KEM</th><th class="recovery-heading"><span class="recovery-heading-label"><span>Largest recovery</span><span class="catalogue-help-space"></span></span></th><th>Recovered by</th><th>Participants</th></tr></thead>
+            <tbody>
+              <tr><td><span class="catalogue-placeholder"></span></td><td data-label="Largest recovery"><span class="catalogue-placeholder"></span></td><td data-label="Recovered by"><span class="catalogue-placeholder"></span></td><td data-label="Participants"><span class="catalogue-placeholder"></span></td></tr>
+              <tr><td><span class="catalogue-placeholder"></span></td><td data-label="Largest recovery"><span class="catalogue-placeholder"></span></td><td data-label="Recovered by"><span class="catalogue-placeholder"></span></td><td data-label="Participants"><span class="catalogue-placeholder"></span></td></tr>
+              <tr><td><span class="catalogue-placeholder"></span></td><td data-label="Largest recovery"><span class="catalogue-placeholder"></span></td><td data-label="Recovered by"><span class="catalogue-placeholder"></span></td><td data-label="Participants"><span class="catalogue-placeholder"></span></td></tr>
+              <tr><td><span class="catalogue-placeholder"></span></td><td data-label="Largest recovery"><span class="catalogue-placeholder"></span></td><td data-label="Recovered by"><span class="catalogue-placeholder"></span></td><td data-label="Participants"><span class="catalogue-placeholder"></span></td></tr>
+              <tr><td><span class="catalogue-placeholder"></span></td><td data-label="Largest recovery"><span class="catalogue-placeholder"></span></td><td data-label="Recovered by"><span class="catalogue-placeholder"></span></td><td data-label="Participants"><span class="catalogue-placeholder"></span></td></tr>
+              <tr><td><span class="catalogue-placeholder"></span></td><td data-label="Largest recovery"><span class="catalogue-placeholder"></span></td><td data-label="Recovered by"><span class="catalogue-placeholder"></span></td><td data-label="Participants"><span class="catalogue-placeholder"></span></td></tr>
+            </tbody>
+          </table>
         </div>
         <div id="access-auth-actions" class="access-actions" hidden>
           <button id="access-github" class="button button-primary" type="button" hidden>Continue with GitHub</button>
@@ -111,10 +122,7 @@
         </div>
         <p id="tier-help" hidden>Stages mark positions in each scheme’s default progression. Schemes can have different numbers of stages; equal stage numbers do not imply equal security or attack cost.</p>
         <div id="kem-catalogue" aria-live="polite">
-          <div class="loading-state" role="status">
-            <span class="loader" aria-hidden="true"></span>
-            Loading KEMs…
-          </div>
+          <div class="loading-state" role="status"><span class="sr-only">Loading schemes</span></div>
         </div>
       </section>
       <section id="review-workspace" class="review-workspace" aria-labelledby="review-title" tabindex="-1" hidden>
@@ -206,12 +214,8 @@
             <p class="eyebrow">
               KEM challenge
             </p>
-            <h1 id="scheme-title">
-              Loading KEM…
-            </h1>
-            <p id="scheme-summary">
-              Loading the challenge profiles…
-            </p>
+            <h1 id="scheme-title"></h1>
+            <p id="scheme-summary"></p>
             <p id="scheme-beta" class="beta-note" hidden></p>
             <div class="scheme-actions">
               <button id="advance-size" class="next-instance-button is-concealed" type="button" disabled aria-hidden="true">
@@ -301,9 +305,7 @@
             <p id="countdown" class="countdown" aria-label="Loading round time">—:—</p>
           </aside>
           <div id="challenge-loading" class="loading-state" role="status">
-            <span class="loader" aria-hidden="true">
-            </span>
-            Loading your workspace…
+            <span class="sr-only">Loading your workspace…</span>
           </div>
           <div id="challenge-error" class="notice notice-error" role="alert" hidden>
             <span id="challenge-error-text">
@@ -453,9 +455,7 @@
               <h3>
                 Exactly what is being tested
               </h3>
-              <p id="protocol-version">
-                Loading the selected protocol…
-              </p>
+              <p id="protocol-version"></p>
             </div>
             <span id="protocol-status" class="status-tag muted-tag" hidden>
               Teaching
