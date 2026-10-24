@@ -30,6 +30,29 @@ test('an unlinked GitHub callback offers password sign-in and clears its error o
   expect(writes).toEqual(['/api/auth/login', '/api/auth/login']);
 });
 
+test('a changed profile refresh retains native keyboard focus without interrupting another control', async ({page}) => {
+  await signIn(page);
+  await page.locator('#account-handle').click();
+  const summary = page.locator('#personal-records > summary');
+  await summary.focus(); await summary.press('Enter');
+  await expect(page.locator('#personal-records')).toHaveAttribute('open', '');
+  let change = 0;
+  // Keep real authorization and reads; vary only the synthetic score so the
+  // refresh must replace the DOM instead of taking its unchanged-data shortcut.
+  await page.route('**/api/people/browser_alice?*', async route => {
+    const response = await route.fetch(), data = await response.json();
+    data.person.points += ++change;
+    await route.fulfill({response, json: data});
+  });
+  await page.evaluate(() => loadPerson('browser_alice', {preserve: true}));
+  await expect(summary).toBeFocused();
+  await expect(page.locator('#personal-records')).toHaveAttribute('open', '');
+  const outside = page.locator('#history-button');
+  await outside.focus();
+  await page.evaluate(() => loadPerson('browser_alice', {preserve: true}));
+  await expect(outside).toBeFocused();
+});
+
 test('GitHub return opens the requested page without a continuation round trip', async ({page}) => {
   const requests = [];
   page.on('request', request => requests.push(new URL(request.url()).pathname));
