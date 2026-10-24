@@ -689,11 +689,26 @@ function loadNotebookAsset(path, stylesheet = false) {
   return task;
 }
 async function showNotebook(query, reviewing = false) {
-  const account = state.user?.id, section = state.reviewSection, request = ++notebookShowRequest;
+  const account = state.user?.id, csrf = state.csrf, section = state.reviewSection, request = ++notebookShowRequest;
+  const params = new URLSearchParams(query || window.location.hash.split('?')[1] || '');
   const target = $(reviewing ? '#review-notebook-workspace' : '#notebook-workspace');
-  const current = () => request === notebookShowRequest && hasAccess() && account === state.user?.id &&
+  const current = () => request === notebookShowRequest && hasAccess() && account === state.user?.id && csrf === state.csrf &&
     (reviewing ? state.screen === 'reviews' && state.canReviewProposals && state.reviewSection === section && section !== 'schemes' : state.screen === 'notebook');
   if (!current()) return;
+  // Only the cold, ordinary first page has a query known before notebook code
+  // arrives. Share that authorized read with its eventual consumer; all other
+  // views and filters continue to decide their own requests inside the notebook.
+  const firstListPath = '/api/notebook/notes?limit=25&include_curated=true&scope=all';
+  const readEpoch = readViewEpoch, startedAt = Date.now();
+  let firstListRead = !reviewing && !notebookWorkspace && account != null && !params.size ?
+    readAgain('notebook:first-list', firstListPath) : null;
+  firstListRead?.catch(() => {}); // A failed request can finish before assets.
+  const notebookAPI = (path, body, options) => {
+    const first = firstListRead; firstListRead = null;
+    if (first && current() && readEpoch === readViewEpoch && Date.now() - startedAt < 10000 &&
+        path === firstListPath && body === undefined && (!options?.method || options.method === 'GET')) return first;
+    return api(path, body, options);
+  };
   if (!window.CrucibleNotebook || (!notebookAssetsReady && notebookAssetLoads.size)) {
     setLoading(target, reviewing ? 'Loading review workspace…' : 'Loading notebook…');
     notebookAssets ||= (async () => {
@@ -713,11 +728,11 @@ async function showNotebook(query, reviewing = false) {
     catch (error) { if (current()) showInlineError(target, error.message, () => showNotebook(query, reviewing)); return; }
   }
   if (!current()) return;
-  const options = {navigate, api, account: () => hasAccess() && (!reviewing || state.canReviewProposals) ? state.user : null,
+  const options = {navigate, api: notebookAPI, account: () => hasAccess() && (!reviewing || state.canReviewProposals) ? state.user : null,
     currentReleases: () => hasAccess() ? state.schemes : [], session: () => state.csrf, reviewOnly: reviewing};
   if (reviewing) reviewNotebookWorkspace ||= window.CrucibleNotebook.mount(target, options);
   else notebookWorkspace ||= window.CrucibleNotebook.mount(target, options);
-  await (reviewing ? reviewNotebookWorkspace : notebookWorkspace).show(new URLSearchParams(query || window.location.hash.split('?')[1] || ''));
+  await (reviewing ? reviewNotebookWorkspace : notebookWorkspace).show(params);
 }
 $('#access-sign-in').addEventListener('click', () => { setAuthMode('login'); openAuth($('#access-sign-in')); $('#auth-password-options').open = true; });
 $('#access-register').addEventListener('click', () => { setAuthMode('register'); openAuth($('#access-register')); });

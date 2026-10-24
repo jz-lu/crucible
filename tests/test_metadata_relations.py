@@ -53,7 +53,9 @@ def connection(request):
 
 def old_values(name, columns, rows, dialect):
     """The original relation, retained only as an independent parity oracle."""
-    return values(*columns).data(rows).cte(name)
+    # Compiling VALUES binds its ColumnClause objects to that relation. Keep
+    # them independent of the PostgreSQL table-valued relation being checked.
+    return values(*(column(field.name, field.type) for field in columns)).data(rows).cte(name)
 
 
 def normalized(rows):
