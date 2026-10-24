@@ -7,11 +7,14 @@ ownership, reviewer permissions, CSRF and authorization inside write transaction
 from starlette.routing import Mount
 
 PUBLIC = {
-    ("GET", "/"), ("GET", "/styles.css"), ("GET", "/app.js"),
+    ("GET", "/"), ("GET", "/styles.css"), ("GET", "/app.js"), ("GET", "/bootstrap.js"),
     ("GET", "/math.js"), ("GET", "/assumptions.js"), ("GET", "/proposal-retractions.js"), ("GET", "/assets/crucible-logo.png"),
     ("GET", "/health"), ("GET", "/api/session"), ("GET", "/api/agent/client"),
     ("POST", "/api/auth/register"), ("POST", "/api/auth/login"),
     ("POST", "/api/auth/logout"), ("POST", "/api/agent/connect/start"),
+    ("POST", "/api/auth/github/start"), ("GET", "/api/auth/github/callback"),
+    ("GET", "/api/auth/github/pending"), ("POST", "/api/auth/github/complete"),
+    ("POST", "/api/auth/password/reset/start"), ("POST", "/api/auth/password/reset/complete"),
     ("POST", "/api/agent/connect/poll"),
     ("GET", "/api/access/status"),
     ("POST", "/api/access/invitations/verify/start"),
@@ -39,6 +42,7 @@ MEMBER_PATHS = {
     "/api/notebook/import", "/api/notebook/imports/{import_id}",
     "/api/notebook/notes/{note_id}/proposal-submissions",
     "/api/notebook/notes/{note_id}/publication-requests",
+    "/api/notebook/notes/{note_id}/delete", "/api/notebook/notes/{note_id}/restore",
     "/api/notebook/notes/{note_id}/publication-withdrawals",
     "/api/notebook/notes/{note_id}/publication-reviews", "/api/notebook/review-queue",
     "/api/protocol/correctness", "/api/protocol/artifact-source", "/api/protocol/example",

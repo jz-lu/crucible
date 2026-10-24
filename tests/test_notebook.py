@@ -18,7 +18,7 @@ from crucible import beta_access, notebook
 from crucible.app import create_app
 from crucible.config import Settings
 from crucible.db import Database, LoginSession, User
-from crucible.machine_auth import MachineToken, SCOPES
+from crucible.machine_auth import MachineToken, DEFAULT_SCOPES
 from crucible.security import mac, passwords, token_hash
 
 ORIGIN = "http://testserver"
@@ -340,7 +340,7 @@ def test_writes_require_csrf_and_agents_cannot_borrow_notebook_authority(system)
     token = "cru_" + "a" * 43
     with app.state.db.transaction(write=True) as session:
         session.add(MachineToken(id=str(uuid4()), user_id=owner.identifier, token_hash=token_hash(token),
-            label="Existing agent", scopes=list(SCOPES), created_at=app.state.clock(), expires_at=app.state.clock() + 3600))
+            label="Existing agent", scopes=list(DEFAULT_SCOPES), created_at=app.state.clock(), expires_at=app.state.clock() + 3600))
     for path in ("/api/notebook/notes", "/api/notebook/export"):
         assert owner.client.get(path, headers={"Authorization": "Bearer " + token}).status_code == 403
     assert owner.client.post("/api/notebook/notes", json=payload,

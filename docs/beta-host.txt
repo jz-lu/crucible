@@ -1,0 +1,245 @@
+Droplet fallback: prepared assets, not a live deployment
+=======================================================
+
+App Platform is now the preferred target, subject to compatibility validation;
+see app-platform-readiness.txt. This runbook is retained for the Droplet fallback.
+The chosen domain is crucible.fail (Porkbun). Do not publish DNS, request public certificates,
+register a production OAuth callback or provision paid infrastructure from this
+runbook until that setup is explicitly ready. Privacy applies to the website as
+well as the Git repository: keep production beta membership enabled. A minimal
+sign-in/invitation surface must be reachable before authentication; schemes,
+notes, profiles, submissions and protected downloads remain behind the app's
+access checks. The Caddy configuration deliberately proxies every request to
+Crucible. It must not acquire a file_server or a direct web/, repository or data
+directory alias, even as a performance optimization.
+
+These assets are for one Linux host, one application process and a managed
+PostgreSQL service over verified TLS. They do not resolve outstanding native
+artifact portability/admission. A working proxy or successful configuration
+check is not evidence that the full application starts or is ready for users.
+
+Files and ownership
+-------------------
+  deploy/crucible.service -> /etc/systemd/system/crucible.service
+  deploy/Caddyfile.example -> /etc/caddy/Caddyfile, after replacing the hostname
+  deploy/caddy-crucible.conf -> /etc/systemd/system/caddy.service.d/crucible.conf
+  deploy/journald-crucible.conf -> /etc/systemd/journald@crucible.conf
+  deploy/crucible-backup.service -> /etc/systemd/system/crucible-backup.service
+  deploy/crucible-backup.timer -> /etc/systemd/system/crucible-backup.timer
+
+Create an unprivileged system account named crucible, with no login shell.
+Install reviewed immutable releases under /opt/crucible/releases/RELEASE_ID,
+owned by root:crucible and readable/executable by the service account. Use an
+explicit /opt/crucible/current symlink to the selected release. The service
+account must not be able to alter application code, workers, dependency files,
+release evidence or that symlink. Keep the prior release for an application
+rollback. Build the release's virtual environment at its final absolute path;
+moving an editable virtual environment can leave entrypoints pointing elsewhere.
+
+Create /etc/crucible as root:crucible mode 0750. Actual runtime.env and backup.env
+are root:root mode 0600, outside Git. systemd reads runtime.env before dropping
+privileges. The database CA certificate can be root:crucible mode 0640 so the app
+can read it. Never put secrets in unit files, CLI arguments, shell history,
+release manifests or logs. EnvironmentFile syntax is not shell scripting: no
+export statements, command substitution or 'source runtime.env' instructions.
+
+StateDirectory creates /var/lib/crucible owned by the service with mode 0700.
+Accounts, notes and submissions live in PostgreSQL; this directory is reserved
+for explicitly required persistent local state. Native executables belong in
+the immutable release, never in this writable directory. Select native backend
+paths explicitly, including HQC's modeled worker path, as described in
+docs/linux-runtime-build.txt. No recursive .local copy is part of deployment.
+
+Produce an actual RELEASE.json from deploy/RELEASE.example.json, containing the
+complete source checkpoint, platform/runtime inventory digest and retained review
+evidence. Placeholder manifests are refused by the backup helper. Keep the actual
+source/native bundle and licenses separately, so this recovery reference remains
+usable if the application disk is lost; a hash without its artifact is insufficient.
+
+HTTPS and process supervision
+-----------------------------
+Use a maintained Caddy package on the chosen Linux distribution. Its package
+service manages certificate storage; the supplied drop-in adds a private Unix
+admin socket directory and the Crucible log namespace. Supply the real domain
+in Caddyfile and the matching HTTPS origin in runtime.env. Caddy performs HTTPS
+certificate management and HTTP redirects after the domain is valid. For a
+private beta, the hostname/certificate may be public while application content
+remains membership-protected. DNS/certificates do not make the beta data public.
+Official reference: https://caddyserver.com/docs/automatic-https
+
+Permit public TCP 80/443 only; restrict SSH to operator access. The app listens
+on 127.0.0.1:8000, not a public interface. Never open 8000 or the Caddy admin
+socket remotely. PostgreSQL stays in the provider's private network and trusts
+only the intended client host/role. No CDN or additional proxy is assumed.
+Caddy ignores client-supplied forwarding chains by default; Uvicorn trusts only
+127.0.0.1. If another proxy is later introduced, review both trust boundaries.
+References: https://caddyserver.com/docs/caddyfile/directives/reverse_proxy
+            https://uvicorn.dev/settings/
+
+The app unit runs one worker because generation/authentication limits are
+per-process. It restarts after failure with a bounded retry rate, retains a
+35-second application shutdown window, and stops child workers with the service.
+Its initial 3 GiB memory ceiling assumes a 4 GiB host; it is an operating bound,
+not proof of user capacity. Measure the actual chosen host before changing it.
+It cannot write release files or home directories, acquire extra privileges,
+produce core dumps or listen on privileged ports. Do not use run.sh for hosted
+startup: that development launcher installs dependencies and runs migrations.
+
+Install units, then validate before enabling anything:
+
+  sudo systemd-analyze verify /etc/systemd/system/crucible.service \
+    /etc/systemd/system/crucible-backup.service /etc/systemd/system/crucible-backup.timer
+  sudo -u caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+  sudo systemctl daemon-reload
+
+Validation does not exercise real TLS, credentials or native workers. The app's
+ExecStartPre performs configuration checks only, and will reject an incomplete
+runtime.env. It never migrates or admits artifacts. Once all release, migration
+and privacy gates pass, enable the app and Caddy explicitly with systemctl.
+Do not enable the backup timer before its encrypted repository/restore checks.
+
+Logs
+----
+There are no proxy or Uvicorn access logs. Caddy's request-bearing proxy error
+events are also excluded, because URLs may contain OAuth codes/invitation tokens.
+Operational warning/error logs remain. Do not enable debug, log_credentials or
+raw request/body tracing in beta. The separate journal has size/retention bounds:
+128 MiB persistent, 32 MiB runtime, 16 MiB files and seven-day retention. These
+are journald rotation bounds; active files can temporarily exceed a size target.
+Restrict journal readers to operators. Inspect with:
+
+  sudo journalctl --namespace=crucible -u crucible.service
+
+References: https://caddyserver.com/docs/caddyfile/options#log
+            https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html
+            https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html
+
+Explicit release and migration procedure
+---------------------------------------
+1. Assemble and test a complete new release under its own immutable directory.
+   Run native/conformance checks and production preflight against the prepared
+   environment. Native failures remain launch blockers, not bypass candidates.
+2. Verify a recent complete encrypted backup and its restore path. Prevent
+   concurrent deployment/configuration rotation and backup while promoting a
+   release; use the backup lock at /run/crucible-backup/backup.lock as the common
+   operator lock. The backup unit preserves its protected RuntimeDirectory
+   across runs so another operation's held lock is not unlinked. After reboot,
+   create that root-owned mode-0700 directory before a manual release if absent.
+3. Stop the application for schema changes that need a maintenance window. Keep
+   Caddy returning an unavailable response; never serve private files directly.
+4. Apply migrations once, explicitly, as the service user with the new release's
+   protected environment. A transient systemd unit can load EnvironmentFile
+   without exposing values in argv. Its command is:
+     /opt/crucible/releases/RELEASE_ID/.venv/bin/python -B -m crucible.manage migrate
+   Record success/failure and the migration head. A service restart must not run
+   this command automatically. Never invoke initial transfer against a populated
+   beta database or copy local development data over it.
+5. Switch current to the tested release, restart the app and test health/sign-in,
+   membership denial, agent access, submissions and note publication. Retain the
+   old artifact. Code rollback is allowed only with a compatible schema; do not
+   restore an old database over new participant contributions to 'roll back code'.
+
+Encrypted backup setup
+----------------------
+Install restic (with --stdin-from-command support) and a pg_dump client compatible
+with the managed PostgreSQL server major version. pg_dump's logical archive is a
+consistent database snapshot; it does not include server roles or runtime secrets.
+The helper pairs it with runtime.env and RELEASE.json in a separate encrypted
+configuration snapshot, then records a final encrypted completion receipt. An
+incomplete run has no completion receipt and is not a complete recovery set.
+Only IDs/status are logged. No plaintext dump or configuration copy is staged.
+References: https://www.postgresql.org/docs/current/app-pgdump.html
+            https://restic.readthedocs.io/en/stable/040_backup.html#reading-data-from-a-command
+
+Use a private Spaces bucket with no public access/CDN and a restricted backup
+credential. Configure backup.env from its example. RESTIC_REPOSITORY points at
+the HTTPS S3 endpoint; the CLI deliberately refuses a local-only repository.
+The repository password and object-store credentials belong in separate root-only
+files. Keep an independent, tested recovery copy of the repository password,
+repository location, object-store recovery access and database bootstrap procedure
+in an operator vault outside the application host. The backup password is not
+included in its own encrypted repository; losing it loses the backups.
+
+Create root-owned 0600 backup-pg-service.conf, for example:
+  [crucible-backup]
+  host=PRIVATE_DATABASE_HOST
+  port=25060
+  dbname=DATABASE_NAME
+  user=DEDICATED_BACKUP_ROLE
+  sslmode=verify-full
+  sslrootcert=/etc/crucible/database-ca.crt
+
+Give that role CONNECT and read access to the complete application schema; use
+a separate migration role for DDL. Store its password in backup-pgpass, mode0600,
+using PostgreSQL's hostname:port:database:user:password format and its escaping
+rules. No password belongs in the service config or command arguments.
+Reference: https://www.postgresql.org/docs/current/libpq-pgpass.html
+
+Repository initialization is an explicit one-time operator action, not performed
+by backup-beta.py. With only the protected backup environment loaded, run restic
+init once for a new repository and retain its recovery material independently.
+Then start crucible-backup.service manually. It refuses missing/unsafe files,
+unverified database TLS, placeholder releases and concurrent runs. pg_dump
+failure prevents the database snapshot; any failed stage prevents completion.
+No snapshot is deleted automatically. Only after restoring a complete set into
+a separate disposable database should the hourly timer be enabled.
+
+Recovery rehearsal and retention
+-------------------------------
+Find the intended snapshot tagged complete, decrypt its completion.json, and use
+the exact database_snapshot/configuration_snapshot IDs from it. Restore config
+into a new protected directory, not over /etc/crucible. Compare its file hashes
+to the encrypted receipt; recover the original server secret. Restore database.dump
+into a freshly created empty database using pg_restore --exit-on-error --no-owner
+--no-privileges. Never direct a rehearsal at the live database. Bootstrap roles
+and grants separately. Verify every schema table/count/content digest and actual
+login/note/submission behavior; see docs/beta-transfer.txt for existing fixtures.
+
+The completion receipt's restore_tested is intentionally false: creating an
+encrypted backup does not prove restoration. Retain separate restore evidence.
+Test host-loss recovery with credentials obtainable independently of that host.
+The hourly timer and provider recovery features are safeguards, not a proven
+one-hour/four-hour recovery promise; measure those targets on the real setup.
+
+Choose and review retention after observing repository size. For paired snapshots,
+apply the same retention selection to complete run_id groups, preserving all
+three snapshots of any retained run. Do not independently 'keep latest' by path,
+which can separate a database from its secret/configuration receipt. The helper
+never runs forget/prune. An operator may examine a dry run before any deletion;
+keep immutable/off-host copies appropriate to the pilot's threat model.
+Reference: https://restic.readthedocs.io/en/stable/060_forget.html
+
+External setup still needed
+--------------------------
+The chosen beta hostname must match CRUCIBLE_ORIGIN and the GitHub OAuth callback
+configuration. Set provider client credentials only through runtime.env after
+registering that exact callback. Cloud/database/backup/mail configuration will
+come from the already planned accounts; no account or domain is created here.
+Configure an independent reviewer and explicit participant membership before
+opening invitations. All content remains private beta content until a separate
+publication-policy decision and implementation.
+
+Local fixture evidence (2026-10-18)
+----------------------------------
+An isolated Debian 13.6 arm64 VM passed all four opt-in tests in
+tests/test_deployment_fixture.py (4 passed in 13.24 seconds). Tested components:
+Caddy 2.6.2, restic 0.18.0, Python 3.13.5 and PostgreSQL 17.
+
+- Real Caddy HTTPS using a disposable local CA: protected-path forwarding,
+  spoofed forwarding-header replacement, no-store/referrer headers, an oversized
+  upload failing, and a synthetic OAuth query absent from proxy error logs.
+- systemd unit syntax via systemd-analyze, without starting the Crucible service.
+- Actual encrypted restic configuration/database/completion snapshots, decrypting
+  the paired synthetic secret and restoring the database into a separate empty
+  fixture database; exact Unicode/JSONB content was compared.
+- Actual pg_dump failure produces no database or completion snapshot. Local-only
+  repositories are refused by the production helper, accepted only through the
+  explicit test-function override.
+
+The fixture creates only uniquely named synthetic databases/roles and removes
+them afterwards. It does not read application data or the real runtime.env.
+The ordinary suite skips these tests unless CRUCIBLE_DEPLOY_FIXTURE=1 is set.
+These results do not verify public ACME/DNS, off-host S3 delivery, production
+credentials, a full hardened application start, or x86 native artifacts. Those
+remain required deployment checks. The final unit-only syntax check was repeated
+after the shutdown/lock-lifetime refinements.

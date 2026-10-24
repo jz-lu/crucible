@@ -121,7 +121,7 @@ def test_duplicate_does_not_consume_native_capacity_and_retry_reuses_instance(ge
             assert entered.wait(3)
             try:
                 duplicate = generation.actor.post("/api/challenges", body)
-                assert duplicate.status_code == 503 and duplicate.headers["retry-after"] == "3"
+                assert duplicate.status_code == 429 and duplicate.headers["retry-after"] == "3"
                 assert len(calls) == count(generation, generation_work.GenerationAttempt) == 1
                 independent = other.post("/api/challenges", body)
                 assert independent.status_code == 200, independent.text

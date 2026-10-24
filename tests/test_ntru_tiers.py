@@ -150,7 +150,9 @@ def test_malformed_inputs_cannot_start_worker(monkeypatch):
 
 
 def test_modified_parameter_and_worker_pins_fail_closed(monkeypatch, tmp_path):
-    monkeypatch.setattr(kem, "WORKER_SHA256", "0" * 64)
+    substituted = tmp_path / "unreviewed-worker"
+    substituted.write_bytes(b"unreviewed worker; must never be executed")
+    monkeypatch.setattr(kem, "WORKER", substituted)
     with pytest.raises(kem.GenerationUnavailable, match="reviewed pin"):
         kem.generate(kem.profile_for_size(1))
     bad = tmp_path / "parameters.json"

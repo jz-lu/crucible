@@ -1,0 +1,12 @@
+# Enable only after the private off-host repository and restore rehearsal pass.
+[Unit]
+Description=Hourly Crucible encrypted backup
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=5min
+Unit=crucible-backup.service
+
+[Install]
+WantedBy=timers.target

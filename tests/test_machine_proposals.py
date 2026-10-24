@@ -38,7 +38,7 @@ def test_new_connection_can_validate_submit_revise_and_replay_its_private_propos
     app, _, _ = proposal_system
     browser = Actor(app, "author")
     agent, credential = connect(app, browser)
-    assert credential["scopes"] == list(machine_auth.SCOPES)
+    assert credential["scopes"] == list(machine_auth.DEFAULT_SCOPES)
     assert set(credential["scopes"]) - set(machine_auth.LEGACY_SCOPES) == {
         "proposals:read", "proposals:write", "notes:read", "notes:rate",
     }
@@ -251,7 +251,7 @@ def test_migration_backfills_legacy_requests_without_changing_tokens_or_accounts
         old_credential = poll(app, {"device_code": private_code}).json()
         assert old_credential["status"] == "authorized"
         assert old_credential["scopes"] == list(machine_auth.LEGACY_SCOPES)
-        assert start(app)["scopes"] == list(machine_auth.SCOPES)
+        assert start(app)["scopes"] == list(machine_auth.DEFAULT_SCOPES)
     finally:
         app.state.db.engine.dispose()
     command.downgrade(config, "0007")

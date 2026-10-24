@@ -22,14 +22,11 @@ PAGE_SIZE = 20
 def _profile_rows(identity, include_standard):
     rows = []
     for scheme_id, version, adapter, _, _ in identity:
-        for profile in registry.presentation_manifests(adapter):
-            if profile.get("profile_kind") == "standard-parameter-set" and not include_standard:
+        for identifier, tier, kind, label, inherits in registry.presentation_record_profiles(adapter):
+            if kind == "standard-parameter-set" and not include_standard:
                 continue
-            tier = profile.get("instance_size", profile.get("parameter_bits"))
             if type(tier) is int and tier > 0:
-                rows.append((scheme_id, version, profile["id"], tier,
-                             profile.get("profile_kind"), profile.get("profile_label"),
-                             profile.get("record_inheritance", True) is not False))
+                rows.append((scheme_id, version, identifier, tier, kind, label, inherits))
     return tuple(rows)
 
 

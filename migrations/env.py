@@ -17,6 +17,9 @@ from crucible import generation  # Register non-secret generation outcome eviden
 from crucible import method_sources  # Register immutable uploaded method source bundles.
 from crucible import beta_access  # Register invitations, membership and verified mailboxes.
 from crucible import notebook  # Register durable notes, immutable revisions and publication decisions.
+from crucible import implementation_builds  # Register explicit reviewed builds without changing release pins.
+from crucible import github_auth  # Register explicit provider identities and bound browser flows.
+from crucible import password_recovery  # Register one-use verified-mailbox recovery.
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

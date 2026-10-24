@@ -1,0 +1,85 @@
+Original release baselines before Linux cutover
+==============================================
+
+Purpose
+-------
+Some archived or unissued releases have no adapter_versions row: historically
+that row was created only on first challenge issuance. A new Linux build must
+not become the original baseline merely because the hosted database is empty.
+This helper adds missing ORIGINAL source/artifact anchors from separately
+reviewed original-runtime evidence, before additional-build review. It never
+approves a Linux build, runs an adapter, creates schema, changes a challenge,
+or replaces an existing anchor or review.
+
+Prerequisites
+-------------
+Use a paused, transferred and verified target database, or an explicitly
+disposable synthetic target. Keep the original evidence file and its independently
+recorded SHA-256. Evidence must have format crucible-original-runtime-evidence-v1:
+32 original Mac releases/1466 public profiles were retained at the 22 October
+checkpoint. That observed inventory is not automatically trusted because it is
+well-formed; review its source/runtime provenance before choosing its digest.
+The entire file is bounded and hash-checked. Every profile must agree with its
+release identity and original implementation pair, without an additional-platform
+admission marker. No account data or private keys belong in that evidence.
+
+Commands
+--------
+Supply CRUCIBLE_BASELINE_DATABASE_URL in the protected operator environment,
+never on the command line. There is no fallback to DATABASE_URL or the local
+SQLite database. Use postgresql+psycopg with an explicit host/database and
+sslmode=verify-full; an optional sslrootcert must be an absolute path. Connection
+query overrides are rejected. --allow-local-test-db permits unverified TLS only
+for an explicitly named loopback fixture; never use it for the hosted database.
+
+Read-only plan:
+
+  python -B -m scripts.beta_release_baselines /ABS/original-runtime.json \
+    --evidence-sha256 REVIEWED_SHA256
+
+Optionally repeat --release SCHEME_ID@VERSION to select exact releases. Otherwise
+all releases in the reviewed evidence are selected. Existing equal anchors and
+timestamps are preserved; a conflicting anchor rejects the whole operation.
+For a missing anchor, every stored challenge for that release must carry the
+same original pair. Missing, conflicting or additional-platform historical
+provenance rejects initialization. No repair or history rewrite is attempted.
+
+After reviewing the plan, the explicit maintenance operation is:
+
+  python -B -m scripts.beta_release_baselines /ABS/original-runtime.json \
+    --evidence-sha256 REVIEWED_SHA256 --apply \
+    --reviewed-by OPERATOR --review-basis 'Specific reviewed original evidence' \
+    --receipt /ABS/private/new-baseline-receipt.json
+
+The new receipt path must not exist. Apply serializes against challenge/baseline
+writers and other operators, using an explicit transaction with bounded waits.
+It adds missing anchors atomically. Run while writes are paused; lock contention
+fails rather than waiting indefinitely. Preserve the private operation receipt
+with the recovery/release evidence, outside the source tree and public site.
+Do not include credentials or participant content in the review basis.
+
+Outcomes and recovery
+---------------------
+Default plans use a read-only PostgreSQL transaction. Apply writes a pending
+receipt, then commit_pending before committing; a successful operation records
+committed. The tool uses mode0600 files and atomic receipt updates with fsync.
+A failed pre-commit receipt write rolls the database transaction back.
+
+Exit2 means the commit succeeded or its outcome is uncertain but verification
+is incomplete. Keep the pending receipt and run a read-only plan. Do not assume
+rollback, overwrite the receipt or blindly retry. Original anchors are immutable;
+manual verification must resolve uncertainty before another maintenance action.
+
+After this operation, additional Linux builds still require their own exact
+implementation-build manifests, evidence review and registration. Runtime
+preflight must then pass on the final source/native image. This helper is not
+part of web startup, automatic deployment, database migration or challenge intake.
+
+Validation, 22 October 2026
+---------------------------
+55 source/synthetic SQLite tests passed locally; two real PostgreSQL tests were
+explicitly skipped there. The same suite passed all57 checks on isolated Linux /
+PostgreSQL, including read-only enforcement, writer contention, retained history,
+receipt failure, uncertain-commit handling and target ambiguity rejection.
+All test databases were synthetic and removed. No actual release baseline has
+been registered through this helper during preparation.

@@ -119,8 +119,15 @@ signed-in account. The browser copy stays untouched. Original history and import
 metadata are preserved as provenance; imported labels cannot grant review status.
 The old example notes are illustrative, not assessments of live KEMs.
 
-Notebook HTTP access currently uses authenticated browser sessions; agent exchange
-uses files, without notebook bearer-token scopes. Scheme proposals and concrete
+The CLI is the primary agent path for notes. Connect once with
+`login --notebook --no-browser`, have the participant approve the displayed link,
+then use `notebook list/show/export/import/create/revise/request-publication`.
+`notebook delete` moves unsubmitted private drafts to Trash; `notebook restore`
+recovers the exact deletion. Submitted evidence cannot be deleted.
+Separate opt-in scopes cover owned private reads, writes and publication requests;
+existing credentials keep their permissions. Agents need no browser automation.
+See [the CLI workflow](docs/agent-workflow.txt) for exact commands and retry files.
+Scheme proposals and concrete
 change requests already pin exact notebook revisions and hashes; review does not
 silently follow later edits. Community sharing review concerns safety and content
 moderation. Substantive review for an official display or numerical challenge is

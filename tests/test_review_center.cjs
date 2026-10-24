@@ -152,6 +152,8 @@ async function test(name, run) {await run(); passed++; console.log('PASS '+name)
     assert.equal(normalRoot.querySelector('.nb-publication-review'),null);assert.equal(normalRoot.querySelector('.nb-review-links'),null);
     app.sandbox.setSession(app.envelope({user:reviewer,csrf_token:'same',capabilities:{review_protocol_proposals:false}}));
     assert.doesNotMatch(reviewRoot.textContent,/Private review seam fixture|Private fixture body/);
+    // Rotating this browser session clears private readers, then reloads the visible one.
+    await flush();
     assert.match(normalRoot.textContent,/Private review seam fixture/);
     await app.navigate('#reviews?section=publication');assert.equal(app.$('#review-access-message').hidden,false);
     assert.equal(reviewRoot.hidden,true);

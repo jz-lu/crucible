@@ -162,7 +162,7 @@ def test_password_capacity_does_not_block_reads_or_create_sessions(private_app):
     visitor=Actor(private_app)
     with private_app.state.auth_limiter.slot('password'),private_app.state.auth_limiter.slot('password'):
         response=visitor.post('/api/auth/login',{'handle':'participant','password':PASSWORD})
-        assert response.status_code==503 and response.headers['retry-after']=='2'
+        assert response.status_code==429 and response.headers['retry-after']=='2'
         assert visitor.client.get('/health').status_code==200
         assert visitor.client.get('/api/session').json()['user'] is None
 

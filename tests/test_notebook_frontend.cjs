@@ -38,7 +38,7 @@ function summaryPage(url,records){
 }
 async function filterNotes(app,value){const select=app.root.querySelector('[name="visibility"]');select.value=value;select.dispatchEvent({type:'change'});await flush();}
 async function searchNotes(app,value){app.q('search').value=value;app.q('search').dispatchEvent({type:'input'});await app.advanceTimers(250);}
-async function boot({account=user,respond,stored=null,mapFactory,currentReleases,reviewOnly=false,researchWorkspace=emptyResearch,initialParams=new URLSearchParams()}={}) {
+async function boot({account=user,respond,stored=null,mapFactory,currentReleases,session,reviewOnly=false,researchWorkspace=emptyResearch,initialParams=new URLSearchParams()}={}) {
   const app=await createApp({schemes:[],hash:'#about'});let current=account;const requests=[],storage=[];
   const timers=new Map();let timerId=0;
   app.sandbox.setTimeout=(fn,delay=0)=>{const id=++timerId;timers.set(id,{fn,delay});return id;};
@@ -51,7 +51,7 @@ async function boot({account=user,respond,stored=null,mapFactory,currentReleases
   const root=app.$('#notebook-workspace');
   const api=async(url,body,options)=>{requests.push({url,body,options});if(respond){const result=await respond(url,body,options);if(result!==undefined)return url==='/map/notes.json'?vm.runInContext('('+JSON.stringify(result)+')',app.sandbox):result;}if(url==='/notebook/request-types.json')return requestTypes;if(url.startsWith('/api/notebook/research-requests?source_note_id='))return{requests:[],next_after:null};if(url==='/map/notes.json')return vm.runInContext('('+JSON.stringify(researchWorkspace)+')',app.sandbox);if(url.startsWith('/api/notebook/notes?'))return summaryPage(url,researchWorkspace.notes.map(curatedSummary));if(url.startsWith('/api/notebook/notes/note-one'))return{note:note()};throw Error('Unexpected '+url);};
   let controller;const navigate=route=>{app.history.pushState(null,'',route);controller.show(new URLSearchParams(route.split('?')[1]||''));};
-  controller=app.sandbox.window.CrucibleNotebook.mount(root,{api,account:()=>current,navigate,mapFactory,currentReleases,reviewOnly});
+  controller=app.sandbox.window.CrucibleNotebook.mount(root,{api,account:()=>current,navigate,mapFactory,currentReleases,session,reviewOnly});
   const q=name=>root.querySelector(`[data-nb="${name}"]`);
   await controller.show(initialParams);
   return{...app,root,controller,q,requests,storage,advanceTimers,setAccount:value=>{current=value;controller.setAccount(value);},show:async(id,rev)=>controller.show(new URLSearchParams(id?{note:id,...(rev?{revision:String(rev)}:{})}:{}))};
@@ -60,6 +60,143 @@ function fill(app,title='New mathematical claim'){for(const [key,value]of Object
 const byText=(root,label)=>root.querySelectorAll('button').find(n=>n.textContent===label);
 let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
 (async()=>{
+
+ await test('expanding a note prefetches its exact body and the reader shares the in-flight GET',async()=>{
+  const late=deferred();const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()]}:url==='/api/notebook/notes/note-one'?late.promise:undefined});
+  app.q('list').querySelector('.nb-title').click();await flush();
+  assert.equal(app.requests.filter(row=>row.url==='/api/notebook/notes/note-one').length,1);
+  const loading=app.show('note-one');await flush();assert.equal(app.requests.filter(row=>row.url==='/api/notebook/notes/note-one').length,1);
+  late.resolve({note:note()});await loading;assert.match(app.q('full').textContent,/Argument as text/);assert.equal(byText(app.q('full'),'Edit').disabled,false);
+ });
+ await test('note intent results cannot restore private caches after an account switch',async()=>{
+  const late=deferred();const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()]}:url==='/api/notebook/notes/note-one'?late.promise:undefined});
+  app.q('list').querySelector('.nb-title').click();await flush();app.setAccount(null);
+  late.resolve({note:note()});await flush();assert.equal(app.q('list').textContent,'');assert.equal(app.q('full').textContent,'');
+ });
+
+ await test('returning to the same notebook list paints immediately and keeps unchanged expanded content',async()=>{
+  const late=deferred();let delay=false;
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?(delay?late.promise:{notes:[note()],next_after:null}):undefined});
+  app.q('list').querySelector('.nb-title').click();const first=app.q('list').firstChild;
+  app.controller.hide();delay=true;const loading=app.show();
+  assert.match(app.q('list').textContent,/Private claim/);assert.ok(app.q('list').firstChild===first, 'preserve the loaded list DOM');
+  late.resolve({notes:[note()],next_after:null});await loading;
+  assert.ok(app.q('list').firstChild===first, 'preserve the loaded list DOM');assert.equal(app.q('list').querySelector('.nb-preview').hidden,false);
+ });
+ await test('cached note bodies render before the network while stale action buttons stay disabled',async()=>{
+  const late=deferred();let delay=false;
+  const app=await boot({respond:url=>url==='/api/notebook/notes/note-one'?(delay?late.promise:{note:note()}):undefined});
+  await app.show('note-one');await app.show();delay=true;const loading=app.show('note-one');
+  assert.match(app.q('full').textContent,/Argument as text/);assert.equal(byText(app.q('full'),'Edit').disabled,true);
+  const body=app.q('full').querySelector('.nb-body');
+  late.resolve({note:note()});await loading;
+  assert.ok(app.q('full').querySelector('.nb-body')===body, 'preserve the body during unchanged refresh');assert.equal(byText(app.q('full'),'Edit').disabled,false);
+  byText(app.q('full'),'Explore connections').click();await flush();assert.ok(app.q('full').querySelector('.nb-note-graph'));
+ });
+ await test('denied and withdrawn cached notes remove their body and invalidate cached list summaries',async()=>{
+  for(const status of [403,404,410]){
+   const late=deferred();let delay=false;
+   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()]}:url==='/api/notebook/notes/note-one'?(delay?late.promise:{note:note()}):undefined});
+   await app.show('note-one');await app.show();delay=true;const loading=app.show('note-one');
+   assert.match(app.q('full').textContent,/Argument as text/);
+   late.reject(Object.assign(Error('Access withdrawn'),{status}));await loading;
+   assert.doesNotMatch(app.q('full').textContent,/Argument as text/);assert.doesNotMatch(app.q('list').textContent,/Private claim/);
+  }
+ });
+ await test('cached list queries never substitute notes from another filter or search',async()=>{
+  const late=deferred();let delay=false;
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?(delay?late.promise:{notes:[note()]}):undefined});
+  delay=true;const changing=filterNotes(app,'human');await flush();
+  assert.doesNotMatch(app.q('list').textContent,/Private claim/);assert.match(app.q('list').textContent,/Loading notes/);
+  late.resolve({notes:[]});await changing;await flush();assert.match(app.q('list').textContent,/No matching notes/);
+ });
+ await test('same-account session rotation clears notebook readers and rejects a pending cached refresh',async()=>{
+  const late=deferred();let delay=false,session='one';
+  const app=await boot({session:()=>session,respond:url=>url==='/api/notebook/notes/note-one'?(delay?late.promise:{note:note()}):undefined});
+  await app.show('note-one');delay=true;const loading=app.show('note-one');
+  session='two';app.setAccount(user);assert.equal(app.q('full').textContent,'');
+  late.resolve({note:note()});await loading;assert.equal(app.q('full').textContent,'');
+ });
+ await test('latest and pinned notebook revisions use distinct caches and retain citation checks',async()=>{
+  const late=deferred();let delay=false;
+  const first=revision(1,'Exact older'),second=revision(2,'Exact latest');
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?(delay?late.promise:{note:note({revision:2,revisions:[first,second]})}):undefined});
+  await app.show('note-one');delay=true;const loading=app.show('note-one',1);
+  assert.doesNotMatch(app.q('full').textContent,/Exact latest/);assert.match(app.q('full').textContent,/Loading note/);
+  late.resolve({note:note({revision:2,revisions:[first,second]})});await loading;assert.match(app.q('full').textContent,/Exact older/);
+ });
+ await test('external notebook mutations invalidate reader caches before the next navigation',async()=>{
+  const late=deferred();let delay=false;
+  const app=await boot({respond:url=>url==='/api/notebook/notes/note-one'?(delay?late.promise:{note:note()}):undefined});
+  await app.show('note-one');await app.show();app.controller.invalidateReads();delay=true;
+  const loading=app.show('note-one');assert.match(app.q('full').textContent,/Loading note/);assert.doesNotMatch(app.q('full').textContent,/Argument as text/);
+  late.resolve({note:note()});await loading;
+ });
+ await test('private draft deletion freezes its exact revision and retries after a lost reply',async()=>{
+  let writes=0,deleted=false;
+  const app=await boot({respond:(url,body)=>{
+   if(url.endsWith('/delete')){writes++;deleted=true;if(writes===1)throw Error('Connection lost');return{deletion:{note_id:'note-one',id:'deletion-one'},deleted};}
+   if(url==='/api/notebook/notes/note-one')return{note:note({can_delete:true})};
+   if(url.startsWith('/api/notebook/notes?'))return{notes:deleted?[]:[note({can_delete:true})]};
+  }});
+  await app.show('note-one');byText(app.q('full'),'Edit').click();byText(app.q('dialog-body'),'Remove note').click();
+  assert.match(app.q('dialog-body').textContent,/Move this private draft to Trash/);
+  assert.equal(writes,0);byText(app.q('dialog-body'),'Move to Trash').click();await flush();
+  const first=app.requests.find(row=>row.body);
+  assert.equal(first.body.revision,1);assert.equal(first.body.content_sha256,'hash-1');
+  byText(app.q('dialog-body'),'Retry the same delete').click();await flush();
+  assert.deepEqual(app.requests.filter(row=>row.body)[1].body,first.body);
+  assert.equal(app.q('dialog').open,false);assert.match(app.q('list').textContent,/No notes yet/);
+ });
+ await test('Trash restores its exact deletion and refreshes the current list',async()=>{
+  let restored=false;
+  const trashed=note({can_edit:false,can_restore:true,deletion:{id:'deletion-one'},can_delete:false});
+  const app=await boot({respond:(url,body)=>{
+   if(url.endsWith('/restore')){assert.equal(body.deletion_id,'deletion-one');restored=true;return{deletion:{note_id:'note-one',id:'deletion-one'},deleted:false};}
+   if(url.startsWith('/api/notebook/notes?'))return{notes:listQuery(url).get('scope')==='trash'&&!restored?[trashed]:[]};
+  }});
+  await filterNotes(app,'trash');assert.equal(listQuery(app.requests.at(-1).url).get('scope'),'trash');
+  assert.match(app.q('list').textContent,/In Trash/);assert.equal(byText(app.q('list'),'Edit'),undefined);
+  byText(app.q('list'),'Restore').click();assert.equal(restored,false);
+  byText(app.q('dialog-body'),'Restore note').click();await flush();
+  assert.equal(app.q('dialog').open,false);assert.match(app.q('list').textContent,/No matching notes/);
+ });
+ await test('removal lives inside Edit and requires owner and draft permissions',async()=>{
+  for(const record of [note({can_delete:false}),note({can_delete:true,owner:{id:2,handle:'alice'}})]){
+   const app=await boot({respond:url=>url==='/api/notebook/notes/note-one'?{note:record}:undefined});
+   await app.show('note-one');assert.equal(byText(app.q('full'),'Delete'),undefined);
+   byText(app.q('full'),'Edit')?.click();assert.equal(byText(app.q('dialog-body'),'Remove note'),undefined);
+  }
+  const app=await boot();app.q('new').click();assert.equal(byText(app.q('dialog-body'),'Remove note'),undefined);
+ });
+ await test('removal from Edit respects unsaved changes and confirmation cancellation',async()=>{
+  const app=await boot({respond:url=>url==='/api/notebook/notes/note-one'?{note:note({can_delete:true})}:undefined});
+  await app.show('note-one');assert.equal(byText(app.q('full'),'Delete'),undefined);
+  byText(app.q('full'),'Edit').click();const title=app.root.querySelector('[name="title"]');title.value='Keep this unsaved draft';
+  let confirmations=0;app.sandbox.window.confirm=()=>{confirmations++;return false;};
+  byText(app.q('dialog-body'),'Remove note').click();assert.equal(confirmations,1);assert.equal(title.value,'Keep this unsaved draft');
+  assert.equal(byText(app.q('dialog-body'),'Move to Trash'),undefined);
+  title.value='Private claim';byText(app.q('dialog-body'),'Remove note').click();
+  byText(app.q('dialog-body'),'Cancel').click();assert.equal(app.q('dialog').open,false);
+  assert.equal(app.requests.filter(row=>row.body).length,0);
+ });
+ await test('removal is blocked during a pending or uncertain revision save',async()=>{
+  const pending=deferred();
+  const app=await boot({respond:url=>url.endsWith('/revisions')?pending.promise:url==='/api/notebook/notes/note-one'?{note:note({can_delete:true})}:undefined});
+  await app.show('note-one');byText(app.q('full'),'Edit').click();fill(app,'Updated draft');
+  const remove=byText(app.q('dialog-body'),'Remove note');app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
+  assert.equal(remove.disabled,true);remove.click();assert.equal(byText(app.q('dialog-body'),'Move to Trash'),undefined);
+  pending.reject(Error('Connection lost'));await flush();assert.equal(remove.disabled,true);
+  assert.equal(app.requests.some(row=>row.url.endsWith('/delete')),false);
+ });
+ await test('late delete replies do not navigate or show data after an account switch',async()=>{
+  const pending=deferred();
+  const app=await boot({respond:url=>url.endsWith('/delete')?pending.promise:url==='/api/notebook/notes/note-one'?{note:note({can_delete:true})}:undefined});
+  await app.show('note-one');byText(app.q('full'),'Edit').click();byText(app.q('dialog-body'),'Remove note').click();byText(app.q('dialog-body'),'Move to Trash').click();
+  app.setAccount({id:2,handle:'bob'});const before=app.location.hash;
+  pending.resolve({deletion:{note_id:'note-one'},deleted:true});await flush();
+  assert.equal(app.location.hash,before);assert.doesNotMatch(app.root.textContent,/Note moved to Trash/);
+ });
  await test('signing in on an exact notebook link restores that view and signing out clears it',async()=>{
   let current=null;
   const app=await createApp({schemes:[],hash:'#about',responder:(url,options,envelope)=>{
@@ -235,7 +372,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   releases=[{id:'frodokem',version:'next'}];assert.equal(context.currentReleases(),releases);
   assert.equal(app.requests.some(request=>request.url==='/api/schemes'),false);
  });
- await test('network visualization stays inside the notebook and restores the filtered notes without refetching',async()=>{
+ await test('network visualization restores the filtered notes and revalidates their visibility quietly',async()=>{
   let mounts=0,shows=0,hides=0;
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()],next_after:null}:undefined,mapFactory:async()=>{mounts++;return{show:()=>shows++,hide:()=>hides++,destroy:()=>{}};}});
   const heading=app.root.querySelector('h1');
@@ -251,7 +388,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   app.q('notes-view').click();await flush();
   assert.equal(app.q('library').hidden,false);assert.equal(app.q('map').hidden,true);
   assert.equal(app.q('search').value,'Private');assert.match(app.q('list').textContent,/Private claim/);
-  assert.equal(app.requests.length,before);assert.equal(mounts,1);
+  assert.equal(app.requests.length,before+1);assert.equal(mounts,1);
   app.q('map-view').click();await flush();assert.equal(mounts,1);assert.ok(shows>=2&&hides>=1);
  });
  await test('leaving the map during loading cannot replace the restored notebook',async()=>{
@@ -280,7 +417,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.ok(app.q('list').querySelectorAll('.nb-entry').every(e=>e.querySelector('.nb-literature')));
   await filterNotes(app,'mine');assert.equal(listQuery(app.requests.at(-1).url).get('scope'),'mine');
   assert.equal(app.q('list').querySelectorAll('.nb-entry').length,2);assert.match(app.q('list').textContent,/Private claim.*Private.*My published note.*Published/);assert.doesNotMatch(app.q('list').textContent,/Approved claim/);
-  assert.deepEqual(Array.from(app.root.querySelector('[name="visibility"]').querySelectorAll('option'),option=>option.textContent),['All notes','My notes','Human-written','Proposals','Literature']);
+  assert.deepEqual(Array.from(app.root.querySelector('[name="visibility"]').querySelectorAll('option'),option=>option.textContent),['All notes','My notes','Human-written','Proposals','Literature','Trash']);
   assert.equal(app.requests.some(r=>r.url==='/map/notes.json'||r.body),false);assert.equal(app.storage.length,0);
  });
  await test('curated source links preserve every revision hash and expose sources without author or review tools',async()=>{

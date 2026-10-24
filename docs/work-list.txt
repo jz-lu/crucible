@@ -1,3 +1,134 @@
+Follow-up checkpoint, 23 October 2026
+
+The actual hosted synthetic beta_check browser login/logout check passed at
+00:32:44 UTC: same-origin CSRF login, session/CSRF rotation, active synthetic
+identity, authorized schemes, logout and denied access after logout. No real
+account/research/invitation was used; only synthetic session/rate state changed.
+Receipt: work/beta-managed-database-20261022/hosted-login-5a42de4ed1b244ab8442a37333192fb3.json.
+Nonmember/revoked users, scoped agents, actual browser/OAuth, workload and
+recovery checks remain pending; this is not participant-beta readiness.
+
+The user has now added the website DNS records at Porkbun. Public resolver
+1.1.1.1 returns exactly162.159.140.98 and172.66.0.96 for crucible.fail, noAAAA,
+and all four Resend records remain intact. Completing Add domain in DigitalOcean,
+custom-domain HTTPS and canonical-origin validation remain pending. No DNS
+mutation was performed by the assistant.
+
+Hosted synthetic preview and managed database — 2026-10-23
+
+The user created a managed PostgreSQL17 cluster. A metadata-only operator probe
+verified pinned-CA verify-full TLS, PostgreSQL17 and doadmin/defaultdb. An explicit
+bootstrap then created crucible_beta_20261023_synthetic and separate migrator,
+runtime and backup logins, with SCRAM passwords, connection limits, restricted
+PUBLIC privileges and migration-owned future-object grants. The user reports SFO2 and US$15.15/month for the cluster; exact plan and
+complete trusted-source/firewall rules are not independently inventoried.
+The frozen 23 migrations reached head0023; actual runtime/backup logins passed
+permission checks across 46 tables and scratch objects were removed. A synthetic
+beta_check reviewer is seeded, with its random password and test application
+secret protected outside the workspace. A read-only baseline plan verified 32
+missing anchors, 1,466 profiles and no historical challenges; explicit apply
+committed all exact original Mac source/artifact anchors to the synthetic DB.
+No Linux pair replaced an original anchor. After a read-only plan, all 19 exact
+additive Linux build reviews were registered in the synthetic DB, preserving
+the 32 original anchors and timestamps. Production admission and authenticated
+selected issuance remain pending; hosted startup/health now pass. The unchanged app
+image passed one first-profile generation cycle
+for each of the 19 changed releases and seven separate Python operation cycles.
+V1's optional-parser harness mistake and the corrected V2 pass are both retained.
+Semantic review found only platform/provenance changes in four adapter sources;
+the other 15 are unchanged. This selected smoke is not full-profile correctness,
+security/capacity approval or a fix for archived McEliece8192128's resource bound.
+The local database, accounts, notes and submissions are untouched; no participant
+membership or data was transferred. The synthetic App Platform preview is live at
+https://crucible-beta-z7znj.ondigitalocean.app. After the user added the app as a
+DB Trusted Source and redeployed, verified HTTPS /health/live and /health passed
+at 00:25–00:26 UTC. Anonymous session access was denied and four protected routes
+returned 401/authentication_required/no-store. The user confirms Degraded is gone.
+A later narrow forwarded-header/Host probe passed; full ingress guarantees remain
+unverified. No authenticated participant workflow has been tested on the host.
+
+Resend's crucible.fail domain is user-confirmed Verified and its DNS records were
+observed. A protected sending key is saved; laptop STARTTLS/AUTH passed with no
+mail sent. Hosted SMTP egress and actual invitation/reset delivery remain pending.
+Website-domain configuration is in progress; DNS change/TLS/canonical-origin
+acceptance has not been observed. Preserve Resend DNS and existing nameservers.
+Recommended App plan: one 4 GiB instance at US$49/month, not independently observed;
+with the reported DB price, planned app/DB base is US$64.15/month before extras.
+
+Next: authenticated/nonmember/revoked-user and scoped-agent checks, remaining
+ingress/workload/resource checks, mail delivery, actual provider backup/restore,
+custom domain and GitHub, then deliberate real-data migration. This is a synthetic
+preview, not a beta launch. Do not recreate completed resources or ledgers.
+See runtime-candidate-checkpoint.txt for receipts and app-platform-next-steps.txt
+for the provider sequence.
+
+App Platform / native-host checkpoint — 2026-10-22
+
+The temporary DigitalOcean native-check Droplet is running (Ubuntu 24.04.5 x64,
+4 GB / 2 vCPU, Docker 29.9.2), retained pending the next step; no test containers
+remain. Private registry crucible-beta (SFO2) now holds the exact app and
+backup images: upload and verification completed at 2026-10-22T22:20:12Z, with
+unchanged manifest/configuration digests and ordered layers. Full references and
+the receipt are in runtime-candidate-checkpoint.txt. Image artifacts are also
+retained locally; operator PAT revocation remains a separate user step.
+At that image-upload checkpoint no App Platform website, managed PostgreSQL,
+DNS change, application secrets, production build admission or participant-data
+migration had occurred. Database/email preparation is recorded above. The local
+website and existing accounts, notes and submissions remain unchanged.
+
+The isolated app image validates all 32 releases. Its 1,466 profile declarations
+are unchanged outside implementation; 19 pairs require explicit additive build
+reviews. Native execution preserves the original archive/configuration and OCI
+manifest identities. Eight synthetic worker boundaries passed (0.99 seconds).
+Earlier harness failures involved image-ID semantics and a noexec test mount;
+the old QEMU results cannot be attributed solely to emulation. Archived published
+McEliece 8192128 still reaches GenerationLimit under unchanged bounds (19.23-second
+test duration); the current-release issuance guard excludes that archived release.
+No full native backend-suite pass or production-throughput claim is made.
+
+The frozen backup context built offline on native AMD64 and passed nonroot,
+read-only/network-disabled tool checks and missing-configuration rejection.
+Actual-image/provider backup/restore and scheduling remain untested. Previous
+separate Linux restore fixtures and all earlier failures remain in the evidence.
+No crypto code, stage parameters, source fixtures or production limits changed.
+
+The source-only candidate is the separate Git snapshot 2d3a10e; it is not a live
+repository commit/push. Four platform adapters remain isolated from the working
+Mac website. Hosted startup subsequently passed as recorded above; selected
+synthetic issuance, sandbox/privacy/resource checks, OAuth/mail and verified backup,
+restoration and data cutover. See runtime-candidate-checkpoint.txt for identities
+and evidence, app-platform-next-steps.txt for the user-operated provider sequence.
+
+Managed PostgreSQL connection budget — 2026-10-22
+
+Bounded each PostgreSQL Database engine to five connections, no overflow and a
+five-second pool wait, reserving capacity for deployment overlap and operator
+work. SQLite behavior and independent NullPool tools are unchanged. Three
+isolated real-pool behavior tests passed using a disposable SQLite transport;
+these establish pooling behavior, not PostgreSQL network/provider readiness.
+Details: database-pooling.txt. No live database or runtime configuration changed.
+
+Private-beta hosting direction and domain — 2026-10-22
+
+Confirmed: DigitalOcean App Platform is preferred, conditional on native runtime
+validation, with managed PostgreSQL and private Spaces. One remote beta and local
+development, separate databases, approximately US$100/month ceiling. Billing,
+2FA, Crucible (beta) team and beta project are complete. The user purchased
+crucible.fail through Porkbun. Recorded the canonical origin and GitHub callback
+in the secret-free configuration template; OAuth remains disabled/unconfigured.
+At that earlier direction-setting checkpoint, no paid hosting, DNS change,
+remote data transfer or deployment had occurred; the native-check host is recorded
+in the current checkpoint above.
+
+Privacy remains mandatory: explicit beta admission in addition to sign-in, all
+site content and evidence behind the app boundary, including APIs, object
+storage and the provider's starter domain. Validate before opening access.
+
+Read-only evaluations are recorded in app-platform-readiness.txt and
+notebook-attachments-design.txt. Attachments are a recommendation, not an
+implemented feature or an approved change to publication policy. The existing
+Droplet runbook remains a fallback; do not mistake it for App Platform setup.
+
 Pipeline consistency and mission audit — 2026-10-18
 
 The confirmed review model has two levels: safety/content moderation for
@@ -1391,3 +1522,8 @@ Primary references collected for the next scoring discussion (not policy):
   https://www.microsoft.com/en-us/research/publication/the-sybil-attack/
 - LWE Challenge submission fields: distinguish exact results from resource reports.
   https://www.latticechallenge.org/lwe_challenge/submission.php
+
+22 October — earlier isolated Linux checkpoint
+Superseded by the native-host checkpoint at the top. Original QEMU test failures,
+backup-probe failures and exact local image evidence remain preserved in
+runtime-candidate-checkpoint.txt; no historical result was rewritten as a pass.

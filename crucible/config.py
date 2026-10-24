@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 import base64
 import json
 import os
+import re
 from pathlib import Path
 from urllib.parse import urlparse, urlsplit
 from uuid import UUID
@@ -34,8 +35,21 @@ class Settings:
     smtp_username: str = ""
     smtp_password: str = field(default="", repr=False)
     smtp_starttls: bool = True
+    github_login_enabled: bool = False
+    github_client_id: str = ""
+    github_client_secret: str = field(default="", repr=False)
 
     def __post_init__(self):
+        if type(self.github_login_enabled) is not bool:
+            raise RuntimeError("GitHub sign-in must be explicitly enabled or disabled.")
+        if self.github_login_enabled:
+            if (type(self.github_client_id) is not str or not re.fullmatch(r"[A-Za-z0-9._-]{1,200}", self.github_client_id)
+                    or type(self.github_client_secret) is not str or not 20 <= len(self.github_client_secret) <= 512
+                    or not self.github_client_secret.isascii()
+                    or any(not 33 <= ord(character) <= 126 for character in self.github_client_secret)
+                    or len(self.origins) != 1 or _canonical_origin(self.origins[0]) != self.origins[0]
+                    or (self.production and not self.origins[0].startswith("https://"))):
+                raise RuntimeError("GitHub sign-in requires explicit app credentials and one canonical site origin.")
         if type(self.allow_self_review) is not bool or (self.production and self.allow_self_review):
             raise RuntimeError("Self-review is available only through an explicit development setting.")
         if self.access_mode not in {"open", "beta"}:
@@ -75,6 +89,14 @@ class Settings:
     @property
     def hosts(self):
         return list({urlparse(origin).hostname for origin in self.origins})
+
+    @property
+    def github_callback_url(self):
+        return self.origins[0] + "/api/auth/github/callback"
+
+    @property
+    def github_cookie_name(self):
+        return "__Host-crucible-github" if self.production else "crucible_github"
 
 
 def _canonical_origin(value: str) -> str:
@@ -169,6 +191,9 @@ def load_settings() -> Settings:
     tls = os.getenv("CRUCIBLE_SMTP_STARTTLS", "true")
     if tls not in {"true", "false"}:
         raise RuntimeError("CRUCIBLE_SMTP_STARTTLS must be true or false.")
+    github_enabled = os.getenv("CRUCIBLE_GITHUB_ENABLED", "false")
+    if github_enabled not in {"true", "false"}:
+        raise RuntimeError("CRUCIBLE_GITHUB_ENABLED must be true or false.")
     return Settings(database_url=database_url, secret=secret, origins=origins, production=production,
                     reviewer_ids=reviewers, allow_self_review=self_review == "true",
                     access_mode=os.getenv("CRUCIBLE_ACCESS_MODE", "beta" if production else "open"),
@@ -181,4 +206,7 @@ def load_settings() -> Settings:
                     mail_outbox_dir=os.getenv("CRUCIBLE_MAIL_OUTBOX_DIR"),
                     mail_from=os.getenv("CRUCIBLE_MAIL_FROM", ""), smtp_host=os.getenv("CRUCIBLE_SMTP_HOST", ""),
                     smtp_port=number("CRUCIBLE_SMTP_PORT", 587), smtp_username=os.getenv("CRUCIBLE_SMTP_USERNAME", ""),
-                    smtp_password=os.getenv("CRUCIBLE_SMTP_PASSWORD", ""), smtp_starttls=tls == "true")
+                    smtp_password=os.getenv("CRUCIBLE_SMTP_PASSWORD", ""), smtp_starttls=tls == "true",
+                    github_login_enabled=github_enabled == "true",
+                    github_client_id=os.getenv("CRUCIBLE_GITHUB_CLIENT_ID", ""),
+                    github_client_secret=os.getenv("CRUCIBLE_GITHUB_CLIENT_SECRET", ""))

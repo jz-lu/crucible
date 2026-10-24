@@ -1,0 +1,41 @@
+[Unit]
+Description=Encrypted Crucible database and recovery configuration backup
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/opt/crucible/current
+EnvironmentFile=/etc/crucible/backup.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=RESTIC_CACHE_DIR=/var/cache/crucible-backup
+ExecStart=/opt/crucible/current/.venv/bin/python -B /opt/crucible/current/deploy/backup-beta.py
+UMask=0077
+RuntimeDirectory=crucible-backup
+RuntimeDirectoryMode=0700
+# Keep a common lock inode across backup runs and manual release operations.
+RuntimeDirectoryPreserve=yes
+CacheDirectory=crucible-backup
+CacheDirectoryMode=0700
+TimeoutStartSec=35min
+KillMode=control-group
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LimitCORE=0
+StandardOutput=journal
+StandardError=journal
+LogNamespace=crucible
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=50

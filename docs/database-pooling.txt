@@ -1,0 +1,30 @@
+PostgreSQL connection budget
+============================
+
+Each Database engine retains at most five PostgreSQL connections, with no
+overflow. Connections open on demand. If all five are checked out, a request
+waits at most five seconds for pool capacity before SQLAlchemy raises its pool
+timeout error. Existing pre-ping checks remain enabled for reused connections.
+This bounds waiting for pool capacity, not TCP connection establishment, lock
+waits or query duration. The app does not currently translate pool exhaustion
+into a dedicated retry response; it follows the existing server-error path.
+
+The cap is per engine/process, not per deployment or database. Start the beta
+with one web worker per app instance. Budget five connections for every running
+instance, including old/new instances overlapping during a deployment, plus
+operator, migration and backup connections. Compare that total with the actual
+managed-database connection allowance before increasing instances or workers.
+If a provider-side pooler is later added, its client/server limits and pooling
+mode need separate review; this change does not configure one.
+
+The small fixed defaults avoid additional launch configuration. Operational
+CLI commands using Database inherit the lazy cap and normally need only one
+connection. Alembic migrations, beta_preflight and the transfer tool already
+use NullPool; their short-lived connections remain separate. SQLite engine
+options, foreign keys, busy timeout and transaction behavior are unchanged.
+
+tests/test_db_pool.py exercises a real SQLAlchemy engine and QueuePool with a
+disposable SQLite driver: five held leases reject a sixth after the configured
+wait, releasing one restores service, failed transactions return capacity, and
+SQLite's separate behavior remains intact. It does not establish PostgreSQL
+network/TLS behavior or the hosted provider's connection quota.

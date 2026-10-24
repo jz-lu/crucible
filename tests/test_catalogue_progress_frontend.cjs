@@ -8,9 +8,13 @@ const row = version => ({id:'fixture',version,participant_count:2,recovered_prof
 const progress = () => ({projection:'progress',catalogue_revision:'stable',releases:[row('current'),row('old')]});
 const snapshot = app => JSON.parse(vm.runInContext('JSON.stringify({schemes:state.schemes,revision:state.catalogueRevision})',app.sandbox));
 async function fixture(respond) {
-  return createApp({schemes:[scheme],hash:'#about',responder:(url,opts,envelope)=>{
+  const app = await createApp({schemes:[scheme],hash:'#about',responder:(url,opts,envelope)=>{
     if (url.pathname === '/api/schemes') return envelope(respond?.(url) ?? {schemes:[scheme],catalogue_revision:'stable'});
   }});
+  // About is independent of scheme metadata; explicitly establish this
+  // fixture's catalogue before exercising incremental progress refreshes.
+  await app.sandbox.loadAuthorizedCatalogue();
+  return app;
 }
 async function metadataFixture(hash) {
   let deployed = false;
@@ -22,7 +26,7 @@ async function metadataFixture(hash) {
     overview:{security:deployed ? 'Revised security discussion' : 'Original security discussion'},
     protocol:{construction:deployed ? 'Revised construction' : 'Original construction'}});
   const app = await createApp({hash,schemes:[value()],responder:(url,opts,envelope)=>{
-    if (url.pathname === '/api/schemes') return envelope(url.search ?
+    if (url.pathname === '/api/schemes') return envelope(url.searchParams.has('progress_only') ?
       {...progress(),catalogue_revision:deployed ? 'revised' : 'stable'} :
       {schemes:[value()],catalogue_revision:deployed ? 'revised' : 'stable'});
   }});
@@ -31,9 +35,9 @@ async function metadataFixture(hash) {
 (async()=>{
   {
     const calls=[];
-    const app=await fixture(url=>{calls.push(url.search);return url.search ? progress() : undefined;});
+    const app=await fixture(url=>{calls.push(url.search);return url.searchParams.has('progress_only') ? progress() : undefined;});
     await app.sandbox.refreshProfiles({background:true});
-    assert.deepEqual(calls,['','?progress_only=true']);
+    assert.deepEqual(calls,['?projection=navigation','?progress_only=true']);
     const current=snapshot(app).schemes[0];
     assert.equal(current.participant_count,2);
     assert.equal(current.previous_releases[0].first_recovery.handle,'alpha');
@@ -42,13 +46,13 @@ async function metadataFixture(hash) {
   for (const corrupt of [data=>{data.catalogue_revision='changed';},data=>{data.releases.pop();},
       data=>{data.releases[1]=data.releases[0];},data=>{data.releases[1]=null;},data=>{delete data.releases[0].first_recovery;}]) {
     const calls=[];
-    const app=await fixture(url=>{calls.push(url.search);if(url.search){const data=progress();corrupt(data);return data;}});
+    const app=await fixture(url=>{calls.push(url.search);if(url.searchParams.has('progress_only')){const data=progress();corrupt(data);return data;}});
     await app.sandbox.refreshProfiles({background:true});
-    assert.deepEqual(calls,['','?progress_only=true','']);
+    assert.deepEqual(calls,['?projection=navigation','?progress_only=true','?projection=navigation']);
     assert.equal(snapshot(app).schemes[0].participant_count,undefined);
   }
   {
-    const app=await fixture(url=>{if(url.search){const data=progress();data.releases[0].profiles=[];data.releases[0].protocol={source_url:'bad'};return data;}});
+    const app=await fixture(url=>{if(url.searchParams.has('progress_only')){const data=progress();data.releases[0].profiles=[];data.releases[0].protocol={source_url:'bad'};return data;}});
     await app.sandbox.refreshProfiles({background:true});
     assert.equal(snapshot(app).schemes[0].profiles.length,1);
     assert.equal(snapshot(app).schemes[0].protocol,undefined);

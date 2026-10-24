@@ -114,6 +114,35 @@ def lock_user(session, user_id):
                           .execution_options(populate_existing=True))
 
 
+def browser_account(session, raw, clock, *, require_membership=False):
+    """Read browser identity and access state together, without caching rights.
+
+    Each call queries the caller's transaction. Write handlers still use their
+    account lock and credential/CSRF rechecks; this is only their outer admission
+    check, or a read handler's fresh lookup.
+    """
+    if not raw or not raw.isascii() or len(raw) > 128:
+        raise HTTPException(401, "Sign in to continue.")
+    row = session.execute(
+        select(User, LoginSession.expires_at, AccountState.suspended_at, BetaMembership.status)
+        .select_from(LoginSession).join(User, User.id == LoginSession.user_id)
+        .outerjoin(AccountState, AccountState.user_id == User.id)
+        .outerjoin(BetaMembership, BetaMembership.user_id == User.id)
+        .where(LoginSession.token_hash == token_hash(raw))
+        .execution_options(populate_existing=True)
+    ).one_or_none()
+    # Check the time after the database read, including a possibly slow checkout.
+    if row is None or not row.expires_at > clock():
+        raise HTTPException(401, "Sign in to continue.")
+    if row.suspended_at is not None:
+        raise HTTPException(403, "This account is suspended. Contact the operator.")
+    if require_membership and row.status != "active":
+        message = ("Beta access was revoked. Contact the operator." if row.status == "revoked"
+                   else "An approved invitation is required for beta access.")
+        raise HTTPException(403, message)
+    return row.User
+
+
 def require_not_suspended(session, user, *, mutation=False):
     if user is None:
         raise HTTPException(401, "Sign in to continue.")
@@ -138,9 +167,14 @@ def require_access(session, settings, user, now, mutation=False):
 
 
 def access_payload(session, settings, user):
-    mode = getattr(settings, "access_mode", "open")
     membership = session.get(BetaMembership, user.id) if user else None
     account = session.get(AccountState, user.id) if user else None
+    return access_summary(settings, user, membership, account)
+
+
+def access_summary(settings, user, membership, account):
+    """Describe freshly read rows; this function does not cache permission state."""
+    mode = getattr(settings, "access_mode", "open")
     status = membership.status if membership else "pending"
     suspended = bool(account and account.suspended_at is not None)
     allowed = not suspended and (mode == "open" or bool(user and status == "active"))

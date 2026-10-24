@@ -13,7 +13,7 @@ class User(Base):
     __tablename__ = "users"
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     handle: Mapped[str] = mapped_column(String(32), unique=True)
-    password_hash: Mapped[str] = mapped_column(Text)
+    password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[float] = mapped_column(Float)
 
 
@@ -104,7 +104,14 @@ class AdapterVersion(Base):
 class Database:
     def __init__(self, url):
         self.sqlite = url.startswith("sqlite")
-        options = {"connect_args": {"check_same_thread": False, "timeout": 15}} if self.sqlite else {"pool_pre_ping": True}
+        if self.sqlite:
+            options = {"connect_args": {"check_same_thread": False, "timeout": 15}}
+        else:
+            # Each PostgreSQL app process gets five connections, including
+            # bursts. Leave managed-database capacity for deploy overlap and
+            # operator work; a full pool waits briefly rather than overflowing.
+            options = {"pool_pre_ping": True, "pool_size": 5,
+                       "max_overflow": 0, "pool_timeout": 5}
         self.engine = create_engine(url, **options)
         if self.sqlite:
             @event.listens_for(self.engine, "connect")

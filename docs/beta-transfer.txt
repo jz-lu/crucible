@@ -1,0 +1,151 @@
+Crucible initial beta database transfer
+=====================================
+
+Purpose
+-------
+This is a one-time SQLite-to-PostgreSQL copy into an empty, already migrated
+beta database. It is not an update/deployment command. After beta starts,
+keep beta's database in place and apply reviewed Alembic migrations; never
+replace it with a fresh copy of the development database.
+
+The tool preserves every application table, including account/password
+hashes, notes and exact revisions, submissions, source artifacts, review
+history, membership state, and archived adapter records. It grants no new
+membership, changes no reviewer decision and does not make test-only
+self-review approvals eligible for production publication.
+
+Preparation
+-----------
+1. Use the same trusted checkout/migration head for the source and target.
+   Upgrade a protected rehearsal copy first when the source is older.
+   The transfer command itself never migrates either database.
+2. Provision an empty PostgreSQL database, apply `alembic upgrade head`, and
+   keep the beta application stopped until import and checks are finished.
+3. Keep a protected backup of the source and all application server secrets.
+   The SQLite source and its journals must remain accessible together. Do
+   not copy only its main file while WAL writes are active.
+4. Put the PostgreSQL SQLAlchemy URL in the operator's secret environment as
+   CRUCIBLE_BETA_TRANSFER_DATABASE_URL. Require postgresql+psycopg, an explicit
+   hostname and database, sslmode=verify-full, and the provider CA. Do not
+   paste credentials into command arguments, version control or chat.
+   DATABASE_URL is deliberately ignored by this transfer tool.
+
+Read-only check (run from the repository)
+----------------------------------------
+  python -m scripts.beta_transfer --source /protected/path/crucible.db
+
+The command creates a temporary private snapshot using SQLite's backup API,
+checks integrity and foreign keys, checks both schemas against this checkout's
+migrated schema, confirms the target is empty, and prints a JSON receipt with
+only schema head, table names, row counts and SHA-256 digests. It does not copy
+any rows. The snapshot is removed afterwards.
+
+Final cutover
+-------------
+Stop writes to the local source and take a protected backup. Then run:
+
+  python -m scripts.beta_transfer --source /protected/path/crucible.db --apply
+
+This takes a new consistent source snapshot, exclusively locks target tables
+against concurrent writes, rechecks emptiness, and inserts in foreign-key
+order. Counts and typed content digests must match for every table before
+one transaction commits. A failed insert, lock conflict or verification
+mismatch rolls back the whole transaction. Existing target application data
+always causes refusal; the tool has no delete, overwrite or reset mode.
+
+Save the resulting receipt in protected operational records. If connectivity
+is lost during commit, do not assume the target is empty: inspect it before
+retrying. A successful commit followed by an output/connection failure can
+leave a complete import even without a receipt; a repeat refuses nonempty
+application tables. Never erase records just to make a repeat run succeed.
+
+Before starting beta, verify preserved accounts, note revisions and intended
+publication visibility, challenge release allowlists and account membership.
+The transfer copies all historical state exactly, including local session
+and machine-token records. App/operator secret handling, session validity,
+explicit access grants/revocations and any credential rotation are separate
+cutover decisions. Do not grant beta membership to all historical accounts
+as a side effect of import. Retain the SQLite backup as an archive; once beta
+accepts writes its PostgreSQL database is authoritative for beta data.
+
+Fidelity and limits
+-------------------
+* The comparison checks tables, ordered column names/types/nullability,
+  primary keys, foreign-key edges and unique constraints, plus migration head.
+* SQL NULL and JSON null are distinct. JSON numbers are parsed without float
+  rounding; arbitrary-size integers, exact text/hash fields and binary64
+  timestamps are checked. Object-key order/whitespace and equivalent JSON
+  number spellings do not change the semantic digest. Duplicate JSON keys,
+  non-finite numbers and invalid SQLite foreign keys require manual repair.
+* Database collation does not affect receipts: rows are hashed individually
+  and those hashes are sorted before the table digest is computed. Digests
+  and counts are deterministic for the same schema and semantic content.
+* Current migrations have no foreign-key cycles or self references. A future
+  cycle/self reference, generated column, sequence, unsupported type or
+  branched migration fails closed pending a reviewed transfer update; the
+  tool never disables foreign-key checks.
+* The expected schema is obtained from trusted migration upgrade functions
+  applied to a fresh in-memory fixture. This avoids importing the app or
+  native cryptographic registry. Only the fixture executes these migrations.
+* No transfer copies filesystem blobs or server secrets. Those need separate
+  protected handling if introduced or configured. Current source bundles are
+  database records and are included.
+
+Local synthetic rehearsal
+-------------------------
+An explicit --allow-local-test-db allows non-TLS PostgreSQL on 127.0.0.1,
+localhost or ::1 only. Never use it for the hosted beta.
+
+The integration tests use only CRUCIBLE_BETA_TRANSFER_TEST_DATABASE_URL,
+pointing to a disposable loopback PostgreSQL cluster. That role must have
+CREATEDB. Tests create/drop randomly named crucible_transfer_test_* databases;
+they never delete or alter the database specified by that environment variable.
+They never read the application DATABASE_URL or the operator transfer DSN.
+
+  python -m pytest -q tests/test_beta_transfer.py
+
+Without the explicit test DSN, real PostgreSQL checks are skipped; this must
+not be represented as a rehearsed PostgreSQL transfer.
+
+Executed rehearsal evidence — 2026-10-18, 21:15 UTC
+-------------------------------------------------
+The initial Linux/PostgreSQL transfer run passed all 20 tests (14 unit checks
+plus six real PostgreSQL integration checks). After adding a repeatable logical
+backup/recovery check, the complete suite passed 21/21 with no skips:
+
+  python -m pytest -q -s tests/test_beta_transfer.py --tb=short
+
+Environment: isolated local Linux VM, Python 3.13.5, PostgreSQL 17.11
+(Debian 17.11-0+deb13u1), migration head 0020. Only generated synthetic data
+and the dedicated fixture role were used. No live Crucible database was read.
+
+Recovery test:
+1. Created SQLite at head 0020 with one synthetic record in each of the 40
+   application tables, plus the alembic_version row (41 tables/41 rows total).
+2. Used the actual transfer tool to copy into a fresh PostgreSQL database.
+3. Ran pg_dump in custom archive format, with owner/privilege restoration
+   omitted, to a temporary file created with mode 0600.
+4. Created a second, distinct empty randomly named fixture database.
+5. Ran pg_restore with --exit-on-error and --single-transaction.
+6. Checked the restored schema/head and every table's count and deterministic
+   typed content digest against the original transfer receipt: all 41 matched.
+7. Dropped only those randomly named fixture databases. The configured
+   administrative/test database was not modified or deleted.
+
+The main transfer fidelity test separately exercises SQL NULL versus JSON
+null, a 2049-bit JSON integer, high-precision JSON decimal text, password-hash
+strings, Unicode/newline text, fractional timestamps, Boolean flags, approval
+history and the absence of automatically granted membership. Failure tests
+cover target data/schema drift, locks, injected mid-copy failure and digest
+mismatch, with no partially committed target data.
+
+The added recovery test requires pg_dump and pg_restore on PATH as well as
+the explicit test DSN. It skips with a stated reason if either binary is
+missing. Credentials are supplied only through subprocess environment, not
+command-line DSNs, and subprocess error payloads are not printed.
+
+This verifies a local logical backup/restoration path for this schema and
+synthetic dataset. It does NOT verify DigitalOcean managed backups, cloud
+point-in-time recovery, provider retention, encryption configuration, real
+user-volume performance, secret recovery or full application failover. Those
+remain deployment checks on the eventual hosted beta.

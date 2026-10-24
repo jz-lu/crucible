@@ -1,0 +1,8 @@
+{
+  "format": "crucible-host-release-v1",
+  "release_id": "REPLACE_WITH_IMMUTABLE_RELEASE_ID",
+  "source_revision": "REPLACE_WITH_COMPLETE_SOURCE_CHECKPOINT",
+  "runtime_platform": "REPLACE_WITH_ACTUAL_OS_ARCH_AND_PYTHON_PATCH_VERSION",
+  "runtime_inventory_sha256": "REPLACE_WITH_REVIEWED_RUNTIME_INVENTORY_SHA256",
+  "review_evidence": "REPLACE_WITH_RETAINED_BUILD_REVIEW_EVIDENCE_LOCATION"
+}

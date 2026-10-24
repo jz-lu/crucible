@@ -4,11 +4,13 @@ const $ = selector => document.querySelector(selector);
 // Keep the research interface dormant while the first MVP focuses on numerical challenges.
 const RESEARCH_ENABLED = false;
 const state = {
+  auth: {}, authPanel: 'signin', githubBusy: false, githubPending: false, githubCompleteBusy: false, authCallbackBusy: false, githubLinkContext: null,
+  passwordResetToken: null, passwordResetBusy: false, passwordRecoveryBusy: false,
   access: null, sessionResolved: false, invitationToken: null, invitationBusy: false, invitationDelivery: null,
   returnRoute: null, protectedLoaded: false, canManageBetaAccess: false,
   user: null, csrf: '', canReviewProposals: false, canSelfReviewProposals: false, schemes: [], profile: null, challenge: null,
   methods: [], view: 'leaderboard', authMode: 'login', round: null,
-  timeOffset: 0, ready: false, challengeLoading: false, issueBusy: false,
+  timeOffset: 0, ready: false, catalogueLoaded: false, challengeLoading: false, issueBusy: false,
   submitBusy: false, pendingAttempt: null, roundRefreshing: false,
   challengeRequest: 0, leaderboardRequest: 0, submissionChallenge: null,
   leaderboardDataKey: null, leaderboardPendingKey: null,
@@ -30,7 +32,72 @@ let sessionSynchronization = null;
 let notebookWorkspace = null;
 let reviewNotebookWorkspace = null;
 let notebookAssets = null;
+let notebookAssetsReady = false;
+const notebookAssetLoads = new Map();
 let notebookShowRequest = 0;
+let catalogueLoad = null;
+// Navigation contains labels/progress only. Charts and challenge controls must
+// resolve an exact complete release through this separate, page-memory cache.
+const releaseDetails = new Map();
+const releaseLoads = new Map();
+let releaseGeneration = 0;
+let navigationProjection = false;
+let workspaceLoadRequest = 0;
+let routeLoadingPanel = null;
+// Only previously authorized read results live here, never credentials or rights.
+// Revalidate reads on entry, sharing in-flight or recent user-intent requests.
+// Bound both lifetime and size; nothing is persisted in browser storage.
+const readViews = new Map();
+const pendingReads = new Map();
+const intendedReads = new Map();
+let readViewEpoch = 0;
+let renderedReads = new WeakMap();
+function invalidateReadViews() {
+  readViews.clear(); pendingReads.clear(); intendedReads.clear(); renderedReads = new WeakMap(); readViewEpoch++;
+}
+function primeRead(key, path) {
+  for (const [oldKey, entry] of intendedReads) if (entry.done && Date.now() - entry.at >= 10000) intendedReads.delete(oldKey);
+  if (!hasAccess() || navigator.connection?.saveData || cachedRead(key) || pendingReads.has(key) || intendedReads.has(key) || intendedReads.size + pendingReads.size >= 2) return;
+  const task = api(path), entry = {task, at: Date.now(), done: false};
+  task.then(() => { entry.done = true; }, () => { entry.done = true; });
+  intendedReads.set(key, entry);
+}
+function readAgain(key, path) {
+  const intended = intendedReads.get(key); intendedReads.delete(key);
+  if (pendingReads.has(key)) return pendingReads.get(key);
+  const response = intended && Date.now() - intended.at < 10000 ? intended.task : api(path);
+  const task = response.finally(() => { if (pendingReads.get(key) === task) pendingReads.delete(key); });
+  pendingReads.set(key, task); return task;
+}
+function cachedRead(key) {
+  const entry = readViews.get(key);
+  if (!entry || Date.now() - entry.at > 300000) { readViews.delete(key); return null; }
+  readViews.delete(key); readViews.set(key, entry);
+  return entry.data;
+}
+function rememberRead(key, data) {
+  const text = JSON.stringify(data);
+  readViews.delete(key);
+  if (text.length > 500000) return;
+  readViews.set(key, {data, at: Date.now(), size: text.length});
+  let size = [...readViews.values()].reduce((sum, entry) => sum + entry.size, 0);
+  while (readViews.size > 32 || size > 2000000) {
+    const first = readViews.keys().next().value;
+    size -= readViews.get(first).size; readViews.delete(first);
+  }
+}
+function paintRead(key, target, data, render) {
+  const signature = JSON.stringify(data), old = renderedReads.get(target);
+  if (old?.key === key && old.signature === signature && old.child === target.firstChild) return;
+  render(data);
+  renderedReads.set(target, {key, signature, child: target.firstChild});
+}
+function forbiddenRead(error) { return [401, 403, 404, 410].includes(error.status); }
+function readRefreshError(key, target, error, retry, cached) {
+  readViews.delete(key);
+  if (cached && !forbiddenRead(error)) toast('Refresh failed. ' + error.message);
+  else showInlineError(target, error.message, retry);
+}
 let assumptionsWorkspace = null;
 const referenceTimings = new Map();
 const REFERENCE_TIMING_MAX_AGE_MS = 60000;
@@ -280,8 +347,17 @@ function tierNote(scheme, profile) {
   return researchTiers(scheme, profile) ? 'Stages follow this scheme’s default progression through reviewed configurations. Security estimates are not yet available.' : 'Stages follow this scheme’s default progression through reviewed configurations.';
 }
 function availableReleases() { return state.schemes.flatMap(scheme => [scheme, ...(scheme.previous_releases || [])]); }
+function releaseKey(id, version) { return JSON.stringify([id, String(version)]); }
+function completeRelease(id, version) {
+  const cached = releaseDetails.get(releaseKey(id, version));
+  if (cached?.revision === state.catalogueRevision) return cached.scheme;
+  // Older servers ignore the new projection argument and return full metadata.
+  // Keep that deployment/rollback path without treating navigation as complete.
+  if (!navigationProjection) return availableReleases().find(scheme => scheme.id === id && String(scheme.version) === String(version));
+  return null;
+}
 function selectedScheme() {
-  return availableReleases().find(scheme => scheme.id === state.schemeId && String(scheme.version) === state.schemeVersion);
+  return completeRelease(state.schemeId, state.schemeVersion);
 }
 function selectionKey() { return JSON.stringify([state.schemeId, state.schemeVersion, profileId()]); }
 function schemeRoute(scheme, profile, view = 'leaderboard') {
@@ -337,7 +413,7 @@ function captureInvitation() {
   }
 }
 function renderAccessGate() {
-  if (state.screen !== 'access' && window.location.hash && !window.location.hash.startsWith('#join')) state.returnRoute = window.location.hash;
+  if (state.screen !== 'access' && window.location.hash && !window.location.hash.startsWith('#join') && !authenticationRoute()) state.returnRoute = window.location.hash;
   state.screen = 'access';
   showWorkspace('access');
   const status = state.access?.status;
@@ -359,9 +435,11 @@ function renderAccessGate() {
   setText('#access-send-code', state.invitationDelivery ? 'Send a new code' : 'Email a verification code');
   setText('#access-delivery', state.invitationDelivery ? 'Code sent to ' + state.invitationDelivery.masked_recipient + '. Check that inbox to continue.' : '');
   $('#register-mode').hidden = state.access?.mode === 'beta' && !joining;
+  renderAuthMethods();
   document.title = 'Private beta — Crucible';
 }
 function clearProtectedState() {
+  invalidateReadViews();
   referenceTimings.clear();
   assumptionsWorkspace?.clear();
   notebookWorkspace?.setAccount(null);
@@ -369,6 +447,10 @@ function clearProtectedState() {
   const reloadShell = state.protectedLoaded;
   state.protectedLoaded = false;
   state.ready = false;
+  state.catalogueLoaded = false;
+  catalogueLoad = null;
+  releaseDetails.clear(); releaseLoads.clear(); releaseGeneration++;
+  navigationProjection = false; workspaceLoadRequest++;
   for (const controller of protectedRequests) controller.abort();
   for (const key of ['catalogueRequest', 'challengeRequest', 'leaderboardRequest', 'historyRequest', 'recoveryRequest', 'peopleRequest', 'personRequest', 'connectRequest']) state[key]++;
   state.schemes = []; state.catalogueRevision = null; state.people = []; state.profile = null; state.challenge = null; state.methods = [];
@@ -388,17 +470,146 @@ function clearProtectedState() {
 }
 async function loadAuthorizedCatalogue() {
   if (!hasAccess()) return false;
-  if (state.screen === 'access') {
-    setText('#access-description', 'Opening your workspace…');
-    for (const selector of ['#access-auth-actions', '#access-verification', '#access-continue']) $(selector).hidden = true;
+  if (catalogueLoad) return catalogueLoad;
+  const account = state.user?.id, csrf = state.csrf, request = ++state.catalogueRequest;
+  const current = () => hasAccess() && account === state.user?.id && csrf === state.csrf && request === state.catalogueRequest;
+  const task = (async () => {
+    let data;
+    try { data = await api('/api/schemes?projection=navigation'); }
+    catch (error) {
+      if (!current() || !routeNeedsCatalogue()) return false;
+      throw error;
+    }
+    if (!current()) return false;
+    installNavigation(data);
+    state.catalogueLoaded = true;
+    state.ready = true;
+    state.protectedLoaded = true;
+    // A slow catalogue request must not reload an independent page entered
+    // meanwhile. Its eventual data is available when a scheme route needs it.
+    if (routeNeedsCatalogue()) applyRoute();
+    return true;
+  })();
+  catalogueLoad = task;
+  try { return await task; }
+  finally { if (catalogueLoad === task) catalogueLoad = null; }
+}
+const RELEASE_PROGRESS_FIELDS = ['participant_count', 'recovered_profile_ids', 'largest_recovered_profile_id', 'next_profile_id', 'profile_recoveries', 'first_recovery'];
+function installNavigation(data) {
+  if (!Array.isArray(data.schemes) || (data.projection && data.projection !== 'navigation')) throw new Error('Scheme navigation could not be loaded.');
+  const revision = data.catalogue_revision || null;
+  const releases = data.schemes.flatMap(scheme => [scheme, ...(scheme.previous_releases || [])]);
+  const keys = new Set();
+  for (const scheme of releases) {
+    if (!scheme || typeof scheme.id !== 'string' || !scheme.id || scheme.version == null ||
+        !Array.isArray(scheme.profiles) || keys.has(releaseKey(scheme.id, scheme.version))) throw new Error('Scheme navigation could not be loaded.');
+    keys.add(releaseKey(scheme.id, scheme.version));
   }
-  const revision = state.sessionRevision, request = ++state.catalogueRequest;
-  const data = await api('/api/schemes');
-  if (!hasAccess() || revision !== state.sessionRevision || request !== state.catalogueRequest) return false;
-  state.schemes = data.schemes || [];
-  state.catalogueRevision = data.catalogue_revision || null;
+  if (state.catalogueRevision !== null && state.catalogueRevision !== revision) {
+    invalidateReadViews();
+    releaseLoads.clear(); releaseGeneration++;
+  }
+  state.schemes = data.schemes;
+  state.catalogueRevision = revision;
+  navigationProjection = data.projection === 'navigation';
+  for (const [key, entry] of releaseDetails) {
+    const current = data.schemes.find(item => item.id === entry.scheme.id);
+    if (entry.revision !== revision || !keys.has(key) || (entry.currentVersion != null && String(entry.currentVersion) !== String(current?.version))) releaseDetails.delete(key);
+  }
+  if (!navigationProjection) {
+    for (const scheme of releases) releaseDetails.set(releaseKey(scheme.id, scheme.version), {revision, scheme});
+  } else {
+    for (const scheme of releases) {
+      const entry = releaseDetails.get(releaseKey(scheme.id, scheme.version));
+      if (!entry) continue;
+      const updated = {...entry.scheme};
+      for (const field of RELEASE_PROGRESS_FIELDS) {
+        if (Object.hasOwn(scheme, field)) updated[field] = scheme[field]; else delete updated[field];
+      }
+      entry.scheme = updated;
+    }
+  }
+}
+function routeRelease() {
+  const match = window.location.hash.split('?')[0].match(/^#(?:scheme|challenge)\/([^/]+)\/([^/]+)(?:\/assumptions)?$/);
+  if (!match) return null;
+  try {
+    const id = decodeURIComponent(match[1]), version = decodeURIComponent(match[2]);
+    return id && version && id.length <= 100 && version.length <= 100 ? {id, version} : null;
+  } catch { return null; }
+}
+async function loadRelease(id, version) {
+  if (!hasAccess()) return false;
+  const key = releaseKey(id, version);
+  if (state.catalogueLoaded && completeRelease(id, version)) return true;
+  if (releaseLoads.has(key)) return releaseLoads.get(key);
+  const account = state.user?.id, csrf = state.csrf, generation = releaseGeneration;
+  const current = () => hasAccess() && account === state.user?.id && csrf === state.csrf && generation === releaseGeneration;
+  const task = (async () => {
+    const data = await api('/api/schemes?' + new URLSearchParams({projection: 'release', scheme_id: id, version}));
+    if (!current()) return false;
+    let scheme = data.scheme;
+    if (!data.projection && Array.isArray(data.schemes)) scheme = data.schemes.flatMap(item => [item, ...(item.previous_releases || [])]).find(item => item.id === id && String(item.version) === String(version));
+    if ((data.projection && data.projection !== 'release') || !scheme || scheme.id !== id || String(scheme.version) !== String(version) || !Array.isArray(scheme.profiles) || !scheme.protocol) throw new Error('This scheme release could not be loaded.');
+    const revision = data.catalogue_revision || null;
+    if (state.catalogueLoaded && revision !== state.catalogueRevision) throw new Error('Scheme information changed. Refresh the page to load the current description.');
+    const latest = state.schemes.find(item => item.id === id);
+    if (state.catalogueLoaded && data.projection === 'release' && String(data.current_version) !== String(latest?.version)) throw new Error('The current scheme release changed. Refresh the page to continue.');
+    releaseDetails.set(key, {revision, scheme, currentVersion: data.current_version});
+    return true;
+  })();
+  releaseLoads.set(key, task);
+  try { return await task; }
+  finally { if (releaseLoads.get(key) === task) releaseLoads.delete(key); }
+}
+function showRouteLoading() {
+  if (!routeLoadingPanel) {
+    routeLoadingPanel = node('section'); routeLoadingPanel.id = 'route-loading'; routeLoadingPanel.tabIndex = -1;
+    document.querySelector('main').append(routeLoadingPanel);
+  }
+  const path = window.location.hash.split('?')[0], release = routeRelease();
+  const known = release && availableReleases().find(item => item.id === release.id && String(item.version) === release.version);
+  const title = known?.name || (release ? 'Scheme' : path.startsWith('#person/') ? 'Profile' : path === '#notebook' ? 'Research notebook' : path === '#reviews' ? 'Review center' : path === '#propose' ? 'Propose a scheme' : 'KEM Schemes');
+  state.screen = 'loading';
+  state.challengeRequest++; state.leaderboardRequest++; state.peopleRequest++; state.personRequest++;
+  const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
+  const intent = state.challengeStartIntent;
+  if (intent && (!release || release.id !== intent.schemeId || release.version !== intent.schemeVersion ||
+      params.get('profile') !== intent.profileId || params.get('view') !== 'challenge')) state.challengeStartIntent = null;
+  routeLoadingPanel.replaceChildren(node('h1', title));
+  const status = node('p', 'Loading…', 'empty-state'); status.setAttribute('role', 'status'); routeLoadingPanel.append(status);
+  showWorkspace('loading');
+  document.title = title + ' — Crucible';
+}
+function routeNeedsCatalogue() {
+  const [path, query = ''] = window.location.hash.split('?');
+  if (['#about', '#people', '#connect'].includes(path)) return false;
+  // Profile records still need the catalogue's mapping from native parameters
+  // to human stage labels. Keep that dependency until the record API supplies it.
+  // The map consumes scheme metadata; ordinary notes and their editors do not.
+  if (path === '#notebook' && new URLSearchParams(query).get('view') !== 'map') return false;
+  return true;
+}
+async function loadAuthorizedWorkspace() {
+  if (!hasAccess()) return false;
   state.ready = true;
   state.protectedLoaded = true;
+  if (routeNeedsCatalogue() && !state.catalogueLoaded) {
+    showRouteLoading();
+    const catalogue = loadAuthorizedCatalogue();
+    // Deep links can overlap the two independent reads. The response revision
+    // must match navigation before a complete release can reach a renderer.
+    const target = routeRelease();
+    if (target) void loadRelease(target.id, target.version).catch(() => {});
+    const person = window.location.hash.split('?')[0].match(/^#person\/([^/]+)$/);
+    if (person) {
+      try {
+        const handle = decodeURIComponent(person[1]);
+        if (handle && handle.length <= 100) primeRead('person:' + handle.toLowerCase(), '/api/people/' + encodeURIComponent(handle) + '?include_milestones=false');
+      } catch { /* Invalid routes do not prefetch another account. */ }
+    }
+    return catalogue;
+  }
   applyRoute();
   return true;
 }
@@ -410,6 +621,7 @@ function proposalPageActive() {
 }
 function renderReviewAccountLink() {
   $('#profile-review-link').hidden = !ownsViewedProfile() || !state.canReviewProposals || !hasAccess();
+  renderAccountSignIn();
 }
 function renderReviewPage(query) {
   const params = new URLSearchParams(query);
@@ -442,41 +654,53 @@ function renderReviewPage(query) {
     showNotebook(params, true);
   }
 }
+function loadNotebookAsset(path, stylesheet = false) {
+  if (notebookAssetLoads.has(path)) return notebookAssetLoads.get(path);
+  const element = node(stylesheet ? 'link' : 'script');
+  if (stylesheet) { element.rel = 'stylesheet'; element.href = path; }
+  else { element.async = false; element.src = path; }
+  const task = new Promise((resolve, reject) => {
+    element.onload = resolve;
+    element.onerror = () => {
+      element.remove(); notebookAssetLoads.delete(path);
+      reject(new Error('The notebook could not be loaded. Please try again.'));
+    };
+  });
+  notebookAssetLoads.set(path, task);
+  (stylesheet ? document.querySelector('head') : document.body).append(element);
+  return task;
+}
 async function showNotebook(query, reviewing = false) {
   const account = state.user?.id, section = state.reviewSection, request = ++notebookShowRequest;
   const target = $(reviewing ? '#review-notebook-workspace' : '#notebook-workspace');
   const current = () => request === notebookShowRequest && hasAccess() && account === state.user?.id &&
     (reviewing ? state.screen === 'reviews' && state.canReviewProposals && state.reviewSection === section && section !== 'schemes' : state.screen === 'notebook');
   if (!current()) return;
-  if (!window.CrucibleNotebook) {
+  if (!window.CrucibleNotebook || (!notebookAssetsReady && notebookAssetLoads.size)) {
     setLoading(target, reviewing ? 'Loading review workspace…' : 'Loading notebook…');
     notebookAssets ||= (async () => {
-      await new Promise((resolve, reject) => {
-        const stylesheet = node('link'); stylesheet.rel = 'stylesheet'; stylesheet.href = '/notebook/notebook.css';
-        stylesheet.onload = resolve;
-        stylesheet.onerror = () => { stylesheet.remove(); reject(new Error('The notebook could not be loaded. Please try again.')); };
-        document.querySelector('head').append(stylesheet);
-      });
-      for (const src of ['/notebook/seed.js', '/notebook/store.js', '/notebook/notebook.js']) {
-        if (!hasAccess()) throw new Error('Sign in to open the notebook.');
-        await new Promise((resolve, reject) => {
-          const script = node('script'); script.src = src;
-          script.onload = resolve; script.onerror = () => { script.remove(); reject(new Error('The notebook could not be loaded. Please try again.')); };
-          document.body.append(script);
-        });
-      }
+      // All four downloads begin together. async=false keeps script execution
+      // in insertion order without serializing their network round trips.
+      const results = await Promise.allSettled([
+        loadNotebookAsset('/notebook/notebook.css', true),
+        ...['/notebook/seed.js', '/notebook/store.js', '/notebook/notebook.js'].map(src => loadNotebookAsset(src))
+      ]);
+      const failed = results.find(result => result.status === 'rejected');
+      if (failed) throw failed.reason;
+      if (!hasAccess()) throw new Error('Sign in to open the notebook.');
+      notebookAssetsReady = true;
     })().catch(error => { notebookAssets = null; throw error; });
     try { await notebookAssets; }
     catch (error) { if (current()) showInlineError(target, error.message, () => showNotebook(query, reviewing)); return; }
   }
   if (!current()) return;
   const options = {navigate, api, account: () => hasAccess() && (!reviewing || state.canReviewProposals) ? state.user : null,
-    currentReleases: () => hasAccess() ? state.schemes : [], reviewOnly: reviewing};
+    currentReleases: () => hasAccess() ? state.schemes : [], session: () => state.csrf, reviewOnly: reviewing};
   if (reviewing) reviewNotebookWorkspace ||= window.CrucibleNotebook.mount(target, options);
   else notebookWorkspace ||= window.CrucibleNotebook.mount(target, options);
   await (reviewing ? reviewNotebookWorkspace : notebookWorkspace).show(new URLSearchParams(query || window.location.hash.split('?')[1] || ''));
 }
-$('#access-sign-in').addEventListener('click', () => { setAuthMode('login'); openAuth($('#access-sign-in')); });
+$('#access-sign-in').addEventListener('click', () => { setAuthMode('login'); openAuth($('#access-sign-in')); $('#auth-password-options').open = true; });
 $('#access-register').addEventListener('click', () => { setAuthMode('register'); openAuth($('#access-register')); });
 $('#access-send-code').addEventListener('click', async () => {
   if (!state.user || !state.invitationToken || state.invitationBusy) return;
@@ -507,20 +731,22 @@ $('#access-code-form').addEventListener('submit', async event => {
     if (!hasAccess()) throw new Error('Your access is not active yet. Please try again.');
     state.invitationToken = null; state.invitationDelivery = null; $('#access-code').value = '';
     window.history.replaceState(null, '', state.returnRoute || '#challenge');
-    await loadAuthorizedCatalogue();
+    await loadAuthorizedWorkspace();
   } catch (error) { if (state.user?.id === account) setError('#access-error', error.message); }
   finally { state.invitationBusy = false; if (!hasAccess() || state.screen === 'access') renderAccessGate(); }
 });
 $('#access-continue').addEventListener('click', async () => {
   state.invitationToken = null; state.invitationDelivery = null;
   window.history.replaceState(null, '', state.returnRoute || '#challenge');
-  try { if (state.ready) applyRoute(); else await loadAuthorizedCatalogue(); }
+  try { await loadAuthorizedWorkspace(); }
   catch (error) { globalError(error.message); }
 });
 function workspaceSelector(screen) {
-  return {access: '#access-workspace', scheme: '#workspace', overview: '#overview-workspace', assumptions: '#assumptions-workspace', notebook: '#notebook-workspace', reviews: '#review-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
+  return {loading: '#route-loading', access: '#access-workspace', scheme: '#workspace', overview: '#overview-workspace', assumptions: '#assumptions-workspace', notebook: '#notebook-workspace', reviews: '#review-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
 }
 function applyRoute(focus = false) {
+  const routeRequest = ++workspaceLoadRequest;
+  if (authenticationRoute() && state.sessionResolved) { void handleAuthenticationRoute().catch(error => globalError(error.message)); return; }
   captureInvitation();
   if (state.sessionResolved && (!hasAccess() || window.location.hash.split('?')[0] === '#join')) {
     renderAccessGate();
@@ -528,6 +754,25 @@ function applyRoute(focus = false) {
     return;
   }
   if (!state.ready) return;
+  if (routeNeedsCatalogue() && !state.catalogueLoaded) {
+    void loadAuthorizedWorkspace().catch(error => {
+      if (hasAccess() && routeRequest === workspaceLoadRequest) showInlineError(routeLoadingPanel, error.message, initialize);
+    });
+    return;
+  }
+  const targetRelease = routeRelease();
+  const knownRelease = targetRelease && availableReleases().some(scheme => scheme.id === targetRelease.id && String(scheme.version) === targetRelease.version);
+  if (knownRelease && !completeRelease(targetRelease.id, targetRelease.version)) {
+    const route = window.location.hash, account = state.user?.id, csrf = state.csrf;
+    const current = () => hasAccess() && routeRequest === workspaceLoadRequest && window.location.hash === route && account === state.user?.id && csrf === state.csrf;
+    showRouteLoading();
+    void loadRelease(targetRelease.id, targetRelease.version).then(loaded => {
+      if (loaded && current()) applyRoute(focus);
+    }).catch(error => {
+      if (current()) showInlineError(routeLoadingPanel, error.message, () => { state.catalogueLoaded = false; void loadAuthorizedWorkspace().catch(error => globalError(error.message)); });
+    });
+    return;
+  }
   const previous = selectionKey();
   const previousScreen = state.screen;
   const previousView = state.view;
@@ -566,7 +811,7 @@ function applyRoute(focus = false) {
     try {
       const id = decodeURIComponent(match[1]);
       const version = decodeURIComponent(match[2]);
-      scheme = availableReleases().find(item => item.id === id && String(item.version) === version);
+      scheme = completeRelease(id, version);
       const params = new URLSearchParams(query);
       profile = scheme?.profiles?.find(item => profileId(item) === params.get('profile'));
       if (!params.has('profile')) profile = scheme?.profiles?.find(item => profileId(item) === scheme.next_profile_id) || scheme?.profiles?.[0];
@@ -583,7 +828,7 @@ function applyRoute(focus = false) {
     try {
       const id = decodeURIComponent(overviewMatch[1]);
       const version = decodeURIComponent(overviewMatch[2]);
-      scheme = availableReleases().find(item => item.id === id && String(item.version) === version);
+      scheme = completeRelease(id, version);
       const params = new URLSearchParams(query);
       profile = scheme?.profiles?.find(item => profileId(item) === params.get('profile'));
       if (scheme && (!params.has('profile') || profile)) { screen = overviewMatch[3] ? 'assumptions' : 'overview'; invalid = false; }
@@ -623,7 +868,7 @@ function applyRoute(focus = false) {
     $('#scheme-back').href = overviewRoute(scheme, profile);
     renderProfiles(null, {details: changed || previousScreen !== 'scheme'});
     renderView(view);
-    if (changed || previousScreen !== 'scheme' || (view === 'challenge' && previousView !== view)) loadChallenge();
+    if (view === 'challenge' && (changed || previousScreen !== 'scheme' || previousView !== view)) loadChallenge();
     if (view === 'leaderboard' && (changed || previousView !== view || previousScreen !== 'scheme')) loadLeaderboard();
   }
   if (screen === 'catalogue') renderCatalogue();
@@ -661,25 +906,32 @@ function absorbClock(data) {
   }
   updateClock();
 }
-async function api(path, body, {raw = false, method = body === undefined ? 'GET' : 'POST'} = {}) {
+async function api(path, body, {raw = false, method = body === undefined ? 'GET' : 'POST', initialSession = false} = {}) {
   const protectedRequest = !/^\/api\/(?:session(?:\?|$)|auth\/|access\/)/.test(path);
   if (protectedRequest && !hasAccess()) {
     const error = new Error('Sign in with an active beta membership to continue.');
     error.status = 403;
     throw error;
   }
-  const controller = new AbortController();
+  let bootstrap;
+  if (initialSession && path === '/api/session' && body === undefined && method === 'GET') {
+    bootstrap = window.CrucibleSessionBootstrap?.response ? window.CrucibleSessionBootstrap : null;
+    // Mark this before fetching if app.js wins the race. A late bootstrap
+    // download must not launch another session request with an older lifecycle.
+    window.CrucibleSessionBootstrap = {consumed: true};
+  }
+  const controller = bootstrap?.controller || new AbortController();
   if (protectedRequest) protectedRequests.add(controller);
-  const timeout = setTimeout(() => controller.abort(), body !== undefined && path === '/api/challenges' ? 30000 : 20000);
+  const timeout = bootstrap ? null : setTimeout(() => controller.abort(), body !== undefined && path === '/api/challenges' ? 30000 : 20000);
   try {
     let response;
-    try { response = await fetch(path, {
+    try { response = await (bootstrap?.response || fetch(path, {
       method, credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
       headers: body === undefined ? {Accept: 'application/json'} : {
         Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': state.csrf
       },
       ...(body === undefined ? {} : {body: JSON.stringify(body)})
-    }); } catch {
+    })); } catch {
       const error = new Error(controller.signal.aborted ? 'The server took too long to respond. Please try again.' : 'The server could not be reached. Check your connection and try again.');
       error.status = 0;
       throw error;
@@ -711,17 +963,29 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
     if (protectedRequest && !hasAccess()) {
       const error = new Error('Beta access is no longer active.'); error.status = 403; throw error;
     }
+    if (protectedRequest && !['GET', 'HEAD'].includes(method)) {
+      invalidateReadViews(); notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
+    }
     if (!raw) absorbClock(data);
     return data;
-  } finally { clearTimeout(timeout); protectedRequests.delete(controller); }
+  } finally {
+    if (bootstrap) bootstrap.finish(); else clearTimeout(timeout);
+    protectedRequests.delete(controller);
+  }
 }
 function setSession(data) {
   state.sessionRevision++;
   const previousId = state.user?.id;
+  const previousCsrf = state.csrf;
   const previousReview = state.canReviewProposals;
   const previousSelfReview = state.canSelfReviewProposals;
   state.user = data.user || null;
+  state.auth = data.auth || {};
   state.csrf = data.csrf_token || '';
+  if (state.authPanel === 'github-link' && state.githubLinkContext && (state.githubLinkContext.accountId !== state.user?.id || state.githubLinkContext.csrf !== state.csrf)) {
+    state.githubLinkContext = null; $('#github-link-password').value = '';
+    state.authPanel = 'signin'; if (authDialog.open) authDialog.close();
+  }
   state.sessionResolved = true;
   state.access = data.access || (state.access?.mode === 'beta' ?
     {mode: 'beta', allowed: false, status: state.user ? 'pending' : 'anonymous'} :
@@ -731,6 +995,16 @@ function setSession(data) {
   state.canSelfReviewProposals = Boolean(state.canReviewProposals && data.capabilities?.self_review_protocol_proposals);
   notebookWorkspace?.setAccount(hasAccess() ? state.user : null);
   reviewNotebookWorkspace?.setAccount(hasAccess() && state.canReviewProposals ? state.user : null);
+  if (previousId !== state.user?.id || previousCsrf !== state.csrf) {
+    invalidateReadViews();
+    notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
+    // An in-flight catalogue belongs to this browser session. A changed account
+    // or rotated session must be able to start a fresh read immediately.
+    catalogueLoad = null;
+    state.catalogueRequest++;
+    releaseDetails.clear(); releaseLoads.clear(); releaseGeneration++;
+    if (navigationProjection) state.catalogueLoaded = false;
+  }
   if (previousId !== state.user?.id) {
     referenceTimings.clear();
     assumptionsWorkspace?.clear();
@@ -770,7 +1044,10 @@ function setSession(data) {
     if (findingDialog.open) findingDialog.close();
     if (research.visible) renderFindings();
   }
-  if (previousId === state.user?.id && (previousReview !== state.canReviewProposals || previousSelfReview !== state.canSelfReviewProposals)) resetProposalAccount(previousId);
+  if (previousId === state.user?.id && (previousReview !== state.canReviewProposals || previousSelfReview !== state.canSelfReviewProposals)) {
+    invalidateReadViews(); notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
+    resetProposalAccount(previousId);
+  }
   $('#auth-button').hidden = Boolean(state.user);
   $('#auth-button').disabled = false;
   $('#account-handle').hidden = !state.user || !hasAccess();
@@ -779,6 +1056,7 @@ function setSession(data) {
   $('#logout-button').hidden = !state.user;
   $('#history-button').hidden = !state.user || !hasAccess();
   $('#register-mode').hidden = state.access.mode === 'beta' && !state.invitationToken;
+  renderAuthMethods();
   if (!hasAccess()) {
     clearProtectedState();
     renderAccessGate();
@@ -786,12 +1064,14 @@ function setSession(data) {
   }
   absorbClock(data);
   renderReviewAccountLink();
-  if (state.screen === 'reviews' && state.ready && (previousId !== state.user?.id || previousReview !== state.canReviewProposals || previousSelfReview !== state.canSelfReviewProposals)) renderReviewPage(window.location.hash.split('?')[1] || '');
+  if (state.screen === 'reviews' && state.ready && (previousId !== state.user?.id || previousCsrf !== state.csrf || previousReview !== state.canReviewProposals || previousSelfReview !== state.canSelfReviewProposals)) renderReviewPage(window.location.hash.split('?')[1] || '');
   if (previousId !== state.user?.id && state.ready) {
     if (state.screen === 'connect') loadConnection();
     if (state.screen === 'person') renderAgentSettings();
     if (state.screen === 'notebook') showNotebook();
   }
+  if (previousId === state.user?.id && previousCsrf !== state.csrf && state.ready && state.screen === 'notebook') showNotebook();
+  if (state.ready && navigationProjection && !state.catalogueLoaded && routeNeedsCatalogue()) applyRoute();
 }
 function globalError(message) {
   setText('#global-message-text', message);
@@ -882,7 +1162,7 @@ async function synchronizeSession() {
       setSession(data);
       revision = state.sessionRevision;
       if (!hasAccess()) return;
-      if (!state.ready) { await loadAuthorizedCatalogue(); return; }
+      if (!state.ready || (routeNeedsCatalogue() && !state.catalogueLoaded)) { await loadAuthorizedWorkspace(); return; }
       const changed = oldRound !== state.round?.id || oldUser !== state.user?.id;
       if (['catalogue', 'overview', 'scheme'].includes(state.screen) && await refreshProfiles({background: true}) === false) return;
       if (state.screen === 'person') await loadPerson(state.personHandle, {preserve: true});
@@ -935,14 +1215,15 @@ async function refreshProfiles({background = false} = {}) {
   const oldRevision = state.catalogueRevision;
   const oldCatalogue = JSON.stringify(state.schemes.map(catalogueDisplayKey));
   const oldSelection = catalogueDisplayKey(selectedScheme());
+  const route = window.location.hash;
   let data;
   let merged;
   try {
-    data = await api('/api/schemes' + (background && state.catalogueRevision ? '?progress_only=true' : ''));
+    data = await api('/api/schemes' + (background && state.catalogueRevision ? '?progress_only=true' : '?projection=navigation'));
     if (request !== state.catalogueRequest) return false;
     if (data.projection === 'progress') {
       merged = mergeCatalogueProgress(data);
-      if (!merged) data = await api('/api/schemes');
+      if (!merged) data = await api('/api/schemes?projection=navigation');
     }
   }
   catch (error) {
@@ -950,10 +1231,18 @@ async function refreshProfiles({background = false} = {}) {
     throw error;
   }
   if (request !== state.catalogueRequest) return false;
-  state.schemes = merged || data.schemes || [];
-  state.catalogueRevision = data.catalogue_revision || null;
+  installNavigation(merged ? {schemes: merged, catalogue_revision: data.catalogue_revision, ...(navigationProjection ? {projection: 'navigation'} : {})} : data);
+  state.catalogueLoaded = true;
   const metadataChanged = oldRevision !== state.catalogueRevision;
-  const scheme = selectedScheme();
+  let scheme = selectedScheme();
+  if (['scheme', 'overview', 'assumptions'].includes(state.screen) && !scheme) {
+    const target = routeRelease();
+    if (target && availableReleases().some(item => item.id === target.id && String(item.version) === target.version)) {
+      await loadRelease(target.id, target.version);
+      if (request !== state.catalogueRequest || route !== window.location.hash) return false;
+      scheme = selectedScheme();
+    }
+  }
   const selectionChanged = oldSelection !== catalogueDisplayKey(scheme);
   if (state.screen === 'catalogue' && (!background || metadataChanged || oldCatalogue !== JSON.stringify(state.schemes.map(catalogueDisplayKey)))) renderCatalogue();
   if (['scheme', 'overview', 'assumptions'].includes(state.screen) && !scheme) return applyRoute();
@@ -985,6 +1274,13 @@ function profileBytes(scheme, profile, metric) {
 function participantCount(scheme) {
   const value = scheme?.participant_count;
   return Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+function prepareSchemeLink(link, scheme) {
+  const prepare = () => {
+    if (!hasAccess() || !state.catalogueLoaded || navigator.connection?.saveData || releaseLoads.size >= 2) return;
+    void loadRelease(scheme.id, String(scheme.version)).catch(() => {});
+  };
+  link.addEventListener('pointerenter', prepare); link.addEventListener('focus', prepare);
 }
 function renderCatalogue() {
   const target = $('#kem-catalogue');
@@ -1043,6 +1339,7 @@ function renderCatalogue() {
     const name = node('td');
     const link = node('a', scheme.name, 'kem-name');
     link.href = overviewRoute(scheme);
+    prepareSchemeLink(link, scheme);
     name.append(link);
     const progress = node('td');
     progress.dataset.label = 'Largest recovery';
@@ -1080,7 +1377,10 @@ const AGENT_SCOPE_LABELS = {
   'proposals:read': 'Read your private proposals and reviewer feedback',
   'proposals:write': 'Submit your proposals and revisions for human review',
   'notes:read': 'Read published and curated research notes and their reading priorities',
-  'notes:rate': 'Rate other authors’ notes on your behalf, influencing reading priorities and author points'
+  'notes:rate': 'Rate other authors’ notes on your behalf, influencing reading priorities and author points',
+  'notebook:read': 'Read and export your own notebook, including private drafts and feedback',
+  'notebook:write': 'Create, import and revise your own private notes; delete and restore unsubmitted drafts',
+  'notebook:publish': 'Request publication review of your exact saved note revisions'
 };
 function agentScopeList(scopes) {
   const list = node('ul', undefined, 'agent-scope-list');
@@ -1339,13 +1639,20 @@ function renderPeople(scoring) {
 }
 async function loadPeople(more = false) {
   if (state.screen !== 'people') return;
-  const request = ++state.peopleRequest;
-  const current = () => state.screen === 'people' && request === state.peopleRequest;
+  const request = ++state.peopleRequest, epoch = readViewEpoch;
+  const current = () => hasAccess() && epoch === readViewEpoch && state.screen === 'people' && request === state.peopleRequest;
   const target = $('#people-content');
   const offset = more && state.peoplePagination ? state.peoplePagination.offset + state.peoplePagination.limit : 0;
   $('#refresh-people').disabled = true;
   $('#more-people').disabled = true;
-  if (!more) {
+  const key = 'people', cached = !more && cachedRead(key);
+  const paint = data => {
+    state.people = data.people; state.peoplePagination = data.pagination || null;
+    paintRead(key, target, data, value => renderPeople(value.scoring));
+    $('#more-people').hidden = !data.pagination?.has_more;
+  };
+  if (cached) paint(cached);
+  if (!more && !cached) {
     state.people = [];
     state.peoplePagination = null;
     $('#more-people').hidden = true;
@@ -1353,15 +1660,13 @@ async function loadPeople(more = false) {
     setLoading(target, 'Loading participants…');
   }
   try {
-    const data = await api('/api/people?' + new URLSearchParams({limit: '50', offset: String(offset), include_records: 'false'}));
+    const data = await readAgain(offset ? key + ':' + offset : key, '/api/people?' + new URLSearchParams({limit: '50', offset: String(offset), include_records: 'false'}));
     if (!current()) return;
     if (!Array.isArray(data.people) || data.people.some(person => typeof person.handle !== 'string' || !person.handle)) throw new Error('The participant list could not be loaded.');
-    state.people = more ? [...state.people, ...data.people.filter(person => !state.people.some(existing => existing.handle === person.handle))] : data.people;
-    state.peoplePagination = data.pagination || null;
-    renderPeople(data.scoring);
-    $('#more-people').hidden = !data.pagination?.has_more;
+    if (!more) rememberRead(key, {people: data.people, pagination: data.pagination, scoring: data.scoring});
+    paint({people: more ? [...state.people, ...data.people.filter(person => !state.people.some(existing => existing.handle === person.handle))] : data.people, pagination: data.pagination, scoring: data.scoring});
   } catch (error) {
-    if (current()) showInlineError(target, error.message, () => loadPeople());
+    if (current()) readRefreshError(key, target, error, () => loadPeople(), cached);
   } finally {
     if (current()) { $('#refresh-people').disabled = false; $('#more-people').disabled = false; }
   }
@@ -1484,30 +1789,33 @@ function renderPerson(person) {
 }
 async function loadPerson(handle, {preserve = false} = {}) {
   const request = ++state.personRequest;
-  const revision = state.sessionRevision;
-  const current = () => state.screen === 'person' && state.personHandle === handle && request === state.personRequest &&
+  const revision = state.sessionRevision, epoch = readViewEpoch;
+  const current = () => hasAccess() && epoch === readViewEpoch && state.screen === 'person' && state.personHandle === handle && request === state.personRequest &&
     (!preserve || revision === state.sessionRevision);
-  const target = $('#person-content');
+  const target = $('#person-content'), key = 'person:' + handle.toLowerCase();
+  const cached = cachedRead(key);
+  const paint = person => paintRead(key, target, person, renderPerson);
+  if (cached) { paint(cached); preserve = true; }
   if (!preserve) {
     state.personDataKey = null;
     setText('#person-title', handle);
     setLoading(target, 'Loading profile…');
   }
   try {
-    const data = await api('/api/people/' + encodeURIComponent(handle) + '?include_milestones=false');
+    const data = await readAgain(key, '/api/people/' + encodeURIComponent(handle) + '?include_milestones=false');
     if (!current()) return;
     if (!data.person || typeof data.person.handle !== 'string' || data.person.handle.toLowerCase() !== handle.toLowerCase()) throw new Error('That profile could not be loaded.');
     // The server envelope changes on each poll; only actual public profile
     // changes should replace these sections and their focused controls.
-    if (preserve && state.personDataKey === JSON.stringify(data.person)) return;
+    rememberRead(key, data.person);
+    if (preserve && state.personDataKey === JSON.stringify(data.person) && renderedReads.get(target)?.child === target.firstChild) return;
     const disclosureKey = element => element.id || element.className;
     const expanded = preserve ? new Set([...target.querySelectorAll('details')].filter(element => element.open).map(disclosureKey)) : new Set();
-    renderPerson(data.person);
+    paint(data.person);
     if (preserve) for (const element of target.querySelectorAll('details')) element.open = expanded.has(disclosureKey(element));
   } catch (error) {
     if (current()) {
-      if (preserve) toast('Profile refresh failed. ' + error.message);
-      else showInlineError(target, error.message, () => loadPerson(handle));
+      readRefreshError(key, target, error, () => loadPerson(handle), cached || preserve);
     }
   }
 }
@@ -2457,35 +2765,20 @@ async function loadLeaderboard({preserve = false} = {}) {
   const exact = exactProfileRecords(selectedScheme(), state.profile);
   const scope = exact ? `The earliest accepted recovery of this exact ${named ? 'parameter set' : intermediateConfiguration(state.profile) ? 'configuration' : 'stage'}, across all rounds. Ties use the server receipt identifier.` : 'The earliest accepted recovery at this stage or higher, across all rounds. Ties use the server receipt identifier.';
   const footnote = (exact ? 'Recoveries do not transfer between profiles. ' : '“Via Stage” credits a recovery at a higher stage; the result describes that actual instance. ') + 'A recovery verifies one challenge answer. It does not establish a new attack method or a general break of the scheme. Method and compute details are contributor-reported.';
-  const request = ++state.leaderboardRequest;
+  const request = ++state.leaderboardRequest, epoch = readViewEpoch;
   const selected = profileId();
   const schemeId = state.schemeId, schemeVersion = state.schemeVersion;
   const selection = selectionKey(), dataKey = leaderboardRecoveryKey();
-  const current = () => request === state.leaderboardRequest && state.screen === 'scheme' &&
+  const current = () => hasAccess() && epoch === readViewEpoch && request === state.leaderboardRequest && state.screen === 'scheme' &&
     state.view === 'leaderboard' && selection === selectionKey();
-  if (state.screen !== 'scheme' || !selected) return showEmpty(target, named ? 'Choose an available parameter set to see its record.' : 'Choose an available stage to see its record.');
-  state.leaderboardPendingKey = dataKey;
-  if (!preserve) {
-    state.leaderboardDataKey = null;
-    setText('#leaderboard-title', 'Recovery record');
-    card.setAttribute('data-state', 'loading');
-    $('#tier-record-notes').hidden = true;
-    $('#tier-record-notes').open = false;
-    $('#leaderboard-scope').hidden = true;
-    $('#leaderboard-footnote').hidden = true;
-    setText('#leaderboard-scope', scope);
-    setText('#leaderboard-footnote', footnote);
-    setLoading(target, 'Loading the recovery record…');
+  if (state.screen !== 'scheme' || !selected) {
+    setText('#leaderboard-title', 'Recovery record'); card.setAttribute('data-state', 'empty');
+    $('#tier-record-notes').hidden = true; $('#leaderboard-scope').hidden = true; $('#leaderboard-footnote').hidden = true;
+    return showEmpty(target, named ? 'Choose an available parameter set to see its record.' : 'Choose an available stage to see its record.');
   }
-  $('#refresh-leaderboard').disabled = true;
-  try {
-    const data = await api('/api/leaderboard?' + new URLSearchParams({profile_id: selected, scheme_id: schemeId, scheme_version: schemeVersion}));
-    if (!current()) return;
-    if (!Array.isArray(data.entries) || (data.profile_id != null && data.profile_id !== selected) ||
-        (data.scheme_id != null && data.scheme_id !== schemeId) ||
-        (data.scheme_version != null && data.scheme_version !== schemeVersion)) {
-      throw new Error('The recovery record could not be loaded. Please try again.');
-    }
+  state.leaderboardPendingKey = dataKey;
+  const key = 'record:' + dataKey, cached = cachedRead(key);
+  const paint = data => paintRead(key, target, data, data => {
     if (!data.entries.length) {
       setText('#leaderboard-title', 'Unsolved');
       card.setAttribute('data-state', 'unsolved');
@@ -2505,12 +2798,6 @@ async function loadLeaderboard({preserve = false} = {}) {
       return;
     }
     const entry = data.entries[0];
-    if (entry.rank !== 1 || typeof entry.handle !== 'string' || !entry.handle || !Number.isFinite(entry.received_at)) {
-      throw new Error('The recovery record could not be loaded. Please try again.');
-    }
-    if (exact && (entry.is_inherited || (entry.profile_id != null && entry.profile_id !== selected))) {
-      throw new Error('The recovery record does not belong to this exact profile. Please refresh.');
-    }
     setText('#leaderboard-title', 'Broken by');
     card.setAttribute('data-state', 'solved');
     $('#tier-record-notes').hidden = false;
@@ -2544,9 +2831,46 @@ async function loadLeaderboard({preserve = false} = {}) {
     winner.append(evidence);
     target.replaceChildren(winner);
     state.leaderboardDataKey = dataKey;
+  });
+  if (cached) { paint(cached); preserve = true; }
+
+  if (!preserve) {
+    state.leaderboardDataKey = null;
+    setText('#leaderboard-title', 'Recovery record');
+    card.setAttribute('data-state', 'loading');
+    $('#tier-record-notes').hidden = true;
+    $('#tier-record-notes').open = false;
+    $('#leaderboard-scope').hidden = true;
+    $('#leaderboard-footnote').hidden = true;
+    setText('#leaderboard-scope', scope);
+    setText('#leaderboard-footnote', footnote);
+    setLoading(target, 'Loading the recovery record…');
+  }
+  $('#refresh-leaderboard').disabled = true;
+  try {
+    const data = await readAgain(key, '/api/leaderboard?' + new URLSearchParams({profile_id: selected, scheme_id: schemeId, scheme_version: schemeVersion}));
+    if (!current()) return;
+    if (!Array.isArray(data.entries) || (data.profile_id != null && data.profile_id !== selected) ||
+        (data.scheme_id != null && data.scheme_id !== schemeId) ||
+        (data.scheme_version != null && data.scheme_version !== schemeVersion)) {
+      throw new Error('The recovery record could not be loaded. Please try again.');
+    }
+    if (data.entries.length) {
+      const entry = data.entries[0];
+      if (entry.rank !== 1 || typeof entry.handle !== 'string' || !entry.handle || !Number.isFinite(entry.received_at)) {
+      throw new Error('The recovery record could not be loaded. Please try again.');
+      }
+      if (exact && (entry.is_inherited || (entry.profile_id != null && entry.profile_id !== selected))) {
+      throw new Error('The recovery record does not belong to this exact profile. Please refresh.');
+      }
+    }
+    const record = {entries: data.entries, includes_compatible_versions: data.includes_compatible_versions};
+    rememberRead(key, record);
+    paint(record);
   } catch (error) {
     if (current()) state.leaderboardDataKey = null;
-    if (current() && preserve) toast('Recovery record refresh failed. ' + error.message);
+    readViews.delete(key);
+    if (current() && preserve && !forbiddenRead(error)) toast('Recovery record refresh failed. ' + error.message);
     else if (current()) {
       setText('#leaderboard-title', 'Recovery record');
       card.setAttribute('data-state', 'error');
@@ -2681,6 +3005,11 @@ for (const dialog of document.querySelectorAll('dialog')) {
     }
     if (dialog === authDialog) {
       $('#auth-password').value = '';
+      $('#password-reset-form').reset();
+      $('#github-link-password').value = ''; state.githubLinkContext = null;
+      state.passwordResetToken = null;
+      if (authenticationRoute() && !state.authCallbackBusy) window.history.replaceState(null, '', safeAuthReturnRoute(state.returnRoute));
+      if (hasAccess() && !state.ready && !state.authCallbackBusy && !state.githubCompleteBusy) void loadAuthorizedWorkspace().catch(error => globalError(error.message));
       if (state.challengeStartIntent?.awaitingSignIn) state.challengeStartIntent = null;
     }
     if (dialog === submissionDialog && !state.pendingAttempt && !state.submitBusy) $('#candidate').value = '';
@@ -2692,9 +3021,239 @@ for (const dialog of document.querySelectorAll('dialog')) {
     }
   });
 }
+function safeAuthReturnRoute(value) {
+  return typeof value === 'string' && value.length <= 2048 && !/[\u0000-\u0020\\]/.test(value) &&
+    /^#(?:challenge|scheme|assumptions|person|people|notebook|propose|reviews|about|connect)(?:[/?]|$)/.test(value) ? value : '#challenge';
+}
+function authenticationRoute() { return /^#(?:auth|reset-password)(?:\?|$)/.test(window.location.hash); }
+function renderAuthMethods() {
+  const github = state.auth?.github_enabled === true;
+  $('#access-github').hidden = !github;
+  $('#access-github').disabled = state.githubBusy;
+  $('#access-sign-in').classList.toggle('button-primary', !github);
+  $('#access-sign-in').classList.toggle('button-quiet', github);
+  setText('#access-sign-in', github ? 'Use a password' : 'Sign in');
+  $('#access-register').hidden = github || !state.invitationToken;
+  $('#auth-github').hidden = !github;
+  $('#auth-github').disabled = state.githubBusy;
+  setText('#auth-github', state.githubBusy ? 'Connecting to GitHub…' : 'Continue with GitHub');
+  setText('#access-github', state.githubBusy ? 'Connecting to GitHub…' : 'Continue with GitHub');
+  $('#auth-password-options').classList.toggle('sole-method', !github);
+  if (!github) $('#auth-password-options').open = true;
+  $('#auth-forgot-password').hidden = !state.auth?.password_recovery || state.authMode !== 'login';
+  $('#auth-sign-in-methods').hidden = state.authPanel !== 'signin';
+  $('#github-handle-form').hidden = state.authPanel !== 'github-handle';
+  $('#github-link-form').hidden = state.authPanel !== 'github-link';
+  $('#github-link-submit').disabled = state.githubBusy;
+  $('#password-reset-request-form').hidden = state.authPanel !== 'reset-request';
+  $('#password-reset-form').hidden = state.authPanel !== 'reset-password';
+  renderAccountSignIn();
+}
+function renderAccountSignIn() {
+  const visible = Boolean(ownsViewedProfile() && hasAccess() && state.auth?.github_enabled);
+  $('#account-sign-in').hidden = !visible;
+  if (!visible) { $('#account-sign-in').open = false; setError('#account-sign-in-error', ''); }
+  const linked = state.auth?.github_linked === true;
+  setText('#account-github-status', linked ? 'Linked' + (state.auth.github_login ? ' as ' + state.auth.github_login : '') + '.' : 'Use GitHub to sign in to this same account.');
+  $('#account-link-github').hidden = linked;
+  $('#account-link-github').disabled = state.githubBusy;
+  setText('#account-link-github', state.githubBusy ? 'Connecting…' : 'Link GitHub');
+}
+async function startGitHub(mode = 'login', trigger = $('#auth-github'), password) {
+  if (!state.auth?.github_enabled || state.githubBusy || (mode === 'link' ? !state.user : Boolean(state.user))) return;
+  const account = state.user?.id, csrf = state.csrf, dialogStart = trigger === $('#auth-github') || trigger === $('#github-link-submit');
+  const destination = mode === 'link' ? personRoute(state.user.handle) : safeAuthReturnRoute(state.returnRoute || window.location.hash);
+  const errorTarget = mode === 'link' ? (dialogStart ? '#github-link-error' : '#account-sign-in-error') : dialogStart ? '#auth-github-error' : '#access-error';
+  state.githubBusy = true; renderAuthMethods(); setError(errorTarget, '');
+  try {
+    const data = await api('/api/auth/github/start', {mode, return_route: destination,
+      ...(mode === 'link' && typeof password === 'string' ? {password} : {}),
+      ...(mode === 'login' && state.invitationToken ? {invitation_token: state.invitationToken} : {})});
+    if (state.user?.id !== account || state.csrf !== csrf || (dialogStart && !authDialog.open) || (mode === 'link' && !ownsViewedProfile())) return;
+    const destinationURL = new URL(data.authorization_url);
+    if (destinationURL.origin !== 'https://github.com' || destinationURL.pathname !== '/login/oauth/authorize' || destinationURL.username || destinationURL.password) throw new Error('GitHub sign-in could not be started. Please try again.');
+    window.location.assign(destinationURL.href);
+  } catch (error) {
+    if (state.user?.id === account && (!dialogStart || authDialog.open)) setError(errorTarget, error.message);
+  } finally { $('#github-link-password').value = ''; state.githubBusy = false; renderAuthMethods(); }
+}
+function showAuthPanel(panel, trigger) {
+  state.authPanel = panel;
+  renderAuthMethods();
+  if (!authDialog.open) openDialog(authDialog, trigger);
+}
+async function finishAuthentication(returnRoute = state.returnRoute) {
+  const destination = safeAuthReturnRoute(returnRoute);
+  state.returnRoute = destination;
+  const route = !hasAccess() && state.invitationToken ? '#join?' + new URLSearchParams({token: state.invitationToken}) : destination;
+  window.history.replaceState(null, '', route);
+  if (!hasAccess()) { renderAccessGate(); return; }
+  state.invitationToken = null; state.invitationDelivery = null;
+  try { await loadAuthorizedWorkspace(); }
+  catch (error) { globalError(error.message); }
+}
+function capturePasswordResetLink() {
+  const [path, query = ''] = window.location.hash.split('?');
+  if (path !== '#reset-password') return;
+  const token = new URLSearchParams(query).get('token');
+  // Scrub before even requesting a session; never put reset secrets in storage.
+  window.history.replaceState(null, '', '#auth?password=reset');
+  state.passwordResetToken = typeof token === 'string' && /^[A-Za-z0-9_-]{43}$/.test(token) ? token : null;
+}
+async function handleAuthenticationRoute() {
+  capturePasswordResetLink();
+  const [path, query = ''] = window.location.hash.split('?');
+  if (path === '#auth' && new URLSearchParams(query).get('password') === 'reset') {
+    $('#password-reset-form').reset();
+    setText('#auth-title', 'Reset your password');
+    setText('#auth-description', 'Choose a new password for your Crucible account.');
+    setError('#password-reset-error', state.passwordResetToken ? '' : 'This reset link is incomplete. Request a new link.');
+    $('#password-reset-submit').disabled = !state.passwordResetToken;
+    showAuthPanel('reset-password');
+    if (state.passwordResetToken) $('#password-reset-new').focus();
+    return true;
+  }
+  if (path !== '#auth') return false;
+  if (state.authCallbackBusy) return true;
+  const outcome = new URLSearchParams(query).get('github');
+  if (!outcome) { openAuth(); return true; }
+  state.authCallbackBusy = true;
+  const callbackHash = window.location.hash, account = state.user?.id;
+  let returnRoute = '#challenge';
+  try {
+    const result = await api('/api/auth/github/pending');
+    if (window.location.hash !== callbackHash || state.user?.id !== account) return true;
+    returnRoute = safeAuthReturnRoute(result.return_route);
+    state.returnRoute = returnRoute;
+    if (typeof result.invitation_token === 'string' && /^[A-Za-z0-9_-]{1,512}$/.test(result.invitation_token)) state.invitationToken = result.invitation_token;
+    if (outcome === 'choose-handle' && result.pending === true && !state.user) {
+      state.githubPending = true;
+      $('#github-handle-form').reset();
+      const suggested = result.suggested_handle;
+      $('#github-handle').value = typeof suggested === 'string' && /^[A-Za-z0-9_]{3,32}$/.test(suggested) ? suggested : '';
+      setText('#github-handle-context', result.github_login ? 'Connected to GitHub as ' + result.github_login + '.' : 'Your GitHub account is connected.');
+      setText('#auth-title', 'Choose your handle');
+      setText('#auth-description', state.access?.mode === 'beta' ? 'Create your Crucible account, then verify your invitation email.' : 'Create your Crucible account.');
+      setError('#github-handle-error', '');
+      showAuthPanel('github-handle');
+      $('#github-handle').focus();
+      return true;
+    }
+    if (['complete', 'linked'].includes(outcome) && state.user) {
+      await finishAuthentication(returnRoute);
+      toast(outcome === 'linked' ? 'GitHub is linked to your account.' : 'Signed in as ' + state.user.handle + '.');
+      return true;
+    }
+    const messages = {
+      denied: 'GitHub sign-in was cancelled. You can try again or use your password.',
+      expired: 'This GitHub sign-in has expired. Please try again.',
+      'invite-required': 'Open your invitation link before creating an account with GitHub.',
+      'identity-in-use': 'This GitHub account is already linked to another Crucible account. Sign in to that account or contact the operator.',
+      'session-changed': 'Your session changed during GitHub sign-in. Please try again from your current account.'
+    };
+    throw new Error(messages[outcome] || 'GitHub sign-in could not be completed. Please try again.');
+  } catch (error) {
+    if (window.location.hash !== callbackHash || state.user?.id !== account) return true;
+    await finishAuthentication(returnRoute);
+    if (state.user) { globalError(error.message); }
+    else { openAuth(); setError('#auth-github-error', error.message); }
+  } finally { state.authCallbackBusy = false; }
+  return true;
+}
+$('#access-github').addEventListener('click', () => startGitHub('login', $('#access-github')));
+$('#auth-github').addEventListener('click', () => startGitHub('login', $('#auth-github')));
+$('#account-link-github').addEventListener('click', () => {
+  if (!ownsViewedProfile() || !hasAccess() || !state.auth?.github_enabled || state.auth.github_linked || state.githubBusy) return;
+  if (!state.auth.password_enabled) return startGitHub('link', $('#account-link-github'));
+  state.githubLinkContext = {accountId: state.user.id, csrf: state.csrf};
+  $('#github-link-form').reset(); setError('#github-link-error', '');
+  setText('#auth-title', 'Link GitHub');
+  setText('#auth-description', 'Confirm your password to add GitHub sign-in to this account.');
+  setText('#github-link-context', 'Your Crucible account: ' + state.user.handle);
+  showAuthPanel('github-link', $('#account-link-github')); $('#github-link-password').focus();
+});
+$('#github-link-form').addEventListener('submit', event => {
+  event.preventDefault();
+  const context = state.githubLinkContext;
+  if (!context || context.accountId !== state.user?.id || context.csrf !== state.csrf || !ownsViewedProfile() || state.authPanel !== 'github-link' || state.githubBusy) return;
+  const password = $('#github-link-password').value;
+  $('#github-link-password').value = '';
+  void startGitHub('link', $('#github-link-submit'), password);
+});
+$('#github-existing-account').addEventListener('click', () => { state.githubPending = false; window.history.replaceState(null, '', safeAuthReturnRoute(state.returnRoute)); setAuthMode('login'); $('#auth-password-options').open = true; $('#auth-handle').focus(); });
+$('#github-handle-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!state.githubPending || state.githubCompleteBusy || state.user) return;
+  const csrf = state.csrf;
+  state.githubCompleteBusy = true;
+  $('#github-handle-submit').disabled = true; setError('#github-handle-error', '');
+  try {
+    const data = await api('/api/auth/github/complete', {handle: $('#github-handle').value.trim()});
+    if (state.user || state.csrf !== csrf) return;
+    state.githubPending = false;
+    setSession(data); authDialog.close();
+    await finishAuthentication();
+  } catch (error) {
+    if (authDialog.open && state.authPanel === 'github-handle') setError('#github-handle-error', error.message);
+  } finally { state.githubCompleteBusy = false; $('#github-handle-submit').disabled = false; }
+});
+function openPasswordRecovery() {
+  if (!state.auth?.password_recovery) return;
+  $('#password-reset-request-form').reset();
+  $('#password-reset-handle').value = $('#auth-handle').value.trim();
+  setError('#password-reset-request-error', '');
+  $('#password-reset-request-status').hidden = true;
+  setText('#auth-title', 'Reset your password');
+  setText('#auth-description', 'We’ll send a reset link to your verified email address.');
+  showAuthPanel('reset-request', $('#auth-forgot-password'));
+  $('#password-reset-handle').focus();
+}
+$('#auth-forgot-password').addEventListener('click', openPasswordRecovery);
+for (const id of ['#password-reset-request-back', '#password-reset-back']) $(id).addEventListener('click', () => {
+  state.passwordResetToken = null; $('#password-reset-form').reset();
+  setAuthMode('login'); $('#auth-password-options').open = true; $('#auth-handle').focus();
+});
+$('#password-reset-request-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (state.passwordRecoveryBusy || !state.auth?.password_recovery) return;
+  const csrf = state.csrf;
+  state.passwordRecoveryBusy = true; $('#password-reset-request-submit').disabled = true;
+  setError('#password-reset-request-error', '');
+  try {
+    await api('/api/auth/password/reset/start', {handle: $('#password-reset-handle').value.trim()});
+    if (state.csrf !== csrf || !authDialog.open || state.authPanel !== 'reset-request') return;
+    setText('#password-reset-request-status', 'If this account has a verified email address, a reset link will arrive shortly.');
+    $('#password-reset-request-status').hidden = false;
+  } catch (error) {
+    if (authDialog.open && state.authPanel === 'reset-request' && state.csrf === csrf) setError('#password-reset-request-error', error.message);
+  } finally { state.passwordRecoveryBusy = false; $('#password-reset-request-submit').disabled = false; }
+});
+$('#password-reset-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!state.passwordResetToken || state.passwordResetBusy) return;
+  const password = $('#password-reset-new').value;
+  if (password !== $('#password-reset-confirm').value) { setError('#password-reset-error', 'The passwords do not match.'); $('#password-reset-confirm').focus(); return; }
+  if (password.length < 12 || password.length > 128) { setError('#password-reset-error', 'Use a password of 12–128 characters.'); return; }
+  const token = state.passwordResetToken, csrf = state.csrf;
+  state.passwordResetBusy = true; $('#password-reset-submit').disabled = true; setError('#password-reset-error', '');
+  try {
+    const data = await api('/api/auth/password/reset/complete', {token, password});
+    if (state.csrf !== csrf) return;
+    state.passwordResetToken = null; $('#password-reset-form').reset();
+    window.history.replaceState(null, '', safeAuthReturnRoute(state.returnRoute));
+    setSession(data);
+    setAuthMode('login'); $('#auth-password-options').open = true;
+    setText('#auth-description', 'Your password has been reset. Sign in with your new password.');
+    $('#auth-handle').focus();
+  } catch (error) {
+    if (authDialog.open && state.authPanel === 'reset-password' && state.csrf === csrf) setError('#password-reset-error', error.message);
+  } finally { state.passwordResetBusy = false; $('#password-reset-submit').disabled = !state.passwordResetToken; }
+});
+
 function setAuthMode(mode) {
   if (mode === 'register' && state.access?.mode === 'beta' && !state.invitationToken) mode = 'login';
   state.authMode = mode;
+  state.authPanel = 'signin';
   $('#login-mode').classList.toggle('selected', mode === 'login');
   $('#register-mode').classList.toggle('selected', mode === 'register');
   $('#login-mode').setAttribute('aria-pressed', String(mode === 'login'));
@@ -2705,8 +3264,10 @@ function setAuthMode(mode) {
   $('#auth-password').autocomplete = mode === 'login' ? 'current-password' : 'new-password';
   $('#auth-password').minLength = 12;
   setError('#auth-error', '');
+  setError('#auth-github-error', '');
+  renderAuthMethods();
 }
-function openAuth(trigger) { setAuthMode(state.authMode); openDialog(authDialog, trigger); }
+function openAuth(trigger) { setAuthMode(state.authMode); $('#auth-password-options').open = !state.auth?.github_enabled; if (!authDialog.open) openDialog(authDialog, trigger); }
 $('#auth-form').addEventListener('submit', async event => {
   event.preventDefault();
   const startIntent = state.challengeStartIntent;
@@ -2727,7 +3288,7 @@ $('#auth-form').addEventListener('submit', async event => {
     $('#auth-form').reset();
     authDialog.close();
     if (!hasAccess()) { renderAccessGate(); return; }
-    if (!state.ready) { await loadAuthorizedCatalogue(); return; }
+    if (!state.ready) { await loadAuthorizedWorkspace(); return; }
     await loadChallenge({allowAutomatic: dialogStillOpen && (!startIntent || resumeStart)});
     if (state.screen === 'scheme' && state.view === 'leaderboard') await loadLeaderboard();
     toast('Signed in as ' + state.user.handle + '.');
@@ -2995,14 +3556,12 @@ $('#submission-form').addEventListener('submit', async event => {
 
 async function showHistory() {
   const request = ++state.historyRequest;
-  const accountId = state.user?.id;
-  const current = () => request === state.historyRequest && historyDialog.open && state.user?.id === accountId;
+  const accountId = state.user?.id, epoch = readViewEpoch;
+  const current = () => hasAccess() && epoch === readViewEpoch && request === state.historyRequest && historyDialog.open && state.user?.id === accountId;
   openDialog(historyDialog, $('#history-button'));
   const target = $('#history-content');
-  setLoading(target, 'Loading your submissions…');
-  try {
-    const data = await api('/api/me/submissions');
-    if (!current()) return;
+  const key = 'history:' + (state.catalogueRevision || ''), cached = cachedRead(key);
+  const paint = data => paintRead(key, target, data, data => {
     if (!data.submissions?.length) return showEmpty(target, 'No submissions yet. Your received answers will appear here.');
     const items = [];
     for (const submission of data.submissions) {
@@ -3022,8 +3581,15 @@ async function showHistory() {
       items.push(item);
     }
     target.replaceChildren(...items);
+  });
+  if (cached) paint(cached); else setLoading(target, 'Loading your submissions…');
+  try {
+    const data = await readAgain(key, '/api/me/submissions');
+    if (!current()) return;
+    rememberRead(key, {submissions: data.submissions});
+    paint({submissions: data.submissions});
   } catch (error) {
-    if (current()) showInlineError(target, error.message, async () => { historyDialog.close(); await showHistory(); });
+    if (current()) readRefreshError(key, target, error, async () => { historyDialog.close(); await showHistory(); }, cached);
   }
 }
 async function copyInstance() {
@@ -3790,6 +4356,7 @@ function showWorkspace(name) {
   const enteringResearch = !research.visible && name === 'research';
   research.visible = name === 'research';
   $('#access-workspace').hidden = name !== 'access';
+  if (routeLoadingPanel) routeLoadingPanel.hidden = name !== 'loading';
   $('.primary-nav').hidden = name === 'access';
   $('#nav-people').hidden = name === 'access';
   $('#catalogue-workspace').hidden = name !== 'catalogue';
@@ -4246,17 +4813,30 @@ for (const [index, tab] of targetTabs.entries()) {
   });
 }
 
+for (const event of ['pointerenter', 'focus']) {
+  $('#nav-people').addEventListener(event, () => primeRead('people', '/api/people?limit=50&offset=0&include_records=false'));
+  $('#account-handle').addEventListener(event, () => {
+    if (state.user) primeRead('person:' + state.user.handle.toLowerCase(), '/api/people/' + encodeURIComponent(state.user.handle) + '?include_milestones=false');
+  });
+  $('#nav-notebook').addEventListener(event, () => {
+    if (!hasAccess() || navigator.connection?.saveData || notebookAssetsReady) return;
+    void loadNotebookAsset('/notebook/notebook.css', true).catch(() => {});
+    for (const path of ['/notebook/seed.js', '/notebook/store.js', '/notebook/notebook.js']) void loadNotebookAsset(path).catch(() => {});
+  });
+}
 async function initialize() {
   globalError('');
   $('#retry-button').disabled = true;
   $('#challenge-loading').hidden = false;
+  capturePasswordResetLink();
   captureInvitation();
   try {
-    setSession(await api('/api/session'));
+    setSession(await api('/api/session', undefined, {initialSession: true}));
+    if (await handleAuthenticationRoute()) return;
     if (!hasAccess()) return;
-    await loadAuthorizedCatalogue();
+    await loadAuthorizedWorkspace();
   } catch (error) {
-    if (hasAccess()) { showWorkspace('catalogue'); showInlineError($('#kem-catalogue'), error.message, initialize); }
+    if (hasAccess()) { showRouteLoading(); showInlineError(routeLoadingPanel, error.message, initialize); }
     else { globalError(error.message); if (!state.sessionResolved) setText('#access-description', 'Access could not be checked. Try again.'); }
     $('#challenge-loading').hidden = true;
   } finally { $('#retry-button').disabled = false; }

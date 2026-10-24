@@ -1,0 +1,311 @@
+CRUCIBLE — IMAGE, NATIVE HOST AND HOSTED PREVIEW CHECKPOINT
+23 October 2026; synthetic preview, not a participant-beta launch or production admission
+
+Application image
+
+The complete isolated Linux AMD64 application image built offline, using exact
+retained wheels/native binaries and a pinned Python 3.13.17 base. Its build runs
+validate_registry() as UID/GID 10001; all 32 registered current/archived releases
+validate. Source, code and native artifacts are root-owned and not writable by
+the service user. No database, credentials or participant content entered the
+build context. The working Mac platform adapters were not replaced.
+
+Docker image configuration ID (not a registry manifest digest):
+sha256:eb2bba5212e4220891531763c076842b3ea849cadfdf767e880ccc1102dac1fa
+Uncompressed image size: 454,794,729 bytes.
+Portable Docker-save archive: 164,741,561 bytes; SHA256
+10c0f9646bdfac70b62ca1fda80f10d7ad5cb4e2b6d4d9f9f8dbcb21af285057.
+The archive hash and embedded configuration identity were verified after export.
+The same archive already contains this single-platform OCI manifest:
+sha256:dbf0b1be3a734a86603ebfc9ff058db22513be430b23df812bba9f75ac1b0320
+Docker 29's containerd image store reports that manifest as its image ID. Native
+host verification compared the loaded raw manifest/config bytes with the original
+archive, checked the configuration digest above and all 22 ordered layer DiffIDs,
+and executed by the verified manifest ID. Neither image content nor the original
+configuration pin was changed to accommodate the store's different ID semantics.
+Isolated source snapshot commit:2d3a10eca83ac63cea8488073284807d91bf5a34.
+This is a real commit in the separate candidate directory, NOT a commit/push to
+the live repository. It includes 620 explicit source files. The runtime input
+manifest records 801 exact native/wheel files; SHA256:
+6f26ec90be4ce7a85d112a78b22be3587472f11752e48195e30769b6e92724c3
+Base AMD64 manifest:
+docker.io/library/python@sha256:d879ed88565a7a3c614b980b369d4a5025a9d057b71f93d09fc6d0b2ca823a18
+
+The first image attempt failed because PATH omitted /usr/sbin and could not find
+useradd. The executable was present. The final recipe uses /usr/sbin/useradd;
+no cryptographic implementation, dependency, stage parameter or limit changed.
+The original failure and exact corrected context are retained.
+
+Protocol and implementation identities
+
+All 32 releases and 1,466 raw profile manifests were compared with the frozen
+original Mac snapshot. Release/profile order and all fields outside implementation
+are identical: no protocol, parameter, correctness or security declaration drift.
+Four adapter source identities and 19 artifact identities changed for the reviewed
+platform support/rebuilds (five current releases and 14 archived releases).
+The other 13 unchanged identity pairs do not encode this interpreter change;
+its exact Python version/platform remain recorded in the image/release evidence.
+This records changes, not permission to overwrite original release anchors. Original receipts and historical builds remain intact.
+All 19 additive reviews are now recorded only in the synthetic database, as
+documented below. Production admission and issuance remain separate.
+
+Original snapshot SHA256:
+ec62c37f0854ca8b770538fcb601b69753df49d512b64e4c59b65006fce3df81
+Comparison report SHA256:
+2a62a0c8e1f4d3980397e17a9f57f2cf5d756d7f9af402afb473f06babcc086e
+Declared-manifest equality is not a new mathematical equivalence/security proof.
+
+Bounded test evidence and limits
+
+Earlier builds produced 174 native workers. PQ checks passed 14 upstream profiles
+and 180 ML-KEM ACVP cases; all code/HQC build agreement checks passed. Raw X25519,
+standard SNTRUP and both NTRU progressions passed their recorded vectors, fresh
+agreement and rejection checks. Evidence retains exact compiler/library/source
+and artifact identities, warnings and skipped upstream instruction scans.
+
+The local QEMU image's selected adapter/platform suite reported 141 passed,
+2 failed, 3 skipped and 79 deselected. Eight test-created shebang-worker cases
+were inconclusive: two timeout failures and six apparent error-path passes did
+not establish those boundaries. The other 135 checks passed. The 79 exclusions
+cover 77 previously raw-tested arithmetic cases and two estimator/cost audits.
+Optional skipped checks remain explicit in logs.
+
+A temporary DigitalOcean native AMD64 host (68.183.18.255, Ubuntu 24.04.5 x64,
+4 GB / 2 vCPU, Docker 29.9.2) then ran the unchanged application image. The first
+harness stopped at its configuration-ID assumption; v2 retained exact image
+verification but encountered a noexec test-tmpfs mount. Thus the earlier eight
+QEMU results cannot be attributed solely to emulation. V3 explicitly permits
+execution only on the temporary filesystem used by trusted test fixtures. Its
+shebang gate and all eight worker-boundary tests passed (0.99 seconds). Application
+source, test cases, cryptographic parameters and production limits were unchanged.
+All three attempts and the exact identity proof are retained.
+
+The archived published McEliece 8192128 generation case still failed on the native
+host with a genuine GenerationLimit (19.23-second test duration) under unchanged
+bounds. It is not the current McEliece research progression. A separate API-guard
+review confirmed archived releases cannot be newly issued through the current
+release route. This result is not a successful generation, and those bounds were
+not raised. Native run.exit remains nonzero for that retained test failure.
+There is no claimed rare-failure bound, side-channel audit, actual gVisor test,
+full native backend-suite pass or throughput/capacity measurement.
+
+Additional native functional smoke, completed 2026-10-22T23:27:31Z: the exact
+unchanged app image passed one fresh, unconditioned generation/agreement cycle
+at the first-listed profile of each of the 19 changed implementation releases.
+All seven Python Frodo/ML-KEM ladders also passed a separate keygen/encapsulate/
+decapsulate cycle. Manifest identity, wire sizes, public provenance and shared
+secret encoding were checked. The owned test container was removed afterward.
+V1's failure assumed every adapter had an optional parser; V2 corrects only that
+harness assumption and adds sanitized phase/class diagnostics. Both attempts
+remain recorded. No application, parameters, distribution or deadline changed.
+This is selected-profile functional evidence, not full-profile coverage, a rare
+failure bound, security approval or a resolution of archived McEliece8192128.
+Read-only semantic review found the four adapter source changes confined to
+platform binding/artifact provenance; arithmetic, sampling, KDF, parameters and
+cryptographic encodings are unchanged. The other 15 primary sources are identical.
+
+Backup image
+
+The exact offline backup input closure is prepared: same source/release/wheels
+as the application, plus 19 authenticated Debian packages. A packaging fix tells
+apt to use their verified local archive directory; installation then succeeds
+without networking. Application and backup source code were unchanged.
+
+The required Restic version probe previously crashed under AMD64 emulation
+(Go runtime SIGSEGV in runtime.netpoll), including one bounded unchanged repeat.
+That failure did not recur when the same frozen backup context built offline on
+the native host. The complete build, nonroot read-only/network-disabled probes,
+Restic 0.18.0 and PostgreSQL 17.11 tool checks, and missing-configuration rejection
+passed. No verification probe was removed and backup source was unchanged.
+
+Native backup OCI manifest ID:
+sha256:7d00c3d1f7a56aeb8f8099c026012d97d4cb50101a1cf96b6f134558968d4a36
+Native backup configuration digest:
+sha256:96fb2cb6f9dbfa81a4ca05445e67cd8c9ed4eb85a5d48241e5efa1419d5370dc
+Retained image archive: 155,547,136 bytes; SHA256
+cca4a7ca2471c55c62af1846f502f918199ef4d85bf4ce7ef9155be032aaae47.
+
+Previous real PostgreSQL/Restic restore fixtures passed in a different local Linux
+environment. No backup or restore was performed with this exact image; actual
+provider storage, scheduling and restoration remain pending. Failed local probes
+and successful native evidence are both retained.
+Backup context SHA256:
+b0503152313d5f6cf47b90bc7c1008b285aca95171afd3dc8091316679931cb8
+Earlier local/emulated backup evidence archive SHA256:
+329b1d810d6b841f4fe071dc4d67657d782dd22bcacfd2ebdae777fdb96c238a
+Native application evidence/proof archive SHA256:
+2015aef2fc455fb5a10ed0a8b4a3aa1c938b0a4daaeda175526c9bbe90744f9a
+Native backup evidence archive SHA256:
+12ae56b72cd14495cb4cab188656f67ee3016b744a3b57f27f2b243128ab8249
+
+Private registry upload
+
+The private registry crucible-beta exists in SFO2. Both retained images
+were uploaded and verified at 2026-10-22T22:20:12Z under the shared release tag:
+20261022-2d3a10e-97615cba9689124e3a393d339904b882
+Digest-pinned image references:
+registry.digitalocean.com/crucible-beta/app@sha256:dbf0b1be3a734a86603ebfc9ff058db22513be430b23df812bba9f75ac1b0320
+registry.digitalocean.com/crucible-beta/backup@sha256:7d00c3d1f7a56aeb8f8099c026012d97d4cb50101a1cf96b6f134558968d4a36
+Both registry manifest digests, configuration digests and ordered layer
+descriptors match the verified source images exactly (app: 22 layers; backup: 13).
+The upload used a one-hour derived Docker credential and completed after removing
+its temporary remote configuration. The local PAT file was also removed, and
+remote cleanup independently checked. Provider revocation of the operator PAT
+is a separate remaining user step. No credentials entered either image or the receipt.
+Receipt, relative to the Codex workspace:
+work/beta-native-host-20261022/registry-upload/receipt-20261022-2d3a10e-97615cba9689124e3a393d339904b882.json
+
+Managed database and email preparation
+
+The user created a managed PostgreSQL 17 cluster. A metadata-only operator probe
+at 2026-10-22T22:55:58Z verified the pinned provider CA, verify-full TLS, PostgreSQL
+17, doadmin/defaultdb and the absence of the application schema. The actual
+database plan and complete trusted-source/firewall inventory have not been
+independently verified. The user subsequently reported database region SFO2 and
+US$15.15/month; this is not inferred from the registry's region.
+
+An explicit bootstrap completed at 2026-10-22T23:11:16Z, creating only
+crucible_beta_20261023_synthetic and separate crucible_migrator, crucible_runtime
+and crucible_backup logins. Passwords use SCRAM; connection limits are 2, 10 and
+2 respectively. The operator connection reported max_connections=25, which is
+not a claim that all 25 are available to application workloads. PUBLIC database
+and schema privileges were revoked; migration-owned future-object grants are
+prepared. Generated role credentials remain in protected files outside the
+workspace. No participant records were copied and the local database is untouched.
+
+The exact frozen 23 migrations subsequently reached head0023. Runtime and backup
+permissions were checked using their actual logins against 46 tables, with
+bounded scratch operations and verified scratch cleanup. A synthetic beta_check
+reviewer account was seeded; its random password and synthetic application secret
+are protected outside the workspace. No participant email, membership or data was
+imported. A read-only baseline plan found 32 missing anchors covering 1,466
+profiles, with no existing pins or historical challenges. Explicit initialization
+then committed all 32 exact original Mac source/artifact anchors to the synthetic
+database. No Linux pair replaced an original anchor. After the selected native
+pass and semantic review, a read-only plan and explicit apply registered all 19
+additive Linux builds in this synthetic database. The original 32 source/artifact
+anchors and timestamps remained unchanged. The final evidence packet index is
+8fde19fad254527d30b1ddc676df4388c8c80406d985dab2c53e0db0d2550a2b.
+This is scoped implementation compatibility, not scientific/security approval,
+production admission or authenticated issuance authorization. Hosted startup is
+recorded separately below.
+Receipts, relative to the Codex workspace:
+work/beta-managed-database-20261022/bootstrap-20261022T231106521695Z-a01e4cd2ac9071c9.json
+work/beta-managed-database-20261022/synthetic-schema-87c660e444754cb492f6ea5518313d04.json
+work/beta-managed-database-20261022/synthetic-reviewer-d5551635de284892b7ca988192f0ec9d.json
+work/beta-managed-database-20261022/original-baselines-read_only_plan-600ab389731948b89ad45d94e0103c26.json
+work/beta-managed-database-20261022/original-baselines-apply-2ac78e18736543099f7f757cd9789b2e.json
+work/beta-managed-database-20261022/build-admission-7547ec30570841c69d90e94fbd0ee740.json
+work/beta-managed-database-20261022/build-admission-4403ba9527af4617b809d7191bf1c1a7.json
+
+The user created a personal Resend account and added crucible.fail. Its four DNS
+records were observed through a public resolver and the user confirms Verified.
+A domain-restricted sending key is saved in a protected file; no credential
+values are recorded here. The laptop probe to smtp.resend.com:2587 passed
+certificate-verified STARTTLS (TLS 1.3), AUTH 235, NOOP and clean QUIT. It sent no
+mail and proves neither sender authorization/delivery nor App Platform egress.
+Receipt: work/beta-managed-database-20261022/smtp-auth-probe-66165d55498c47ed978e34cb94bbfbd8.json.
+
+Hosted synthetic preview, 23 October
+
+Origin: https://crucible-beta-z7znj.ondigitalocean.app
+The user created the service, imported the prepared runtime configuration and
+later added this app as a Trusted Source on the existing managed database.
+The first deployment had passed settings/native preflight but failed database
+read checks and exited before listening. After the trusted-source addition and
+redeployment, external health checks passed. This sequence is consistent with
+network access causing the earlier failure; the complete source inventory has
+not been independently inspected. The user now confirms Degraded is gone.
+Actual provider deployment ID/status details and instance size remain uninspected.
+
+At00:25–00:26 UTC, verified-HTTPS probes observed /health/live and /health both
+HTTP200 with status:ok; /health includes an actual database read. The homepage
+returned 200. /api/session reported an anonymous user with beta access denied and
+a Secure/HttpOnly/SameSite=Strict session cookie. Four protected paths each
+returned 401/authentication_required, no-store and no redirect: /api/schemes,
+/map/notes.json, /api/notebook/export and
+/api/protocol/source?scheme_id=teaching-dh-kem&version=7.
+Normal app responses carried CSP, frame DENY and HSTS; /health/live is the
+dedicated wrapper exception. Raw response bodies and cookie values were not
+retained. Two anonymous session GETs created ordinary anonymous session/rate state;
+no participant credentials, account, invitation, note or submission was used.
+
+The middle receipt's authentication_required matcher was false because the local
+probe looked under error instead of the actual top-level code. Only the probe
+matcher changed; the final receipt repeats the five session/private checks and
+confirms their expected codes. The original receipt remains; no app change.
+Receipts, relative to the Codex workspace:
+work/beta-managed-database-20261022/hosted-startup-20261023T002522937832Z.json
+work/beta-managed-database-20261022/hosted-startup-20261023T002549902289Z.json
+work/beta-managed-database-20261022/hosted-startup-20261023T002629220798Z.json
+
+Four later anonymous ingress probes passed a narrow boundary: generic forged
+forwarding headers and invalid/valid documentation-range Do-Connecting-IP values
+returned the normal 401; invalid Host was rejected 403 upstream. Invalid-provider-
+header behavior supports replacement on this path, but valid-IP rate-key
+independence and direct-service exposure remain unverified. Receipt:
+work/beta-managed-database-20261022/hosted-startup-20261023T002942173157Z.json.
+Custom-domain configuration is in progress; actual DNS change, domain acceptance,
+TLS issuance and canonical-origin change have not been observed.
+
+Prepared runtime settings remain production/beta, provider-expanded ${APP_URL},
+GitHub initially disabled, DH/RSA issuance only and generation/auth concurrency 1.
+The user reports runtime variable setup; actual provider scopes/encryption flags
+still need inspection. The recommended plan is one apps-d-1vcpu-4gb instance at
+US$49/month, not an independently observed running size. With user-reported
+SFO2 PostgreSQL at US$15.15/month, planned app/DB base is US$64.15/month, excluding
+registry, backup storage/jobs, temporary runner, tax and other usage.
+
+Continuation and preserved state
+
+The temporary paid native-check Droplet remains retained pending the next step;
+no test containers remain running. Exact image artifacts are retained locally
+and in the private registry. The managed cluster and synthetic database above
+exist and the App Platform synthetic preview is responding. No production build
+admission or participant-data transfer has been completed. Custom website DNS,
+GitHub OAuth, actual email delivery and provider backup/restore remain pending.
+Existing accounts, notes, submissions and local website remain untouched.
+See app-platform-next-steps.txt and deploy/app-platform.env.example.
+
+Next: verify authenticated/nonmember/revoked-user and scoped-agent boundaries,
+provider ingress/header behavior, selected issuance/workloads and resource limits,
+actual email delivery, backup/restore, custom domain and GitHub. Only then perform
+one deliberate real-data cutover. Future code deployments preserve hosted data.
+The default image entrypoint was tested with missing secrets/configuration and
+correctly blocked startup with a generic response and exit1. Configured provider
+startup and selected anonymous boundaries now pass; these are narrower evidence
+than full authenticated access, workflow, capacity or recovery validation.
+
+Local evidence locations, relative to the Codex workspace
+
+work/beta-linux-amd64-20261022/RESULTS.txt — native/raw tests and residual failure.
+work/beta-linux-amd64-20261022/runtime-checkpoint/RESULTS.txt — image/tests/export.
+Its v2-evidence/ directory includes the complete raw manifest comparison.
+work/beta-runtime-candidate-20261022/ — frozen source, exact contexts and receipts.
+work/beta-linux-platform-metadata-20261022/ — reviewed platform metadata/overlay.
+work/beta-manifest-comparison-20261022/ — read-only comparison tool and pure tests.
+work/beta-backup-image-20261022/ — package provenance and earlier probe evidence.
+work/beta-native-host-20261022/native-app-evidence/ — native attempts and image proof.
+work/beta-native-host-20261022/native-backup-evidence/ — successful native build/probes.
+work/beta-changed-release-smoke-20261023/native-evidence-02/ — v2 all19+7 result.
+work/beta-semantic-review-20261023/ — four source diffs and semantic comparison.
+work/beta-build-review-final-20261023/ — final 19-build evidence packet.
+These retained evidence copies are local, not public downloads. The temporary
+runner handled exact image/context artifacts, synthetic checks and a short-lived
+upload credential; it received no user data.
+
+Follow-up checkpoint, 23 October 2026
+
+The actual hosted synthetic beta_check browser login/logout check passed at
+00:32:44 UTC: same-origin CSRF login, session/CSRF rotation, active synthetic
+identity, authorized schemes, logout and denied access after logout. No real
+account/research/invitation was used; only synthetic session/rate state changed.
+Receipt: work/beta-managed-database-20261022/hosted-login-5a42de4ed1b244ab8442a37333192fb3.json.
+Nonmember/revoked users, scoped agents, actual browser/OAuth, workload and
+recovery checks remain pending; this is not participant-beta readiness.
+
+The user has now added the website DNS records at Porkbun. Public resolver
+1.1.1.1 returns exactly162.159.140.98 and172.66.0.96 for crucible.fail, noAAAA,
+and all four Resend records remain intact. Completing Add domain in DigitalOcean,
+custom-domain HTTPS and canonical-origin validation remain pending. No DNS
+mutation was performed by the assistant.

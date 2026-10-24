@@ -1,0 +1,235 @@
+APP PLATFORM — PRIVATE-BETA PREPARATION
+23 October 2026; hosted synthetic preview, not a participant-beta readiness claim
+
+Target and ownership
+
+Use one DigitalOcean App Platform service, managed PostgreSQL and private Spaces.
+The user selected this managed approach over administering a Droplet, conditional
+on native worker compatibility. Keep the existing host assets as a fallback.
+The Crucible (beta) team and beta project are ready; domain crucible.fail was
+purchased through Porkbun. Intended canonical origin: https://crucible.fail. Exact GitHub
+OAuth callback: https://crucible.fail/api/auth/github/callback. A temporary paid
+native-check Droplet handled image/context artifacts and synthetic checks, then
+a temporary upload credential. The private registry crucible-beta (SFO2) holds
+both verified images. A managed PostgreSQL17 cluster now exists; verified TLS
+and an explicit synthetic-database bootstrap completed with separate migration,
+runtime and backup logins. Its frozen schema is at head0023, actual role privilege
+checks passed, and a synthetic reviewer is seeded. The App Platform preview now
+responds at https://crucible-beta-z7znj.ondigitalocean.app using this synthetic DB;
+no participant-data transfer occurred. Website custom-domain setup remains pending.
+The user reports DB region SFO2 and US$15.15/month; exact plan and complete network
+rules remain uninspected. After adding the app as a Trusted Source and redeploying,
+hosted health and bounded anonymous checks passed. The user now confirms Degraded
+is gone; actual provider deployment ID and resource size are not yet inspected.
+Resend's sending domain is user-confirmed Verified; laptop STARTTLS/AUTH passed,
+but no mail was sent and hosted delivery remains untested.
+
+The laptop remains development. No second permanently hosted staging site.
+Treat hosted beta data as authoritative after cutover; deployments migrate schema
+without replacing participant accounts, notes, submissions or revision history.
+
+Compatibility gates
+
+1. Retain the pinned Linux AMD64 images and native-host evidence. App Platform
+   uses gVisor; bounded native-Droplet checks do not establish its compatibility.
+   Startup validates all 32 current/archived adapters before the beta allowlist.
+   The isolated candidate now includes reviewed X25519/NTRU platform bindings;
+   it builds offline and validates all 32 adapters as a nonroot user. Live Mac
+   platform code remains untouched. See runtime-candidate-checkpoint.txt.
+   Preserve original release identities and receipts; additional implementation
+   builds require explicit review. Never relax checks or rewrite pins to boot.
+2. Run one non-root application process listening on the platform's configured
+   container port. Bake reviewed native executables into the immutable image;
+   exclude .local, developer databases, credentials and private notebook content.
+   App filesystem storage is ephemeral with a 4 GiB limit. Native build limits
+   may favor building externally and retaining an immutable image.
+3. Exercise subprocesses, randomness, pipes, selectors, process groups, CPU/memory
+   limits, cancellation and child cleanup in the actual platform. Test small,
+   middle and largest settings, exhaustion, concurrent reads and shutdown.
+4. Keep one instance/worker initially: generation/authentication limits are
+   process-local. Test old/new deployment overlap. Explicitly bound SQLAlchemy
+   pools: the app now caps each engine at five connections with no overflow and
+   a five-second checkout wait. Two overlapping app processes budget ten, leaving
+   room within the smallest managed PostgreSQL plan's 22 backend connections for
+   migrations, backups and operator work. See database-pooling.txt for limits.
+5. The dedicated crucible.app_platform entry point now handles the documented
+   provider client address; 32 focused tests pass. Four narrow hosted anonymous
+   forwarding-header/Host probes now pass. Valid-IP rate-key independence and
+   direct service exposure remain unverified. DigitalOcean documents
+   do-connecting-ip as the original client address; X-Forwarded-For identifies
+   its ingress. Do not blindly trust caller-supplied forwarding headers. Verify
+   platform overwrite guarantees and spoof tests before using headers for rate
+   limits. Preserve explicit host validation, including health checks.
+6. Use managed PostgreSQL over verified TLS and restricted networking. Rehearse
+   migrations, persistence after redeploy and complete logical restoration.
+   The paired backup job adapter now uses a dedicated PostgreSQL session lock
+   and checks lock ownership before recording completion. Linux fixtures include
+   real encrypted Restic backup/restore and lost-lock rejection. The separate
+   job image now builds offline on native AMD64 and passes nonroot/read-only tool
+   probes and missing-configuration rejection. Those probes perform no backup.
+   Actual-image/provider restoration, remote storage and scheduling remain pending.
+   See runtime-candidate-checkpoint.txt for exact image identities and evidence.
+   A local flock/systemd timer does not coordinate separate containers. Preserve
+   the database, secret and exact source/native release as a recoverable set.
+7. Verify actual OAuth, email and invitation flows. HTTPS health/bootstrap and
+   selected anonymous boundaries now pass. Resend's domain DNS records were
+   observed and verification is user-confirmed; a protected sending key is saved.
+   Laptop certificate-verified SMTP STARTTLS/AUTH to port 2587 passed without
+   sending mail. Hosted SMTP egress and invitation/reset delivery remain untested.
+   GitHub is initially disabled and login never implies beta membership.
+
+Executed preparation and bounded native checks, 22 October
+
+The combined focused Mac check passed 189 tests for admission, preflight, ingress,
+dependency locking, builders, backups and connection pooling. The backup suite
+passed 41 checks in Linux, including three actual PostgreSQL/Restic integration
+checks. The original-baseline helper passed all57 checks in Linux/PostgreSQL,
+including read-only planning and serialized, history-preserving initialization.
+At that fixture checkpoint no actual baseline was registered; the later synthetic
+initialization is recorded below. See beta-release-baselines.txt. Exact files/evidence are retained in the local work/beta-* directories;
+no live database or provider credentials entered the VM.
+
+The earlier local VM runs AMD64 containers under QEMU without a live checkout,
+forwarded app port or participant data. Exact wheels install offline with
+--no-deps and pass pip check. Four platform bindings are in the isolated candidate
+source snapshot, not the working Mac adapters.
+
+The temporary native AMD64 Droplet now confirms all eight synthetic worker
+boundaries (0.99 seconds) after exact image verification and an explicit executable
+test tmpfs. Earlier identity-guard and noexec failures are retained; the original
+QEMU ambiguity is not attributed solely to emulation. Archived McEliece 8192128
+still produces GenerationLimit under unchanged bounds (19.23-second test duration)
+and is excluded by the current-release issuance guard. The native backup build
+and bounded probes pass. Neither result is a full native backend-suite pass,
+production throughput measurement, App Platform/gVisor test or hosted restore.
+Both images were uploaded to the private registry at 2026-10-22T22:20:12Z with
+unchanged manifest/configuration digests and ordered layers. Exact references
+and the upload receipt are in runtime-candidate-checkpoint.txt. The runner remains
+retained pending the next step; no test containers remain running.
+
+Managed-database preparation, 23 October
+
+The verified-TLS operator probe and explicit synthetic bootstrap completed.
+crucible_beta_20261023_synthetic has separate migrator/runtime/backup logins,
+SCRAM passwords, connection limits and restricted PUBLIC privileges. The frozen
+23 migrations reached head0023. Actual runtime and backup logins passed metadata
+and bounded operation checks across 46 tables; scratch cleanup was verified.
+A synthetic beta_check reviewer and protected test secrets are ready. No real
+accounts, notes, submissions or membership were transferred. The local website
+and database are unchanged. Exact receipts are in runtime-candidate-checkpoint.txt.
+
+All 32 original Mac source/artifact anchors were initialized after a read-only
+plan verified 1,466 profiles, no existing pins and no historical challenges.
+The explicit apply committed successfully without replacing original identities
+with Linux pairs. The 19 exact additive Linux build reviews were subsequently
+registered in the synthetic database after a read-only plan; original anchors
+and timestamps are unchanged. Exact receipts and the final packet digest are
+recorded in runtime-candidate-checkpoint.txt. Provider startup and database health
+now pass; production admission, authenticated issuance and workload checks remain.
+The unchanged app image also passed selected native functional smoke: one fresh
+first-profile generation/agreement cycle for each of those 19 releases, plus
+seven separate Python keygen/encapsulation/decapsulation cycles. A V1 optional-
+parser harness mistake is retained; V2 changes only the harness. Semantic source
+review found only platform/provenance changes in four adapters; the other 15
+primary sources are identical. These checks do not establish all-profile or
+rare-failure correctness, security, capacity or actual-provider readiness.
+Archived McEliece8192128 remains resource-limited. The user reports SFO2 and
+US$15.15/month for the database and has added the app as a Trusted Source.
+Independently inspect the actual plan and complete network-source inventory;
+successful connections alone do not establish all those boundaries.
+
+Hosted checks observed, 23 October
+
+At00:25–00:26 UTC, verified HTTPS requests returned 200/status:ok for /health/live
+and /health (the latter checks the database), and200 for the homepage. Anonymous
+/api/session reported no user and denied beta access; its cookie was Secure,
+HttpOnly and SameSite=Strict. /api/schemes, /map/notes.json, /api/notebook/export
+and the DH protocol-source route each returned 401/authentication_required with
+no-store and no redirect. Normal responses carried CSP, frame DENY and HSTS;
+the dedicated /health/live wrapper response is the documented exception.
+Two anonymous sessions created only ordinary session/rate state, not participant
+accounts or research records. Receipts and a corrected local probe-matcher result
+are retained in runtime-candidate-checkpoint.txt. No app code changed for the probe.
+These checks cover only selected anonymous boundaries, not authenticated access,
+provider-header overwrite, complete caching behavior, workload or recovery.
+
+Private access before launch
+
+All routes, including static content and downloads, must pass the application.
+Do not add an App Platform static-site component pointing at web/ or a public
+object bucket/CDN. DNS and certificates identify the hostname publicly; only the
+minimal login/bootstrap surface should be visible without admission.
+
+Test anonymous visitors, authenticated nonmembers, members, revoked members,
+reviewers and scoped agents. Include direct URLs, legacy routes, notebook exports,
+protocol/method files, provider starter/preview domains and cached responses.
+Only authorized exact revisions may be read; membership does not override private
+draft ownership or review permissions. Restrict the provider domain to the same
+boundary or reject it. A private source repository is not website access control.
+
+Bounded source audit, 22 October: 51 existing beta boundary/invitation tests
+passed on temporary synthetic databases, with no skips. No research-data bypass
+was found in the inspected routes or public bundles. Current public assets still
+include the full HTML/JS interface and generic process guidance, not just a small
+login bundle; no actual catalogue, note bodies, account records or concrete scheme
+parameters were found there. A minimal login-shell split is optional further
+privacy hardening; those local checks and the selected hosted anonymous checks
+do not establish every hosted access path or authenticated role boundary.
+
+No production database or private research data should enter build logs, images,
+preview builds or diagnostics. Configure secrets at runtime, never in source.
+
+Current budget checkpoint, 23 October 2026
+
+User-reported managed PostgreSQL: SFO2, US$15.15/month. Recommended App Platform
+plan: one apps-d-1vcpu-4gb instance at US$49/month, autoscaling off. The actual
+running app size has not been independently inspected. This gives a planned
+app/DB base of US$64.15/month; registry, backup storage/jobs, temporary runner,
+taxes and other usage are separate. Measure actual worker memory/CPU and confirm
+billing before broader use; keep the overall planning ceiling near US$100/month.
+Neither price nor instance size proves capacity. Alerts are not spending caps.
+
+Next sequence
+
+See app-platform-next-steps.txt and deploy/app-platform.env.example for the
+provider walkthrough and container-specific runtime paths.
+
+Continue on the existing hosted preview and managed PostgreSQL cluster. Do not
+recreate the completed bootstrap, reviewer seed, build ledger or service, or
+replace original anchors. Inspect effective provider settings and validate
+authenticated membership/revocation/agent access, ingress and workloads with
+synthetic data. Successful health and anonymous checks do not establish readiness.
+Verify actual email delivery and provider backup/restoration before beta migration.
+Configure the custom domain using the exact DNS instructions DigitalOcean emits;
+Porkbun can continue serving DNS. Finally transfer/verify data, enroll selected
+participants, verify rejection for outsiders and rehearse recovery before opening.
+
+Primary references
+https://docs.digitalocean.com/products/app-platform/details/limits/
+https://docs.digitalocean.com/products/app-platform/reference/app-spec/
+https://docs.digitalocean.com/products/app-platform/how-to/store-data/
+https://docs.digitalocean.com/products/app-platform/how-to/enable-vpc/
+https://docs.digitalocean.com/products/app-platform/how-to/manage-jobs/
+https://docs.digitalocean.com/products/app-platform/how-to/manage-domains/
+https://docs.digitalocean.com/support/where-can-i-find-the-client-ip-address-of-a-request-connecting-to-my-app/
+https://docs.digitalocean.com/products/app-platform/details/pricing/
+https://docs.digitalocean.com/products/databases/postgresql/details/pricing/
+https://docs.digitalocean.com/products/databases/postgresql/details/limits/
+https://docs.digitalocean.com/products/spaces/details/pricing/
+https://docs.sqlalchemy.org/en/20/core/pooling.html
+
+Follow-up checkpoint, 23 October 2026
+
+The actual hosted synthetic beta_check browser login/logout check passed at
+00:32:44 UTC: same-origin CSRF login, session/CSRF rotation, active synthetic
+identity, authorized schemes, logout and denied access after logout. No real
+account/research/invitation was used; only synthetic session/rate state changed.
+Receipt: work/beta-managed-database-20261022/hosted-login-5a42de4ed1b244ab8442a37333192fb3.json.
+Nonmember/revoked users, scoped agents, actual browser/OAuth, workload and
+recovery checks remain pending; this is not participant-beta readiness.
+
+The user has now added the website DNS records at Porkbun. Public resolver
+1.1.1.1 returns exactly162.159.140.98 and172.66.0.96 for crucible.fail, noAAAA,
+and all four Resend records remain intact. Completing Add domain in DigitalOcean,
+custom-domain HTTPS and canonical-origin validation remain pending. No DNS
+mutation was performed by the assistant.

@@ -114,7 +114,7 @@ def source_snapshot(session, user, ref):
         note = session.get(notebook.NotebookNote, ref.note_id)
         revision = session.scalar(select(notebook.NotebookRevision).where(
             notebook.NotebookRevision.note_id == ref.note_id, notebook.NotebookRevision.revision == ref.revision))
-        if note is None or revision is None:
+        if note is None or revision is None or notebook.notebook_trash.active(session, ref.note_id):
             raise HTTPException(404, 'Source revision not found.')
         if note.author_id != user.id:
             shared = session.scalar(select(notebook.NotebookPublication).where(

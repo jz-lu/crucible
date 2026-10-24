@@ -38,6 +38,16 @@ async function test(name, run) {await run();console.log('PASS '+name);passed++;}
     assert.doesNotMatch(app.document.body.textContent,/NEVER_RENDER_ME/);
     assert.equal(app.$('#connect-content').querySelector('[data-agent-decision]'),null);
   });
+  await test('opt-in notebook approval clearly describes private reads, writes and publication requests', async () => {
+    const app = await createApp({schemes,user,hash:'#connect?code=ABCD-EFGH',responder:(url,options,envelope) => {
+      if(url.pathname==='/api/agent/connect/ABCD-EFGH')return envelope({connection:connection({scopes:['notebook:read','notebook:write','notebook:publish']})});
+    }});
+    const text = app.$('#connect-content').querySelector('.agent-scope-list').textContent;
+    assert.match(text,/including private drafts/);
+    assert.match(text,/Create, import and revise/);
+    assert.match(text,/Request publication review/);
+    assert.equal(writes(app).length,0);
+  });
   await test('expiry, denial and a mismatched preview never leave an approval button', async () => {
     for(const value of [connection({expires_at:0}),connection({status:'denied'}),connection({user_code:'WRNG-CODE'})]){
       const app=await createApp({schemes,user,hash:'#connect?code=ABCD-EFGH',responder:(url,options,envelope)=>url.pathname.startsWith('/api/agent/connect/')?envelope({connection:value}):undefined});

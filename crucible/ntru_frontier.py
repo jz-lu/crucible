@@ -17,6 +17,7 @@ import time
 from types import MappingProxyType
 
 from .ntru_reference import encoded_length
+from . import platform_pins
 
 SCHEME_ID, SCHEME_VERSION = "sntrup", "3"
 ROOT = Path(__file__).resolve().parent.parent
@@ -108,17 +109,19 @@ def _verify_artifact_files():
             path = ROOT / name
             if path.stat().st_size > 2 * 1024 * 1024 or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
                 raise NativeImplementationError("NTRU research source differs from its reviewed pin")
-        if WORKER.stat().st_size > 16 * 1024 * 1024 or hashlib.sha256(WORKER.read_bytes()).hexdigest() != WORKER_SHA256:
-            raise NativeImplementationError("NTRU research worker differs from its reviewed pin")
+        return platform_pins.select(SCHEME_ID, SCHEME_VERSION,
+            files={"worker": (WORKER, 16 * 1024 * 1024)}, legacy={"worker": WORKER_SHA256})
+    except platform_pins.Unavailable:
+        raise NativeImplementationError("NTRU research worker differs from its reviewed pin or is unavailable") from None
     except OSError:
         raise NativeImplementationError("NTRU research artifact unavailable; run the explicit pinned builder") from None
 
 
 def artifact_manifest():
-    _verify_artifact_files()
+    binding = _verify_artifact_files()
     result = {"format": "crucible-implementation-artifact-v1", "scheme_id": SCHEME_ID,
         "scheme_version": SCHEME_VERSION, "adapter_source_sha256": IMPLEMENTATION_SHA256,
-        "worker_sha256": WORKER_SHA256, "files": dict(FILE_PINS),
+        "worker_sha256": binding.pins["worker"], "files": dict(FILE_PINS),
         "upstream": {"name": "NTRU Prime reference", "date": "2020-10-07",
             "archive_sha256": "280e5dad090144446a49cc0e283163b8167a7961f5ccb183817501fcc3b695ce"},
         "native_dependencies": [
@@ -127,6 +130,13 @@ def artifact_manifest():
         "build": "Apple clang 14.0.3; C99 -O2; statically linked crypto and randomness; macOS arm64",
         "changes_from_reference": "Runtime public parameters selected only from a certified table; exact uniform samplers replace near-uniform 32-bit mappings; bounded binary pipe wrapper.",
         "security_scope": "No constant-time audit; no confidentiality estimate or independent admission implied."}
+    result.setdefault("files", {}).update(binding.source_files())
+    result["platform_build"] = binding.identity()
+    if binding.additional:
+        result["build"] = binding.build()
+        result["native_dependencies"] = [
+            {"name": name, "static_sha256": digest}
+            for name, digest in sorted(binding.build()["dependencies"].items())]
     result["artifact_sha256"] = hashlib.sha256(json.dumps(result, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     return result
 
@@ -315,7 +325,7 @@ def get_manifest(profile_id):
             "implementation_checks": "tests/test_ntru_frontier.py; one independent honest decapsulation per issued instance."},
         "admission": {"status": "local-beta", "official_ranked": False,
             "reason": "Local research availability is separate from independent manual admission and scoring enrollment."},
-        "implementation": {"source": "crucible/ntru_frontier.py", "source_sha256": IMPLEMENTATION_SHA256,
+        "implementation": {**_verify_artifact_files().implementation_fields(), "source": "crucible/ntru_frontier.py", "source_sha256": IMPLEMENTATION_SHA256,
             "artifact_sha256": verify_artifact()["artifact_sha256"], "version": SCHEME_VERSION,
             "runtime": "Pinned static native process with 15-second wall deadline; reference samplers are not constant-time audited",
             "evidence": "docs/ntru-parameter-frontier.txt"},

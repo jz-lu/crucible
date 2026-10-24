@@ -2,6 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
+    <!-- critical-canvas -->
+    <meta name="theme-color" content="#f6f9fd">
+    <script src="/bootstrap.js" async></script>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Recover a shared key. Share the method and computational cost. Timed challenges and documented progress in open cryptographic research.">
     <meta name="color-scheme" content="light">
@@ -24,7 +27,7 @@
     </a>
     <header class="site-header">
       <div class="header-inner">
-        <a class="brand" href="/" aria-label="Crucible home">
+        <a class="brand" href="#challenge" aria-label="Crucible home">
           <img class="brand-mark" src="/assets/crucible-logo.png" width="38" height="54" alt="">
           <span>
             Crucible
@@ -75,6 +78,7 @@
         <h1 id="access-title">Crucible</h1>
         <p id="access-description" role="status">Checking access…</p>
         <div id="access-auth-actions" class="access-actions" hidden>
+          <button id="access-github" class="button button-primary" type="button" hidden>Continue with GitHub</button>
           <button id="access-sign-in" class="button button-primary" type="button">Sign in</button>
           <button id="access-register" class="button button-quiet" type="button" hidden>Create account</button>
         </div>
@@ -135,6 +139,14 @@
         <a class="text-button scheme-back" href="#people">← Leaderboard</a>
         <div class="catalogue-heading"><h1 id="person-title">Profile</h1><a id="profile-review-link" class="button button-quiet" href="#reviews?section=publication" hidden>Review center →</a></div>
         <div id="person-content" aria-live="polite"></div>
+        <details id="account-sign-in" class="account-sign-in" hidden>
+          <summary>Sign-in settings</summary>
+          <div class="account-sign-in-row">
+            <div><strong>GitHub</strong><p id="account-github-status" class="field-hint"></p></div>
+            <button id="account-link-github" class="button button-quiet" type="button">Link GitHub</button>
+          </div>
+          <p id="account-sign-in-error" class="form-error" role="alert" hidden></p>
+        </details>
         <details id="agent-connections" class="agent-connections" hidden>
           <summary>Connected agents</summary>
           <div class="agent-connections-heading"><p>Manage agents connected to your account.</p><button id="refresh-agent-tokens" class="text-button" type="button">Refresh</button></div>
@@ -754,7 +766,7 @@
         <!-- Collaborators: add mission, team, and contact content here. -->
       </section>
       <footer class="site-footer">
-        <a class="brand footer-brand" href="/" aria-label="Crucible home">
+        <a class="brand footer-brand" href="#challenge" aria-label="Crucible home">
           <img class="brand-mark" src="/assets/crucible-logo.png" width="30" height="42" alt="">
           <span>Crucible</span>
         </a>
@@ -775,41 +787,95 @@
       <p class="dialog-description" id="auth-description">
         Sign in to receive your instance for the current round.
       </p>
-      <div class="auth-switch" role="group" aria-label="Account action">
-        <button id="login-mode" type="button" class="selected" aria-pressed="true">
-          Sign in
-        </button>
-        <button id="register-mode" type="button" aria-pressed="false">
-          Create account
-        </button>
+      <div id="auth-sign-in-methods">
+        <button id="auth-github" class="button button-primary full-width github-sign-in" type="button" hidden>Continue with GitHub</button>
+        <p id="auth-github-error" class="form-error" role="alert" hidden></p>
+        <details id="auth-password-options" class="auth-password-options sole-method" open>
+          <summary>Use a password</summary>
+          <div class="auth-switch" role="group" aria-label="Account action">
+            <button id="login-mode" type="button" class="selected" aria-pressed="true">
+              Sign in
+            </button>
+            <button id="register-mode" type="button" aria-pressed="false">
+              Create account
+            </button>
+          </div>
+          <form id="auth-form">
+            <div class="form-field">
+              <label for="auth-handle">
+                Public handle
+              </label>
+              <input id="auth-handle" name="handle" required autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" title="Use 3–32 letters, numbers, or underscores." autocapitalize="none" spellcheck="false">
+              <p class="field-hint">
+                Use 3–32 letters, numbers, or underscores. Your handle appears beside public recoveries.
+              </p>
+            </div>
+            <div class="form-field">
+              <label for="auth-password">
+                Password
+              </label>
+              <input id="auth-password" name="password" type="password" required autocomplete="current-password" minlength="12" maxlength="128">
+              <p class="field-hint">
+                Use 12–128 characters.
+              </p>
+            </div>
+            <p id="auth-error" class="form-error" role="alert" hidden>
+            </p>
+            <button id="auth-submit" class="button button-primary full-width" type="submit">
+              Sign in
+              <span aria-hidden="true">
+                →
+              </span>
+            </button>
+          </form>
+          <button id="auth-forgot-password" class="text-button auth-forgot-password" type="button" hidden>Forgot your password?</button>
+        </details>
       </div>
-      <form id="auth-form">
+      <form id="github-link-form" hidden>
+        <p id="github-link-context" class="field-hint"></p>
         <div class="form-field">
-          <label for="auth-handle">
-            Public handle
-          </label>
-          <input id="auth-handle" name="handle" required autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" title="Use 3–32 letters, numbers, or underscores." autocapitalize="none" spellcheck="false">
-          <p class="field-hint">
-            Use 3–32 letters, numbers, or underscores. Your handle appears beside public recoveries.
-          </p>
+          <label for="github-link-password">Current password</label>
+          <input id="github-link-password" name="password" type="password" required autocomplete="current-password" minlength="12" maxlength="128">
+        </div>
+        <p id="github-link-error" class="form-error" role="alert" hidden></p>
+        <button id="github-link-submit" class="button button-primary full-width" type="submit">Continue to GitHub</button>
+      </form>
+      <form id="github-handle-form" hidden>
+        <p id="github-handle-context" class="field-hint"></p>
+        <div class="form-field">
+          <label for="github-handle">Public handle</label>
+          <input id="github-handle" name="handle" required autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" title="Use 3–32 letters, numbers, or underscores." autocapitalize="none" spellcheck="false">
+          <p class="field-hint">Your name beside results and research notes. Use 3–32 letters, numbers, or underscores.</p>
+        </div>
+        <p id="github-handle-error" class="form-error" role="alert" hidden></p>
+        <button id="github-handle-submit" class="button button-primary full-width" type="submit">Create account</button>
+        <p class="field-hint">Already have a Crucible account? <button id="github-existing-account" class="text-button" type="button">Sign in with your password</button> and link GitHub from your profile.</p>
+      </form>
+      <form id="password-reset-request-form" hidden>
+        <div class="form-field">
+          <label for="password-reset-handle">Public handle</label>
+          <input id="password-reset-handle" name="handle" required autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" autocapitalize="none" spellcheck="false">
+        </div>
+        <p id="password-reset-request-error" class="form-error" role="alert" hidden></p>
+        <p id="password-reset-request-status" class="field-hint" role="status" hidden></p>
+        <button id="password-reset-request-submit" class="button button-primary full-width" type="submit">Send reset link</button>
+        <p class="field-hint">If you have no verified email address, contact the person who invited you.</p>
+        <button class="text-button auth-back" type="button" id="password-reset-request-back">Back to sign in</button>
+      </form>
+      <form id="password-reset-form" hidden>
+        <div class="form-field">
+          <label for="password-reset-new">New password</label>
+          <input id="password-reset-new" name="password" type="password" required autocomplete="new-password" minlength="12" maxlength="128">
+          <p class="field-hint">Use 12–128 characters.</p>
         </div>
         <div class="form-field">
-          <label for="auth-password">
-            Password
-          </label>
-          <input id="auth-password" name="password" type="password" required autocomplete="current-password" minlength="12" maxlength="128">
-          <p class="field-hint">
-            Use 12–128 characters.
-          </p>
+          <label for="password-reset-confirm">Confirm new password</label>
+          <input id="password-reset-confirm" name="password_confirmation" type="password" required autocomplete="new-password" minlength="12" maxlength="128">
         </div>
-        <p id="auth-error" class="form-error" role="alert" hidden>
-        </p>
-        <button id="auth-submit" class="button button-primary full-width" type="submit">
-          Sign in
-          <span aria-hidden="true">
-            →
-          </span>
-        </button>
+        <p class="field-hint">Resetting your password signs out your browsers and connected agents.</p>
+        <p id="password-reset-error" class="form-error" role="alert" hidden></p>
+        <button id="password-reset-submit" class="button button-primary full-width" type="submit">Reset password</button>
+        <button class="text-button auth-back" type="button" id="password-reset-back">Back to sign in</button>
       </form>
     </dialog>
     <dialog id="submission-dialog" class="wide-dialog" aria-labelledby="submission-title">

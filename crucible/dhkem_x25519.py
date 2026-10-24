@@ -17,6 +17,8 @@ import platform
 import secrets
 from typing import Any
 
+from . import platform_pins
+
 SCHEME_ID = "dhkem-x25519"
 SCHEME_VERSION = "1"
 PROFILE_ID = "dhkem-x25519-v1-rfc9180"
@@ -46,6 +48,24 @@ def _profile(profile_id):
         raise ValueError("Unknown DHKEM parameter profile")
 
 
+def _platform_binding(native_path=None, source_path=None):
+    if native_path is None:
+        try:
+            distribution = metadata.distribution("cryptography")
+        except metadata.PackageNotFoundError:
+            raise GenerationUnavailable("DHKEM requires the pinned cryptography release") from None
+        if distribution.version != CRYPTOGRAPHY_VERSION:
+            raise GenerationUnavailable("DHKEM requires the pinned cryptography release")
+        native_path = Path(distribution.locate_file("cryptography/hazmat/bindings/_rust.abi3.so"))
+        source_path = Path(distribution.locate_file("cryptography/hazmat/primitives/asymmetric/x25519.py"))
+    try:
+        return platform_pins.select(SCHEME_ID, SCHEME_VERSION,
+            files={"native": (native_path, 32 * 1024 * 1024), "x25519_source": (source_path, 65536)},
+            legacy={"native": CRYPTOGRAPHY_NATIVE_SHA256, "x25519_source": CRYPTOGRAPHY_X25519_SHA256})
+    except platform_pins.Unavailable:
+        raise GenerationUnavailable("DHKEM dependency artifact differs from the reviewed platform pin") from None
+
+
 def _backend():
     try:
         distribution = metadata.distribution("cryptography")
@@ -55,13 +75,7 @@ def _backend():
         raise GenerationUnavailable("DHKEM requires the pinned cryptography release")
     native_path = Path(distribution.locate_file("cryptography/hazmat/bindings/_rust.abi3.so"))
     source_path = Path(distribution.locate_file("cryptography/hazmat/primitives/asymmetric/x25519.py"))
-    try:
-        if (native_path.stat().st_size > 32 * 1024 * 1024 or source_path.stat().st_size > 65536
-                or hashlib.sha256(native_path.read_bytes()).hexdigest() != CRYPTOGRAPHY_NATIVE_SHA256
-                or hashlib.sha256(source_path.read_bytes()).hexdigest() != CRYPTOGRAPHY_X25519_SHA256):
-            raise GenerationUnavailable("DHKEM dependency artifact differs from the reviewed pin")
-    except OSError:
-        raise GenerationUnavailable("DHKEM dependency artifact is unavailable") from None
+    _platform_binding(native_path, source_path)
     # Verify the extension before the first native import, not just after load.
     from cryptography.hazmat.primitives.asymmetric import x25519
     from cryptography.hazmat.bindings import _rust
@@ -72,14 +86,19 @@ def _backend():
 
 def artifact_manifest():
     _backend()
+    binding = _platform_binding()
     from cryptography.hazmat.backends.openssl.backend import backend
     result = {"format": "crucible-implementation-artifact-v1", "scheme_id": SCHEME_ID,
               "scheme_version": SCHEME_VERSION, "adapter_source_sha256": IMPLEMENTATION_SHA256,
               "specification": "RFC 9180, KEM 0x0020, February 2022",
               "python_runtime": platform.python_version(),
               "dependencies": [{"name": "cryptography", "version": CRYPTOGRAPHY_VERSION,
-                  "native_sha256": CRYPTOGRAPHY_NATIVE_SHA256, "x25519_source_sha256": CRYPTOGRAPHY_X25519_SHA256,
+                  "native_sha256": binding.pins["native"], "x25519_source_sha256": binding.pins["x25519_source"],
                   "openssl": backend.openssl_version_text()}]}
+    result.setdefault("files", {}).update(binding.source_files())
+    result["platform_build"] = binding.identity()
+    if binding.additional:
+        result["reviewed_build"] = binding.build()
     result["artifact_sha256"] = hashlib.sha256(json.dumps(result, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     return result
 
@@ -236,7 +255,7 @@ def get_manifest(profile_id):
                 "implementation_checks": "tests/test_dhkem_x25519.py: all pinned unauthenticated RFC vectors, malformed/low-order inputs, freshness and target preservation."},
             "admission": {"status": "local-beta", "official_ranked": False,
                 "reason": "Published profile with bounded conformance evidence; operator activation is separate from manual scientific admission."},
-            "implementation": {"source": "crucible/dhkem_x25519.py", "source_sha256": IMPLEMENTATION_SHA256,
+            "implementation": {**_platform_binding().implementation_fields(), "source": "crucible/dhkem_x25519.py", "source_sha256": IMPLEMENTATION_SHA256,
                 "artifact_sha256": artifact_manifest()["artifact_sha256"],
                 "version": SCHEME_VERSION, "runtime": f"cryptography=={CRYPTOGRAPHY_VERSION} X25519; Python SHA-256/HMAC labeled HKDF",
                 "evidence": "docs/implementation-dhkem-sntrup.txt"},

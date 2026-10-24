@@ -12,7 +12,6 @@ class DeliveryUnavailable(RuntimeError):
 
 
 def send_verification(settings, recipient, code):
-    backend = getattr(settings, "mail_backend", "disabled")
     message = EmailMessage()
     message["From"] = settings.mail_from
     message["To"] = recipient
@@ -23,6 +22,26 @@ def send_verification(settings, recipient, code):
         "Enter it only in the Crucible page where you requested it. "
         "If you did not request this code, ignore this message.\n"
     )
+    _deliver(settings, message)
+
+
+def send_password_reset(settings, recipient, url):
+    message = EmailMessage()
+    message["From"] = settings.mail_from
+    message["To"] = recipient
+    message["Subject"] = "Reset your Crucible password"
+    message.set_content(
+        "Use this link to reset your Crucible password:\n\n" + url + "\n\n"
+        "This link expires in 30 minutes and works once. Resetting your password "
+        "signs out your browsers and connected agents. Your contributions and "
+        "linked sign-in accounts are preserved.\n\n"
+        "If you did not request a reset, ignore this message. Your password has not changed.\n"
+    )
+    _deliver(settings, message)
+
+
+def _deliver(settings, message):
+    backend = getattr(settings, "mail_backend", "disabled")
     try:
         if backend == "local" and not settings.production:
             directory = Path(settings.mail_outbox_dir).expanduser()

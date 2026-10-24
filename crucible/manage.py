@@ -81,6 +81,8 @@ def configure_reviewer(settings, handle, *, grant):
 def cleanup_expired(database, now=None):
     """Remove transient expired state while retaining accounts and credentials."""
     from .machine_auth import DeviceConnection, EXCHANGE_SECONDS
+    from .github_auth import GitHubFlow
+    from .password_recovery import PasswordReset
     now = time.time() if now is None else now
     device_deadline = case((DeviceConnection.approved_at.is_(None), DeviceConnection.expires_at),
                            else_=DeviceConnection.approved_at + EXCHANGE_SECONDS)
@@ -88,6 +90,8 @@ def cleanup_expired(database, now=None):
         session.execute(delete(LoginSession).where(LoginSession.expires_at <= now))
         session.execute(delete(RateBucket).where(RateBucket.expires_at <= now))
         session.execute(delete(DeviceConnection).where(device_deadline <= now))
+        session.execute(delete(GitHubFlow).where(GitHubFlow.expires_at <= now))
+        session.execute(delete(PasswordReset).where(PasswordReset.expires_at <= now))
 
 
 def main():

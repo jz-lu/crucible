@@ -18,6 +18,8 @@ import subprocess
 import time
 from typing import Any
 
+from . import platform_pins
+
 SCHEME_ID = "sntrup"
 SCHEME_VERSION = "1"
 PROFILE_ID = "sntrup-v1-761"
@@ -67,24 +69,24 @@ def _bytes(value, size, label):
 
 def _verify_artifact():
     try:
-        # Read the bounded trusted artifact afresh, not a mutable manifest or a
-        # version string. There is no environment-controlled worker override.
-        if WORKER.stat().st_size > 16 * 1024 * 1024 or WORKER_SOURCE.stat().st_size > 65536:
-            raise NativeImplementationError("Streamlined NTRU Prime artifact size mismatch")
-        if (hashlib.sha256(WORKER.read_bytes()).hexdigest() != WORKER_SHA256
+        # Legacy macOS pins stay authoritative on that platform. Additional
+        # platforms require a separate code-pinned manifest and DB admission.
+        if (WORKER_SOURCE.stat().st_size > 65536
                 or hashlib.sha256(WORKER_SOURCE.read_bytes()).hexdigest() != WORKER_SOURCE_SHA256):
-            raise NativeImplementationError("Streamlined NTRU Prime artifact differs from its reviewed pin")
-    except OSError:
-        raise NativeImplementationError("Streamlined NTRU Prime worker is unavailable; build the pinned artifact") from None
+            raise NativeImplementationError("Streamlined NTRU Prime source differs from its reviewed pin")
+        return platform_pins.select(SCHEME_ID, SCHEME_VERSION,
+            files={"worker": (WORKER, 16 * 1024 * 1024)}, legacy={"worker": WORKER_SHA256})
+    except (OSError, platform_pins.Unavailable):
+        raise NativeImplementationError("Streamlined NTRU Prime artifact differs from its reviewed pin or is unavailable") from None
 
 
 def artifact_manifest():
-    _verify_artifact()
+    binding = _verify_artifact()
     result = {"format": "crucible-implementation-artifact-v1", "scheme_id": SCHEME_ID,
               "scheme_version": SCHEME_VERSION, "adapter_source_sha256": IMPLEMENTATION_SHA256,
               "specification": "NTRU Prime 2020-10-07; sntrup761",
               "python_runtime": platform.python_version(),
-              "worker_sha256": WORKER_SHA256, "worker_source_sha256": WORKER_SOURCE_SHA256,
+              "worker_sha256": binding.pins["worker"], "worker_source_sha256": WORKER_SOURCE_SHA256,
               "dependencies": [
                   {"name": "libntruprime", "version": LIBRARY_VERSION, "archive_sha256": LIBRARY_ARCHIVE_SHA256},
                   {"name": "librandombytes", "version": "20240318", "archive_sha256": RANDOMBYTES_ARCHIVE_SHA256,
@@ -96,6 +98,10 @@ def artifact_manifest():
                         "worker_flags": ["-O2", "-std=c99", "-Wall", "-Wextra"],
                         "external_runtime": ["system libc/libSystem"],
                         "constant_time_tests": "Valgrind/TIMECOP unavailable on this host; not attested"}}
+    result.setdefault("files", {}).update(binding.source_files())
+    result["platform_build"] = binding.identity()
+    if binding.additional:
+        result["build"] = binding.build()
     result["artifact_sha256"] = hashlib.sha256(json.dumps(result, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     return result
 
@@ -269,10 +275,10 @@ def get_manifest(profile_id):
                 "implementation_checks": "tests/test_sntrup.py and docs/implementation-dhkem-sntrup.txt; each issued instance receives one honest agreement self-check."},
             "admission": {"status": "local-beta", "official_ranked": False,
                 "reason": "Published profile with bounded conformance evidence; operator activation is separate from manual scientific admission."},
-            "implementation": {"source": "crucible/sntrup.py", "source_sha256": IMPLEMENTATION_SHA256,
+            "implementation": {**_verify_artifact().implementation_fields(), "source": "crucible/sntrup.py", "source_sha256": IMPLEMENTATION_SHA256,
                 "artifact_sha256": artifact_manifest()["artifact_sha256"],
                 "version": SCHEME_VERSION, "runtime": "Pinned libntruprime20260717 static native worker; 15-second hard process deadline",
-                "worker_source": "scripts/native/sntrup_worker.c", "worker_sha256": WORKER_SHA256,
+                "worker_source": "scripts/native/sntrup_worker.c", "worker_sha256": _verify_artifact().pins["worker"],
                 "evidence": "docs/implementation-dhkem-sntrup.txt"},
             "references": [{"title": "NTRU Prime specification 2020-10-07", "url": "https://ntruprime.cr.yp.to/nist/ntruprime-20201007.pdf"},
                 {"title": "libntruprime release 20260717", "url": "https://libntruprime.cr.yp.to/download.html"}]}

@@ -21,8 +21,20 @@ Each author alone can edit their notes. Other participants can read only revisio
 published to the Crucible community, or submitted to them for review. A reviewer's
 role alone does not grant access to an author's private workspace.
 Database backups include notes, revisions, sharing grants, publication decisions,
-moderator withdrawals and imports.
+moderator withdrawals, imports and private-draft deletion records.
 Durability does not substitute for operator backups or redundant hosting.
+
+An author can delete an unsubmitted private draft from its full reader or with
+CLI notebook delete, pinning its latest revision/hash. This moves the entire
+note to Trash without erasing its history. Normal lists, search, timeline, graph
+and exports exclude it. Only its author can inspect or restore it through Show →
+Trash, CLI list/show --deleted and restore, or the corresponding scoped API.
+Restore binds a deletion ID; exact retries never reverse a later lifecycle action.
+Notes ever submitted for publication, scheme admission or as research-request
+evidence cannot be deleted, including their newer private revisions. Existing
+moderator withdrawal and proposal retraction are separate operations. Import
+archives remain available to their author; importing old content cannot restore
+a deleted note. Trash still counts toward note and revision-storage quotas.
 
 Publishing is separate from saving. The author uses Publish to make a Publish
 request for an exact latest revision. A configured reviewer
@@ -127,11 +139,15 @@ Legacy view bindings are remapped to durable IDs in a new workspace export; thei
 simulated assessment labels have no review authority. Export includes the owner's
 notes only, never other participants' notes or their private revisions.
 
-Agent file exchange remains available through export, a starting prompt and import.
-Notebook bearer-token access has not been enabled. Existing challenge/proposal
-agent credentials cannot directly read, write or review notebook records, including when a
-request also carries browser cookies. Notebook mutations require the browser
-account, same-origin request and CSRF token.
+The CLI is the primary agent interface; browser file exchange also remains
+available. Explicit opt-in notebook:read, notebook:write and notebook:publish
+scopes cover owned private reads, writes/imports and exact publication requests.
+Run login --notebook --no-browser for a one-time human connection approval, then
+notebook list/show/export/import/create/revise/request-publication. Existing
+credentials keep their original scopes. Bearer requests never borrow browser
+cookie authority and cannot review, moderate or read others' private notes.
+Human notebook mutations still require same-origin session/CSRF authorization.
+Both paths use the same validators, quotas, immutable history and request pins.
 
 INITIAL CAPACITY
 At most 200 notes per account and 100 revisions per note. The complete exportable

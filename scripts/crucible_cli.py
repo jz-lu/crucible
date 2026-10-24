@@ -35,6 +35,14 @@ MAX_PROPOSAL_GUIDE = 64 * 1024
 PROPOSAL_GUIDE = "/api/protocol/proposal-guide"
 MAX_AGENT_PIPELINE = 64 * 1024
 MAX_NOTE_LIST_RESPONSE = 8 * 1024 * 1024
+MAX_NOTEBOOK_RESPONSE = 8 * 1024 * 1024
+MAX_NOTE_WORKSPACE = 2 * 1024 * 1024
+MAX_NOTE_CONTENT = 384 * 1024
+NOTEBOOK = "/api/notebook"
+DEFAULT_SCOPES = ("challenges:read", "challenges:write", "methods:read", "methods:write",
+                  "submissions:read", "submissions:write", "proposals:read", "proposals:write",
+                  "notes:read", "notes:rate")
+NOTEBOOK_SCOPES = ("notebook:read", "notebook:write", "notebook:publish")
 AGENT_PIPELINE = "/api/agent/pipeline"
 AGENT_GUIDANCE = "/api/agent/guidance/"
 PROPOSALS = "/api/protocol/proposals"
@@ -206,6 +214,8 @@ class Client:
             response_limit = MAX_CATALOGUE_RESPONSE
         elif parts.path == "/api/agent/notes":
             response_limit = MAX_NOTE_LIST_RESPONSE
+        elif parts.path.startswith(NOTEBOOK + "/"):
+            response_limit = MAX_NOTEBOOK_RESPONSE
         elif parts.path == PROPOSAL_GUIDE:
             response_limit = MAX_PROPOSAL_GUIDE
         elif parts.path == AGENT_PIPELINE or parts.path.startswith(AGENT_GUIDANCE):
@@ -246,6 +256,14 @@ class Client:
                                  404: "That exact published note revision is unavailable.",
                                  409: "Your account's rating changed. Use notes show to read the current version and reassess before changing it.",
                                  422: "Check the note ID, exact revision/hash, rating value and expected version."})
+            if parts.path.startswith(NOTEBOOK + "/"):
+                messages.update({403: "Notebook access needs explicit notebook permissions. Run login --notebook --no-browser and ask the participant to approve the connection once.",
+                                 409: "The saved note, revision or retry conflicts with recorded state. Preserve the retry file; use notebook show to inspect the current revision before preparing a new request.",
+                                 410: "This note is in Trash or its revision was withdrawn. Use notebook list --deleted for your deleted drafts.",
+                                 413: "The note or notebook exceeds the server's bounded workspace size.",
+                                 422: "Check the note-format contract, required content fields and exact revision/hash."})
+                if parts.path.endswith("/delete"):
+                    messages[409] = "Deletion requires the exact latest revision of an unsubmitted private draft. Submitted evidence is retained; an existing deletion requires its original retry file."
             # Never echo a request body, candidate, token, or arbitrary server error text.
             raise ClientError(messages.get(error.code, "The server could not complete the request."),
                               "http_" + str(error.code), details) from None
@@ -265,7 +283,15 @@ class Client:
 
 
 def login(client, args):
-    start = client.request("/api/agent/connect/start", {"label": args.label}, auth=False)
+    requested = list(DEFAULT_SCOPES + NOTEBOOK_SCOPES) if args.notebook else None
+    if args.scope:
+        if args.notebook:
+            raise ClientError("Use either --notebook or explicit --scope values.")
+        requested = list(dict.fromkeys(args.scope))
+    body = {"label": args.label, **({"scopes": requested} if requested is not None else {})}
+    start = client.request("/api/agent/connect/start", body, auth=False)
+    if requested is not None and start.get("scopes") != requested:
+        raise ClientError("The server did not offer the exact requested permissions. No connection was saved.")
     uri = start.get("verification_uri", "")
     parts = urlsplit(uri)
     if origin(parts.scheme + "://" + parts.netloc) != client.server:
@@ -299,6 +325,8 @@ def login(client, args):
             continue
         if status != "authorized":
             raise ClientError("Connection request was denied or expired. Run login to start again.", "authorization_failed")
+        if requested is not None and result.get("scopes") != requested:
+            raise ClientError("The granted permissions differ from the request. No connection was saved.")
         token = result.get("access_token")
         if not isinstance(token, str) or not re.fullmatch(r"cru_[A-Za-z0-9_-]{43}", token):
             raise ClientError("The server returned an invalid access token.")
@@ -309,11 +337,17 @@ def login(client, args):
         handle = result.get("user", {}).get("handle")
         if not isinstance(handle, str) or not re.fullmatch(r"[a-z0-9_]{3,32}", handle):
             raise ClientError("The server returned an invalid account identity.")
-        config["servers"][client.server] = {"access_token": token, "expires_at": expiry, "handle": handle}
+        scopes = result.get("scopes")
+        if scopes is not None and (not isinstance(scopes, list) or any(
+                value not in DEFAULT_SCOPES + NOTEBOOK_SCOPES for value in scopes)):
+            raise ClientError("The server returned unsupported permissions. No connection was saved.")
+        config["servers"][client.server] = {"access_token": token, "expires_at": expiry, "handle": handle,
+                                           **({"scopes": scopes} if scopes is not None else {})}
         config["default_server"] = client.server
         save_json(client.config_path, config)
         return {"status": "connected", "server": client.server,
-                "handle": result.get("user", {}).get("handle"), "expires_at": expiry}
+                "handle": result.get("user", {}).get("handle"), "expires_at": expiry,
+                **({"scopes": scopes} if scopes is not None else {})}
     raise ClientError("Connection request expired. Run login to start again.", "authorization_expired")
 
 
@@ -1098,6 +1132,174 @@ def notes_command(client, args):
     return result
 
 
+def notebook_id(value):
+    try:
+        if str(UUID(value)) != value:
+            raise ValueError
+    except (ValueError, TypeError, AttributeError):
+        raise ClientError("Use the full saved notebook UUID.") from None
+    return value
+
+
+def notebook_pin(revision, digest):
+    if type(revision) is not int or not 1 <= revision <= 100:
+        raise ClientError("Use an exact note revision between 1 and 100.")
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise ClientError("Use the exact saved note content hash.")
+
+
+def checked_notebook_note(result, *, identifier=None, revision=None, digest=None, owner=None):
+    note = result.get("note")
+    if not isinstance(note, dict):
+        raise ClientError("The server returned an invalid notebook record.")
+    notebook_id(note.get("id"))
+    notebook_pin(note.get("revision"), note.get("content_sha256"))
+    if ((identifier is not None and note["id"] != identifier)
+            or (revision is not None and note["revision"] != revision)
+            or (digest is not None and note["content_sha256"] != digest)
+            or (owner is not None and note.get("owner", {}).get("handle") != owner)):
+        raise ClientError("The returned note does not match the requested identity, owner or revision.")
+    history = note.get("revisions")
+    if not isinstance(history, list) or not 1 <= len(history) <= 100:
+        raise ClientError("The server returned invalid note history.")
+    selected = False
+    seen = set()
+    for item in history:
+        if not isinstance(item, dict):
+            raise ClientError("The server returned invalid note history.")
+        notebook_pin(item.get("revision"), item.get("content_sha256"))
+        if (not isinstance(item.get("content"), dict) or item["revision"] in seen
+                or hashlib.sha256(encode(item["content"])).hexdigest() != item["content_sha256"]):
+            raise ClientError("The saved note content does not match its recorded hash.")
+        seen.add(item["revision"])
+        if item["revision"] == note["revision"]:
+            selected = item["content_sha256"] == note["content_sha256"]
+    if not selected:
+        raise ClientError("The selected revision is absent from the returned note history.")
+    return note
+
+
+def notebook_retry(client, args, endpoint, body, owner):
+    """Freeze the account, destination, content and key before the first write."""
+    identity = {"server": client.server, "owner_handle": owner, "endpoint": endpoint, "body": body}
+    if args.retry:
+        path = Path(args.retry).expanduser()
+    elif getattr(args, "file", None):
+        source = Path(args.file).expanduser()
+        path = source.with_name(source.name + "." + args.notebook_action + "-retry.json")
+    else:
+        digest = hashlib.sha256(encode(identity)).hexdigest()
+        path = client.config_path.parent / "notebook-retries" / (digest + ".json")
+    if path.absolute() == client.config_path.absolute() or (
+            getattr(args, "file", None) and path.absolute() == Path(args.file).expanduser().absolute()):
+        raise ClientError("The retry file must be separate from the input and credential files.")
+    if path.exists():
+        pending = load_json(path, MAX_NOTEBOOK_RESPONSE)
+        if pending.get("format") != "crucible-notebook-retry-v1" or pending.get("request") != identity:
+            raise ClientError("This notebook retry file belongs to a different request, server or account. Preserve it; restore the original inputs to retry, or choose a new --retry file for a new operation.", "notebook_retry_changed")
+        notebook_id(pending.get("idempotency_key"))
+    else:
+        pending = {"format": "crucible-notebook-retry-v1", "request": identity,
+                   "idempotency_key": str(uuid4())}
+        save_json(path, pending)
+    return path, pending, {**body, "idempotency_key": pending["idempotency_key"]}
+
+
+def notebook_command(client, args):
+    action = args.notebook_action
+    credential = configuration(client.config_path)["servers"].get(client.server, {})
+    owner = credential.get("handle")
+    if not isinstance(owner, str) or not re.fullmatch(r"[a-z0-9_]{3,32}", owner):
+        raise ClientError("Connect with login --notebook --no-browser to bind notebook work to your account.", "login_required")
+    client.expected_handle = owner
+    identifier = notebook_id(args.note_id) if getattr(args, "note_id", None) else None
+    endpoint = NOTEBOOK + "/notes" + ("/" + identifier if identifier else "")
+    if action == "list":
+        query = {"scope": "trash" if args.deleted else "mine", "limit": args.limit}
+        for key, value in (("q", args.search), ("tag", args.tag), ("after", args.after)):
+            if value is not None:
+                query[key] = value
+        return client.request(endpoint + "?" + urlencode(query))
+    if action == "show":
+        query = {"include_deleted": "true"} if args.deleted else {}
+        if args.revision is not None:
+            if not 1 <= args.revision <= 100:
+                raise ClientError("--revision must be between 1 and 100.")
+            query["revision"] = args.revision
+        if args.sha256 is not None:
+            if args.revision is None:
+                raise ClientError("--sha256 requires an exact --revision.")
+            notebook_pin(args.revision, args.sha256)
+        result = client.request(endpoint + ("?" + urlencode(query) if query else ""))
+        checked_notebook_note(result, identifier=identifier, revision=args.revision, digest=args.sha256, owner=owner)
+        if args.out:
+            save_json(args.out, result)
+            return {"status": "saved", "path": str(Path(args.out).expanduser())}
+        return result
+    if action == "export":
+        result = client.request(NOTEBOOK + "/export" + ("?" + urlencode({"note_id": identifier}) if identifier else ""))
+        if result.get("format") != "crucible-theory-local-v1" or not isinstance(result.get("notes"), list):
+            raise ClientError("The server returned an invalid notebook workspace.")
+        save_json(args.out, result)
+        return {"status": "exported", "notes": len(result["notes"]), "path": str(Path(args.out).expanduser())}
+    if action == "import":
+        value = load_json(args.file, MAX_NOTE_WORKSPACE)
+        if (value.get("format") != "crucible-theory-local-v1" or not isinstance(value.get("notes"), list)
+                or not isinstance(value.get("views"), list)):
+            raise ClientError("Use a crucible-theory-local-v1 workspace with notes and views.")
+        endpoint, body = NOTEBOOK + "/import", {"workspace": value}
+    elif action in {"create", "revise"}:
+        content = load_json(args.file, MAX_NOTE_CONTENT)
+        content.setdefault("tags", [])
+        body = {"content": content}
+        if action == "revise":
+            notebook_pin(args.revision, args.sha256)
+            endpoint += "/revisions"
+            body.update(expected_revision=args.revision, content_sha256=args.sha256)
+    elif action == "restore":
+        endpoint += "/restore"
+        body = {"deletion_id": notebook_id(args.deletion_id)}
+    else:
+        notebook_pin(args.revision, args.sha256)
+        endpoint += "/delete" if action == "delete" else "/publication-requests"
+        body = {"revision": args.revision, "content_sha256": args.sha256}
+    retry_path, pending, payload = notebook_retry(client, args, endpoint, body, owner)
+    response = client.request(endpoint, payload)
+    if action in {"delete", "restore"}:
+        deletion = response.get("deletion")
+        if not isinstance(deletion, dict) or deletion.get("note_id") != identifier or type(response.get("deleted")) is not bool:
+            raise ClientError("The deletion receipt does not match the requested note. Preserve the retry file.")
+        notebook_id(deletion.get("id"))
+        notebook_pin(deletion.get("revision"), deletion.get("content_sha256"))
+        if ((action == "delete" and (deletion["revision"], deletion["content_sha256"]) != (args.revision, args.sha256))
+                or (action == "restore" and deletion["id"] != args.deletion_id)):
+            raise ClientError("The deletion receipt has a different revision or deletion ID. Preserve the retry file.")
+        receipt = {**deletion, "deletion_id": deletion["id"], "deleted": response["deleted"]}
+    elif action == "import":
+        mapping = response.get("id_map")
+        expected = {note["id"] for note in value["notes"]}
+        if not isinstance(mapping, dict) or set(mapping) != expected:
+            raise ClientError("The import receipt does not match the input note identities. Preserve the retry file.")
+        for target in mapping.values():
+            notebook_id(target)
+        notebook_id(response.get("import_id"))
+        if any(type(response.get(key)) is not int or response[key] < 0 for key in ("added_notes", "added_revisions")):
+            raise ClientError("The server returned an invalid import receipt. Preserve the retry file.")
+        receipt = response
+    else:
+        expected_revision = 1 if action == "create" else args.revision + 1 if action == "revise" else args.revision
+        expected_hash = hashlib.sha256(encode(content)).hexdigest() if action in {"create", "revise"} else args.sha256
+        note = checked_notebook_note(response, identifier=identifier, revision=expected_revision, digest=expected_hash, owner=owner)
+        if action == "request-publication" and note.get("publication_status") not in {"submitted", "approved", "changes_requested", "withdrawn"}:
+            raise ClientError("The server did not return a recorded publication request. Preserve the retry file.")
+        receipt = {key: note[key] for key in ("id", "revision", "content_sha256", "publication_status")}
+        receipt["note_url"] = client.server + "/#notebook?" + urlencode({
+            "note": note["id"], "revision": note["revision"], "sha256": note["content_sha256"]})
+    pending["receipt"] = receipt
+    save_json(retry_path, pending)
+    return {"status": "recorded", "action": action, "receipt": receipt, "retry_file": str(retry_path)}
+
+
 def parser():
     command = argparse.ArgumentParser(description=__doc__)
     def common(target, suppress=False):
@@ -1113,6 +1315,9 @@ def parser():
         if name == "login":
             item.add_argument("--label", default="Crucible CLI")
             item.add_argument("--no-browser", action="store_true")
+            item.add_argument("--notebook", action="store_true", help="Also request access to your own drafts, note writes and publication requests")
+            item.add_argument("--scope", action="append", choices=DEFAULT_SCOPES + NOTEBOOK_SCOPES,
+                              help="Request only these permissions; repeat for each scope")
         if name == "guide":
             item.add_argument("--resource", help="Read a guidance file named in the model pipeline contract")
         if name in {"init", "get", "run", "submit"}:
@@ -1166,6 +1371,34 @@ def parser():
         if name == "rate":
             item.add_argument("value", type=int, choices=(0, 1, 2), help="1: genuinely useful; 2: every research agent should read; 0: remove your vote")
             item.add_argument("--expected-version", type=int, required=True, help="your_rating.version from notes show; retain for an identical retry")
+    notebook = commands.add_parser("notebook", help="Read, save and submit your own research notes through the API")
+    common(notebook, True)
+    actions = notebook.add_subparsers(dest="notebook_action", required=True)
+    for name in ("list", "show", "export", "import", "create", "revise", "request-publication", "delete", "restore"):
+        item = actions.add_parser(name)
+        common(item, True)
+        if name in {"show", "revise", "request-publication", "delete", "restore"}:
+            item.add_argument("note_id", help="Full saved note UUID")
+        if name in {"show", "revise", "request-publication", "delete"}:
+            item.add_argument("--revision", type=int, required=name != "show")
+            item.add_argument("--sha256", required=name != "show")
+        if name in {"show", "export"}:
+            item.add_argument("--out", required=name == "export", help="Private JSON output file")
+        if name == "export":
+            item.add_argument("--note-id", help="Export one owned note instead of the whole notebook")
+        if name in {"list", "show"}:
+            item.add_argument("--deleted", action="store_true", help="Read your recoverable private drafts in Trash")
+        if name == "restore":
+            item.add_argument("--deletion-id", required=True, help="Exact deletion UUID from the delete receipt or notebook list --deleted")
+        if name == "list":
+            item.add_argument("--limit", type=int, choices=range(1, 101), default=50, metavar="1..100")
+            item.add_argument("--search")
+            item.add_argument("--tag")
+            item.add_argument("--after")
+        if name in {"import", "create", "revise"}:
+            item.add_argument("--file", required=True, help="Workspace JSON for import, or note content JSON for create/revise")
+        if name in {"import", "create", "revise", "request-publication", "delete", "restore"}:
+            item.add_argument("--retry", help="Durable retry file; reuse unchanged after a lost response")
     return command
 
 
@@ -1190,6 +1423,7 @@ def main(argv=None):
         elif args.action == "guide": result = agent_guidance(client, args.resource) if args.resource else agent_pipeline(client)
         elif args.action == "schemes": result = public_reference(client, "/api/schemes")
         elif args.action == "notes": result = notes_command(client, args)
+        elif args.action == "notebook": result = notebook_command(client, args)
         elif args.action == "init": result = init_workspace(client, args)
         elif args.action == "get": result = workspace(client, download_challenge(client, args.challenge_id), args.path)
         elif args.action == "run": result = run_solver(args)

@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import signal
 import subprocess
 import sys
 import tarfile
@@ -47,9 +48,46 @@ def archive(cache, item, download):
     return path
 
 
-def run(args, cwd, env, log):
+def build_timeout_seconds(value):
+    try:
+        seconds = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("Build timeout must be a whole number from 60 to 3600 seconds") from error
+    if not 60 <= seconds <= 3600:
+        raise argparse.ArgumentTypeError("Build timeout must be a whole number from 60 to 3600 seconds")
+    return seconds
+
+
+def stop_build_group(process):
+    # Killing make alone can leave its compiler children running. The dedicated
+    # session owns the build descendants; also kill the group if its leader
+    # exits on TERM while a child ignores that signal.
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        process.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    process.wait(timeout=5)
+
+
+def run(args, cwd, env, log, *, timeout_seconds=900):
     # Build-time subprocesses have bounded completion; no server/user payloads.
-    subprocess.run(args, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=900)
+    process = subprocess.Popen(args, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT,
+                               start_new_session=True)
+    try:
+        status = process.wait(timeout=timeout_seconds)
+        if status:
+            raise subprocess.CalledProcessError(status, args)
+    except BaseException:
+        stop_build_group(process)
+        raise
 
 
 def main():
@@ -59,6 +97,8 @@ def main():
     parser.add_argument("--reference", action="store_true", help="Also build the old reference for differential tests")
     parser.add_argument("--openssl-prefix", type=Path, default=Path("/opt/homebrew/opt/openssl@3"))
     parser.add_argument("--jobs", type=int, choices=range(1, 9), default=4)
+    parser.add_argument("--build-timeout-seconds", type=build_timeout_seconds, default=900,
+                        help="Per make install limit, 60..3600 seconds (default: 900); other deadlines are unchanged")
     args = parser.parse_args()
     prefix = ROOT / ".native/sntrup"
     source = prefix / "source"
@@ -85,7 +125,8 @@ def main():
                     options.append("--no-valgrind")
             print("Building", name, flush=True)
             run([sys.executable, "configure", *options], source / name, env, log)
-            run(["make", f"-j{args.jobs}", "install"], source / name, env, log)
+            run(["make", f"-j{args.jobs}", "install"], source / name, env, log,
+                timeout_seconds=args.build_timeout_seconds)
         worker = prefix / "crucible-sntrup-worker"
         run(["cc", "-O2", "-std=c99", "-Wall", "-Wextra", "-I", str(prefix / "include"),
              "scripts/native/sntrup_worker.c", str(prefix / "lib/libntruprime.a"),
@@ -101,6 +142,7 @@ def main():
     record = {"format": "crucible-native-build-v1", "platform": platform.system() + " " + platform.machine(),
               "sources": [{"name": n, "url": u, "sha256": d} for n, u, d in items],
               "build_script_sha256": digest(Path(__file__)),
+              "make_install_timeout_seconds": args.build_timeout_seconds,
               "worker_source_sha256": digest(ROOT / "scripts/native/sntrup_worker.c"),
               "worker_sha256": digest(worker),
               "static_library_sha256": digest(prefix / "lib/libntruprime.a"),

@@ -82,9 +82,10 @@ def test_each_existing_single_scope_can_read_orientation_only(private_app, scope
     with TestClient(private_app) as client:
         for path in READ_PATHS:
             assert_document(client.get(path, headers=headers), path)
-        # Reading orientation never grants browser-only notebook capabilities.
+        # Only the explicit own-notebook read permission can read these routes.
         for path in ("/api/notebook/notes", "/api/notebook/export", "/map/notes.json"):
-            assert client.get(path, headers=headers).status_code == 403
+            expected = 200 if scope == "notebook:read" and path != "/map/notes.json" else 403
+            assert client.get(path, headers=headers).status_code == expected
         assert not client.cookies
 
 
@@ -255,7 +256,7 @@ def test_retraction_guidance_separates_research_advice_from_author_authority():
     assert len(json.dumps(pipeline).encode()) < 65536
 
 
-def test_agent_contract_tracks_publication_and_retired_sharing_without_new_bearer_scope():
+def test_agent_contract_tracks_opt_in_notebook_and_human_publication_review():
     pipeline = json.loads((ROOT / "web/agent/pipeline.json").read_text())
     catalogue = json.loads((ROOT / "web/notebook/request-types.json").read_text())
     assert "technical_review" not in {row["id"] for row in catalogue["actions"]}
@@ -264,8 +265,12 @@ def test_agent_contract_tracks_publication_and_retired_sharing_without_new_beare
     assert "private-note-sharing" not in capabilities
     publication = capabilities["note-publication"]
     assert "publication-requests" in publication["interface"]
-    assert "Browser-only, author-only" in publication["scope"]
-    assert "No participant bearer capability is added" in publication["scope"]
+    assert "Author-only" in publication["scope"]
+    assert "notebook:publish" in publication["scope"]
+    assert "Agents cannot approve publication" in publication["scope"]
+    owned = capabilities["agent-owned-notebook"]
+    assert "notebook:read" in owned["scope"] and "notebook:write" in owned["scope"]
+    assert "retry file" in owned["scope"]
     rule = next(row for row in pipeline["rules"] if row["id"] == "authority.note-publication")
     assert "Later edits remain private" in rule["instruction"]
     assert "historical grants confer no access" in rule["instruction"]

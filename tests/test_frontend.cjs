@@ -726,7 +726,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assertLeaderboardState(app, 'Unsolved');
     assert.doesNotMatch(app.$('#leaderboard-content').textContent, /size-four-solver/);
   });
-  await test('refresh failures and missing selections remain neutral rather than being labelled unsolved', async () => {
+  await test('refresh failures preserve a known record while missing selections remain neutral', async () => {
     let failRefresh;
     let requestCount = 0;
     const failed = new Promise((resolve, reject) => { failRefresh = reject; });
@@ -738,10 +738,11 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     }});
     assertLeaderboardState(app, 'Broken by', true);
     app.$('#refresh-leaderboard').click(); await flush();
-    assertLeaderboardState(app, 'Recovery record');
+    assertLeaderboardState(app, 'Broken by', true);
     failRefresh(new Error('Fixture outage')); await flush();
-    assertLeaderboardState(app, 'Recovery record');
-    assert.match(app.$('#leaderboard-content').textContent, /could not be reached/);
+    assertLeaderboardState(app, 'Broken by', true);
+    assert.match(app.$('#leaderboard-content').textContent, /fixture-solver/);
+    assert.match(app.$('#toast').textContent, /refresh failed/);
     assert.equal(app.$('#refresh-leaderboard').disabled, false);
     await app.navigate('#challenge');
     await app.sandbox.loadLeaderboard();
@@ -1240,11 +1241,11 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
       const clock = envelope({});
       return {id, profile_id: profileId, round_id: clock.round.id, issued_at: clock.server_time, ends_at: clock.round.ends_at, status: 'open', public: {encoding: {shared_secret_bytes: 32}, marker: id}};
     };
-    const app = await createApp({schemes, user: {id: 'fixture-user', handle: 'fixture'}, hash: route(schemes[0], 'alpha-3'), responder: (url, options, envelope) => {
+    const app = await createApp({schemes, user: {id: 'fixture-user', handle: 'fixture'}, hash: route(schemes[0], 'alpha-3', 'challenge'), responder: (url, options, envelope) => {
       if (url.pathname !== '/api/challenges') return undefined;
       return url.searchParams.get('profile_id') === 'alpha-3' ? alpha : envelope({challenge: challenge('beta-instance', 'beta-5', envelope)});
     }});
-    await app.navigate(route(schemes[1], 'beta-5'));
+    await app.navigate(route(schemes[1], 'beta-5', 'challenge'));
     assert.match(app.$('#download-button').href, /beta-instance/);
     releaseAlpha(app.envelope({challenge: challenge('alpha-instance', 'alpha-3', app.envelope)})); await flush();
     assert.equal(app.$('#scheme-title').textContent, 'Beta KEM');

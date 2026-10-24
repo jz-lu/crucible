@@ -51,6 +51,11 @@ def test_math_mount_rejects_traversal_and_directory_listing(math_client, path):
 
 
 def test_math_mount_rejects_symlinks_outside_the_distribution(tmp_path, monkeypatch):
+    from crucible.public_assets import PUBLIC_FILES
+    for url in (*PUBLIC_FILES, '/index.html'):
+        asset = tmp_path / 'web' / url.lstrip('/')
+        asset.parent.mkdir(parents=True, exist_ok=True)
+        asset.write_text('synthetic public asset')
     vendor = tmp_path / "web" / "vendor" / "katex"
     vendor.mkdir(parents=True)
     private = tmp_path / "private.txt"

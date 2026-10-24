@@ -172,7 +172,7 @@ def test_all_adapter_types_share_capacity_and_reads_stay_available(capacity_app,
         assert entered.wait(5)
         try:
             busy = second.post("/api/challenges", issue_body(other_adapter))
-            assert busy.status_code == 503 and busy.headers["retry-after"] == "3"
+            assert busy.status_code == 429 and busy.headers["retry-after"] == "3"
             for path in ("/health", "/api/session", "/api/schemes"):
                 response = pool.submit(second.client.get, path).result(timeout=3)
                 assert response.status_code == 200
@@ -199,7 +199,7 @@ def test_account_limit_covers_different_profiles_but_not_other_accounts(capacity
         assert entered.wait(5)
         try:
             busy = first.post("/api/challenges", issue_body(dh_v7, 1))
-            assert busy.status_code == 503 and busy.headers["retry-after"] == "3"
+            assert busy.status_code == 429 and busy.headers["retry-after"] == "3"
             assert second.post("/api/challenges", issue_body(dh_v7, 1)).status_code == 200
         finally:
             release.set()
@@ -270,7 +270,7 @@ def test_busy_and_existing_instance_reuse_do_not_consume_generation_quota(limite
     limiter = system.app.state.generation_limiter
     with limiter.slot("held-account-a"), limiter.slot("held-account-b"):
         busy = system.actor.post("/api/challenges", issue_body(dh_v7))
-        assert busy.status_code == 503 and busy.headers["retry-after"] == "3"
+        assert busy.status_code == 429 and busy.headers["retry-after"] == "3"
         assert quota_count() == 29 and calls == []
     first = system.actor.post("/api/challenges", issue_body(dh_v7))
     assert first.status_code == 200 and quota_count() == 30

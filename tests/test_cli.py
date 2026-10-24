@@ -65,11 +65,14 @@ def server(tmp_path):
                 self.end_headers()
                 return
             if path == "/api/agent/connect/start":
+                state["requested_scopes"] = body.get("scopes")
                 return self.reply({"device_code": "crd_" + "d" * 43, "user_code": "ABCD-EFGH",
-                    "verification_uri": state["origin"] + "/#connect?code=ABCD-EFGH", "expires_in": 600, "interval": 2})
+                    "verification_uri": state["origin"] + "/#connect?code=ABCD-EFGH", "expires_in": 600, "interval": 2,
+                    **({"scopes": state.get("offered_scopes", body["scopes"])} if "scopes" in body else {})})
             if path == "/api/agent/connect/poll":
                 return self.reply({"status": "authorized", "access_token": TOKEN,
-                    "expires_at": time.time() + 3600, "token_type": "Bearer", "user": {"handle": "solver"}})
+                    "expires_at": time.time() + 3600, "token_type": "Bearer", "user": {"handle": "solver"},
+                    **({"scopes": state.get("granted_scopes", state["requested_scopes"])} if state.get("requested_scopes") else {})})
             if (path in {cli.AGENT_PIPELINE, "/api/schemes"} or path.startswith(cli.AGENT_GUIDANCE)) and state.get("beta_required") and self.headers.get("Authorization") != "Bearer " + TOKEN:
                 return self.reply({"detail": "Unauthorized"}, 401)
             if path == cli.AGENT_GUIDANCE + "note-format.txt":
@@ -198,6 +201,28 @@ def test_login_stores_private_origin_bound_credentials_without_printing_them(ser
     assert config.stat().st_mode & 0o777 == 0o600
     assert cli.configuration(config)["servers"][state["origin"]]["access_token"] == TOKEN
     assert all(request[3] is None for request in state["requests"])
+
+
+def test_notebook_login_requests_explicit_scopes_without_agent_browser_use(server, monkeypatch, capsys):
+    state, config, _ = server
+    monkeypatch.setattr(cli.time, "sleep", lambda _: None)
+    monkeypatch.setattr(cli.webbrowser, "open", lambda _: pytest.fail("The agent must not open a browser."))
+    assert invoke(server, "login", "--notebook", "--no-browser") == 0
+    output = capsys.readouterr()
+    assert state["requested_scopes"] == list(cli.DEFAULT_SCOPES + cli.NOTEBOOK_SCOPES)
+    assert cli.configuration(config)["servers"][state["origin"]]["scopes"] == state["requested_scopes"]
+    assert TOKEN not in output.out + output.err and "crd_" not in output.out + output.err
+
+
+@pytest.mark.parametrize("field", ["offered_scopes", "granted_scopes"])
+def test_explicit_login_refuses_a_changed_permission_set(server, monkeypatch, capsys, field):
+    state, config, _ = server
+    before = config.read_bytes()
+    monkeypatch.setattr(cli.time, "sleep", lambda _: None)
+    state[field] = list(cli.DEFAULT_SCOPES)
+    assert invoke(server, "login", "--notebook", "--no-browser") == 1
+    assert "permissions" in json.loads(capsys.readouterr().out)["error"]["message"]
+    assert config.read_bytes() == before
 
 
 def test_login_retries_lost_authorized_poll_with_same_private_code(server, monkeypatch, capsys):

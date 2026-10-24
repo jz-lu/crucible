@@ -237,8 +237,9 @@ sources; it does not imply mathematics or reproduction were checked. Assessment
 is immutable for that packet; follow-up evidence belongs in another request.
 
 Research packets are visible to the requester and configured reviewers. These
-notebook/research actions currently require the browser account and normal write
-authorization; general agent notebook bearer access is not enabled. The existing
+research-request actions currently require the browser account and normal write
+authorization. The separate notebook CLI scopes allow owned draft reads/writes
+and publication requests, but do not authorize these research requests. The existing
 scoped proposal API/CLI can submit an owner's specification and creates a linked
 note. Review authority is not inherited by participant agent credentials.
 Development self-review is explicitly marked and cannot satisfy independent

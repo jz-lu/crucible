@@ -14,7 +14,7 @@ from urllib.parse import quote
 from uuid import uuid4
 
 from fastapi import HTTPException, Query, Request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import Float, ForeignKey, JSON, String, and_, case, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column
@@ -30,7 +30,9 @@ TOKEN_SECONDS = 30 * 86400
 POLL_INTERVAL = 2
 LEGACY_SCOPES = ("challenges:read", "challenges:write", "methods:read", "methods:write",
                  "submissions:read", "submissions:write")
-SCOPES = LEGACY_SCOPES + ("proposals:read", "proposals:write", "notes:read", "notes:rate")
+DEFAULT_SCOPES = LEGACY_SCOPES + ("proposals:read", "proposals:write", "notes:read", "notes:rate")
+NOTEBOOK_SCOPES = ("notebook:read", "notebook:write", "notebook:publish")
+SCOPES = DEFAULT_SCOPES + NOTEBOOK_SCOPES
 ANONYMOUS_POST_PATHS = frozenset({"/api/agent/connect/start", "/api/agent/connect/poll"})
 _UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 _TOKEN = re.compile(r"Bearer (cru_[A-Za-z0-9_-]{43})", re.IGNORECASE)
@@ -70,6 +72,14 @@ class DeviceConnection(Base):
 class ConnectInput(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     label: str = Field(default="Crucible agent", min_length=1, max_length=80)
+    scopes: list[str] = Field(default_factory=lambda: list(DEFAULT_SCOPES), min_length=1, max_length=len(SCOPES))
+
+    @field_validator("scopes")
+    @classmethod
+    def supported_scopes(cls, values):
+        if len(set(values)) != len(values) or any(value not in SCOPES for value in values):
+            raise ValueError("Request distinct supported permissions.")
+        return values
 
 
 class PollInput(BaseModel):
@@ -92,6 +102,9 @@ def required_scope(method, path):
         # applies only to the fixed documentation paths, never account data.
         return SCOPES
     if method == "GET":
+        if path in {"/api/notebook/notes", "/api/notebook/export"} or re.fullmatch(
+                rf"/api/notebook/(?:notes|imports)/{_UUID}", path):
+            return "notebook:read"
         if path == "/api/agent/notes" or re.fullmatch(r"/api/agent/notes/[^/]{1,108}", path):
             return "notes:read"
         if path in {"/api/schemes", "/api/leaderboard", "/api/challenges",
@@ -109,6 +122,11 @@ def required_scope(method, path):
                         rf"/api/protocol/proposals/{_UUID}(?:/revisions)?", path):
             return "proposals:read"
     if method == "POST":
+        if path in {"/api/notebook/notes", "/api/notebook/import"} or re.fullmatch(
+                rf"/api/notebook/notes/{_UUID}/(?:revisions|delete|restore)", path):
+            return "notebook:write"
+        if re.fullmatch(rf"/api/notebook/notes/{_UUID}/publication-requests", path):
+            return "notebook:publish"
         if re.fullmatch(r"/api/agent/notes/[^/]{1,108}/rating", path):
             return "notes:rate"
         if path == "/api/challenges":
@@ -206,7 +224,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             code = code[:4] + "-" + code[4:]
             now = clock()
             connection = DeviceConnection(id=str(uuid4()), device_hash=token_hash(raw), user_code=code,
-                                          label=body.label, scopes=list(SCOPES),
+                                          label=body.label, scopes=list(body.scopes),
                                           created_at=now, expires_at=now+DEVICE_SECONDS)
             try:
                 with db.transaction(write=True) as session:

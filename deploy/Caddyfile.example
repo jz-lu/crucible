@@ -1,0 +1,47 @@
+# Replace this reserved hostname only after choosing the beta domain.
+# See docs/beta-host.txt. Do not serve web/ directly: the app enforces membership.
+{
+	admin unix//run/caddy/admin.sock
+	grace_period 40s
+	log default {
+		level WARN
+		# Request URIs can contain OAuth codes/invitation tokens. No access logs
+		# are enabled, and request-bearing proxy error events are suppressed.
+		exclude http.log.access http.log.error
+	}
+	servers {
+		max_header_size 32KB
+		timeouts {
+			read_header 10s
+			read_body 20s
+			write 90s
+			idle 60s
+		}
+	}
+}
+
+beta.example.invalid {
+	# Above the app's 2 MiB + 1 KiB notebook-import envelope. The app retains
+	# stricter per-route limits. No cache/CDN or public static-file bypass.
+	request_body {
+		max_size 3MiB
+	}
+	header {
+		Cache-Control "no-store"
+		Referrer-Policy "no-referrer"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+	reverse_proxy 127.0.0.1:8000 {
+		# Caddy's default untrusted-proxy policy rebuilds X-Forwarded-* from
+		# the actual peer. Do not add trusted_proxies for arbitrary clients.
+		header_up -Forwarded
+		header_up -X-Real-IP
+		transport http {
+			dial_timeout 3s
+			response_header_timeout 40s
+			read_timeout 60s
+			write_timeout 20s
+		}
+	}
+}

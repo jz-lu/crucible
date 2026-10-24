@@ -14,18 +14,19 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from starlette.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
-from . import beta_access, generation, generation_policy, standard_schemes, kem, machine_auth, method_sources, notebook, people, protocol_proposals, registry, research, research_reviews
+from . import beta_access, generation, generation_policy, implementation_builds, standard_schemes, kem, machine_auth, method_sources, notebook, people, protocol_proposals, registry, research, research_reviews
 from .config import ROOT, Settings, load_settings
 from .db import AdapterVersion, Base, Challenge, Database, LoginSession, Method, ProfileIncident, RateBucket, Submission, User
 from .schemas import Credentials, NewChallenge, NewMethod, NewSubmission
 from .security import mac, passwords, payload_mac, target_mac, token_hash, verify_password
 from .public_json import catalogue_progress, catalogue_response
+from .public_assets import CONTENT_SECURITY_POLICY, PublicAssets, PublicMathFiles, is_public_ui
 from .access_policy import AccessPolicy
 from . import benchmark_reports, assumption_sheets, agent_guidance
 from .reference_policy import METHOD as REFERENCE_METHOD
+from . import github_auth, password_recovery
 
 
 def current_round(now):
@@ -46,6 +47,7 @@ class RequestBoundary:
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
+        started = time.perf_counter()
         original_send = send
         async def secure_send(message):
             if message["type"] == "http.response.start":
@@ -54,10 +56,18 @@ class RequestBoundary:
                     (b"referrer-policy", b"no-referrer"),
                     (b"x-frame-options", b"DENY"),
                     (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
-                    (b"content-security-policy", b"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"),
+                    (b"content-security-policy", CONTENT_SECURITY_POLICY),
                 ]
-                if scope["path"].startswith("/api") or self.settings.access_mode == "beta":
+                cacheable_ui = (scope["method"] in {"GET", "HEAD"}
+                                and is_public_ui(scope["path"])
+                                and message["status"] in {200, 304})
+                if scope["path"].startswith("/api") or (self.settings.access_mode == "beta" and not cacheable_ui):
                     extra.append((b"cache-control", b"no-store"))
+                if scope["path"].startswith("/api/"):
+                    # Includes admission, pool wait, SQL and handler work until
+                    # headers; excludes the proxy/network and response transfer.
+                    duration = max(0.0, (time.perf_counter() - started) * 1000)
+                    extra.append((b"server-timing", f"app;dur={duration:.2f}".encode("ascii")))
                 if self.settings.production:
                     extra.append((b"strict-transport-security", b"max-age=31536000"))
                 replaced = {key for key, _ in extra}
@@ -89,9 +99,7 @@ class RequestBoundary:
                 def admit_browser():
                     raw = Request(scope).cookies.get(self.settings.cookie_name, "")
                     with self.db.transaction() as session:
-                        record = session.get(LoginSession, token_hash(raw), populate_existing=True) if raw.isascii() and 0 < len(raw) <= 128 else None
-                        user = session.get(User, record.user_id) if record and record.user_id and record.expires_at > self.clock() else None
-                        beta_access.require_access(session, self.settings, user, self.clock())
+                        beta_access.browser_account(session, raw, self.clock, require_membership=True)
                 try:
                     await run_in_threadpool(admit_browser)
                 except HTTPException as error:
@@ -157,6 +165,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                                                          max_per_account=settings.auth_concurrency)
     policy = AccessPolicy()
     app.state.access_policy = policy
+    public_assets = PublicAssets(ROOT / "web", frozen=settings.production)
     app.add_middleware(RequestBoundary, settings=settings, clock=clock, db=db, policy=policy)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.hosts)
 
@@ -198,6 +207,8 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         return record
 
     def account_for(request, session, *, mutation=False):
+        if not mutation and request.method in {"GET", "HEAD"} and "authorization" not in request.headers:
+            return beta_access.browser_account(session, request.cookies.get(settings.cookie_name, ""), clock)
         record = (machine_auth.request_identity(request, session, settings, clock, mutation=mutation)
                   if "authorization" in request.headers else identity(request, session, mutation=mutation))
         if not record.user_id:
@@ -213,6 +224,9 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         return beta_access.require_not_suspended(session, user)
 
     def user_for(request, session, *, mutation=False):
+        if not mutation and request.method in {"GET", "HEAD"} and "authorization" not in request.headers:
+            return beta_access.browser_account(session, request.cookies.get(settings.cookie_name, ""), clock,
+                                               require_membership=settings.access_mode == "beta")
         user = account_for(request, session, mutation=mutation)
         return beta_access.require_access(session, settings, user, clock(), mutation=mutation)
 
@@ -223,9 +237,10 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                             secure=settings.production, samesite="strict", path="/")
         return raw
 
-    def session_payload(user, raw, session):
-        access = beta_access.access_payload(session, settings, user)
+    def session_payload(user, raw, session, *, access=None, auth=None):
+        access = beta_access.access_payload(session, settings, user) if access is None else access
         return envelope(user={"id": user.id, "handle": user.handle} if user else None, access=access,
+                        auth=github_auth.auth_payload(session, settings, user) if auth is None else auth,
                         capabilities={"manage_beta_access": beta_access.is_admin(settings, user) and access["allowed"],
                                       "review_protocol_proposals": protocol_proposals.is_reviewer(settings, user) and access["allowed"],
                                       "self_review_protocol_proposals": protocol_proposals.can_self_review(settings, user) and access["allowed"]},
@@ -238,7 +253,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             with app.state.auth_limiter.slot("password"):
                 return operation(*arguments)
         except generation.GenerationBusy:
-            raise HTTPException(503, "Sign-in is busy. Please retry shortly.", headers={"Retry-After": "2"}) from None
+            raise HTTPException(429, "Sign-in is busy. Please retry shortly.", headers={"Retry-After": "2"}) from None
 
     def throttle(request, name, limit, seconds, extra="", *, account_id=None, handle=None):
         if not settings.rate_limits:
@@ -289,10 +304,20 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         return manifest
 
     def pin_adapter(session, manifest):
+        try:
+            additional_platform = implementation_builds.additional_platform_admission(manifest)
+        except ValueError:
+            raise HTTPException(409, "The implementation has an unsupported platform admission declaration.") from None
         identity_ = (manifest["scheme_id"], manifest["version"])
         current_hash = manifest["implementation"]["source_sha256"]
         artifact_hash = manifest["implementation"].get("artifact_sha256")
         existing_pin = session.get(AdapterVersion, identity_)
+        if additional_platform is not None:
+            # Additional platforms must never establish their own baseline,
+            # including on an empty database or when claiming the original pair.
+            if existing_pin is None or not implementation_builds.implementation_is_compatible(session, manifest, existing_pin):
+                raise HTTPException(409, "This additional platform requires an existing original release baseline and an active review of its exact build.")
+            return
         if existing_pin is None:
             # Upgrading a pre-pin database must respect its existing releases.
             # Missing or conflicting historical provenance is a stop, not an
@@ -310,7 +335,8 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         session.execute(insert(AdapterVersion).values(scheme_id=manifest["scheme_id"], version=manifest["version"],
             source_sha256=current_hash, artifact_sha256=artifact_hash, created_at=clock()).on_conflict_do_nothing())
         pinned = session.get(AdapterVersion, identity_)
-        if pinned.source_sha256 != current_hash or pinned.artifact_sha256 != artifact_hash:
+        if (pinned.source_sha256 != current_hash or pinned.artifact_sha256 != artifact_hash) and not (
+                implementation_builds.implementation_is_compatible(session, manifest, pinned)):
             raise HTTPException(409, "The implementation changed without a new scheme version. New challenges are paused.")
 
     def owned_challenge(session, challenge_id, user_id, *, lock=False):
@@ -345,12 +371,34 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         throttle(request, "session", 300, 60)
         response = JSONResponse({})
         with db.transaction(write=True) as session:
-            record = session_for(request, session)
             raw = request.cookies.get(settings.cookie_name)
+            # One fresh snapshot for the browser's session display. Member
+            # routes retain their separate admission and handler checks; writes
+            # retain account locks and credential/CSRF rechecks.
+            row = None
+            if "authorization" in request.headers:
+                # This browser-only route rejects machine credentials even if
+                # it is called outside the normal request boundary.
+                machine_auth.request_identity(request, session, settings, clock)
+            if raw and raw.isascii() and len(raw) <= 128:
+                row = session.execute(select(LoginSession, User, beta_access.BetaMembership,
+                        beta_access.AccountState, github_auth.GitHubIdentity)
+                    .select_from(LoginSession)
+                    .outerjoin(User, User.id == LoginSession.user_id)
+                    .outerjoin(beta_access.BetaMembership, beta_access.BetaMembership.user_id == User.id)
+                    .outerjoin(beta_access.AccountState, beta_access.AccountState.user_id == User.id)
+                    .outerjoin(github_auth.GitHubIdentity, github_auth.GitHubIdentity.user_id == User.id)
+                    .where(LoginSession.token_hash == token_hash(raw))).one_or_none()
+            # Expiry is evaluated after a possibly slow checkout/read, exactly
+            # as for a normal session lookup. Expired rows grant no identity.
+            record = row.LoginSession if row and row.LoginSession.expires_at > clock() else None
             if not record:
                 raw = issue_session(response, session)
-            user = session.get(User, record.user_id) if record and record.user_id else None
-            response.body = json.dumps(session_payload(user, raw, session)).encode()
+            user = row.User if record else None
+            access = beta_access.access_summary(settings, user,
+                row.BetaMembership if user else None, row.AccountState if user else None)
+            auth = github_auth.auth_summary(settings, user, row.GitHubIdentity if user else None)
+            response.body = json.dumps(session_payload(user, raw, session, access=access, auth=auth)).encode()
             response.headers["content-length"] = str(len(response.body))
         return response
 
@@ -388,7 +436,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             user = session.scalar(select(User).where(User.handle == body.handle))
             user_id, encoded = (user.id, user.password_hash) if user else (None, None)
         valid = password_operation(verify_password, encoded, body.password)
-        if not user_id or not valid:
+        if not user_id or not encoded or not valid:
             raise HTTPException(401, "Handle or password is incorrect.")
         replacement = password_operation(passwords.hash, body.password) if passwords.check_needs_rehash(encoded) else None
         response = JSONResponse({})
@@ -418,15 +466,33 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         return response
 
     @app.get("/api/schemes")
-    def schemes(request: Request, progress_only: bool = False):
-        catalogue = registry.catalogue()
-        releases = [release for scheme in catalogue for release in [scheme, *scheme["previous_releases"]]]
+    def schemes(request: Request, progress_only: bool = False, projection: str | None = None,
+                scheme_id: str | None = None, version: str | None = None):
+        if (projection not in {None, "navigation", "release"}
+                or projection is not None and "progress_only" in request.query_params
+                or projection != "release" and (scheme_id is not None or version is not None)
+                or projection == "release" and (not scheme_id or not version)):
+            raise HTTPException(422, "Choose a navigation projection, an exact release, or the existing catalogue/progress view.")
+        if projection == "release":
+            releases = [registry.descriptor(adapter_for(version, scheme_id))]
+            catalogue = None
+        else:
+            catalogue = (registry.navigation_catalogue() if projection == "navigation" else
+                         registry.progress_catalogue() if progress_only else registry.catalogue())
+            releases = [release for scheme in catalogue for release in [scheme, *scheme["previous_releases"]]]
         # One bounded-result query for the whole catalogue: first successful
         # receipt per exact scheme/version/profile, using the leaderboard's tie
         # rule. Do not mistake a first recovery at a smaller size for the solver
         # who first reached the largest displayed size.
-        current_releases = [and_(Challenge.scheme_id == scheme["id"],
-                                 Challenge.scheme_version == scheme["version"]) for scheme in releases]
+        source_releases = {(scheme["id"], scheme["version"]) for scheme in releases}
+        if projection == "release":
+            # An exact detail still inherits only explicitly compatible receipts,
+            # including when those source releases were not requested themselves.
+            source_releases.update((scheme["id"], source_version)
+                for scheme in releases for profile in scheme["profiles"]
+                for source_version in registry.comparison_versions(scheme["id"], scheme["version"], profile["id"]))
+        current_releases = [and_(Challenge.scheme_id == identifier, Challenge.scheme_version == release_version)
+                            for identifier, release_version in sorted(source_releases)]
         first_receipts = select(
             Challenge.scheme_id.label("scheme_id"), Challenge.scheme_version.label("scheme_version"),
             Submission.profile_id.label("profile_id"), Submission.user_id.label("user_id"),
@@ -484,7 +550,11 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                 "profile_id": first.profile_id, "scheme_version": first.scheme_version,
                 "submission_id": first.receipt_id} if first else None
         document = {"catalogue_revision": registry.catalogue_revision()}
-        if progress_only:
+        if projection == "release":
+            document.update(projection="release", scheme=releases[0], current_version=registry.CURRENT[scheme_id])
+        elif projection == "navigation":
+            document.update(projection="navigation", schemes=catalogue)
+        elif progress_only:
             document.update(projection="progress", releases=catalogue_progress(catalogue))
         else:
             document["schemes"] = catalogue
@@ -642,7 +712,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             with generation.instance_reservation(key):
                 return generate_and_commit()
         except generation.GenerationBusy:
-            raise HTTPException(503, "Challenge generation is busy. Please retry shortly.", headers={"Retry-After": "3"}) from None
+            raise HTTPException(429, "Challenge generation is busy. Please retry shortly.", headers={"Retry-After": "3"}) from None
 
     @app.get("/api/challenges/{challenge_id}/download")
     def download(challenge_id: str, request: Request):
@@ -830,28 +900,32 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         return {"status": "ok"}
 
     @app.get("/")
-    def index():
-        return FileResponse(ROOT / "web" / "index.html", headers={"Cache-Control": "no-cache"})
+    def index(request: Request):
+        return public_assets.response(request)
 
     @app.get("/styles.css")
-    def styles():
-        return FileResponse(ROOT / "web" / "styles.css", headers={"Cache-Control": "no-cache"})
+    def styles(request: Request):
+        return public_assets.response(request)
 
     @app.get("/app.js")
-    def javascript():
-        return FileResponse(ROOT / "web" / "app.js", headers={"Cache-Control": "no-cache"})
+    def javascript(request: Request):
+        return public_assets.response(request)
+
+    @app.get("/bootstrap.js")
+    def bootstrap_javascript(request: Request):
+        return public_assets.response(request)
 
     @app.get("/assumptions.js")
-    def assumptions_javascript():
-        return FileResponse(ROOT / "web" / "assumptions.js", headers={"Cache-Control": "no-cache"})
+    def assumptions_javascript(request: Request):
+        return public_assets.response(request)
 
     @app.get("/proposal-retractions.js")
-    def proposal_retractions_script():
-        return FileResponse(ROOT / "web" / "proposal-retractions.js", headers={"Cache-Control": "no-cache"})
+    def proposal_retractions_script(request: Request):
+        return public_assets.response(request)
 
     @app.get("/math.js")
-    def math_javascript():
-        return FileResponse(ROOT / "web" / "math.js", headers={"Cache-Control": "no-cache"})
+    def math_javascript(request: Request):
+        return public_assets.response(request)
 
     @app.get("/map/{asset_name}")
     def research_map_asset(asset_name: str):
@@ -884,14 +958,12 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                             media_type=assets[asset_name], headers={"Cache-Control": "no-cache"})
 
     @app.get("/assets/crucible-logo.png")
-    def logo():
-        return FileResponse(ROOT / "web" / "assets" / "crucible-logo.png", media_type="image/png",
-                            headers={"Cache-Control": "no-cache"})
+    def logo(request: Request):
+        return public_assets.response(request)
 
     # Only the vendored math distribution is mounted, never the repository or
     # general web directory. Real-path containment also rejects escaping symlinks.
-    app.mount("/vendor/katex", StaticFiles(directory=ROOT / "web" / "vendor" / "katex",
-                                          follow_symlink=False), name="katex")
+    app.mount("/vendor/katex", PublicMathFiles(public_assets), name="katex")
 
     @app.get("/api/protocol/reference-method")
     def reference_method():
@@ -1026,5 +1098,8 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     notebook.register_routes(app, db, settings, clock, user_for, throttle)
     research_reviews.register_routes(app, db, settings, clock, user_for, throttle)
     beta_access.register_routes(app, db, settings, clock, account_for, throttle)
+    github_auth.register_routes(app, db, settings, clock, identity, issue_session, session_payload, password_operation, throttle)
+    password_recovery.register_routes(app, db, settings, clock, identity, issue_session,
+                                      session_payload, password_operation, throttle)
     policy.register(app.routes)
     return app

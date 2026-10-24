@@ -32,6 +32,11 @@
   box-sizing: border-box;
 }
 
+html {
+  background: var(--paper);
+  color-scheme: light;
+}
+
 body {
   margin: 0;
   min-height: 100dvh;
@@ -3798,3 +3803,24 @@ dialog.assumption-reader { width: min(760px, calc(100% - 40px)); padding: 0; bor
 .proposal-review-workspace { padding-top: 0; }
 .proposal-review-workspace .catalogue-heading h1 { font-size: clamp(1.4rem, 2vw, 1.8rem); }
 @media (max-width: 560px) { .review-navigation a { padding: .7rem .65rem; } }
+
+/* Sign-in remains a single primary action, with existing accounts kept nearby. */
+.github-sign-in { margin-top: 24px; }
+.auth-password-options { margin-top: 20px; }
+.auth-password-options > summary { width: fit-content; cursor: pointer; color: var(--muted); font-size: 14px; }
+.auth-password-options.sole-method > summary { display: none; }
+.auth-password-options.sole-method { margin-top: 0; }
+.auth-password-options > summary:hover { color: var(--ink); }
+.auth-forgot-password,.auth-back { margin-top: 16px; font-size: 13px; }
+#github-link-form,#github-handle-form,#password-reset-request-form,#password-reset-form { margin-top: 24px; }
+#github-link-form > .field-hint,#github-handle-form > .field-hint { margin: 14px 0; }
+#github-handle-form .text-button { font-size: inherit; }
+#password-reset-form > .field-hint { margin-bottom: 16px; }
+#password-reset-request-status { margin-bottom: 16px; }
+.account-sign-in { margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--line); }
+.account-sign-in > summary { width: fit-content; color: var(--primary); cursor: pointer; font-size: 14px; }
+.account-sign-in-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 18px; }
+.account-sign-in-row strong { font-size: 15px; color: var(--ink); }
+.account-sign-in-row .field-hint { margin: 6px 0 0; }
+.account-sign-in-row .button { flex-shrink: 0; }
+@media (max-width: 480px) { .account-sign-in-row { align-items: flex-start; flex-wrap: wrap; } }

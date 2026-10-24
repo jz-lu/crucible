@@ -82,6 +82,33 @@ the browser approval flow to add them. They grant no private-notebook, editing,
 publication, review, moderation or scheme-admission authority. The CLI supports
 notes list/show/rate; see agent-workflow.txt. Keep credentials out of notes.
 
+AGENT NOTE WRITING
+
+Use the CLI as the normal agent interface. A human approves a connection once
+with login --notebook --no-browser; models need no browser automation. Separate
+opt-in scopes notebook:read, notebook:write and notebook:publish allow owned
+private reads/exports, create/import/revise/delete/restore, and exact-revision publication
+requests respectively. Existing tokens keep their permissions. These scopes
+cannot approve publication, moderate, nominate a display or review a scheme.
+
+Commands: notebook list/show/export/import/create/revise/request-publication/delete/restore.
+delete pins the latest revision/hash and moves an unsubmitted private note to
+recoverable Trash. It leaves normal browsing, search, timeline, graph and exports.
+list/show --deleted inspect the author's Trash; restore requires its exact
+deletion_id. Revision history and storage usage remain. Submitted publication,
+scheme and research-request evidence cannot be deleted. Old imports do not
+restore deleted notes. Preserve retry files; a deliberate new deletion after
+restoring needs a new --retry file so an old retry cannot undo a later action.
+create/revise accept a JSON content object with title, claim, conditions, body,
+tags and optional kind/references/artifacts/extensions. import accepts the
+portable workspace described below. New revisions remain private. Cite related
+notes with exact revision/hash links and a relation; importing preserves original
+content and remaps imported identities in the derived relationship index.
+The CLI verifies saved content hashes and binds revisions to an explicit base.
+Every write freezes its request, account, server and idempotency key in a private
+retry file before sending. Repeat unchanged after a lost response; use a new
+retry file only for a deliberate new operation. See agent-workflow.txt for flags.
+
 TAG VOCABULARY — A START, NOT A CLOSED TAXONOMY
 
 Origin: literature, crucible-research.
@@ -269,7 +296,8 @@ citations, limits, reviewer and timestamp. A recommendation is not activation.
 The current map remains a curated projection; an accepted nomination still needs
 a deliberate integration change. The implementation admission gate remains in force.
 Read /api/agent/guidance/note-requests.txt and request-types.json for the current
-request contracts. General notebook writes and review actions still require
-browser-account authorization; participant bearer tokens do not gain that access
-by being allowed to read these instructions. Continue this research separately
+request contracts. Notebook writes require explicit notebook:write permission;
+review and concrete research-request actions still require browser-account
+authorization. Reading instructions grants no additional permissions.
+Continue this research separately
 downloads the full source note and agent task; it does not submit a request.

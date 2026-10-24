@@ -1,0 +1,309 @@
+Linux runtime: isolated build and review
+=======================================
+
+Scope
+-----
+This is a build runbook for a dedicated local Linux VM, not a deployment or an
+approval mechanism. Build only a source-only copy of the intended checkpoint.
+Do not run these commands in the live Mac checkout or a checkout containing beta
+user data. Do not copy .local/, credentials, databases or the Mac .venv into the
+VM. A Linux arm64 build is not an x86_64 build: freeze the intended architecture,
+exact Python patch version, OS packages and compiler before reviewing outputs.
+
+At this checkpoint registry.py contains 32 registered adapters, including
+archived releases. Startup validates all their manifests. The beta allowlist
+does not remove the archived build requirements. None of the steps below change
+mathematical parameters, profile IDs, scheme versions or source digest checks.
+The wrapper deliberately has no 'build everything and activate' operation.
+
+Prerequisites: Ubuntu 24.04 example
+---------------------------------
+Inside the isolated VM, the operator may install these build prerequisites:
+
+  sudo apt-get update
+  sudo apt-get install --no-install-recommends build-essential cmake ninja-build \
+    pkg-config libssl-dev python3 python3-venv python3-dev ca-certificates \
+    valgrind binutils file
+
+These commands install packages; they are not part of the wrapper. Record exact
+package versions and the VM image version before approving a build. Ubuntu's
+Python package may receive patch updates: a version pin must use the observed
+full patch version, not merely 'Python 3.12'. For a runtime based on another OS or
+Python, establish its own equivalent build record. SageMath is not a runtime
+dependency; some independent offline certificate/estimator checks require it.
+No Sage result is implied by successful compilation here.
+
+For a source-only copy at /opt/crucible-build, as the unprivileged build user:
+
+  cd /opt/crucible-build
+  python3 -m venv .venv
+  .venv/bin/python -m pip install --only-binary=:all: -r requirements.lock
+  .venv/bin/python -m pip install --no-deps -e .
+  printf '%s\n' crucible-isolated-linux-build-v1 > .crucible-linux-build-worktree
+  bash deploy/build-linux-runtime.sh --worktree /opt/crucible-build --step prerequisites
+
+Use a clean shell without CRUCIBLE_* or database credentials. The marker is an
+operator assertion that this is disposable build storage, not proof of that
+fact. The wrapper also rejects unexpected .local contents and symlinked output
+roots. Its build subprocesses use an empty environment and a separate home under
+.linux-build-home. Existing build outputs in this isolated copy may be rebuilt;
+some upstream builders replace their own source/output directories. They never
+change the application's registry or approve a binary.
+
+Pinned wheels are preferred for the listed Python requirements. If a pinned
+wheel is absent for the chosen interpreter/architecture, stop and make an explicit
+build decision; do not silently upgrade dependencies or fall back to an
+unrecorded Rust/OpenSSL build. Editable installation uses the pyproject build
+backend; record the installed build tool versions too. requirements.lock pins
+versions, not all downloaded wheel hashes, so retain the exact downloaded wheel
+files and checksums for the eventual reviewed release inventory.
+
+Efficient build order
+---------------------
+Start with two build jobs on a small VM. Increase only after observing memory.
+Run each command separately and retain its exit status and stdout/stderr. A
+completed step is evidence only for the checks actually run by that builder.
+
+  bash deploy/build-linux-runtime.sh --worktree /opt/crucible-build --step pq --jobs 2 --download
+  bash deploy/build-linux-runtime.sh --worktree /opt/crucible-build --step code --jobs 2
+  bash deploy/build-linux-runtime.sh --worktree /opt/crucible-build --step hqc-growth --jobs 2
+  bash deploy/build-linux-runtime.sh --worktree /opt/crucible-build --step hqc-model --jobs 2
+  bash deploy/build-linux-runtime.sh --worktree /opt/crucible-build --step sntrup --jobs 2 --download
+
+Only pq and sntrup accept --download. Their existing builders fetch explicit
+upstream source/vector URLs and require the existing SHA-256 values. Omit that
+flag when exact source caches have already been supplied. The wrapper performs
+no implicit package installation or downloads of its own.
+
+The liboqs base is built once. The code, HQC growth and modeled HQC steps reuse
+its verified source tree and static library; none should rebuild that base.
+sntrup is independent and can be built in parallel if capacity permits, but do
+not run two commands against the same build output root simultaneously.
+
+Build coverage and storage
+--------------------------
+  .native-pq/:
+    One static worker covering the four published PQ adapters (14 profiles).
+    Pinned liboqs commit 5a1a854b0dc9f2141bdc771c555ee60c37950183; archive SHA-256
+    83c6e6cff490638312e1e20ed5de593fb5d7bfab162235f6238f519d6a1feafb.
+    CMake uses generic target, O1, OpenSSL disabled. The builder checks one
+    upstream KAT per profile and 180 pinned ML-KEM ACVP cases; this is not an
+    exhaustive proof or constant-time certification.
+
+  .native-code/:
+    77 parameter-specialized workers: 27 archived HQC weight settings and 50
+    McEliece length settings. One unconditioned agreement draw per worker at
+    build. Independent code/codec tests remain required.
+
+  .native-hqc-growth/:
+    27 archived HQC growth workers, with their own manifests and licenses.
+
+  .local/native-hqc-model/:
+    66 current modeled HQC workers. This exact subtree is build output, not user
+    state. The builder currently requires its output beneath checkout/.local.
+    Retain only its explicit install subtree in a runtime bundle; set
+    CRUCIBLE_HQC_MODEL_BACKEND to that bundle when later deploying. Never copy
+    .local wholesale. Reference timing/codec reproduction also needs the source
+    tree retained in build evidence.
+
+  .native/sntrup/ and .native/source-cache/:
+    Published sntrup761 worker, static libraries, upstream test program and the
+    2020 reference sources/fixture library. Builds libcpucycles 20260901,
+    librandombytes 20240318 and libntruprime 20260717 with the script's archive
+    hashes. --reference also verifies the 2020-10-07 source archive digest
+    280e5dad090144446a49cc0e283163b8167a7961f5ccb183817501fcc3b695ce.
+    The upstream conventional sntrup761 test runs. The manifest explicitly does
+    not attest that the full TIMECOP suite ran. The reference shared library is
+    named reference-20201007.dylib by the existing script even on Linux; inspect
+    its actual ELF type rather than treating the suffix as the format.
+
+  Python + cryptography:
+    DH (7 releases), RSA (4), elliptic research (2), Frodo research (3), and
+    module research (4) need no separately compiled challenge worker here.
+    Their exact source/runtime closures still need verification. X25519 uses
+    cryptography 50.0.2's native extension; an installed version string alone
+    does not meet its currently Mac-specific native digest pin.
+
+The original two NTRU research builders retain their Mac pins. A separate Linux
+builder is now available, as described in the 22 October checkpoint below.
+Do not import the whole registry merely to inventory partial outputs: its
+intentional fail-closed checks can stop before all builds are ready.
+
+Known portability boundaries: do not silently patch
+---------------------------------------------------
+1. NTRU research v2/v3 builders require exact Mac static-library digests for
+   librandombytes-kernel.a and libcrypto.a. Both Linux builds will stop at those
+   checks. The /usr OpenSSL prefix used for sntrup's -lcrypto reference build is
+   insufficient for those scripts' literal prefix/lib/libcrypto.a path on
+   multiarch Ubuntu. Inspect the real library path with:
+
+     pkg-config --variable=libdir openssl
+     cc -print-multiarch
+
+   A reviewed portability change must select exact Linux dependencies and their
+   provenance without discarding the Mac pins. Only after that change is ready
+   can build_ntru_tiers.py and build_ntru_frontier.py build these outputs. Do not
+   replace the digest constants with whatever was just built. The wrapper does
+   not offer these blocked steps or fabricate an approval manifest for them.
+
+2. sntrup.py, ntru_tiers.py, ntru_frontier.py and dhkem_x25519.py contain current
+   Mac-specific runtime pins/provenance. New Linux files will not pass them.
+   A platform-aware, reviewed implementation-build registration is separate
+   work. Preserve historical receipts and existing pins; a new binary does not
+   imply a new mathematical scheme or permission to rewrite old evidence.
+
+3. HQC builds use HQC_ARCH_REF, PQCHQC_NAMESPACE_PREFIX and USE_OQS_RANDOMBYTES;
+   McEliece uses old_gas_syntax. Those definitions are part of the recorded build
+   recipe. Compile unchanged first on the chosen architecture. If GCC reports
+   an inline-assembly syntax or unavailable-instruction error, retain the error
+   and inspect the exact upstream conditional branch. Do not remove a macro or
+   add CPU flags globally merely to make a build green. Any necessary source or
+   compiler recipe change must enter the new artifact evidence and tests.
+
+4. liboqs uses a generic target, but NTRU's upstream configure can choose
+   CPU-specific implementations. Record host CPU features and compiler choices;
+   validate executables on the eventual runtime CPU before distributing them.
+   Inspect ELF dependencies with readelf -d; a recorded claim of static crypto
+   linkage must agree with the actual NEEDED entries. System libc remains a
+   dependency even for the workers with static cryptographic libraries.
+
+5. Pure Python closures can include platform.python_version(). Changing the
+   patch version can change their implementation artifact identity. The old
+   database accepts one source/artifact pair per scheme version; implementation
+   build migration/registration must address this without deleting old pins.
+
+Inventory, review and validation
+-------------------------------
+After each useful checkpoint, this read-only command reports observed hashes:
+
+  bash deploy/build-linux-runtime.sh --worktree /opt/crucible-build --step inventory
+
+It inventories only explicit native install roots, NTRU worker/manifests and
+the installed cryptography primitive files. Missing paths remain explicit.
+Its 'approved: false' and 'registry_validated: false' are deliberate: a file
+inventory is not proof that those bytes follow from the checked source, nor a
+runtime admission. Preserve full builder manifests, sources, logs, licenses,
+wheel hashes, toolchain/package inventory and source checkpoint separately.
+
+After the new implementation builds are independently checked and explicitly
+registered, run (with an isolated development test data directory):
+
+  .venv/bin/python -B -c 'from crucible.registry import validate_registry; validate_registry()'
+  CRUCIBLE_ENV=development CRUCIBLE_DATA_DIR=/tmp/crucible-linux-validation \
+    .venv/bin/python -B -m pytest -q -p no:cacheprovider
+
+Use a fresh test directory, never a database copied from production. The full
+test suite and registry validation must run on the actual reviewed native
+installation, not mocks. Account for skipped Sage/reference-source checks
+explicitly. Validate at least the native conformance, NTRU differential/vector,
+HQC boundary, McEliece codec and worker integrity/failure tests. A runtime-only
+bundle lacks the source/static-library inputs needed by some of these tests;
+keep the build tree for validation. See docs/native-setup.txt for test path
+overrides. Do not classify a Linux build as ready because source-only CI passed.
+
+New binaries must not inherit Mac performance reports by changing their hashes.
+Keep existing reports as historical machine-specific evidence; any Linux timing
+report is a separately measured artifact. Finally exercise real PostgreSQL and
+concurrent browser/agent flows on the intended server. Neither compilation nor
+the preflight command provides those measurements or creates launch approval.
+
+Executed local ARM64 checkpoint, 2026-10-18
+-----------------------------------------
+The runbook's prerequisites, pq, code, hqc-model and hqc-growth steps completed
+with two jobs in a disposable Lima VM, source /tmp/crucible. Only pq used
+--download; existing archive/vector digests were checked. This is Debian 13.6
+aarch64, Python 3.13.5, cryptography 50.0.2, GCC 14.2.0-19, CMake 3.31.6-2,
+Ninja 1.12.1-1+b1, libc6-dev 2.41-12+deb13u4, libssl-dev 3.5.7-1~deb13u3.
+It is not x86_64 deployment evidence. No source, parameter, macro or pin changes
+were needed for these four builders. No database or application startup ran.
+
+Results: 14 upstream KATs and 180 ML-KEM ACVP cases passed; the derived builds
+checked one fresh honest agreement for each of 77 code-family, 66 modeled-HQC
+and 27 growth-HQC workers. These samples are not analytical correctness proofs.
+
+Targeted runs used .venv/bin/python -B -m pytest -q -p no:cacheprovider:
+  tests/test_pq_native.py: 40 passed in 13.09s.
+  tests/test_code_research.py tests/test_hqc_model.py: 202 passed in 27.14s.
+  tests/test_hqc_growth.py: 56 passed in 8.60s.
+Total: 298 passed, no reported skips. This is not the full backend suite; test
+durations are not cryptographic performance measurements for website graphs.
+The PQ worker and first worker of each derived family were sampled with file/
+readelf: ARM aarch64 ELF, loader /lib/ld-linux-aarch64.so.1, libc.so.6 the only
+NEEDED library. This sampling does not attest every executable.
+
+Observed build-manifest SHA-256 values (not admitted pins):
+  .native-pq/install/build-manifest.json
+    909e58d038262704185434d82b7df40ba3d82bcb09f770fd6458241677b1250c
+  .native-code/install/build-manifest.json
+    f5cf9fd7ce1f93d14497afe7c0391f29e604022cc154175542922b6498a09c1f
+  .native-hqc-growth/install/build-manifest.json
+    68439150126714243fce30d36277c54485baf66920666b3b33635025f237c9cb
+  .local/native-hqc-model/install/build-manifest.json
+    f89c0de5b88fef4bdd60e8ccfbca8e86647dfb50dff82662f1d8c5c25d6993d3
+
+Full logs/manifests, platform evidence and the unapproved inventory were exported
+to the local task's work/beta-runtime-20261018/linux-evidence folder:
+  logs-and-manifests.tar
+    15b9ed8c6af3eed524fa749c02864662c99f06c9de152aa82f14c4e26ea82808
+  inventory.json
+    a9914191fde1cf4852a7cf59ca6d7351efbb516530dc278c6c0905c38c2b714d
+  platform.txt
+    22c89cecea813ce2f81882072ce87bb1e41f34c0539d897712d80bb59d353e22
+
+NTRU builds were deliberately deferred; all three worker/manifests remain
+explicitly missing in the inventory. Their Mac dependency pins/multiarch paths
+and X25519's Mac extension pin remain unresolved runtime blockers. No hash was
+approved or old receipt/timing report rewritten. Full registry startup, backend
+suite, implementation admission and eventual server architecture still need
+their own verification. All processes from this pass finished; the VM can be
+stopped normally and retained for the next portability pass.
+
+Linux AMD64 preparation, 2026-10-22
+---------------------------------
+A separate scripts/build_ntru_linux.py preserves the original Mac builders and
+source/parameter pins. It accepts explicit verified Linux static dependencies,
+records resolved OpenSSL headers and dependency bytes, and emits candidate
+workers/manifests in an isolated marked checkout. The actual Debian build needs
+libcrypto.a plus explicit ordered libz.a and libzstd.a dependencies. Both research
+workers compiled successfully; their ELF NEEDED entries contain only libc.so.6.
+This does not yet establish complete conformance or platform admission.
+
+The builder records its compiler driver and selected inputs but is not hermetic: 
+not every system header, linker or compiler subprogram is individually pinned.
+Retain the recorded build image/package inventory alongside its manifest.
+The original Mac build scripts and runtime pins remain untouched.
+
+scripts/build_sntrup.py accepts --build-timeout-seconds (60..3600, default900)
+for make-install only. Its configure, worker/reference compilation and upstream
+test deadlines stay900s. Timed-out process groups are terminated. The first
+AMD64 attempt hit900s under QEMU; retain that failure separately from the retry.
+Neither this option nor successful compilation changes server worker limits.
+
+Exact Linux Python3.13.17 wheels are retained and installed offline with --no-deps;
+pip check passes after the Linux-conditional greenlet pin. The runtime source
+snapshot is explicitly an uncommitted source inventory, not a Git commit.
+Four platform-aware runtime adapters and their loader are staged separately.
+Before using them, freeze reviewed metadata and source, validate actual manifests,
+and record additive implementation reviews anchored to the original Mac release
+identities. Never rewrite old receipts or use observed binaries as automatic pins.
+
+All 32 original Mac releases/1466 public profiles were inventoried without opening
+a database. This public evidence is retained privately with its exact checksum.
+It is not itself approval of a Linux build. Archived releases with no issued
+challenges can lack an AdapterVersion row; initialize missing ORIGINAL anchors
+only through scripts/beta_release_baselines.py after transfer verification
+(see docs/beta-release-baselines.txt),
+never by letting an unadmitted Linux runtime choose them on first issuance.
+
+No actual DigitalOcean sandbox, runtime image, cloud database or participant
+cutover has been tested. QEMU results must not be presented as native benchmark
+measurements or provider capacity. The original ARM64 evidence above remains
+separate historical evidence with its exact source/runtime scope.
+
+22 October local container checkpoint
+
+The final isolated runtime now builds offline and validates all 32 registered
+adapters as UID 10001. See runtime-candidate-checkpoint.txt for exact source and
+image identities, bounded test results and remaining host checks. The working
+Mac platform adapters and original release records remain unchanged. No Linux
+build was admitted into a participant database.

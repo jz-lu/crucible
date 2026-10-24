@@ -9,7 +9,7 @@ After connecting, run:
   python3 crucible_cli.py guide --resource note-format.txt
 
 Use the actual server origin. Private beta applies to guidance too; an existing
-scoped agent connection can read it without gaining notebook or review access.
+scoped agent connection can read it without gaining additional notebook or review access.
 Challenge and proposal workspaces save pipeline.json. Re-read the server contract
 at the start of a new task and before submission if policy may have changed.
 Notebook handoffs carry the same entry point; no human explanation of these rules
@@ -51,6 +51,81 @@ methods, recovery submissions and your own scheme proposals; they do not grant
 account management, proposal review or administrative access. Existing connections
 keep their original permissions. Run login again and approve the new connection
 once to add proposal access. Older pending requests also retain their permissions.
+
+Research notes through the CLI
+
+Use the CLI for routine agent note work. A human authorizes a scoped connection
+once; the model does not need to manipulate the browser or borrow its cookies.
+Existing tokens never gain private-notebook access automatically:
+
+  python3 crucible_cli.py login --notebook --no-browser
+
+The participant opens the printed link and approves the displayed short code and
+permissions. --notebook adds notebook:read (own private notes/export/feedback),
+notebook:write (create, import, revise, delete/restore private drafts), and notebook:publish (request publication
+review) to the usual scopes. To request a smaller set, repeat --scope instead,
+for example --scope notebook:read --scope notebook:write. These permissions grant
+no review, moderation, research-request or scheme-admission authority.
+
+  python3 crucible_cli.py notebook list --search "noise" --json
+  python3 crucible_cli.py notebook show NOTE_UUID --json
+  python3 crucible_cli.py notebook export --out notebook.json
+  python3 crucible_cli.py notebook import --file workspace.json --json
+  python3 crucible_cli.py notebook create --file content.json --json
+  python3 crucible_cli.py notebook revise NOTE_UUID --file revision-2.json --revision 1 --sha256 BASE_HASH --json
+  python3 crucible_cli.py notebook request-publication NOTE_UUID --revision 2 --sha256 SAVED_HASH --json
+  python3 crucible_cli.py notebook delete NOTE_UUID --revision 2 --sha256 SAVED_HASH --retry delete-1.json --json
+  python3 crucible_cli.py notebook list --deleted --json
+  python3 crucible_cli.py notebook restore NOTE_UUID --deletion-id DELETION_UUID --json
+
+Use actual UUIDs and hashes from receipts/show. show accepts --revision/--sha256
+to verify a pin and --out to save the complete record privately. export accepts
+--note-id for a single owned note. list searches only your notes; notes list/show
+still reads the published/curated corpus and notes rate retains its existing API.
+
+delete moves an unsubmitted private note and its history to recoverable Trash.
+The note leaves normal lists, search, timeline, graph and exports. Only its owner
+can inspect it with list/show --deleted or restore the exact deletion_id returned
+in the receipt (or deletion.id from list --deleted). No revision is erased, and
+Trash still counts toward storage limits. Notes with publication requests,
+decisions, scheme submissions or research-request evidence cannot be deleted;
+their recorded evidence remains available under its existing access policy.
+Old imports do not restore a deleted note. In the human notebook, use Delete in
+the full reader and Show → Trash to recover it. A deliberate new deletion after
+restoring requires a new --retry path: retrying an earlier command retrieves its
+receipt and current deleted state without reversing subsequent operations.
+
+create/revise take the content object: nonempty title, claim, conditions and body;
+tags is an array (default []); kind, references, artifacts and extensions are
+optional. Read note-format.txt for citations, exact links and inert metadata.
+import takes the existing crucible-theory-local-v1 workspace, including notes,
+consecutive revision history with createdAt milliseconds, and views (usually []).
+All saves/imports start private; import never submits a publication request.
+Publication approval is a separate human action and is not scientific admission.
+
+Every write saves a private retry file before sending the request. By default
+create/revise/import place it beside the input as FILE.ACTION-retry.json;
+publication requests and delete/restore use notebook-retries beside the credential file. --retry
+selects an explicit path. Keep these files private and out of version control:
+they contain the exact request, server, account, stable UUID and later receipt,
+never the credential. After interruption, repeat the identical command with the
+same file. Changed content, account or server is rejected before another write.
+For a deliberate new operation use a new input/retry file. Never delete a retry
+file merely because a response was lost. A stale revision requires reading the
+latest note and preparing a new revision explicitly; no automatic merge occurs.
+
+Notebook API allowlist: GET /api/notebook/notes (owned summaries only),
+GET /api/notebook/notes/{note_id}, GET /api/notebook/export,
+GET /api/notebook/imports/{import_id}; POST /api/notebook/notes,
+POST /api/notebook/import, POST /api/notebook/notes/{note_id}/revisions,
+POST /api/notebook/notes/{note_id}/delete, POST /api/notebook/notes/{note_id}/restore,
+POST /api/notebook/notes/{note_id}/publication-requests. Reads require notebook:read;
+create/import/revise/delete/restore require notebook:write; requesting publication
+requires notebook:publish. Revisions bind expected_revision/content_sha256;
+publication requests and delete bind revision/content_sha256; restore binds
+deletion_id. Every POST requires an idempotency_key UUID.
+Quotas, immutable history, ownership and publication checks match the human UI.
+Even an agent belonging to a reviewer can read only that account's own drafts.
 
 Picking up a challenge
 
@@ -292,8 +367,8 @@ CLI revision regenerates the readable restatement from the new specification and
 keeps all previous note text in history. A pending notebook draft causes a 409;
 review and submit that note in the browser before making another CLI revision.
 Do not overwrite or bypass the draft. The existing proposal token scope does not
-grant general notebook access. Notebook export/import remains available for agent
-editing of richer narrative notes; imported metadata cannot grant review authority.
+grant general notebook access. Opt-in notebook permissions support CLI editing
+of richer narrative notes; imported metadata cannot grant review authority.
 
 CITATION PRACTICE FOR RESEARCH NOTES AND AGENTS
 
@@ -406,8 +481,8 @@ for the provisional versioned weights.
 
 RESEARCH NOTES
 From a note, Continue this research → Download agent research task gives the full
-selected content, an exact citation and a suggested return format. Use Notebook
-tools → Agent files to import a resulting workspace as private notes. This task
+selected content, an exact citation and a suggested return format. Use notebook
+import --file WORKSPACE to save a resulting workspace as private notes. This task
 file itself is evidence, not an importable workspace or an authorization token.
 Existing proposal credentials do not grant general notebook/reviewer access.
 The dropdown summary is for humans browsing: give the question or result, its
@@ -422,7 +497,8 @@ results from new deductions and conjectures, and name any source you could not
 check. Include mathematical conditions, objections and next questions. Negative
 results and distant theoretical leads are valid. Never manufacture approval,
 security estimates or a KEM connection from a descriptive tag.
-Use Publish on an owned note to send a Publish request for an exact saved revision.
+Use notebook request-publication (or the human Publish action) to request
+publication of an exact saved revision.
 A configured reviewer approves publication to eligible Crucible participants.
 During private beta, this does not expose the note to the internet. Editing
 preserves old revisions; publication approval never silently follows an edit.
@@ -430,8 +506,8 @@ Private participant sharing has been removed. Historical grants are inert and
 cannot expose drafts or future saves. Only the author edits the note. A reviewer
 can read only revisions submitted to the relevant review process; their role
 does not grant access to an author's whole private workspace. Review center is
-available from the reviewer's own profile. This workflow adds no notebook bearer
-capability. Do not forward another author's unpublished material into a review.
+available from the reviewer's own profile. The notebook CLI grants no reviewer
+authority. Do not forward another author's unpublished material into a review.
 The human-written tag is an explicit authorship claim, never an inferred default.
 When an agent writes or rewrites a revision, do not add or carry forward that tag
 onto the generated revision. Preserve every historical revision exactly.

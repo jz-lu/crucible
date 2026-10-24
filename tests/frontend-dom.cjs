@@ -80,7 +80,7 @@ function parseHTML(source) {
   document.body = document.querySelector('body'); document.activeElement = document.body; return document;
 }
 async function flush() { for (let i = 0; i < 6; i++) await new Promise(resolve => setImmediate(resolve)); }
-async function createApp({schemes, user = null, hash = '#challenge', responder, notebook} = {}) {
+async function createApp({schemes, user = null, hash = '#challenge', responder, notebook, bootstrap = false} = {}) {
   const web = path.resolve(__dirname, '../web');
   const document = parseHTML(fs.readFileSync(path.join(web, 'index.html'), 'utf8'));
   const window = new Events(); window.scrollTo = () => {}; document.defaultView = window;
@@ -108,7 +108,7 @@ async function createApp({schemes, user = null, hash = '#challenge', responder, 
     return {ok: true, status: 200, json: async () => data, text: async () => typeof data === 'string' ? data : JSON.stringify(data)};
   };
   const sandbox = {document, window, location, history, fetch, URL, URLSearchParams, AbortController, Blob, TextEncoder, console, navigator: {}, crypto: {randomUUID: () => 'test-uuid'}, setTimeout: () => 1, clearTimeout: () => {}, setInterval: () => 1};
-  vm.createContext(sandbox); for (const file of ['assumptions.js', 'proposal-retractions.js', 'app.js']) vm.runInContext(fs.readFileSync(path.join(web, file), 'utf8'), sandbox, {filename:file}); await flush();
+  vm.createContext(sandbox); for (const file of [...(bootstrap ? ['bootstrap.js'] : []), 'assumptions.js', 'proposal-retractions.js', 'app.js']) vm.runInContext(fs.readFileSync(path.join(web, file), 'utf8'), sandbox, {filename:file}); await flush();
   return {document, window, location, history, requests, sandbox, envelope, $: selector => { const element = document.querySelector(selector); if (!element) throw new Error('Missing element: ' + selector); return element; }, navigate: async next => { location.hash = next; await flush(); }};
 }
 module.exports = {createApp, flush};

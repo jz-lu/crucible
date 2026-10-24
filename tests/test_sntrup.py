@@ -113,7 +113,9 @@ def test_disagreement_preserves_original_target_without_retry(monkeypatch):
 
 
 def test_changed_artifact_and_missing_worker_are_rejected(monkeypatch, tmp_path):
-    monkeypatch.setattr(kem, "WORKER_SHA256", "0" * 64)
+    substituted = tmp_path / "unreviewed-worker"
+    substituted.write_bytes(b"unreviewed worker; must never be executed")
+    monkeypatch.setattr(kem, "WORKER", substituted)
     with pytest.raises(kem.GenerationUnavailable, match="reviewed pin"):
         kem.generate(kem.PROFILE_ID)
     monkeypatch.setattr(kem, "WORKER", tmp_path / "missing")

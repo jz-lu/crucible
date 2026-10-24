@@ -127,3 +127,9 @@
 .nb-review-workspace .nb-full{max-width:100%}
 
 .nb-review-workspace{padding-top:0}
+
+/* Keep draft removal inside Edit, separate from saving a revision. */
+.nb-editor-actions{flex-wrap:wrap}
+.nb-editor-actions .nb-remove-note{margin-right:auto;color:var(--error)}
+
+.nb-trash-actions{gap:16px;flex-wrap:wrap}

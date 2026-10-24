@@ -1,0 +1,115 @@
+Releasing the private beta
+==========================
+
+Normal development uses a branch and pull request. The stable branch-protection
+check is "CI passed" in the CI workflow. A repository administrator must require
+it and protect main; write access alone cannot establish that rule. This check
+means portable Python tests, migrations, frontend regressions and the reviewed
+runtime source contract passed. It does not mean native workers were rebuilt or
+every backend/platform test ran. Optional PostgreSQL fixtures are explicitly
+skipped without their dedicated synthetic database configuration.
+
+Release beta is a separate manual GitHub Actions workflow. Choose main, then Run
+workflow. With Publish enabled it builds, verifies and publishes one app image;
+with Publish disabled it performs the same native checks without publishing.
+Neither mode deploys the website. Pushes and merges never trigger this workflow.
+
+One-time setup
+--------------
+Add the repository secret DIGITALOCEAN_REGISTRY_TOKEN. It must have Registry Read and Update permission for
+the existing private registry crucible-beta. It needs no app/database permissions.
+Each run exchanges this API token for fresh Docker credentials expiring in one
+hour, using the fixed DigitalOcean registry endpoint. Credentials live only in
+an ephemeral runner's mode-0700 directory/mode-0600 file and are removed in an
+always cleanup step. They are never Docker build arguments or release artifacts.
+The API token's own expiry remains separate: choose an appropriate expiration,
+record/rotate it, and replace the GitHub secret when it expires. A one-hour Docker
+configuration is not a durable GitHub secret. No secret values belong in Git.
+A repository administrator can add a protected GitHub environment later; this
+initial workflow does not depend on environment features or their plan availability.
+
+The workflow uses native Linux AMD64 GitHub runners and the exact reviewed app
+base recorded in deploy/release-runtime.json. The private base must be retained
+in the registry: do not delete it during image cleanup. Nothing is compiled or
+installed into the crypto runtime on an ordinary release. Python 3.13.17, native
+workers, their notices and the reviewed dependency closure come from that image.
+No self-hosted permanent build server is required by this workflow.
+
+What is checked
+---------------
+deploy/release.py prepares only a clean, exact Git commit. Its context contains
+explicit source directories and three root configuration files. It never copies
+.git, .local, a virtual environment, environment files, credentials or databases.
+Complete source directories replace the base copies, so deleting a UI file does
+not silently leave the old file in the image. Image files are root-owned and
+readable but not writable by runtime UID10001. Build/test networking is disabled.
+
+The source contract freezes scheme implementations and supporting data/scripts,
+dependencies, migrations, the central database module, generation policy and runtime budget
+configuration. A small explicit list of application modules plus web/docs can
+change on the ordinary path. Some application modules also define database models;
+the separate fresh-migration/alembic-check gate detects model/schema disagreement.
+Schema changes require explicit migration review rather than relying on this path
+allowlist alone. New executable modules require deliberate review of
+that list. Some documentation is also bound into scheme provenance; the native
+manifest check catches such changes even if the source path is ordinarily allowed.
+This contract is a guard against accidental drift, not a substitute for reviewing
+application changes or a security boundary against someone authorized to rewrite
+the workflow and its contract.
+
+The resulting image must validate the whole registry and match the exact raw
+manifest hashes for all 32 releases and 1,466 profiles, including archived ones.
+It runs the named access/UI, catalogue, projection, math-asset, milestone and scoring regression
+batches from the selected commit. These are bounded tests with synthetic local
+state, not a claim of exhaustive cryptographic correctness, production capacity
+or a full backend suite. The portable source checks run first. Published images
+are the exact tested images, not a second rebuild.
+
+Publishing records the full Git SHA, unique run/attempt tag, immutable registry
+digest, config digest and test evidence. A digest-pinned remote manifest must
+match the tested build's exact image configuration. The summary and downloadable
+release artifact contain no application secrets. A failed upload can have remote
+side effects; inspect its logs and registry before retrying. A new run/attempt
+uses another tag. Do not use latest or a mutable tag as deployment identity.
+
+Deploying a verified ordinary release
+------------------------------------
+Use the workflow's published image digest/tag in the existing Crucible App
+Platform web component. Preserve the component, environment, database, domain,
+instance size, command, allowlist and disabled automatic deployments. Wait for
+the provider deployment to complete, then check health, anonymous private-route
+denial, sign-in and the changed user flow. Keep the previous working digest for
+rollback. This workflow deliberately has no provider deployment credential or
+API call; automatic deployment can be added after its configuration-preservation
+and live-verification steps are reviewed.
+
+An ordinary web-only release does not require rebuilding or rebinding the
+scheduled backup job. Its declaration continues to identify its own immutable
+backup/code release and unchanged runtime configuration. Preserve that image,
+declaration, original server key and encrypted recovery evidence. The release
+receipt records the retained reviewed backup image as provenance, not as a claim
+that this workflow inspected or changed the provider's backup job. A restore may
+use the preserved backup/code release or a separately verified compatible newer
+app image. Never label an old backup as created by the new website image.
+
+When the ordinary path refuses a change
+---------------------------------------
+Scheme, Python/dependency, native artifact, schema, runtime configuration, budget
+or backup changes need a separate reviewed release. Do not update contract hashes
+merely to turn CI green. Build/test the new runtime, compare declarations and
+implementation identities, preserve old receipts, and use the existing explicit
+implementation-build admission process where needed. Schema/configuration changes
+also require a migration and paired backup/recovery plan. CI never migrates a live
+database, approves an implementation or invents a correctness/security review.
+
+Maintenance locations
+---------------------
+.github/workflows/tests.yml          portable checks and stable aggregate
+.github/workflows/release-beta.yml   intentional native build/test/publication
+deploy/release.py                    source/context/runtime/publication checks
+deploy/release-runtime.json          reviewed base, frozen files and manifests
+tests/test_release_pipeline.py       offline tests; no credentials or Docker
+
+The initial native runtime was reviewed outside CI and retained by digest. Verify
+setup with a successful GitHub release run after the secret and committed main
+are available; offline tests alone do not demonstrate an operational workflow.

@@ -91,8 +91,8 @@ async def check_capacity(users=150, slots=2, timeout=30.0):
                                 done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
                                 for task in done:
                                     response = task.result()
-                                    if response.status_code != 503 or response.headers.get("retry-after") != "3":
-                                        raise AssertionError("Saturated requests must return 503 with Retry-After")
+                                    if response.status_code != 429 or response.headers.get("retry-after") != "3":
+                                        raise AssertionError("Saturated requests must return 429 with Retry-After")
                             for path in ("/health", "/api/session", "/api/schemes"):
                                 started = time.monotonic()
                                 response = await client.get(path, headers=request_headers[0])
@@ -108,7 +108,7 @@ async def check_capacity(users=150, slots=2, timeout=30.0):
                     if any(isinstance(response, BaseException) for response in responses):
                         raise AssertionError("A synthetic HTTP request failed before receiving a response")
                     statuses = Counter(response.status_code for response in responses)
-                    if statuses != Counter({200: slots, 503: users - slots}) or calls != slots:
+                    if statuses != Counter({200: slots, 429: users - slots}) or calls != slots:
                         raise AssertionError(f"Unexpected admission counts: {dict(statuses)}")
             snapshot = app.state.generation_limiter.snapshot()
             if snapshot["inflight"] != 0 or snapshot["peak_inflight"] != slots:

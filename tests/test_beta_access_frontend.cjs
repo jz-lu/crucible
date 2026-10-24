@@ -114,7 +114,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     const app = await createApp({schemes: [scheme], user, hash: '#challenge', responder: (url, options, envelope) =>
       url.pathname === '/api/session' ? envelope({user, csrf_token: 'csrf', access: access(status)}) : undefined});
     const gate = deferred(), original = app.sandbox.fetch;
-    app.sandbox.fetch = (url, options) => url === '/api/schemes' ? gate.promise : original(url, options);
+    app.sandbox.fetch = (url, options) => url.startsWith('/api/schemes') ? gate.promise : original(url, options);
     const pending = app.sandbox.refreshProfiles();
     status = 'revoked';
     await app.sandbox.synchronizeSession();

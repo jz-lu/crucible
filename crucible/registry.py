@@ -206,6 +206,37 @@ def presentation_manifests(adapter):
     return profiles
 
 
+def presentation_profile_ids(adapter):
+    """Immutable display membership without copying full protocol manifests."""
+    return _presentation_profile_ids(adapter, adapter.manifests,
+                                     getattr(adapter, "IMPLEMENTATION_SHA256", None))
+
+
+def presentation_record_profiles(adapter):
+    """Immutable scalar tuples for receipt labels, not execution or admission.
+
+    Each tuple is (id, native size, kind, label, inherits records). Consumers
+    needing only these values must not copy full parameter/protocol manifests.
+    The provider and source identity invalidate this projection together with
+    the existing presentation snapshot; it contains no participant data.
+    """
+    return _presentation_record_profiles(adapter, adapter.manifests,
+                                          getattr(adapter, "IMPLEMENTATION_SHA256", None))
+
+
+@lru_cache(maxsize=64)
+def _presentation_record_profiles(adapter, provider, source_sha256):
+    return tuple((profile["id"], profile.get("instance_size", profile.get("parameter_bits")),
+                  profile.get("profile_kind"), profile.get("profile_label"),
+                  profile.get("record_inheritance", True) is not False)
+                 for profile in _presentation_profiles(adapter, provider, source_sha256))
+
+
+@lru_cache(maxsize=64)
+def _presentation_profile_ids(adapter, provider, source_sha256):
+    return frozenset(profile["id"] for profile in _presentation_profiles(adapter, provider, source_sha256))
+
+
 def _has_unsafe_json_integer(value):
     """Browser JSON.parse rounds integers beyond Number's exact range."""
     if type(value) is int:
@@ -459,6 +490,42 @@ def catalogue():
     return result
 
 
+def progress_catalogue():
+    """Fresh compact navigation metadata for live progress queries.
+
+    Only static display fields are cached. Recovery records, participants and
+    response envelopes still come from each request; the full catalogue and
+    exact manifest/generation APIs retain their existing paths and checks.
+    """
+    return deepcopy(_progress_catalogue(metadata_identity(), tuple(CURRENT.items())))
+
+
+def navigation_catalogue():
+    """The cached label index, copied before attaching this request's progress.
+
+    No protocol, cryptographic parameters, implementation metadata or graph
+    metrics are sent to navigation clients. Full details remain release-specific.
+    """
+    return progress_catalogue()
+
+
+@lru_cache(maxsize=4)
+def _progress_catalogue(identity, current):
+    # Derive labels/order from the same descriptors as the full response once,
+    # rather than maintaining a second interpretation of default progressions.
+    def compact(release):
+        return {**{key: release[key] for key in
+                    ("id", "version", "name", "display_group", "selection_kind", "record_inheritance")},
+                "default_progression": bool(release["default_progression"]),
+                "profiles": [{key: profile[key] for key in
+                    ("id", "instance_size", "parameter_bits", "stage_number", "stage_label", "stage_position",
+                     "stage_context", "profile_label", "profile_kind", "profile_order", "native_parameter_label")
+                    if key in profile}
+                    for profile in release["profiles"]]}
+    return [{**compact(scheme), "previous_releases": [compact(release) for release in scheme["previous_releases"]]}
+            for scheme in catalogue()]
+
+
 def catalogue_revision():
     """Identify immutable presentation metadata, never changing recovery records.
 
@@ -501,7 +568,7 @@ def participant_counts(session, releases):
             # Intersect both registered endpoints: compatibility cannot create a
             # profile that either release does not actually support.
             source = ADAPTERS.get((scheme_id, source_version))
-            source_profiles = {profile["id"] for profile in presentation_manifests(source)} if source else set()
+            source_profiles = presentation_profile_ids(source) if source else frozenset()
             shared = profiles.intersection(declared_profiles, source_profiles)
             if shared:
                 eligible.append(and_(Challenge.scheme_version == source_version,

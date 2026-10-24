@@ -20,7 +20,7 @@ from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, JSON, String,
 from sqlalchemy.orm import Mapped, aliased, mapped_column
 
 from .db import Base, User
-from . import protocol_proposals, proposal_notes, proposal_retractions, notebook_sharing, notebook_moderation, notebook_graph, note_ratings
+from . import protocol_proposals, proposal_notes, proposal_retractions, notebook_sharing, notebook_moderation, notebook_graph, note_ratings, machine_auth, notebook_trash
 
 
 FORMAT = "crucible-theory-local-v1"
@@ -337,8 +337,10 @@ def check_capacity(session, user, added=1):
     if count + added > MAX_NOTES:
         raise HTTPException(409, "This notebook currently supports 200 notes per account. Existing notes remain saved.")
 
-def workspace_for(session, user, note_id=None):
+def workspace_for(session, user, note_id=None, *, include_deleted=True):
     query = select(NotebookNote).where(NotebookNote.author_id == user.id)
+    if not include_deleted:
+        query = query.where(NotebookNote.id.not_in(notebook_trash.deleted_ids()))
     if note_id:
         query = query.where(NotebookNote.id == str(note_id))
     notes = session.scalars(query.order_by(NotebookNote.id)).all()
@@ -371,6 +373,9 @@ def workspace_for(session, user, note_id=None):
             for binding in view.get("bindings", []) if isinstance(view.get("bindings", []), list) else []:
                 if isinstance(binding, dict) and binding.get("noteId") in imported.id_map:
                     binding["noteId"] = imported.id_map[binding["noteId"]]
+            if not include_deleted:
+                view["bindings"] = [binding for binding in view.get("bindings", [])
+                                    if binding.get("noteId") in note_ids]
     if len(_export_bytes(workspace)) > MAX_WORKSPACE_BYTES:
         raise HTTPException(409, "This change would exceed the notebook's 2 MiB capacity, including revision history. Existing notes are unchanged; your draft has not been saved.")
     return workspace
@@ -378,20 +383,20 @@ def workspace_for(session, user, note_id=None):
 
 
 
-def proposal_request_clause(settings, user):
+def proposal_request_clause(settings, user, *, own_only=False):
     """Whether this exact revision has a proposal the reader may discover."""
     from . import research_reviews
 
     link, revision = proposal_notes.ProposalNoteLink, protocol_proposals.ProtocolProposalRevision
     scheme_query = select(link.note_id, link.note_revision_id).join(revision,
         and_(revision.id == link.proposal_revision_id, revision.proposal_id == link.proposal_id))
-    if not protocol_proposals.is_reviewer(settings, user):
+    if own_only or not protocol_proposals.is_reviewer(settings, user):
         scheme_query = scheme_query.where(link.author_id == user.id)
     scheme = tuple_(NotebookRevision.note_id, NotebookRevision.id).in_(scheme_query)
     request = research_reviews.ResearchRequest
     research = select(request.sources[0]["note_id"].as_string(), request.sources[0]["revision"].as_integer(),
         request.sources[0]["content_sha256"].as_string()).where(request.purpose.in_(research_reviews.PROPOSAL_PURPOSES))
-    if not protocol_proposals.is_reviewer(settings, user):
+    if own_only or not protocol_proposals.is_reviewer(settings, user):
         research = research.where(request.author_id == user.id)
     # Uncorrelated membership sets avoid scanning/decoding every request packet
     # again for each historical note revision. Both identities remain exact.
@@ -520,7 +525,7 @@ def _read_browse_cursor(value):
         raise HTTPException(422, "Invalid notebook page cursor. Restart the notebook list.") from None
 
 
-def request_summaries(session, settings, user, revision_refs):
+def request_summaries(session, settings, user, revision_refs, *, own_only=False):
     """Batch trusted request metadata for exact visible note revisions.
 
     No authored tags/extensions, proposal bodies, or frozen research packets
@@ -551,7 +556,7 @@ def request_summaries(session, settings, user, revision_refs):
             withdrawal.target_id == link.proposal_id))
         .where(tuple_(*identity).in_(refs), link.note_id == NotebookRevision.note_id)
         .order_by(link.created_at, link.proposal_id))
-    if not protocol_proposals.is_reviewer(settings, user):
+    if own_only or not protocol_proposals.is_reviewer(settings, user):
         schemes = schemes.where(link.author_id == user.id)
     for note_id, number, digest, proposal_id, proposal_number, decision, test_only, withdrawn_at in session.execute(schemes):
         item = {"id": proposal_id, "kind": "scheme_admission", "status": decision or "submitted",
@@ -571,7 +576,7 @@ def request_summaries(session, settings, user, revision_refs):
         .outerjoin(withdrawal, and_(withdrawal.target_kind == proposal_retractions.RESEARCH,
             withdrawal.target_id == request.id))
         .where(tuple_(*primary).in_(refs)).order_by(request.created_at, request.id))
-    if not protocol_proposals.is_reviewer(settings, user):
+    if own_only or not protocol_proposals.is_reviewer(settings, user):
         query = query.where(request.author_id == user.id)
     for note_id, number, digest, identifier, purpose, outcome, test_only, withdrawn_at in session.execute(query):
         item = {"id": identifier, "kind": purpose, "status": outcome or "submitted",
@@ -585,8 +590,9 @@ def request_summaries(session, settings, user, revision_refs):
 
 def register_routes(app, db, settings, clock, user_for, throttle):
     def account(request, session, mutation=False):
-        if "authorization" in request.headers:
-            raise HTTPException(403, "Use your browser account for the notebook. Agent notebook access is not enabled yet.")
+        if ("authorization" in request.headers
+                and machine_auth.required_scope(request.method, request.url.path) not in machine_auth.NOTEBOOK_SCOPES):
+            raise HTTPException(403, "This notebook action requires a browser account.")
         user = user_for(request, session, mutation=mutation)
         if mutation:
             session.execute(select(User.id).where(User.id == user.id).with_for_update())
@@ -594,11 +600,14 @@ def register_routes(app, db, settings, clock, user_for, throttle):
 
     def publication_map(session, revisions):
         if not revisions:
-            return {}
-        return {row.revision_id: row for row in session.scalars(select(NotebookPublication).where(
-            NotebookPublication.revision_id.in_([item.id for item in revisions]))).all()}
+            return {}, {}
+        rows = session.execute(select(NotebookPublication, User.handle)
+            .outerjoin(User, User.id == NotebookPublication.reviewer_id).where(
+                NotebookPublication.revision_id.in_([item.id for item in revisions]))).all()
+        return ({row.revision_id: row for row, _ in rows},
+                {row.revision_id: handle for row, handle in rows})
 
-    def revision_data(session, revision, publication=None, withdrawal=None):
+    def revision_data(revision, publication=None, withdrawal=None, reviewer_handle=None):
         data = {"revision": revision.revision, "created_at": revision.created_at,
                 "content_sha256": revision.content_sha256, "content": revision.content,
                 "publication_status": (publication.decision or "submitted") if publication else "private",
@@ -606,9 +615,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
         if revision.source_revision is not None:
             data["imported_created_at"] = revision.source_revision["createdAt"]
         if publication:
-            reviewer = session.get(User, publication.reviewer_id) if publication.reviewer_id else None
             data["publication"] = {"requested_at": publication.requested_at, "reviewed_at": publication.reviewed_at,
-                "reason": publication.reason, "reviewer": {"handle": reviewer.handle} if reviewer else None,
+                "reason": publication.reason, "reviewer": {"handle": reviewer_handle} if reviewer_handle is not None else None,
                 "test_only_self_review": publication.test_only_self_review,
                 "scope": "Publication makes this exact revision readable to eligible Crucible participants. It does not certify mathematics or activate a scheme."}
         if withdrawal:
@@ -623,7 +631,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
         return and_(NotebookPublication.decision == "approved", or_(*allowed),
                     NotebookPublication.revision_id.not_in(notebook_moderation.withdrawn_ids()))
 
-    def visible(session, user, note_id=None, *, review=False):
+    def visible(session, user, note_id=None, *, review=False, include_deleted=False):
         query = select(NotebookRevision).join(NotebookNote, NotebookNote.id == NotebookRevision.note_id).outerjoin(
             NotebookPublication, NotebookPublication.revision_id == NotebookRevision.id)
         permitted = [NotebookNote.author_id == user.id, approved_clause()]
@@ -631,6 +639,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             permitted.append(NotebookPublication.id.is_not(None))
             permitted.append(NotebookRevision.id.in_(select(proposal_notes.ProposalNoteLink.note_revision_id)))
         query = query.where(or_(*permitted))
+        if not include_deleted:
+            query = query.where(NotebookNote.id.not_in(notebook_trash.deleted_ids()))
         if note_id is not None:
             query = query.where(NotebookNote.id == note_id)
         return query
@@ -653,24 +663,25 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 "publication_status": "approved", "publication": {"test_only_self_review": test_only}, "summary": True}
                 for identifier, number, digest, created, title, claim, tags, kind, test_only in rows}
 
-    def note_data(session, note, user, revisions, *, selected=None, summary=False):
-        publications = publication_map(session, revisions)
+    def note_data(session, note, user, revisions, *, selected=None, summary=False, agent=False):
+        publications, reviewer_handles = publication_map(session, revisions)
         withdrawals = notebook_moderation.records(session, [item.id for item in revisions])
         chosen = next((item for item in revisions if item.revision == selected), None) if selected is not None else revisions[-1]
         if chosen is None:
             raise HTTPException(404, "Note revision not found.")
         owner = session.get(User, note.author_id)
-        serial = [revision_data(session, item, publications.get(item.id), withdrawals.get(item.id)) for item in ([chosen] if summary else revisions)]
+        serial = [revision_data(item, publications.get(item.id), withdrawals.get(item.id), reviewer_handles.get(item.id))
+                  for item in ([chosen] if summary else revisions)]
         submissions = (proposal_notes.review_records(session, revisions, settings=settings)
             if user.id == note.author_id or protocol_proposals.is_reviewer(settings, user) else {})
         for data, item in zip(serial, ([chosen] if summary else revisions)):
             data["scheme_review"] = submissions.get(item.id)
-        current = revision_data(session, chosen, publications.get(chosen.id), withdrawals.get(chosen.id))
+        current = next(data for data in serial if data["revision"] == chosen.revision)
         shared = shared_summaries(session, [note.id]).get(note.id)
         refs = [(note.id, item.revision, item.content_sha256) for item in revisions]
         if shared:
             refs.append((note.id, shared["revision"], shared["content_sha256"]))
-        requests = request_summaries(session, settings, user, refs)
+        requests = request_summaries(session, settings, user, refs, own_only=agent)
         for data in serial:
             data["requests"] = requests.get((note.id, data["revision"], data["content_sha256"]), [])
         if shared:
@@ -678,10 +689,14 @@ def register_routes(app, db, settings, clock, user_for, throttle):
         proposal_revision = next(({"revision": item.revision, "content_sha256": item.content_sha256,
             "requests": proposals} for item in reversed(revisions)
             if (proposals := proposal_records(requests.get((note.id, item.revision, item.content_sha256), [])))), None)
-        return {"id": note.id, "owner": {"id": owner.id, "handle": owner.handle}, "can_edit": user.id == owner.id,
-                "can_review": protocol_proposals.is_reviewer(settings, user) and (user.id != owner.id or protocol_proposals.can_self_review(settings, user)),
-                "can_self_review": protocol_proposals.can_self_review(settings, user),
-                "can_moderate": protocol_proposals.is_reviewer(settings, user),
+        deletion = notebook_trash.active(session, note.id)
+        return {"id": note.id, "owner": {"id": owner.id, "handle": owner.handle}, "can_edit": user.id == owner.id and deletion is None,
+                "can_delete": user.id == owner.id and deletion is None and not notebook_trash.has_review_history(session, note.id),
+                "can_restore": user.id == owner.id and deletion is not None,
+                "deletion": notebook_trash.data(deletion) if deletion else None,
+                "can_review": not agent and protocol_proposals.is_reviewer(settings, user) and (user.id != owner.id or protocol_proposals.can_self_review(settings, user)),
+                "can_self_review": not agent and protocol_proposals.can_self_review(settings, user),
+                "can_moderate": not agent and protocol_proposals.is_reviewer(settings, user),
                 "created_at": note.created_at, "revision": chosen.revision, "content_sha256": chosen.content_sha256,
                 "publication_status": current["publication_status"], "revision_count": len(revisions), "revisions": serial,
                 "shared_revision": shared, "proposal_revision": proposal_revision, "imported": note.source_id is not None}
@@ -691,6 +706,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             NotebookNote.author_id == user.id).with_for_update())
         if note is None:
             raise HTTPException(404, "Note not found.")
+        notebook_trash.require_active(session, note.id)
         return note
 
     def all_revisions(session, note):
@@ -736,7 +752,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
     def list_notes(request: Request, after: str | None = Query(default=None, max_length=768),
                    limit: int = Query(default=50, ge=1, le=100), proposals_only: bool = False,
                    include_curated: bool = False, q: str = Query(default="", max_length=200),
-                   scope: Literal["all", "mine", "shared", "literature", "human"] = "all",
+                   scope: Literal["all", "mine", "shared", "literature", "human", "trash"] = "all",
                    tag: str | None = Query(default=None, min_length=1, max_length=100)):
         try:
             for value in (q, tag):
@@ -748,16 +764,26 @@ def register_routes(app, db, settings, clock, user_for, throttle):
         cursor = _read_browse_cursor(after) if after is not None else None
         with db.transaction() as session:
             user = account(request, session)
+            agent = "authorization" in request.headers
+            if agent:
+                # A notebook credential covers only the author's own records,
+                # even when the account is also a configured reviewer.
+                if scope not in {"all", "mine", "trash"} or include_curated:
+                    raise HTTPException(422, "Agent notebook listing supports owned notes only. Use the published-note API for community notes.")
+                if scope != "trash":
+                    scope = "mine"
             if scope == "shared":
                 raise HTTPException(410, notebook_sharing.RETIRED)
             # First identify the latest VISIBLE revision; search never selects
             # an old matching draft or discloses an unpublished later revision.
-            newest_proposal = func.max(case((proposal_request_clause(settings, user), NotebookRevision.revision), else_=None))
-            grouped = visible(session, user).with_only_columns(NotebookRevision.note_id,
+            newest_proposal = func.max(case((proposal_request_clause(settings, user, own_only=agent), NotebookRevision.revision), else_=None))
+            grouped = visible(session, user, include_deleted=scope == "trash").with_only_columns(NotebookRevision.note_id,
                 func.max(NotebookRevision.revision).label("latest"), func.count().label("revision_count"),
                 newest_proposal.label("proposal_revision"))
-            if scope == "mine":
+            if scope in {"mine", "trash"}:
                 grouped = grouped.where(NotebookNote.author_id == user.id)
+            if scope == "trash":
+                grouped = grouped.where(NotebookNote.id.in_(notebook_trash.deleted_ids()))
             if proposals_only:
                 grouped = grouped.having(newest_proposal.is_not(None))
             latest_visible = grouped.group_by(NotebookRevision.note_id).subquery()
@@ -786,7 +812,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             rows = session.execute(query.order_by(NotebookRevision.created_at.desc(), NotebookNote.id).limit(limit + 1)).all()
 
             curated, curated_requests = [], {}
-            if include_curated and scope != "mine":
+            if include_curated and scope not in {"mine", "trash"}:
                 for note in curated_collection():
                     latest = note["revisions"][-1]
                     content = latest["content"]
@@ -814,6 +840,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                                 key=lambda item: item[0])
             page = candidates[:limit]
             selected_rows = [value for _, kind, value in page if kind == "account"]
+            deleted = notebook_trash.records(session, [row[0].id for row in selected_rows])
             publications = {row.revision_id: row for row in session.scalars(select(NotebookPublication).where(
                 NotebookPublication.revision_id.in_([row[2] for row in selected_rows]))).all()} if selected_rows else {}
             withdrawals = notebook_moderation.records(session, [row[2] for row in selected_rows])
@@ -821,7 +848,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             refs = [(row[0].id, row[3], row[5]) for row in selected_rows]
             refs.extend((identifier, item["revision"], item["content_sha256"]) for identifier, item in shared.items())
             refs.extend((row[0].id, row[11], row[12]) for row in selected_rows if row[11] is not None)
-            requests = request_summaries(session, settings, user, refs)
+            requests = request_summaries(session, settings, user, refs, own_only=agent)
             for identifier, item in shared.items():
                 item["requests"] = requests.get((identifier, item["revision"], item["content_sha256"]), [])
             records = []
@@ -844,9 +871,11 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 if kind is not None:
                     content["kind"] = kind
                 records.append({"id": note.id, "owner": {"id": note.author_id, "handle": handle},
-                    "can_edit": user.id == note.author_id,
-                    "can_review": protocol_proposals.is_reviewer(settings, user) and (user.id != note.author_id or protocol_proposals.can_self_review(settings, user)),
-                    "can_self_review": protocol_proposals.can_self_review(settings, user),
+                    "can_edit": user.id == note.author_id and note.id not in deleted,
+                    "can_restore": user.id == note.author_id and note.id in deleted,
+                    "deletion": notebook_trash.data(deleted[note.id]) if note.id in deleted else None,
+                    "can_review": not agent and protocol_proposals.is_reviewer(settings, user) and (user.id != note.author_id or protocol_proposals.can_self_review(settings, user)),
+                    "can_self_review": not agent and protocol_proposals.can_self_review(settings, user),
                     "created_at": note.created_at, "revision": number, "content_sha256": digest,
                     "publication_status": status, "revision_count": count, "imported": note.source_id is not None,
                     "shared_revision": shared.get(note.id),
@@ -858,19 +887,29 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                                    "requests": requests.get((note.id, number, digest), [])}]})
             return {"notes": records, "next_after": _browse_cursor(-page[-1][0][0], page[-1][0][1])
                     if len(candidates) > limit else None,
-                    "capabilities": {"review_publication": protocol_proposals.is_reviewer(settings, user),
-                                     "self_review_publication": protocol_proposals.can_self_review(settings, user)}, "server_time": clock()}
+                    "capabilities": {"review_publication": not agent and protocol_proposals.is_reviewer(settings, user),
+                                     "self_review_publication": not agent and protocol_proposals.can_self_review(settings, user)}, "server_time": clock()}
 
     notebook_sharing.register_routes(app, db, settings, clock, account, throttle)
     notebook_moderation.register_routes(app, db, settings, clock, account, throttle)
     notebook_graph.register_routes(app, db, settings, account, visible)
+    notebook_trash.register_routes(app, db, clock, account, throttle)
     note_ratings.register_routes(app, db, clock, user_for, throttle)
 
     @app.get("/api/notebook/notes/{note_id}")
-    def get_note(note_id: UUID, request: Request, revision: int | None = Query(default=None, ge=1, le=MAX_REVISIONS)):
+    def get_note(note_id: UUID, request: Request, revision: int | None = Query(default=None, ge=1, le=MAX_REVISIONS),
+                 include_deleted: bool = False):
         with db.transaction() as session:
             user = account(request, session)
-            revisions = session.scalars(visible(session, user, str(note_id), review=True).order_by(NotebookRevision.revision)).all()
+            agent = "authorization" in request.headers
+            note = session.get(NotebookNote, str(note_id))
+            owner = note is not None and note.author_id == user.id
+            if (agent or include_deleted) and not owner:
+                raise HTTPException(404, "Note not found.")
+            if owner and not include_deleted:
+                notebook_trash.require_active(session, str(note_id))
+            revisions = session.scalars(visible(session, user, str(note_id), review=True,
+                include_deleted=include_deleted).order_by(NotebookRevision.revision)).all()
             # A pinned link must not fall through to another revision or expose
             # a private moderation reason. Only previously shared targets get
             # a neutral tombstone; unrelated private drafts still return 404.
@@ -883,7 +922,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                     raise HTTPException(410, notebook_moderation.NOTICE)
             if not revisions:
                 raise HTTPException(404, "Note not found.")
-            return {"note": note_data(session, session.get(NotebookNote, str(note_id)), user, revisions, selected=revision)}
+            return {"note": note_data(session, note, user, revisions, selected=revision, agent=agent)}
 
     @app.post("/api/notebook/notes")
     def create_note(body: CreateInput, request: Request):
@@ -895,9 +934,10 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             existing = session.scalar(select(NotebookNote).where(NotebookNote.author_id == user.id,
                 NotebookNote.idempotency_key == str(body.idempotency_key)))
             if existing:
+                notebook_trash.require_active(session, existing.id)
                 if existing.request_sha256 != commitment:
                     raise HTTPException(409, "This save identifier was already used for different content.")
-                return {"note": note_data(session, existing, user, all_revisions(session, existing), selected=1)}
+                return {"note": note_data(session, existing, user, all_revisions(session, existing), selected=1, agent="authorization" in request.headers)}
             check_capacity(session, user)
             now = clock()
             note = NotebookNote(id=str(uuid4()), author_id=user.id, created_at=now, latest_revision=1,
@@ -909,7 +949,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             session.add(revision)
             session.flush()
             workspace_for(session, user)
-            return {"note": note_data(session, note, user, [revision])}
+            return {"note": note_data(session, note, user, [revision], agent="authorization" in request.headers)}
 
     @app.post("/api/notebook/notes/{note_id}/revisions")
     def revise_note(note_id: UUID, body: RevisionInput, request: Request):
@@ -924,7 +964,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             if replay:
                 if replay.request_sha256 != commitment:
                     raise HTTPException(409, "This save identifier was already used for a different revision.")
-                return {"note": note_data(session, note, user, history, selected=replay.revision)}
+                return {"note": note_data(session, note, user, history, selected=replay.revision, agent="authorization" in request.headers)}
             if note.latest_revision != body.expected_revision or history[-1].content_sha256 != body.content_sha256:
                 raise HTTPException(409, "This note changed. Reload the latest revision before saving; your draft has not been overwritten.")
             if note.latest_revision >= MAX_REVISIONS:
@@ -936,7 +976,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             session.add(revision)
             session.flush()
             workspace_for(session, user)
-            return {"note": note_data(session, note, user, [*history, revision])}
+            return {"note": note_data(session, note, user, [*history, revision], agent="authorization" in request.headers)}
 
     @app.post("/api/notebook/notes/{note_id}/proposal-submissions")
     def submit_proposal_note(note_id: UUID, body: PublicationInput, request: Request):
@@ -952,7 +992,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
     def export_notebook(request: Request, note_id: UUID | None = Query(default=None)):
         with db.transaction() as session:
             user = account(request, session)
-            return workspace_for(session, user, note_id)
+            return workspace_for(session, user, note_id, include_deleted=False)
 
     @app.post("/api/notebook/import")
     def import_notebook(body: ImportInput, request: Request):
@@ -983,6 +1023,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 if note is None:
                     note = session.scalar(select(NotebookNote).where(NotebookNote.author_id == user.id,
                         NotebookNote.source_id == source_id))
+                if note is not None:
+                    notebook_trash.require_active(session, note.id)
                 if note is None:
                     check_capacity(session, user)
                     note = NotebookNote(id=str(uuid4()), author_id=user.id, created_at=clock(), latest_revision=0,
@@ -1039,7 +1081,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             if replay:
                 if replay.request_sha256 != commitment:
                     raise HTTPException(409, "This publication identifier was already used for another request.")
-                return {"note": note_data(session, note, user, history, selected=body.revision)}
+                return {"note": note_data(session, note, user, history, selected=body.revision, agent="authorization" in request.headers)}
             target = history[-1]
             if target.revision != body.revision or target.content_sha256 != body.content_sha256:
                 raise HTTPException(409, "Request publication of the exact latest revision. Refresh before trying again.")
@@ -1050,7 +1092,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 requested_at=clock(), idempotency_key=str(body.idempotency_key), request_sha256=commitment,
                 test_only_self_review=False))
             session.flush()
-            return {"note": note_data(session, note, user, history, selected=body.revision)}
+            return {"note": note_data(session, note, user, history, selected=body.revision, agent="authorization" in request.headers)}
 
     @app.get("/api/notebook/review-queue")
     def publication_queue(request: Request, after: str | None = Query(default=None, max_length=36),
