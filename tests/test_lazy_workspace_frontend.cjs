@@ -78,7 +78,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     for(const asset of assets(app))asset.onload();await flush();
     assert.equal(notebook.calls.mount,1);assert.equal(notebook.calls.show,1);
     assert.equal(app.requests.some(request=>request.options.method==='POST'),false);
-    assert.equal(paths(app).includes('/api/schemes'),false);
+    assert.deepEqual(app.requests.filter(request=>request.url.pathname==='/api/schemes').map(request=>request.url.searchParams.get('projection')),['map']);
   });
   await test('ordinary session refresh cannot strand the initial catalogue read', async () => {
     const gate = deferred();

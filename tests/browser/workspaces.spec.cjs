@@ -1,5 +1,58 @@
 const {test, expect, signIn, notebookReady, gate, holdResponse} = require('./helpers.cjs');
 
+test('an unlinked GitHub callback offers password sign-in and clears its error on a real password attempt', async ({page}) => {
+  // Simulate only the callback presentation; password authentication still uses
+  // the real local app, CSRF checks, and disposable account database.
+  await page.route('**/api/session', async route => {
+    const response = await route.fetch();
+    const session = await response.json();
+    session.auth.github_enabled = true;
+    await route.fulfill({response, json: session});
+  });
+  await page.route('**/api/auth/github/pending', route => route.fulfill({
+    json: {pending: false, return_route: '#about'}, headers: {'Cache-Control': 'no-store'}
+  }));
+  const writes = [];
+  page.on('request', request => {if (request.method() === 'POST') writes.push(new URL(request.url()).pathname);});
+  await page.goto('/#auth?github=invite-required');
+  await expect(page.locator('#auth-github-error')).toContainText('is not linked');
+  await expect(page.locator('#auth-form')).toBeVisible();
+  expect(writes).toEqual([]);
+  await page.locator('#auth-handle').fill('browser_alice');
+  await page.locator('#auth-password').fill('Incorrect synthetic password');
+  await page.locator('#auth-submit').click();
+  await expect(page.locator('#auth-error')).toHaveText('Handle or password is incorrect.');
+  await expect(page.locator('#auth-github-error')).toBeHidden();
+  await page.locator('#auth-password').fill('Synthetic browser fixture password');
+  await page.locator('#auth-submit').click();
+  await expect(page.locator('#account-handle')).toHaveText('browser_alice');
+  await expect(page.locator('#auth-dialog')).not.toBeVisible();
+  expect(writes).toEqual(['/api/auth/login', '/api/auth/login']);
+});
+
+test('a changed profile refresh retains native keyboard focus without interrupting another control', async ({page}) => {
+  await signIn(page);
+  await page.locator('#account-handle').click();
+  const summary = page.locator('#personal-records > summary');
+  await summary.focus(); await summary.press('Enter');
+  await expect(page.locator('#personal-records')).toHaveAttribute('open', '');
+  let change = 0;
+  // Keep real authorization and reads; vary only the synthetic score so the
+  // refresh must replace the DOM instead of taking its unchanged-data shortcut.
+  await page.route('**/api/people/browser_alice?*', async route => {
+    const response = await route.fetch(), data = await response.json();
+    data.person.points += ++change;
+    await route.fulfill({response, json: data});
+  });
+  await page.evaluate(() => loadPerson('browser_alice', {preserve: true}));
+  await expect(summary).toBeFocused();
+  await expect(page.locator('#personal-records')).toHaveAttribute('open', '');
+  const outside = page.locator('#history-button');
+  await outside.focus();
+  await page.evaluate(() => loadPerson('browser_alice', {preserve: true}));
+  await expect(outside).toBeFocused();
+});
+
 test('GitHub return opens the requested page without a continuation round trip', async ({page}) => {
   const requests = [];
   page.on('request', request => requests.push(new URL(request.url()).pathname));
