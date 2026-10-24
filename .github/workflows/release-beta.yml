@@ -28,12 +28,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      RELEASE_OUTPUT: ${{ runner.temp }}/crucible-release
-      DOCKER_CONFIG: ${{ runner.temp }}/crucible-registry-auth
       IMAGE: crucible-beta-check:${{ github.sha }}
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - uses: actions/checkout@v7
+      - name: Set isolated release directories
+        run: |
+          printf '%s\n' "RELEASE_OUTPUT=$RUNNER_TEMP/crucible-release" "DOCKER_CONFIG=$RUNNER_TEMP/crucible-registry-auth" >> "$GITHUB_ENV"
       - name: Prepare exact committed source and reviewed runtime contract
         run: python3 -B deploy/release.py prepare --revision "$GITHUB_SHA" --output "$RELEASE_OUTPUT"
       - name: Obtain one-hour private registry credential
@@ -105,4 +106,4 @@ jobs:
             ${{ runner.temp }}/crucible-release/evidence/
       - name: Remove temporary registry authentication
         if: always()
-        run: rm -rf -- "$DOCKER_CONFIG"
+        run: rm -rf -- "$RUNNER_TEMP/crucible-registry-auth"
