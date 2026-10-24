@@ -1,0 +1,14 @@
+{
+  "format": "crucible-approved-beta-releases-v1",
+  "review_record": "docs/beta-release-policy.txt",
+  "releases": [
+    "teaching-dh-kem@7",
+    "rsa-kem@4",
+    "dhkem-x25519@curve-compressed-v2",
+    "ml-kem@compressed-research-v4",
+    "frodokem@anchor-research-v3",
+    "sntrup@3",
+    "hqc@modeled-research-v3",
+    "classic-mceliece@length-research-v1"
+  ]
+}

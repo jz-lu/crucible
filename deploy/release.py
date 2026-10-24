@@ -82,9 +82,18 @@ def source_files(root):
 def check_contract(files, contract):
     baseline = contract['baseline_files']
     changed = sorted(name for name in files.keys() | baseline.keys() if files.get(name) != baseline.get(name))
+    # Preserve the original runtime inventory. An explicitly reviewed overlay
+    # pins a particular source change; it does not make that module mutable.
+    reviewed = contract.get('reviewed_overlay_files', {})
+    require(isinstance(reviewed, dict) and all(
+        isinstance(name, str) and runtime_path(name) and
+        isinstance(sha, str) and re.fullmatch('[0-9a-f]{64}', sha)
+        for name, sha in reviewed.items()), 'Invalid reviewed source overlay')
+    expected = {**baseline, **reviewed}
+    deviations = sorted(name for name in files.keys() | expected.keys() if files.get(name) != expected.get(name))
     allowed = set(contract['mutable_files'])
-    blocked = [name for name in changed if name not in allowed and
-               not any(name.startswith(prefix) for prefix in contract['mutable_prefixes'])]
+    blocked = [name for name in deviations if name in reviewed or (name not in allowed and
+               not any(name.startswith(prefix) for prefix in contract['mutable_prefixes']))]
     require(not blocked, 'Reviewed runtime changed; ordinary release refused: ' + ', '.join(blocked))
     return changed
 

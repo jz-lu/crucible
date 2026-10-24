@@ -482,8 +482,10 @@ supported by the persistence layer and migrations; its concurrency behavior stil
 needs integration testing before a public release.
 
 Production mode requires PostgreSQL, an explicit HTTPS origin, a persistent
-random server secret and beta access. Issuing hosted challenges also requires an
-explicit release allowlist. See `.env.example`. These guards are **not a claim of production
+random server secret and beta access. Hosted issuance uses the version-controlled
+approved release catalogue; an optional environment override can restrict it.
+See [beta release policy](docs/beta-release-policy.txt) for the one-time transition
+from a legacy override and subsequent reviewed additions. These guards are **not a claim of production
 readiness**: identity/recovery policy, abuse/moderation, hosting limits, proxy
 trust, monitoring, backups, and independent admission/security review remain.
 

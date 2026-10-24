@@ -64,11 +64,16 @@ def test_version_query_cannot_cache_or_bypass_private_routes(private_app):
         assert denied.status_code == 401 and denied.headers['cache-control'] == 'no-store'
         assert 'content-encoding' not in denied.headers
     member = private_app.test_login('participant')
-    for path in ('/api/session', '/notebook/store.js', '/api/notebook/notes'):
+    for path in ('/api/session', '/api/notebook/notes'):
         response = member.client.get(path + '?v=' + 'a' * 24, headers={'Accept-Encoding': 'gzip'})
         assert response.status_code == 200
         assert response.headers['cache-control'] == 'no-store'
         assert 'content-encoding' not in response.headers
+    bundled = member.client.get('/notebook/store.js?v=' + 'a' * 24,
+                                headers={'Accept-Encoding': 'gzip'})
+    assert bundled.status_code == 200
+    assert bundled.headers['cache-control'] == 'no-store'
+    assert bundled.headers['content-encoding'] == 'gzip'
 
 
 def test_content_change_changes_url_and_development_sees_edits(tmp_path):

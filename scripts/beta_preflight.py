@@ -50,8 +50,10 @@ def configuration_checks(settings):
                              "One reviewer cannot approve their own work; add a second reviewer or leave it pending."))
     checks.append(result("access_operator", "pass" if settings.access_admin_ids else "warn",
                          "Configure an access administrator, or deliberately operate membership through the trusted host CLI."))
-    checks.append(result("release_allowlist", "pass" if settings.beta_releases else "fail",
-                         "Explicit scheme_id@version entries are required to issue hosted challenges."))
+    checks.append(result("release_allowlist", "pass" if settings.beta_releases or settings.beta_issuance_disabled else "fail",
+                         "New challenge issuance is intentionally disabled; existing records remain available."
+                         if settings.beta_issuance_disabled else
+                         "Reviewed scheme_id@version entries are required to issue hosted challenges."))
     return checks
 
 

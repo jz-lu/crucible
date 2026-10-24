@@ -31,7 +31,7 @@ def test_reviewed_contract_covers_current_source_and_all_historical_releases():
                                   'scripts/build_sntrup.py', 'migrations/versions/0023_notebook_trash.py'])
 def test_runtime_changes_and_deletions_block_ordinary_release(name):
     contract = release.policy()
-    changed = dict(contract['baseline_files'])
+    changed = {**contract['baseline_files'], **contract.get('reviewed_overlay_files', {})}
     changed[name] = '0' * 64
     with pytest.raises(ValueError, match='ordinary release refused'):
         release.check_contract(changed, contract)
@@ -42,9 +42,36 @@ def test_runtime_changes_and_deletions_block_ordinary_release(name):
 
 def test_new_executable_modules_require_explicit_policy_review():
     contract = release.policy()
-    changed = {**contract['baseline_files'], 'crucible/new_worker.py': '0' * 64}
+    changed = {**contract['baseline_files'], **contract.get('reviewed_overlay_files', {}),
+               'crucible/new_worker.py': '0' * 64}
     with pytest.raises(ValueError, match='new_worker'):
         release.check_contract(changed, contract)
+
+
+def test_reviewed_overlay_pins_exact_changes_and_keeps_original_inventory():
+    baseline = {'crucible/config.py': 'a' * 64}
+    contract = {'baseline_files': baseline.copy(), 'mutable_files': [], 'mutable_prefixes': ['web/'],
+                'reviewed_overlay_files': {'crucible/config.py': 'b' * 64,
+                                           'crucible/data/approved.json': 'c' * 64}}
+    files = dict(contract['reviewed_overlay_files'])
+    assert release.check_contract(files, contract) == sorted(files)
+    assert contract['baseline_files'] == baseline
+    for name in files:
+        for changed in ({**files, name: 'd' * 64}, {key: value for key, value in files.items() if key != name}):
+            with pytest.raises(ValueError, match='ordinary release refused'):
+                release.check_contract(changed, contract)
+    with pytest.raises(ValueError, match='ordinary release refused'):
+        release.check_contract({**files, 'crucible/new_worker.py': 'e' * 64}, contract)
+
+
+def test_reviewed_overlay_cannot_be_bypassed_by_mutable_prefix_or_bad_digest():
+    contract = {'baseline_files': {}, 'mutable_files': [], 'mutable_prefixes': ['web/'],
+                'reviewed_overlay_files': {'web/pinned.js': 'a' * 64}}
+    with pytest.raises(ValueError, match='ordinary release refused'):
+        release.check_contract({'web/pinned.js': 'b' * 64}, contract)
+    contract['reviewed_overlay_files']['web/pinned.js'] = '*'
+    with pytest.raises(ValueError, match='Invalid reviewed source overlay'):
+        release.check_contract({}, contract)
 
 
 def test_prepare_exact_commit_replaces_directories_including_removed_ui(tmp_path, monkeypatch):
@@ -56,7 +83,7 @@ def test_prepare_exact_commit_replaces_directories_including_removed_ui(tmp_path
         (root / name).write_text('fixed\n')
     (root / 'web/index.html').write_text('<html>new</html>')
     (root / 'crucible/app.py').write_text('value = 1\n')
-    contract = {**release.policy(), 'baseline_files': release.source_files(root)}
+    contract = {**release.policy(), 'baseline_files': release.source_files(root), 'reviewed_overlay_files': {}}
     contract['baseline_files']['web/deleted.js'] = '0' * 64
     monkeypatch.setattr(release, 'policy', lambda: contract)
     for command in (['init'], ['add', '.'], ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-m', 'fixture']):

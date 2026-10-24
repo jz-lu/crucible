@@ -9,6 +9,54 @@ from urllib.parse import urlparse, urlsplit
 from uuid import UUID
 
 ROOT = Path(__file__).resolve().parent.parent
+APPROVED_BETA_RELEASES = ROOT / "crucible" / "data" / "approved_beta_releases.json"
+
+
+def approved_beta_releases() -> tuple[str, ...]:
+    """Read deployment policy, without importing or automatically admitting adapters."""
+    message = "The packaged beta release catalogue is missing or invalid."
+
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError
+            result[key] = value
+        return result
+
+    try:
+        with APPROVED_BETA_RELEASES.open("rb") as source:
+            raw = source.read(65537)
+        if len(raw) > 65536:
+            raise ValueError
+        data = json.loads(raw, object_pairs_hook=unique_object)
+        if (type(data) is not dict or set(data) != {"format", "review_record", "releases"}
+                or data["format"] != "crucible-approved-beta-releases-v1"
+                or data["review_record"] != "docs/beta-release-policy.txt"
+                or type(data["releases"]) is not list or not 1 <= len(data["releases"]) <= 128):
+            raise ValueError
+        releases = data["releases"]
+        if (any(type(value) is not str or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,99}@[A-Za-z0-9][A-Za-z0-9._-]{0,99}", value)
+                for value in releases) or len(set(releases)) != len(releases)):
+            raise ValueError
+        return tuple(releases)
+    except (OSError, ValueError, TypeError, RecursionError):
+        raise RuntimeError(message) from None
+
+
+def configured_beta_releases(*, production: bool) -> tuple[str, ...]:
+    value = os.getenv("CRUCIBLE_BETA_RELEASES", "").strip()
+    if not production:
+        return tuple(part.strip() for part in value.split(",") if part.strip())
+    approved = approved_beta_releases()  # Even an override requires valid packaged policy.
+    if not value:
+        return approved
+    if value == "none":
+        return ()
+    selected = tuple(part.strip() for part in value.split(","))
+    if len(set(selected)) != len(selected) or not set(selected) <= set(approved):
+        raise RuntimeError("CRUCIBLE_BETA_RELEASES must be a subset of the packaged approved releases, or none.")
+    return selected
 
 
 @dataclass(frozen=True)
@@ -27,6 +75,7 @@ class Settings:
     generation_per_account: int = 1
     auth_concurrency: int = 2
     beta_releases: tuple[str, ...] = ()
+    beta_issuance_disabled: bool = False
     mail_backend: str = "disabled"
     mail_outbox_dir: str | None = None
     mail_from: str = ""
@@ -81,6 +130,8 @@ class Settings:
         if any(not isinstance(value, str) or value.count("@") != 1 or
                not all(value.split("@")) for value in self.beta_releases):
             raise RuntimeError("Beta releases must use scheme_id@version identifiers.")
+        if type(self.beta_issuance_disabled) is not bool or (self.beta_issuance_disabled and self.beta_releases):
+            raise RuntimeError("Disabled beta issuance cannot select releases.")
 
     @property
     def cookie_name(self):
@@ -201,7 +252,8 @@ def load_settings() -> Settings:
                     generation_concurrency=number("CRUCIBLE_GENERATION_CONCURRENCY", 2),
                     generation_per_account=number("CRUCIBLE_GENERATION_PER_ACCOUNT", 1),
                     auth_concurrency=number("CRUCIBLE_AUTH_CONCURRENCY", 2),
-                    beta_releases=tuple(value.strip() for value in os.getenv("CRUCIBLE_BETA_RELEASES", "").split(",") if value.strip()),
+                    beta_releases=configured_beta_releases(production=production),
+                    beta_issuance_disabled=production and os.getenv("CRUCIBLE_BETA_RELEASES", "").strip() == "none",
                     mail_backend=os.getenv("CRUCIBLE_MAIL_BACKEND", "disabled"),
                     mail_outbox_dir=os.getenv("CRUCIBLE_MAIL_OUTBOX_DIR"),
                     mail_from=os.getenv("CRUCIBLE_MAIL_FROM", ""), smtp_host=os.getenv("CRUCIBLE_SMTP_HOST", ""),

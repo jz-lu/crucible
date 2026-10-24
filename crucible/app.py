@@ -22,7 +22,7 @@ from .db import AdapterVersion, Base, Challenge, Database, LoginSession, Method,
 from .schemas import Credentials, NewChallenge, NewMethod, NewSubmission
 from .security import mac, passwords, payload_mac, target_mac, token_hash, verify_password
 from .public_json import catalogue_progress, catalogue_response
-from .public_assets import CONTENT_SECURITY_POLICY, PublicAssets, PublicMathFiles, is_public_ui
+from .public_assets import CONTENT_SECURITY_POLICY, ProtectedAssets, PublicAssets, PublicMathFiles, is_public_ui
 from .access_policy import AccessPolicy
 from . import benchmark_reports, assumption_sheets, agent_guidance
 from .reference_policy import METHOD as REFERENCE_METHOD
@@ -32,6 +32,34 @@ from . import github_auth, password_recovery
 def current_round(now):
     number = int(now) // 3600
     return {"id": number, "starts_at": number * 3600, "ends_at": (number + 1) * 3600}
+
+
+def generation_admission(settings, manifest, *, current_version):
+    """Describe settings-level issuance permission, not capacity or build health."""
+    if manifest["version"] != current_version:
+        return {"admitted": False, "reason": "archived_release"}
+    # Keep this predicate shared with POST: a catalogue entry alone never admits
+    # its implementation, and availability does not replace mutation preflight.
+    local_beta = (not settings.production and manifest["scheme_id"] in standard_schemes.SCHEMES
+                  and manifest.get("profile_kind") in {"standard-parameter-set", "research-tier"})
+    hosted_beta = (settings.production and settings.access_mode == "beta" and
+                   f'{manifest["scheme_id"]}@{manifest["version"]}' in settings.beta_releases)
+    eligible = hosted_beta if settings.production else manifest.get("educational") or local_beta
+    return {"admitted": bool(eligible), "reason": None if eligible else "release_not_admitted"}
+
+
+def release_generation_admission(settings, scheme_id, version):
+    """Fresh settings summary; mixed development profiles defer to exact GET."""
+    manifest = {"scheme_id": scheme_id, "version": version}
+    current = registry.CURRENT[scheme_id]
+    if settings.production or version != current:
+        return generation_admission(settings, manifest, current_version=current)
+    outcomes = [generation_admission(settings, {**manifest, "educational": educational, "profile_kind": kind},
+                                     current_version=current)
+                for educational, kind in registry.presentation_issuance_profiles(registry.adapter_for(scheme_id, version))]
+    if outcomes and all(outcome == outcomes[0] for outcome in outcomes):
+        return outcomes[0]
+    return {"admitted": None, "reason": "profile_specific"}
 
 
 class RequestBoundary:
@@ -167,6 +195,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     policy = AccessPolicy()
     app.state.access_policy = policy
     public_assets = PublicAssets(ROOT / "web", frozen=settings.production)
+    protected_assets = ProtectedAssets(ROOT / "web")
     app.add_middleware(RequestBoundary, settings=settings, clock=clock, db=db, policy=policy)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.hosts)
 
@@ -517,6 +546,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             participants = registry.participant_counts(session, releases)
         recovered = {(row.scheme_id, row.scheme_version, row.profile_id): row for row in records}
         for scheme in releases:
+            scheme["generation_admission"] = release_generation_admission(settings, scheme["id"], scheme["version"])
             scheme["participant_count"] = participants.get((scheme["id"], scheme["version"]), 0)
             # Some frozen research manifests contain the policy flag from their
             # initial release. Catalogue descriptors use today's explicit score
@@ -579,6 +609,8 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             # Describe the exact queried round, even if the hour turns while
             # reading. A later guarded POST must still match the server's round.
             return {"challenge": challenge_data(session, challenge) if challenge else None,
+                    "generation_admission": generation_admission(settings, manifest,
+                        current_version=registry.CURRENT[manifest["scheme_id"]]),
                     "round_started": started, "round_started_round_id": round_["id"],
                     "server_time": observed_at, "round": round_}
 
@@ -589,15 +621,8 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         profile_id = manifest["id"]
         adapter = adapter_for(manifest["version"], manifest["scheme_id"])
         # Adapters are an explicit code registry; proposals never execute uploads.
-        local_beta = (not settings.production and manifest["scheme_id"] in standard_schemes.SCHEMES
-                      and manifest.get("profile_kind") in {"standard-parameter-set", "research-tier"})
-        hosted_beta = (settings.production and settings.access_mode == "beta" and
-                       f'{manifest["scheme_id"]}@{manifest["version"]}' in settings.beta_releases)
-        if settings.production:
-            eligible = hosted_beta
-        else:
-            eligible = manifest.get("educational") or local_beta
-        if not eligible:
+        if not generation_admission(settings, manifest,
+                current_version=registry.CURRENT[manifest["scheme_id"]])["admitted"]:
             raise HTTPException(409, "This profile has not been admitted to this challenge track.")
 
         def preflight(session, *, expected_user=None, expected_round=None):
@@ -929,34 +954,16 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         return public_assets.response(request)
 
     @app.get("/map/{asset_name}")
-    def research_map_asset(asset_name: str):
+    def research_map_asset(asset_name: str, request: Request):
         # Curated, read-only research notes; never a directory mount or a view
         # into account-owned notebook data. Beta membership is enforced above.
-        assets = {
-            "index.html": "text/html", "notes.html": "text/html",
-            "styles.css": "text/css", "notes.css": "text/css",
-            "app.js": "text/javascript", "map-views.js": "text/javascript",
-            "notes.js": "text/javascript", "note-ui.js": "text/javascript",
-            "catalogue.js": "text/javascript", "notes-data.js": "text/javascript",
-            "catalogue.json": "application/json", "notes.json": "application/json",
-            "PIPELINE.txt": "text/plain", "NOTE-FORMAT.txt": "text/plain",
-        }
-        if asset_name not in assets:
-            raise HTTPException(404, "Map asset not found.")
-        return FileResponse(ROOT / "web" / "map" / asset_name,
-                            media_type=assets[asset_name], headers={"Cache-Control": "no-store"})
+        return protected_assets.response(request)
 
     @app.get("/notebook/{asset_name}")
-    def notebook_asset(asset_name: str):
-        assets = {"seed.js": "text/javascript", "store.js": "text/javascript",
-                  "notebook.js": "text/javascript", "notebook.css": "text/css",
-                  "request-types.json": "application/json"}
-        if asset_name not in assets:
-            raise HTTPException(404, "Notebook asset not found.")
+    def notebook_asset(asset_name: str, request: Request):
         # Only these fixed UI assets are exposed. Saved notebook data uses
         # authenticated routes with per-note ownership/publication checks.
-        return FileResponse(ROOT / "web" / "notebook" / asset_name,
-                            media_type=assets[asset_name], headers={"Cache-Control": "no-cache"})
+        return protected_assets.response(request)
 
     @app.get("/assets/crucible-logo.png")
     def logo(request: Request):

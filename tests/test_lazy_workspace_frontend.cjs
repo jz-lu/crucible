@@ -67,6 +67,20 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.match(app.$('#kem-catalogue').textContent, /Fixture scheme/);
     assert.equal(app.requests.filter(request => request.url.searchParams.get('projection') === 'navigation').length, 1);
   });
+  await test('direct map route downloads notebook code while its catalogue is still pending', async () => {
+    const gate=deferred();
+    const app=await createApp({schemes:[scheme],hash:'#notebook?view=map',responder:(url,options,envelope)=>{
+      if(url.pathname==='/api/session')return active(envelope);
+      if(url.pathname==='/api/schemes')return gate.promise;
+    }});
+    assert.equal(assets(app).length,4,'Assets start without waiting for navigation metadata');
+    assert.equal(app.$('#notebook-workspace').hidden,true,'No partially authorized or unlabelled map is painted');
+    const notebook=notebookDouble();app.window.CrucibleNotebook=notebook;
+    for(const asset of assets(app))asset.onload();await flush();assert.equal(notebook.calls.mount,0);
+    gate.resolve(app.envelope({schemes:[scheme]}));await flush();
+    assert.equal(notebook.calls.mount,1);assert.equal(notebook.calls.show,1);
+    assert.equal(app.requests.some(request=>request.options.method==='POST'),false);
+  });
   await test('ordinary session refresh cannot strand the initial catalogue read', async () => {
     const gate = deferred();
     const app = await createApp({schemes: [scheme], responder: (url, options, envelope) => {

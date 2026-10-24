@@ -1,0 +1,59 @@
+Reviewed beta challenge releases
+===============================
+
+The production default is crucible/data/approved_beta_releases.json, an explicit
+deployment selection reviewed in Git. It does not automatically follow the
+registry, admit an implementation build, approve a proposal, or change a scheme's
+parameters. Current-version checks, database build admission and generation limits
+still apply. Existing challenges and records remain readable when issuance stops.
+
+Initial selection and provenance (2026-10-24)
+-------------------------------------------
+The eight exact releases are the existing reviewed beta selection, not eight new
+approvals. The retained operator record beta-managed-database-20261022/STATE.txt
+records the all-eight setting and twelve hosted first/endpoint checks for the six
+added families on 2026-10-23; the final data cutover retained the same selection.
+The exact identities were also retained in
+beta-hosted-backup-20261023/prepare-backup-configuration.py. These operator records
+are outside the repository; this paragraph records their provenance, rather than
+claiming that a JSON entry alone certifies correctness or deployment capacity.
+
+On 2026-10-24 the deployment reported two configured releases, with no
+elliptic-curve release, which explained rejection of every elliptic-curve stage. The repository default
+avoids requiring a second provider edit after each reviewed code release.
+
+One-time deployment change
+--------------------------
+Deploy this configuration loader and its reviewed catalogue first. Then remove
+CRUCIBLE_BETA_RELEASES from the service and any inherited application-level
+settings, or leave it blank. The next process start uses the packaged selection.
+Until removed, the existing two-entry override deliberately continues to restrict
+issuance. Do not remove it on an older image: older loaders interpret absence as
+no admitted releases. Verify the desired current releases after redeployment.
+
+Keep the first verified policy-aware image as the next rollback point. Rolling
+back across this change to a pre-policy image also requires restoring the saved
+previous explicit allowlist (or the exact previously reviewed eight-entry list):
+the older image cannot read the new repository default. Restoring an original
+backup with its matching original image and environment is unaffected. Preserve
+the old configuration privately before changing the provider setting.
+
+A nonempty CRUCIBLE_BETA_RELEASES remains an operator restriction: comma-separated
+exact entries must be a subset of the packaged selection. Unknown, duplicate or
+malformed entries fail startup instead of silently falling back. The literal
+`none` explicitly disables all new hosted issuance while allowing the website to
+start for browsing and existing challenges; preflight reports that deliberate
+choice. An unexplained empty selection still fails preflight. Missing or invalid
+packaged policy fails production configuration even if an override is present. Development eligibility
+is unchanged.
+
+Subsequent additions
+--------------------
+Review the exact scheme version, implementation/correctness evidence and hosting
+limits first, then add that exact pair in the catalogue in the reviewed PR. Update
+the reviewed release-contract binding for the policy bytes; do not add a wildcard
+or automatically admit registry.CURRENT. The native release verification and
+beta preflight must confirm that selected releases are registered and current;
+database implementation-build approval is still separate. A changed algorithm or
+native dependency still needs its own runtime review. With no restrictive env
+override, the deployed reviewed image supplies the new default automatically.
