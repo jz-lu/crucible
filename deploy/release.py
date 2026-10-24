@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Publish-only beta releases from an explicitly reviewed, unchanged runtime.
+"""Intentional beta releases from an explicitly reviewed, unchanged runtime.
 
-No database, migration, implementation admission, provider deployment or secrets
-are part of the image. Runtime changes require a new reviewed contract.
+No database, migration, implementation admission or provider configuration change
+is performed. Promoting the beta tag can trigger an already-configured automatic
+deployment. Runtime changes require a new reviewed contract.
 """
 import argparse
 import base64
@@ -25,6 +26,8 @@ SOURCE_DIRS = ('crucible', 'scripts', 'web', 'docs', 'migrations')
 SOURCE_FILES = ('requirements.lock', 'pyproject.toml', 'alembic.ini')
 REGISTRY = 'registry.digitalocean.com'
 REPOSITORY = REGISTRY + '/crucible-beta/app'
+CHANNEL = REPOSITORY + ':beta'
+GIT_REPOSITORY = 'https://github.com/jz-lu/crucible.git'
 DOCKER = ['docker', '--host', 'unix:///var/run/docker.sock']
 
 
@@ -308,9 +311,102 @@ def publish(output, run_id, attempt):
     return receipt
 
 
+def current_main(root):
+    # Reuse checkout's contents-read GitHub authentication, never a new provider
+    # credential. Read the fixed remote directly, not an outdated tracking ref.
+    value = git(root, 'ls-remote', '--exit-code', GIT_REPOSITORY, 'refs/heads/main')
+    match = re.fullmatch(r'([0-9a-f]{40})\trefs/heads/main', value)
+    require(match is not None, 'Could not establish the current main revision')
+    return match.group(1)
+
+
+def registry_manifest(reference):
+    require(reference == CHANNEL or re.fullmatch(re.escape(REPOSITORY) + r'@sha256:[0-9a-f]{64}', reference),
+            'Unexpected registry manifest reference')
+    # Buildx --raw emits the original bytes without a trailing presentation
+    # newline. Hash those bytes, never reserialize JSON to identify a manifest.
+    raw = docker('buildx', 'imagetools', 'inspect', '--raw', reference, timeout=60)
+    require(0 < len(raw) <= 1048576, 'Unexpected registry manifest size')
+    return raw
+
+
+def promote(root, output, run_id, attempt):
+    """Move only beta to the exact already-published, tested single manifest."""
+    require(re.fullmatch('[0-9]+', run_id) and re.fullmatch('[0-9]+', attempt), 'Expected GitHub run identity')
+    require(not (output / 'promotion.json').exists(), 'Promotion already recorded; inspect before retrying')
+    verified = json.loads((output / 'verified.json').read_text())
+    published = json.loads((output / 'published.json').read_text())
+    revision = published['source_revision']
+    require(re.fullmatch('[0-9a-f]{40}', revision), 'Expected full published Git commit')
+    required_checks = {'runtime': 'passed', **{name: 'passed' for name in policy()['native_test_batches']}}
+    require(verified['status'] == published['status'] == 'passed' and
+            verified['published'] is False and published['published'] is True and
+            verified['native_checks'] == required_checks, 'Successful native verification and publication required')
+    require(all(published.get(key) == value for key, value in verified.items() if key != 'published'),
+            'Published receipt differs from verified image')
+    tag = 'git-' + revision + '-' + run_id + '-' + attempt
+    require(published['registry_tag'] == tag and published['registry_tag_reference'] == REPOSITORY + ':' + tag,
+            'Publication does not belong to this release run')
+    reference = published['registry_reference']
+    require(re.fullmatch(re.escape(REPOSITORY) + r'@sha256:[0-9a-f]{64}', reference), 'Expected immutable published reference')
+    expected_digest = reference.split('@')[1]
+    config_digest = published['image_config_digest']
+    build = json.loads((output / 'build-metadata.json').read_text())
+    require(re.fullmatch('sha256:[0-9a-f]{64}', config_digest) and
+            config_digest == build['containerimage.config.digest'], 'Published config differs from tested build')
+    require(git(root, 'rev-parse', 'HEAD') == revision, 'Promotion checkout differs from published source')
+    record = {'format': 'crucible-beta-promotion-v1', 'status': 'started',
+              'source_revision': revision, 'registry_reference': reference, 'registry_tag': tag,
+              'channel_reference': CHANNEL, 'expected_digest': expected_digest,
+              'observed_digest': None, 'promotion_attempted': False, 'channel_digest_verified': False,
+              'remote_side_effects_possible': False, 'automatic_deployment_may_be_triggered': False,
+              'provider_configuration_changed': False, 'live_deployment_verified': False}
+    write_json(output / 'promotion.json', record)
+    try:
+        raw = registry_manifest(reference)
+        require('sha256:' + digest(raw) == expected_digest, 'Published manifest bytes differ from immutable digest')
+        def unique_fields(pairs):
+            value = dict(pairs)
+            require(len(value) == len(pairs), 'Duplicate manifest field')
+            return value
+        manifest = json.loads(raw, object_pairs_hook=unique_fields)
+        require(type(manifest) is dict and manifest.get('schemaVersion') == 2 and
+                manifest.get('mediaType') in {'application/vnd.oci.image.manifest.v1+json',
+                                             'application/vnd.docker.distribution.manifest.v2+json'} and
+                'manifests' not in manifest and type(manifest.get('config')) is dict and
+                manifest['config'].get('digest') == config_digest and
+                type(manifest.get('layers')) is list and 0 < len(manifest['layers']) <= 128,
+                'Expected the published single-platform image manifest')
+        record['main_before'] = current_main(root)
+        require(record['main_before'] == revision, 'Main advanced; publish the newer tested revision before promoting beta')
+        # Persist uncertainty before invoking the sole remote mutation. Timeout,
+        # cancellation or failed readback must never imply the tag stayed put.
+        record.update(promotion_attempted=True, remote_side_effects_possible=True,
+                      automatic_deployment_may_be_triggered=True)
+        write_json(output / 'promotion.json', record)
+        docker('buildx', 'imagetools', 'create', '--prefer-index=false', '--tag', CHANNEL,
+               reference, timeout=180)
+        record['observed_digest'] = 'sha256:' + digest(registry_manifest(CHANNEL))
+        record['channel_digest_verified'] = record['observed_digest'] == expected_digest
+        require(record['channel_digest_verified'], 'Beta tag differs from the tested manifest; inspect before retrying')
+        # GitHub and the registry cannot form one atomic transaction. Detect a
+        # concurrent main change, record the completed tag write, and do not
+        # race a newer operator by attempting an automatic rollback.
+        record['main_after'] = current_main(root)
+        require(record['main_after'] == revision, 'Main changed during promotion; beta may already be deploying')
+        record['status'] = 'passed'
+    except Exception as error:
+        record.update(status='needs_review' if record['promotion_attempted'] else 'blocked',
+                      failure_class=type(error).__name__)
+        raise
+    finally:
+        write_json(output / 'promotion.json', record)
+    return record
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['contract', 'prepare', 'verify-runtime', 'check-image', 'authenticate', 'publish'])
+    parser.add_argument('command', choices=['contract', 'prepare', 'verify-runtime', 'check-image', 'authenticate', 'publish', 'promote'])
     parser.add_argument('--source', type=Path, default=ROOT)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--revision')
@@ -330,8 +426,10 @@ def main():
     elif args.command == 'authenticate':
         authenticate(args.output, os.environ.pop('DIGITALOCEAN_REGISTRY_TOKEN', ''))
         result = {'credentials_written': True}
-    else:
+    elif args.command == 'publish':
         result = publish(args.output.resolve(), args.run_id, args.attempt)
+    else:
+        result = promote(args.source.resolve(), args.output.resolve(), args.run_id, args.attempt)
     print(json.dumps(result, sort_keys=True))
 
 

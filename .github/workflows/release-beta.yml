@@ -1,11 +1,11 @@
 name: Release beta
 
-# Deliberate operator action only. A push or merge never deploys the website.
+# Deliberate operator action only. A push or merge never starts this workflow.
 on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish the verified image to the private registry
+        description: Publish the verified image and promote beta (may trigger configured Autodeploy)
         type: boolean
         required: true
         default: true
@@ -68,6 +68,11 @@ jobs:
         run: >-
           python3 -B deploy/release.py publish --output "$RELEASE_OUTPUT"
           --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT"
+      - name: Promote the exact tested image to beta
+        if: success() && inputs.publish
+        run: >-
+          python3 -B deploy/release.py promote --output "$RELEASE_OUTPUT"
+          --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT"
       - name: Release summary
         if: always()
         run: |
@@ -76,6 +81,7 @@ jobs:
           root = pathlib.Path(os.environ['RELEASE_OUTPUT'])
           published = root / 'published.json'
           verified = root / 'verified.json'
+          promotion = root / 'promotion.json'
           print('## Beta image release')
           if published.exists():
               value = json.loads(published.read_text())
@@ -87,8 +93,20 @@ jobs:
               print('Native image verified; no completed registry publication recorded.')
           else:
               print('No successful native release recorded. Inspect the failing step and evidence.')
-          print('\n**No website deployment, database migration or backup configuration change was performed.**')
-          print('\nSee docs/releasing-beta.txt before selecting this image in the existing beta service.')
+          if promotion.exists():
+              value = json.loads(promotion.read_text())
+              if value['status'] == 'passed':
+                  print('\nVerified beta channel: `' + value['channel_reference'] + '` → `' + value['observed_digest'] + '`')
+                  print('\nAn existing App Platform Autodeploy subscription may now deploy this image. Live deployment has not been verified.')
+              elif value['promotion_attempted']:
+                  print('\n**Beta promotion needs inspection: a tag update may already have triggered deployment.**')
+                  print('\nObserved channel digest: `' + str(value['observed_digest']) + '`')
+              else:
+                  print('\nBeta promotion was blocked before any tag update was attempted.')
+          else:
+              print('\nNo beta promotion was started.')
+          print('\nNo provider configuration, database migration or backup configuration was changed.')
+          print('\nSee docs/releasing-beta.txt for live verification and rollback.')
           PY
       - name: Retain non-secret release evidence
         if: always()
@@ -102,6 +120,7 @@ jobs:
             ${{ runner.temp }}/crucible-release/build-metadata.json
             ${{ runner.temp }}/crucible-release/verified.json
             ${{ runner.temp }}/crucible-release/published.json
+            ${{ runner.temp }}/crucible-release/promotion.json
             ${{ runner.temp }}/crucible-release/context/metadata/
             ${{ runner.temp }}/crucible-release/evidence/
       - name: Remove temporary registry authentication

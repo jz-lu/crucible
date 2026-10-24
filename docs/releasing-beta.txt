@@ -13,8 +13,11 @@ skipped without their dedicated synthetic database configuration.
 
 Release beta is a separate manual GitHub Actions workflow. Choose main, then Run
 workflow. With Publish enabled it builds, verifies and publishes one app image;
-with Publish disabled it performs the same native checks without publishing.
-Neither mode deploys the website. Pushes and merges never trigger this workflow.
+then it promotes that exact immutable image to the stable beta tag. With Publish
+disabled it performs the same native checks without publishing or promotion.
+Pushes and merges never trigger this workflow. Moving beta can trigger an existing
+App Platform Autodeploy subscription; the workflow itself never edits an app,
+its environment or its database.
 
 One-time setup
 --------------
@@ -72,18 +75,58 @@ digest, config digest and test evidence. A digest-pinned remote manifest must
 match the tested build's exact image configuration. The summary and downloadable
 release artifact contain no application secrets. A failed upload can have remote
 side effects; inspect its logs and registry before retrying. A new run/attempt
-uses another tag. Do not use latest or a mutable tag as deployment identity.
+uses another tag. The immutable digest and unique tag remain the release identity;
+beta is only a movable delivery channel. Neither the old unique tags nor the fixed
+reviewed runtime base are deleted by this workflow.
+
+The beta channel
+----------------
+Successful Publish runs copy the single published manifest to
+registry.digitalocean.com/crucible-beta/app:beta using the already-installed Docker
+Buildx imagetools command with --prefer-index=false. There is no rebuild, dependency
+installation, annotation or platform transformation. The helper hashes the raw
+immutable manifest, checks its config against the tested build, then verifies that
+beta resolves to exactly the same raw manifest digest. Buildx preserves raw bytes
+with imagetools inspect --raw; see the official command reference:
+https://docs.docker.com/reference/cli/docker/buildx/imagetools/create/
+https://docs.docker.com/reference/cli/docker/buildx/imagetools/inspect/
+
+The existing workflow-wide concurrency group serializes releases without canceling
+an active one. Immediately before promotion, the helper reads main directly from
+the fixed GitHub remote and refuses a stale source revision. It checks again after
+promotion. GitHub and the registry do not share an atomic transaction: if main
+changes during that interval, the receipt records that beta was already written
+and the run requires inspection. Avoid concurrent manual writes to beta.
+
+Failed checks, failed publication, stale main and verification-only runs cannot
+reach the promotion write. A promotion timeout or failed readback is different:
+the write may have happened. promotion.json records started/attempted state,
+expected and observed digest, verification outcome and possible side effects.
+The immutable publication receipt is retained even when promotion fails. Do not
+interpret a failed workflow as proof that beta was unchanged or automatically
+retry/roll back over a newer release. Inspect the receipt and provider status.
 
 Deploying a verified ordinary release
 ------------------------------------
-Use the workflow's published image digest/tag in the existing Crucible App
-Platform web component. Preserve the component, environment, database, domain,
-instance size, command, allowlist and disabled automatic deployments. Wait for
-the provider deployment to complete, then check health, anonymous private-route
-denial, sign-in and the changed user flow. Keep the previous working digest for
-rollback. This workflow deliberately has no provider deployment credential or
-API call; automatic deployment can be added after its configuration-preservation
-and live-verification steps are reviewed.
+For the automatic channel, an operator first selects the existing app repository's
+beta tag in the existing App Platform web component and enables Autodeploy there.
+That one-time provider action is separate from this workflow. Preserve all existing
+environment values, database, domain, instance size, command and allowlist. After
+that, each deliberately started Publish run can update the website through beta
+without another app-update credential or repeated configuration entry.
+DigitalOcean documents the existing component's Settings → Source → Edit controls
+and watched-tag behavior here:
+https://docs.digitalocean.com/products/app-platform/how-to/deploy-from-container-images/
+
+If the provider is still watching a unique tag/digest, promoting beta does not
+update it. Either keep manual selection of a verified immutable release, or
+perform the one-time channel setup deliberately. Registry promotion proves the
+image identity, not that the hosted service is healthy or even running that image.
+Wait for the provider deployment to complete, then check health, anonymous
+private-route denial, sign-in and the changed user flow. Keep the previous working
+unique tag/digest. To roll back, select it in the existing web component rather
+than rebuilding old code; disable channel Autodeploy until the next intended
+release if necessary. Do not replace environment values during an image rollback.
 
 An ordinary web-only release does not require rebuilding or rebinding the
 scheduled backup job. Its declaration continues to identify its own immutable
