@@ -17,7 +17,7 @@ from uuid import UUID, uuid4
 from fastapi import HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, and_, case, cast, event, func, or_, select, tuple_
-from sqlalchemy.orm import Mapped, aliased, mapped_column
+from sqlalchemy.orm import Mapped, aliased, load_only, mapped_column
 
 from .db import Base, User
 from . import protocol_proposals, proposal_notes, proposal_retractions, notebook_sharing, notebook_moderation, notebook_graph, note_ratings, machine_auth, notebook_trash
@@ -788,17 +788,30 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 grouped = grouped.having(newest_proposal.is_not(None))
             latest_visible = grouped.group_by(NotebookRevision.note_id).subquery()
             proposed = aliased(NotebookRevision)
+            withdrawal = notebook_moderation.PublicationWithdrawal
+            deletion = notebook_trash.NotebookDeletion
             query = (select(NotebookNote, User.handle, NotebookRevision.id,
                 NotebookRevision.revision, NotebookRevision.created_at, NotebookRevision.content_sha256,
                 NotebookRevision.content["title"].as_string(), NotebookRevision.content["claim"].as_string(),
                 NotebookRevision.content["tags"], NotebookRevision.content["kind"].as_string(),
                 latest_visible.c.revision_count, latest_visible.c.proposal_revision,
-                proposed.content_sha256).join(latest_visible, latest_visible.c.note_id == NotebookNote.id)
+                proposed.content_sha256, NotebookPublication.id, NotebookPublication.decision,
+                withdrawal.revision_id, deletion).join(latest_visible, latest_visible.c.note_id == NotebookNote.id)
                 .join(NotebookRevision, and_(NotebookRevision.note_id == NotebookNote.id,
                     NotebookRevision.revision == latest_visible.c.latest))
                 .join(User, User.id == NotebookNote.author_id)
                 .outerjoin(proposed, and_(proposed.note_id == NotebookNote.id,
-                    proposed.revision == latest_visible.c.proposal_revision)))
+                    proposed.revision == latest_visible.c.proposal_revision))
+                # Each join has at most one row: publication/withdrawal are
+                # unique per revision, and only one active deletion is allowed.
+                # Keep the current summary and its status in the same read.
+                .outerjoin(NotebookPublication, NotebookPublication.revision_id == NotebookRevision.id)
+                .outerjoin(withdrawal, withdrawal.revision_id == NotebookRevision.id)
+                .outerjoin(deletion, and_(deletion.note_id == NotebookNote.id, deletion.restored_at.is_(None)))
+                .options(load_only(NotebookNote.id, NotebookNote.author_id, NotebookNote.created_at,
+                                  NotebookNote.source_id, raiseload=True),
+                         load_only(deletion.id, deletion.note_id, deletion.revision, deletion.content_sha256,
+                                   deletion.deleted_at, deletion.restored_at, raiseload=True)))
             if cursor:
                 created_at, identifier = cursor
                 query = query.where(or_(NotebookRevision.created_at < created_at,
@@ -840,10 +853,6 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                                 key=lambda item: item[0])
             page = candidates[:limit]
             selected_rows = [value for _, kind, value in page if kind == "account"]
-            deleted = notebook_trash.records(session, [row[0].id for row in selected_rows])
-            publications = {row.revision_id: row for row in session.scalars(select(NotebookPublication).where(
-                NotebookPublication.revision_id.in_([row[2] for row in selected_rows]))).all()} if selected_rows else {}
-            withdrawals = notebook_moderation.records(session, [row[2] for row in selected_rows])
             shared = shared_summaries(session, [row[0].id for row in selected_rows])
             refs = [(row[0].id, row[3], row[5]) for row in selected_rows]
             refs.extend((identifier, item["revision"], item["content_sha256"]) for identifier, item in shared.items())
@@ -864,16 +873,16 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                             "content": content, "summary": True,
                             "requests": curated_requests.get((row["id"], latest["revision"], latest["content_sha256"]), [])}]})
                     continue
-                note, handle, revision_id, number, created, digest, title, claim, tags, kind, count, proposed_number, proposed_digest = row
-                publication = publications.get(revision_id)
-                status = "withdrawn" if revision_id in withdrawals else (publication.decision or "submitted") if publication else "private"
+                (note, handle, revision_id, number, created, digest, title, claim, tags, kind, count,
+                 proposed_number, proposed_digest, publication_id, decision, withdrawn_id, deleted) = row
+                status = "withdrawn" if withdrawn_id is not None else (decision or "submitted") if publication_id else "private"
                 content = {"title": title, "claim": claim, "tags": tags or []}
                 if kind is not None:
                     content["kind"] = kind
                 records.append({"id": note.id, "owner": {"id": note.author_id, "handle": handle},
-                    "can_edit": user.id == note.author_id and note.id not in deleted,
-                    "can_restore": user.id == note.author_id and note.id in deleted,
-                    "deletion": notebook_trash.data(deleted[note.id]) if note.id in deleted else None,
+                    "can_edit": user.id == note.author_id and deleted is None,
+                    "can_restore": user.id == note.author_id and deleted is not None,
+                    "deletion": notebook_trash.data(deleted) if deleted is not None else None,
                     "can_review": not agent and protocol_proposals.is_reviewer(settings, user) and (user.id != note.author_id or protocol_proposals.can_self_review(settings, user)),
                     "can_self_review": not agent and protocol_proposals.can_self_review(settings, user),
                     "created_at": note.created_at, "revision": number, "content_sha256": digest,

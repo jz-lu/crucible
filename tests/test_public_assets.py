@@ -124,6 +124,23 @@ def asset_request(path='/app.js', *, encoding=None, method='GET', query=b'', hea
                     'query_string': query, 'headers': fields})
 
 
+def test_critical_canvas_matches_base_typography_with_one_exact_csp_hash(frozen_public_assets):
+    from crucible.public_assets import CONTENT_SECURITY_POLICY
+    shell = frozen_public_assets.response(asset_request('/')).body.decode()
+    css = frozen_public_assets.response(asset_request('/styles.css')).body.decode()
+    critical, = re.findall(r'<style>(.*?)</style>', shell, re.S)
+    sans, = re.findall(r'--sans:\s*([^;]+);', css)
+    assert 'font:14px/1.6 ' + sans + ';' in critical
+    assert 'font: 14px/1.6 var(--sans);' in css
+    assert 'background:#f6f9fd' in critical and '--paper: #f6f9fd;' in css
+    assert 'color:#2d4563' in critical and '--text: #2d4563;' in css
+    assert '[hidden]{display:none!important}' in critical
+    assert 'visibility:' not in critical and 'animation:' not in critical
+    digest = base64.b64encode(hashlib.sha256(critical.encode()).digest()).decode()
+    assert "'sha256-" + digest + "'" in CONTENT_SECURITY_POLICY.decode()
+    assert 'unsafe-inline' not in CONTENT_SECURITY_POLICY.decode()
+
+
 @pytest.mark.parametrize(('header', 'expected'), [
     (None, 'identity'), ('', 'identity'), ('identity', 'identity'),
     ('gzip', 'gzip'), ('GZip;Q=1.000', 'gzip'), ('br, gzip;q=0.5', 'gzip'),

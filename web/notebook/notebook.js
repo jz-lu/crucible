@@ -152,10 +152,10 @@
     let mapController = null, mapPreparation = null, mapIdle = null, mapRequest = 0, timelineRequest = 0, listLoaded = false, cardAction = 0;
     let curatedNotes = [], curatedLoaded = false, curatedPromise = null;
     let pageCursors = [null], pageIndex = 0, searchTimer = null;
-    let currentSession = session(), readEpoch = 0, listStamp = null, listRefreshing = false;
+    let currentSession = session(), readEpoch = 0, listStamp = null, timelineStamp = null, listRefreshing = false;
     const readCache = new Map();
     const preparingNotes = new Map();
-    function invalidateReads() { readCache.clear(); preparingNotes.clear(); listStamp = null; readEpoch++; }
+    function invalidateReads() { readCache.clear(); preparingNotes.clear(); listStamp = null; timelineStamp = null; readEpoch++; }
     function cachedRead(key) {
       if (reviewOnly) return null; // Review forms always require a fresh server read.
       const entry = readCache.get(key);
@@ -224,7 +224,7 @@
     const noticeNode = mark('notice', el('div', 'nb-notice')); noticeNode.setAttribute('role', 'status'); noticeNode.hidden = true;
     const library = mark('library', el('section')); const toolbar = el('div', 'nb-toolbar');
     const searchLabel = el('label', 'nb-search'); searchLabel.append(el('span', 'nb-sr-only', 'Search notes'));
-    const searchInput = mark('search', el('input')); searchInput.type = 'search'; searchInput.maxLength = 200; searchInput.placeholder = 'Search notes or tags…'; searchLabel.append(searchInput);
+    const searchInput = mark('search', el('input')); searchInput.type = 'search'; searchInput.maxLength = 200; searchInput.placeholder = 'Search titles, summaries or tags…'; searchLabel.append(searchInput);
     const filter = field('Show', 'visibility', 'all', {options: [{value:'all', label:'All notes'}, {value:'mine', label:'My notes'}, {value:'human', label:'Human-written'}, {value:'proposals', label:'Proposals'}, {value:'research', label:'Literature'}, {value:'trash', label:'Trash'}]}); filter.wrap.classList.add('nb-visibility-filter');
     filter.input.addEventListener('change', () => { visibility = filter.input.value; changeQuery(); });
     toolbar.append(searchLabel, filter.wrap, mark('filter', el('span')), mark('count', el('span', 'nb-count')));
@@ -257,13 +257,14 @@
       if (next === accountId && nextSession === currentSession) return;
       currentSession = nextSession; invalidateReads(); cancelMapPreparation();
       accountId = next; epoch++; request++; mapRequest++; timelineRequest++; listLoaded = false;
+      q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy');
       q('timeline').replaceChildren();
       curatedNotes = []; curatedLoaded = false; curatedPromise = null; resetPages(); clearTimeout(searchTimer); searchTimer = null;
       mapController?.destroy(); mapController = null; q('map').replaceChildren(); notes = []; nextAfter = null; previewId = null; search = ''; tag = ''; visibility = 'all'; filter.input.value = 'all';
       q('search').value = ''; q('filter').replaceChildren(); q('page').textContent = ''; humanHint.hidden = true;
       closeDialog(true); q('dialog-body').replaceChildren(); q('list').replaceChildren(); q('full').replaceChildren(); q('count').textContent = ''; q('pagination').hidden = true; notice('');
     }
-    function hide() { cancelMapPreparation(); clearTimeout(searchTimer); searchTimer = null; active = false; request++; mapRequest++; timelineRequest++; q('timeline').replaceChildren(); mapController?.hide(); if (q('dialog').open) { suspendedDialog = true; q('dialog').close(); } }
+    function hide() { cancelMapPreparation(); clearTimeout(searchTimer); searchTimer = null; active = false; request++; mapRequest++; timelineRequest++; q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy'); q('timeline').replaceChildren(); mapController?.hide(); if (q('dialog').open) { suspendedDialog = true; q('dialog').close(); } }
     const reviewUrl = (section, extra = {}) => '#reviews?' + new URLSearchParams({section, ...extra});
     function pageGuard() { const current = guard(), token = request; return () => current() && token === request; }
     function backToNotes() { return button(reviewOnly ? '← Publish requests' : '← Research notebook', () => navigate(reviewOnly ? reviewUrl('publication') : '#notebook'), 'nb-link nb-back'); }
@@ -293,6 +294,8 @@
       if (!reviewMode && ['all', 'mine', 'human', 'proposals', 'research', 'trash'].includes(params.get('filter'))) { visibility = params.get('filter'); filter.input.value = visibility; resetPages(); }
       if (suspendedDialog) { q('dialog').showModal(); suspendedDialog = false; }
       const id = params.get('note'), inResearch = params.has('research') || params.has('research_request'); q('library').hidden = inVisualization || Boolean(id) || inResearch; q('full').hidden = inVisualization || (!id && !inResearch);
+      if (q('library').hidden) q('list').removeAttribute('aria-busy');
+      if (!inTimeline) q('timeline').removeAttribute('aria-busy');
       q('new').disabled = !accountId; q('files').disabled = !accountId;
       if (!accountId) { q('list').replaceChildren(); q('full').replaceChildren(); notice('Sign in to read your notebook.'); return; }
       if (inMap) { await showMap(); return; }
@@ -353,14 +356,36 @@
       }
     }
     async function showTimeline() {
-      const owner = accountId, generation = epoch, token = ++timelineRequest;
-      const current = () => active && identity() === owner && accountId === owner && epoch === generation && token === timelineRequest && params.get('view') === 'timeline';
-      q('timeline').replaceChildren(reading('Loading notes over time…'));
+      const owner = accountId, generation = epoch, reads = readEpoch, token = ++timelineRequest;
+      const current = () => active && identity() === owner && accountId === owner && epoch === generation && reads === readEpoch && token === timelineRequest && params.get('view') === 'timeline';
+      const key = 'timeline', target = q('timeline'), cached = cachedRead(key);
+      const paint = data => {
+        // The clock is not chart content. An unchanged aggregate at the same
+        // width keeps its DOM during background validation.
+        const {server_time, ...aggregate} = data;
+        const signature = JSON.stringify(aggregate), width = target.clientWidth;
+        if (timelineStamp?.signature !== signature || timelineStamp.width !== width || timelineStamp.child !== target.firstChild) {
+          renderTimeline(data); timelineStamp = {signature, width, child: target.firstChild};
+        }
+      };
+      notice(''); target.setAttribute('aria-busy', 'true');
+      if (cached) paint(cached); else target.replaceChildren(reading('Loading notes over time…'));
       try {
         const data = await api('/api/notebook/timeline');
-        if (current()) renderTimeline(data);
+        if (!current()) return;
+        paint(data); rememberRead(key, data);
       } catch (error) {
-        if (current()) q('timeline').replaceChildren(el('p', 'nb-error', 'The timeline could not be loaded.'), button('Try again', showTimeline, 'nb-button'));
+        if (!current()) return;
+        readCache.delete(key);
+        if (cached && !forbiddenRead(error)) notice('The timeline could not be refreshed.', true);
+        else {
+          if (forbiddenRead(error)) invalidateReads();
+          timelineStamp = null;
+          target.replaceChildren(el('p', 'nb-error', 'The timeline could not be loaded.'), button('Try again', showTimeline, 'nb-button'));
+        }
+        target.removeAttribute('aria-busy');
+      } finally {
+        if (current()) target.removeAttribute('aria-busy');
       }
     }
     function renderTimeline(data) {
@@ -460,6 +485,16 @@
     }
     function previousPage() { if (pageIndex > 0) { pageIndex--; previewId = null; loadList(); } }
     function nextPage() { if (nextAfter) { pageCursors = pageCursors.slice(0, pageIndex + 1); pageCursors.push(nextAfter); pageIndex++; previewId = null; loadList(); } }
+    function setListActionsDisabled(disabled) {
+      for (const actions of q('list').querySelectorAll('.nb-card-actions')) {
+        for (const control of actions.querySelectorAll('button')) control.disabled = disabled;
+      }
+    }
+    function updateList(update) {
+      const focused = document.activeElement?.closest('.nb-list') === q('list');
+      update();
+      if (focused) q('list').focus({preventScroll:true});
+    }
     async function loadList() {
       clearTimeout(searchTimer); searchTimer = null;
       humanHint.hidden = reviewMode || visibility !== 'human';
@@ -475,20 +510,26 @@
       if (cursor) query.set('after', cursor);
       const key = 'list:' + (reviewMode ? 'review:' : '') + query;
       const cached = visibility === 'trash' ? null : cachedRead(key);
+      // Keep the last admitted page while a different query is pending, but
+      // never treat its rows as matches for that query or derive local pages.
+      const retained = !cached && !reviewOnly && visibility !== 'trash' && listStamp?.generation === readEpoch &&
+        listStamp.child === q('list').firstChild && q('list').querySelector('.nb-entry') && cachedRead(listStamp.key);
       const paint = result => {
         notes = result.notes; nextAfter = result.next_after || null; listLoaded = true;
         const signature = JSON.stringify(result);
         if (listStamp?.key !== key || listStamp.signature !== signature || listStamp.child !== q('list').firstChild) {
-          renderList(); listStamp = {key, signature, child: q('list').firstChild};
+          updateList(renderList); listStamp = {key, signature, generation: readEpoch, child: q('list').firstChild};
         }
       };
-      notice(''); listRefreshing = Boolean(cached);
-      if (cached) { paint(cached); for (const control of q('list').querySelectorAll('.nb-card-actions button')) control.disabled = true; }
-      else {
+      notice(''); listRefreshing = Boolean(cached || retained);
+      q('list').setAttribute('aria-busy', 'true');
+      if (cached) paint(cached);
+      else if (!retained) {
         listLoaded = false; notes = []; nextAfter = null;
-        q('list').replaceChildren(reading('Loading notes…')); q('count').textContent = '';
+        updateList(() => q('list').replaceChildren(reading('Loading notes…'))); q('count').textContent = '';
         q('page').textContent = 'Page ' + (pageIndex + 1);
       }
+      setListActionsDisabled(true);
       q('more').disabled = true; q('prev').disabled = true;
       try {
         const result = await api((reviewMode ? '/api/notebook/review-queue?' : '/api/notebook/notes?') + query);
@@ -498,20 +539,21 @@
         if (visibility !== 'trash') rememberRead(key, page);
         listRefreshing = false; paint(page);
         if (!reviewOnly && visibility !== 'trash') scheduleMap();
-        for (const control of q('list').querySelectorAll('.nb-card-actions button')) control.disabled = false;
+        setListActionsDisabled(false);
       } catch (error) {
         if (!current() || request !== token || generation !== readEpoch) return;
         readCache.delete(key);
+        if (forbiddenRead(error)) { invalidateReads(); q('list').removeAttribute('aria-busy'); }
         const expiredCursor = cursor && error.status === 422 && /page cursor/i.test(error.message);
         if (expiredCursor) resetPages();
         if (cached && !forbiddenRead(error) && !expiredCursor) notice('Notes could not be refreshed. ' + error.message, true);
         else {
           notes = []; nextAfter = null; listLoaded = false; listStamp = null;
-          q('list').replaceChildren(el('p', 'nb-error', error.message), button(expiredCursor ? 'Restart notebook list' : 'Try again', () => loadList(), 'nb-button'));
+          updateList(() => q('list').replaceChildren(el('p', 'nb-error', error.message), button(expiredCursor ? 'Restart notebook list' : 'Try again', () => loadList(), 'nb-button')));
           q('count').textContent = '';
         }
       } finally {
-        if (current() && request === token) { q('prev').disabled = pageIndex === 0; q('more').disabled = !nextAfter; q('pagination').hidden = pageIndex === 0 && !nextAfter; }
+        if (current() && request === token && generation === readEpoch) { q('list').removeAttribute('aria-busy'); q('prev').disabled = pageIndex === 0; q('more').disabled = !nextAfter; q('pagination').hidden = pageIndex === 0 && !nextAfter; }
       }
     }
 
@@ -557,14 +599,14 @@
       }, forget);
     }
     function renderList() {
-      q('search').value = search; q('search').placeholder = 'Search titles, summaries or tags…'; q('filter').replaceChildren();
+      q('search').value = search; q('filter').replaceChildren();
       if (tag) q('filter').append(button(tagLabel(tag) + ' ×', () => { tag = ''; changeQuery(); }, 'nb-tag'));
       // Search, visibility and proposal filters have already run before the
       // server selected this page. Never filter only the downloaded subset.
       const filtered = notes;
       q('count').textContent = `${filtered.length} ${filtered.length === 1 ? 'note' : 'notes'}`; q('list').replaceChildren();
       q('page').textContent = 'Page ' + (pageIndex + 1);
-      q('prev').disabled = pageIndex === 0; q('more').disabled = !nextAfter;
+      q('prev').disabled = listRefreshing || pageIndex === 0; q('more').disabled = listRefreshing || !nextAfter;
       q('pagination').hidden = pageIndex === 0 && !nextAfter;
       if (reviewMode) q('list').append(el('p', 'nb-hint', 'Publish requests · approve an exact revision for all approved participants to read. This does not publish it to the internet or certify its mathematics.'));
       if (!filtered.length) q('list').append(el('p', 'nb-empty', reviewMode ? 'No publish requests awaiting approval.' : search.trim() || tag || visibility !== 'all' ? 'No matching notes.' : 'No notes yet. Start with New note.'));
@@ -1317,6 +1359,8 @@
     q('search').addEventListener('input', event => {
       search = event.target.value; clearTimeout(searchTimer); resetPages(); previewId = null;
       const current = guard(), token = ++request;
+      listRefreshing = true; q('list').setAttribute('aria-busy', 'true');
+      setListActionsDisabled(true);
       q('prev').disabled = true; q('more').disabled = true;
       searchTimer = setTimeout(() => { if (current() && request === token && !params.has('note')) loadList(); }, 250);
     });

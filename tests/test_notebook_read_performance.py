@@ -1,11 +1,11 @@
 """Notebook history stays complete without querying each revision's reviewer."""
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from crucible import notebook, notebook_trash
 from test_browser_admission import selects
-from test_notebook import system, create, content, revise
+from test_notebook import system, create, content, revise, request_publication, approve
 
 
 def reviewed_history(app, owner, reviewer, count):
@@ -53,3 +53,62 @@ def test_unsubmitted_review_history_check_is_one_query_and_still_allows_delete(s
     assert len(queries) == 1 and queries[0].count('EXISTS') == 3
     result = owner.client.get(f'/api/notebook/notes/{note["id"]}').json()['note']
     assert result['can_delete'] is True and result['publication_status'] == 'private'
+
+
+def test_list_reads_current_status_with_summary_and_never_hydrates_import_metadata(system):
+    app, owner, reviewer, reader, _ = system
+    private = create(owner, content(title='Private summary', body='PRIVATE_BODY_SENTINEL'))
+    pending = create(owner, content(title='Pending summary'))
+    request_publication(owner, pending)
+    public = create(owner, content(title='Public summary'))
+    request_publication(owner, public); approve(reviewer, public)
+    withdrawn = create(owner, content(title='Withdrawn summary'))
+    request_publication(owner, withdrawn); approve(reviewer, withdrawn)
+    from test_notebook_moderation import withdraw
+    assert withdraw(reviewer, withdrawn).status_code == 200
+    with app.state.db.transaction(write=True) as session:
+        session.execute(update(notebook.NotebookNote).where(notebook.NotebookNote.id == private['id'])
+            .values(source_id='synthetic-import', source_metadata={'parts': ['unused provenance' * 2000] * 6}))
+
+    with selects(app) as queries:
+        response = owner.client.get('/api/notebook/notes')
+    assert response.status_code == 200
+    result = {row['id']: row for row in response.json()['notes']}
+    assert {key: row['publication_status'] for key, row in result.items()} == {
+        private['id']: 'private', pending['id']: 'submitted', public['id']: 'approved', withdrawn['id']: 'withdrawn'}
+    assert result[private['id']]['imported'] is True
+    assert len(queries) == 5  # Fresh account + summary/status + shared summary + two request kinds.
+    assert not any('notebook_notes.source_metadata' in query for query in queries)
+    assert not any('notebook_publications.reason' in query or 'notebook_publication_withdrawals.reason' in query for query in queries)
+    assert 'PRIVATE_BODY_SENTINEL' not in response.text and 'unused provenance' not in response.text
+    visible = reader.client.get('/api/notebook/notes').json()['notes']
+    assert [row['id'] for row in visible] == [public['id']]
+    # Query projection never removes durable provenance from storage/export.
+    exported = owner.client.get('/api/notebook/export').json()['notes']
+    assert next(row for row in exported if row['id'] == private['id'])['parts'][0].startswith('unused provenance')
+    with app.state.db.transaction() as session:
+        assert session.get(notebook.NotebookNote, private['id']).source_metadata['parts'][0].startswith('unused provenance')
+
+
+def test_summary_status_join_keeps_one_row_across_deletion_and_restore_history(system):
+    app, owner, _, reader, _ = system
+    from test_notebook_trash import delete, restore
+    saved = create(owner)
+    first = delete(owner, saved).json()['deletion']
+    assert restore(owner, first).status_code == 200
+    second = delete(owner, saved).json()['deletion']
+    with selects(app) as queries:
+        response = owner.client.get('/api/notebook/notes?scope=trash&limit=1')
+    assert response.status_code == 200
+    result = response.json()
+    assert len(result['notes']) == 1 and result['next_after'] is None
+    row = result['notes'][0]
+    assert row['deletion'] == second and row['can_restore'] and not row['can_edit']
+    assert len(queries) == 5
+    assert owner.client.get('/api/notebook/notes').json()['notes'] == []
+    assert reader.client.get('/api/notebook/notes?scope=trash').json()['notes'] == []
+    assert restore(owner, second).status_code == 200
+    restored = owner.client.get('/api/notebook/notes?limit=1').json()
+    assert len(restored['notes']) == 1 and restored['next_after'] is None
+    assert restored['notes'][0]['deletion'] is None
+    assert restored['notes'][0]['can_edit'] and not restored['notes'][0]['can_restore']

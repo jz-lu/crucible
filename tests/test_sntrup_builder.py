@@ -1,4 +1,5 @@
 """Build-only deadline policy and real subprocess-group cleanup checks."""
+import errno
 import importlib.util
 import json
 import os
@@ -62,10 +63,35 @@ def active_process(pid):
     if sys.platform.startswith("linux"):
         try:
             status = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
-        except FileNotFoundError:
+        except (FileNotFoundError, ProcessLookupError):
+            # Reaping can race either opening or reading procfs after kill(0).
             return False
         return status != "Z"
     return True
+
+
+@pytest.mark.parametrize("error,disappeared", [
+    (ProcessLookupError(errno.ESRCH, "Process disappeared"), True),
+    (FileNotFoundError(errno.ENOENT, "Process disappeared"), True),
+    (PermissionError(errno.EACCES, "Access denied"), False),
+    (OSError(errno.EIO, "Read failed"), False),
+])
+def test_process_observer_handles_procfs_exit_race_only(monkeypatch, error, disappeared):
+    pid, observed = 123456, []
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(os, "kill", lambda actual_pid, sig: observed.append((actual_pid, sig)))
+    def read_stat(path, *args, **kwargs):
+        assert str(path) == f"/proc/{pid}/stat"
+        observed.append("procfs read")
+        raise error
+    monkeypatch.setattr(Path, "read_text", read_stat)
+    if disappeared:
+        assert active_process(pid) is False
+    else:
+        with pytest.raises(type(error)) as caught:
+            active_process(pid)
+        assert caught.value is error
+    assert observed == [(pid, 0), "procfs read"]
 
 
 @pytest.mark.skipif(os.name != "posix", reason="Native build uses POSIX process groups")

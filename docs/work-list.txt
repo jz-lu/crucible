@@ -1,3 +1,19 @@
+Read responsiveness checkpoint, 24 October 2026
+
+Current source changes preserve notes during filtering, reuse bounded Timeline
+summaries on revisits, keep search wording stable, reduce authored overview SQL,
+and decode a smaller logo before revealing it. Error classification distinguishes
+interrupted API bodies from unexpected service pages without replaying writes.
+Browser journeys cover admission, navigation, focus, filtering, timeline refresh,
+revocation, and first paint. Long notebook tags wrap on small screens.
+
+These are source-level completion notes, not proof of hosted deployment. The
+release workflow's exact source/image evidence and hosted /health source revision
+must agree before calling a version live. See read-performance.txt for measured
+scope and limitations, logo-delivery.txt for the unchanged artwork's derivative,
+and releasing-beta.txt for the tested-main release process. Earlier dated entries
+below are historical checkpoints; their pending items are not current status.
+
 Follow-up checkpoint, 23 October 2026
 
 The actual hosted synthetic beta_check browser login/logout check passed at

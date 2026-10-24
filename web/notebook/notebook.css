@@ -135,3 +135,6 @@
 .nb-editor-actions .nb-remove-note{margin-right:auto;color:var(--error)}
 
 .nb-trash-actions{gap:16px;flex-wrap:wrap}
+
+/* Valid long tags remain readable and clickable within narrow note views. */
+.nb-tag{max-width:100%;min-width:0;overflow-wrap:anywhere}
