@@ -89,8 +89,11 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const app=await boot({respond:url=>url==='/api/notebook/notes/note-one'?(delay?late.promise:{note:note()}):undefined});
   await app.show('note-one');await app.show();delay=true;const loading=app.show('note-one');
   assert.match(app.q('full').textContent,/Argument as text/);assert.equal(byText(app.q('full'),'Edit').disabled,true);
+  assert.equal(app.document.activeElement,app.q('full').querySelector('h2'),'cached entry hands focus to the reader');
+  const back=app.q('full').querySelector('.nb-back');back.focus();
   const body=app.q('full').querySelector('.nb-body');
   late.resolve({note:note()});await loading;
+  assert.equal(app.document.activeElement,back,'quiet revalidation preserves the reader choice of focus');
   assert.ok(app.q('full').querySelector('.nb-body')===body, 'preserve the body during unchanged refresh');assert.equal(byText(app.q('full'),'Edit').disabled,false);
   byText(app.q('full'),'Explore connections').click();await flush();assert.ok(app.q('full').querySelector('.nb-note-graph'));
  });

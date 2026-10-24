@@ -1,0 +1,6 @@
+{
+  "name": "crucible-browser-checks",
+  "private": true,
+  "scripts": {"test": "playwright test"},
+  "devDependencies": {"playwright": "1.62.1"}
+}

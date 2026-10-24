@@ -46,7 +46,7 @@ async function boot() {
     return {show:()=>calls.show++,hide:()=>calls.hide++,destroy:()=>calls.destroy++};
   }};
   const pendingScripts=()=>app.document.querySelector('head').querySelectorAll('script').filter(node=>node.src?.startsWith('/map/'));
-  const finishScript=name=>{const script=pendingScripts().find(node=>node.src==='/map/'+name);assert.ok(script?.onload);app.window[globals[scripts.indexOf(name)]]=name==='app.js'?renderer:{};script.onload();};
+  const finishScript=name=>{const script=pendingScripts().find(node=>new URL(node.src,'http://127.0.0.1:8000').pathname==='/map/'+name);assert.ok(script?.onload);app.window[globals[scripts.indexOf(name)]]=name==='app.js'?renderer:{};script.onload();};
   const finishScripts=()=>scripts.forEach(name=>{if(!app.window[globals[scripts.indexOf(name)]])finishScript(name);});
   const respond=(index=reads.length-1,ok=true)=>reads[index].resolve({ok,text:async()=>template});
   const surface=()=>q('map').children.find(node=>node.shadowRoot);
@@ -63,7 +63,7 @@ async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
   await test('all seven protected assets start before any result and no unstyled map mounts',async()=>{
     const app=await boot(),loading=app.show();
     assert.deepEqual(Array.from(app.pendingScripts(),script=>script.src),scripts.map(name=>'/map/'+name));
-    assert.ok(app.pendingScripts().every(script=>script.async===false),'browser execution order is explicit');
+    assert.ok(app.pendingScripts().every(script=>script.async===true),'independent execution cannot be held behind a removed timed-out script');
     assert.equal(app.reads.length,1);assert.equal(app.reads[0].options.credentials,'same-origin');
     assert.equal(app.reads[0].options.cache,'no-store');assert.ok(app.reads[0].options.signal);
     assert.equal(app.stylesheet().href,'/map/styles.css');assert.equal(app.surface().isConnected,true);
@@ -76,10 +76,16 @@ async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
     assert.equal(app.surface(),surface);assert.equal(detachments,0,'keep the loaded shadow stylesheet continuously connected');
     assert.doesNotMatch(app.q('map').textContent,/Loading scheme map/);assert.equal(app.timers.size,0);
   });
-  await test('HTML and CSS completing first cannot mount before the last ordered script',async()=>{
+  await test('HTML and CSS completing first cannot mount before the last independent script',async()=>{
     const app=await boot(),loading=app.show();app.respond();app.stylesheet().onload();
     scripts.slice(0,-1).forEach(app.finishScript);await flush();assert.equal(app.calls.mount,0);
     app.finishScript('app.js');await loading;assert.equal(app.calls.mount,1);
+  });
+  await test('actual map scripts initialize in reverse order without consuming missing globals',async()=>{
+    const app=await boot();app.document.getElementById=()=>null;
+    for(const name of [...scripts].reverse())vm.runInContext(fs.readFileSync(path.join(__dirname,'../web/map',name),'utf8'),app.sandbox,{filename:name});
+    assert.ok(globals.every(name=>app.window[name]));assert.equal(typeof app.window.CrucibleResearchMap.mount,'function');
+    assert.equal(app.calls.mount,0,'the readiness barrier owns mounting');
   });
   await test('failed script waits for the other downloads and retries only the missing dependency',async()=>{
     const app=await boot(),loading=app.show();const failed=app.pendingScripts()[1];
@@ -89,13 +95,16 @@ async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
     assert.match(app.q('map').textContent,/could not be loaded/);assert.equal(app.surface(),undefined);
     const successful=app.pendingScripts();const retry=app.show();
     assert.equal(app.pendingScripts().length,5);assert.ok(successful.every(script=>app.pendingScripts().includes(script)));
+    assert.equal(app.pendingScripts().find(script=>!successful.includes(script)).src,'/map/notes-data.js?asset_attempt=2');
     app.finishScript('notes-data.js');app.respond();app.stylesheet().onload();await retry;
     assert.equal(app.calls.mount,1);assert.equal(app.timers.size,0);
   });
   await test('stylesheet failure leaves no surface and retries without downloading successful scripts',async()=>{
     const app=await boot(),loading=app.show();app.stylesheet().onerror();app.respond();app.finishScripts();await loading;
     assert.equal(app.surface(),undefined);assert.match(app.q('map').textContent,/could not be loaded/);
-    const successful=app.pendingScripts(),retry=app.show();app.respond();app.stylesheet().onload();await retry;
+    const successful=app.pendingScripts(),retry=app.show();
+    assert.equal(app.stylesheet().href,'/map/styles.css?asset_attempt=2');
+    app.respond();app.stylesheet().onload();await retry;
     assert.deepEqual(app.pendingScripts(),successful);assert.equal(app.calls.mount,1);
   });
   await test('denied template never mounts previously loaded data and a retry makes a fresh private read',async()=>{

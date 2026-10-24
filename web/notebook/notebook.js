@@ -36,14 +36,20 @@
   const latestRevision = note => note.revisions?.reduce((last, revision) => !last || revision.revision > last.revision ? revision : last, null);
 
   let researchMapAssets = null;
+  const researchMapAssetAttempts = new Map(); // Six fixed script/style paths.
+  function researchMapAssetURL(name) {
+    const attempt = (researchMapAssetAttempts.get(name) || 0) + 1;
+    researchMapAssetAttempts.set(name, attempt);
+    return '/map/' + name + (attempt > 1 ? '?asset_attempt=' + attempt : '');
+  }
   async function mountResearchMap(host, current, {currentReleases} = {}) {
     if (!current()) return null;
-    // Start the stylesheet, template and ordered scripts together. The surface
+    // Start the stylesheet, template and independent scripts together. The surface
     // must be connected for its shadow stylesheet to load, but stays hidden
     // until every dependency is ready; the existing loading message stays put.
     const surface = el('div'); surface.hidden = true;
     const shadow = surface.attachShadow({mode:'open'});
-    const stylesheet = el('link'); stylesheet.rel = 'stylesheet'; stylesheet.href = '/map/styles.css';
+    const stylesheet = el('link'); stylesheet.rel = 'stylesheet'; stylesheet.href = researchMapAssetURL('styles.css');
     const styled = new Promise((resolve, reject) => {
       const timer = setTimeout(() => finish(new Error('Map styles unavailable.')), 15000);
       function finish(error) {
@@ -68,7 +74,7 @@
       const results = await Promise.allSettled(scripts.map(([name, global]) => {
         if (window[global]) return Promise.resolve();
         return new Promise((resolve, reject) => {
-          const script = el('script'); script.src = '/map/' + name; script.async = false;
+          const script = el('script'); script.src = researchMapAssetURL(name); script.async = true;
           const timer = setTimeout(() => finish(new Error('Map asset unavailable.')), 15000);
           function finish(error) {
             clearTimeout(timer); script.onload = script.onerror = null;
@@ -79,8 +85,9 @@
           document.querySelector('head').append(script);
         });
       }));
-      // Do not retry a failed dependency while later ordered scripts are still
-      // loading. Successfully loaded globals are reused on a subsequent try.
+      // Global factories are independent; mount below waits for all of them.
+      // Wait for every attempt to settle before retrying failed dependencies.
+      // Successfully loaded globals are reused on a subsequent try.
       const failed = results.find(result => result.status === 'rejected');
       if (failed) throw failed.reason;
     })().catch(error => { researchMapAssets = null; throw error; });
@@ -554,7 +561,12 @@
       const key = 'note:' + JSON.stringify([id, requested, expectedHash]), cached = cachedRead(key);
       const prepared = preparingNotes.get(key); preparingNotes.delete(key);
       let unlock = () => {};
-      if (cached) { renderFull(cached, requested); unlock = lockReader(); }
+      if (cached) {
+        renderFull(cached, requested); unlock = lockReader();
+        // Cached navigation needs the same focus handoff as a first visit.
+        // Quiet revalidation below must not steal focus back from the reader.
+        q('full').querySelector('h2')?.focus({preventScroll:true});
+      }
       else q('full').replaceChildren(backToNotes(), el('p', 'nb-empty', 'Loading note…'));
       try {
         const result = id.startsWith('curated:')

@@ -1,5 +1,9 @@
 name: CI
-on: [push, pull_request, workflow_call]
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
 permissions:
   contents: read
 jobs:
@@ -90,14 +94,58 @@ jobs:
         with:
           python-version: '3.13'
       - run: python -B deploy/release.py contract
+  browser-checks:
+    name: Real Chromium UI and private-access checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tests/browser/package-lock.json
+      - name: Install pinned test dependencies
+        run: |
+          python -m pip install -r requirements.lock
+          npm ci --prefix tests/browser --ignore-scripts --no-audit --no-fund
+      - name: Install locked Chromium
+        working-directory: tests/browser
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Run disposable loopback browser checks
+        working-directory: tests/browser
+        run: npm test
+      - name: Retain synthetic browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: synthetic-browser-failures
+          path: |
+            tests/browser/playwright-report
+            tests/browser/test-results
+          retention-days: 7
+      - name: State browser verification boundary
+        if: always()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          Browser checks use the actual app, static assets, session/membership
+          checks and notebook handlers on disposable SQLite. A test-only portable
+          DH catalogue avoids native build dependencies. This does not test the
+          hosted beta, PostgreSQL, OAuth/mail providers or native KEM workers.
+          There are no test retries or skips. Only synthetic failure traces are saved.
+          EOF
   ci:
     name: CI passed
     if: always()
-    needs: [portable-source-checks, release-contract]
+    needs: [portable-source-checks, release-contract, browser-checks]
     runs-on: ubuntu-latest
     steps:
       - name: Require every source check
         env:
           SOURCE_RESULT: ${{ needs.portable-source-checks.result }}
           CONTRACT_RESULT: ${{ needs.release-contract.result }}
-        run: test "$SOURCE_RESULT" = success && test "$CONTRACT_RESULT" = success
+          BROWSER_RESULT: ${{ needs.browser-checks.result }}
+        run: test "$SOURCE_RESULT" = success && test "$CONTRACT_RESULT" = success && test "$BROWSER_RESULT" = success

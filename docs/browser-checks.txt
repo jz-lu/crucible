@@ -1,0 +1,52 @@
+Real-browser quality gate
+=========================
+
+The fast standalone Node tests remain the detailed state-machine regression
+suite. The required Chromium job adds actual script loading, CSS/shadow DOM,
+layout, focus, native dialogs and HTTP behavior. It runs once, not once for each
+Python version. Failed tests are not retried or skipped.
+
+Run from the repository with the existing Python dependencies installed:
+
+  npm ci --prefix tests/browser --ignore-scripts --no-audit --no-fund
+  cd tests/browser
+  npx --no-install playwright install --with-deps chromium
+  npm test
+
+Playwright 1.62.1 and its transitive packages are pinned in package-lock.json.
+They are development-only dependencies. CI installs the matching browser. For a
+local existing Chromium, CRUCIBLE_BROWSER_EXECUTABLE may name its executable;
+CRUCIBLE_BROWSER_PYTHON may name the Python interpreter with requirements.lock
+installed. Neither option changes the fixed loopback origin or accepts a hosted
+target. The runner refuses to reuse an existing server on port 8029.
+
+server.py creates an ephemeral SQLite database, random test application key and
+synthetic accounts/notes. It passes explicit Settings, never loads an .env or
+opens the operator's database, and binds only 127.0.0.1. The actual application
+serves the real checked-out web assets and enforces session/membership rules.
+Only the fixture subprocess limits the registry to portable DH release 4, using
+the established portable authentication-test pattern. Production registration,
+artifact verification and database schema are unchanged. No KEM is generated.
+Mail/GitHub are disabled. Browser requests outside this loopback origin fail.
+
+The eight checks cover cached navigation while a real response is held, brand
+navigation without a document reload, anonymous/revoked private reads, a late
+private response across an account change, concurrent map asset requests without
+duplicate CSS, rendered SVG and keyboard dialog behavior, mobile note layout and
+focus, neutral initial-access/route previews while real responses are held, and
+real stalled notebook/map script deadlines followed by retry while
+the original requests remain stalled. Controlled response
+holds establish ordering; no sub-100ms timing threshold depends on runner load.
+The stalled-script case intentionally waits for the real 15-second deadline.
+
+Failures retain synthetic screenshots and traces for seven days in CI. They
+contain disposable fixture credentials and notes, never participant information.
+There is no production URL, provider credential, database connection or login in
+this suite. Tests and browser packages are not included in the release image.
+
+Scope: Chromium at desktop and mobile viewport sizes, real ASGI/SQLite HTTP and
+browser behavior. This is not hosted performance/capacity evidence, a complete
+accessibility audit, native cryptographic verification or PostgreSQL integration.
+The separate source security tests and reviewed native-image release checks
+remain required. Manual keyboard, screen-reader and cross-browser review still
+matter; this small gate is a repeatable foundation rather than a completeness claim.

@@ -1,4 +1,6 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const vm = require('node:vm');
 const {createApp, flush} = require('./frontend-dom.cjs');
 const user = {id: 'fixture-user', handle: 'alice'};
@@ -19,6 +21,16 @@ function notebookDouble() {
 function assets(app) {
   return [...app.document.querySelectorAll('link'), ...app.document.querySelectorAll('script')]
     .filter(element => (element.src || element.href || '').startsWith('/notebook/'));
+}
+async function timedNotebook() {
+  const app = await createApp({schemes:[scheme], hash:'#about', responder:(url, options, envelope) => {
+    if (url.pathname === '/api/session') return active(envelope);
+  }});
+  const timers = new Map(); let sequence=0;
+  app.sandbox.setTimeout = (callback, delay) => {const id=++sequence;timers.set(id,{callback,delay});return id;};
+  app.sandbox.clearTimeout = id => timers.delete(id);
+  await app.navigate('#notebook');
+  return {...app,timers};
 }
 let passed = 0;
 async function test(name, run) { await run(); console.log('PASS ' + name); passed++; }
@@ -109,12 +121,12 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.match(app.$('#kem-catalogue').textContent, /Current catalogue/);
     assert.doesNotMatch(app.$('#kem-catalogue').textContent, /Old catalogue/);
   });
-  await test('all notebook assets start together, scripts stay ordered, and re-entry keeps the mounted DOM', async () => {
+  await test('all notebook assets start independently, mounting waits for readiness, and re-entry keeps the DOM', async () => {
     const app = await createApp({schemes: [scheme], user, hash: '#notebook'});
     const requested = assets(app);
     assert.deepEqual(requested.map(element => element.src || element.href),
       ['/notebook/notebook.css', '/notebook/seed.js', '/notebook/store.js', '/notebook/notebook.js']);
-    assert.ok(requested.slice(1).every(script => script.async === false));
+    assert.ok(requested.slice(1).every(script => script.async === true));
     const notebook = notebookDouble(); app.window.CrucibleNotebook = notebook;
     requested[3].onload(); requested[1].onload(); requested[2].onload(); await flush();
     assert.equal(notebook.calls.mount, 0, 'stylesheet still pending');
@@ -126,6 +138,20 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.$('#notebook-fixture'), marker);
     assert.equal(assets(app).length, 4);
     assert.equal(paths(app).includes('/api/schemes'), false);
+  });
+  await test('actual notebook scripts initialize correctly in every arrival order', async () => {
+    const permutations = values => values.length ? values.flatMap((value,index) => permutations(values.filter((_,i)=>i!==index)).map(rest=>[value,...rest])) : [[]];
+    for (const order of permutations(['seed.js','store.js','notebook.js'])) {
+      const app = await createApp({schemes:[scheme], user, hash:'#about'});
+      for (const file of order) vm.runInContext(fs.readFileSync(path.join(__dirname,'../web/notebook',file),'utf8'),app.sandbox,{filename:file});
+      assert.equal(typeof app.window.CrucibleNotebook.mount,'function');
+      assert.equal(app.window.TheoryStore.validateSnapshot(app.window.CrucibleTheorySeed).format,'crucible-theory-local-v1');
+      const root=app.$('#notebook-workspace');
+      const controller=app.window.CrucibleNotebook.mount(root,{account:()=>user,navigate:()=>{},api:async url=>{
+        assert.ok(url.startsWith('/api/notebook/notes?'));return {notes:[],next_after:null};
+      }});
+      await controller.show();assert.match(root.textContent,/No notes/);
+    }
   });
   await test('same-account session rotation starts a fresh read and ignores the previous session response', async () => {
     const gates = [deferred(), deferred()]; let reads = 0;
@@ -153,6 +179,41 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.ok(requested.slice(1).every(script => retried.includes(script)));
     retried.find(element => element.tagName === 'LINK').onload(); await retry;
     assert.equal(notebook.calls.mount, 1);
+  });
+  for (const stalledIndex of [0,3]) await test((stalledIndex ? 'script' : 'stylesheet') + ' deadline permits a bounded retry and ignores the old attempt callbacks', async () => {
+    const app=await timedNotebook(), requested=assets(app), stalled=requested[stalledIndex];
+    assert.equal(app.timers.size,4);assert.ok([...app.timers.values()].every(timer=>timer.delay===15000));
+    const lateLoad=stalled.onload,lateError=stalled.onerror;
+    const notebook=notebookDouble();app.window.CrucibleNotebook=notebook;
+    requested.forEach((element,index)=>{if(index!==stalledIndex)element.onload();});
+    assert.equal(app.timers.size,1);const deadline=[...app.timers.values()][0].callback;
+    deadline();await flush();
+    assert.equal(app.timers.size,0);assert.equal(stalled.isConnected,false);
+    assert.equal(stalled.onload,null);assert.equal(stalled.onerror,null);
+    assert.match(app.$('#notebook-workspace').textContent,/took too long/);assert.equal(notebook.calls.mount,0);
+    const retry=app.sandbox.showNotebook('');await flush();
+    const replacement=assets(app).find(element=>!requested.includes(element));
+    assert.ok(replacement);
+    const retryURL=new URL(replacement.src||replacement.href,'http://127.0.0.1:8000');
+    assert.equal(retryURL.pathname,stalled.src||stalled.href);assert.equal(retryURL.search,'?asset_attempt=2');
+    assert.equal(assets(app).length,4);assert.equal(app.timers.size,1);
+    const path=JSON.stringify(stalled.src||stalled.href),pending=read(app,'notebookAssetLoads.get('+path+')');
+    lateLoad();lateError();deadline();await flush();
+    assert.equal(notebook.calls.mount,0,'late load cannot complete the new attempt');
+    assert.equal(read(app,'notebookAssetLoads.get('+path+')'),pending,'late error cannot evict the new task');
+    assert.equal(app.timers.size,1,'late deadline cannot clear the new timer');
+    replacement.onload();await retry;
+    assert.equal(notebook.calls.mount,1);assert.equal(app.timers.size,0);
+  });
+  await test('revocation during a stalled asset prevents retries or late callbacks from mounting private notebook content', async () => {
+    const app=await timedNotebook(),requested=assets(app),lateLoads=requested.map(element=>element.onload);
+    const notebook=notebookDouble();app.window.CrucibleNotebook=notebook;
+    app.sandbox.setSession(app.envelope({user,csrf_token:'csrf',access:{mode:'beta',status:'revoked',allowed:false}}));
+    [...app.timers.values()].forEach(timer=>timer.callback());await flush();
+    lateLoads.forEach(callback=>callback());await app.sandbox.showNotebook('');
+    assert.equal(app.timers.size,0);assert.equal(assets(app).length,0);
+    assert.equal(notebook.calls.mount,0);assert.equal(app.$('#access-workspace').hidden,false);
+    assert.deepEqual(paths(app),['/api/session']);
   });
   await test('leaving during asset loading cannot mount a hidden notebook or fetch its notes', async () => {
     const app = await createApp({schemes: [scheme], user, hash: '#notebook'});
