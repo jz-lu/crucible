@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 import pytest
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, update
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
 
@@ -43,8 +43,10 @@ def test_map_projection_rejects_other_projection_selectors(private_app, query):
 
 def test_challenge_summary_omits_large_inputs_and_full_download_remains_exact(private_app):
     actor = private_app.test_login("participant")
-    created = actor.post("/api/challenges?summary=true", {"profile_id": "dh-20"})
+    with selects(private_app) as created_queries:
+        created = actor.post("/api/challenges?summary=true", {"profile_id": "dh-20"})
     assert created.status_code == 200, created.text
+    assert not any("challenges.public_data" in query for query in created_queries)
     summary = created.json()["challenge"]
     assert "public" not in summary and summary["projection"] == "summary"
     assert summary["shared_secret_bytes"] == 32
@@ -52,13 +54,24 @@ def test_challenge_summary_omits_large_inputs_and_full_download_remains_exact(pr
         stored = session.get(Challenge, summary["id"])
         public = {**stored.public_data, "large_public_fixture": "x" * 512000}
         stored.public_data = public
-    full = actor.client.get("/api/challenges?profile_id=dh-20").json()["challenge"]
+    with selects(private_app) as full_queries:
+        full = actor.client.get("/api/challenges?profile_id=dh-20").json()["challenge"]
     with patch.object(dh_v4, "generate", side_effect=AssertionError("Existing instance must be reused")):
         with selects(private_app) as queries:
             read = actor.client.get("/api/challenges?profile_id=dh-20&summary=true")
-        reused = actor.post("/api/challenges?summary=true", {"profile_id": "dh-20"})
+        with selects(private_app) as reused_queries:
+            reused = actor.post("/api/challenges?summary=true", {"profile_id": "dh-20"})
+        with selects(private_app) as full_reuse_queries:
+            full_reuse = actor.post("/api/challenges", {"profile_id": "dh-20"})
     assert len(queries) == 3  # Fresh outer/handler access + joined instance/status.
+    assert len(reused_queries) == len(full_reuse_queries)
+    for statements in (queries, reused_queries):
+        assert any("challenges.manifest" in query for query in statements)
+        assert not any("challenges.public_data" in query for query in statements)
+    for statements in (full_queries, full_reuse_queries):
+        assert any("challenges.public_data" in query for query in statements)
     assert read.json()["challenge"] == reused.json()["challenge"] == summary
+    assert full_reuse.json()["challenge"] == full
     assert full == {key: value for key, value in summary.items() if key not in {"projection", "shared_secret_bytes"}} | {"public": public}
     assert len(read.content) < 2000
     assert read.headers["cache-control"] == "no-store"
@@ -66,6 +79,52 @@ def test_challenge_summary_omits_large_inputs_and_full_download_remains_exact(pr
     assert download["challenge"]["public"] == public
     assert download["challenge"]["id"] == summary["id"]
     assert "projection" not in download["challenge"]
+
+
+@pytest.mark.parametrize("encoding", [{"shared_secret_bytes": 64}, {}, None, "invalid"])
+def test_summary_uses_stored_manifest_not_public_encoding(private_app, encoding):
+    actor = private_app.test_login("participant")
+    challenge = actor.challenge()
+    with private_app.state.db.transaction(write=True) as session:
+        stored = session.get(Challenge, challenge["id"])
+        stored.public_data = {**stored.public_data, "encoding": encoding}
+    with selects(private_app) as queries:
+        response = actor.client.get("/api/challenges?profile_id=dh-20&summary=true")
+    assert response.status_code == 200
+    assert response.json()["challenge"]["shared_secret_bytes"] == 32
+    assert len(queries) == 3
+    assert not any("challenges.public_data" in query for query in queries)
+    assert actor.client.get(challenge["download_url"]).json()["challenge"]["public"]["encoding"] == encoding
+
+
+@pytest.mark.parametrize("declared,expected", [
+    (None, None), (False, None), (0, None), (-1, None), (4097, None),
+    ("32", None), (32.0, None), (16, 16), (4096, 4096),
+])
+def test_summary_reports_unavailable_for_invalid_stored_length_without_fallback(private_app, declared, expected):
+    actor = private_app.test_login("participant")
+    challenge = actor.challenge()
+    with private_app.state.db.transaction(write=True) as session:
+        stored = session.get(Challenge, challenge["id"])
+        manifest = dict(stored.manifest)
+        if declared is None:
+            manifest.pop("shared_secret_bytes")
+        else:
+            manifest["shared_secret_bytes"] = declared
+        # An explicit UPDATE also persists JSON type changes such as 32 ->
+        # 32.0, which Python dictionary equality otherwise treats as unchanged.
+        session.execute(update(Challenge).where(Challenge.id == stored.id).values(manifest=manifest))
+    with patch.object(dh_v4, "generate", side_effect=AssertionError("Existing instance must be reused")):
+        with selects(private_app) as queries:
+            read = actor.client.get("/api/challenges?profile_id=dh-20&summary=true")
+            reused = actor.post("/api/challenges?summary=true", {"profile_id": "dh-20"})
+    assert read.status_code == reused.status_code == 200
+    assert read.json()["challenge"]["shared_secret_bytes"] == expected
+    assert reused.json()["challenge"]["shared_secret_bytes"] == expected
+    assert not any("challenges.public_data" in query for query in queries)
+    # Keep old public inputs readable even when their declaration needs review.
+    full = actor.client.get("/api/challenges?profile_id=dh-20").json()["challenge"]
+    assert full["public"] == challenge["public"]
 
 
 def test_small_reads_do_not_bypass_membership_or_create_challenges(private_app):

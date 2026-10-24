@@ -13,6 +13,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError, TimeoutError as DatabasePoolTimeout
+from sqlalchemy.orm import defer
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.concurrency import run_in_threadpool
 
@@ -404,16 +405,18 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                 "id": challenge.id, "profile_id": challenge.profile_id, "round_id": challenge.round_id,
                 "scheme_id": challenge.scheme_id, "scheme_version": challenge.scheme_version,
                 "issued_at": challenge.issued_at, "starts_at": challenge.starts_at, "ends_at": challenge.ends_at,
-                "public": challenge.public_data, "status": status,
+                **({} if summary else {"public": challenge.public_data}),
+                "status": status,
                 "submission": submission_data(submission) if submission else None,
                 "download_url": f"/api/challenges/{challenge.id}/download"}
         if summary:
-            # The browser displays status and a download link, not the public
-            # key/ciphertext. Keep full, exact inputs on the default API/download.
-            encoding = challenge.public_data.get("encoding")
-            data.pop("public")
-            data.update(projection="summary", shared_secret_bytes=
-                        encoding.get("shared_secret_bytes") if isinstance(encoding, dict) else None)
+            # Use the frozen declaration enforced by answer submission, never
+            # load a large public key just to display the shared-secret length.
+            # Invalid historical declarations stay readable with length unknown;
+            # submission still rejects them and full inputs remain downloadable.
+            expected = challenge.manifest.get("shared_secret_bytes")
+            data.update(projection="summary", shared_secret_bytes=expected
+                        if type(expected) is int and 1 <= expected <= 4096 else None)
         return data
 
     def challenge_data(session, challenge, *, summary=False):
@@ -629,8 +632,10 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             user = user_for(request, session)
             observed_at = clock()
             round_ = current_round(observed_at)
-            row = session.execute(select(Challenge, Submission).outerjoin(Submission, Submission.challenge_id == Challenge.id)
-                      .where(Challenge.user_id == user.id, Challenge.profile_id == profile_id,
+            query = select(Challenge, Submission).outerjoin(Submission, Submission.challenge_id == Challenge.id)
+            if summary:
+                query = query.options(defer(Challenge.public_data, raiseload=True))
+            row = session.execute(query.where(Challenge.user_id == user.id, Challenge.profile_id == profile_id,
                       Challenge.scheme_id == manifest["scheme_id"], Challenge.scheme_version == manifest["version"],
                       Challenge.round_id == round_["id"])).one_or_none()
             challenge, submission = row if row is not None else (None, None)
@@ -680,7 +685,10 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                 if started is None:
                     raise HTTPException(409, "Request this scheme's current round before opening another stage automatically.")
             pin_adapter(session, manifest)
-            existing = session.scalar(select(Challenge).where(Challenge.user_id == user.id, Challenge.profile_id == profile_id,
+            query = select(Challenge)
+            if summary:
+                query = query.options(defer(Challenge.public_data, raiseload=True))
+            existing = session.scalar(query.where(Challenge.user_id == user.id, Challenge.profile_id == profile_id,
                       Challenge.scheme_id == manifest["scheme_id"],
                       Challenge.scheme_version == manifest["version"], Challenge.round_id == round_["id"]))
             if existing:
