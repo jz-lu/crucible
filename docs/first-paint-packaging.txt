@@ -1,0 +1,59 @@
+Main stylesheet delivery
+========================
+
+The public HTML embeds the main stylesheet from the same immutable PublicAssets
+snapshot that supplies its other versioned assets. It needs no separate main-CSS
+request before rendering. The original /styles.css route stays available with
+its existing representation and cache behavior. Protected notebook/map styles
+and content remain behind admission; none enters the public document.
+
+The source HTML keeps its main stylesheet link for clarity. Snapshot construction
+replaces exactly that link with a style block after versioning the other URLs.
+CSS contents are not rewritten. CRLF/CR normalize to LF before embedding and
+hashing, matching the HTML parser; UTF-8, NUL and closing-style checks prevent a
+document/hash mismatch. The current LF source is otherwise byte-exact.
+
+Bootstrap and the existing deferred script sequence precede this block. Moving
+their discovery behind a large embedded stylesheet would cost time on slow links.
+Deferred execution still follows document parsing, and script order is unchanged.
+The small initial canvas style remains at the beginning of the document.
+
+Policy and representation identity
+----------------------------------
+Each immutable Asset carries its CSP. Only the HTML adds the exact full-style
+SHA256 alongside the existing critical-style hash. All other directives stay
+unchanged: no unsafe-inline, inline script, user-supplied CSS or new origin is
+allowed. The response binds its selected Asset in an internal ASGI scope field.
+RequestBoundary uses that typed asset only for successful public GET/HEAD/304
+responses and replaces arbitrary response CSP headers with one effective policy.
+Request headers, untyped scope values and prior bindings cannot select a policy;
+private/error/API responses keep the default policy.
+
+HTML, policy, compression and ETags derive from the same selected snapshot. A
+development edit after response selection cannot mix old HTML with a new hash.
+Production snapshots remain frozen. Development edits update HTML/hash/ETag
+together. Identity/gzip retain separate strong validators, Vary and HEAD/304
+semantics; HTML still requires revalidation. No permission or account data is
+stored in this asset cache.
+
+Trade-off and evidence
+----------------------
+At this checkpoint the compressed HTML+main-CSS total is about 32 KB either way.
+An unchanged HTML304 reuses its cached complete document; a new HTML200 caused
+by an unrelated asset change resends roughly 17 KB of unchanged CSS that could
+previously have remained separately cached. This is a deliberate cold-paint
+trade-off, not a claim that every navigation or access check becomes faster.
+
+Isolated preliminary experiments at 200 ms RTT measured first paint at 488 to
+256 ms on 10 Mbps and 940 to 400 ms on 1 Mbps. They used three cold anonymous
+contexts per variant and identical settled screenshots. The original experiment
+delayed app.js discovery on the slower link, which is why this implementation
+preserves all script discovery ahead of the style. Those figures are experiment
+results, not measurements or promises for this deployed implementation.
+
+Regression checks cover exact parsed style/hash, one effective CSP, script order,
+normalization/rejected sources, frozen/development identity, identity/gzip
+GET/HEAD/304, private inventory, policy forgery/leakage, and full public/admitted
+layouts while the external CSS endpoint is blocked. Existing logo, authentication,
+navigation, math and retry journeys remain required. There is no change to the
+pre-document browser canvas, network propagation time or fresh access checks.
