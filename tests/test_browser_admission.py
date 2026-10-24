@@ -1,6 +1,8 @@
 """Browser admission query budgets without stale permissions or write shortcuts."""
 from contextlib import contextmanager
+import asyncio
 import importlib
+from types import SimpleNamespace
 
 from fastapi import HTTPException
 import pytest
@@ -10,6 +12,50 @@ from crucible import beta_access as beta
 from crucible.db import LoginSession, Method, User
 from crucible.security import token_hash
 from test_beta_boundary import private_app
+
+
+@pytest.mark.parametrize('method,path,status,binding,custom_policy', [
+    ('GET', '/', 200, 'asset', True),
+    ('HEAD', '/', 304, 'asset', True),
+    ('GET', '/api/session', 200, 'asset', False),
+    ('GET', '/', 500, 'asset', False),
+    ('GET', '/', 200, 'missing', False),
+    ('GET', '/', 200, 'untyped', False),
+])
+def test_public_asset_policy_is_bound_to_the_selected_response(method, path, status, binding, custom_policy):
+    from crucible.app import RequestBoundary
+    from crucible.config import Settings
+    from crucible.public_assets import Asset, CONTENT_SECURITY_POLICY
+    policy = CONTENT_SECURITY_POLICY.replace(b"style-src 'self'", b"style-src 'self' 'sha256-synthetic'")
+    asset = Asset(b'synthetic document', 'text/html', policy)
+    messages = []
+
+    async def application(scope, receive, send):
+        if binding == 'asset':
+            scope['_crucible_public_asset'] = asset
+        elif binding == 'untyped':
+            scope['_crucible_public_asset'] = SimpleNamespace(content_security_policy=b"default-src *")
+        await send({'type': 'http.response.start', 'status': status, 'headers': [
+            (b'content-security-policy', b"default-src *"),
+            (b'Content-Security-Policy', b"script-src 'unsafe-inline'")]})
+        await send({'type': 'http.response.body', 'body': b''})
+
+    async def receive():
+        return {'type': 'http.request', 'body': b''}
+
+    async def send(message):
+        messages.append(message)
+
+    scope = {'type': 'http', 'method': method, 'path': path,
+             'headers': [(b'content-security-policy', b"default-src *")],
+             # A prior/upstream binding is not authority for this response.
+             '_crucible_public_asset': asset}
+    boundary = RequestBoundary(application, Settings('sqlite://', b'x' * 32), lambda: 1, db=None)
+    asyncio.run(boundary(scope, receive, send))
+    headers = messages[0]['headers']
+    policies = [value for key, value in headers if key.lower() == b'content-security-policy']
+    assert policies == [policy if custom_policy else CONTENT_SECURITY_POLICY]
+    assert (b'x-frame-options', b'DENY') in headers
 
 
 @contextmanager

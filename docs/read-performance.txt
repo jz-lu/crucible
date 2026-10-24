@@ -104,11 +104,15 @@ Brand decoding and interrupted responses
 The same logo artwork now uses a 17,875-byte derivative instead of 421,760 bytes,
 large enough for the header at 3x pixel density. Its existing frame reserves space;
 an incomplete image becomes visible only after decoding, with no reveal animation.
-Already complete images are not re-hidden if bootstrap arrives late. The exact
-static CSP-hashed fallback also supplies the normal body background, color and
-system font when the main stylesheet is interrupted. See logo-delivery.txt for
-asset provenance. A white canvas before the document arrives is not under the
-page's control; a hosted cause for the reported flash has not been established.
+Already complete images are not re-hidden if bootstrap arrives late. Main CSS
+now arrives inside the HTML document, with its exact hash allowed by that same
+immutable asset's CSP. This removes a render-blocking request and the separate
+stylesheet-failure window. Bootstrap and all deferred scripts remain ahead of
+the embedded style so its bytes do not delay their discovery. The small initial
+canvas style remains. See first-paint-packaging.txt for representation/cache
+rules and logo-delivery.txt for artwork provenance. A white canvas before the
+document arrives is not under the page's control; a hosted cause for the earlier
+reported flash has not been established.
 
 API errors distinguish a response body interrupted after headers from malformed
 JSON and an unexpected HTML service page. Deadlines and explicit retry remain;

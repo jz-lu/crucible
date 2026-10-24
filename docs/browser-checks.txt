@@ -49,10 +49,13 @@ The stalled-script case intentionally waits for the real 15-second deadline.
 
 Additional journeys exercise Notes filters with out-of-order responses, retained
 rows, cached Timeline validation, revocation, interrupted API bodies, repeated
-reloads, image decoding and late bootstrap, interrupted CSS, Record-to-Challenge
+reloads, image decoding and late bootstrap, fully styled pages with the old
+external main-CSS endpoint blocked, Record-to-Challenge
 focus, manual download/submission controls, and maximum-length mobile tags. The
 logo streaming check holds actual image bytes; response classification checks
 use synthetic transport failures. Neither establishes a particular hosted cause.
+Main-style checks verify the exact embedded stylesheet hash, one effective CSP
+header, early deferred-script discovery, and public/admitted layouts after reload.
 
 Failures retain synthetic screenshots and traces for seven days in CI. They
 contain disposable fixture credentials and notes, never participant information.

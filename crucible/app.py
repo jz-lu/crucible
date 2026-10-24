@@ -23,7 +23,7 @@ from .db import AdapterVersion, Base, Challenge, Database, LoginSession, Method,
 from .schemas import Credentials, NewChallenge, NewMethod, NewSubmission
 from .security import mac, passwords, payload_mac, target_mac, token_hash, verify_password
 from .public_json import catalogue_progress, catalogue_response
-from .public_assets import CONTENT_SECURITY_POLICY, ProtectedAssets, PublicAssets, PublicMathFiles, is_public_ui
+from .public_assets import Asset, CONTENT_SECURITY_POLICY, ProtectedAssets, PublicAssets, PublicMathFiles, is_public_ui
 from .access_policy import AccessPolicy
 from . import benchmark_reports, assumption_sheets, agent_guidance
 from .reference_policy import METHOD as REFERENCE_METHOD
@@ -97,19 +97,26 @@ class RequestBoundary:
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
         started = time.perf_counter()
+        # Only the selected immutable public representation may supply an
+        # asset-specific policy. Neither request nor response headers select it.
+        scope.pop("_crucible_public_asset", None)
         original_send = send
         async def secure_send(message):
             if message["type"] == "http.response.start":
+                cacheable_ui = (scope["method"] in {"GET", "HEAD"}
+                                and is_public_ui(scope["path"])
+                                and message["status"] in {200, 304})
+                public_asset = scope.get("_crucible_public_asset")
+                content_policy = (public_asset.content_security_policy
+                                  if cacheable_ui and isinstance(public_asset, Asset)
+                                  else CONTENT_SECURITY_POLICY)
                 extra = [
                     (b"x-content-type-options", b"nosniff"),
                     (b"referrer-policy", b"no-referrer"),
                     (b"x-frame-options", b"DENY"),
                     (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
-                    (b"content-security-policy", CONTENT_SECURITY_POLICY),
+                    (b"content-security-policy", content_policy),
                 ]
-                cacheable_ui = (scope["method"] in {"GET", "HEAD"}
-                                and is_public_ui(scope["path"])
-                                and message["status"] in {200, 304})
                 if scope["path"].startswith("/api") or (self.settings.access_mode == "beta" and not cacheable_ui):
                     extra.append((b"cache-control", b"no-store"))
                 if scope["path"].startswith("/api/"):

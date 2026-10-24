@@ -32,10 +32,10 @@ Actual-browser checks also cover interrupted image/reload recovery and a late
 bootstrap after the image has completed. These are synthetic loading checks,
 not measurements of hosted latency.
 
-The exact-hash critical inline style also uses the same base font, line height
-and text color as styles.css, in addition to the existing canvas background.
-It adds no layout, hidden page, animation, inline script or relaxed CSP source.
-An interrupted stylesheet can still leave the page without its complete layout;
-these fallback rules preserve base typography and color, not full styling.
-They apply only after this HTML commits. A browser's blank canvas before the
-document arrives is outside this evidence; no claim of fixing that is made.
+The exact-hash critical inline style uses the same base font, line height and
+text color as styles.css. The subsequent first-paint packaging change embeds
+the complete main stylesheet in the HTML too, eliminating its separate fetch;
+see first-paint-packaging.txt. Neither change hides the page, adds an animation
+or inline script, or permits arbitrary inline styles. They apply only after
+this HTML commits. A browser's blank canvas before the document arrives remains
+outside this evidence; no claim of fixing that is made.

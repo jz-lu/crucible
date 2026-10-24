@@ -1,5 +1,9 @@
 Read responsiveness checkpoint, 24 October 2026
 
+Main CSS now travels with the HTML and its exact CSP, removing a separate
+render-blocking request. Script discovery stays ahead of the embedded style;
+first-paint-packaging.txt records cache, privacy and validation boundaries.
+
 Current source changes preserve notes during filtering, reuse bounded Timeline
 summaries on revisits, keep search wording stable, reduce authored overview SQL,
 and decode a smaller logo before revealing it. Error classification distinguishes

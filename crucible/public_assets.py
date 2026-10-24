@@ -20,8 +20,8 @@ from starlette.responses import Response
 from starlette.staticfiles import StaticFiles
 
 
-# Paint the canvas before the render-blocking stylesheets arrive. Only this
-# fixed, server-owned style is allowed inline; scripts and user CSS stay blocked.
+# Keep the minimal canvas independently hash-authorized. The trusted main
+# stylesheet receives its own snapshot-bound hash below; user CSS stays blocked.
 FIRST_PAINT_STYLE = (
     'html{background:#f6f9fd;color-scheme:light}'
     'body{margin:0;background:#f6f9fd;color:#2d4563;'
@@ -117,6 +117,7 @@ def _encoding(header, *, gzip_available):
 class Asset:
     body: bytes
     media_type: str
+    content_security_policy: bytes = CONTENT_SECURITY_POLICY
 
     @cached_property
     def version(self):
@@ -168,9 +169,23 @@ class PublicAssets:
             raise RuntimeError('Public HTML shell escaped its fixed directory.')
         html = read(index).decode()
         html = html.replace('<!-- critical-canvas -->', '<style>' + FIRST_PAINT_STYLE + '</style>')
+        main_link = '<link rel="stylesheet" href="/styles.css">'
+        if html.count(main_link) != 1:
+            raise RuntimeError('Public HTML must contain one main stylesheet link.')
+        main_css = assets['/styles.css'].body.decode('utf-8').replace('\r\n', '\n').replace('\r', '\n')
+        # Match HTML's line-ending normalization before hashing. LF sources
+        # stay byte-exact; reject NUL and any enclosing-element terminator.
+        if '\0' in main_css or re.search(r'</style', main_css, re.IGNORECASE):
+            raise RuntimeError('Main stylesheet cannot be embedded byte-exactly.')
         for url, asset in assets.items():
             html = html.replace('"' + url + '"', '"' + url + '?v=' + asset.version + '"')
-        assets['/'] = Asset(html.encode(), 'text/html')
+        # Insert after URL rewriting: quoted asset paths inside CSS are never
+        # changed, and the hash covers exactly the embedded representation.
+        versioned_link = main_link.replace('/styles.css', '/styles.css?v=' + assets['/styles.css'].version)
+        html = html.replace(versioned_link, '<style data-main-style>' + main_css + '</style>')
+        main_hash = base64.b64encode(hashlib.sha256(main_css.encode()).digest())
+        policy = CONTENT_SECURITY_POLICY.replace(b'; img-src', b" 'sha256-" + main_hash + b"'; img-src", 1)
+        assets['/'] = Asset(html.encode(), 'text/html', content_security_policy=policy)
         for asset in assets.values():
             # Compress after CSS/font URLs and the HTML shell are finalized.
             # Requests only select an existing representation.
@@ -179,10 +194,14 @@ class PublicAssets:
         return assets
 
     def response(self, request, path=None):
+        request.scope.pop('_crucible_public_asset', None)
         path = path or request.url.path
         asset = (self._snapshot if self.frozen else self.snapshot()).get(path)
         if asset is None:
             return Response(status_code=404, headers={'Cache-Control': 'no-store'})
+        # The response boundary uses this exact snapshot, including on HEAD
+        # and 304. Recomputing policy later could race a development CSS edit.
+        request.scope['_crucible_public_asset'] = asset
         encoding = _encoding(','.join(request.headers.getlist('accept-encoding')),
                              gzip_available=asset.gzip_body is not None)
         if encoding is None:
