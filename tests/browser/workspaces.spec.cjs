@@ -215,6 +215,58 @@ test('the map downloads concurrently, keeps one stylesheet, and supports a nativ
   expect(started).toHaveLength(count);
 });
 
+test('the scheme map paints while its small release-link index is held, without profile or note downloads', async ({page}) => {
+  const metadata = await holdResponse(page, url => url.pathname === '/api/schemes' && url.searchParams.get('projection') === 'map');
+  const unwanted = [];
+  page.on('request', request => {
+    const url = new URL(request.url());
+    if (url.pathname === '/map/notes-data.js' || (url.pathname === '/api/schemes' && url.searchParams.get('projection') !== 'map')) unwanted.push(url.pathname);
+  });
+  try {
+    await signIn(page); await notebookReady(page);
+    await page.getByRole('button', {name: 'Scheme map', exact: true}).click();
+    await metadata.arrived;
+    await expect(page.locator('#landscape svg')).toBeVisible();
+    expect(unwanted).toEqual([]);
+    await page.setViewportSize({width:390,height:844});
+    await expect(page.locator('#landscape svg')).toBeVisible();
+  } finally {metadata.release();}
+});
+
+test('challenge status starts beside its held description and uses a small response', async ({page}) => {
+  await signIn(page); await notebookReady(page);
+  const description = await holdResponse(page, url => url.pathname === '/api/schemes' && url.searchParams.get('projection') === 'release');
+  let reads = 0;
+  page.on('request', request => {if (new URL(request.url()).pathname === '/api/challenges' && request.method() === 'GET') reads++;});
+  const response = page.waitForResponse(value => {
+    const url = new URL(value.url());
+    return url.pathname === '/api/challenges' && url.searchParams.get('summary') === 'true';
+  });
+  try {
+    await page.goto('/#challenge/teaching-dh-kem/4?profile=dh-20&view=challenge');
+    await description.arrived;
+    expect((await response).status()).toBe(200);
+    expect(reads).toBe(1);
+  } finally {description.release();}
+  await expect(page.locator('#issue-button')).toBeVisible();
+  await page.locator('#issue-button').click();
+  await expect(page.locator('#challenge-active')).toBeVisible();
+  await expect(page.locator('#target-key')).toContainText('32-byte key');
+  expect(reads).toBe(1);
+  await page.locator('#nav-about').click();
+  await expect(page.locator('#about-workspace')).toBeVisible();
+  const refresh = await holdResponse(page, url => url.pathname === '/api/challenges' && url.searchParams.get('profile_id') === 'dh-20');
+  try {
+    await page.goto('/#challenge/teaching-dh-kem/4?profile=dh-20&view=challenge');
+    await refresh.arrived;
+    await expect(page.locator('#challenge-active')).toBeVisible();
+    await expect(page.locator('#challenge-loading')).not.toBeVisible();
+    await expect(page.locator('#use-agent')).toBeDisabled();
+  } finally {refresh.release();}
+  await expect(page.locator('#use-agent')).toBeEnabled();
+  expect(reads).toBe(2);
+});
+
 test('mobile note navigation fits the viewport and moves keyboard focus into the warm reader', async ({page}) => {
   await page.setViewportSize({width: 390, height: 844});
   await signIn(page); await notebookReady(page);

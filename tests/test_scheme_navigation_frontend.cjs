@@ -144,7 +144,9 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
       await app.navigate(route(a, 'challenge'));
       assert.equal(app.$('#workspace').hidden, true);
       assert.match(app.$('#route-loading').textContent, /could not be loaded|changed/);
-      assert.equal(app.requests.some(r => r.url.pathname === '/api/challenges'), false);
+      const challengeReads = app.requests.filter(r => r.url.pathname === '/api/challenges');
+      assert.ok(challengeReads.length <= 1);
+      assert.ok(challengeReads.every(r => r.options.method === 'GET' && r.url.searchParams.get('summary') === 'true'));
       assert.equal(vm.runInContext('releaseDetails.size', app.sandbox), 0);
     }
   });

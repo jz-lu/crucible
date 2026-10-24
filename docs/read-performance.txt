@@ -1,9 +1,56 @@
 Read-path preparation and metadata SQL
 
+Browser loading and small projections
+------------------------------------
+The notebook's scheme map renders from its bundled graph without waiting for
+the complete profile catalogue or live recovery aggregates. Its action links
+use GET /api/schemes?projection=map, a small current-release identity list with
+the normal fresh beta admission check. A slow link-index read does not hide the
+graph. Opening a scheme can finish/retry that shared read without replacing a
+research-note popup or moving focus away from an existing link.
+
+The browser requests summary=true on challenge GET/POST. These responses carry
+the same instance identity, deadline, submission status, output length and
+download link, without transferring public-key/ciphertext bytes. Default API
+responses and exact challenge downloads retain the complete original inputs.
+Existing-instance GETs join the submission in the instance query and do not
+repeat the already-proven round lookup (three member-read SQL statements,
+including both fresh access checks, instead of five).
+Generation, ownership, scope, parameter and admission policies are unchanged. Visiting
+an exact challenge route starts its read-only status request alongside scheme
+descriptions, then consumes that result once. It never speculatively generates.
+Previously authorized instance summaries can paint an exact same-round revisit
+from bounded session memory while their status revalidates. Instance actions
+wait for the fresh read. Rotation, revocation, writes and hour/selection changes
+invalidate or separate these views; a failed refresh removes the saved summary.
+
+Database pool checkout exhaustion returns 503 and Retry-After: 2 from both
+outer admission and application handlers, with no connection/credential details.
+The existing connection cap and checkout timeout remain unchanged. This is a
+controlled overload response, not additional capacity or a hosted load-test claim.
+
+tests/test_loading_projections.py covers exact full-download preservation,
+small responses, fresh membership, map SQL budget and real pool exhaustion /
+recovery. Standalone frontend and Chromium checks hold independent responses
+to verify overlap, route/session ownership and an unblocked graph. Timing is
+not asserted against a fast local server. Hosted signed-in latency and provider
+CPU/database placement still need separate measurement.
+
+Public-site observation, 24 October 2026: three fresh-connection anonymous
+/api/session requests took 249–294 ms, while Server-Timing reported 19.85–28.64 ms
+inside the application. The no-database /health/live path took 239–347 ms. The
+difference includes network/proxy overhead; this is a small developer-machine
+sample, not a signed-in challenge or capacity benchmark. Reducing sequential
+requests matters even when an individual handler is fast.
+
+Metadata SQL
+------------
+
 Startup prepares one immutable compact scheme index and its catalogue revision.
 The revision remains the SHA256 of the same canonical complete catalogue. Each
 request receives independent mutable copies of its small label metadata, then
-fresh recovery/participant SQL. No account permission, score or receipt is cached.
+fresh recovery/participant SQL. These server metadata caches never retain account
+permissions, scores or receipts.
 
 Scoring and milestones join the same trusted profile tuples through a typed,
 materialized JSON relation. This replaces thousands of individual VALUES bind

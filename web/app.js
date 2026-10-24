@@ -37,6 +37,8 @@ const notebookAssetLoads = new Map();
 const notebookAssetAttempts = new Map(); // Four fixed asset paths; no account data.
 let notebookShowRequest = 0;
 let catalogueLoad = null;
+let mapCatalogueLoad = null;
+let mapReleases = null;
 // Navigation contains labels/progress only. Charts and challenge controls must
 // resolve an exact complete release through this separate, page-memory cache.
 const releaseDetails = new Map();
@@ -454,6 +456,7 @@ function clearProtectedState() {
   catalogueLoad = null;
   releaseDetails.clear(); releaseLoads.clear(); releaseGeneration++;
   navigationProjection = false; workspaceLoadRequest++;
+  mapCatalogueLoad = null; mapReleases = null;
   for (const controller of protectedRequests) controller.abort();
   for (const key of ['catalogueRequest', 'challengeRequest', 'leaderboardRequest', 'historyRequest', 'recoveryRequest', 'peopleRequest', 'personRequest', 'connectRequest']) state[key]++;
   state.schemes = []; state.catalogueRevision = null; state.generationAdmission = null; state.people = []; state.profile = null; state.challenge = null; state.methods = [];
@@ -541,6 +544,39 @@ function routeRelease() {
     return id && version && id.length <= 100 && version.length <= 100 ? {id, version} : null;
   } catch { return null; }
 }
+function challengeReadKey(id, version, profile) {
+  return 'challenge:' + JSON.stringify([state.round?.id, id, String(version), profile]);
+}
+function challengeReadPath(id, version, profile) {
+  return '/api/challenges?' + new URLSearchParams({profile_id: profile, scheme_id: id, scheme_version: version, summary: 'true'});
+}
+function primeRouteChallenge(target) {
+  if (!target) return;
+  const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
+  const profile = params.get('profile');
+  if (params.get('view') !== 'challenge' || !profile || profile.length > 200) return;
+  // Read only the explicitly visited selection while its description loads.
+  // Generation still requires the normal confirmed round or deliberate action.
+  primeRead(challengeReadKey(target.id, target.version, profile), challengeReadPath(target.id, target.version, profile));
+}
+async function loadMapCatalogue() {
+  if (!hasAccess()) return;
+  if (state.catalogueLoaded || mapReleases) return;
+  if (mapCatalogueLoad) return mapCatalogueLoad;
+  const account = state.user?.id, csrf = state.csrf;
+  const task = (async () => {
+    const data = await api('/api/schemes?projection=map');
+    if (!hasAccess() || account !== state.user?.id || csrf !== state.csrf) return;
+    if (data.projection !== 'map' || !Array.isArray(data.schemes) || data.schemes.some(item =>
+      !item || typeof item.id !== 'string' || !item.id || typeof item.version !== 'string' || !item.version)) {
+      throw new Error('Scheme links could not be loaded. Please try again.');
+    }
+    mapReleases = data.schemes;
+  })();
+  mapCatalogueLoad = task;
+  try { await task; }
+  finally { if (mapCatalogueLoad === task) mapCatalogueLoad = null; }
+}
 async function loadRelease(id, version) {
   if (!hasAccess()) return false;
   const key = releaseKey(id, version);
@@ -587,12 +623,12 @@ function showRouteLoading() {
   document.title = title + ' — Crucible';
 }
 function routeNeedsCatalogue() {
-  const [path, query = ''] = window.location.hash.split('?');
+  const path = window.location.hash.split('?')[0];
   if (['#about', '#people', '#connect'].includes(path)) return false;
   // Profile records still need the catalogue's mapping from native parameters
   // to human stage labels. Keep that dependency until the record API supplies it.
-  // The map consumes scheme metadata; ordinary notes and their editors do not.
-  if (path === '#notebook' && new URLSearchParams(query).get('view') !== 'map') return false;
+  // Notebook visualizations load their small release-link index independently.
+  if (path === '#notebook') return false;
   return true;
 }
 async function loadAuthorizedWorkspace() {
@@ -602,13 +638,10 @@ async function loadAuthorizedWorkspace() {
   if (routeNeedsCatalogue() && !state.catalogueLoaded) {
     showRouteLoading();
     const catalogue = loadAuthorizedCatalogue();
-    const [path, query = ''] = window.location.hash.split('?');
-    if (path === '#notebook' && new URLSearchParams(query).get('view') === 'map') {
-      void ensureNotebookAssets().catch(() => {});
-    }
     // Deep links can overlap the two independent reads. The response revision
     // must match navigation before a complete release can reach a renderer.
     const target = routeRelease();
+    primeRouteChallenge(target);
     if (target) void loadRelease(target.id, target.version).catch(() => {});
     const person = window.location.hash.split('?')[0].match(/^#person\/([^/]+)$/);
     if (person) {
@@ -737,8 +770,8 @@ async function showNotebook(query, reviewing = false) {
   }
   if (!current()) return;
   const options = {navigate, api: notebookAPI, account: () => hasAccess() && (!reviewing || state.canReviewProposals) ? state.user : null,
-    prepareMapCatalogue: () => hasAccess() && !state.catalogueLoaded ? loadAuthorizedCatalogue() : Promise.resolve(),
-    currentReleases: () => hasAccess() ? state.schemes : [], session: () => state.csrf, reviewOnly: reviewing};
+    prepareMapCatalogue: loadMapCatalogue,
+    currentReleases: () => hasAccess() ? (state.catalogueLoaded ? state.schemes : mapReleases || []) : [], session: () => state.csrf, reviewOnly: reviewing};
   if (reviewing) reviewNotebookWorkspace ||= window.CrucibleNotebook.mount(target, options);
   else notebookWorkspace ||= window.CrucibleNotebook.mount(target, options);
   await (reviewing ? reviewNotebookWorkspace : notebookWorkspace).show(params);
@@ -809,6 +842,7 @@ function applyRoute(focus = false) {
     const route = window.location.hash, account = state.user?.id, csrf = state.csrf;
     const current = () => hasAccess() && routeRequest === workspaceLoadRequest && window.location.hash === route && account === state.user?.id && csrf === state.csrf;
     showRouteLoading();
+    primeRouteChallenge(targetRelease);
     void loadRelease(targetRelease.id, targetRelease.version).then(loaded => {
       if (loaded && current()) applyRoute(focus);
     }).catch(error => {
@@ -933,7 +967,7 @@ function applyRoute(focus = false) {
   if (focus && previousScreen !== screen) $(workspaceSelector(screen)).focus({preventScroll: screen === 'catalogue'});
 }
 function sharedKeyBytes(challenge) {
-  const bytes = challenge?.public?.encoding?.shared_secret_bytes;
+  const bytes = challenge?.projection === 'summary' ? challenge.shared_secret_bytes : challenge?.public?.encoding?.shared_secret_bytes;
   return Number.isInteger(bytes) && bytes > 0 && bytes <= 4096 ? bytes : null;
 }
 function roundRemaining() { return state.round ? Math.max(0, Math.ceil(state.round.ends_at - now())) : null; }
@@ -966,7 +1000,7 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
   }
   const controller = bootstrap?.controller || new AbortController();
   if (protectedRequest) protectedRequests.add(controller);
-  const timeout = bootstrap ? null : setTimeout(() => controller.abort(), body !== undefined && path === '/api/challenges' ? 30000 : 20000);
+  const timeout = bootstrap ? null : setTimeout(() => controller.abort(), body !== undefined && path.split('?')[0] === '/api/challenges' ? 30000 : 20000);
   try {
     let response;
     try { response = await (bootstrap?.response || fetch(path, {
@@ -1045,6 +1079,7 @@ function setSession(data) {
     // An in-flight catalogue belongs to this browser session. A changed account
     // or rotated session must be able to start a fresh read immediately.
     catalogueLoad = null;
+    mapCatalogueLoad = null; mapReleases = null;
     state.catalogueRequest++;
     releaseDetails.clear(); releaseLoads.clear(); releaseGeneration++;
     if (navigationProjection) state.catalogueLoaded = false;
@@ -1595,7 +1630,7 @@ function agentInstructions(challenge) {
   const quote = value => "'" + String(value).replace(/'/g, "'\\''") + "'";
   const client = 'python3 ./crucible_cli.py --server ' + quote(origin);
   const folder = './crucible-attack-' + challenge.id.slice(0, 8);
-  const schemeId = challenge.public?.scheme_id || state.schemeId;
+  const schemeId = challenge.scheme_id || challenge.public?.scheme_id || state.schemeId;
   const selection = namedParameters(selectedScheme(), state.profile) || intermediateConfiguration(state.profile) ? '--profile-id ' + quote(profileId()) : '--stage ' + instanceSize(state.profile);
   return `Retrieve my selected ${selectedScheme()?.name || schemeId} challenge ${namedParameters(selectedScheme(), state.profile) ? 'for' : 'at'} ${profileLabel(state.profile, selectedScheme())}.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running. If login is needed, run ${client} login and let me approve in my browser.\n\nBefore work, read and follow the model pipeline contract at ${origin}/api/agent/pipeline: run ${client} guide. It identifies the supported workflows, exact source contracts and permission boundaries. The workspace saves a copy as pipeline.json; never put credentials in prompts or research files.\n\nFetch this exact instance into a fresh folder:\n${client} get --challenge-id ${quote(challenge.id)} --path ${quote(folder)}\nDeadline: ${utcDate(challenge.ends_at)}. Follow the workspace README for the attack and submission workflow. Record the AI model(s) that implemented the result in ai_model, with exact versions when known; never guess. Leave it blank when not reported.\n\nNext time I can just ask: “${agentFollowupRequest()}”\nFor those future requests, use ${client} init ${quote(schemeId)} ${selection} --path NEW_EMPTY_FOLDER. No website visit needed while connected.`;
 }
@@ -2644,14 +2679,15 @@ function renderRecordChallengeAction() {
 }
 function renderChallenge() {
   if (state.agentInstructionsKey !== agentInstructionsKey()) resetAgentInstructions();
-  $('#use-agent').disabled = !state.user || !state.challenge;
+  $('#use-agent').disabled = !state.user || !state.challenge || state.challengeLoading;
   $('#manual-instance-tools').hidden = !state.challenge || state.challengeLoading;
   $('#open-submission').hidden = false;
-  $('#open-submission').disabled = !state.ready || state.submitBusy || state.importBusy;
-  $('#challenge-loading').hidden = !state.challengeLoading;
+  $('#open-submission').disabled = !state.ready || state.submitBusy || state.importBusy || state.challengeLoading;
+  $('#challenge-loading').hidden = !state.challengeLoading || Boolean(state.challenge);
   $('#challenge-empty').hidden = state.challengeLoading || Boolean(state.challenge);
-  $('#challenge-active').hidden = state.challengeLoading || !state.challenge;
-  $('#challenge-details').hidden = state.challengeLoading || !state.challenge;
+  $('#challenge-active').hidden = !state.challenge;
+  $('#challenge-active').setAttribute('aria-busy', String(state.challengeLoading));
+  $('#challenge-details').hidden = !state.challenge;
   const unavailable = generationUnavailable();
   $('#scheme-clock').hidden = unavailable && !state.challenge;
   $('#challenge-instance-rule').hidden = unavailable && !state.challenge;
@@ -2741,14 +2777,16 @@ async function loadChallenge({retry = false, allowAutomatic = true} = {}) {
   const selected = profileId();
   const selection = selectionKey();
   const accountId = state.user?.id;
+  const csrf = state.csrf;
+  const key = challengeReadKey(state.schemeId, state.schemeVersion, selected);
   const stillSelected = () => request === state.challengeRequest &&
-    state.user?.id === accountId && selectionKey() === selection;
+    hasAccess() && state.user?.id === accountId && state.csrf === csrf && selectionKey() === selection;
   if (retry) {
     state.autoIssueAttempts.delete(challengeAccessAttempt());
     state.autoIssuePaused.delete(challengeAccessScope());
   }
   $('#challenge-error').hidden = true;
-  state.challenge = null; state.generationAdmission = null;
+  state.challenge = retry ? null : cachedRead(key)?.challenge || null; state.generationAdmission = null;
   if (state.screen !== 'scheme' || !state.user || !selected) {
     state.challengeLoading = false;
     renderChallenge();
@@ -2760,7 +2798,7 @@ async function loadChallenge({retry = false, allowAutomatic = true} = {}) {
   renderChallenge();
   let access;
   try {
-    const data = await api('/api/challenges?' + new URLSearchParams({profile_id: selected, scheme_id: state.schemeId, scheme_version: state.schemeVersion}));
+    const data = await readAgain(challengeReadKey(state.schemeId, state.schemeVersion, selected), challengeReadPath(state.schemeId, state.schemeVersion, selected));
     if (!stillSelected()) return;
     if (data.round?.id !== state.round?.id) { state.challengeStartIntent = null; return; }
     state.challenge = data.challenge || null;
@@ -2768,8 +2806,11 @@ async function loadChallenge({retry = false, allowAutomatic = true} = {}) {
       state.generationAdmission = {selection, value: {admitted: data.generation_admission?.admitted === true, reason: data.generation_admission?.reason}};
     }
     access = data;
+    if (state.challenge) rememberRead(key, {challenge: state.challenge});
+    else readViews.delete(key);
   } catch (error) {
     if (!stillSelected()) return;
+    state.challenge = null; readViews.delete(key);
     state.challengeStartIntent = null;
     setText('#challenge-error-text', error.message);
     $('#challenge-error').hidden = false;
@@ -2778,6 +2819,12 @@ async function loadChallenge({retry = false, allowAutomatic = true} = {}) {
     if (stillSelected()) {
       state.challengeLoading = false;
       renderChallenge();
+    } else if (request === state.challengeRequest && hasAccess() && state.user?.id === accountId &&
+        state.csrf !== csrf && selectionKey() === selection && state.screen === 'scheme' && state.view === 'challenge') {
+      // Rotation invalidates both cached and pending reads. A fresh read may
+      // recover the current display, but cannot carry an old request to start.
+      state.challenge = null; state.challengeLoading = false; state.challengeStartIntent = null;
+      void loadChallenge({allowAutomatic: false});
     }
   }
   if (stillSelected() && generationUnavailable()) { state.challengeStartIntent = null; return; }
@@ -2830,11 +2877,12 @@ async function issueChallenge({activeRoundId} = {}) {
   renderChallenge();
   let completed = false;
   try {
-    const data = await api('/api/challenges', {profile_id: selected, scheme_id: state.schemeId, scheme_version: state.schemeVersion,
+    const data = await api('/api/challenges?summary=true', {profile_id: selected, scheme_id: state.schemeId, scheme_version: state.schemeVersion,
       ...(automatic ? {active_round_id: activeRoundId} : {})});
     completed = confirmedRoundAccess(data);
     if (!stillSelected()) return;
     state.challenge = data.challenge?.round_id === state.round?.id ? data.challenge : null;
+    if (state.challenge) rememberRead(challengeReadKey(state.schemeId, state.schemeVersion, selected), {challenge: state.challenge});
     if (state.challenge && !automatic) toast('Your instance is ready. The shared round deadline applies.');
   } catch (error) {
     if (state.user?.id === accountId) state.autoIssuePaused.set(scope, error.message);
