@@ -1194,7 +1194,7 @@ function updateClock() {
   if (formExpired && submissionDialog.open && !state.submitBusy && !state.pendingAttempt) {
     setError('#submission-error', 'This round has ended. Close this form to receive an instance for the new round.');
   }
-  $('#open-submission').disabled = !state.ready || state.submitBusy || state.importBusy;
+  $('#open-submission').disabled = !state.ready || state.submitBusy || state.importBusy || state.challengeLoading;
   const staleChallenge = state.challenge && state.challenge.round_id !== state.round.id;
   if ((remaining === 0 || staleChallenge) && state.ready && !state.roundRefreshing && !state.submitBusy && Date.now() >= roundRetryAt) refreshRound();
 }
@@ -3605,7 +3605,7 @@ function renderSubmissionTarget() {
 }
 async function openSubmission() {
   if (!state.user) return openAuth($('#open-submission'));
-  if (state.submitBusy || state.importBusy) return;
+  if (state.submitBusy || state.importBusy || (state.challengeLoading && !state.pendingAttempt)) return;
   // An uncertain answer must keep its original target and retry identifier.
   const challenge = state.pendingAttempt ? state.submissionChallenge : isChallengeOpen() ? state.challenge : null;
   const accountId = state.user?.id;

@@ -81,6 +81,13 @@ async function test(name, run) {await run(); passed++; console.log('PASS '+name)
     await app.navigate(route);
     assert.equal(app.$('#challenge-active').hidden,false);assert.equal(app.$('#challenge-loading').hidden,true);
     assert.equal(app.$('#use-agent').disabled,true);assert.equal(app.$('#open-submission').disabled,true);
+    for(let tick=0;tick<3;tick++)app.sandbox.updateClock();
+    assert.equal(app.$('#open-submission').disabled,true,'Clock ticks cannot authorize an unconfirmed cached instance');
+    const methodReads=app.requests.filter(r=>r.url.pathname==='/api/methods').length;
+    app.$('#open-submission').click();await app.sandbox.openSubmission();await flush();
+    assert.equal(app.$('#submission-dialog').open,false,'Handler also refuses stale status without relying on disabled markup');
+    assert.equal(vm.runInContext('state.submissionChallenge',app.sandbox),null);
+    assert.equal(app.requests.filter(r=>r.url.pathname==='/api/methods').length,methodReads);
     late.resolve(app.envelope({challenge:{...summary(app),status:'solved',submission:{status:'correct'}},round_started:true,round_started_round_id:app.envelope({}).round.id}));
     await flush();assert.match(app.$('#challenge-status').textContent,/Recovered/);
     assert.equal(app.$('#use-agent').disabled,false);
@@ -96,6 +103,39 @@ async function test(name, run) {await run(); passed++; console.log('PASS '+name)
     fresh.resolve(app.envelope({challenge:null,round_started:false}));await flush();
     assert.equal(app.$('#challenge-loading').hidden,true);assert.equal(app.$('#empty-title').textContent,'Ready?');
     assert.equal(app.requests.some(r=>r.options.method==='POST'),false);
+  });
+  await test('an uncertain answer retains its original target and retry payload during a fresh-status read, even after its deadline', async () => {
+    let hold=false;const late=deferred();
+    const app=await createApp({schemes:[scheme],user,hash:route,responder:(url,options,envelope)=>{
+      if(url.pathname==='/api/challenges')return hold?late.promise:envelope({challenge:summary({envelope})});
+      if(url.pathname==='/api/methods')return envelope({methods:[{id:'method-1',name:'Fixture method'}]});
+    }});
+    const writes=[],fetch=app.sandbox.fetch;
+    app.sandbox.fetch=async(path,options)=>{
+      if(path!=='/api/challenges/instance/submit')return fetch(path,options);
+      writes.push(JSON.parse(options.body));
+      if(writes.length===1)return {ok:false,status:503,json:async()=>({detail:'Fixture lost result'})};
+      return {ok:true,status:200,json:async()=>app.envelope({challenge:{...summary(app),status:'incorrect',submission:{status:'incorrect'}},submission:{status:'incorrect'}})};
+    };
+    await app.sandbox.openSubmission();
+    for(const [id,value] of Object.entries({candidate:'ab'.repeat(32),'method-select':'method-1',hardware:'Fixture CPU',workers:'1',
+      'wall-seconds':'2',precomputation:'None','peak-memory':'1 MiB'}))app.$('#'+id).value=value;
+    app.$('#submission-form').dispatchEvent({type:'submit'});await flush();
+    assert.equal(writes.length,1);assert.match(app.$('#submission-error').textContent,/no confirmed result/);
+    const pending=vm.runInContext('JSON.stringify(state.pendingAttempt)',app.sandbox);
+    app.$('#submission-dialog').close();hold=true;
+    const refresh=app.sandbox.loadChallenge();await flush();
+    assert.equal(vm.runInContext('state.challengeLoading',app.sandbox),true);
+    vm.runInContext('state.submissionChallenge.ends_at = now() - 1',app.sandbox);
+    await app.sandbox.openSubmission();app.sandbox.updateClock();
+    assert.equal(app.$('#submission-dialog').open,true);assert.equal(app.$('#submit-answer').disabled,false);
+    assert.equal(vm.runInContext('JSON.stringify(state.pendingAttempt)',app.sandbox),pending);
+    assert.equal(vm.runInContext('state.submissionChallenge.id',app.sandbox),'instance');
+    assert.match(app.$('#submit-answer').textContent,/Retry the same answer/);
+    app.$('#submission-form').dispatchEvent({type:'submit'});await flush();
+    assert.equal(writes.length,2);assert.deepEqual(writes[1],writes[0]);
+    assert.equal(vm.runInContext('state.pendingAttempt',app.sandbox),null);
+    late.resolve(app.envelope({challenge:{...summary(app),status:'incorrect',submission:{status:'incorrect'}}}));await refresh;
   });
   await test('a denied refresh removes a warm instance instead of keeping stale controls or cached data', async () => {
     const app=await createApp({schemes:[scheme],user,hash:route,responder:(url,options,envelope)=>
