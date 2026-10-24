@@ -13,6 +13,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError, TimeoutError as DatabasePoolTimeout
+from sqlalchemy.orm import defer
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.concurrency import run_in_threadpool
 
@@ -27,6 +28,21 @@ from .access_policy import AccessPolicy
 from . import benchmark_reports, assumption_sheets, agent_guidance
 from .reference_policy import METHOD as REFERENCE_METHOD
 from . import github_auth, password_recovery
+
+
+SOURCE_REVISION_FILE = ROOT / "SOURCE_REVISION"
+
+
+def packaged_source_revision():
+    """Read only the bounded, optional image marker; never infer a local revision."""
+    try:
+        with SOURCE_REVISION_FILE.open("rb") as marker:
+            value = marker.read(42).removesuffix(b"\n")
+    except OSError:
+        return None
+    if len(value) != 40 or any(byte not in b"0123456789abcdef" for byte in value):
+        return None
+    return value.decode("ascii")
 
 
 def current_round(now):
@@ -189,6 +205,7 @@ class RequestBoundary:
 
 
 def create_app(settings: Settings | None = None, *, clock=time.time, initialize=False):
+    source_revision = packaged_source_revision()
     registry.validate_registry()
     registry.warm_navigation_metadata()
     settings = settings or load_settings()
@@ -404,16 +421,18 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                 "id": challenge.id, "profile_id": challenge.profile_id, "round_id": challenge.round_id,
                 "scheme_id": challenge.scheme_id, "scheme_version": challenge.scheme_version,
                 "issued_at": challenge.issued_at, "starts_at": challenge.starts_at, "ends_at": challenge.ends_at,
-                "public": challenge.public_data, "status": status,
+                **({} if summary else {"public": challenge.public_data}),
+                "status": status,
                 "submission": submission_data(submission) if submission else None,
                 "download_url": f"/api/challenges/{challenge.id}/download"}
         if summary:
-            # The browser displays status and a download link, not the public
-            # key/ciphertext. Keep full, exact inputs on the default API/download.
-            encoding = challenge.public_data.get("encoding")
-            data.pop("public")
-            data.update(projection="summary", shared_secret_bytes=
-                        encoding.get("shared_secret_bytes") if isinstance(encoding, dict) else None)
+            # Use the frozen declaration enforced by answer submission, never
+            # load a large public key just to display the shared-secret length.
+            # Invalid historical declarations stay readable with length unknown;
+            # submission still rejects them and full inputs remain downloadable.
+            expected = challenge.manifest.get("shared_secret_bytes")
+            data.update(projection="summary", shared_secret_bytes=expected
+                        if type(expected) is int and 1 <= expected <= 4096 else None)
         return data
 
     def challenge_data(session, challenge, *, summary=False):
@@ -629,8 +648,10 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             user = user_for(request, session)
             observed_at = clock()
             round_ = current_round(observed_at)
-            row = session.execute(select(Challenge, Submission).outerjoin(Submission, Submission.challenge_id == Challenge.id)
-                      .where(Challenge.user_id == user.id, Challenge.profile_id == profile_id,
+            query = select(Challenge, Submission).outerjoin(Submission, Submission.challenge_id == Challenge.id)
+            if summary:
+                query = query.options(defer(Challenge.public_data, raiseload=True))
+            row = session.execute(query.where(Challenge.user_id == user.id, Challenge.profile_id == profile_id,
                       Challenge.scheme_id == manifest["scheme_id"], Challenge.scheme_version == manifest["version"],
                       Challenge.round_id == round_["id"])).one_or_none()
             challenge, submission = row if row is not None else (None, None)
@@ -680,7 +701,10 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                 if started is None:
                     raise HTTPException(409, "Request this scheme's current round before opening another stage automatically.")
             pin_adapter(session, manifest)
-            existing = session.scalar(select(Challenge).where(Challenge.user_id == user.id, Challenge.profile_id == profile_id,
+            query = select(Challenge)
+            if summary:
+                query = query.options(defer(Challenge.public_data, raiseload=True))
+            existing = session.scalar(query.where(Challenge.user_id == user.id, Challenge.profile_id == profile_id,
                       Challenge.scheme_id == manifest["scheme_id"],
                       Challenge.scheme_version == manifest["version"], Challenge.round_id == round_["id"]))
             if existing:
@@ -955,7 +979,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     def health():
         with db.transaction() as session:
             session.execute(select(User.id).limit(1))
-        return {"status": "ok"}
+        return {"status": "ok", **({"source_revision": source_revision} if source_revision else {})}
 
     @app.get("/")
     def index(request: Request):

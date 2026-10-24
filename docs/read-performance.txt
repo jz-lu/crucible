@@ -16,6 +16,12 @@ responses and exact challenge downloads retain the complete original inputs.
 Existing-instance GETs join the submission in the instance query and do not
 repeat the already-proven round lookup (three member-read SQL statements,
 including both fresh access checks, instead of five).
+Summary reads also omit the public-input JSON column from the database query,
+including reuse of an already issued instance. Query-scoped raiseload prevents
+an accidental property access from silently fetching that large column later.
+Output length comes from the instance's stored manifest, which already governs
+answer validation. Missing or invalid historical declarations remain readable
+with unknown length; full API responses and downloads preserve their inputs.
 Generation, ownership, scope, parameter and admission policies are unchanged. Visiting
 an exact challenge route starts its read-only status request alongside scheme
 descriptions, then consumes that result once. It never speculatively generates.
