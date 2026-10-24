@@ -492,6 +492,8 @@
     "access-ui": [
       "test_public_assets.py",
       "test_protected_assets.py",
+      "test_generation_admission.py",
+      "test_beta_release_policy.py",
       "test_browser_admission.py",
       "test_catalogue_progress_access.py"
     ],
@@ -711,5 +713,11 @@
     }
   ],
   "retained_backup_config": "sha256:5bbaba546a20bbcf8aae1e6efe000d6b22cad6cef9775b8092abfaa7afa8deee",
-  "retained_backup_image": "registry.digitalocean.com/crucible-beta/backup@sha256:491572468a1654fb241ab50d2c36f0b34bfb685df308104739dd8fd7ff1b9ac7"
+  "retained_backup_image": "registry.digitalocean.com/crucible-beta/backup@sha256:491572468a1654fb241ab50d2c36f0b34bfb685df308104739dd8fd7ff1b9ac7",
+  "reviewed_overlay_files": {
+    "crucible/config.py": "52a7f6dc13967a47ebac54bb7c1919215ce746b63d73c5be10f3b6dde42d5ce9",
+    "crucible/data/approved_beta_releases.json": "d866a822cb468ac8284a941ba797ac1c87a2d94175c305dca08af41ebd67fe0a",
+    "scripts/beta_preflight.py": "8511519397e79bbfc0e179b77a670507a19c4a558c46a75cd4de80880ed404d3",
+    "docs/beta-release-policy.txt": "549c69ce412bde8de427c755959450ce0cbaaf87c2c63297468eb864d2375c8a"
+  }
 }

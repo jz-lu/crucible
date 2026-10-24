@@ -53,7 +53,7 @@ def test_actual_production_config_is_read_without_mail_database_or_native_operat
         "CRUCIBLE_ORIGIN": settings.origins[0], "DATABASE_URL": settings.database_url,
         "CRUCIBLE_SECRET": base64.b64encode(settings.secret).decode(),
         "CRUCIBLE_REVIEWER_IDS": REVIEWER, "CRUCIBLE_ACCESS_ADMIN_IDS": ADMIN,
-        "CRUCIBLE_BETA_RELEASES": "example@1", "CRUCIBLE_MAIL_BACKEND": "smtp",
+        "CRUCIBLE_BETA_RELEASES": "teaching-dh-kem@7", "CRUCIBLE_MAIL_BACKEND": "smtp",
         "CRUCIBLE_MAIL_FROM": settings.mail_from, "CRUCIBLE_SMTP_HOST": settings.smtp_host,
     }.items():
         monkeypatch.setenv(key, value)

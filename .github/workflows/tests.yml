@@ -50,6 +50,7 @@ jobs:
           tests/test_beta_invitations.py
           tests/test_beta_operator.py
           tests/test_beta_preflight.py
+          tests/test_beta_release_policy.py
           tests/test_beta_migration.py
           tests/test_beta_transfer.py
           tests/test_beta_release_baselines.py

@@ -114,6 +114,12 @@ That one-time provider action is separate from this workflow. Preserve all exist
 environment values, database, domain, instance size, command and allowlist. After
 that, each deliberately started Publish run can update the website through beta
 without another app-update credential or repeated configuration entry.
+The reviewed beta-release catalogue has one explicit configuration transition:
+deploy its loader before removing the legacy CRUCIBLE_BETA_RELEASES override.
+Then approved additions can follow the packaged policy. See beta-release-policy.txt.
+An image-only rollback to a pre-policy release after that removal is insufficient:
+restore its saved explicit allowlist too. Original backup image/environment pairs
+remain valid; prefer a verified policy-aware image as the subsequent rollback point.
 DigitalOcean documents the existing component's Settings → Source → Edit controls
 and watched-tag behavior here:
 https://docs.digitalocean.com/products/app-platform/how-to/deploy-from-container-images/
