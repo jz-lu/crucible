@@ -213,9 +213,9 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     lateLoads.forEach(callback=>callback());await app.sandbox.showNotebook('');
     assert.equal(app.timers.size,0);assert.equal(assets(app).length,0);
     assert.equal(notebook.calls.mount,0);assert.equal(app.$('#access-workspace').hidden,false);
-    assert.deepEqual(paths(app),['/api/session']);
+    assert.deepEqual(paths(app),['/api/session','/api/notebook/notes'], 'Only the already-authorized initial read ran; revocation starts no further note request');
   });
-  await test('leaving during asset loading cannot mount a hidden notebook or fetch its notes', async () => {
+  await test('leaving during asset loading cannot mount a hidden notebook', async () => {
     const app = await createApp({schemes: [scheme], user, hash: '#notebook'});
     const notebook = notebookDouble(); app.window.CrucibleNotebook = notebook;
     await app.navigate('#challenge');
@@ -224,7 +224,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     await app.navigate('#notebook');
     assert.equal(notebook.calls.mount, 1);
   });
-  await test('revocation during notebook downloads prevents mounting or reading notes', async () => {
+  await test('revocation during notebook downloads prevents mounting or starting further note reads', async () => {
     const app = await createApp({schemes: [scheme], hash: '#notebook', responder: (url, options, envelope) => {
       if (url.pathname === '/api/session') return active(envelope);
     }});
@@ -233,7 +233,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assets(app).forEach(element => element.onload()); await flush();
     assert.equal(notebook.calls.mount, 0);
     assert.equal(app.$('#access-workspace').hidden, false);
-    assert.deepEqual(paths(app), ['/api/session']);
+    assert.deepEqual(paths(app), ['/api/session', '/api/notebook/notes'], 'No new request follows revocation');
   });
   await test('the notebook map still obtains scheme metadata before its renderer runs', async () => {
     const notebook = notebookDouble();
