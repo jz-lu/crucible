@@ -12,6 +12,7 @@ __pycache__/
 .pytest_cache/
 .coverage
 playwright-report/
+tests/browser/test-results/
 
 .native/
 .native-pq/

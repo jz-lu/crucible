@@ -45,8 +45,11 @@ git diff --check
 ```
 
 Run relevant checks for your changes and describe their results. Source CI covers
-the supported Python versions, fresh migrations, portable backend tests, and all
-standalone JavaScript regressions. The release workflow also tests the image with
+the supported Python versions, fresh migrations, portable backend tests, all
+standalone JavaScript regressions, and a real Chromium browser suite. See
+[browser checks](docs/browser-checks.txt) for the disposable local setup and its
+verification boundaries. Pull requests run these checks; feature branches do
+not duplicate them with a second push-triggered run. The release workflow also tests the image with
 its reviewed Linux native runtime. Source-only CI does not establish native
 correctness or PostgreSQL behavior. Add a reviewed migration for schema changes.
 Browser changes should be checked at desktop and mobile widths, including errors,

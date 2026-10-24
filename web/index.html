@@ -74,9 +74,14 @@
           Try again
         </button>
       </div>
-      <section id="access-workspace" class="access-workspace" aria-labelledby="access-title" tabindex="-1">
+      <section id="access-workspace" class="access-workspace" aria-labelledby="access-title" aria-busy="true" tabindex="-1">
         <h1 id="access-title">Crucible</h1>
         <p id="access-description" role="status">Checking access…</p>
+        <div id="access-loading-preview" class="loading-preview loading-preview-compact" aria-hidden="true">
+          <div class="loading-preview-row"><span></span><span></span></div>
+          <div class="loading-preview-row"><span></span><span></span></div>
+          <div class="loading-preview-row"><span></span><span></span></div>
+        </div>
         <div id="access-auth-actions" class="access-actions" hidden>
           <button id="access-github" class="button button-primary" type="button" hidden>Continue with GitHub</button>
           <button id="access-sign-in" class="button button-primary" type="button">Sign in</button>
@@ -765,6 +770,7 @@
         <h1 id="about-title">About us</h1>
         <!-- Collaborators: add mission, team, and contact content here. -->
       </section>
+      <section id="route-loading" aria-label="Loading page" tabindex="-1" hidden></section>
       <footer class="site-footer">
         <a class="brand footer-brand" href="#challenge" aria-label="Crucible home">
           <img class="brand-mark" src="/assets/crucible-logo.png" width="30" height="42" alt="">

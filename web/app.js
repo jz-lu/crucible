@@ -34,6 +34,7 @@ let reviewNotebookWorkspace = null;
 let notebookAssets = null;
 let notebookAssetsReady = false;
 const notebookAssetLoads = new Map();
+const notebookAssetAttempts = new Map(); // Four fixed asset paths; no account data.
 let notebookShowRequest = 0;
 let catalogueLoad = null;
 // Navigation contains labels/progress only. Charts and challenge controls must
@@ -43,7 +44,7 @@ const releaseLoads = new Map();
 let releaseGeneration = 0;
 let navigationProjection = false;
 let workspaceLoadRequest = 0;
-let routeLoadingPanel = null;
+const routeLoadingPanel = $('#route-loading');
 // Only previously authorized read results live here, never credentials or rights.
 // Revalidate reads on entry, sharing in-flight or recent user-intent requests.
 // Bound both lifetime and size; nothing is persisted in browser storage.
@@ -413,6 +414,8 @@ function captureInvitation() {
   }
 }
 function renderAccessGate() {
+  $('#access-loading-preview').hidden = true;
+  $('#access-workspace').setAttribute('aria-busy', 'false');
   if (state.screen !== 'access' && window.location.hash && !window.location.hash.startsWith('#join') && !authenticationRoute()) state.returnRoute = window.location.hash;
   state.screen = 'access';
   showWorkspace('access');
@@ -563,10 +566,6 @@ async function loadRelease(id, version) {
   finally { if (releaseLoads.get(key) === task) releaseLoads.delete(key); }
 }
 function showRouteLoading() {
-  if (!routeLoadingPanel) {
-    routeLoadingPanel = node('section'); routeLoadingPanel.id = 'route-loading'; routeLoadingPanel.tabIndex = -1;
-    document.querySelector('main').append(routeLoadingPanel);
-  }
   const path = window.location.hash.split('?')[0], release = routeRelease();
   const known = release && availableReleases().find(item => item.id === release.id && String(item.version) === release.version);
   const title = known?.name || (release ? 'Scheme' : path.startsWith('#person/') ? 'Profile' : path === '#notebook' ? 'Research notebook' : path === '#reviews' ? 'Review center' : path === '#propose' ? 'Propose a scheme' : 'KEM Schemes');
@@ -577,7 +576,13 @@ function showRouteLoading() {
   if (intent && (!release || release.id !== intent.schemeId || release.version !== intent.schemeVersion ||
       params.get('profile') !== intent.profileId || params.get('view') !== 'challenge')) state.challengeStartIntent = null;
   routeLoadingPanel.replaceChildren(node('h1', title));
-  const status = node('p', 'Loading…', 'empty-state'); status.setAttribute('role', 'status'); routeLoadingPanel.append(status);
+  routeLoadingPanel.setAttribute('aria-busy', 'true');
+  const status = node('p', 'Loading…', 'route-loading-status'); status.setAttribute('role', 'status');
+  const preview = node('div', undefined, 'loading-preview'); preview.setAttribute('aria-hidden', 'true');
+  for (let index = 0; index < 4; index++) {
+    const row = node('div', undefined, 'loading-preview-row'); row.append(node('span'), node('span')); preview.append(row);
+  }
+  routeLoadingPanel.append(status, preview);
   showWorkspace('loading');
   document.title = title + ' — Crucible';
 }
@@ -656,15 +661,28 @@ function renderReviewPage(query) {
 }
 function loadNotebookAsset(path, stylesheet = false) {
   if (notebookAssetLoads.has(path)) return notebookAssetLoads.get(path);
+  const attempt = (notebookAssetAttempts.get(path) || 0) + 1;
+  notebookAssetAttempts.set(path, attempt);
+  // A removed element may leave its request stalled. A retry needs a distinct
+  // URL to avoid sharing that browser request; admission still uses this path.
+  const url = path + (attempt > 1 ? '?asset_attempt=' + attempt : '');
   const element = node(stylesheet ? 'link' : 'script');
-  if (stylesheet) { element.rel = 'stylesheet'; element.href = path; }
-  else { element.async = false; element.src = path; }
+  if (stylesheet) { element.rel = 'stylesheet'; element.href = url; }
+  else { element.async = true; element.src = url; }
   const task = new Promise((resolve, reject) => {
-    element.onload = resolve;
-    element.onerror = () => {
-      element.remove(); notebookAssetLoads.delete(path);
-      reject(new Error('The notebook could not be loaded. Please try again.'));
-    };
+    let settled = false;
+    const timer = setTimeout(() => finish(new Error('The notebook took too long to load. Please try again.')), 15000);
+    function finish(error) {
+      if (settled) return;
+      settled = true; clearTimeout(timer); element.onload = element.onerror = null;
+      if (error) {
+        element.remove();
+        if (notebookAssetLoads.get(path) === task) notebookAssetLoads.delete(path);
+        reject(error);
+      } else resolve();
+    }
+    element.onload = () => finish();
+    element.onerror = () => finish(new Error('The notebook could not be loaded. Please try again.'));
   });
   notebookAssetLoads.set(path, task);
   (stylesheet ? document.querySelector('head') : document.body).append(element);
@@ -679,8 +697,9 @@ async function showNotebook(query, reviewing = false) {
   if (!window.CrucibleNotebook || (!notebookAssetsReady && notebookAssetLoads.size)) {
     setLoading(target, reviewing ? 'Loading review workspace…' : 'Loading notebook…');
     notebookAssets ||= (async () => {
-      // All four downloads begin together. async=false keeps script execution
-      // in insertion order without serializing their network round trips.
+      // These scripts define independent globals; dependencies are read only
+      // after this readiness barrier. Independent execution also lets a retry
+      // succeed while a removed, timed-out script request is still stalled.
       const results = await Promise.allSettled([
         loadNotebookAsset('/notebook/notebook.css', true),
         ...['/notebook/seed.js', '/notebook/store.js', '/notebook/notebook.js'].map(src => loadNotebookAsset(src))
@@ -1085,6 +1104,7 @@ function setLoading(target, text) {
   target.replaceChildren(content);
 }
 function showInlineError(target, message, retry) {
+  target.setAttribute('aria-busy', 'false');
   const messageNode = node('div', undefined, 'notice notice-error');
   messageNode.setAttribute('role', 'alert');
   messageNode.append(node('span', message));
@@ -4826,6 +4846,11 @@ for (const event of ['pointerenter', 'focus']) {
 }
 async function initialize() {
   globalError('');
+  if (!state.sessionResolved) {
+    $('#access-loading-preview').hidden = false;
+    $('#access-workspace').setAttribute('aria-busy', 'true');
+    setText('#access-description', 'Checking access…');
+  }
   $('#retry-button').disabled = true;
   $('#challenge-loading').hidden = false;
   capturePasswordResetLink();
@@ -4837,7 +4862,12 @@ async function initialize() {
     await loadAuthorizedWorkspace();
   } catch (error) {
     if (hasAccess()) { showRouteLoading(); showInlineError(routeLoadingPanel, error.message, initialize); }
-    else { globalError(error.message); if (!state.sessionResolved) setText('#access-description', 'Access could not be checked. Try again.'); }
+    else {
+      globalError(error.message);
+      $('#access-loading-preview').hidden = true;
+      $('#access-workspace').setAttribute('aria-busy', 'false');
+      if (!state.sessionResolved) setText('#access-description', 'Access could not be checked. Try again.');
+    }
     $('#challenge-loading').hidden = true;
   } finally { $('#retry-button').disabled = false; }
 }

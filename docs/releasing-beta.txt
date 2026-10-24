@@ -4,8 +4,9 @@ Releasing the private beta
 Normal development uses a branch and pull request. The stable branch-protection
 check is "CI passed" in the CI workflow. A repository administrator must require
 it and protect main; write access alone cannot establish that rule. This check
-means portable Python tests, migrations, frontend regressions and the reviewed
-runtime source contract passed. It does not mean native workers were rebuilt or
+means portable Python tests, migrations, frontend regressions, disposable Chromium
+browser checks and the reviewed runtime source contract passed. See
+docs/browser-checks.txt for the browser fixture and its scope. It does not mean native workers were rebuilt or
 every backend/platform test ran. Optional PostgreSQL fixtures are explicitly
 skipped without their dedicated synthetic database configuration.
 

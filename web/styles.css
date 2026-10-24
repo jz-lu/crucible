@@ -53,6 +53,7 @@ body {
 }
 
 .access-workspace {
+  width: min(100%, 520px);
   max-width: 520px;
   margin: clamp(44px, 12vh, 120px) auto;
   padding: 32px;
@@ -1444,6 +1445,21 @@ input::placeholder,textarea::placeholder {
   border-radius: 50%;
   animation: spin .9s linear infinite;
 }
+
+/* Neutral geometry keeps first loads composed without displaying private data. */
+#route-loading { padding-top: 40px; }
+.route-loading-status { margin: 12px 0 24px; color: var(--muted); font-size: 14px; }
+.loading-preview { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+.loading-preview-row { min-height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 20px 24px; }
+.loading-preview-row + .loading-preview-row { border-top: 1px solid var(--line); }
+.loading-preview-row span { display: block; height: 12px; width: 34%; border-radius: 4px; background: var(--line); animation: loading-preview-pulse 1.8s ease-in-out infinite; }
+.loading-preview-row span + span { width: 16%; }
+.loading-preview-row:nth-child(2) span:first-child { width: 43%; }
+.loading-preview-row:nth-child(3) span:first-child { width: 28%; }
+.loading-preview-compact { border: 0; margin-top: 24px; background: transparent; }
+.loading-preview-compact .loading-preview-row { min-height: 32px; padding: 9px 0; border: 0; }
+.loading-preview-compact .loading-preview-row span { height: 10px; }
+@keyframes loading-preview-pulse { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
 
 @keyframes spin {
   to {
