@@ -1,4 +1,6 @@
 /* Notebook views share a baseline; only alternate views carry a group label. */
+.nb-reading{position:relative;min-height:160px}
+.nb-reading-compact{min-height:40px}
 #notebook-workspace .nb-views{display:flex;align-items:flex-end;gap:23px;margin:24px 0 26px;border-bottom:1px solid var(--line)}
 #notebook-workspace .nb-view{display:inline-flex;align-items:center;gap:9px;position:relative;font:600 15px/1.4 var(--sans);color:var(--muted);text-decoration:none;border:0;border-bottom:2px solid transparent;background:none;border-radius:0;padding:11px 2px 13px;margin-bottom:-1px;cursor:pointer;white-space:nowrap}
 #notebook-workspace .nb-view[aria-current=page]{color:var(--ink);border-bottom-color:var(--ink)}

@@ -62,6 +62,23 @@ const byText=(root,label)=>root.querySelectorAll('button').find(n=>n.textContent
 let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
 (async()=>{
 
+ for(const [view,endpoint,result] of [
+  ['list','/api/notebook/notes?',{notes:[]}],
+  ['full','/api/notebook/notes/note-one',{note:note()}],
+  ['timeline','/api/notebook/timeline',timeline()]
+ ]) await test(view+' read reserves quiet space with an accessible status until fresh content arrives',async()=>{
+  const late=deferred();let held=false;
+  const app=await boot({respond:url=>held&&url.startsWith(endpoint)?late.promise:undefined});
+  app.controller.invalidateReads();held=true;
+  const pending=view==='timeline'?app.controller.show(new URLSearchParams('view=timeline')):app.show(view==='full'?'note-one':undefined);
+  const region=app.q(view).querySelector('.nb-reading'),status=region?.querySelector('[role="status"]');
+  assert.ok(region);assert.equal(region.getAttribute('aria-busy'),'true');
+  assert.ok(status?.classList.contains('nb-sr-only'),'Read status is visually hidden, not an animated loading message');
+  assert.match(status.textContent,/Loading/);assert.equal(region.querySelectorAll('button,a,input').length,0);
+  late.resolve(result);await pending;
+  assert.equal(app.q(view).querySelector('.nb-reading'),null,'Settled content removes the temporary busy region');
+ });
+
  await test('expanding a note prefetches its exact body and the reader shares the in-flight GET',async()=>{
   const late=deferred();const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()]}:url==='/api/notebook/notes/note-one'?late.promise:undefined});
   app.q('list').querySelector('.nb-title').click();await flush();

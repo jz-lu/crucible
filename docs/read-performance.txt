@@ -49,6 +49,21 @@ difference includes network/proxy overhead; this is a small developer-machine
 sample, not a signed-in challenge or capacity benchmark. Reducing sequential
 requests matters even when an individual handler is fast.
 
+Loading presentation
+--------------------
+
+Cold catalogue reads reserve the heading and four-column table layout using
+neutral placeholders. Heading fonts and spacing match the populated catalogue;
+there is no pulsing, stagger or artificial minimum display time. Private scheme
+and participant data still wait for fresh session admission. Warm reads retain
+the current content when the existing cache policy permits it.
+
+Transient read statuses are visually hidden but remain accessible to assistive
+technology. Errors, retry controls, real empty states and submission feedback
+stay visible. This is presentation continuity, not a reduction in network time.
+Held-response browser checks compare typography and geometry at desktop and
+mobile widths; ownership tests cover navigation, access loss and late responses.
+
 Metadata SQL
 ------------
 

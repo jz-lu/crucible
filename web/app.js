@@ -416,6 +416,7 @@ function captureInvitation() {
   }
 }
 function renderAccessGate() {
+  $('#access-workspace').removeAttribute('data-catalogue-pending');
   $('#access-loading-preview').hidden = true;
   $('#access-workspace').setAttribute('aria-busy', 'false');
   if (state.screen !== 'access' && window.location.hash && !window.location.hash.startsWith('#join') && !authenticationRoute()) state.returnRoute = window.location.hash;
@@ -601,6 +602,36 @@ async function loadRelease(id, version) {
   try { return await task; }
   finally { if (releaseLoads.get(key) === task) releaseLoads.delete(key); }
 }
+function cataloguePreview() {
+  const wrap = node('div', undefined, 'kem-table-wrap catalogue-preview loading-preview');
+  wrap.setAttribute('aria-hidden', 'true');
+  const table = node('table', undefined, 'kem-table'), head = node('thead'), headings = node('tr'), body = node('tbody');
+  const labels = ['KEM', 'Largest recovery', 'Recovered by', 'Participants'];
+  for (const label of labels) {
+    const heading = node('th', label, label === 'Largest recovery' ? 'recovery-heading' : '');
+    if (label === 'Largest recovery') {
+      const line = node('span', undefined, 'recovery-heading-label');
+      line.append(node('span', label), node('span', undefined, 'catalogue-help-space'));
+      heading.replaceChildren(line);
+    }
+    headings.append(heading);
+  }
+  head.append(headings);
+  for (let index = 0; index < 6; index++) {
+    const row = node('tr');
+    for (const [column, label] of labels.entries()) {
+      const cell = node('td');
+      if (column) cell.dataset.label = label;
+      cell.append(node('span', undefined, 'catalogue-placeholder')); row.append(cell);
+    }
+    body.append(row);
+  }
+  table.append(head, body); wrap.append(table);
+  return wrap;
+}
+function routeLoadingTarget() {
+  return state.screen === 'catalogue' ? $('#kem-catalogue') : routeLoadingPanel;
+}
 function showRouteLoading() {
   const path = window.location.hash.split('?')[0], release = routeRelease();
   const known = release && availableReleases().find(item => item.id === release.id && String(item.version) === release.version);
@@ -611,9 +642,26 @@ function showRouteLoading() {
   const intent = state.challengeStartIntent;
   if (intent && (!release || release.id !== intent.schemeId || release.version !== intent.schemeVersion ||
       params.get('profile') !== intent.profileId || params.get('view') !== 'challenge')) state.challengeStartIntent = null;
+  if (!release && ['', '#challenge'].includes(path)) {
+    const target = $('#kem-catalogue');
+    state.screen = 'catalogue';
+    if (!target.querySelector('.catalogue-preview')) {
+      const status = node('span', 'Loading schemes', 'sr-only'); status.setAttribute('role', 'status');
+      target.replaceChildren(status, cataloguePreview());
+    }
+    target.setAttribute('aria-busy', 'true');
+    $('#refresh-catalogue').disabled = true;
+    showWorkspace('catalogue');
+    document.title = title + ' — Crucible';
+    return;
+  }
+  if (routeLoadingPanel.dataset.route === window.location.hash && routeLoadingPanel.getAttribute('aria-busy') === 'true') {
+    showWorkspace('loading'); return;
+  }
+  routeLoadingPanel.dataset.route = window.location.hash;
   routeLoadingPanel.replaceChildren(node('h1', title));
   routeLoadingPanel.setAttribute('aria-busy', 'true');
-  const status = node('p', 'Loading…', 'route-loading-status'); status.setAttribute('role', 'status');
+  const status = node('p', 'Loading…', 'sr-only'); status.setAttribute('role', 'status');
   const preview = node('div', undefined, 'loading-preview'); preview.setAttribute('aria-hidden', 'true');
   for (let index = 0; index < 4; index++) {
     const row = node('div', undefined, 'loading-preview-row'); row.append(node('span'), node('span')); preview.append(row);
@@ -836,7 +884,7 @@ function applyRoute(focus = false) {
   if (!state.ready) return;
   if (routeNeedsCatalogue() && !state.catalogueLoaded) {
     void loadAuthorizedWorkspace().catch(error => {
-      if (hasAccess() && routeRequest === workspaceLoadRequest) showInlineError(routeLoadingPanel, error.message, initialize);
+      if (hasAccess() && routeRequest === workspaceLoadRequest) showInlineError(routeLoadingTarget(), error.message, initialize);
     });
     return;
   }
@@ -1056,6 +1104,7 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
   }
 }
 function setSession(data) {
+  document.body.removeAttribute('data-access-pending');
   state.sessionRevision++;
   const previousId = state.user?.id;
   const previousCsrf = state.csrf;
@@ -1163,12 +1212,16 @@ function globalError(message) {
 function setLoading(target, text) {
   const content = node('div', undefined, 'loading-state');
   content.setAttribute('role', 'status');
-  content.append(node('span', undefined, 'loader'), node('span', text));
-  content.firstChild.setAttribute('aria-hidden', 'true');
+  content.append(node('span', text, 'sr-only'));
   target.replaceChildren(content);
+}
+function quietReadStatus(target, text) {
+  const status = node('span', text, 'sr-only'); status.setAttribute('role', 'status');
+  target.replaceChildren(status);
 }
 function showInlineError(target, message, retry) {
   target.setAttribute('aria-busy', 'false');
+  if (target === $('#kem-catalogue')) $('#refresh-catalogue').disabled = false;
   const messageNode = node('div', undefined, 'notice notice-error');
   messageNode.setAttribute('role', 'alert');
   messageNode.append(node('span', message));
@@ -1373,6 +1426,8 @@ function prepareSchemeLink(link, scheme) {
 }
 function renderCatalogue() {
   const target = $('#kem-catalogue');
+  if (target.getAttribute('aria-busy') === 'true') $('#refresh-catalogue').disabled = false;
+  target.setAttribute('aria-busy', 'false');
   setText('#tier-help', 'Stages mark positions in each scheme’s default progression through reviewed configurations. Schemes can have different numbers of stages; equal stage numbers do not imply equal security or attack cost. Named parameter sets are distinct targets; their order does not imply security or transfer recovery results.');
   if (!state.schemes.length) return showEmpty(target, 'No KEMs have been published yet.');
   const wrap = node('div', undefined, 'kem-table-wrap');
@@ -2073,7 +2128,7 @@ function renderTimingDetails(target, scheme, metric) {
   }
   for (const profile of reportedProfiles) {
     const result = timingResult(scheme, profile, metric), measured = plottedTiming(result), conditional = conditionalTiming(result), row = node('tr');
-    const status = result ? {measured: 'Measured', failed: 'Run failed', timeout: 'Timed out', partial: 'Partial run'}[result.status] : entry?.status === 'loading' ? 'Loading' : entry?.status === 'error' ? 'Unavailable' : 'Not measured';
+    const status = result ? {measured: 'Measured', failed: 'Run failed', timeout: 'Timed out', partial: 'Partial run'}[result.status] : entry?.status === 'loading' ? '—' : entry?.status === 'error' ? 'Unavailable' : 'Not measured';
     const label = node('th', profileLabel(profile, scheme)); label.scope = 'row'; label.title = profileId(profile);
     row.append(label, node('td', conditional ? 'Successful exchanges only · ' + timingAbortLabel(result) : status + (result?.failure_count ? ` · ${result.failure_count} failed` : '')),
       node('td', result ? result.samples : '—'), node('td', measured ? timingDuration(result.median_seconds) : '—'),
@@ -2081,7 +2136,8 @@ function renderTimingDetails(target, scheme, metric) {
     body.append(row);
   }
   if (!reportedProfiles.length) {
-    const row = node('tr'), cell = node('td', entry?.status === 'loading' ? 'Loading measurements…' : entry?.status === 'error' ? 'Measurements unavailable.' : 'Not measured.');
+    const row = node('tr'), cell = node('td', entry?.status === 'loading' ? '' : entry?.status === 'error' ? 'Measurements unavailable.' : 'Not measured.');
+    if (entry?.status === 'loading') quietReadStatus(cell, 'Loading measurements');
     cell.colSpan = 5; row.append(cell); body.append(row);
   }
   table.append(body);
@@ -2089,7 +2145,7 @@ function renderTimingDetails(target, scheme, metric) {
   scroll.tabIndex = 0; scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Reference timing results');
   scroll.append(table); content.append(scroll);
   const actions = node('div', undefined, 'reference-timing-actions');
-  const refresh = node('button', entry?.status === 'loading' ? 'Loading…' : entry?.status === 'error' ? 'Try again' : 'Refresh results', 'text-button');
+  const refresh = node('button', entry?.status === 'error' ? 'Try again' : 'Refresh results', 'text-button');
   refresh.type = 'button'; refresh.disabled = entry?.status === 'loading';
   refresh.addEventListener('click', () => loadReferenceTimings(scheme, {refresh: true}));
   const download = node('a', 'Download method and results', 'text-button');
@@ -2258,9 +2314,9 @@ function renderOverviewChart(scheme, cardId) {
       svg.append(dot);
     }
   } else {
-    const timingLabel = timing?.status === 'loading' ? 'Loading timings' : timing?.status === 'error' ? 'Timings unavailable' : 'No timings published';
+    const timingLabel = timing?.status === 'loading' ? '' : timing?.status === 'error' ? 'Timings unavailable' : 'No timings published';
     svg.append(svgNode('text', {x: (left + right) / 2, y: 106, 'text-anchor': 'middle', class: 'chart-empty-label'}, polynomialQuantum ? 'Polynomial-time quantum attack' : ['security', 'baseline'].includes(descriptor.kind) ? 'No estimates published' : descriptor.kind === 'timing' ? timingLabel : 'No values published'));
-    svg.append(svgNode('text', {x: (left + right) / 2, y: 128, 'text-anchor': 'middle', class: 'chart-empty-detail'}, polynomialQuantum ? 'Shor’s algorithm · not a zero-cost estimate' : descriptor.kind === 'timing' ? timing?.status === 'loading' ? 'Fetching the reference report' : timing?.status === 'error' ? 'Retry in Method and results' : 'No completed measurements for this operation' : evidence?.explanation ? 'See model and values below' : 'Awaiting evidence'));
+    svg.append(svgNode('text', {x: (left + right) / 2, y: 128, 'text-anchor': 'middle', class: 'chart-empty-detail'}, polynomialQuantum ? 'Shor’s algorithm · not a zero-cost estimate' : descriptor.kind === 'timing' ? timing?.status === 'loading' ? '' : timing?.status === 'error' ? 'Retry in Method and results' : 'No completed measurements for this operation' : evidence?.explanation ? 'See model and values below' : 'Awaiting evidence'));
   }
   for (const point of recoveredPoints) {
     const marker = svgNode('line', {x1: x(point.tier), y1: top, x2: x(point.tier), y2: bottom, class: 'chart-recovery-line', 'data-tier': point.tier, 'data-profile-id': point.profileId});
@@ -2292,6 +2348,7 @@ function renderOverviewChart(scheme, cardId) {
   const badge = $('#overview-badge-' + cardId);
   badge.textContent = literatureOnly ? 'Published reference' : descriptor.kind === 'timing' ? timing?.report ? 'Local pilot' : timing?.status === 'loading' ? 'Loading' : timing?.status === 'error' ? 'Unavailable' : 'Not measured' : measured.length ? (descriptor.kind === 'baseline' ? attackReferenceModel(scheme) ? 'Attack reference' : 'Initial model' : 'Published values') : 'Not reported';
   badge.classList.toggle('is-empty', !measured.length);
+  if (descriptor.kind === 'timing' && timing?.status === 'loading') quietReadStatus(badge, 'Loading timings');
   if ((descriptor.kind === 'encoding' || security) && values.length) {
     const details = node('details', undefined, 'overview-values');
     details.append(node('summary', security ? 'Model and values' : 'View values'));
@@ -4329,7 +4386,7 @@ async function loadProposalRevision(id) {
   proposals.detailId = null;
   proposals.revisionBase = null;
   clearProposalReview();
-  setText('#proposal-revision-context', 'Loading the revision to replace…');
+  quietReadStatus($('#proposal-revision-context'), 'Loading the revision to replace');
   renderProposalDraft();
   const current = () => request === proposals.detailRequest && account === state.user?.id && proposalPageActive() && proposals.revisingId === id && !proposals.detailId;
   if (!account) { setText('#proposal-revision-context', 'Sign in to upload a revised specification.'); return; }
@@ -4532,6 +4589,7 @@ $('#download-proposal').addEventListener('click', () => {
 // Research records keep claims and their conditions separate from hourly ranking.
 function showWorkspace(name) {
   if (!hasAccess()) name = 'access';
+  const transferLoadingFocus = name !== 'loading' && document.activeElement?.closest?.('#route-loading') === routeLoadingPanel;
   if (!RESEARCH_ENABLED && name === 'research') name = 'catalogue';
   const [pendingPath, pendingQuery = ''] = window.location.hash.split('?');
   const preparingMap = name === 'loading' && hasAccess() && pendingPath === '#notebook' && new URLSearchParams(pendingQuery).get('view') === 'map';
@@ -4543,7 +4601,10 @@ function showWorkspace(name) {
   const enteringResearch = !research.visible && name === 'research';
   research.visible = name === 'research';
   $('#access-workspace').hidden = name !== 'access';
-  if (routeLoadingPanel) routeLoadingPanel.hidden = name !== 'loading';
+  if (routeLoadingPanel) {
+    routeLoadingPanel.hidden = name !== 'loading';
+    if (name !== 'loading') routeLoadingPanel.setAttribute('aria-busy', 'false');
+  }
   $('.primary-nav').hidden = name === 'access';
   $('#nav-people').hidden = name === 'access';
   $('#catalogue-workspace').hidden = name !== 'catalogue';
@@ -4567,6 +4628,7 @@ function showWorkspace(name) {
     else button.removeAttribute('aria-current');
   }
   $('.skip-link').href = workspaceSelector(name);
+  if (transferLoadingFocus) $(workspaceSelector(name)).focus({preventScroll: true});
   if (enteringResearch && !research.targets.length) loadResearch();
   else if (enteringResearch && research.target) loadFindings();
 }
@@ -4859,7 +4921,7 @@ async function loadSupportingRecoveries(selectedId = '') {
   const request = ++research.recoveriesRequest;
   if (!enabled) return;
   select.disabled = true;
-  setText('#finding-recovery-hint', 'Loading your correct submissions…');
+  quietReadStatus($('#finding-recovery-hint'), 'Loading your correct submissions');
   try {
     const data = await api('/api/me/submissions');
     if (request !== research.recoveriesRequest) return;
@@ -5016,6 +5078,12 @@ async function initialize() {
   if (!state.sessionResolved) {
     $('#access-loading-preview').hidden = false;
     $('#access-workspace').setAttribute('aria-busy', 'true');
+    const catalogue = ['', '#challenge'].includes(window.location.hash.split('?')[0]);
+    if (catalogue) $('#access-workspace').setAttribute('data-catalogue-pending', 'true');
+    else $('#access-workspace').removeAttribute('data-catalogue-pending');
+    const path = window.location.hash.split('?')[0];
+    setText('#access-title', catalogue ? 'KEM Schemes' : path === '#notebook' ? 'Research notebook' : path === '#about' ? 'About us' : 'Crucible');
+    $('#access-title').removeAttribute('aria-hidden');
     setText('#access-description', 'Checking access…');
   }
   $('#retry-button').disabled = true;
@@ -5028,8 +5096,9 @@ async function initialize() {
     if (!hasAccess()) return;
     await loadAuthorizedWorkspace();
   } catch (error) {
-    if (hasAccess()) { showRouteLoading(); showInlineError(routeLoadingPanel, error.message, initialize); }
+    if (hasAccess()) { showRouteLoading(); showInlineError(routeLoadingTarget(), error.message, initialize); }
     else {
+      document.body.removeAttribute('data-access-pending');
       globalError(error.message);
       $('#access-loading-preview').hidden = true;
       $('#access-workspace').setAttribute('aria-busy', 'false');

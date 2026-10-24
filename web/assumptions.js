@@ -272,7 +272,10 @@
     async function show(scheme, profile = null, claim = null) {
       const current = ++request, owner = account();
       const active = () => current === request && owner === account() && isVisible();
-      clearView(); root.append(prose('Loading assumptions…', 'assumptions-context'));
+      clearView();
+      const pending = el('div', undefined, 'loading-state');
+      const status = prose('Loading assumptions…', 'sr-only'); status.setAttribute('role', 'status');
+      pending.append(status); root.append(pending);
       root.setAttribute('aria-busy', 'true');
       try {
         const params = new URLSearchParams({scheme_id: scheme.id, version: scheme.version});

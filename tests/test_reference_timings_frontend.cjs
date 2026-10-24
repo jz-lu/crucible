@@ -166,7 +166,11 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
   await test('loading, failure and explicit retry are distinct; retry preserves disclosure',async()=>{
     const wait=deferred();let count=0;
     const app=await boot({responder:url=>url.pathname==='/api/protocol/benchmarks'?(++count===1?wait.promise:{method,report:report()}):undefined});
-    assert.match(chart(app).textContent,/Loading timings/);chart(app).querySelector('details').open=true;
+    assert.doesNotMatch(chart(app).querySelector('svg').textContent,/Loading|Fetching/);
+    const status=app.$('#overview-badge-computation').querySelector('[role="status"]');
+    assert.equal(status.className,'sr-only');assert.equal(status.textContent,'Loading timings');
+    assert.equal(chart(app).querySelector('button').disabled,true);
+    chart(app).querySelector('details').open=true;
     wait.resolve({method,report:{}});await flush();assert.match(chart(app).textContent,/Timings unavailable/);
     chart(app).querySelector('button').click();await flush();assert.equal(count,2);assert.equal(points(app).length,2);assert.equal(chart(app).querySelector('details').open,true);
   });

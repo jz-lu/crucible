@@ -119,13 +119,13 @@ test('cached navigation paints while its fresh read is held; the brand never rel
   try {
     await page.getByRole('banner').getByRole('link', {name: 'Crucible home', exact: true}).click();
     await catalogue.arrived;
-    const preview = page.locator('#route-loading .loading-preview');
+    const preview = page.locator('#kem-catalogue .catalogue-preview');
     await expect(preview).toBeVisible();
     await expect(preview).toHaveAttribute('aria-hidden', 'true');
-    await expect(page.locator('#route-loading')).toHaveAttribute('aria-busy', 'true');
+    await expect(page.locator('#kem-catalogue')).toHaveAttribute('aria-busy', 'true');
     const bounds = await preview.boundingBox();
     expect(bounds.width).toBeGreaterThan(50); expect(bounds.height).toBeGreaterThan(50);
-    const panel = await page.locator('#route-loading').boundingBox();
+    const panel = await page.locator('#catalogue-workspace').boundingBox();
     const footer = await page.locator('.site-footer').boundingBox();
     expect(panel.y + panel.height, 'loading content stays above the site footer').toBeLessThanOrEqual(footer.y);
     await page.screenshot({path: testInfo.outputPath('held-route-preview.png')});
@@ -138,7 +138,6 @@ test('cached navigation paints while its fresh read is held; the brand never rel
 
 test('initial access has a neutral loading preview without revealing private content', async ({page}, testInfo) => {
   const pending = await holdResponse(page, url => url.pathname === '/api/session');
-  let cardWidth;
   const privateReads = [];
   page.on('request', request => {
     if (/^\/(?:map\/|notebook\/|api\/notebook)/.test(new URL(request.url()).pathname)) privateReads.push(request.url());
@@ -151,14 +150,14 @@ test('initial access has a neutral loading preview without revealing private con
     await expect(page.locator('#access-description')).toHaveText('Checking access…');
     const bounds = await preview.boundingBox();
     expect(bounds.width).toBeGreaterThan(50); expect(bounds.height).toBeGreaterThan(20);
-    cardWidth = (await page.locator('#access-workspace').boundingBox()).width;
+    await expect(page.locator('#access-title')).toHaveText('Research notebook');
     await expect(page.locator('body')).not.toContainText('ALICE_PRIVATE_BROWSER_BODY');
     expect(privateReads).toEqual([]);
     await page.screenshot({path: testInfo.outputPath('held-access-preview.png')});
   } finally {pending.release(); await pending.delivered; await pending.remove();}
   await expect(page.locator('#access-loading-preview')).toBeHidden();
   await expect(page.locator('#access-auth-actions')).toBeVisible();
-  expect((await page.locator('#access-workspace').boundingBox()).width).toBeCloseTo(cardWidth, 0);
+  expect((await page.locator('#access-workspace').boundingBox()).width).toBeLessThanOrEqual(520);
 });
 
 test('anonymous and revoked readers cannot fetch private assets or notebook data', async ({page, context}) => {

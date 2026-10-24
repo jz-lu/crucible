@@ -71,6 +71,8 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
  });
  await test('late results cannot overwrite another scheme',async()=>{
   const wait=deferred();const app=await boot({schemes:[scheme(),scheme('beta')],responder:url=>url.pathname==='/api/protocol/assumptions'?(url.searchParams.get('scheme_id')==='alpha'?wait.promise:{sheet:sheet('beta')}):undefined});
+  assert.equal(app.$('#assumptions-content').getAttribute('aria-busy'),'true');
+  assert.equal(app.$('#assumptions-content').querySelector('[role="status"]').className,'sr-only');
   await app.navigate('#scheme/beta/1/assumptions');wait.resolve({sheet:sheet()});await flush();
   assert.match(app.$('#assumptions-title').textContent,/beta/);assert.match(cards(app)[0].querySelector('.assumption-permalink').href,/#scheme\/beta\/1/);
  });

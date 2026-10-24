@@ -2,6 +2,12 @@
 (() => {
   'use strict';
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+  function reading(text, compact = false) {
+    const region = el('div', 'nb-reading' + (compact ? ' nb-reading-compact' : ''));
+    region.setAttribute('aria-busy', 'true');
+    const status = el('p', 'nb-sr-only', text); status.setAttribute('role', 'status');
+    region.append(status); return region;
+  }
   const button = (text, fn, cls = 'nb-link') => { const n = el('button', cls, text); n.type = 'button'; n.addEventListener('click', fn); return n; };
   const math = (tag, cls, text) => { const n = el(tag, cls); if (window.CrucibleMath) window.CrucibleMath.render(n, text); else n.textContent = text; return n; };
   const canonical = value => Array.isArray(value) ? '[' + value.map(canonical).join(',') + ']' : value && typeof value === 'object' ? '{' + Object.keys(value).sort().map(k => JSON.stringify(k) + ':' + canonical(value[k])).join(',') + '}' : JSON.stringify(value);
@@ -338,7 +344,7 @@
     async function showMap() {
       const owner = accountId, generation = epoch;
       const current = () => active && accountId === owner && identity() === owner && epoch === generation && params.get('view') === 'map';
-      if (!mapController && !q('map').querySelector('.nb-empty')) q('map').prepend(el('p', 'nb-empty', 'Loading scheme map…'));
+      if (!mapController && !q('map').querySelector('.nb-reading')) q('map').prepend(reading('Loading scheme map…'));
       try {
         const controller = await prepareMap();
         if (current()) controller?.show();
@@ -349,7 +355,7 @@
     async function showTimeline() {
       const owner = accountId, generation = epoch, token = ++timelineRequest;
       const current = () => active && identity() === owner && accountId === owner && epoch === generation && token === timelineRequest && params.get('view') === 'timeline';
-      q('timeline').replaceChildren(el('p', 'nb-empty', 'Loading notes over time…'));
+      q('timeline').replaceChildren(reading('Loading notes over time…'));
       try {
         const data = await api('/api/notebook/timeline');
         if (current()) renderTimeline(data);
@@ -480,7 +486,7 @@
       if (cached) { paint(cached); for (const control of q('list').querySelectorAll('.nb-card-actions button')) control.disabled = true; }
       else {
         listLoaded = false; notes = []; nextAfter = null;
-        q('list').replaceChildren(el('p', 'nb-empty', 'Loading notes…')); q('count').textContent = '';
+        q('list').replaceChildren(reading('Loading notes…')); q('count').textContent = '';
         q('page').textContent = 'Page ' + (pageIndex + 1);
       }
       q('more').disabled = true; q('prev').disabled = true;
@@ -638,7 +644,7 @@
         // Quiet revalidation below must not steal focus back from the reader.
         q('full').querySelector('h2')?.focus({preventScroll:true});
       }
-      else q('full').replaceChildren(backToNotes(), el('p', 'nb-empty', 'Loading note…'));
+      else q('full').replaceChildren(backToNotes(), reading('Loading note…'));
       try {
         const result = id.startsWith('curated:')
           ? {note:(await loadCuratedNotes()).find(note => note.id === id)}
@@ -814,7 +820,7 @@
     function requestGuidance(host, kind, present, ready = () => {}) {
       const token = {}; host.requestToken = token;
       const current = () => present() && host.requestToken === token;
-      ready(false); host.replaceChildren(el('p', 'nb-hint', 'Loading request requirements…'));
+      ready(false); host.replaceChildren(reading('Loading request requirements…', true));
       loadRequestTypes().then(document => {
         if (!current()) return;
         const action = document.actions.find(value => value.id === kind);
@@ -936,7 +942,7 @@
           const cursors = new Set(); let busy = false;
           const load = async (after = '') => {
             if (busy || !current()) return; busy = true;
-            footer.replaceChildren(el('p', 'nb-hint', 'Loading connections…'));
+            footer.replaceChildren(reading('Loading connections…', true));
             try {
               const query = new URLSearchParams({...pin, direction, limit:'12', ...(after ? {after} : {})});
               const result = await api('/api/notebook/graph?' + query);
