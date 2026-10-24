@@ -159,7 +159,47 @@ async function appWith({hash = '#challenge', signedIn = null, status, config = a
     assert.equal(app.$('#auth-dialog').open, true);
     assert.match(app.$('#auth-github-error').textContent, /cancelled/);
     assert.equal(app.$('#auth-github').disabled, false);
+    assert.equal(app.$('#auth-password-options').open, false);
     assert.equal(paths(app).includes('/api/schemes'), false);
+  });
+  await test('an unlinked GitHub callback explains existing account linking and exposes password sign-in without creating an account', async () => {
+    const app = await appWith({hash:'#auth?github=invite-required', responder:url =>
+      url.pathname === '/api/auth/github/pending' ? {pending:false, return_route:'#notebook'} : undefined});
+    assert.equal(app.location.hash,'#notebook');
+    assert.equal(app.$('#auth-dialog').open,true);
+    assert.equal(app.$('#auth-password-options').open,true);
+    assert.equal(app.$('#auth-form').closest('[hidden]'),null);
+    assert.equal(app.$('#github-handle-form').hidden,true);
+    assert.equal(state(app).user,null);assert.equal(state(app).authMode,'login');
+    assert.equal(state(app).access.allowed,false);
+    const guidance=app.$('#auth-github-error').textContent;
+    assert.match(guidance,/not linked to a Crucible account/);
+    assert.match(guidance,/sign in with your password/);
+    assert.match(guidance,/profile’s Sign-in settings and choose Link GitHub/);
+    assert.match(guidance,/New participants should open their invitation link/);
+    assert.deepEqual(paths(app),['/api/session','/api/auth/github/pending']);
+    assert.ok(app.requests.every(request=>request.options.method==='GET'));
+  });
+  await test('password rejection replaces stale GitHub guidance with the actual password error', async () => {
+    const app = await appWith({hash:'#auth?github=invite-required', responder:url =>
+      url.pathname === '/api/auth/github/pending' ? {pending:false, return_route:'#notebook'} : undefined});
+    assert.equal(app.$('#auth-github-error').hidden,false);
+    const fetch=app.sandbox.fetch, attempts=[];
+    app.sandbox.fetch=async(path,options)=>{
+      if(path!=='/api/auth/login')return fetch(path,options);
+      attempts.push({path,method:options.method,body:JSON.parse(options.body)});
+      return {ok:false,status:401,json:async()=>({detail:'Invalid handle or password.'})};
+    };
+    app.$('#auth-handle').value='alice';app.$('#auth-password').value='incorrect fixture password';
+    app.$('#auth-form').dispatchEvent({type:'submit'});
+    assert.equal(app.$('#auth-github-error').hidden,true);
+    assert.equal(app.$('#auth-github-error').textContent,'');
+    await flush();
+    assert.equal(app.$('#auth-error').textContent,'Invalid handle or password.');
+    assert.equal(app.$('#auth-github-error').hidden,true);
+    assert.equal(app.$('#auth-dialog').open,true);assert.equal(state(app).user,null);
+    assert.deepEqual(attempts,[{path:'/api/auth/login',method:'POST',body:{handle:'alice',password:'incorrect fixture password'}}]);
+    assert.deepEqual(paths(app),['/api/session','/api/auth/github/pending']);
   });
   await test('a suspended signed-in callback stays gated', async () => {
     const app = await appWith({signedIn: user, status: 'suspended', hash: '#auth?github=complete', responder: url =>

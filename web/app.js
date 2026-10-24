@@ -3303,7 +3303,7 @@ async function handleAuthenticationRoute() {
     const messages = {
       denied: 'GitHub sign-in was cancelled. You can try again or use your password.',
       expired: 'This GitHub sign-in has expired. Please try again.',
-      'invite-required': 'Open your invitation link before creating an account with GitHub.',
+      'invite-required': 'This GitHub account is not linked to a Crucible account. If you already have one, sign in with your password, then open your profile’s Sign-in settings and choose Link GitHub. New participants should open their invitation link.',
       'identity-in-use': 'This GitHub account is already linked to another Crucible account. Sign in to that account or contact the operator.',
       'session-changed': 'Your session changed during GitHub sign-in. Please try again from your current account.'
     };
@@ -3312,7 +3312,11 @@ async function handleAuthenticationRoute() {
     if (window.location.hash !== callbackHash || state.user?.id !== account) return true;
     await finishAuthentication(returnRoute);
     if (state.user) { globalError(error.message); }
-    else { openAuth(); setError('#auth-github-error', error.message); }
+    else {
+      openAuth();
+      if (outcome === 'invite-required') $('#auth-password-options').open = true;
+      setError('#auth-github-error', error.message);
+    }
   } finally { state.authCallbackBusy = false; }
   return true;
 }
@@ -3432,6 +3436,7 @@ $('#auth-form').addEventListener('submit', async event => {
   $('#login-mode').disabled = true;
   $('#register-mode').disabled = true;
   setError('#auth-error', '');
+  setError('#auth-github-error', '');
   setText('#auth-submit', state.authMode === 'login' ? 'Signing in…' : 'Creating your account…');
   try {
     const data = await api('/api/auth/' + state.authMode, {handle: $('#auth-handle').value.trim(), password: $('#auth-password').value,
