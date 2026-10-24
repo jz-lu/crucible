@@ -176,7 +176,7 @@ def test_check_cleanup_accepts_only_verified_absence_after_inspection_error(monk
     assert not any(args[0] == 'rm' for args in calls)
 
 
-def test_workflow_is_manual_publish_only_with_always_credential_cleanup():
+def test_workflow_is_manual_and_promotes_only_after_successful_publication():
     workflow = (ROOT / '.github/workflows/release-beta.yml').read_text()
     assert 'workflow_dispatch:' in workflow and '\n  push:' not in workflow and '\n  pull_request:' not in workflow
     assert "github.ref == 'refs/heads/main'" in workflow
@@ -184,6 +184,11 @@ def test_workflow_is_manual_publish_only_with_always_credential_cleanup():
     assert release.DOCKER == ['docker', '--host', 'unix:///var/run/docker.sock']
     assert '--network none' in workflow and '--provenance=false --load' in workflow
     assert 'deploy create' not in workflow and 'apps update' not in workflow
+    assert 'group: crucible-beta-release\n  cancel-in-progress: false' in workflow
+    assert workflow.index('name: Verify exact native catalogue') < workflow.index('name: Publish the tested image')
+    assert workflow.index('name: Publish the tested image') < workflow.index('name: Promote the exact tested image to beta')
+    assert 'name: Promote the exact tested image to beta\n        if: success() && inputs.publish' in workflow
+    assert 'crucible-release/promotion.json' in workflow
     assert 'if: always()\n        run: rm -rf -- "$RUNNER_TEMP/crucible-registry-auth"' in workflow
     aggregate = (ROOT / '.github/workflows/tests.yml').read_text()
     assert 'name: CI passed' in aggregate
@@ -191,3 +196,163 @@ def test_workflow_is_manual_publish_only_with_always_credential_cleanup():
     assert 'BROWSER_RESULT: ${{ needs.browser-checks.result }}' in aggregate
     assert 'test "$BROWSER_RESULT" = success' in aggregate
     assert 'test "$METADATA_RESULT" = success' in aggregate
+
+
+@pytest.fixture
+def promotion(tmp_path, monkeypatch):
+    revision, config = 'a' * 40, 'sha256:' + 'b' * 64
+    manifest = {'schemaVersion': 2, 'mediaType': 'application/vnd.oci.image.manifest.v1+json',
+                'config': {'mediaType': 'application/vnd.oci.image.config.v1+json', 'digest': config, 'size': 100},
+                'layers': [{'mediaType': 'application/vnd.oci.image.layer.v1.tar+gzip',
+                            'digest': 'sha256:' + 'c' * 64, 'size': 200}]}
+    raw = release.canonical(manifest)
+    checked = {'status': 'passed', 'published': False, 'source_revision': revision,
+               'local_image': 'crucible-beta-check:' + revision, 'local_image_id': 'sha256:' + 'd' * 64,
+               'native_checks': {'runtime': 'passed', **{name: 'passed' for name in release.policy()['native_test_batches']}},
+               'release_sha256': 'e' * 64, 'deployment_performed': False}
+    release.write_json(tmp_path / 'verified.json', checked)
+    release.write_json(tmp_path / 'build-metadata.json', {'containerimage.config.digest': config})
+    tag = 'git-' + revision + '-123-1'
+    published = {**checked, 'published': True, 'image_config_digest': config,
+                 'registry_reference': release.REPOSITORY + '@sha256:' + release.digest(raw),
+                 'registry_tag': tag, 'registry_tag_reference': release.REPOSITORY + ':' + tag}
+    release.write_json(tmp_path / 'published.json', published)
+    state = {'root': tmp_path, 'revision': revision, 'manifest': manifest,
+             'published': published, 'source_raw': raw, 'channel_raw': raw,
+             'main': [revision, revision], 'events': [], 'mutation_error': None}
+    def git(root, *args):
+        assert root == tmp_path
+        if args == ('rev-parse', 'HEAD'):
+            return revision
+        assert args == ('ls-remote', '--exit-code', release.GIT_REPOSITORY, 'refs/heads/main')
+        state['events'].append('main')
+        return state['main'].pop(0) + '\trefs/heads/main'
+    def docker(*args, **kwargs):
+        if args[:4] == ('buildx', 'imagetools', 'inspect', '--raw'):
+            assert kwargs['timeout'] == 60
+            if args[4] == release.CHANNEL:
+                state['events'].append('channel-read')
+                if isinstance(state['channel_raw'], Exception):
+                    raise state['channel_raw']
+                return state['channel_raw']
+            assert args[4] == state['published']['registry_reference']
+            state['events'].append('source-read')
+            return state['source_raw']
+        assert args == ('buildx', 'imagetools', 'create', '--prefer-index=false', '--tag',
+                        release.CHANNEL, state['published']['registry_reference'])
+        assert kwargs['timeout'] == 180
+        # Uncertainty must be durable BEFORE a tag-changing subprocess starts.
+        started = json.loads((tmp_path / 'promotion.json').read_text())
+        assert started['promotion_attempted'] and started['remote_side_effects_possible']
+        assert started['automatic_deployment_may_be_triggered']
+        state['events'].append('promote')
+        if state['mutation_error']:
+            raise state['mutation_error']
+        return b''
+    monkeypatch.setattr(release, 'git', git)
+    monkeypatch.setattr(release, 'docker', docker)
+    return state
+
+
+def test_promotion_preserves_exact_manifest_and_immutable_receipts(promotion):
+    root = promotion['root']
+    before = {name: (root / name).read_bytes() for name in ['verified.json', 'published.json']}
+    result = release.promote(root, root, '123', '1')
+    assert promotion['events'] == ['source-read', 'main', 'promote', 'channel-read', 'main']
+    assert result['status'] == 'passed' and result['channel_digest_verified']
+    assert result['expected_digest'] == result['observed_digest'] == promotion['published']['registry_reference'].split('@')[1]
+    assert result['main_before'] == result['main_after'] == promotion['revision']
+    assert not result['provider_configuration_changed'] and not result['live_deployment_verified']
+    assert json.loads((root / 'promotion.json').read_text()) == result
+    assert all((root / name).read_bytes() == value for name, value in before.items())
+    with pytest.raises(ValueError, match='already recorded'):
+        release.promote(root, root, '123', '1')
+
+
+@pytest.mark.parametrize('invalid', ['verify-only', 'failed-test', 'incomplete-tests', 'wrong-run',
+                                    'receipt-drift', 'foreign-registry', 'bad-digest', 'config-drift'])
+def test_unverified_or_mismatched_release_never_starts_promotion(promotion, invalid):
+    root = promotion['root']
+    published = promotion['published']
+    checked = json.loads((root / 'verified.json').read_text())
+    if invalid == 'verify-only':
+        (root / 'published.json').unlink()
+    elif invalid in {'failed-test', 'incomplete-tests'}:
+        checked['native_checks']['runtime'] = 'failed' if invalid == 'failed-test' else 'skipped'
+        published['native_checks'] = checked['native_checks']
+        release.write_json(root / 'verified.json', checked)
+    elif invalid == 'wrong-run': published['registry_tag'] = 'git-' + promotion['revision'] + '-122-1'
+    elif invalid == 'receipt-drift': published['local_image_id'] = 'sha256:' + '0' * 64
+    elif invalid == 'foreign-registry': published['registry_reference'] = 'evil.invalid/app@sha256:' + '0' * 64
+    elif invalid == 'bad-digest': published['registry_reference'] = release.REPOSITORY + '@sha256:bad'
+    elif invalid == 'config-drift': published['image_config_digest'] = 'sha256:' + '0' * 64
+    if invalid != 'verify-only': release.write_json(root / 'published.json', published)
+    with pytest.raises((ValueError, FileNotFoundError)):
+        release.promote(root, root, '123', '1')
+    assert promotion['events'] == []
+    assert not (root / 'promotion.json').exists()
+
+
+@pytest.mark.parametrize('invalid', ['wrong-bytes', 'invalid-json', 'index', 'config-list',
+                                    'wrong-config', 'duplicate-fields', 'oversized'])
+def test_malformed_or_changed_source_manifest_blocks_before_tag_write(promotion, invalid):
+    root = promotion['root']
+    raw, manifest = promotion['source_raw'], promotion['manifest']
+    if invalid == 'wrong-bytes': raw += b'\n'
+    elif invalid == 'invalid-json': raw = b'not JSON'
+    elif invalid == 'index':
+        raw = release.canonical({'schemaVersion': 2, 'mediaType': 'application/vnd.oci.image.index.v1+json', 'manifests': []})
+    elif invalid == 'config-list': manifest['config'] = []; raw = release.canonical(manifest)
+    elif invalid == 'wrong-config': manifest['config']['digest'] = 'sha256:' + '0' * 64; raw = release.canonical(manifest)
+    elif invalid == 'duplicate-fields': raw = raw[:-1] + b',"schemaVersion":2}'
+    elif invalid == 'oversized': raw = b' ' * 1048577
+    promotion['source_raw'] = raw
+    if invalid != 'wrong-bytes':
+        promotion['published']['registry_reference'] = release.REPOSITORY + '@sha256:' + release.digest(raw)
+        release.write_json(root / 'published.json', promotion['published'])
+    with pytest.raises(ValueError):
+        release.promote(root, root, '123', '1')
+    result = json.loads((root / 'promotion.json').read_text())
+    assert result['status'] == 'blocked' and not result['promotion_attempted']
+    assert promotion['events'] == ['source-read']
+
+
+def test_stale_main_refuses_to_move_beta(promotion):
+    promotion['main'][0] = 'f' * 40
+    root = promotion['root']
+    with pytest.raises(ValueError, match='Main advanced'):
+        release.promote(root, root, '123', '1')
+    result = json.loads((root / 'promotion.json').read_text())
+    assert result['status'] == 'blocked' and not result['remote_side_effects_possible']
+    assert promotion['events'] == ['source-read', 'main']
+
+
+@pytest.mark.parametrize('failure', ['push-timeout', 'readback-timeout', 'different-manifest', 'main-race'])
+def test_promotion_failure_retains_side_effect_uncertainty_and_observed_digest(promotion, failure):
+    root = promotion['root']
+    if failure == 'push-timeout': promotion['mutation_error'] = subprocess.TimeoutExpired('docker', 180)
+    elif failure == 'readback-timeout': promotion['channel_raw'] = subprocess.TimeoutExpired('docker', 60)
+    elif failure == 'different-manifest': promotion['channel_raw'] += b'\n'
+    else: promotion['main'][1] = 'f' * 40
+    with pytest.raises((ValueError, subprocess.TimeoutExpired)):
+        release.promote(root, root, '123', '1')
+    result = json.loads((root / 'promotion.json').read_text())
+    assert result['status'] == 'needs_review' and result['promotion_attempted']
+    assert result['remote_side_effects_possible'] and result['automatic_deployment_may_be_triggered']
+    assert promotion['events'].count('promote') == 1  # No hidden retry or rollback.
+    if failure in {'push-timeout', 'readback-timeout'}:
+        assert result['observed_digest'] is None and not result['channel_digest_verified']
+    elif failure == 'different-manifest':
+        assert result['observed_digest'] == 'sha256:' + release.digest(promotion['channel_raw'])
+        assert result['observed_digest'] != result['expected_digest']
+    else:
+        assert result['channel_digest_verified'] and result['main_after'] != result['source_revision']
+    assert (root / 'published.json').exists()
+
+
+def test_main_lookup_rejects_malformed_or_ambiguous_output(promotion, monkeypatch):
+    for response in ['a' * 40, 'a' * 40 + '\trefs/heads/other',
+                     'a' * 40 + '\trefs/heads/main\n' + 'b' * 40 + '\trefs/heads/main']:
+        monkeypatch.setattr(release, 'git', lambda *args: response)
+        with pytest.raises(ValueError, match='current main revision'):
+            release.current_main(promotion['root'])
