@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
 
 from crucible import beta_access, dh_v4, registry
+import crucible.app as app_module
 from crucible.db import Challenge
 from test_beta_boundary import connect, private_app
 from test_browser_admission import selects
@@ -17,6 +18,82 @@ from test_browser_admission import selects
 def portable_registry(monkeypatch):
     monkeypatch.setattr(registry, "ADAPTERS", {(dh_v4.SCHEME_ID, dh_v4.SCHEME_VERSION): dh_v4})
     monkeypatch.setattr(registry, "CURRENT", {dh_v4.SCHEME_ID: dh_v4.SCHEME_VERSION})
+
+
+@pytest.mark.parametrize("contents,expected", [
+    (b"a" * 40, "a" * 40), (b"0123456789abcdef" * 2 + b"01234567\n", "0123456789abcdef" * 2 + "01234567"),
+    (None, None), (b"", None), (b"a" * 39, None), (b"A" * 40, None),
+    (b"g" * 40, None), (b"\xff" * 40, None), (b"a" * 40 + b"\r\n", None),
+    (b"a" * 40 + b"\n\n", None), (b"a" * 40 + b"\n" + b"x" * 100000, None),
+])
+def test_packaged_revision_marker_is_optional_and_strict(tmp_path, monkeypatch, contents, expected):
+    marker = tmp_path / "SOURCE_REVISION"
+    if contents is not None:
+        marker.write_bytes(contents)
+    monkeypatch.setattr(app_module, "SOURCE_REVISION_FILE", marker)
+    assert app_module.packaged_source_revision() == expected
+
+
+def test_packaged_revision_reads_at_most_42_bytes(monkeypatch):
+    class BoundedMarker:
+        def open(self, mode):
+            assert mode == "rb"
+            return self
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def read(self, limit):
+            assert limit == 42
+            return b"a" * limit
+    monkeypatch.setattr(app_module, "SOURCE_REVISION_FILE", BoundedMarker())
+    assert app_module.packaged_source_revision() is None
+
+
+@pytest.fixture
+def revision_app(tmp_path, monkeypatch, request):
+    marker = tmp_path / "SOURCE_REVISION"
+    contents = getattr(request, "param", b"a" * 40 + b"\n")
+    if contents is not None:
+        marker.write_bytes(contents)
+    monkeypatch.setattr(app_module, "SOURCE_REVISION_FILE", marker)
+    # Configure the marker before constructing the existing isolated DB fixture.
+    return request.getfixturevalue("private_app"), marker
+
+
+@pytest.mark.parametrize("revision_app", [None, b"invalid"], indirect=True)
+def test_health_omits_missing_or_invalid_revision(revision_app):
+    app, _ = revision_app
+    with TestClient(app) as client:
+        response = client.get("/health")
+    assert response.json() == {"status": "ok"}
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_health_revision_is_startup_snapshot_not_admission_or_readiness(revision_app, monkeypatch):
+    app, marker = revision_app
+    with TestClient(app) as client:
+        expected = {"status": "ok", "source_revision": "a" * 40}
+        response = client.get("/health")
+        assert response.status_code == 200 and response.json() == expected
+        assert response.headers["cache-control"] == "no-store"
+        marker.write_bytes(b"b" * 40 + b"\n")
+        assert client.get("/health").json() == expected
+        marker.unlink()
+        assert client.get("/health").json() == expected
+        denied = client.get("/api/schemes?projection=map")
+        assert denied.status_code == 401 and denied.headers["cache-control"] == "no-store"
+        engine = create_engine(app.state.db.engine.url, poolclass=QueuePool,
+                               pool_size=1, max_overflow=0, pool_timeout=0.01,
+                               connect_args={"check_same_thread": False})
+        monkeypatch.setattr(app.state.db, "sessions", sessionmaker(engine, expire_on_commit=False))
+        try:
+            with engine.connect():
+                busy = client.get("/health")
+                assert busy.status_code == 503
+                assert busy.json() == {"detail": "The service is busy. Please retry shortly."}
+                assert busy.headers["cache-control"] == "no-store"
+            assert client.get("/health").json() == expected
+        finally:
+            engine.dispose()
 
 
 def test_map_links_need_no_profile_catalogue_or_progress_sql(private_app, monkeypatch):

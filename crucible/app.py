@@ -30,6 +30,21 @@ from .reference_policy import METHOD as REFERENCE_METHOD
 from . import github_auth, password_recovery
 
 
+SOURCE_REVISION_FILE = ROOT / "SOURCE_REVISION"
+
+
+def packaged_source_revision():
+    """Read only the bounded, optional image marker; never infer a local revision."""
+    try:
+        with SOURCE_REVISION_FILE.open("rb") as marker:
+            value = marker.read(42).removesuffix(b"\n")
+    except OSError:
+        return None
+    if len(value) != 40 or any(byte not in b"0123456789abcdef" for byte in value):
+        return None
+    return value.decode("ascii")
+
+
 def current_round(now):
     number = int(now) // 3600
     return {"id": number, "starts_at": number * 3600, "ends_at": (number + 1) * 3600}
@@ -190,6 +205,7 @@ class RequestBoundary:
 
 
 def create_app(settings: Settings | None = None, *, clock=time.time, initialize=False):
+    source_revision = packaged_source_revision()
     registry.validate_registry()
     registry.warm_navigation_metadata()
     settings = settings or load_settings()
@@ -963,7 +979,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     def health():
         with db.transaction() as session:
             session.execute(select(User.id).limit(1))
-        return {"status": "ok"}
+        return {"status": "ok", **({"source_revision": source_revision} if source_revision else {})}
 
     @app.get("/")
     def index(request: Request):

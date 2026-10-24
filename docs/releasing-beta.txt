@@ -134,6 +134,13 @@ unique tag/digest. To roll back, select it in the existing web component rather
 than rebuilding old code; disable channel Autodeploy until the next intended
 release if necessary. Do not replace environment values during an image rollback.
 
+Readiness at /health includes source_revision when the image contains a valid
+SOURCE_REVISION marker. Compare it with the released Git SHA to verify backend-only
+rollouts whose browser files have not changed. The marker is the fixed metadata
+already checked during image verification; it is read once at startup, never
+inferred from local Git or environment variables. Local builds without it omit
+the field. The database readiness check and /health/live behavior are unchanged.
+
 An ordinary web-only release does not require rebuilding or rebinding the
 scheduled backup job. Its declaration continues to identify its own immutable
 backup/code release and unchanged runtime configuration. Preserve that image,
