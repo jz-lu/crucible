@@ -1,36 +1,364 @@
-RESEARCH NOTEBOOK DRAFT — 2026-10-16
+RESEARCH NOTEBOOK — 2026-10-18
 
 Entry: /#notebook. Native to the main Crucible header and navigation.
+New note and Agent files are visible header actions. Each owned note exposes Edit
+and Publish in the note list and full reader. Publish opens a confirmation for an
+exact saved revision. A submitted request is labelled Publish request pending;
+approved revisions are labelled Published. Reviewer queues and decisions live on
+the dedicated Review center, reached from the reviewer’s own account profile.
+Its queues are /#reviews?section=publication, section=schemes and section=research;
+review decisions are inline pages. Earlier reviewer links redirect there.
 Titles open a preview with tags and claim; Read full note opens a reading page.
-There is no generic Visualizations tab. Dedicated pages such as Schemes can
-later explain selected notes alongside built-in challenge and protocol data.
-Notes may stand alone or apply to multiple schemes.
+Notes may stand alone or apply to multiple schemes. The older experimental
+research UI remains disabled.
 
-CURRENT SCOPE
-Six illustrative toy notes; none assesses the live KEMs. New notes and revisions
-are saved only in browser localStorage (crucible-theory-prototype-v1), not in
-accounts or the server database. Clearing browser data removes local drafts.
-Draft tools provides JSON export/import and an agent starting prompt. Port 8011
-and port 8000 have independent storage; export/import transfers a draft.
-This is not a shared repository, authenticated model API or review pipeline.
+PERSISTENCE AND OWNERSHIP
+Notes belong to a signed-in account and are stored in the server database.
+Saving an edit appends an immutable revision with a server timestamp and canonical
+content SHA-256. Expected revision/hash checks reject stale changes; an exact
+idempotency-key retry returns the original saved result, even after later edits.
+Each author alone can edit their notes. Other participants can read only revisions
+published to the Crucible community, or submitted to them for review. A reviewer's
+role alone does not grant access to an author's private workspace.
+Database backups include notes, revisions, sharing grants, publication decisions,
+moderator withdrawals, imports and private-draft deletion records.
+Durability does not substitute for operator backups or redundant hosting.
 
-PROVISIONAL CONTRACT
-Title, precise claim, conditions and supporting body are required. Tags and
-an evidence description are freeform. Motivated conjectures are eligible and
-must be labelled unproved. Labels and subject tags do not establish truth or
-reviewed applicability. Revisions are append-only; imports preserve prior
-note history. Exact revisions can be linked with ?note=ID&revision=N in the
-notebook hash route. Visualization membership is not a note requirement.
+An author can delete an unsubmitted private draft from its full reader or with
+CLI notebook delete, pinning its latest revision/hash. This moves the entire
+note to Trash without erasing its history. Normal lists, search, timeline, graph
+and exports exclude it. Only its author can inspect or restore it through Show →
+Trash, CLI list/show --deleted and restore, or the corresponding scoped API.
+Restore binds a deletion ID; exact retries never reverse a later lifecycle action.
+Notes ever submitted for publication, scheme admission or as research-request
+evidence cannot be deleted, including their newer private revisions. Existing
+moderator withdrawal and proposal retraction are separate operations. Import
+archives remain available to their author; importing old content cannot restore
+a deleted note. Trash still counts toward note and revision-storage quotas.
 
-FUTURE BOUNDARIES
-Shared storage, permissions, discussion, review/assessment, agent API and
-production schema remain to be designed. Curated explanations should reference
-exact source revisions; publication and mathematical assessment are separate
-from metadata. Human and model review should use one auditable record.
+Publishing is separate from saving. The author uses Publish to make a Publish
+request for an exact latest revision. A configured reviewer
+can approve it for other participants or request changes, with a recorded reason.
+Review access covers only submitted
+revisions; it does not include earlier private history or later drafts. An approved
+revision is readable by other authenticated participants with site access, never
+anonymous readers. In private beta that also requires active beta membership.
+An author may have a published revision and a newer private draft simultaneously.
+The approved revision remains discoverable while the new draft is developed.
+
+RETIRED PRIVATE SHARING
+Notes are private drafts until an exact revision is approved for publication.
+Private sharing with named participants has been removed. Earlier grants no
+longer permit access to a note, its earlier revisions, search results or timeline.
+Historical grant and response records remain stored as inert audit history; no
+notes, revisions, accounts or publication decisions are deleted or relabelled.
+
+The private-shares API routes are retired and return 410 after authentication
+and applicable ownership/CSRF checks. They cannot create, change or restore a
+grant. The old scope=shared library filter is retired too. Old browser links return
+to the ordinary notebook rather than an empty recipient workflow. This retirement
+needs no database migration. Existing independently approved publication remains
+valid unless withdrawn through the separate moderation process.
+
+Publication approval makes that exact revision readable by the Crucible
+community. During private beta this still means admitted participants, not the internet. It does not certify a proof, security claim, correctness guarantee,
+implementation, proposal or live challenge.
+Tag names, imported assessments and author descriptions cannot grant approval.
+Decisions are pinned to the exact content hash and cannot be overwritten. A
+changes-requested decision needs a new note revision and publication request.
+
+Publication review is the safety/content moderation level: privacy, attribution,
+spam and abusive content. Honest uncertainty, conjectures and technical criticism
+can be shared without mathematical endorsement. Official inclusion in a display,
+scheme map, highlight or numerical challenge requires a separate substantive
+review scoped to that destination; see proposal-guide.txt.
+
+POST-PUBLICATION MODERATION
+A configured reviewer can withdraw an already approved exact revision using
+Withdraw community access. A recorded reason is required. The author and reviewers
+with access to that submitted revision retain the original content, publication
+decision and restricted withdrawal reason. Other readers receive a neutral 410
+withdrawal notice at its exact link. Withdrawal removes that revision from
+community search, lists and timeline counts. A newer private draft is not withdrawn with it.
+
+Frozen review packets containing a withdrawn third-party source are withheld from
+their requester and retained for configured reviewers. Their original content and
+hashes are unchanged. Authors retain their own source evidence. Copies already
+downloaded cannot be recalled, and separately authored copies require their own
+moderation action. Withdrawal does not retract a scientific proposal, deactivate
+a live challenge or change recovery points. Ratings on that withdrawn revision
+stop contributing note priority and author points. A correction is saved as a new revision and
+needs its own publication decision; the original withdrawal is not erased.
+
+POST /api/notebook/notes/{note_id}/publication-withdrawals requires the configured
+reviewer's browser session, CSRF, active site access, revision, content_sha256,
+nonblank reason and UUID idempotency_key. Retry the identical request after an
+uncertain result. Conflicting retries or a second withdrawal return 409. The
+additive 0017 migration stores moderation receipts separately from immutable
+revision and publication records. This grants no agent bearer capability.
+
+Reviewers use the existing configured reviewer IDs (initially countableclouds).
+Self-review is denied unless the existing development-only self-review flag is
+enabled. Such decisions are labelled Development self-review; their shared access
+exists only while that development flag is enabled. Disabling the flag or moving
+to production does not convert a test decision into independent approval.
+
+CONTENT CONTRACT
+Title, precise claim, conditions and supporting body are required. Tags and an
+evidence description are freeform. Motivated conjectures are eligible and must be
+labelled unproved. Authored references, artifacts and extensions are bounded inert
+JSON, never executable code. Notes render as text with local KaTeX, not HTML.
+Exact revisions have URLs using ?note=UUID&revision=N. The durable UUID, revision
+and canonical content hash identify the exact source of a scheme proposal.
+No research note automatically changes a protocol, scoring policy or live scheme.
+
+The optional human-written tag is an explicit, self-reported authorship claim on
+that exact revision. The editor provides an unchecked-by-default Human-written
+control, synchronized with the ordinary tags field; the badge is also filterable.
+It is not verified authorship, a review decision or a permission. Existing notes
+are never tagged automatically. An agent writing or rewriting a revision must not
+assert human-written or carry the claim onto its generated revision; immutable
+historical revisions remain unchanged.
+
+LEGACY DRAFTS AND AGENT FILES
+The former browser-local notebook used localStorage key
+crucible-theory-prototype-v1. Browser data is never silently uploaded or deleted.
+The explicit import action previews the selected material; untouched illustrative
+seed notes are not automatically added to an account. An edited illustrative note
+retains its whole historical revision sequence so its provenance is not erased.
+
+The crucible-theory-local-v1 JSON file format remains supported. Import is atomic:
+every existing revision must remain exact, and changes append new revisions.
+Legacy IDs are mapped to durable server UUIDs within the importing account.
+One account cannot revise another account's server note by importing its ID.
+Imported dates and extra historical labels are kept as author-supplied provenance,
+separate from the trusted server import timestamp and publication decisions.
+The original workspace, including legacy views and metadata, is saved privately
+as an import artifact. Its exact JSON remains available through the import ID.
+Legacy view bindings are remapped to durable IDs in a new workspace export; their
+simulated assessment labels have no review authority. Export includes the owner's
+notes only, never other participants' notes or their private revisions.
+
+The CLI is the primary agent interface; browser file exchange also remains
+available. Explicit opt-in notebook:read, notebook:write and notebook:publish
+scopes cover owned private reads, writes/imports and exact publication requests.
+Run login --notebook --no-browser for a one-time human connection approval, then
+notebook list/show/export/import/create/revise/request-publication. Existing
+credentials keep their original scopes. Bearer requests never borrow browser
+cookie authority and cannot review, moderate or read others' private notes.
+Human notebook mutations still require same-origin session/CSRF authorization.
+Both paths use the same validators, quotas, immutable history and request pins.
+
+INITIAL CAPACITY
+At most 200 notes per account and 100 revisions per note. The complete exportable
+account workspace, including revision history and retained legacy metadata, must
+fit in 2 MiB. A larger save/import fails before commit and preserves prior data;
+the unsaved draft remains available in the editor. This deliberately bounded
+first version keeps every successful workspace export re-importable. Expanding
+capacity and segmented archives is future work, not an unbounded read endpoint.
+Original private import artifacts have a separate 20 MiB/1,000-import account
+limit. An exact idempotent retry adds no artifact and consumes no extra capacity.
+Reimporting with a new identifier can consume archive capacity even if its note
+history is unchanged. No capacity limit silently deletes old research.
 
 IMPLEMENTATION
-web/notebook/{seed,store,notebook}.js and notebook.css form a scoped module.
-Main app mounts it on demand. Backend exposes only those four allowlisted
-assets. Existing security headers, accounts, database and challenge flows are
-unchanged. Notes render as text with local KaTeX, not executable HTML.
-The older experimental research UI remains disabled.
+crucible/notebook.py owns the durable contract; migration0011 adds four tables
+without changing existing accounts, sessions, proposals or numerical results.
+Read/write handlers enforce ownership and site access. The explicit beta route
+policy classifies notebook APIs as member-only. Lists select latest visible
+revision summaries in SQL instead of loading every historical note body. The
+default order is newest first by the latest revision visible to that reader,
+with a deterministic ID tie-break. Hidden later drafts never affect ordering.
+The same chronological order applies across account notes and curated notes;
+pagination uses an opaque cursor instead of exposing an ID-only ordering.
+The notebook timeline uses the same library visibility: owned drafts and readable
+published revisions. Historical private-sharing grants confer no visibility.
+web/notebook/{store,notebook}.js and notebook.css remain the scoped interface;
+store.js also validates interoperable legacy files. No uploaded content executes.
+
+SCHEME PROPOSALS ARE NOTES
+Start a proposal from /#notebook?compose=proposal. A note uses the same title,
+claim, conditions, body, tags and evidence description as other research notes.
+Attach a bounded crucible-kem-spec-v1 document in extensions.kem_specification.
+The editor checks the document format and fills empty narrative fields, leaving
+existing prose intact. Save creates a private note; it requests no review.
+
+Submit for scheme review explicitly freezes the saved note revision and canonical
+specification. POST /api/notebook/notes/{note_id}/proposal-submissions takes the
+revision, content_sha256 and UUID idempotency_key. Retrying returns the same
+submission. The endpoint is browser-only and requires account/CSRF/site access.
+An edited note is not submitted for scheme review until its author submits that
+revision. Saving an edit does not publish that new revision.
+Submitting again appends to the same proposal, retaining earlier reviews.
+
+Migration 0012 adds trusted proposal_note_links. A submitted proposal revision is
+bound to one exact note revision, not an editable URL or an authored metadata tag.
+Configured reviewers can read those exact submitted revisions; unsubmitted private
+revisions remain author-only. Publication remains a separate action. Scheme
+approval neither publishes a note nor activates a live challenge or awards points.
+The existing correctness, stage-design, implementation and independent-review
+requirements remain in force. Development self-review remains explicitly test-only.
+
+Existing proposal API/CLI submit and revise commands create linked private notes
+from the submitted specification in the same database transaction. Agent write
+permission is limited to that proposal operation; it does not open general notebook
+access. Generated prose restates the supplied specification, not verified claims.
+API revisions regenerate the readable prose and preserve the previous note in
+history. If the author has an unsubmitted notebook edit, API revision fails with
+409 instead of overwriting it. Finish that draft through the notebook first.
+API/CLI receipts include the exact source note link alongside the review link.
+
+Notebook exports retain the attached specification and all note revisions. Import
+preserves it as inert content; it cannot recreate trusted review links, statuses,
+or authority. Existing notebook capacity and export-size guards apply atomically
+to both proposal and note writes. No historical proposal is silently converted by
+the migration. Explicit conversions preserve its original specification, IDs and
+reviews and record the actual conversion time.
+
+Research requests and scoped assessments are implemented as described below.
+Future work: discussion threads, live map projection from admission decisions,
+scoped general notebook agent access and larger segmented archives.
+
+Agent support ratings (implemented)
+
+Migration 0019 adds one revision-pinned rating per account/note. The separate
+/api/agent/notes list/detail and /api/agent/notes/{note_id}/rating routes require
+notes:read and notes:rate respectively and expose only independently moderated
+published revisions and curated notes. No human notebook rating controls, totals
+or vote-based ordering are added. Agent connections retain existing scopes until
+explicitly reconnected. See web/map/NOTE-FORMAT.txt for the complete contract.
+Upvote/double-upvote choices contribute provisional +1/+2 reading priority and
+author contribution points, under crucible-note-support-v1/crucible-points-v10.
+Updates replace existing votes. Compare-and-set versions prevent stale/concurrent
+agents and lost-response retries from stacking votes. Self-votes are rejected;
+curated notes have no credited account author. Withdrawal and voter suspension
+exclude affected votes. Source content/history and review authority are unchanged.
+
+CITATION PRACTICE FOR RESEARCH NOTES AND AGENTS
+
+Every note reader displays a Citations section, including an explicit empty state.
+Do not rewrite immutable historical revisions to add a heading or citations.
+The notebook editor lets authors add sources and explain what each supports.
+A genuine original observation may have no sources; explain that in the note.
+Missing citations are not proof of originality. Never add filler references.
+
+Allocate a separate, deliberate citation-checking pass before returning a note:
+read the original source, verify its version and relevant result, and identify the
+section, theorem, page or code location. State what it actually supports and what
+it does not. Prefer primary sources; distinguish the author's claims from your
+own deductions and unproved conjectures. Record inaccessible or unchecked sources
+honestly. A mathematical ingredient does not establish an entire KEM, its novelty,
+or its security. A citation to another note does not certify that note's claims.
+
+Notebook references retain the flexible global format. Recommended entry:
+  {"title":"Source title", "url":"https://example.org/paper#section",
+   "scope":"The exact claim supported, section/page, and relevant limitation."}
+
+Use Cite this note to obtain the exact link or an agent-ready reference object:
+  {"title":"Note title · revision 2",
+   "url":"/#notebook?note=NOTE_ID&revision=2&sha256=CONTENT_HASH",
+   "scope":"Which claim and section of this revision is being used."}
+
+Use an actual saved note ID, revision and 64-character SHA-256; never guess them.
+Curated research IDs use the curated: prefix returned by the notebook. The reader
+checks a cited hash before displaying that revision. It never substitutes the
+latest revision. Links preserve access checks; they cannot publish a private note.
+Do not include another author's private title, excerpt or other details in shared
+work without permission. No automatic source fetch or linked code execution occurs.
+Links are local to this Crucible instance; do not silently reinterpret them as
+references to an unrelated server. Old imported local IDs need their explicit
+server mapping before they can be cited by these durable links.
+
+DIRECT NOTE RELATIONSHIPS
+A reference may include relation: cites (the default), builds_on, supports,
+challenges, reproduces or responds_to. Explain the precise connection in scope.
+These are the citing author's descriptions; a supports or reproduces link is not
+an independent review, a vote, a publication decision or scheme admission.
+
+In the note reader, Explore connections shows outgoing references and incoming
+backlinks. Write a related note starts a new private note with the selected source
+revision already cited; supply the explanation and choose the relationship.
+Each node is an exact note revision and hash, not a note's mutable latest version.
+For example, proposal r2 -> critique r1 -> proposal r1 preserves the dependency
+DAG even though the discussion returns to the original proposal. Older links
+never silently move to a corrected revision.
+
+The graph resolves only matching revision/hash pins that the reader can access.
+Private and withdrawn neighbors do not produce titles, placeholder nodes or
+counts for unauthorized readers. Submitted review roots can be opened by their
+reviewers, but graph discovery does not grant access to other private drafts.
+Relationship labels and explanations are inert text. Unpinned, malformed, external
+or unresolved citations remain in the authored record and do not invent nodes.
+Same-origin links entered in the editor are saved as /#notebook?...; absolute URLs
+already in historical content are not silently assigned to this installation.
+Imports can resolve local IDs through the owner's explicit import mapping; the
+derived index changes, never the original reference bytes or revision hash.
+Links remain local to an installation; moving a workspace to another installation
+requires checking its imported ID mapping before relying on the references.
+
+GET /api/notebook/graph requires a browser account and note_id, revision and
+content_sha256. direction is incoming or outgoing; limit is 1-50 (default 25).
+Continue using next_after as after. Each page includes the exact root and links
+with source, target, relation and scope. Pages are views of currently readable
+connections, not a complete public graph or an assessment of research quality.
+
+A scheme specification still follows its own schema: references contains title
+and url, while supporting scope belongs in the relevant mathematical argument.
+Do not add unsupported fields to a specification. The surrounding notebook note
+can use the richer title/url/scope format. Citation completeness and soundness are
+review judgments, not established by passing JSON validation or counting sources.
+
+LITERATURE AND RESEARCH REQUESTS — 2026-10-17
+
+The bundled literature collection now includes 11 research leads and analyses
+alongside the existing 15 notes. They credit outside researchers; compilation
+is not invention or certification. Theoretical PKE, key agreement and useful
+negative results belong in the notebook without becoming Scheme map entries.
+The dropdown summary is the human-facing browsing layer. The technical body stays
+free-form for agents and expert reviewers: LaTeX, prose, code, calculations and
+other useful representations are welcome without a prescribed outline or new
+schema. It need not be simplified for a general audience. Browser rendering does
+not limit the source preserved in the note or export. Citation and review guidance
+still applies, independently of presentation.
+The Literature tag indicates outside research, not review quality; curated notes
+without that tag no longer receive a generic Research badge.
+
+Continue this research offers a full agent task download. Request source check
+asks an optional citation question; Propose a change requests a concrete update.
+Research requests remains available from a note and through its existing route;
+configured reviewers use Review center for pending proposed changes and source
+checks. Publish is the separate author action for participant visibility. Standalone technical_review is
+retired: historical packets/assessments stay readable, but no new requests or
+assessments are accepted and they are excluded from pending review queues.
+
+crucible/research_reviews.py and migration 0013 add bounded private requests and
+immutable assessments. POST /api/notebook/research-requests accepts purpose,
+title, question, exact source references and an idempotency UUID. Sources are
+validated and copied by the server from readable immutable revisions. The
+requester can explicitly send their own private revision to reviewers; this
+does not authorize access to their other revisions. Independently shared notes
+can be cited by other members. Development-only publication approvals do not qualify
+as someone else's shared source. Curated notes use curated:SOURCE_ID.
+
+GET the collection for owned requests; review=true requires a configured
+reviewer and returns pending requests. Both lists paginate. GET /{request_id}
+returns the frozen packet to its author or a reviewer. POST /{request_id}/
+assessments binds an assessment to packet_sha256. Source checking, mathematical
+checking and reproduction are separate, each with not_checked/checked/gaps.
+findings must state exact scope and supporting citations; limitations is required.
+Only one assessment is accepted per request; new evidence requires a follow-up.
+Self-review covers both the requester and any source author, requires development
+configuration and never becomes an independent approval after that flag is removed.
+
+No request or assessment mutates note visibility, registry, scheme catalogue,
+scoring membership or points. A recommendation supports a deliberate integration
+decision. Source and note tags cannot fabricate it. Reviewer identity and time
+are recorded. Request bodies and assessments are private to requester/reviewers.
+All routes use beta membership, browser authentication and CSRF. Existing bearer
+tokens cannot inherit these rights. Packets contain at most 8 sources / 256 KiB;
+each account has 200 requests. No resource limit silently deletes prior work.
+
+The first release deliberately retains the static literature source identity
+rather than impersonating paper authors with server accounts. Hash-bound packets
+bridge those records into real review. General agent notebook API access and
+permission-aware server projections remain explicit subsequent work.

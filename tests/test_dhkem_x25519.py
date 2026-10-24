@@ -1,6 +1,7 @@
 """RFC 9180 fixture conformance and boundary checks, no custom small curves."""
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -83,7 +84,13 @@ def test_target_is_never_replaced_or_retried_after_disagreement(monkeypatch):
     assert calls == [1]
 
 
-def test_dependency_version_or_binary_substitution_is_rejected(monkeypatch):
-    monkeypatch.setattr(kem, "CRYPTOGRAPHY_NATIVE_SHA256", "0" * 64)
-    with pytest.raises(RuntimeError, match="artifact"):
+@pytest.mark.parametrize("tampering", ["version", "native"])
+def test_dependency_version_or_binary_substitution_is_rejected(monkeypatch, tmp_path, tampering):
+    distribution = kem.metadata.distribution("cryptography")
+    substituted = tmp_path / "unreviewed-native.so"
+    substituted.write_bytes(b"unreviewed binary; must never be imported")
+    candidate = SimpleNamespace(version="0.0.0" if tampering == "version" else distribution.version,
+        locate_file=lambda name: substituted if name.endswith("_rust.abi3.so") else distribution.locate_file(name))
+    monkeypatch.setattr(kem.metadata, "distribution", lambda name: candidate)
+    with pytest.raises(RuntimeError, match="pinned|artifact"):
         kem.generate(kem.PROFILE_ID)

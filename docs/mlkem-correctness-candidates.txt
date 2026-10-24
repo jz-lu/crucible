@@ -1,0 +1,182 @@
+ML-KEM candidate ladder: correctness evidence and its limits
+==========================================================
+
+Status: a design and calculation artifact, not automatic profile admission.
+No existing scheme version or challenge is changed by these files.
+
+The intended challenge endpoint is the published ML-KEM-512 parameter set.
+No separate768 deployment reference is selected. The512 standard endpoint has
+its published category-1 assessment; lower-degree research configurations inherit
+neither that category nor a full KEM reduction or implementation certificate.
+
+Proposed simplest path
+---------------------
+Keep q=3329, module rank k=2, eta1=3, eta2=2, du=10 and dv=4 fixed. Change only
+the power-of-two polynomial degree n through 8,16,32,64,128,256. Use every native
+n-bit message, rather than restricting the message space of a larger ring.
+The n=256 endpoint must conform byte-for-byte to the published ML-KEM-512
+algorithms. All lower degrees are explicitly nonstandard research variants.
+Six genuinely different degrees are more defensible than invented intermediate
+degrees or several redundant parameter combinations merely to inflate tier count.
+The sampling/NTT adaptation and its structural-security consequences require
+separate review; this document addresses honest agreement only.
+
+The wider candidate JSON also covers rank1 configurations and the alternative
+ML-KEM-768 family (eta1=2, rank1..3), so rejected designs and their evidence remain
+inspectable. Inclusion in that JSON does not recommend or activate a configuration.
+
+Two distinct evidentiary statements
+---------------------------------
+1. Conservative-compression: an analytical upper bound on a single honest
+   encryption/decryption experiment in the ideal independent sampling model.
+   Ciphertext rounding is the actual deterministic rounding operation; its
+   errors need not be independent, uniform, or independent of encryption noise.
+   Small parameters also admit a deterministic support bound, requiring no
+   probabilistic assumption about the supported noise draws.
+
+2. Independent-uniform-u-compression: an exact analytical upper bound for a
+   modified noise experiment. Each coefficient of the u-rounding error is drawn
+   independently as Decompress(Compress(U))-U with U uniform modulo3329, and is
+   independent of every noise coefficient. This is an additional modeling
+   approximation. The bridge from this modified experiment to the actual KEM
+   has NOT been established here, and exact rational arithmetic does not prove
+   that bridge. The v-rounding error is bounded adversarially in this analysis;
+   it is not replaced by an independent random variable.
+
+Both probabilistic statements concern one honestly generated key and honest
+encapsulation, averaged over their randomness. They are not a worst-key bound,
+an adversarially selected-coin guarantee, an IND-CCA bound, or a statement about
+many adaptive attempts. Finite seeded SHAKE/hash expansion is not literally
+independent infinite randomness. Its idealized interpretation and any failure
+of implementation fidelity remain explicit premises, as with other research
+family analyses on Crucible. Operational generation aborts are separate.
+
+The distinction is relevant even for the published scheme. Barbosa et al.,
+"Formally Verified Correctness Bounds for Lattice-Based Cryptography", CCS2025,
+verify computations for the heuristic ML-KEM noise experiment. Their Section1
+and footnote4 distinguish that result from proving that the same numerical
+bound applies to ML-KEM itself; they provide a looser bound under MLWE instead.
+This is evidence about the scope of the standard-style numerical analysis,
+not evidence of an exploitable failure in ML-KEM.
+https://www.cryptojedi.org/papers/frodoec-20250831.pdf
+
+The September2026 preprint by Duriez and Tommasini, "Dependency-Aware ROM/CBD
+Correctness Bounds for ML-KEM-768 at the Heuristic Failure Scale", reports a
+dependency-preserving2^-164.81 bound for honest fixed-message/random-message
+ML-KEM-768 in an explicit ideal randomness model. It does not claim adaptive
+correctness or a fixed-SHAKE equivalence. We have read its scope and statement,
+but have not independently validated its proof or rerun its artifacts. It is
+a relevant direction for improving this analysis, not a certificate for our
+ML-KEM-512 endpoint or any reduced degree. Consequently the2025 paper's open
+problem discussion should not be presented as a blanket claim about the state
+of research today.
+https://arxiv.org/abs/2609.09983
+
+FIPS203 Table1 supplies the published estimate approximately2^-138.8 for
+ML-KEM-512. It is attributed to that parameter set only, never copied onto a
+smaller-degree construction. Our independent conservative computation below
+is intentionally looser even in its modified noise model.
+https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf
+
+Algebraic argument
+------------------
+Work in R=Z_q[x]/(x^n+1), with independently sampled CBD_eta coefficients in
+the ideal experiment. Let eta=eta1 and let CBD2 be used for e1 and e2.
+With t=A*s+e, u=A^T*r+e1, v=t^T*r+e2+Encode(m), define centered compression
+errors delta_u=Decompress(Compress(u))-u and delta_v analogously. The decoded
+value before its one-bit rounding is Encode(m)+E, where
+
+  E = e^T*r - s^T*(e1+delta_u) + e2 + delta_v  (mod q).
+
+The script enumerates all3329 coefficients under the integer FIPS rounding
+rules and verifies |delta_u|<=2 and |delta_v|<=104. For either encoded message
+bit, a one-bit decoding error requires |E|>=832 for the corresponding integer
+lift. (The exact positive and negative endpoints differ by one because q is
+odd; taking832 is conservative.) Consequently a failure requires
+
+  |W| >= 728,  W=e^T*r-s^T*(e1+delta_u)+e2.
+
+A deterministic sufficient condition is
+
+  nk * [eta^2 + eta*(eta2+2)] + eta2 +104 <832.
+
+This proves zero disagreement for n8 and16 when k2,eta3. It is an incidental
+property of these small dimensions, not a policy requiring zero failure.
+
+Conservative-compression derivation
+----------------------------------
+Fix a coefficient of W and condition on A,r,e1. Then delta_u is fixed and is
+independent of the remaining independently sampled s,e,e2. Each negacyclic
+coefficient pairs each relevant e or s coefficient exactly once. For x>1,
+write M_X(x)=E[x^X]. Symmetry of a CBD variable S implies M_S(x^a) increases
+with |a|. Thus
+
+  M_S(x^(e1_j+delta_u_j)) <= M_S(x^(|e1_j|+2)).
+
+Integrating over the independent r and e1 coefficients gives
+
+  E[x^W] <= ( M_(ER)(x) * M_(S*(|E1|+2))(x) )^(nk) * M_E2(x),
+
+where E,R,S are independent CBD_eta and E1,E2 are independent CBD2.
+This argument does not require delta_u to have any particular distribution.
+All the dominating product distributions are symmetric, so the same expression
+bounds the negative tail. A union bound over n message coefficients yields
+
+  delta <= 2*n*x^-728 * (M_(ER)(x)*M_(S*(|E1|+2))(x))^(nk)*M_E2(x).
+
+There is no assumption of independence between the n decoded coefficients.
+
+Independent-uniform-u-compression derivation
+------------------------------------------
+Let D be the centered rounding error of one independent uniform coefficient.
+Its exact integer counts over3329 inputs are
+
+  D=-2:128, D=-1:1024, D=0:1024, D=1:1024, D=2:129.
+
+Replace M_(S*(|E1|+2)) above by M_(S*(E1+D)). This product is symmetric because
+S is symmetric, despite the one-count asymmetry in D. All products for a fixed
+decoded coefficient are independent under the stated modified experiment, so
+the Chernoff/union expression bounds that experiment. It does not, by itself,
+bound the real u-rounding correlations.
+
+Certificate mechanics and results
+--------------------------------
+All CBD masses are exact rational binomial coefficients; compression counts
+are exhaustively enumerated. A floating-point search proposes only the witness
+x>1, which is rounded to an explicit rational. The final probability expression
+uses Python Fraction arithmetic, and the comparison to2^-128 uses integer
+cross multiplication. A witness need not be optimal for its bound to be valid.
+The displayed exponent is rounded DOWN using exact integer comparisons, giving
+a conservative dyadic upper bound. The full rational's SHA256 is recorded so
+it can be reproduced without storing thousands of decimal digits.
+
+For k2,eta1=3,eta2=2,q3329,du10,dv4:
+
+  n     conservative-compression      independent-uniform-u-compression
+  8     0                            0
+  16    0                            0
+  32    <=2^-367                     <=2^-565
+  64    <=2^-193                     <=2^-383
+  128   <=2^-95                      <=2^-236
+  256   <=2^-43                      <=2^-128
+
+The model's endpoint Chernoff exponent is approximately128.041429812; the exact
+rational comparison passes2^-128. This is NOT the published2^-138.8 estimate:
+using a worst-case v error and Chernoff rather than the exact convolved tail
+deliberately sacrifices tightness. A weak conservative bound, such as2^-43,
+does not say the actual failure probability is near2^-43. It says this proof
+technique does not establish the requested target at that configuration.
+
+Reproduce and independently verify:
+  python scripts/mlkem_correctness_certificate.py --output docs/mlkem-correctness-candidates.json
+  python scripts/mlkem_correctness_certificate.py --verify docs/mlkem-correctness-candidates.json
+
+Pending admission decision
+--------------------------
+If the common target requires a bound without the independent-compression
+model, only n8,16,32,64 of this fixed-rank candidate path are certified here.
+The two higher degrees need a better argument or an explicit exception for
+standard-style modeled evidence. If modeled evidence is accepted, every
+candidate on this six-degree path meets the target WITHIN THE STATED MODEL.
+This evidentiary distinction must survive manifests, review records and UI
+copy; an integer comparison in a script cannot decide that review policy.

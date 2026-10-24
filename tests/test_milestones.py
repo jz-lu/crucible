@@ -25,18 +25,18 @@ def pairs(rows):
 def test_exact_hqc_profiles_keep_independent_places_and_lower_tier_highlights(current_system):
     app, _, _ = current_system
     alice, bob = (add_user(app, name) for name in ("alice", "bob"))
-    high = registered_receipt(app, alice, registry.code_hqc_v2, 27, 0)
-    low = registered_receipt(app, bob, registry.code_hqc_v2, 1, 1)
-    alice_low = registered_receipt(app, alice, registry.code_hqc_v2, 1, 2)
-    bob_high = registered_receipt(app, bob, registry.code_hqc_v2, 27, 3)
-    registered_receipt(app, alice, registry.code_hqc_v2, 1, 4)
-    registered_receipt(app, bob, registry.code_hqc_v2, 27, 5)
+    high = registered_receipt(app, alice, registry.code_hqc_v3, 66, 0)
+    low = registered_receipt(app, bob, registry.code_hqc_v3, 1, 1)
+    alice_low = registered_receipt(app, alice, registry.code_hqc_v3, 1, 2)
+    bob_high = registered_receipt(app, bob, registry.code_hqc_v3, 66, 3)
+    registered_receipt(app, alice, registry.code_hqc_v3, 1, 4)
+    registered_receipt(app, bob, registry.code_hqc_v3, 66, 5)
     board = TestClient(app).get("/api/leaderboard", params={"scheme_id": "hqc",
-        "profile_id": "hqc-growth-research-v2-tier-1"}).json()["entries"]
+        "profile_id": "hqc-modeled-research-v3-tier-1"}).json()["entries"]
     assert [(row["handle"], row["rank"]) for row in board] == [("bob", 1), ("alice", 2)]
     for name, expected, identifiers in (
-        ("alice", [(1, 2), (27, 1)], {high["submission_id"], alice_low["submission_id"]}),
-        ("bob", [(27, 2), (1, 1)], {low["submission_id"], bob_high["submission_id"]}),
+        ("alice", [(1, 2), (66, 1)], {high["submission_id"], alice_low["submission_id"]}),
+        ("bob", [(66, 2), (1, 1)], {low["submission_id"], bob_high["submission_id"]}),
     ):
         data = person(app, name)
         milestones = data["first_ten"]
@@ -44,7 +44,7 @@ def test_exact_hqc_profiles_keep_independent_places_and_lower_tier_highlights(cu
         assert set(pairs(milestones["highlights"])) == set(expected)
         assert {row["submission_id"] for row in milestones["history"]} == identifiers
         assert history(app, name)["milestones"] == milestones["history"]
-        assert data["points"] == (1350 if name == "alice" else 310)
+        assert data["points"] == (2500 if name == "alice" else 528)
         winner = high["submission_id"] if name == "alice" else low["submission_id"]
         for row in milestones["history"]:
             assert row["profile_kind"] == "research-tier"
@@ -62,7 +62,7 @@ def test_direct_or_incremental_progress_has_one_highlight_and_no_repeat_badges(c
     receipt(app, alice, 1, 22)
     data = person(app, "alice")
     assert data["points"] == 1000
-    assert data["score_breakdown"] == {"progress": 200, "early_recovery": 800, "scheme_contributions": 0}
+    assert data["score_breakdown"] == {"progress": 200, "early_recovery": 800, "scheme_contributions": 0, "note_contributions": 0}
     assert pairs(data["first_ten"]["highlights"]) == [(20, 1)]
     assert len(data["first_ten"]["history"]) == len(achieved)
     assert data["first_ten"]["history"][0]["submission_id"] == achieved[-1]["submission_id"]

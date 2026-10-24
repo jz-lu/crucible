@@ -1,0 +1,140 @@
+PRIVATE BETA PROVIDER HANDOFF — hosted synthetic preview, 23 October 2026
+
+The App Platform preview is responding at
+https://crucible-beta-z7znj.ondigitalocean.app using the synthetic database.
+Verified HTTPS health/database checks and four anonymous private-route checks
+passed after the user added the app as a database Trusted Source and redeployed.
+The user now reports the Degraded label is gone. This is a working preview, not
+a participant-beta launch or complete access/recovery validation. Continue one
+provider step at a time. Domain crucible.fail remains registered at Porkbun;
+custom website-domain setup is pending. Existing local participant data is intact.
+
+0. Native AMD64 checkpoint completed; runner retained pending next step
+   The temporary crucible-native-check Droplet exists: 68.183.18.255,
+   Ubuntu 24.04.5 x64, 4 GB / 2 vCPU, Docker 29.9.2. SSH uses keys; no website ports
+   or participant data were needed. Do not create another native-check host.
+   The exact app image's eight synthetic worker boundaries now pass. Earlier
+   failures involved image-ID assumptions and a noexec test mount; the old QEMU
+   results cannot be attributed solely to emulation. The archived McEliece 8192128
+   case still reaches its unchanged resource bound and is not newly issuable
+   through the current-release API. The backup image builds offline and passes
+   nonroot/tool/missing-configuration checks. See runtime-candidate-checkpoint.txt.
+   Native results do not establish App Platform gVisor/ingress behavior, a full
+   backend-suite pass, throughput or actual provider backup/restore.
+   No test containers remain running. Evidence/images are retained locally and
+   both images are now in the private registry. The runner remains retained
+   pending the next step; delete it when no longer needed. Powering it off does
+   not end its ongoing charge. It is temporary compute, not a second hosted
+   website; the beta target remains App Platform.
+
+1. Private image storage completed
+   Private registry crucible-beta is in SFO2. The app and backup repositories
+   now contain the exact reviewed images, uploaded and verified at
+   2026-10-22T22:20:12Z. Manifest/configuration identities and ordered layers are
+   unchanged; runtime-candidate-checkpoint.txt records the full digest references,
+   shared release tag and receipt. Select those exact digests for deployment.
+   Keep automatic deployment disabled and retain a prior release for rollback.
+   The one-hour upload credential's temporary remote configuration was removed;
+   revoke the operator PAT separately in DigitalOcean. This upload did not create
+   an application, database or public website.
+
+2. Managed database and test configuration
+   The existing PostgreSQL17 cluster passed a metadata-only verify-full TLS
+   probe. Do not create another cluster. Explicit bootstrap created only
+   crucible_beta_20261023_synthetic with separate migration/runtime/backup logins,
+   restricted PUBLIC privileges and migration-owned future-object grants.
+   The frozen 23 migrations reached head0023, actual runtime/backup role checks
+   passed and scratch objects were removed. A synthetic beta_check reviewer is
+   seeded with protected test credentials; no real participant data was imported.
+   All 32 exact original Mac anchors are now initialized after a read-only plan
+   confirmed 1,466 profiles, no existing pins and no historical challenges.
+   The 19 exact additive Linux builds are now registered in the synthetic DB;
+   all original anchors and timestamps remain unchanged. See the plan/apply
+   receipts and final packet digest in runtime-candidate-checkpoint.txt.
+   The exact app image passed one first-profile generation cycle for each of the
+   19 changed releases and seven additional Python operation cycles. The earlier
+   harness-only failure is retained. This does not prove all-profile correctness,
+   security or capacity. Hosted startup and database health now pass; production
+   admission, selected issuance and authenticated workload checks remain separate.
+   Do not rerun bootstrap/migration/seed or replace original anchors
+   as a startup workaround.
+   The user reports database region SFO2 and US$15.15/month. Exact plan and the
+   complete trusted-source rules have not been independently inventoried. The
+   specific app was added as a Trusted Source; preserve intended operator/service
+   access and verified TLS rather than broadening the firewall.
+   First use synthetic records for runtime validation. Migrate the real dataset
+   only after the app, privacy and recovery flows work. Local development retains
+   a separate database. There is no second permanently hosted test website.
+   Schema migration, original-baseline initialization and exact Linux build
+   admission are explicit maintenance operations, never automatic startup fixes.
+
+3. Existing App Platform service — validate next
+   Do not create a second service. The prepared configuration uses production/beta,
+   provider-expanded ${APP_URL}, port8080, root route / and the image ENTRYPOINT.
+   GitHub is initially disabled; DH/RSA issuance and generation/auth concurrency 1
+   are the initial host-validation settings. Actual provider variable scopes,
+   encrypted flags, deployment ID and resource size still need inspection.
+   Recommended plan: one apps-d-1vcpu-4gb instance, US$49/month, autoscaling off;
+   this is not an independently verified running size. With the user-reported DB,
+   the app/DB base would be US$64.15/month, before registry, backups/jobs, temporary
+   runner, taxes and other usage. Keep the approximately US$100/month budget.
+   /health/live and /health returned 200/status:ok; /api/session denied anonymous
+   beta access and four protected routes returned 401/authentication_required.
+   Next verify approved/nonmember/revoked accounts, scoped agents, ingress header
+   replacement/spoof handling, actual workload limits and persistence on redeploy.
+   Do not relax access, host, image or database guards to make tests pass.
+
+4. Domain and identity
+   Add crucible.fail to the service and use exactly the DNS records DigitalOcean
+   supplies in Porkbun. Do not guess an IP or move nameservers unnecessarily.
+   Configure the existing GitHub OAuth app with callback
+   https://crucible.fail/api/auth/github/callback, then verify login/account linking.
+   GitHub identity does not grant membership. Check HTTPS, external header handling
+   and provider-default hostname behavior before participant access.
+   Resend's crucible.fail sending domain is user-confirmed Verified, and its four
+   DNS records were observed. A protected domain-restricted sending key is saved.
+   Laptop SMTP to smtp.resend.com:2587 passed verified STARTTLS and AUTH; no mail
+   was sent. Test hosted egress and actual invitation/password-reset delivery
+   before claiming either works. Do not recreate the verified domain or key.
+
+5. Backups, cutover and beta access
+   Prepare private Spaces and an encrypted Restic repository. The separate backup
+   job needs restricted credentials, exact deployed configuration/secret and the
+   same release identity as the app. Start an hourly schedule only after a manual
+   synthetic backup/restore proves the actual tool/storage path. Verify managed
+   database recovery too. Restore into a separate temporary database and compare
+   records, revisions and the original verifier secret as a set.
+   At cutover, pause local writes, take a consistent snapshot, transfer to the
+   empty final beta database, verify typed table digests, then enroll only the
+   intended participants. Preserve account/note/submission/revision IDs. Never
+   replace hosted data with a developer snapshot on future code deployments.
+   Confirm anonymous visitors/nonmembers/revoked users cannot read protected data,
+   and approved browser/agent users can use the intended workflows. Only then
+   invite the initial cohort. Production self-review remains disabled.
+
+Documentation checked 22 October 2026:
+https://docs.digitalocean.com/products/app-platform/how-to/deploy-from-container-images/
+https://docs.digitalocean.com/products/container-registry/details/pricing/
+https://docs.digitalocean.com/products/app-platform/how-to/manage-jobs/
+See repository docs/app-platform-readiness.txt, docs/beta-transfer.txt and
+ deploy/app-platform-backup.md for existing implementation and validation limits.
+
+Native-runner references checked 22 October 2026:
+https://www.digitalocean.com/pricing/droplets
+https://docs.digitalocean.com/products/droplets/how-to/create/
+
+Follow-up checkpoint, 23 October 2026
+
+The actual hosted synthetic beta_check browser login/logout check passed at
+00:32:44 UTC: same-origin CSRF login, session/CSRF rotation, active synthetic
+identity, authorized schemes, logout and denied access after logout. No real
+account/research/invitation was used; only synthetic session/rate state changed.
+Receipt: work/beta-managed-database-20261022/hosted-login-5a42de4ed1b244ab8442a37333192fb3.json.
+Nonmember/revoked users, scoped agents, actual browser/OAuth, workload and
+recovery checks remain pending; this is not participant-beta readiness.
+
+The user has now added the website DNS records at Porkbun. Public resolver
+1.1.1.1 returns exactly162.159.140.98 and172.66.0.96 for crucible.fail, noAAAA,
+and all four Resend records remain intact. Completing Add domain in DigitalOcean,
+custom-domain HTTPS and canonical-origin validation remain pending. No DNS
+mutation was performed by the assistant.

@@ -73,6 +73,9 @@ def profile_presentation(manifest):
 def beta_metadata(scheme_id, manifest=None):
     if scheme_id not in SCHEMES:
         return {"selection_kind": "tier", "display_group": None, "record_inheritance": True,
+                "review_status": "local-beta", "origin": "known",
+                "review_note": "Research construction. Independent implementation admission remains pending; estimates cover only the stated reference attacks.",
+                "failure_policy": "hold-on-disagreement-v1",
                 **scoring_presentation(manifest or {})}
     if manifest and manifest.get("profile_kind") == "research-tier":
         return {"selection_kind": "tier", "release_kind": "research-tier",

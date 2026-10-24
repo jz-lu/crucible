@@ -1,0 +1,42 @@
+{
+  "build": {
+    "dependencies": {
+      "cryptography-wheel": "9dab55f57c74c3cad24c323bacbbd04be4705ba6eb0d92e920b1fc4837ed5079"
+    },
+    "evidence": {
+      "build-image": "108fd370dc94d0498b77a942e0edc50c614410d33481e9a27c98ea96e2561515",
+      "build-packages": "bec467518bce8ee648efd6f0eed132e99d8fe8f0bebf21561ce2be759f494187",
+      "compiler-context": "5e5638648b480ed40db7c8e9c66e2acec47482a6c74f1a3107a464c0c1aa4708",
+      "dependency-lock": "0900cdf9634130aa4c35d5971585c318f48153d71c44d0c39f5df572f3217eab",
+      "elf-dependencies": "aedbf5b2605e40478f053ec7d8aa30963fe5480e82d0a53ca1a00d6c30b81095",
+      "evidence-inventory": "1ed8e5cd4b1d501683b9e56d76bf26a2172f843946687b2acf8740b5c0db44c0",
+      "initial-wheel-install-recipe": "a17097c510511e2d91b279bef880e77a58bc3429c60519cd8b039ce305fc0493",
+      "initial-wheel-inventory": "ec4e3c9b19e05e9b2db417a9864da0bf6f07daf3910392981d2581fecad61461",
+      "native-licenses": "54671099971e2930715562772e9600971b7ad9eba71c9ff100dbc14218380f7e",
+      "native-source-archive": "aaed0f1180b80c1d7b67f9b791d8ce2dad575edb3c0d8c77c86c73c8b6690613",
+      "offline-lock-validation": "53d763cfcc626410a43e620c3fbc066111849c9f33d45012369d15d60c16c7b0",
+      "published-fixture": "84c391ff448ebda333ca710b9c147104a603cc25347237ab745e995041dca1aa",
+      "raw-conformance": "8d1cc0269292904dbfbf78b8cc95f4d9ba97a47147a044b4470ee820858b8e73",
+      "raw-harness": "6d6dab7fab6845b32c127851c484ecc7290b67e3dd283b99a11901e93e5877a3",
+      "runtime-base-image": "9b86bc3e5a89f03f60d9e154ca584997c78f79d95cb920e8414f7c7a0c6b63ef",
+      "runtime-check-command": "9ddf98a051390d0b4aa3c72ecc7a40b00cf9dafd6bc3fb7542ff37a21354add5",
+      "runtime-container": "cb64f4f6b078a9872410ac1da473affbf6f48fdedad4b76642b576e49132abd8",
+      "runtime-cpuid": "895a1759f82c75ec0e089ce7eb6f05c621d943c44f2c9158542dfd841cd5d3bd",
+      "runtime-inventory": "46b616c6b432e06a859aa4c3c11f48ebfcb010d4c560f0474a3e469d4527d228",
+      "source-overlays": "ca604c392beadcb6b2139e4782c70865a849721fee634112e73e899480e388b9"
+    },
+    "recipe_sha256": "9ddf98a051390d0b4aa3c72ecc7a40b00cf9dafd6bc3fb7542ff37a21354add5",
+    "toolchain": "Prebuilt cryptography50.0.2 cp311-abi3 manylinux_2_34_x86_64 wheel, CPython3.13.17, OpenSSL4.0.3. Recipe identifies the isolated nonroot read-only/network-disabled slim-runtime validation command; wheel installation/source provenance is in the evidence inventory. QEMU AMD64 observations, no upstream wheel-build or performance attestation."
+  },
+  "files": {
+    "native": "1e5d23fa66915204b9b67202a46993844d81cda56f6ad52cead2def37617ee29",
+    "x25519_source": "950720524f8f8ae6e3f329c535641e6267b7b5864c80742a9112a42033872f3a"
+  },
+  "format": "crucible-platform-pins-v1",
+  "platform": {
+    "machine": "x86_64",
+    "system": "Linux"
+  },
+  "scheme_id": "dhkem-x25519",
+  "scheme_version": "1"
+}

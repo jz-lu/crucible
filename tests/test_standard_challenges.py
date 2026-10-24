@@ -159,7 +159,7 @@ def test_resource_abort_busy_and_expired_generation_never_issue(beta, monkeypatc
         raise adapter.GenerationLimit("Synthetic resource exhaustion")
     monkeypatch.setattr(adapter, "generate", abort)
     assert issue(actor, adapter, profile["id"]).status_code == 503
-    with generation.generation_slot(), generation.generation_slot():
+    with app.state.generation_limiter.slot("capacity-test-a"), app.state.generation_limiter.slot("capacity-test-b"):
         busy = issue(actor, adapter, profile["id"])
         assert busy.status_code == 503 and busy.headers["retry-after"] == "3"
     def expired(profile_id):
@@ -187,7 +187,7 @@ def test_changed_dependency_pin_blocks_a_release(beta):
 
 def test_beta_availability_is_not_production_admission(beta):
     _, actor, clock, settings = beta
-    production = create_app(replace(settings, production=True), clock=lambda: clock[0])
+    production = create_app(replace(settings, production=True, access_mode="beta"), clock=lambda: clock[0])
     visitor = Actor(production)
     adapter = registry.adapter_for("dhkem-x25519")
-    assert issue(visitor, adapter, adapter.manifests()[0]["id"]).status_code == 409
+    assert issue(visitor, adapter, adapter.manifests()[0]["id"]).status_code == 401

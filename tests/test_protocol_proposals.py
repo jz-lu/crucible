@@ -22,7 +22,7 @@ from crucible.protocol_proposals import ProtocolProposal, ProtocolProposalRevisi
 from crucible.protocol_specs import ProtocolSpec, SPEC_MAX_BYTES, builtin_spec, canonical_spec
 from scripts.solve_teaching import recover
 from test_api import pin_legacy_releases
-from proposal_fixtures import tier_design
+from proposal_fixtures import correctness_review_spec, tier_design
 
 
 ORIGIN = "http://testserver"
@@ -55,7 +55,7 @@ def proposal_system(tmp_path):
 
 
 def specification():
-    return {**deepcopy(builtin_spec("teaching-dh-kem", "4")), "tier_design": tier_design()}
+    return correctness_review_spec({**deepcopy(builtin_spec("teaching-dh-kem", "4")), "tier_design": tier_design()})
 
 
 def canonical(value):
@@ -190,7 +190,8 @@ def test_frozen_private_record_roundtrips_without_mutating_catalogue_or_sources(
     spec = specification()
     result = submit(alice, spec)
     assert result == {"id": result["id"], "created_at": clock[0], "status": "submitted", "revision": 1,
-                      "content_sha256": digest(canonical(spec)), "specification": canonical(spec)}
+                      "content_sha256": digest(canonical(spec)), "specification": canonical(spec), "source_note": result["source_note"],
+                      "retracted": False, "retraction": None, "can_retract": True}
     assert alice.client.get(f'{SUBMIT}/{result["id"]}').json()["proposal"] == result
     assert alice.client.get("/api/me/protocol-proposals").json() == {"proposals": [{**result, "author": alice.user}]}
     assert "specification" not in caplog.text
@@ -409,12 +410,13 @@ def test_reviewer_capability_is_explicit_stable_account_id_and_defaults_false(re
     app, clock, settings, alice, reviewer, bob = review_system
     for actor, allowed in ((alice, False), (reviewer, True), (bob, False)):
         result = actor.client.get("/api/session").json()
-        assert result["capabilities"] == {"review_protocol_proposals": allowed, "self_review_protocol_proposals": False}
-    assert TestClient(app).get("/api/session").json()["capabilities"] == {"review_protocol_proposals": False, "self_review_protocol_proposals": False}
+        assert result["capabilities"] == {"review_protocol_proposals": allowed, "self_review_protocol_proposals": False,
+                                          "manage_beta_access": False}
+    assert TestClient(app).get("/api/session").json()["capabilities"] == {"review_protocol_proposals": False, "self_review_protocol_proposals": False, "manage_beta_access": False}
     unconfigured = create_app(replace(settings, reviewer_ids=()), clock=lambda: clock[0])
     client = TestClient(unconfigured)
     client.cookies.update(reviewer.client.cookies)
-    assert client.get("/api/session").json()["capabilities"] == {"review_protocol_proposals": False, "self_review_protocol_proposals": False}
+    assert client.get("/api/session").json()["capabilities"] == {"review_protocol_proposals": False, "self_review_protocol_proposals": False, "manage_beta_access": False}
     assert client.get("/api/protocol/review-queue").status_code == 403
     unconfigured.state.db.engine.dispose()
     assert alice.client.get("/api/protocol/review-queue").status_code == 403
@@ -426,14 +428,14 @@ def test_manual_approval_records_exact_revision_artifact_checks_and_evidence_wit
     before = TestClient(app).get("/api/schemes").json()["schemes"]
     record = submit(alice)
     queue = reviewer.client.get("/api/protocol/review-queue").json()
-    assert queue["proposals"] == [{**record, "author": alice.user}]
+    assert queue["proposals"] == [{**record, "can_retract": False, "author": alice.user}]
     assert queue["next_after"] is None
     assert reviewer.client.get(f'{SUBMIT}/{record["id"]}').status_code == 200
     body = review_body(record)
     response = reviewer.post(f'{SUBMIT}/{record["id"]}/reviews', body)
     assert response.status_code == 200, response.text
     result = response.json()
-    assert result["proposal"] == {**record, "status": "approved"}
+    assert result["proposal"] == {**record, "status": "approved", "can_retract": False}
     audit = result["review"]
     assert audit["decision"] == "approved" and audit["revision"] == 1
     assert audit["content_sha256"] == record["content_sha256"]
@@ -492,7 +494,7 @@ def test_reviews_require_csrf_configured_other_person_and_current_revision_hash(
     assert count(app, ProtocolProposalReview) == 0
 
 
-@pytest.mark.parametrize("case", ["unknown", "no-implementation", "no-sha", "false-check", "short-evidence", "blank-notes", "unpaired-unicode", "missing-plan", "missing-tier-check", "false-tier-check", "missing-selection", "missing-selection-check", "false-selection-check"])
+@pytest.mark.parametrize("case", ["unknown", "no-implementation", "no-sha", "false-check", "short-evidence", "blank-notes", "unpaired-unicode", "missing-plan", "missing-tier-check", "false-tier-check", "missing-selection", "missing-selection-check", "false-selection-check", "missing-justification", "empirical-only", "missing-private-key"])
 def test_approval_rejects_missing_correctness_artifact_checks_or_supporting_evidence(review_system, case):
     app, _, _, alice, reviewer, _ = review_system
     spec = specification()
@@ -506,6 +508,12 @@ def test_approval_rejects_missing_correctness_artifact_checks_or_supporting_evid
         spec.pop("tier_design")
     elif case == "missing-selection":
         spec["tier_design"].pop("parameter_selection")
+    elif case in ("missing-justification", "empirical-only"):
+        spec["correctness"].pop("justification")
+        if case == "empirical-only":
+            spec["correctness"]["evidence"] = "One million honest round-trip tests passed with no failures."
+    elif case == "missing-private-key":
+        spec["encoding"].pop("private_key")
     record = submit(alice, spec)
     body = review_body(record)
     if case == "false-check":
@@ -582,7 +590,7 @@ def test_revision_after_approval_resets_approval_and_old_review_cannot_approve_n
     # Safe retry returns the old decision, and the current unapproved revision.
     replay = reviewer.post(f'{SUBMIT}/{record["id"]}/reviews', old_body)
     assert replay.status_code == 200
-    assert replay.json()["proposal"] == latest and replay.json()["review"] == approved["review"]
+    assert replay.json()["proposal"] == {**latest, "can_retract": False} and replay.json()["review"] == approved["review"]
     stale = reviewer.post(f'{SUBMIT}/{record["id"]}/reviews', {**old_body, "idempotency_key": str(uuid4())})
     assert stale.status_code == 409
     # The initial intake retry still resolves its original frozen document.
@@ -703,7 +711,7 @@ def test_development_self_review_requires_explicit_flag_and_remains_test_only(re
         reviewer.client = client
         try:
             assert client.get('/api/session').json()['capabilities'] == {
-                'review_protocol_proposals': True, 'self_review_protocol_proposals': True}
+                'review_protocol_proposals': True, 'self_review_protocol_proposals': True, 'manage_beta_access': False}
             own = submit(reviewer)
             assert own['id'] in {row['id'] for row in client.get('/api/protocol/review-queue').json()['proposals']}
             body = review_body(own)
@@ -770,3 +778,61 @@ def test_self_review_flag_defaults_off_is_strict_and_fails_closed_in_production(
         monkeypatch.setenv('CRUCIBLE_ALLOW_SELF_REVIEW', invalid)
         with pytest.raises(RuntimeError, match='exactly true or false'):
             load_settings()
+
+
+@pytest.mark.parametrize("exponent,include_exponent,accepted", [(128, True, True), (138, True, True), (64, True, False), (127, True, False), (128, False, False)])
+def test_common_claimed_goal_controls_approval_without_requiring_proof_of_dependencies(review_system, exponent, include_exponent, accepted):
+    from proposal_fixtures import conjectural_correctness_spec
+
+    app, _, _, alice, reviewer, _ = review_system
+    spec = conjectural_correctness_spec(specification(), exponent)
+    if not include_exponent:
+        spec["correctness"].pop("failure_bound_exponent")
+    record = submit(alice, spec)  # Weaker and incomplete claims are valid drafts.
+    response = reviewer.post(f'{SUBMIT}/{record["id"]}/reviews', review_body(record,
+        evidence="Reviewed the exact conditional claims, conjecture C, unproved reduction and transfer steps, reference artifact and safety checks; this is research admission, not a proof."))
+    if not accepted:
+        assert response.status_code == 422
+        assert "failure_bound_exponent >=128" in response.json()["detail"]
+        assert count(app, ProtocolProposalReview) == 0
+        unchanged = alice.client.get(f'{SUBMIT}/{record["id"]}').json()["proposal"]
+        assert unchanged["status"] == "submitted"
+        assert unchanged["specification"] == canonical(spec)
+        return
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["proposal"]["status"] == "approved"
+    claimed = result["proposal"]["specification"]
+    assert claimed == canonical(spec)
+    assert claimed["correctness"]["justification"]["kind"] == "conjectural-claim"
+    assert claimed["correctness"]["failure_bound"] == f"2^-{exponent}"
+    assert "policy_id" not in claimed["correctness"]
+    assert "verified" not in claimed["correctness"]
+    assert result["review"]["checks"]["specification_complete"] is True
+    assert count(app, ProtocolProposalReview) == 1
+
+
+def test_conjectural_reasoning_does_not_replace_an_explicit_correctness_guarantee(review_system):
+    from proposal_fixtures import conjectural_correctness_spec
+
+    app, _, _, alice, reviewer, _ = review_system
+    spec = conjectural_correctness_spec(specification())
+    spec["correctness"].update(kind="unknown", failure_bound=None)
+    spec["correctness"].pop("failure_bound_exponent", None)
+    record = submit(alice, spec)
+    response = reviewer.post(f'{SUBMIT}/{record["id"]}/reviews', review_body(record))
+    assert response.status_code == 422
+    assert "precise correctness guarantee" in response.json()["detail"]
+    assert count(app, ProtocolProposalReview) == 0
+
+
+def test_scoped_security_claim_is_a_substantive_manual_review_check(review_system):
+    from proposal_fixtures import conjectural_correctness_spec
+
+    app, _, _, alice, reviewer, _ = review_system
+    record = submit(alice, conjectural_correctness_spec(specification()))
+    body = review_body(record)
+    body["checks"]["specification_complete"] = False
+    response = reviewer.post(f'{SUBMIT}/{record["id"]}/reviews', body)
+    assert response.status_code == 422
+    assert count(app, ProtocolProposalReview) == 0

@@ -1,0 +1,127 @@
+{
+  "format": "crucible-display-note-bindings-v1",
+  "releases": [
+    {
+      "note": {
+        "id": "curated:display-evidence-teaching-dh-kem-7",
+        "revision": 2,
+        "content_sha256": "5c477d1deb0f6735e7dc882f98fb9c10dac5cd10f3da5f99e2f73ca0d5ba8c63",
+        "url": "#notebook?note=curated%3Adisplay-evidence-teaching-dh-kem-7&revision=2&sha256=5c477d1deb0f6735e7dc882f98fb9c10dac5cd10f3da5f99e2f73ca0d5ba8c63"
+      },
+      "evidence_sha256": "58d7048da73a931b6aa360c86833258b4b4587a7aa14c86ddc4509958b70e620",
+      "snapshot_file": "58d7048da73a931b6aa360c86833258b4b4587a7aa14c86ddc4509958b70e620.json",
+      "scheme_id": "teaching-dh-kem",
+      "version": "7",
+      "timing_report_id": "42ccf5cf-3d94-4aaf-9363-a85a098b51c2",
+      "timing_report_sha256": "a66051b9b108f0f1a45856064dc2b091a76461f50a12abb53a488e7ee32e8d7a"
+    },
+    {
+      "note": {
+        "id": "curated:display-evidence-rsa-kem-4",
+        "revision": 2,
+        "content_sha256": "b9b09735a538c332d5ccb07b106e9c286f516aefd810d28fe68c1279b3b9ff59",
+        "url": "#notebook?note=curated%3Adisplay-evidence-rsa-kem-4&revision=2&sha256=b9b09735a538c332d5ccb07b106e9c286f516aefd810d28fe68c1279b3b9ff59"
+      },
+      "evidence_sha256": "fd788038ac8dff1c10aa38fa7381916aa80b2f82c97619d2c9fdeb8d96a735ce",
+      "snapshot_file": "fd788038ac8dff1c10aa38fa7381916aa80b2f82c97619d2c9fdeb8d96a735ce.json",
+      "scheme_id": "rsa-kem",
+      "version": "4",
+      "timing_report_id": "45c09901-9adb-47dd-8020-c3fe4c6a83ca",
+      "timing_report_sha256": "13600dd5ab044b49d06d0c29abb128017ae30191d930bfc4e4397c00b3c2e5d9"
+    },
+    {
+      "note": {
+        "id": "curated:display-evidence-dhkem-x25519-curve-compressed-v2",
+        "revision": 2,
+        "content_sha256": "8e37098d679d2547eff670b9a82b283000b31c37f16884f6a94f61634e51fbad",
+        "url": "#notebook?note=curated%3Adisplay-evidence-dhkem-x25519-curve-compressed-v2&revision=2&sha256=8e37098d679d2547eff670b9a82b283000b31c37f16884f6a94f61634e51fbad"
+      },
+      "evidence_sha256": "376878ad9a83d97620a2911e8e26ce650c823088921ff0bd1b52d50d9441b9e5",
+      "snapshot_file": "376878ad9a83d97620a2911e8e26ce650c823088921ff0bd1b52d50d9441b9e5.json",
+      "scheme_id": "dhkem-x25519",
+      "version": "curve-compressed-v2",
+      "timing_report_id": "009ec0e9-32e9-4f17-9fb8-24870d472a3a",
+      "timing_report_sha256": "d5210f59ad561ba91a194374daa08452152b91b4abc996f64ad33e3d177ee42b"
+    },
+    {
+      "note": {
+        "id": "curated:display-evidence-ml-kem-compressed-research-v4",
+        "revision": 3,
+        "content_sha256": "52baf333f8c95f70074ae23949067f9930f4d032672abfaba3d6d647f660b1b5",
+        "url": "#notebook?note=curated%3Adisplay-evidence-ml-kem-compressed-research-v4&revision=3&sha256=52baf333f8c95f70074ae23949067f9930f4d032672abfaba3d6d647f660b1b5"
+      },
+      "evidence_sha256": "cf9df9302c0ae6c9d848469170f8670fdcae74fe9006c00ad0c5948d0264ce1b",
+      "snapshot_file": "cf9df9302c0ae6c9d848469170f8670fdcae74fe9006c00ad0c5948d0264ce1b.json",
+      "scheme_id": "ml-kem",
+      "version": "compressed-research-v4",
+      "timing_report_id": "2ccd3de7-e6e9-445d-82eb-ae0758481d5b",
+      "timing_report_sha256": "7b7ef7a70e21411bd44a271b18f8328190d2c317a0a01206805e77f938af6f11"
+    },
+    {
+      "note": {
+        "id": "curated:display-evidence-frodokem-anchor-research-v3",
+        "revision": 2,
+        "content_sha256": "1900a24a048944189ab21bcb239d3554d96d6c71b53ba865ea8227da572d7b13",
+        "url": "#notebook?note=curated%3Adisplay-evidence-frodokem-anchor-research-v3&revision=2&sha256=1900a24a048944189ab21bcb239d3554d96d6c71b53ba865ea8227da572d7b13"
+      },
+      "evidence_sha256": "c0b40dcc55e6f4dc28a627b1b4a14d9efe083e0c7a95acbf61589f7ef7a3a8e0",
+      "snapshot_file": "c0b40dcc55e6f4dc28a627b1b4a14d9efe083e0c7a95acbf61589f7ef7a3a8e0.json",
+      "scheme_id": "frodokem",
+      "version": "anchor-research-v3",
+      "timing_report_id": "ba9be64e-57b6-4989-a184-14d0c85e9323",
+      "timing_report_sha256": "98e8e50f403928b6f6975a856837979aa06d1af6ab6e6eeb605bfa99c9253b9e"
+    },
+    {
+      "note": {
+        "id": "curated:display-evidence-sntrup-3",
+        "revision": 2,
+        "content_sha256": "d84b2839647e0fb2746d949d0ae7f9e92320eedce6dd8d640e032738d22a67ae",
+        "url": "#notebook?note=curated%3Adisplay-evidence-sntrup-3&revision=2&sha256=d84b2839647e0fb2746d949d0ae7f9e92320eedce6dd8d640e032738d22a67ae"
+      },
+      "evidence_sha256": "a03c8f525f8660df8d05f4406ef8fa1df4b916c7481760bdc64720d6f2cd4a7e",
+      "snapshot_file": "a03c8f525f8660df8d05f4406ef8fa1df4b916c7481760bdc64720d6f2cd4a7e.json",
+      "scheme_id": "sntrup",
+      "version": "3",
+      "timing_report_id": "7b1c0e94-10bc-4ffb-92a7-73504a569411",
+      "timing_report_sha256": "6b9a8e9b440846cbe313b1731d685707211cce37026900c2da462147f7510d21"
+    },
+    {
+      "note": {
+        "id": "curated:display-evidence-hqc-modeled-research-v3",
+        "revision": 2,
+        "content_sha256": "1a93911fa91a03cb03f33ad8b7dd61c0407581e3fd8649cffdb287c5d4dfcbe0",
+        "url": "#notebook?note=curated%3Adisplay-evidence-hqc-modeled-research-v3&revision=2&sha256=1a93911fa91a03cb03f33ad8b7dd61c0407581e3fd8649cffdb287c5d4dfcbe0"
+      },
+      "evidence_sha256": "0956a0a39c1f2ff0b9dfa935b354c56f8de89a02dd3d4a3fb2db1de848e8e753",
+      "snapshot_file": "0956a0a39c1f2ff0b9dfa935b354c56f8de89a02dd3d4a3fb2db1de848e8e753.json",
+      "scheme_id": "hqc",
+      "version": "modeled-research-v3",
+      "timing_report_id": "18fdfe10-f033-4d60-b81c-53d5d94b72a0",
+      "timing_report_sha256": "1110b4d0481ce75ce7f76ac2a10ef39976dee1c826f457da5c689e1ec8b09c0a"
+    },
+    {
+      "note": {
+        "id": "curated:display-evidence-classic-mceliece-length-research-v1",
+        "revision": 2,
+        "content_sha256": "31ed3ca1bdd5cc56400ec913241cdf61874f58467d0a6c45adc71d8e8b689d9a",
+        "url": "#notebook?note=curated%3Adisplay-evidence-classic-mceliece-length-research-v1&revision=2&sha256=31ed3ca1bdd5cc56400ec913241cdf61874f58467d0a6c45adc71d8e8b689d9a"
+      },
+      "evidence_sha256": "adbe60efd8b2e9fc0665674bd3dd7fe49daa036aee303de5cae00dd3c8929a86",
+      "snapshot_file": "adbe60efd8b2e9fc0665674bd3dd7fe49daa036aee303de5cae00dd3c8929a86.json",
+      "scheme_id": "classic-mceliece",
+      "version": "length-research-v1",
+      "timing_report_id": "79e4edd2-cf5a-4d7e-88a5-c06244434f47",
+      "timing_report_sha256": "2de692124ec4b1b4048490e8e32fabf18e5236dfa74bd3db8c2c798136f5ca2c"
+    }
+  ],
+  "proposal_guide": {
+    "note": {
+      "id": "curated:proposal-advice",
+      "revision": 7,
+      "content_sha256": "efabc46ddd7dcd9dba61072d8c232c3363c00d57e0843320beae159f55532276",
+      "url": "#notebook?note=curated%3Aproposal-advice&revision=7&sha256=efabc46ddd7dcd9dba61072d8c232c3363c00d57e0843320beae159f55532276"
+    },
+    "evidence_sha256": "0c4fe4278fbd32c701f4f2d8887faf0ae5ba3b38cfb34c7672616d44bf89ca96",
+    "snapshot_file": "0c4fe4278fbd32c701f4f2d8887faf0ae5ba3b38cfb34c7672616d44bf89ca96.json"
+  }
+}

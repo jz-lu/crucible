@@ -1,0 +1,82 @@
+{
+  "format": "crucible-benchmark-publications-v1",
+  "reports": [
+    {
+      "scheme_id": "ml-kem",
+      "version": "packed-research-v3",
+      "file": "local-all-20261017T111711Z-module.json",
+      "sha256": "d5dbd168a99d58b440d942e2cc3d516ff5d0474e9c64d571a55f9fb904258321",
+      "status": "local-pilot"
+    },
+    {
+      "scheme_id": "teaching-dh-kem",
+      "version": "7",
+      "file": "local-all-20261017T111711Z-dh.json",
+      "sha256": "6cf0448e6cf0167ebfd9042d03b0e3da80804d9061fd827bb64d90e529249ccc",
+      "status": "local-pilot"
+    },
+    {
+      "scheme_id": "dhkem-x25519",
+      "version": "curve-compressed-v2",
+      "file": "local-all-20261017T111711Z-ec.json",
+      "sha256": "a1cac5dd058a79362605861fa1b292a512990f2fe145ecc075e01585049d576d",
+      "status": "local-pilot"
+    },
+    {
+      "scheme_id": "frodokem",
+      "version": "anchor-research-v3",
+      "file": "local-all-20261017T111711Z-frodo.json",
+      "sha256": "87ef7c02f7c0f0b09d86267afe3c776d7d92ebc2f43c7a732383b0ef502cfa10",
+      "status": "local-pilot"
+    },
+    {
+      "scheme_id": "rsa-kem",
+      "version": "4",
+      "file": "local-all-20261017T111711Z-rsa.json",
+      "sha256": "db31980287e9a82aebb28f795746eea4282964a927003023245788bad19a8327",
+      "status": "local-pilot"
+    },
+    {
+      "scheme_id": "hqc",
+      "version": "growth-research-v2",
+      "file": "local-all-20261017-native-hqc.json",
+      "sha256": "6aa3ec75739c1519916a63b1f80b8c868ab806b23d5529cb47956916e28d1305",
+      "status": "local-pilot"
+    },
+    {
+      "scheme_id": "classic-mceliece",
+      "version": "length-research-v1",
+      "file": "local-all-20261017-native-mceliece.json",
+      "sha256": "031d106464e4872d789d7eff2ee7f20132ff00d7e46194f2d1574a221d7e2dd5",
+      "status": "local-pilot"
+    },
+    {
+      "scheme_id": "sntrup",
+      "version": "3",
+      "file": "local-all-20261017-native-ntru.json",
+      "sha256": "19f61ebe660029e63debe9aa51a4325829513177b08e5e3a2fb91e1e946c0c62",
+      "status": "local-pilot"
+    },
+    {
+      "scheme_id": "ml-kem",
+      "version": "fips203-oqs016-v1",
+      "file": "local-all-20261017-native-mlkem.json",
+      "sha256": "bd012a95813a34c60007cf744d55f7df35a7ccb695321db33d470add001ee68c",
+      "status": "local-pilot"
+    },
+    {
+      "scheme_id": "ml-kem",
+      "version": "compressed-research-v4",
+      "file": "local-all-20261017-module-v4.json",
+      "sha256": "228f24a0d91f6fdc4a9fd7a2312a30b1f08dae37a1d2d544d46c7086c6472f52",
+      "status": "local-pilot"
+    },
+    {
+      "scheme_id": "hqc",
+      "version": "modeled-research-v3",
+      "file": "local-all-20261017-native-hqc-v3.json",
+      "sha256": "da36da4accbf80c7c3799015e786646193179c92525ebd44edc0447ca3cebaef",
+      "status": "local-pilot"
+    }
+  ]
+}

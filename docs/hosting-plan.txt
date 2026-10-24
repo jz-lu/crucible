@@ -1,6 +1,12 @@
 HOSTING DIRECTION — PRIVATE BETA, THEN PUBLIC
-Recorded 2026-10-14. Design requirements, not an implemented access gate or a
-deployment approval. Finish local polish and collaborator review before hosting.
+Status reconciled 2026-10-18: the beta access gate, invitations, membership
+revocation and hosted release allowlist are implemented. Use private-beta-setup.txt
+and architecture.txt for current behavior. Production still requires beta mode;
+public-launch publication policy and operational readiness remain unfinished.
+
+The text below preserves the 2026-10-14 design record. Its "current state" and
+"to implement" descriptions are historical, not instructions to rebuild controls
+that now exist. This document does not grant deployment approval.
 
 Keep one application and one API for people and agents. The next hosted stage
 must restrict site content to approved beta participants. Opening selected

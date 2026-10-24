@@ -2,6 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
+    <!-- critical-canvas -->
+    <meta name="theme-color" content="#f6f9fd">
+    <script src="/bootstrap.js" async></script>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Recover a shared key. Share the method and computational cost. Timed challenges and documented progress in open cryptographic research.">
     <meta name="color-scheme" content="light">
@@ -11,12 +14,10 @@
     </title>
     <link rel="stylesheet" href="/vendor/katex/katex.min.css">
     <link rel="stylesheet" href="/styles.css">
-    <link rel="stylesheet" href="/notebook/notebook.css">
     <script src="/vendor/katex/katex.min.js" defer></script>
     <script src="/math.js" defer></script>
-    <script src="/notebook/seed.js" defer></script>
-    <script src="/notebook/store.js" defer></script>
-    <script src="/notebook/notebook.js" defer></script>
+    <script src="/assumptions.js" defer></script>
+    <script src="/proposal-retractions.js" defer></script>
     <script src="/app.js" defer>
     </script>
   </head>
@@ -26,18 +27,15 @@
     </a>
     <header class="site-header">
       <div class="header-inner">
-        <a class="brand" href="/" aria-label="Crucible home">
+        <a class="brand" href="#challenge" aria-label="Crucible home">
           <img class="brand-mark" src="/assets/crucible-logo.png" width="38" height="54" alt="">
           <span>
             Crucible
           </span>
         </a>
-        <nav class="primary-nav" aria-label="Main navigation">
+        <nav class="primary-nav" aria-label="Main navigation" hidden>
           <button id="nav-challenge" class="nav-button selected" type="button" aria-current="page">
             Schemes
-          </button>
-          <button id="nav-people" class="nav-button" type="button">
-            Leaderboard
           </button>
           <button id="nav-notebook" class="nav-button" type="button">
             Research notebook
@@ -51,6 +49,9 @@
           </button>
         </nav>
         <div class="account-actions">
+          <button id="nav-people" class="nav-button" type="button" hidden>
+            Leaderboard
+          </button>
           <button id="history-button" class="text-button" type="button" hidden>
             My submissions
           </button>
@@ -73,13 +74,33 @@
           Try again
         </button>
       </div>
-      <section id="catalogue-workspace" class="catalogue-workspace" aria-labelledby="catalogue-title" tabindex="-1">
+      <section id="access-workspace" class="access-workspace" aria-labelledby="access-title" tabindex="-1">
+        <h1 id="access-title">Crucible</h1>
+        <p id="access-description" role="status">Checking access…</p>
+        <div id="access-auth-actions" class="access-actions" hidden>
+          <button id="access-github" class="button button-primary" type="button" hidden>Continue with GitHub</button>
+          <button id="access-sign-in" class="button button-primary" type="button">Sign in</button>
+          <button id="access-register" class="button button-quiet" type="button" hidden>Create account</button>
+        </div>
+        <div id="access-verification" hidden>
+          <p id="access-account"></p>
+          <button id="access-send-code" class="button button-primary" type="button">Email a verification code</button>
+          <form id="access-code-form" hidden>
+            <label for="access-code">Code from your invitation email</label>
+            <input id="access-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12" required>
+            <button id="access-redeem" class="button button-primary" type="submit">Join Crucible</button>
+          </form>
+          <p id="access-delivery" class="field-hint" role="status"></p>
+        </div>
+        <button id="access-continue" class="button button-primary" type="button" hidden>Continue to Crucible</button>
+        <p id="access-error" class="form-error" role="alert" hidden></p>
+      </section>
+      <section id="catalogue-workspace" class="catalogue-workspace" aria-labelledby="catalogue-title" tabindex="-1" hidden>
         <div class="catalogue-heading">
           <div>
             <h1 id="catalogue-title">KEM Schemes</h1>
           </div>
           <div class="catalogue-actions">
-            <a class="text-button" href="#propose">Propose a scheme <span aria-hidden="true">→</span></a>
             <button id="refresh-catalogue" class="text-button" type="button">
               Refresh <span aria-hidden="true">↻</span>
             </button>
@@ -93,6 +114,17 @@
           </div>
         </div>
       </section>
+      <section id="review-workspace" class="review-workspace" aria-labelledby="review-title" tabindex="-1" hidden>
+        <a id="review-account-back" class="text-button scheme-back" href="#people">← My account</a>
+        <div class="catalogue-heading"><h1 id="review-title">Review center</h1></div>
+        <nav id="review-navigation" class="review-navigation" aria-label="Review queues" hidden>
+          <a id="review-nav-publication" href="#reviews?section=publication">Publish requests</a>
+          <a id="review-nav-schemes" href="#reviews?section=schemes">Scheme proposals</a>
+          <a id="review-nav-research" href="#reviews?section=research">Proposed changes</a>
+        </nav>
+        <p id="review-access-message" class="empty-state">The review center is available to configured reviewers.</p>
+      </section>
+      <section id="review-notebook-workspace" aria-label="Reviewer queue" hidden></section>
       <section id="notebook-workspace" aria-label="Research notebook" tabindex="-1" hidden></section>
       <section id="people-workspace" class="people-workspace" aria-labelledby="people-title" tabindex="-1" hidden>
         <div class="catalogue-heading">
@@ -105,8 +137,16 @@
       </section>
       <section id="person-workspace" class="person-workspace" aria-labelledby="person-title" tabindex="-1" hidden>
         <a class="text-button scheme-back" href="#people">← Leaderboard</a>
-        <div class="catalogue-heading"><h1 id="person-title">Profile</h1></div>
+        <div class="catalogue-heading"><h1 id="person-title">Profile</h1><a id="profile-review-link" class="button button-quiet" href="#reviews?section=publication" hidden>Review center →</a></div>
         <div id="person-content" aria-live="polite"></div>
+        <details id="account-sign-in" class="account-sign-in" hidden>
+          <summary>Sign-in settings</summary>
+          <div class="account-sign-in-row">
+            <div><strong>GitHub</strong><p id="account-github-status" class="field-hint"></p></div>
+            <button id="account-link-github" class="button button-quiet" type="button">Link GitHub</button>
+          </div>
+          <p id="account-sign-in-error" class="form-error" role="alert" hidden></p>
+        </details>
         <details id="agent-connections" class="agent-connections" hidden>
           <summary>Connected agents</summary>
           <div class="agent-connections-heading"><p>Manage agents connected to your account.</p><button id="refresh-agent-tokens" class="text-button" type="button">Refresh</button></div>
@@ -134,6 +174,7 @@
           <div class="overview-entry">
             <a id="overview-challenges" class="button button-primary" href="#challenge">View challenges <span aria-hidden="true">→</span></a>
             <p id="overview-progress"></p>
+            <a id="overview-assumptions" class="overview-assumptions-link" href="#challenge">View assumptions <span aria-hidden="true">↗</span></a>
           </div>
         </div>
         <div id="overview-graphs" class="overview-graphs"></div>
@@ -143,6 +184,16 @@
           <section aria-labelledby="overview-correctness-title"><h2 id="overview-correctness-title">Correctness</h2><p id="overview-correctness"></p></section>
           <section aria-labelledby="overview-security-title"><h2 id="overview-security-title">Security scope</h2><p id="overview-security"></p></section>
         </div>
+      </section>
+      <section id="assumptions-workspace" class="assumptions-workspace" aria-labelledby="assumptions-title" tabindex="-1" hidden>
+        <a id="assumptions-back" class="text-button scheme-back" href="#challenge">← Scheme overview</a>
+        <header class="assumptions-heading">
+          <p class="eyebrow">Assumptions</p>
+          <h1 id="assumptions-title"></h1>
+          <p class="assumptions-intro">What supports the scheme, and what remains unresolved.</p>
+          <p id="assumptions-context" class="assumptions-context"></p>
+        </header>
+        <div id="assumptions-content" aria-live="polite"></div>
       </section>
       <section id="workspace" class="workspace" aria-labelledby="scheme-title" tabindex="-1" hidden>
         <nav class="scheme-breadcrumbs" aria-label="Scheme navigation"><a id="scheme-all" class="text-button" href="#challenge">All schemes</a><span aria-hidden="true">/</span><a id="scheme-back" class="text-button" href="#challenge">Overview</a></nav>
@@ -594,20 +645,34 @@
         </section>
       </section>
       <section id="proposal-workspace" class="proposal-workspace" aria-labelledby="proposal-title" tabindex="-1" hidden>
-        <a class="text-button scheme-back" href="#challenge">← All KEMs</a>
+        <a id="proposal-page-back" class="text-button scheme-back" href="#challenge">← All KEMs</a>
         <div class="catalogue-heading">
           <div>
-            <h1 id="proposal-title">Propose a scheme</h1>
-            <p>Describe a KEM in a standard specification. Review comes before live challenges.</p>
+            <h1 id="proposal-title">Scheme review</h1>
+            <p id="proposal-context">Proposals are research notes with a KEM specification. Submit a saved revision for scheme review.</p>
           </div>
-          <a id="proposal-review-link" class="text-button" href="#propose?review=1" hidden>Review proposals →</a>
         </div>
         <div id="proposal-draft">
+          <p><a class="text-button" href="#notebook?compose=proposal">Write a proposal note →</a></p>
           <p id="proposal-revision-context" class="proposal-status" hidden></p>
           <div class="agent-handoff-action">
             <button id="proposal-use-agent" class="button button-primary" type="button" aria-controls="proposal-agent-instructions" aria-expanded="false">Use with an agent <span aria-hidden="true">→</span></button>
-            <p class="field-hint">Prepare the specification with your agent, then submit it for human review.</p>
+            <p class="field-hint">Agent submissions create a private proposal note and submit that revision for human review.</p>
           </div>
+          <details class="manual-tools proposal-guidelines">
+            <summary>Proposal guidelines</summary>
+            <div class="proposal-guidelines-content">
+              <p>Start with a precise construction and the claims someone else could investigate.</p>
+              <ul>
+                <li><strong>Specify the algorithms.</strong> Include sampling distributions, encodings, invalid inputs and any shared setup.</li>
+                <li><strong>Separate claims from assumptions.</strong> State the security game, supporting arguments and open questions. New mathematical directions are welcome; a numerical security estimate is not required.</li>
+                <li><strong>Claim honest agreement.</strong> Decapsulation should fail with probability at most 2⁻¹²⁸. Name any models or conjectures the claim depends on; tests alone cannot establish this bound.</li>
+                <li><strong>Choose useful configurations.</strong> Explain the cost–security tradeoffs, correctness coverage and evidence for the endpoint. Stages follow natural parameter choices.</li>
+                <li><strong>Make it reviewable.</strong> Give precise sources and reproducible evidence. Human review and implementation checks precede a live challenge.</li>
+              </ul>
+              <a class="text-button" href="/api/protocol/proposal-guide" target="_blank" rel="noopener">Full guide for people and agents ↗</a>
+            </div>
+          </details>
           <details id="proposal-manual-tools" class="manual-tools">
             <summary>Manual tools</summary>
             <div class="proposal-import">
@@ -625,7 +690,7 @@
               <h4 id="proposal-agent-title">Give this to your agent</h4>
               <button id="copy-proposal-agent" class="button button-quiet" type="button">Copy prompt</button>
             </div>
-            <p class="field-hint">No sign-in needed to prepare. Connect before reading private proposals or submitting.</p>
+            <p class="field-hint">The CLI saves the guide, template and schema in your workspace. A private beta requires a connection; submission always needs your approval.</p>
             <p class="agent-followup">Next time, ask: <strong id="proposal-agent-followup"></strong></p>
             <pre id="proposal-agent-text" class="code-block" tabindex="0" aria-label="Proposal instructions to give your agent"></pre>
           </section>
@@ -642,7 +707,7 @@
           </section>
         </div>
         <section id="proposal-detail" class="proposal-detail" aria-label="Submitted specification" hidden>
-          <a class="text-button" href="#propose">← New proposal</a>
+          <a id="proposal-detail-back" class="text-button" href="#notebook?compose=proposal">← New proposal note</a>
           <div id="proposal-detail-content" aria-live="polite"></div>
           <div id="proposal-detail-actions" class="recovery-import-actions" hidden>
             <button id="proposal-revise-agent" class="button button-primary" type="button" aria-controls="proposal-revise-agent-instructions" aria-expanded="false" hidden>Revise with an agent <span aria-hidden="true">→</span></button>
@@ -665,9 +730,9 @@
             <p id="proposal-review-artifact" class="proposal-digest"></p>
             <fieldset id="proposal-review-fields">
               <legend>Checks performed</legend>
-              <label class="proposal-check"><input type="checkbox" data-proposal-check="specification_complete"> Specification and parameter distribution are complete</label>
-              <label class="proposal-check"><input type="checkbox" data-proposal-check="correctness"> Correctness argument and its scope reviewed</label>
-              <label class="proposal-check"><input type="checkbox" data-proposal-check="tier_design"> Default progression, faithful configurations, resource costs, a common correctness bound, endpoint evidence or provisional status, and useful intermediate stages reviewed</label>
+              <label class="proposal-check"><input type="checkbox" data-proposal-check="specification_complete"> Algorithms are reproducible; distributions, encodings, validation rules, scoped security guarantee and its assumptions are explicit</label>
+              <label class="proposal-check"><input type="checkbox" data-proposal-check="correctness"> Correctness claim of failure at most 2⁻¹²⁸, parameter coverage and assumptions reviewed; unproved steps and known objections assessed</label>
+              <label class="proposal-check"><input type="checkbox" data-proposal-check="tier_design"> Default progression, faithful configurations, resource costs, the declared correctness envelope, endpoint evidence or provisional status, and useful intermediate stages reviewed</label>
               <label class="proposal-check"><input type="checkbox" data-proposal-check="parameter_selection"> Parameter selection objective, constraints, security model, candidate comparisons and tradeoffs reviewed</label>
               <label class="proposal-check"><input type="checkbox" data-proposal-check="implementation_conformance"> Implementation conforms to the specification</label>
               <label class="proposal-check"><input type="checkbox" data-proposal-check="input_resource_safety"> Input validation and resource limits reviewed</label>
@@ -701,7 +766,7 @@
         <!-- Collaborators: add mission, team, and contact content here. -->
       </section>
       <footer class="site-footer">
-        <a class="brand footer-brand" href="/" aria-label="Crucible home">
+        <a class="brand footer-brand" href="#challenge" aria-label="Crucible home">
           <img class="brand-mark" src="/assets/crucible-logo.png" width="30" height="42" alt="">
           <span>Crucible</span>
         </a>
@@ -722,41 +787,95 @@
       <p class="dialog-description" id="auth-description">
         Sign in to receive your instance for the current round.
       </p>
-      <div class="auth-switch" role="group" aria-label="Account action">
-        <button id="login-mode" type="button" class="selected" aria-pressed="true">
-          Sign in
-        </button>
-        <button id="register-mode" type="button" aria-pressed="false">
-          Create account
-        </button>
+      <div id="auth-sign-in-methods">
+        <button id="auth-github" class="button button-primary full-width github-sign-in" type="button" hidden>Continue with GitHub</button>
+        <p id="auth-github-error" class="form-error" role="alert" hidden></p>
+        <details id="auth-password-options" class="auth-password-options sole-method" open>
+          <summary>Use a password</summary>
+          <div class="auth-switch" role="group" aria-label="Account action">
+            <button id="login-mode" type="button" class="selected" aria-pressed="true">
+              Sign in
+            </button>
+            <button id="register-mode" type="button" aria-pressed="false">
+              Create account
+            </button>
+          </div>
+          <form id="auth-form">
+            <div class="form-field">
+              <label for="auth-handle">
+                Public handle
+              </label>
+              <input id="auth-handle" name="handle" required autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" title="Use 3–32 letters, numbers, or underscores." autocapitalize="none" spellcheck="false">
+              <p class="field-hint">
+                Use 3–32 letters, numbers, or underscores. Your handle appears beside public recoveries.
+              </p>
+            </div>
+            <div class="form-field">
+              <label for="auth-password">
+                Password
+              </label>
+              <input id="auth-password" name="password" type="password" required autocomplete="current-password" minlength="12" maxlength="128">
+              <p class="field-hint">
+                Use 12–128 characters.
+              </p>
+            </div>
+            <p id="auth-error" class="form-error" role="alert" hidden>
+            </p>
+            <button id="auth-submit" class="button button-primary full-width" type="submit">
+              Sign in
+              <span aria-hidden="true">
+                →
+              </span>
+            </button>
+          </form>
+          <button id="auth-forgot-password" class="text-button auth-forgot-password" type="button" hidden>Forgot your password?</button>
+        </details>
       </div>
-      <form id="auth-form">
+      <form id="github-link-form" hidden>
+        <p id="github-link-context" class="field-hint"></p>
         <div class="form-field">
-          <label for="auth-handle">
-            Public handle
-          </label>
-          <input id="auth-handle" name="handle" required autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" title="Use 3–32 letters, numbers, or underscores." autocapitalize="none" spellcheck="false">
-          <p class="field-hint">
-            Use 3–32 letters, numbers, or underscores. Your handle appears beside public recoveries.
-          </p>
+          <label for="github-link-password">Current password</label>
+          <input id="github-link-password" name="password" type="password" required autocomplete="current-password" minlength="12" maxlength="128">
+        </div>
+        <p id="github-link-error" class="form-error" role="alert" hidden></p>
+        <button id="github-link-submit" class="button button-primary full-width" type="submit">Continue to GitHub</button>
+      </form>
+      <form id="github-handle-form" hidden>
+        <p id="github-handle-context" class="field-hint"></p>
+        <div class="form-field">
+          <label for="github-handle">Public handle</label>
+          <input id="github-handle" name="handle" required autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" title="Use 3–32 letters, numbers, or underscores." autocapitalize="none" spellcheck="false">
+          <p class="field-hint">Your name beside results and research notes. Use 3–32 letters, numbers, or underscores.</p>
+        </div>
+        <p id="github-handle-error" class="form-error" role="alert" hidden></p>
+        <button id="github-handle-submit" class="button button-primary full-width" type="submit">Create account</button>
+        <p class="field-hint">Already have a Crucible account? <button id="github-existing-account" class="text-button" type="button">Sign in with your password</button> and link GitHub from your profile.</p>
+      </form>
+      <form id="password-reset-request-form" hidden>
+        <div class="form-field">
+          <label for="password-reset-handle">Public handle</label>
+          <input id="password-reset-handle" name="handle" required autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" autocapitalize="none" spellcheck="false">
+        </div>
+        <p id="password-reset-request-error" class="form-error" role="alert" hidden></p>
+        <p id="password-reset-request-status" class="field-hint" role="status" hidden></p>
+        <button id="password-reset-request-submit" class="button button-primary full-width" type="submit">Send reset link</button>
+        <p class="field-hint">If you have no verified email address, contact the person who invited you.</p>
+        <button class="text-button auth-back" type="button" id="password-reset-request-back">Back to sign in</button>
+      </form>
+      <form id="password-reset-form" hidden>
+        <div class="form-field">
+          <label for="password-reset-new">New password</label>
+          <input id="password-reset-new" name="password" type="password" required autocomplete="new-password" minlength="12" maxlength="128">
+          <p class="field-hint">Use 12–128 characters.</p>
         </div>
         <div class="form-field">
-          <label for="auth-password">
-            Password
-          </label>
-          <input id="auth-password" name="password" type="password" required autocomplete="current-password" minlength="12" maxlength="128">
-          <p class="field-hint">
-            Use 12–128 characters.
-          </p>
+          <label for="password-reset-confirm">Confirm new password</label>
+          <input id="password-reset-confirm" name="password_confirmation" type="password" required autocomplete="new-password" minlength="12" maxlength="128">
         </div>
-        <p id="auth-error" class="form-error" role="alert" hidden>
-        </p>
-        <button id="auth-submit" class="button button-primary full-width" type="submit">
-          Sign in
-          <span aria-hidden="true">
-            →
-          </span>
-        </button>
+        <p class="field-hint">Resetting your password signs out your browsers and connected agents.</p>
+        <p id="password-reset-error" class="form-error" role="alert" hidden></p>
+        <button id="password-reset-submit" class="button button-primary full-width" type="submit">Reset password</button>
+        <button class="text-button auth-back" type="button" id="password-reset-back">Back to sign in</button>
       </form>
     </dialog>
     <dialog id="submission-dialog" class="wide-dialog" aria-labelledby="submission-title">
@@ -844,6 +963,16 @@
               <pre id="selected-method-code" class="code-block">
               </pre>
             </details>
+            <div class="form-field">
+              <label for="ai-model">
+                AI model(s)
+                <span class="optional">Optional</span>
+              </label>
+              <input id="ai-model" name="ai_model" maxlength="600" aria-describedby="ai-model-hint" placeholder="Model name and version, if known" autocomplete="off">
+              <p id="ai-model-hint" class="field-hint">
+                Which model(s) implemented this result? Participant-reported, up to 300 characters. Leave blank if not reported.
+              </p>
+            </div>
           </fieldset>
           <fieldset class="form-section">
             <legend>
@@ -897,7 +1026,7 @@
             </div>
           </fieldset>
           <p class="form-footnote">
-            Correct recoveries may publish your handle, method, pseudocode, and compute declaration on the leaderboard.
+            Correct recoveries may publish your handle, method, pseudocode, AI model annotation, and compute declaration with the result.
           </p>
           <p id="submission-error" class="form-error" role="alert" hidden>
           </p>

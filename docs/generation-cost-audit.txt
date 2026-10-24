@@ -1,0 +1,73 @@
+CHALLENGE GENERATION AUDIT — 16 OCTOBER 2026
+Application checkpoint afa1185. No runtime behavior changed by this audit.
+
+Observed lifecycle
+Start issues only the selected profile. Once that account has started a scheme
+for the current hour, opening another profile in the Challenge view requests
+just that profile. Overview/leaderboard browsing and slider previews do not
+generate. Repeated requests reuse the account/scheme/version/profile/hour row.
+No all-profile/hourly background sweep runs. A new hour requires a fresh Start
+unless this account has already started that scheme/hour elsewhere.
+
+User clarification: do not eagerly generate all tiers merely to make them ready.
+The existing lazy implementation already meets this intent and should be kept.
+
+Measurement method
+Local macOS arm64, Python 3.14.6, 10 logical CPUs. Three sequential adapter.generate
+calls at first/middle/highest profile for each of eight current constructions:
+72 calls across 24 profiles. Fresh interpreter per profile; imports and metadata
+setup excluded from generation timings. Timed work includes fresh key generation,
+encapsulation, honest decapsulation/agreement, output construction, and adapter
+integrity checks. No live database or user account is used. No secret outputs
+are retained. CPU includes the Python parent and completed worker children.
+
+These are small-sample local latency observations, not cloud capacity guarantees,
+load tests, worst-case bounds, or official benchmark timings for named standards.
+Most current adapters are explicit research constructions. HTTP, persistence,
+networking, startup validation and contention are excluded. All 72 sampled
+generations completed with matching shared secrets.
+
+Median generation times (milliseconds; first / middle / highest profile)
+teaching-dh-kem (7): 0.028 / 3.764 / 126.340; highest observed range 125.136–127.314
+rsa-kem (4): 0.074 / 12.392 / 2253.332; highest observed range 968.433–2460.559
+dhkem-x25519 (curve-compressed-v2): 0.313 / 5.286 / 20.419; highest observed range 19.563–20.433
+ml-kem (packed-research-v3): 32.424 / 37.524 / 100.144; highest observed range 99.133–100.721
+frodokem (anchor-research-v3): 33.481 / 119.999 / 342.206; highest observed range 342.057–344.841
+sntrup (3): 6.582 / 7.816 / 36.765; highest observed range 36.568–36.862
+hqc (growth-research-v2): 2.534 / 3.102 / 6.416; highest observed range 6.056–10.556
+classic-mceliece (length-research-v1): 67.711 / 243.365 / 846.311; highest observed range 330.168–849.343
+
+Total measured CPU across all 72 calls: 11.24 seconds. This is not a workload
+average: the test deliberately takes the same number of samples at three sizes
+for every scheme. RSA prime search and McEliece key generation vary by draw.
+Highest McEliece public JSON alone is about 523 KB; stored manifests/HTTP add
+overhead. Avoiding unused instances saves storage as well as processing.
+
+Assessment and bounded next work
+- Keep lazy issuance and persisted same-round reuse. Do not reuse private keys
+  across participants or alter challenge distributions to reduce server cost.
+- Generation already happens outside long database transactions; publication
+  rechecks identity, release, incident holds and round before short commit.
+- Same-process reservation rejects duplicate in-flight work without another draw.
+  Different app workers can redundantly compute before one durable result wins.
+  Start beta with a controlled worker count; add shared reservation before scaling.
+- The two-slot semaphore covers research/standard profiles, not current DH/RSA.
+  Apply bounded admission to all generators before beta. Existing per-IP request
+  rate limiting is not an account compute allowance.
+- Browser request timeout is 20 seconds, equal to some worker limits before
+  HTTP overhead. Align generation deadlines and retry/status UX for slow cases.
+- Do not add a general background queue or persistent secret-holding worker pool
+  just for these measured latencies. Revisit only if hosted measurements justify it.
+- Profile the selected target host, simultaneous users and peak-hour bursts before
+  setting a cohort size. Allocated VM costs are not billed per generated instance.
+
+Verification
+24 tests passed: tests/test_round_access.py and tests/test_generation_concurrency.py.
+16 frontend round-access regressions passed: tests/test_round_access.cjs.
+Test warnings: existing Starlette/httpx deprecation; pytest cache could not be
+written under the read-only repository sandbox. Test cases all passed.
+
+Code reviewed: crucible/app.py challenge GET/POST; crucible/generation.py;
+web/app.js loadChallenge/issueChallenge; current registered adapters and workers.
+Local raw measurements and harness: workspace work/generation-audit/results.jsonl
+and work/generation-audit/measure.py. These contain timings/metadata only.

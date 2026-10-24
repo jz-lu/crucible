@@ -20,7 +20,7 @@ from crucible.protocol_admission import CHECKS, check_admission
 from crucible.protocol_proposals import ProtocolProposal, ProtocolProposalRevision, ProtocolProposalReview
 from crucible.protocol_specs import builtin_spec
 from test_api import system
-from proposal_fixtures import tier_design
+from proposal_fixtures import correctness_review_spec, tier_design
 
 
 def digest(spec):
@@ -31,7 +31,7 @@ def digest(spec):
 @pytest.fixture
 def approved(system):
     app, _, settings = system
-    spec = {**builtin_spec('teaching-dh-kem', '4'), 'tier_design': tier_design()}
+    spec = correctness_review_spec({**builtin_spec('teaching-dh-kem', '4'), 'tier_design': tier_design()})
     author, reviewer, identifier = (str(uuid4()) for _ in range(3))
     with app.state.db.transaction(write=True) as session:
         session.add_all([User(id=author, handle='author', password_hash='unused', created_at=1),
@@ -108,6 +108,20 @@ def test_registered_source_fingerprint_cannot_change_after_review(approved, monk
         check_admission(session, identifier, 'teaching-dh-kem', '4')
 
 
+@pytest.mark.parametrize('field', ['justification', 'private_key'])
+def test_historical_approval_is_preserved_but_needs_new_correctness_review_for_admission(approved, field):
+    app, identifier, _, _, _ = approved
+    section = 'encoding' if field == 'private_key' else 'correctness'
+    replace_reviewed_specification(app, identifier, lambda spec: spec[section].pop(field))
+    with app.state.db.transaction() as session:
+        record = session.get(ProtocolProposal, identifier)
+        before = deepcopy(record.specification), record.content_sha256, record.status
+        with pytest.raises(ValueError, match='correctness justification|private-key encoding'):
+            check_admission(session, identifier, 'teaching-dh-kem', '4')
+        session.refresh(record)
+        assert (record.specification, record.content_sha256, record.status) == before
+
+
 def replace_reviewed_specification(app, identifier, change):
     """Keep exact review bindings while testing one changed declaration."""
     with app.state.db.transaction(write=True) as session:
@@ -156,7 +170,7 @@ def test_profile_correctness_must_be_consistent_with_perfect_envelope(approved, 
 def test_statistical_common_envelope_binds_exact_declarations_and_allows_perfect_profiles(approved, monkeypatch, profile_bound, accepted):
     app, identifier, _, _, _ = approved
     replace_reviewed_specification(app, identifier,
-        lambda spec: spec['correctness'].update(kind='statistical', failure_bound='2^-133'))
+        lambda spec: spec['correctness'].update(kind='statistical', failure_bound='2^-133', failure_bound_exponent=133))
     adapter = registry.ADAPTERS[('teaching-dh-kem', '4')]
     profiles = deepcopy(adapter.manifests())
     profiles[-1]['correctness'].update(kind='statistical', failure_bound=profile_bound)
@@ -171,7 +185,8 @@ def test_statistical_common_envelope_binds_exact_declarations_and_allows_perfect
 
 def test_actual_frodo_profiles_bind_the_common_envelope_with_stronger_perfect_first_profile(approved):
     app, identifier, _, _, _ = approved
-    spec = {**builtin_spec('frodokem', 'dimension-research-v1'), 'tier_design': tier_design()}
+    spec = correctness_review_spec({**builtin_spec('frodokem', 'dimension-research-v1'), 'tier_design': tier_design()})
+    spec['correctness']['failure_bound_exponent'] = 133  # Exact existing fixture envelope, declared for new admission.
     with app.state.db.transaction(write=True) as session:
         record = session.get(ProtocolProposal, identifier)
         record.specification, record.content_sha256 = spec, digest(spec)
@@ -225,7 +240,7 @@ def test_variable_output_spec_can_bind_distinct_valid_per_profile_lengths(approv
     with app.state.db.transaction() as session:
         report = check_admission(session, identifier, 'teaching-dh-kem', '4')
     assert report['status'] == 'binding-check-passed'
-    assert 'No execution, security certification, or activation' in report['scope']
+    assert 'No execution, correctness/security certification, or activation' in report['scope']
 
 
 @pytest.mark.parametrize('failure', ['duplicate', 'mismatch', 'missing-id', 'missing-profile-id',
@@ -270,7 +285,7 @@ def test_local_reviewer_assignment_resolves_existing_account_id_and_preserves_ot
 def test_local_grant_cannot_override_production_or_environment_policy(approved, monkeypatch):
     _, _, _, _, settings = approved
     with pytest.raises(ValueError, match='environment-managed'):
-        configure_reviewer(replace(settings, production=True), 'reviewer', grant=True)
+        configure_reviewer(replace(settings, production=True, access_mode="beta"), 'reviewer', grant=True)
     monkeypatch.setenv('CRUCIBLE_REVIEWER_IDS', '')
     with pytest.raises(ValueError, match='environment-managed'):
         configure_reviewer(settings, 'reviewer', grant=True)
@@ -364,3 +379,58 @@ def test_new_admission_requires_selection_review_and_rejects_test_only_decisions
             review.checks = checks
     with app.state.db.transaction() as session, pytest.raises(ValueError):
         check_admission(session, identifier, 'teaching-dh-kem', '4')
+
+
+@pytest.mark.parametrize('exponent,include_exponent,accepted', [(128, True, True), (138, True, True), (64, True, False), (127, True, False), (128, False, False)])
+def test_admission_requires_common_claimed_goal_and_binds_conjectural_profiles(approved, monkeypatch, exponent, include_exponent, accepted):
+    from proposal_fixtures import conjectural_correctness_spec
+
+    app, identifier, _, _, _ = approved
+    def replace_claim(spec):
+        spec.update(conjectural_correctness_spec(spec, exponent))
+        if not include_exponent:
+            spec['correctness'].pop('failure_bound_exponent')
+    replace_reviewed_specification(app, identifier, replace_claim)
+    adapter = registry.ADAPTERS[('teaching-dh-kem', '4')]
+    profiles = deepcopy(adapter.manifests())
+    profiles[-1]['correctness'].update(kind='statistical', failure_bound=f'2^-{exponent}')
+    monkeypatch.setattr(adapter, 'manifests', lambda: profiles)
+    before = dict(registry.CURRENT)
+    if not accepted:
+        with app.state.db.transaction() as session:
+            before_spec = deepcopy(session.get(ProtocolProposal, identifier).specification)
+            with pytest.raises(ValueError, match='failure_bound_exponent >=128'):
+                check_admission(session, identifier, 'teaching-dh-kem', '4')
+            record = session.get(ProtocolProposal, identifier)
+            assert record.status == 'approved'  # Historical review is not rewritten.
+            assert record.specification == before_spec
+        assert registry.CURRENT == before
+        return
+    with app.state.db.transaction() as session:
+        report = check_admission(session, identifier, 'teaching-dh-kem', '4')
+        stored = deepcopy(session.get(ProtocolProposal, identifier).specification)
+    assert report['status'] == 'binding-check-passed'
+    assert report['correctness_policy_id'] is None
+    assert report['correctness_policy_advisory'] is False
+    assert report['correctness_claim_target_exponent'] == 128
+    assert report['correctness_evidence_kind'] == 'conjectural-claim'
+    assert 'not established' in report['scope']
+    assert stored['correctness']['failure_bound'] == f'2^-{exponent}'
+    assert stored['correctness']['justification']['kind'] == 'conjectural-claim'
+    assert 'verified' not in stored['correctness']
+    assert registry.CURRENT == before
+    profiles[-1]['correctness']['failure_bound'] = '2^-32'
+    with app.state.db.transaction() as session, pytest.raises(ValueError, match='exact reviewed common failure bound'):
+        check_admission(session, identifier, 'teaching-dh-kem', '4')
+
+
+def test_optional_historical_reference_is_reported_only_when_declared(approved):
+    app, identifier, _, _, _ = approved
+    with app.state.db.transaction() as session:
+        assert check_admission(session, identifier, 'teaching-dh-kem', '4')['correctness_policy_id'] is None
+    replace_reviewed_specification(app, identifier,
+        lambda spec: spec['correctness'].update(policy_id='crucible-honest-agreement-128-v1'))
+    with app.state.db.transaction() as session:
+        report = check_admission(session, identifier, 'teaching-dh-kem', '4')
+    assert report['correctness_policy_id'] == 'crucible-honest-agreement-128-v1'
+    assert report['correctness_policy_advisory'] is False

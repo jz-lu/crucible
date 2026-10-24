@@ -1,0 +1,184 @@
+PRIVATE BETA FOUNDATION — 16 OCTOBER 2026
+
+Implemented locally; no hosted service has been provisioned or declared ready.
+This supersedes the implementation-status paragraphs in hosting-plan.txt; its
+privacy and operational requirements remain applicable. The intended pilot is
+100–150 concurrent participants, not 100–150 simultaneous generation workers.
+Hosted capacity has not been measured.
+
+What is available
+
+- Explicit membership on existing account UUIDs; recipient-bound invitations,
+  separate mailbox verification, revocation, suspension and access audit events.
+  Existing accounts, passwords, ownership, results and sessions are preserved.
+- One beta access policy for browser and agent requests, including protected
+  reads/downloads and device approval. Unclassified routes are denied in beta.
+  Membership does not grant reviewer powers or access to other users' private
+  challenges/proposals. Revocation also invalidates sessions and agent access.
+- Production challenge issuance requires a scheme_id@version allowlist, including
+  existing DH/RSA releases; an empty allowlist permits no new hosted challenges.
+  This is a beta availability decision, not independent admission, a security
+  certification, or permission to change pinned source/build artifacts.
+- Per-app generation capacity defaults to two jobs, one per account across all
+  schemes, including DH/RSA. Separate password-work capacity defaults to two.
+  Busy generation returns 503 with Retry-After: 3; there is no generation queue.
+- Generation stays lazy: request one configuration, persist that account's
+  instance for the hourly round, reuse it on refresh/download/retry. There is no
+  eager whole-ladder or hourly regeneration. Participants receive distinct fresh
+  instances with the same end-of-hour deadline, not one global shared instance.
+- Research notes and immutable revisions now persist in the database under their
+  account owner. New notes begin private. Publish sends a Publish request that gives
+  configured reviewers access to an exact revision; approval permits other
+  admitted participants to read it. This does not certify the research, admit a
+  scheme or award points. Private participant sharing is retired: old grants no
+  longer authorize reading and no new grants can be created. Historical audit
+  records are preserved. Later edits stay private until separately published.
+  Development-only self-review is recorded separately and cannot grant production
+  publication authority. Reviewer configuration remains separate from beta membership.
+- Notebook browser/API routes follow the membership gate and resource ownership.
+  Notebook agent exchange uses explicit JSON export/import; existing bearer tokens
+  do not grant notebook access. Import preserves revision history and provenance,
+  and cannot supply approval authority. Old browser drafts remain in place until
+  explicitly imported; no sign-in automatically uploads or assigns them.
+
+Local setup with an existing account
+
+Defaults remain CRUCIBLE_ENV=development and CRUCIBLE_ACCESS_MODE=open. Merely
+updating the code does not put existing local users behind the beta gate.
+The example environment file is documentation; it is not automatically loaded.
+Export chosen variables in the server/operator process environment.
+
+Use the intended checkout and the same DATABASE_URL, CRUCIBLE_DATA_DIR and server
+secret for both CLI and server. Preserve the existing database and server key.
+After stopping the local server and backing up its state, apply migrations:
+
+  .venv/bin/python -m crucible.manage migrate
+
+Migration 0009 adds access records; it does not enroll or delete existing users.
+Migration 0010 adds optional AI-model attribution to numerical submissions;
+migration 0011 adds notebook records. Neither assigns existing browser drafts to
+accounts or changes historical results. Database backups now cover saved server
+notes and sharing decisions; export unimported browser drafts separately.
+Inspect accounts, then explicitly grant each participant who should retain entry:
+
+  .venv/bin/python -m scripts.beta_access list
+  .venv/bin/python -m scripts.beta_access grant EXISTING_HANDLE --reason "Local beta workflow test"
+
+The operator CLI accepts handles, resolves stable UUIDs and records the reason.
+It is a trusted service-host tool with database access; it needs no configured
+CRUCIBLE_ACCESS_ADMIN_IDS. No automatic grant to every existing account occurs.
+The account list reports membership (pending, active or revoked) and a separate
+suspended flag. Active membership alone does not override a suspension.
+
+Start the local gate after grants are in place:
+
+  CRUCIBLE_ACCESS_MODE=beta ./run.sh
+
+The launcher binds only to 127.0.0.1:8000. To return this local development server
+to its prior access behavior, restart with CRUCIBLE_ACCESS_MODE=open. Production
+must stay beta until per-record publication controls are implemented; opening
+the existing beta corpus is not a supported launch procedure.
+
+Operator controls also include revoke, suspend and restore, each with an existing
+handle and --reason. Restore removes suspension; it does not recreate revoked
+credentials or itself grant a revoked membership. Regrant explicitly if intended.
+CRUCIBLE_ACCESS_ADMIN_IDS is needed only for invitation/member administration
+through the authenticated browser/API; it accepts UUIDs, separate from reviewer
+IDs. Configured admins still need active beta membership.
+
+Testing invitation and email verification
+
+Real delivery is disabled by default: CRUCIBLE_MAIL_BACKEND=disabled. For a local
+trial, explicitly export these before starting the server:
+
+  export CRUCIBLE_MAIL_BACKEND=local
+  export CRUCIBLE_MAIL_OUTBOX_DIR="$PWD/.local/mail-outbox"
+  export CRUCIBLE_MAIL_FROM=crucible@example.invalid
+
+Create a recipient-bound invitation using the same database/configuration:
+
+  .venv/bin/python -m scripts.beta_access invite participant@example.invalid
+
+The CLI returns its secret invitation link once; it does not email that link.
+Open it, sign in or create the invited account, and request mailbox verification.
+Local delivery puts the verification message in .local/mail-outbox as a private
+.eml file. Read its code locally and complete the invitation page. This exercises
+the flow without claiming delivery to a real mailbox. Invitations expire after
+seven days; verification codes expire after ten minutes, with resend/guess limits.
+Do not commit or share the outbox, invite links, codes or database contents.
+
+List or withdraw invitations through the trusted operator CLI:
+
+  .venv/bin/python -m scripts.beta_access invitations --limit 100 --offset 0
+  .venv/bin/python -m scripts.beta_access revoke-invite INVITATION_ID --reason "Invitation withdrawn"
+
+Listing returns invitation IDs, recipient emails, expiry and status, never the
+secret link or verification code. Status is available, redeemed, expired, locked
+(too many failed verification attempts), or revoked. Pagination permits limits
+from 1 to 1000 and a nonnegative offset. Repeated revoke-invite is safe and sends
+no email. It withdraws the invitation only: to remove an already admitted user's
+membership, use revoke EXISTING_HANDLE --reason "Access withdrawn" instead.
+
+For actual delivery, configure SMTP host, verified sender and any credentials
+through deployment secrets; STARTTLS is required. The transport is implemented,
+but a real sender/domain, delivery tests and operational handling remain pending.
+Mailbox verification currently establishes invitation ownership; it is not a
+password-recovery flow. ORCID linking is not yet implemented.
+
+Capacity checks and limits
+
+CRUCIBLE_GENERATION_CONCURRENCY=2, CRUCIBLE_GENERATION_PER_ACCOUNT=1 and
+CRUCIBLE_AUTH_CONCURRENCY=2 are conservative defaults, each bounded to 1..32.
+Generation per-account capacity cannot exceed total capacity. Limits and counters
+are local to an app process: four processes can admit four times the configured
+work. Begin with a controlled single-process deployment, then measure before
+changing this. The native workers are separate bounded child processes.
+
+Run the reproducible admission check from the checkout:
+
+  PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m scripts.check_generation_capacity --users 150
+
+Recorded result: 150 simultaneous synthetic HTTP requests, two admitted and 148
+busy responses with Retry-After; peak generation two, no leaked slots. Health,
+session and catalogue reads completed while accepted generation was held.
+The focused generation/correctness integration suites passed 45 tests.
+
+This harness creates and deletes a temporary SQLite database, seeds synthetic
+sessions and replaces generation in memory. It never connects to a running site.
+It does not measure real cryptographic throughput, password hashing, PostgreSQL,
+network latency or hosted capacity. In-memory limiter snapshots expose aggregate
+counts/durations only, reset on restart, and are not a monitoring service.
+
+Current isolated workers have deadlines of 20 seconds (module/Frodo/HQC/McEliece
+and published PQ references) or 15 seconds (NTRU). A 30-second browser generation
+timeout leaves normal overhead headroom but is not an end-to-end guarantee.
+DH/EC are in-process without hard request deadlines; RSA's five-second search
+budget does not cover all request work. Database waits, artifact checks and
+commits add time. Browser timeout does not cancel server generation; re-read or
+retry the same configuration to recover its existing instance safely.
+
+Before a hosted pilot
+
+Use one application service behind HTTPS, private PostgreSQL, private persistent
+storage and restorable backups. Configure production origin/secret, access mode,
+reviewed beta release allowlist and mail deliberately; do not expose development
+mode to enable research schemes. No vendor, machine size or paid service is chosen.
+
+Remaining release gates:
+- Reviewed Linux builds and artifact identity policy. Current native pins are
+  runtime/platform-specific. Do not replace a release's pinned artifact in place
+  or bypass checks; review a new release or explicit platform-variant model.
+- Real PostgreSQL migrations, concurrency, revocation/issuance races and restore
+  tests; the temporary SQLite admission check does not establish these results.
+- A workload test on the chosen host: 100–150 active participants with realistic
+  browsing, generation bursts, submission traffic and separate login bursts;
+  record latency tails, CPU/RAM, errors and generation aborts. Size from evidence.
+- HTTPS/proxy/origin configuration, secret storage, private logs, health checks,
+  backups including the persistent server key, and a rehearsed restore.
+- Real email delivery, account recovery and ORCID linking as separate identity
+  work. No mailbox or ORCID identifier should replace existing account UUIDs.
+- Notebook integration with proposals and change requests, scoped agent API access,
+  and scientific review beyond permission to share a note. Test database recovery
+  with notebook revisions/import provenance and sharing decisions included.
+- Explicit per-record publication rules and author decisions before any public
+  launch. Beta-only contributions must not become public by changing one setting.

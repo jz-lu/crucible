@@ -1,0 +1,2201 @@
+{
+  "environment": {
+    "architecture": "arm64",
+    "cpu_affinity": "not pinned",
+    "cpu_model": "arm",
+    "os": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+    "python": "CPython 3.14.6",
+    "single_threaded": true
+  },
+  "format": "crucible-reference-benchmark-v1",
+  "harness": {
+    "files": {
+      "scripts/reference_benchmark.py": "dfb282ab263983155a2698340a480090bd5291960057853ad518fc69c8f26d1e",
+      "scripts/reference_benchmark_adapters.py": "a5fd6b57c246143afc7bb0aca352a99e4cd3ba62e525c8ce2b08d8e1d3124878",
+      "scripts/reference_benchmark_native.c": "e4aa9f3342a2f00edee07d2752343cab7e1adbd3edf68e073094e4ce284649db",
+      "scripts/reference_benchmark_native.py": "ee375adcc9128c79e954fc902e18b68db08e5677df327f7c189392723b4bb5eb",
+      "scripts/reference_benchmark_worker.py": "1513cf7699daf2914edc60411df9827ee52503d7103e906e8b6ef515f173e1a3"
+    },
+    "sha256": "0fef1a7a55c897c0fbf857ceda619f42d7fe92aa2a9f96725a5ea3fe7afca46f"
+  },
+  "measured_at": "2026-10-17T12:01:00.980339+00:00",
+  "method_id": "reference-operations-v1",
+  "policy": {
+    "excludes": [
+      "process startup",
+      "artifact verification",
+      "HTTP",
+      "JSON",
+      "database",
+      "final equality check"
+    ],
+    "includes": [
+      "required operation checks",
+      "RNG",
+      "canonical cryptographic encoding",
+      "KDF"
+    ],
+    "input_distribution": "fresh independent honest keypair and encapsulation per trial; valid ciphertext decapsulation",
+    "profile_timeout_seconds": 120.0,
+    "quartiles": "inclusive linear interpolation; summaries retain completed operations from partial trials",
+    "trials": 20,
+    "warmups": 3
+  },
+  "records": [
+    {
+      "artifact_sha256": "4e57f4490a91ac563861091c58682b295de2a01b8368420de143de2342dd1d3b",
+      "benchmark_artifact": null,
+      "completed_trials": 20,
+      "end_to_end_seconds": 0.04552791599417105,
+      "exit_code": 0,
+      "implementation": {
+        "label": "Python compressed module-LWE reference",
+        "language": "Python",
+        "performance_level": "reference"
+      },
+      "notes": [],
+      "operations": {
+        "decapsulate": {
+          "count": 20,
+          "max_ns": 81375,
+          "median_ns": 70896.0,
+          "min_ns": 65125,
+          "q1_ns": 69812.0,
+          "q3_ns": 71584.0,
+          "samples_ns": [
+            67250,
+            75666,
+            71458,
+            65125,
+            71584,
+            81375,
+            72000,
+            70417,
+            67625,
+            69375,
+            69916,
+            71125,
+            70041,
+            71125,
+            70667,
+            74500,
+            70167,
+            71584,
+            69500,
+            71250
+          ]
+        },
+        "encapsulate": {
+          "count": 20,
+          "max_ns": 67958,
+          "median_ns": 57916.5,
+          "min_ns": 53625,
+          "q1_ns": 57021.0,
+          "q3_ns": 58645.75,
+          "samples_ns": [
+            54792,
+            56583,
+            58834,
+            53625,
+            60875,
+            67958,
+            55250,
+            58583,
+            57958,
+            57875,
+            57709,
+            55000,
+            57875,
+            59083,
+            58500,
+            57500,
+            58084,
+            58625,
+            57167,
+            58708
+          ]
+        },
+        "keygen": {
+          "count": 20,
+          "max_ns": 44833,
+          "median_ns": 43896.0,
+          "min_ns": 41083,
+          "q1_ns": 42780.75,
+          "q3_ns": 44364.25,
+          "samples_ns": [
+            41083,
+            41125,
+            44125,
+            44833,
+            42250,
+            44458,
+            44542,
+            44166,
+            44333,
+            44625,
+            42459,
+            43083,
+            43792,
+            44500,
+            44000,
+            42750,
+            43709,
+            43541,
+            44208,
+            42791
+          ]
+        }
+      },
+      "outcomes": {
+        "measured": {
+          "agreement": 20
+        },
+        "warmup": {
+          "agreement": 3
+        }
+      },
+      "parameters_sha256": "974e7d9e983491f915b4dfb1c3230deea8d9d29d9cdb5809f6597108c9debae3",
+      "profile_id": "module-lwe-v4-tier-1",
+      "protocol_error": false,
+      "requested_trials": 20,
+      "scheme_id": "ml-kem",
+      "setup_seconds": 0.003652709,
+      "source_changed": false,
+      "source_sha256": "b3bd1e34b22a93e1e049868dfcd29b7e4f134793b411b1619029c8ad0dca452c",
+      "status": "complete",
+      "timed_out": false,
+      "trials": [
+        {
+          "index": 0,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 83500,
+            "encapsulate": 75834,
+            "keygen": 94542
+          }
+        },
+        {
+          "index": 1,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 72583,
+            "encapsulate": 69000,
+            "keygen": 56541
+          }
+        },
+        {
+          "index": 2,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 67833,
+            "encapsulate": 63959,
+            "keygen": 41375
+          }
+        },
+        {
+          "index": 0,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 67250,
+            "encapsulate": 54792,
+            "keygen": 41083
+          }
+        },
+        {
+          "index": 1,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 75666,
+            "encapsulate": 56583,
+            "keygen": 41125
+          }
+        },
+        {
+          "index": 2,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 71458,
+            "encapsulate": 58834,
+            "keygen": 44125
+          }
+        },
+        {
+          "index": 3,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 65125,
+            "encapsulate": 53625,
+            "keygen": 44833
+          }
+        },
+        {
+          "index": 4,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 71584,
+            "encapsulate": 60875,
+            "keygen": 42250
+          }
+        },
+        {
+          "index": 5,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 81375,
+            "encapsulate": 67958,
+            "keygen": 44458
+          }
+        },
+        {
+          "index": 6,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 72000,
+            "encapsulate": 55250,
+            "keygen": 44542
+          }
+        },
+        {
+          "index": 7,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 70417,
+            "encapsulate": 58583,
+            "keygen": 44166
+          }
+        },
+        {
+          "index": 8,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 67625,
+            "encapsulate": 57958,
+            "keygen": 44333
+          }
+        },
+        {
+          "index": 9,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 69375,
+            "encapsulate": 57875,
+            "keygen": 44625
+          }
+        },
+        {
+          "index": 10,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 69916,
+            "encapsulate": 57709,
+            "keygen": 42459
+          }
+        },
+        {
+          "index": 11,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 71125,
+            "encapsulate": 55000,
+            "keygen": 43083
+          }
+        },
+        {
+          "index": 12,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 70041,
+            "encapsulate": 57875,
+            "keygen": 43792
+          }
+        },
+        {
+          "index": 13,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 71125,
+            "encapsulate": 59083,
+            "keygen": 44500
+          }
+        },
+        {
+          "index": 14,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 70667,
+            "encapsulate": 58500,
+            "keygen": 44000
+          }
+        },
+        {
+          "index": 15,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 74500,
+            "encapsulate": 57500,
+            "keygen": 42750
+          }
+        },
+        {
+          "index": 16,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 70167,
+            "encapsulate": 58084,
+            "keygen": 43709
+          }
+        },
+        {
+          "index": 17,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 71584,
+            "encapsulate": 58625,
+            "keygen": 43541
+          }
+        },
+        {
+          "index": 18,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 69500,
+            "encapsulate": 57167,
+            "keygen": 44208
+          }
+        },
+        {
+          "index": 19,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 71250,
+            "encapsulate": 58708,
+            "keygen": 42791
+          }
+        }
+      ],
+      "version": "compressed-research-v4",
+      "warmup_completed": 3,
+      "warmup_requested": 3,
+      "worker_failure": null
+    },
+    {
+      "artifact_sha256": "4e57f4490a91ac563861091c58682b295de2a01b8368420de143de2342dd1d3b",
+      "benchmark_artifact": null,
+      "completed_trials": 20,
+      "end_to_end_seconds": 0.047142333001829684,
+      "exit_code": 0,
+      "implementation": {
+        "label": "Python compressed module-LWE reference",
+        "language": "Python",
+        "performance_level": "reference"
+      },
+      "notes": [],
+      "operations": {
+        "decapsulate": {
+          "count": 20,
+          "max_ns": 159167,
+          "median_ns": 120291.5,
+          "min_ns": 111458,
+          "q1_ns": 118458.0,
+          "q3_ns": 125510.5,
+          "samples_ns": [
+            119792,
+            120500,
+            118625,
+            158083,
+            159167,
+            125542,
+            111458,
+            118875,
+            113125,
+            118375,
+            118458,
+            113584,
+            121750,
+            120083,
+            126875,
+            123667,
+            128167,
+            125500,
+            118458,
+            122458
+          ]
+        },
+        "encapsulate": {
+          "count": 20,
+          "max_ns": 135500,
+          "median_ns": 97354.0,
+          "min_ns": 89541,
+          "q1_ns": 95843.5,
+          "q3_ns": 99771.25,
+          "samples_ns": [
+            99167,
+            97292,
+            95125,
+            105541,
+            135500,
+            117125,
+            102584,
+            98250,
+            89541,
+            95958,
+            101584,
+            98166,
+            96042,
+            93500,
+            96667,
+            98958,
+            96791,
+            95500,
+            97416,
+            95500
+          ]
+        },
+        "keygen": {
+          "count": 20,
+          "max_ns": 90417,
+          "median_ns": 72104.0,
+          "min_ns": 66500,
+          "q1_ns": 71489.75,
+          "q3_ns": 73479.0,
+          "samples_ns": [
+            72083,
+            71917,
+            71542,
+            71833,
+            90417,
+            79625,
+            73083,
+            69792,
+            85625,
+            73375,
+            66500,
+            72917,
+            71208,
+            72125,
+            71333,
+            75625,
+            73791,
+            70875,
+            72125,
+            71875
+          ]
+        }
+      },
+      "outcomes": {
+        "measured": {
+          "agreement": 20
+        },
+        "warmup": {
+          "agreement": 3
+        }
+      },
+      "parameters_sha256": "68049271fba466b7cb54a50a967d7e3d7321a0e6e2e40ae36c2a4dee08bd33e6",
+      "profile_id": "module-lwe-v4-tier-2",
+      "protocol_error": false,
+      "requested_trials": 20,
+      "scheme_id": "ml-kem",
+      "setup_seconds": 0.003501583,
+      "source_changed": false,
+      "source_sha256": "b3bd1e34b22a93e1e049868dfcd29b7e4f134793b411b1619029c8ad0dca452c",
+      "status": "complete",
+      "timed_out": false,
+      "trials": [
+        {
+          "index": 0,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 145000,
+            "encapsulate": 124084,
+            "keygen": 132750
+          }
+        },
+        {
+          "index": 1,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 137083,
+            "encapsulate": 102792,
+            "keygen": 77583
+          }
+        },
+        {
+          "index": 2,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 120500,
+            "encapsulate": 99459,
+            "keygen": 74042
+          }
+        },
+        {
+          "index": 0,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 119792,
+            "encapsulate": 99167,
+            "keygen": 72083
+          }
+        },
+        {
+          "index": 1,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 120500,
+            "encapsulate": 97292,
+            "keygen": 71917
+          }
+        },
+        {
+          "index": 2,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 118625,
+            "encapsulate": 95125,
+            "keygen": 71542
+          }
+        },
+        {
+          "index": 3,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 158083,
+            "encapsulate": 105541,
+            "keygen": 71833
+          }
+        },
+        {
+          "index": 4,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 159167,
+            "encapsulate": 135500,
+            "keygen": 90417
+          }
+        },
+        {
+          "index": 5,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 125542,
+            "encapsulate": 117125,
+            "keygen": 79625
+          }
+        },
+        {
+          "index": 6,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 111458,
+            "encapsulate": 102584,
+            "keygen": 73083
+          }
+        },
+        {
+          "index": 7,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 118875,
+            "encapsulate": 98250,
+            "keygen": 69792
+          }
+        },
+        {
+          "index": 8,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 113125,
+            "encapsulate": 89541,
+            "keygen": 85625
+          }
+        },
+        {
+          "index": 9,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 118375,
+            "encapsulate": 95958,
+            "keygen": 73375
+          }
+        },
+        {
+          "index": 10,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 118458,
+            "encapsulate": 101584,
+            "keygen": 66500
+          }
+        },
+        {
+          "index": 11,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 113584,
+            "encapsulate": 98166,
+            "keygen": 72917
+          }
+        },
+        {
+          "index": 12,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 121750,
+            "encapsulate": 96042,
+            "keygen": 71208
+          }
+        },
+        {
+          "index": 13,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 120083,
+            "encapsulate": 93500,
+            "keygen": 72125
+          }
+        },
+        {
+          "index": 14,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 126875,
+            "encapsulate": 96667,
+            "keygen": 71333
+          }
+        },
+        {
+          "index": 15,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 123667,
+            "encapsulate": 98958,
+            "keygen": 75625
+          }
+        },
+        {
+          "index": 16,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 128167,
+            "encapsulate": 96791,
+            "keygen": 73791
+          }
+        },
+        {
+          "index": 17,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 125500,
+            "encapsulate": 95500,
+            "keygen": 70875
+          }
+        },
+        {
+          "index": 18,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 118458,
+            "encapsulate": 97416,
+            "keygen": 72125
+          }
+        },
+        {
+          "index": 19,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 122458,
+            "encapsulate": 95500,
+            "keygen": 71875
+          }
+        }
+      ],
+      "version": "compressed-research-v4",
+      "warmup_completed": 3,
+      "warmup_requested": 3,
+      "worker_failure": null
+    },
+    {
+      "artifact_sha256": "4e57f4490a91ac563861091c58682b295de2a01b8368420de143de2342dd1d3b",
+      "benchmark_artifact": null,
+      "completed_trials": 20,
+      "end_to_end_seconds": 0.0523803329851944,
+      "exit_code": 0,
+      "implementation": {
+        "label": "Python compressed module-LWE reference",
+        "language": "Python",
+        "performance_level": "reference"
+      },
+      "notes": [],
+      "operations": {
+        "decapsulate": {
+          "count": 20,
+          "max_ns": 255708,
+          "median_ns": 217000.0,
+          "min_ns": 214000,
+          "q1_ns": 215854.75,
+          "q3_ns": 230708.5,
+          "samples_ns": [
+            235417,
+            216625,
+            243000,
+            215125,
+            214167,
+            216583,
+            216500,
+            239292,
+            216250,
+            216084,
+            222833,
+            215167,
+            229375,
+            214209,
+            227875,
+            234709,
+            214000,
+            217375,
+            255708,
+            223208
+          ]
+        },
+        "encapsulate": {
+          "count": 20,
+          "max_ns": 200667,
+          "median_ns": 172645.5,
+          "min_ns": 170291,
+          "q1_ns": 171343.75,
+          "q3_ns": 177031.25,
+          "samples_ns": [
+            178625,
+            170500,
+            172375,
+            171500,
+            174459,
+            172292,
+            171250,
+            178250,
+            172083,
+            171250,
+            178875,
+            172916,
+            173916,
+            170291,
+            176625,
+            174167,
+            171375,
+            170750,
+            200667,
+            183000
+          ]
+        },
+        "keygen": {
+          "count": 20,
+          "max_ns": 136042,
+          "median_ns": 127604.5,
+          "min_ns": 124333,
+          "q1_ns": 126562.25,
+          "q3_ns": 132500.0,
+          "samples_ns": [
+            132250,
+            136042,
+            128000,
+            128417,
+            126666,
+            127209,
+            126750,
+            125792,
+            129542,
+            124708,
+            125375,
+            133250,
+            126625,
+            128250,
+            133542,
+            126500,
+            134500,
+            124333,
+            126583,
+            135958
+          ]
+        }
+      },
+      "outcomes": {
+        "measured": {
+          "agreement": 20
+        },
+        "warmup": {
+          "agreement": 3
+        }
+      },
+      "parameters_sha256": "8b90097b66358165f29ac56be0960fa445689baae659b620eba7c323495f7f3f",
+      "profile_id": "module-lwe-v4-tier-3",
+      "protocol_error": false,
+      "requested_trials": 20,
+      "scheme_id": "ml-kem",
+      "setup_seconds": 0.003846875,
+      "source_changed": false,
+      "source_sha256": "b3bd1e34b22a93e1e049868dfcd29b7e4f134793b411b1619029c8ad0dca452c",
+      "status": "complete",
+      "timed_out": false,
+      "trials": [
+        {
+          "index": 0,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 239375,
+            "encapsulate": 215417,
+            "keygen": 203208
+          }
+        },
+        {
+          "index": 1,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 232625,
+            "encapsulate": 182167,
+            "keygen": 133875
+          }
+        },
+        {
+          "index": 2,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 219084,
+            "encapsulate": 193625,
+            "keygen": 152667
+          }
+        },
+        {
+          "index": 0,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 235417,
+            "encapsulate": 178625,
+            "keygen": 132250
+          }
+        },
+        {
+          "index": 1,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 216625,
+            "encapsulate": 170500,
+            "keygen": 136042
+          }
+        },
+        {
+          "index": 2,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 243000,
+            "encapsulate": 172375,
+            "keygen": 128000
+          }
+        },
+        {
+          "index": 3,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 215125,
+            "encapsulate": 171500,
+            "keygen": 128417
+          }
+        },
+        {
+          "index": 4,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 214167,
+            "encapsulate": 174459,
+            "keygen": 126666
+          }
+        },
+        {
+          "index": 5,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 216583,
+            "encapsulate": 172292,
+            "keygen": 127209
+          }
+        },
+        {
+          "index": 6,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 216500,
+            "encapsulate": 171250,
+            "keygen": 126750
+          }
+        },
+        {
+          "index": 7,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 239292,
+            "encapsulate": 178250,
+            "keygen": 125792
+          }
+        },
+        {
+          "index": 8,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 216250,
+            "encapsulate": 172083,
+            "keygen": 129542
+          }
+        },
+        {
+          "index": 9,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 216084,
+            "encapsulate": 171250,
+            "keygen": 124708
+          }
+        },
+        {
+          "index": 10,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 222833,
+            "encapsulate": 178875,
+            "keygen": 125375
+          }
+        },
+        {
+          "index": 11,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 215167,
+            "encapsulate": 172916,
+            "keygen": 133250
+          }
+        },
+        {
+          "index": 12,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 229375,
+            "encapsulate": 173916,
+            "keygen": 126625
+          }
+        },
+        {
+          "index": 13,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 214209,
+            "encapsulate": 170291,
+            "keygen": 128250
+          }
+        },
+        {
+          "index": 14,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 227875,
+            "encapsulate": 176625,
+            "keygen": 133542
+          }
+        },
+        {
+          "index": 15,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 234709,
+            "encapsulate": 174167,
+            "keygen": 126500
+          }
+        },
+        {
+          "index": 16,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 214000,
+            "encapsulate": 171375,
+            "keygen": 134500
+          }
+        },
+        {
+          "index": 17,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 217375,
+            "encapsulate": 170750,
+            "keygen": 124333
+          }
+        },
+        {
+          "index": 18,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 255708,
+            "encapsulate": 200667,
+            "keygen": 126583
+          }
+        },
+        {
+          "index": 19,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 223208,
+            "encapsulate": 183000,
+            "keygen": 135958
+          }
+        }
+      ],
+      "version": "compressed-research-v4",
+      "warmup_completed": 3,
+      "warmup_requested": 3,
+      "worker_failure": null
+    },
+    {
+      "artifact_sha256": "4e57f4490a91ac563861091c58682b295de2a01b8368420de143de2342dd1d3b",
+      "benchmark_artifact": null,
+      "completed_trials": 20,
+      "end_to_end_seconds": 0.06348524999339134,
+      "exit_code": 0,
+      "implementation": {
+        "label": "Python compressed module-LWE reference",
+        "language": "Python",
+        "performance_level": "reference"
+      },
+      "notes": [],
+      "operations": {
+        "decapsulate": {
+          "count": 20,
+          "max_ns": 458250,
+          "median_ns": 429979.5,
+          "min_ns": 413292,
+          "q1_ns": 421979.0,
+          "q3_ns": 447698.0,
+          "samples_ns": [
+            439375,
+            434250,
+            430125,
+            429834,
+            425417,
+            453750,
+            414625,
+            414250,
+            458250,
+            433292,
+            453375,
+            454250,
+            422083,
+            423083,
+            422250,
+            421667,
+            413292,
+            419000,
+            447500,
+            448292
+          ]
+        },
+        "encapsulate": {
+          "count": 20,
+          "max_ns": 349000,
+          "median_ns": 331583.5,
+          "min_ns": 327208,
+          "q1_ns": 329395.5,
+          "q3_ns": 335354.5,
+          "samples_ns": [
+            339917,
+            335416,
+            329334,
+            332667,
+            331292,
+            340792,
+            327917,
+            327208,
+            331542,
+            347333,
+            334833,
+            331625,
+            335334,
+            333334,
+            329833,
+            329250,
+            349000,
+            329500,
+            329416,
+            327792
+          ]
+        },
+        "keygen": {
+          "count": 20,
+          "max_ns": 265917,
+          "median_ns": 245124.5,
+          "min_ns": 238833,
+          "q1_ns": 241948.5,
+          "q3_ns": 252083.0,
+          "samples_ns": [
+            264250,
+            241917,
+            243750,
+            243375,
+            251333,
+            256750,
+            250542,
+            238833,
+            250417,
+            264750,
+            250750,
+            265917,
+            245958,
+            242791,
+            241959,
+            240542,
+            254333,
+            240958,
+            241500,
+            244291
+          ]
+        }
+      },
+      "outcomes": {
+        "measured": {
+          "agreement": 20
+        },
+        "warmup": {
+          "agreement": 3
+        }
+      },
+      "parameters_sha256": "9438a7c8eaa56a89aab02655307809a6f44511085cc3c0fec0aa7eda4afd8c84",
+      "profile_id": "module-lwe-v4-tier-4",
+      "protocol_error": false,
+      "requested_trials": 20,
+      "scheme_id": "ml-kem",
+      "setup_seconds": 0.003417917,
+      "source_changed": false,
+      "source_sha256": "b3bd1e34b22a93e1e049868dfcd29b7e4f134793b411b1619029c8ad0dca452c",
+      "status": "complete",
+      "timed_out": false,
+      "trials": [
+        {
+          "index": 0,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 512417,
+            "encapsulate": 367167,
+            "keygen": 348208
+          }
+        },
+        {
+          "index": 1,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 423583,
+            "encapsulate": 346875,
+            "keygen": 253208
+          }
+        },
+        {
+          "index": 2,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 434541,
+            "encapsulate": 341916,
+            "keygen": 238708
+          }
+        },
+        {
+          "index": 0,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 439375,
+            "encapsulate": 339917,
+            "keygen": 264250
+          }
+        },
+        {
+          "index": 1,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 434250,
+            "encapsulate": 335416,
+            "keygen": 241917
+          }
+        },
+        {
+          "index": 2,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 430125,
+            "encapsulate": 329334,
+            "keygen": 243750
+          }
+        },
+        {
+          "index": 3,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 429834,
+            "encapsulate": 332667,
+            "keygen": 243375
+          }
+        },
+        {
+          "index": 4,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 425417,
+            "encapsulate": 331292,
+            "keygen": 251333
+          }
+        },
+        {
+          "index": 5,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 453750,
+            "encapsulate": 340792,
+            "keygen": 256750
+          }
+        },
+        {
+          "index": 6,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 414625,
+            "encapsulate": 327917,
+            "keygen": 250542
+          }
+        },
+        {
+          "index": 7,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 414250,
+            "encapsulate": 327208,
+            "keygen": 238833
+          }
+        },
+        {
+          "index": 8,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 458250,
+            "encapsulate": 331542,
+            "keygen": 250417
+          }
+        },
+        {
+          "index": 9,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 433292,
+            "encapsulate": 347333,
+            "keygen": 264750
+          }
+        },
+        {
+          "index": 10,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 453375,
+            "encapsulate": 334833,
+            "keygen": 250750
+          }
+        },
+        {
+          "index": 11,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 454250,
+            "encapsulate": 331625,
+            "keygen": 265917
+          }
+        },
+        {
+          "index": 12,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 422083,
+            "encapsulate": 335334,
+            "keygen": 245958
+          }
+        },
+        {
+          "index": 13,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 423083,
+            "encapsulate": 333334,
+            "keygen": 242791
+          }
+        },
+        {
+          "index": 14,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 422250,
+            "encapsulate": 329833,
+            "keygen": 241959
+          }
+        },
+        {
+          "index": 15,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 421667,
+            "encapsulate": 329250,
+            "keygen": 240542
+          }
+        },
+        {
+          "index": 16,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 413292,
+            "encapsulate": 349000,
+            "keygen": 254333
+          }
+        },
+        {
+          "index": 17,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 419000,
+            "encapsulate": 329500,
+            "keygen": 240958
+          }
+        },
+        {
+          "index": 18,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 447500,
+            "encapsulate": 329416,
+            "keygen": 241500
+          }
+        },
+        {
+          "index": 19,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 448292,
+            "encapsulate": 327792,
+            "keygen": 244291
+          }
+        }
+      ],
+      "version": "compressed-research-v4",
+      "warmup_completed": 3,
+      "warmup_requested": 3,
+      "worker_failure": null
+    },
+    {
+      "artifact_sha256": "4e57f4490a91ac563861091c58682b295de2a01b8368420de143de2342dd1d3b",
+      "benchmark_artifact": null,
+      "completed_trials": 20,
+      "end_to_end_seconds": 0.08689829101786017,
+      "exit_code": 0,
+      "implementation": {
+        "label": "Python compressed module-LWE reference",
+        "language": "Python",
+        "performance_level": "reference"
+      },
+      "notes": [],
+      "operations": {
+        "decapsulate": {
+          "count": 20,
+          "max_ns": 910875,
+          "median_ns": 853813.0,
+          "min_ns": 828500,
+          "q1_ns": 839448.0,
+          "q3_ns": 868541.75,
+          "samples_ns": [
+            861458,
+            871125,
+            847292,
+            840125,
+            833292,
+            865292,
+            862417,
+            888459,
+            860334,
+            828500,
+            842875,
+            845750,
+            869291,
+            841500,
+            868292,
+            835417,
+            837417,
+            891417,
+            836541,
+            910875
+          ]
+        },
+        "encapsulate": {
+          "count": 20,
+          "max_ns": 720625,
+          "median_ns": 669020.5,
+          "min_ns": 648084,
+          "q1_ns": 654530.75,
+          "q3_ns": 682906.25,
+          "samples_ns": [
+            649250,
+            693042,
+            653000,
+            650042,
+            648084,
+            685208,
+            675042,
+            655250,
+            676750,
+            720625,
+            656625,
+            657416,
+            650791,
+            678208,
+            692916,
+            655041,
+            664791,
+            684500,
+            682375,
+            673250
+          ]
+        },
+        "keygen": {
+          "count": 20,
+          "max_ns": 523667,
+          "median_ns": 482499.5,
+          "min_ns": 470625,
+          "q1_ns": 476188.0,
+          "q3_ns": 487844.0,
+          "samples_ns": [
+            479625,
+            487417,
+            474500,
+            478625,
+            496542,
+            470625,
+            476584,
+            475000,
+            523667,
+            482166,
+            486000,
+            482833,
+            508875,
+            474000,
+            490375,
+            474250,
+            478917,
+            483500,
+            489125,
+            487042
+          ]
+        }
+      },
+      "outcomes": {
+        "measured": {
+          "agreement": 20
+        },
+        "warmup": {
+          "agreement": 3
+        }
+      },
+      "parameters_sha256": "df6cf865fec68e66b9006b9ae487c3e0f34b55a4c970f7ad82664b4563d9e5c9",
+      "profile_id": "module-lwe-v4-tier-5",
+      "protocol_error": false,
+      "requested_trials": 20,
+      "scheme_id": "ml-kem",
+      "setup_seconds": 0.003392416,
+      "source_changed": false,
+      "source_sha256": "b3bd1e34b22a93e1e049868dfcd29b7e4f134793b411b1619029c8ad0dca452c",
+      "status": "complete",
+      "timed_out": false,
+      "trials": [
+        {
+          "index": 0,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 900750,
+            "encapsulate": 689834,
+            "keygen": 626291
+          }
+        },
+        {
+          "index": 1,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 885916,
+            "encapsulate": 700625,
+            "keygen": 533083
+          }
+        },
+        {
+          "index": 2,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 843417,
+            "encapsulate": 673625,
+            "keygen": 488958
+          }
+        },
+        {
+          "index": 0,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 861458,
+            "encapsulate": 649250,
+            "keygen": 479625
+          }
+        },
+        {
+          "index": 1,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 871125,
+            "encapsulate": 693042,
+            "keygen": 487417
+          }
+        },
+        {
+          "index": 2,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 847292,
+            "encapsulate": 653000,
+            "keygen": 474500
+          }
+        },
+        {
+          "index": 3,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 840125,
+            "encapsulate": 650042,
+            "keygen": 478625
+          }
+        },
+        {
+          "index": 4,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 833292,
+            "encapsulate": 648084,
+            "keygen": 496542
+          }
+        },
+        {
+          "index": 5,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 865292,
+            "encapsulate": 685208,
+            "keygen": 470625
+          }
+        },
+        {
+          "index": 6,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 862417,
+            "encapsulate": 675042,
+            "keygen": 476584
+          }
+        },
+        {
+          "index": 7,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 888459,
+            "encapsulate": 655250,
+            "keygen": 475000
+          }
+        },
+        {
+          "index": 8,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 860334,
+            "encapsulate": 676750,
+            "keygen": 523667
+          }
+        },
+        {
+          "index": 9,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 828500,
+            "encapsulate": 720625,
+            "keygen": 482166
+          }
+        },
+        {
+          "index": 10,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 842875,
+            "encapsulate": 656625,
+            "keygen": 486000
+          }
+        },
+        {
+          "index": 11,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 845750,
+            "encapsulate": 657416,
+            "keygen": 482833
+          }
+        },
+        {
+          "index": 12,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 869291,
+            "encapsulate": 650791,
+            "keygen": 508875
+          }
+        },
+        {
+          "index": 13,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 841500,
+            "encapsulate": 678208,
+            "keygen": 474000
+          }
+        },
+        {
+          "index": 14,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 868292,
+            "encapsulate": 692916,
+            "keygen": 490375
+          }
+        },
+        {
+          "index": 15,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 835417,
+            "encapsulate": 655041,
+            "keygen": 474250
+          }
+        },
+        {
+          "index": 16,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 837417,
+            "encapsulate": 664791,
+            "keygen": 478917
+          }
+        },
+        {
+          "index": 17,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 891417,
+            "encapsulate": 684500,
+            "keygen": 483500
+          }
+        },
+        {
+          "index": 18,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 836541,
+            "encapsulate": 682375,
+            "keygen": 489125
+          }
+        },
+        {
+          "index": 19,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 910875,
+            "encapsulate": 673250,
+            "keygen": 487042
+          }
+        }
+      ],
+      "version": "compressed-research-v4",
+      "warmup_completed": 3,
+      "warmup_requested": 3,
+      "worker_failure": null
+    },
+    {
+      "artifact_sha256": "4e57f4490a91ac563861091c58682b295de2a01b8368420de143de2342dd1d3b",
+      "benchmark_artifact": null,
+      "completed_trials": 20,
+      "end_to_end_seconds": 0.1358489159902092,
+      "exit_code": 0,
+      "implementation": {
+        "label": "Python compressed module-LWE reference",
+        "language": "Python",
+        "performance_level": "reference"
+      },
+      "notes": [],
+      "operations": {
+        "decapsulate": {
+          "count": 20,
+          "max_ns": 1795916,
+          "median_ns": 1737792.0,
+          "min_ns": 1717791,
+          "q1_ns": 1730093.75,
+          "q3_ns": 1755291.25,
+          "samples_ns": [
+            1760584,
+            1767833,
+            1747875,
+            1760416,
+            1795916,
+            1746083,
+            1724125,
+            1753583,
+            1734291,
+            1787584,
+            1730625,
+            1735709,
+            1739917,
+            1727500,
+            1722958,
+            1732375,
+            1734000,
+            1739875,
+            1717791,
+            1728500
+          ]
+        },
+        "encapsulate": {
+          "count": 20,
+          "max_ns": 1396375,
+          "median_ns": 1356896.0,
+          "min_ns": 1327042,
+          "q1_ns": 1341489.25,
+          "q3_ns": 1365646.25,
+          "samples_ns": [
+            1338458,
+            1342875,
+            1396375,
+            1333250,
+            1357375,
+            1356417,
+            1360708,
+            1339708,
+            1327042,
+            1372583,
+            1362542,
+            1358125,
+            1353500,
+            1343375,
+            1365167,
+            1390250,
+            1338917,
+            1342083,
+            1367084,
+            1386750
+          ]
+        },
+        "keygen": {
+          "count": 20,
+          "max_ns": 1034792,
+          "median_ns": 987896.0,
+          "min_ns": 961792,
+          "q1_ns": 968697.25,
+          "q3_ns": 1001666.5,
+          "samples_ns": [
+            961792,
+            989084,
+            1004542,
+            965500,
+            1008459,
+            991417,
+            974333,
+            1006583,
+            977250,
+            963541,
+            1034792,
+            997000,
+            1005209,
+            963375,
+            992833,
+            986708,
+            967666,
+            975042,
+            1000708,
+            969041
+          ]
+        }
+      },
+      "outcomes": {
+        "measured": {
+          "agreement": 20
+        },
+        "warmup": {
+          "agreement": 3
+        }
+      },
+      "parameters_sha256": "de735afe1a0519efd7499dab15e099359c2b65339d6456d34bc80cf9a3e5436a",
+      "profile_id": "module-lwe-v4-tier-6",
+      "protocol_error": false,
+      "requested_trials": 20,
+      "scheme_id": "ml-kem",
+      "setup_seconds": 0.003595833,
+      "source_changed": false,
+      "source_sha256": "b3bd1e34b22a93e1e049868dfcd29b7e4f134793b411b1619029c8ad0dca452c",
+      "status": "complete",
+      "timed_out": false,
+      "trials": [
+        {
+          "index": 0,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 1788750,
+            "encapsulate": 1465709,
+            "keygen": 1163041
+          }
+        },
+        {
+          "index": 1,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 1801125,
+            "encapsulate": 1378666,
+            "keygen": 980125
+          }
+        },
+        {
+          "index": 2,
+          "outcome": "agreement",
+          "phase": "warmup",
+          "timings_ns": {
+            "decapsulate": 1801791,
+            "encapsulate": 1356208,
+            "keygen": 985375
+          }
+        },
+        {
+          "index": 0,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 1760584,
+            "encapsulate": 1338458,
+            "keygen": 961792
+          }
+        },
+        {
+          "index": 1,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 1767833,
+            "encapsulate": 1342875,
+            "keygen": 989084
+          }
+        },
+        {
+          "index": 2,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 1747875,
+            "encapsulate": 1396375,
+            "keygen": 1004542
+          }
+        },
+        {
+          "index": 3,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 1760416,
+            "encapsulate": 1333250,
+            "keygen": 965500
+          }
+        },
+        {
+          "index": 4,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 1795916,
+            "encapsulate": 1357375,
+            "keygen": 1008459
+          }
+        },
+        {
+          "index": 5,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 1746083,
+            "encapsulate": 1356417,
+            "keygen": 991417
+          }
+        },
+        {
+          "index": 6,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 1724125,
+            "encapsulate": 1360708,
+            "keygen": 974333
+          }
+        },
+        {
+          "index": 7,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 1753583,
+            "encapsulate": 1339708,
+            "keygen": 1006583
+          }
+        },
+        {
+          "index": 8,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 1734291,
+            "encapsulate": 1327042,
+            "keygen": 977250
+          }
+        },
+        {
+          "index": 9,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 1787584,
+            "encapsulate": 1372583,
+            "keygen": 963541
+          }
+        },
+        {
+          "index": 10,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 1730625,
+            "encapsulate": 1362542,
+            "keygen": 1034792
+          }
+        },
+        {
+          "index": 11,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 1735709,
+            "encapsulate": 1358125,
+            "keygen": 997000
+          }
+        },
+        {
+          "index": 12,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 1739917,
+            "encapsulate": 1353500,
+            "keygen": 1005209
+          }
+        },
+        {
+          "index": 13,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 1727500,
+            "encapsulate": 1343375,
+            "keygen": 963375
+          }
+        },
+        {
+          "index": 14,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 1722958,
+            "encapsulate": 1365167,
+            "keygen": 992833
+          }
+        },
+        {
+          "index": 15,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 1732375,
+            "encapsulate": 1390250,
+            "keygen": 986708
+          }
+        },
+        {
+          "index": 16,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 1734000,
+            "encapsulate": 1338917,
+            "keygen": 967666
+          }
+        },
+        {
+          "index": 17,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 1739875,
+            "encapsulate": 1342083,
+            "keygen": 975042
+          }
+        },
+        {
+          "index": 18,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 1717791,
+            "encapsulate": 1367084,
+            "keygen": 1000708
+          }
+        },
+        {
+          "index": 19,
+          "outcome": "agreement",
+          "phase": "measured",
+          "timings_ns": {
+            "decapsulate": 1728500,
+            "encapsulate": 1386750,
+            "keygen": 969041
+          }
+        }
+      ],
+      "version": "compressed-research-v4",
+      "warmup_completed": 3,
+      "warmup_requested": 3,
+      "worker_failure": null
+    }
+  ],
+  "run_id": "2ccd3de7-e6e9-445d-82eb-ae0758481d5b"
+}

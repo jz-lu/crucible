@@ -7,10 +7,12 @@ operation.
 
 Hosting direction: the next hosted stage is a restricted private beta, followed
 by an explicit public launch. This audience policy is separate from production
-security settings. The current app has no beta-membership gate and still permits
-anonymous catalogue/profile/result reads; a private source repository does not
-restrict those routes. docs/hosting-plan.txt records the shared browser/agent
-access model and the remaining implementation work. Local polish comes first.
+security settings. The current app implements a central beta-membership gate for
+browser and scoped agent access, invitations, revocation and an explicit hosted
+release allowlist. Default open local mode still permits anonymous catalogue,
+profile and successful-result reads. Production currently requires beta mode.
+docs/private-beta-setup.txt describes the implemented controls; hosting-plan.txt
+preserves the earlier design and the remaining public-launch decisions.
 
 Persistence and boundaries
 
@@ -194,7 +196,7 @@ domain are unchanged. Release
 The example solver supports both releases. Existing challenges and answer receipts
 continue to use their recorded release, manifest, and target verifier.
 
-The leaderboard defaults to the current release (DH6/RSA3 as of 14 October 2026).
+The leaderboard defaults to the release explicitly selected in registry.CURRENT.
 Set scheme_version=1 to inspect
 historical records for a release-1 profile; records from different releases are not
 silently combined. GET /api/protocol/source?version=1 returns the archived source.
@@ -202,7 +204,7 @@ Research history retains the exact target release, and findings about registered
 older releases remain revisable. Historical source files must not be edited when
 updating the current adapter.
 
-Candidate admission — reviewed 14 October 2026
+Candidate admission — current workflow; earlier baseline reviewed 14 October 2026
 
 Authenticated private specification intake and revision-bound manual review are
 implemented. See protocol-admission.txt for the exact workflow. Submitted code
@@ -213,8 +215,10 @@ it does not independently consult the proposal approval ledger.
 
 A candidate needs a pinned specification and adapter, encodings and exact profiles,
 correctness argument with scope/assumptions, independent review, conformance
-vectors and a failure policy. Current active references are custom DH6/RSA3.
-Nonzero honest failure distributions need their own reviewed policy; never silently
+vectors and a failure policy. The eight current family releases and their evidence
+are described in README.md and scheme-reviews/current-releases-20261017.txt;
+registry.CURRENT determines executable identities. Nonzero honest failure
+distributions follow correctness-policy-v1.txt and their scoped reviewed premises; never silently
 condition sampling on agreement or generalize the current fault rule to all KEMs.
 See scheme-reviews/admission-and-coverage-challenge.txt for the audited rules,
 enforcement limits and remaining gates. Catalogue selection grants no admission.

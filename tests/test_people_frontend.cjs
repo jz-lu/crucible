@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const {createApp, flush} = require('./frontend-dom.cjs');
 const scoring = {status: 'active', policy_id: 'crucible-points-v2', ordering: 'points_desc_handle'};
 const record = {scheme_id: 'fixture', scheme_name: 'Fixture scheme', scheme_version: '2', profile_id: 'tier-4', tier: 4, submission_id: 'receipt-a', received_at: 100, is_current: true, scoring_eligible: true, score: {progress: 40, early_recovery: 160, total: 200}};
-const person = handle => ({handle, points: 200, rank: 1, score_status: 'active', score_breakdown: {progress: 40, early_recovery: 160, scheme_contributions: 0}, accepted_proposal_count: 0, schemes_recovered: 1, correct_submission_count: 2, records: [record], recent_recoveries: [record]});
+const person = handle => ({handle, points: 200, rank: 1, score_status: 'active', score_breakdown: {progress: 40, early_recovery: 160, scheme_contributions: 0, note_contributions: 0}, accepted_proposal_count: 0, schemes_recovered: 1, correct_submission_count: 2, records: [record], recent_recoveries: [record]});
 const schemes = [{id: 'fixture', version: '2', name: 'Fixture scheme', profiles: [{id: 'tier-4', instance_size: 4}], largest_recovered_profile_id: 'tier-4', first_recovery: {handle: 'alpha', profile_id: 'tier-4', submission_id: 'receipt-a'}}];
 const baseResponder = (url, options, envelope) => {
   if (url.pathname === '/api/people') return envelope({people: [person('alpha'), {...person('beta'), points: 0, rank: 2}], pagination: {limit: 50, offset: 0, total: 2, has_more: false}, scoring});
@@ -11,9 +11,13 @@ const baseResponder = (url, options, envelope) => {
 let passed = 0;
 async function test(name, run) {await run(); passed++; console.log('PASS ' + name);}
 (async () => {
-  await test('Leaderboard is the second navigation item and loads only on demand', async () => {
+  await test('Leaderboard precedes My submissions in account navigation and loads only on demand', async () => {
     const app = await createApp({schemes, responder: baseResponder});
-    assert.deepEqual(app.$('.primary-nav').children.filter(e => !e.hidden).map(e => e.textContent.trim()), ['Schemes', 'Leaderboard', 'Research notebook', 'About us']);
+    assert.deepEqual(app.$('.primary-nav').children.filter(e => !e.hidden).map(e => e.textContent.trim()), ['Schemes', 'Research notebook', 'About us']);
+    const accountActions = app.$('.account-actions').children;
+    assert.equal(accountActions.indexOf(app.$('#nav-people')), accountActions.indexOf(app.$('#history-button')) - 1);
+    assert.equal(app.$('#history-button').hidden, true);
+    assert.equal(app.$('#nav-people').hidden, false);
     assert.equal(app.requests.some(r => r.url.pathname === '/api/people'), false);
     app.$('#nav-people').click(); await flush();
     assert.equal(app.location.hash, '#people');
@@ -26,9 +30,16 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
     assert.deepEqual(app.$('#people-content').querySelectorAll('.person-points').map(e => e.textContent), ['200', '0']);
     assert.equal(app.$('#people-score-note').hidden, true);
     assert.equal(app.requests.some(r => r.options.method === 'POST'), false);
+    app.sandbox.showWorkspace('access');
+    assert.equal(app.$('.primary-nav').hidden, true);
+    assert.equal(app.$('#nav-people').hidden, true);
+    app.sandbox.showWorkspace('people');
+    assert.equal(app.$('#nav-people').hidden, false);
   });
   await test('Recovered by and the signed-in handle lead to real profiles; Back returns to the catalogue', async () => {
     const app = await createApp({schemes, user: {id: 'a', handle: 'alpha'}, responder: baseResponder});
+    assert.equal(app.$('#history-button').hidden, false);
+    assert.equal(app.$('#nav-people').hidden, false);
     assert.equal(app.$('#account-handle').href, '#person/alpha');
     const recovered = app.$('#kem-catalogue').querySelector('.kem-first-handle');
     assert.equal(recovered.tagName, 'A');
@@ -36,7 +47,7 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
     assert.equal(app.$('#person-title').textContent, 'alpha');
     assert.equal(app.$('#person-workspace').hidden, false);
     assert.equal(app.$('#recovery-dialog').open, false);
-    assert.match(app.$('#person-content').textContent, /Personal progress40First-record bonus160Accepted proposals0/);
+    assert.match(app.$('#person-content').textContent, /Personal progress40First-record bonus160Accepted proposals0Research notes0/);
     assert.match(app.$('#person-content').textContent, /Intermediate stages and repeated solves do not accumulate extra points/);
     app.history.back(); await flush();
     assert.equal(app.$('#catalogue-workspace').hidden, false);

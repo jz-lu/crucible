@@ -1,0 +1,66 @@
+App Platform ingress — candidate boundary, 22 October 2026
+=========================================================
+
+This is a dedicated entry point for an App Platform service, not a replacement
+for the local development server. It does not configure DigitalOcean, grant
+membership, or establish that a real provider deployment has passed verification.
+
+Run Uvicorn with:
+  crucible.app_platform:create_app --factory --no-proxy-headers
+
+All public routes must enter through DigitalOcean ingress. Do not expose the
+container port directly, add a public static-site component, or reuse this
+factory behind a proxy with a different header contract. The factory requires
+explicit production beta configuration and the canonical HTTPS site origin.
+
+DigitalOcean documents do-connecting-ip as the original client address, whereas
+x-forwarded-for describes its ingress server. The wrapper accepts exactly one
+valid IP literal in do-connecting-ip, canonicalizes it for downstream throttles,
+and ignores/removes Forwarded, X-Forwarded-*, and X-Real-IP. It does not infer
+authorization from the address. User/session/token/membership checks are intact.
+Malformed or missing provider client addresses reject ordinary requests before
+the application. No header chains, scoped IPv6 addresses or client ports are
+accepted. Uvicorn's generic proxy parsing must remain disabled.
+
+Ordinary requests retain Host for the application's canonical-host check. The
+scope scheme is HTTPS from the explicit deployment contract, not a client header.
+App Platform must enforce HTTPS on its external ingress. No custom-domain or
+provider-default hostname becomes a second approved site origin implicitly.
+
+The exact GET/HEAD /health path is the readiness probe. Provider probes may lack
+the canonical Host and do-connecting-ip headers, so this path alone receives
+the configured canonical Host and continues to the existing database health
+check. It does not bypass database readiness. GET/HEAD /health/live is a separate
+constant liveness response without database work. This prevents a database
+outage alone from forcing repeated process restarts. Other paths, path prefixes,
+and mutation methods do not receive these exceptions. Neither probe reveals
+accounts, scheme data, notes, credentials or configuration values.
+
+Use /health for App Platform health_check and /health/live for
+liveness_health_check. Choose delays/timeouts from the actual image's startup
+and read-only preflight measurements, not a fabricated timing estimate.
+
+Required verification on the real service before inviting participants
+---------------------------------------------------------------------
+1. Confirm container HTTP has no direct public bypass around the provider.
+2. From an external client, supply forged and duplicate do-connecting-ip,
+   Forwarded and X-Forwarded-For headers. Verify ingress replaces the client
+   address with its observed address rather than preserving attacker input.
+   The official documentation describes the header's purpose but does not by
+   itself establish duplicate-header replacement behavior. Local unit tests
+   cannot certify that behavior. Do not enable participants if this fails.
+3. Confirm two distinct clients reach distinct downstream rate-limit buckets;
+   compare privately without logging bearer credentials, cookies or bodies.
+4. Confirm HTTPS redirect, canonical-domain access, default hostname rejection,
+   successful health probes and account/member/agent access checks.
+5. Interrupt only a disposable test database connection and verify readiness
+   fails while liveness remains healthy. Restore connectivity before access.
+
+Local evidence: tests/test_app_platform.py covers header rejection, normalization,
+unchanged ordinary Host restrictions, exact health exceptions, application
+readiness failures, liveness and distinct downstream client identities. These
+are synthetic ASGI checks, not DigitalOcean ingress or load tests.
+
+Primary references checked 22 October 2026
+https://docs.digitalocean.com/support/where-can-i-find-the-client-ip-address-of-a-request-connecting-to-my-app/
+https://docs.digitalocean.com/products/app-platform/reference/app-spec/

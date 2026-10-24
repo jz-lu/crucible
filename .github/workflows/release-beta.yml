@@ -1,0 +1,109 @@
+name: Release beta
+
+# Deliberate operator action only. A push or merge never deploys the website.
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the verified image to the private registry
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crucible-beta-release
+  cancel-in-progress: false
+
+jobs:
+  source-checks:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/tests.yml
+  native-release:
+    name: Build and verify native beta image
+    needs: source-checks
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      IMAGE: crucible-beta-check:${{ github.sha }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set isolated release directories
+        run: |
+          printf '%s\n' "RELEASE_OUTPUT=$RUNNER_TEMP/crucible-release" "DOCKER_CONFIG=$RUNNER_TEMP/crucible-registry-auth" >> "$GITHUB_ENV"
+      - name: Prepare exact committed source and reviewed runtime contract
+        run: python3 -B deploy/release.py prepare --revision "$GITHUB_SHA" --output "$RELEASE_OUTPUT"
+      - name: Obtain one-hour private registry credential
+        env:
+          DIGITALOCEAN_REGISTRY_TOKEN: ${{ secrets.DIGITALOCEAN_REGISTRY_TOKEN }}
+        run: python3 -B deploy/release.py authenticate --output "$DOCKER_CONFIG"
+      - name: Pull the fixed reviewed runtime
+        run: |
+          base=$(python3 -c 'import json; print(json.load(open("deploy/release-runtime.json"))["app_base"])')
+          docker --host unix:///var/run/docker.sock pull --platform linux/amd64 "$base"
+          python3 - <<'PY'
+          import json, subprocess
+          policy = json.load(open('deploy/release-runtime.json'))
+          docker = ['docker', '--host', 'unix:///var/run/docker.sock']
+          manifest = json.loads(subprocess.check_output([*docker, 'manifest', 'inspect', policy['app_base']], timeout=60))
+          assert manifest['config']['digest'] == policy['app_base_config']
+          image, = json.loads(subprocess.check_output([*docker, 'image', 'inspect', policy['app_base']], timeout=60))
+          assert image['Os'] == 'linux' and image['Architecture'] == 'amd64'
+          assert image['Config']['User'] == '10001:10001'
+          PY
+      - name: Build application overlay without dependency installation
+        run: >-
+          docker --host unix:///var/run/docker.sock buildx build --platform linux/amd64 --network none --pull=false
+          --provenance=false --load --tag "$IMAGE"
+          --metadata-file "$RELEASE_OUTPUT/build-metadata.json"
+          "$RELEASE_OUTPUT/context"
+      - name: Verify exact native catalogue and application regressions
+        run: python3 -B deploy/release.py check-image --image "$IMAGE" --output "$RELEASE_OUTPUT"
+      - name: Publish the tested image
+        if: inputs.publish
+        run: >-
+          python3 -B deploy/release.py publish --output "$RELEASE_OUTPUT"
+          --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT"
+      - name: Release summary
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, os, pathlib
+          root = pathlib.Path(os.environ['RELEASE_OUTPUT'])
+          published = root / 'published.json'
+          verified = root / 'verified.json'
+          print('## Beta image release')
+          if published.exists():
+              value = json.loads(published.read_text())
+              revision = value['source_revision']
+              print('Source: [' + revision[:12] + '](https://github.com/' + os.environ['GITHUB_REPOSITORY'] + '/commit/' + revision + ')')
+              print('\nPublished image: `' + value['registry_reference'] + '`')
+              print('\nTag: `' + value['registry_tag'] + '`')
+          elif verified.exists():
+              print('Native image verified; no completed registry publication recorded.')
+          else:
+              print('No successful native release recorded. Inspect the failing step and evidence.')
+          print('\n**No website deployment, database migration or backup configuration change was performed.**')
+          print('\nSee docs/releasing-beta.txt before selecting this image in the existing beta service.')
+          PY
+      - name: Retain non-secret release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beta-release-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/crucible-release/prepared.json
+            ${{ runner.temp }}/crucible-release/build-metadata.json
+            ${{ runner.temp }}/crucible-release/verified.json
+            ${{ runner.temp }}/crucible-release/published.json
+            ${{ runner.temp }}/crucible-release/context/metadata/
+            ${{ runner.temp }}/crucible-release/evidence/
+      - name: Remove temporary registry authentication
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/crucible-registry-auth"

@@ -6,7 +6,7 @@ const archive = {id: 'fixture-kem', version: '1', name: 'Archived fixture', prof
 const scheme = {id: 'fixture-kem', version: '2', name: 'Fixture KEM', educational: true, profiles: [{id: 'fixture-20', instance_size: 20}, {id: 'fixture-21', instance_size: 21}], next_profile_id: 'fixture-20', previous_releases: [archive]};
 const otherScheme = {id: 'other-kem', version: '1', name: 'Other encapsulation', profiles: [{id: 'other-42', instance_size: 42}], next_profile_id: 'other-42'};
 const route = (profile, version = '2', id = 'fixture-kem', view = 'challenge') => `#challenge/${id}/${version}?profile=${profile}&view=${view}`;
-const formFields = ['candidate', 'method-select', 'method-name', 'method-pseudocode', 'hardware', 'workers', 'wall-seconds', 'precomputation', 'peak-memory', 'compute-notes'];
+const formFields = ['candidate', 'method-select', 'method-name', 'method-pseudocode', 'hardware', 'workers', 'wall-seconds', 'precomputation', 'peak-memory', 'compute-notes', 'ai-model'];
 const record = (id = 'fixture-challenge', bytes = 32) => ({format: 'crucible-recovery-v1', challenge_id: id, candidate: 'AB'.repeat(bytes), method: {name: '  Fixture attack  ', pseudocode: '  Recover the fixture key.  '}, compute: {hardware: '  Fixture CPU  ', workers: 2, wall_seconds: 0.25, precomputation: '  None  ', peak_memory: '  4 KiB  '}});
 const simpleChallenge = (bytes = 32) => ({id: 'fixture-challenge', public: {encoding: {shared_secret_bytes: bytes}}});
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -89,6 +89,15 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
       assert.equal(output.compute.wall_seconds, 0.25);
     }
   });
+  await test('optional AI attribution normalizes text without inventing provenance for old files', () => {
+    assert.equal(parse(record()).ai_model, '');
+    for (const value of ['', ' \n\t ', '  Fixture Model 1; Other Model 2  ', '🧪'.repeat(300)]) {
+      assert.equal(parse({...record(), ai_model: value}).ai_model, value.trim());
+    }
+    for (const value of [null, false, 7, [], {}, 'x'.repeat(301), '🧪'.repeat(301), ' ' + 'x'.repeat(300), '\u0000', '\ud800', '\udfff']) {
+      assert.throws(() => parse({...record(), ai_model: value}), /ai_model/);
+    }
+  });
   await test('malformed JSON, unsupported format, wrong challenge and invalid containers reject', () => {
     for (const text of ['', '{', '{"candidate":}', 'null', '[]', '"record"', 'true', '17']) assert.throws(() => parse(text), undefined, text);
     for (const [field, value] of [['format', 'future-format'], ['format', 1], ['challenge_id', 'other-challenge'], ['challenge_id', 7], ['method', null], ['method', []], ['method', 'attack'], ['compute', null], ['compute', []], ['compute', 'CPU']]) {
@@ -124,6 +133,8 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     const instructions = Object.values(template._instructions).join(' ');
     for (const expected of [/hex/i, /32/, /15000|15,000/, /1000000|1,000,000/, /315576000|315,576,000/, /seconds/i, /128/, /pseudocode/i, /precomputation/i, /memory|peak_memory/i, /notes/i, /optional/i, /deadline|hour|round/i, /review/i]) assert.match(instructions, expected);
     assert.equal(template.candidate, '');
+    assert.equal(template.ai_model, '');
+    assert.match(template._instructions.ai_model, /300 Unicode.*exact versions.*Do not guess.*blank does not establish/);
     const completed = {...clone(template), ...record('fixture-challenge', 16)};
     assert.equal(parse(completed, simpleChallenge(16)).candidate, 'ab'.repeat(16));
     assert.equal(Object.hasOwn(parse(completed, simpleChallenge(16)), '_instructions'), false);
@@ -185,6 +196,60 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(answer.method_id, 'fixture-method');
     assert.deepEqual(answer.compute, {hardware: 'Fixture CPU', workers: 2, wall_seconds: 0.25, precomputation: 'None', peak_memory: '4 KiB', notes: ''});
     assert.equal(app.$('#submission-dialog').open, false);
+  });
+  await test('model attribution imports, permits manual edits, freezes uncertain retries and resets after acceptance', async () => {
+    let attempts = 0;
+    const app = await fixtureApp({mutationResponder: (url, options, envelope) => {
+      if (url.pathname === '/api/methods') return {method: {id: 'fixture-method', ...JSON.parse(options.body)}};
+      assert.equal(url.pathname, '/api/challenges/fixture-challenge/submit');
+      if (++attempts === 1) throw new Error('Simulated lost response');
+      return envelope({submission: {status: 'correct'}, challenge: {...app.targets['fixture-challenge'], status: 'solved', submission: {status: 'correct'}}});
+    }});
+    await importText(app, JSON.stringify({...record(), ai_model: '  Original Model 1  '}));
+    assert.equal(app.$('#ai-model').value, 'Original Model 1');
+    app.$('#ai-model').value = '  Reviewed Model 2; Original Model 1  ';
+    app.$('#submission-form').dispatchEvent({type: 'submit'}); await flush();
+    assert.equal(app.$('#submission-dialog').open, true);
+    assert.equal(app.$('#ai-model').disabled, true);
+    const first = mutations(app).find(item => item.url.pathname.endsWith('/submit'));
+    assert.equal(JSON.parse(first.options.body).ai_model, 'Reviewed Model 2; Original Model 1');
+    assert.equal(Object.hasOwn(JSON.parse(mutations(app)[0].options.body), 'ai_model'), false, 'Annotation belongs to the result, not the reusable method');
+    app.$('#ai-model').value = 'Changed after the uncertain request';
+    app.$('#submission-form').dispatchEvent({type: 'submit'}); await flush();
+    const answers = mutations(app).filter(item => item.url.pathname.endsWith('/submit'));
+    assert.equal(answers.length, 2);
+    assert.equal(answers[1].options.body, answers[0].options.body, 'Retry preserves annotation, key and idempotency identifier');
+    assert.equal(app.$('#ai-model').value, '');
+    assert.equal(app.$('#submission-dialog').open, false);
+  });
+  await test('legacy imports and a different instance clear a previous model attribution', async () => {
+    const app = await fixtureApp();
+    await importText(app, JSON.stringify({...record(), ai_model: 'Fixture Model 1'}));
+    await importText(app, JSON.stringify(record()));
+    assert.equal(app.$('#ai-model').value, '');
+    app.$('#ai-model').value = 'Only for the original instance';
+    app.$('#submission-dialog').close();
+    await app.navigate(route('fixture-21'));
+    app.$('#open-submission').click(); await flush();
+    assert.equal(app.$('#ai-model').value, '');
+  });
+  await test('overlong manual AI attribution rejects before creating a method or submitting an answer', async () => {
+    const app = await fixtureApp();
+    await importText(app, JSON.stringify(record()));
+    app.$('#ai-model').value = 'x'.repeat(301);
+    app.$('#submission-form').dispatchEvent({type: 'submit'}); await flush();
+    assert.match(app.$('#submission-error').textContent, /AI model.*300/);
+    assert.equal(mutations(app).length, 0);
+  });
+  await test('invalid Unicode or null characters in manual model names cannot be submitted', async () => {
+    for (const value of ['\u0000', '\ud800', '\udfff']) {
+      const app = await fixtureApp();
+      await importText(app, JSON.stringify(record()));
+      app.$('#ai-model').value = value;
+      app.$('#submission-form').dispatchEvent({type: 'submit'}); await flush();
+      assert.match(app.$('#submission-error').textContent, /AI model.*valid Unicode/);
+      assert.equal(mutations(app).length, 0);
+    }
   });
   await test('invalid imports leave every existing form value unchanged', async () => {
     const app = await fixtureApp(); fillExisting(app); const before = snapshot(app);

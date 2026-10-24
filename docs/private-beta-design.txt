@@ -1,0 +1,440 @@
+CRUCIBLE — INVITATION-ONLY BETA, ORCID, AND PUBLIC LAUNCH
+Design proposal, 16 October 2026
+Based on checkpoint afa1185 and a read-only audit of the current application.
+This is a proposed implementation plan, not an implemented access gate or a
+hosting approval. No invitations, provider accounts or deployments were created.
+
+RECOMMENDATION
+
+Build one durable Crucible account system. Treat sign-in identity, permission to
+enter the beta, privileged roles, and the audience of a contribution as separate
+facts. Invite specific people; ORCID can be a sign-in method and authenticated
+research identity. It must not automatically grant beta entry or review powers.
+Opening the site later changes enrollment and publication rules, not account IDs,
+challenge contracts, the agent protocol, or ownership.
+
+The user has requested explicit access for beta participants and an ORCID feature
+for eventual public use. Whether ORCID must be linked before public contributions
+is still a product decision. This draft recommends optional ORCID initially,
+encouraged for research contributors. Requiring it later can be a contribution
+policy without restricting public reading or changing the identity architecture.
+
+Keep the interface small: a private-beta sign-in screen, an invitation welcome
+flow, ordinary account settings, and an operator-only membership tool. Once
+admitted, a participant uses the familiar site and agent workflow.
+
+1. PARTICIPANT AND OPERATOR EXPERIENCE
+
+Outsider: show only the Crucible identity, “Private beta”, Sign in, and a way to
+redeem an invitation. Do not show schemes, participants, scores, research notes,
+proposal metadata, challenge instances or source downloads. An access-request
+form is optional later; a waitlist is not necessary to launch the first cohort.
+The sign-in shell can be public without making research content public.
+
+Operator: create an invitation addressed to a specific email, with an optional
+internal note. The first tool can be an operator CLI; a small admin-only page
+can then list Pending, Active and Revoked entries, with Invite, Resend and Revoke.
+The normal navigation does not gain an admin tab for everyone. Bootstrapping an
+operator is an explicit deployment action against an account UUID, never the
+first person to register or someone with a matching email domain.
+
+New participant:
+  Invitation -> verify invited mailbox -> create/link Crucible account -> enter.
+Use a random, single-use invitation, with seven days as a proposed initial expiry.
+The invitation can be delivered by email or deliberately shared by the operator.
+It is not a perpetual API key and is never needed again after admission.
+
+Possession of a forwarded invitation alone should not be sufficient. Require
+fresh verification of the exact invited mailbox, or use an existing independently
+verified email on an already authenticated account. Sending a short-lived code
+or confirmation link to that mailbox adds one small step. Verification is bound
+to the admission transaction, with bounded attempts, expiry and resend limits.
+Do not silently accept a replacement email address or broadly normalize aliases.
+
+If a recipient already has a Crucible account, they sign in and accept into that
+account. Preserve their UUID, handle, records and score. Do not create a second
+account just because they choose ORCID. Once ORCID is enabled, a new participant
+can choose it as a sign-in method instead of setting another password; the invited
+email still needs independent verification. Never require both passwords merely
+to satisfy the data model.
+
+Returning participant: ordinary sign-in, then return to the originally requested
+internal page. An expired invite offers a resend/request-new-invite path; an
+already used invitation directs its owner to Sign in. Do not consume a link on
+GET: mail scanners and previews must not spend the invitation. Final acceptance
+is an explicit, CSRF-protected action and is safe to retry after a lost response.
+
+Revocation: remove access on the next authorization check for browser and agent
+requests, invalidate sessions/tokens and pending device approvals, and prevent
+in-flight writes from committing under old membership. Preserve research records
+and an audit trail. A new invitation must not silently reinstate a banned account.
+Nothing can recall a file an authorized participant already downloaded; the gate
+controls continuing access to the service, not copies outside it.
+
+2. ACCESS POLICY AND FUTURE PUBLIC OPERATION
+
+Keep these dimensions independent:
+- Account: stable UUID and active/suspended status; handle is presentation.
+- Identity: password and/or authenticated ORCID association; verified contact email.
+- Beta membership: explicit active/revoked grant, with grantor and audit history.
+- Roles: participant, access administrator, proposal reviewer; no implied elevation.
+- Record audience: owner/reviewer-only, beta participants, or explicitly public.
+- Release availability: which exact reviewed implementations may issue challenges
+  in beta or publicly. Availability does not certify mathematical security.
+
+Proposed audience matrix:
+  Resource                         During private beta        At public launch
+  Sign-in/help/ORCID callback       Anyone                     Anyone
+  Selected scheme pages/standings   Active beta members        Explicit public set
+  Successful receipts/source       Active beta members        Only approved public records
+  A participant's issued instance   Owner, while admitted      Owner with challenge access
+  Incorrect answers/private drafts  Owner                      Owner
+  Proposal draft/review             Author + assigned reviewer Same rules
+  Shared research notes (future)    Declared beta audience      Published notes only
+  Invitation/admin operations       Access administrators       Access administrators
+  Reviewer decisions               Assigned reviewers          Assigned reviewers
+
+A beta member may read shared beta results, but still cannot see somebody else's
+private instances, unsuccessful answers or proposals. An ORCID-linked account has
+no extra privilege merely because it has an ORCID iD.
+
+A practical migration uses two explicit switches: reading audience and enrollment
+policy. Public reading can open first for selected records while contribution
+registration remains invitation-only. Later open registration can admit new
+contributors. Neither switch makes older beta-only data public. Revoked beta
+membership does not necessarily mean a public-site ban; global suspension is
+separate and survives a launch. Access to remaining beta-only records still
+requires active beta membership after public reading opens.
+
+At beta onboarding, say that shared results/methods are visible to approved beta
+members and will not be published to everyone without a separate publication
+decision. Default historical local/beta records to nonpublic. Before public
+release, obtain the relevant authors' permission and choose the publication
+terms/license. Do not treat accepting a private-beta invitation as a blanket
+public release of source or identity. Public leaderboards/aggregates must be
+computed from the permitted audience; otherwise a hidden result can leak through
+a score, participant count, recovered frontier, tooltip or download URL.
+
+3. ORCID: WHAT TO BUILD
+
+Observed reference: Hexagon offers “Sign in or create an account with your ORCID
+iD” and receives the authenticated iD, not the ORCID password. Its policy links
+contributors to ORCID while separating acceptance from correctness/endorsement.
+See sources [1] and [2]. Crucible should similarly use a real ORCID connection,
+not a textbox into which anyone can paste somebody else's identifier.
+
+Use the backend OpenID Connect authorization-code flow, requesting only openid.
+ORCID documents openid as the replacement for /authenticate in this flow; do not
+request both or request write access to researchers' records. Register a complete
+HTTPS callback URL and use separate sandbox credentials for development [3,4].
+The server validates signature, issuer, audience, expiry and nonce using a
+maintained OIDC implementation. Bind each transaction to a one-time state value,
+the initiating browser, purpose (sign-in/link) and an allowlisted internal return
+path. Never accept a token supplied by a caller as proof of membership.
+
+Store a unique (issuer, subject) identity against the existing Crucible UUID [5].
+Do not merge on display name, institution or email. Linking requires a signed-in
+account, recent authentication, and confirmation that the same account is still
+present when the flow completes. A duplicate ORCID association gets an explicit
+account-recovery path rather than transferring ownership. Before unlinking,
+require another usable sign-in/recovery method. Preserve existing passwords and
+history. Permit a nullable password hash only when a valid alternative identity
+exists; do not invent a shared/dummy usable password for ORCID-only accounts.
+
+The current session cookie uses SameSite=Strict, so it will not accompany the
+cross-site ORCID callback. Keep it Strict and use a separate, short-lived Secure,
+HttpOnly, SameSite=Lax transaction cookie for the GET callback. Resolve the
+callback server-side, then complete account linking on a same-origin request
+that rechecks the original account. Clear transaction data after completion.
+Do not weaken CSRF/origin checks for all endpoints to make external sign-in work.
+
+ORCID's current discovery document does not advertise an email claim [6]. Collect
+and verify contact/recovery email separately. Do not fetch a whole CV, private
+profile or affiliations just to sign in. Retain identity/audit data needed for the
+link; avoid storing long-lived ORCID access tokens when they serve no feature.
+PKCE enforcement is not established by the current advertised metadata: verify
+in the sandbox before claiming or depending on it. Use the confidential backend
+flow, validated state/nonce, exact callbacks and a maintained library regardless.
+
+Profile UI: a linked official ORCID iD with an explanation that its ownership was
+authenticated. It is not a “verified cryptographer” or “reviewed work” badge.
+ORCID does not guarantee one account per human, qualifications, correctness or
+independent attacks. Keep moderation, anti-abuse controls and scoring policies.
+
+API setup is a real dependency: ORCID Public API terms restrict use to
+noncommercial purposes and put credentials under an individual holder. Confirm
+Crucible's intended use and operational owner; consider the Member API where
+appropriate rather than assuming nonprofit status settles eligibility [7].
+No credentials need to be pasted into chat or committed to Git.
+
+4. AGENT EXPERIENCE
+
+Keep one application policy for the website and CLI. The human accepts the invite
+and signs in once. Their agent then uses the existing device-connection flow:
+request connection, show a matching code, receive explicit browser approval,
+then use a scoped Crucible token. Routine retrieval/submission needs neither a
+new invitation nor a visit to the website. ORCID credentials and tokens stay out
+of the agent workflow. Attribute agent actions to the owning account and retain
+the agent label/source/compute evidence; do not create fake researcher identities
+for models or automatically grant agents review/admin powers.
+
+Check current membership when the device request is approved, when polling would
+exchange approval for a credential, and on every protected token request. The
+scope check remains separate. Revocation blocks an old token even if it has not
+expired. A denied/revoked member gets a structured access error, not an HTML login
+page, hidden redirect, endless token-refresh loop or request to bypass the gate.
+The browser approval screen must not quietly broaden requested scopes.
+
+A second universal proxy login would complicate agents and duplicate admission
+policy. Application membership should be authoritative. Infrastructure access
+controls may protect operators/origins as defense in depth; a shared proxy service
+token must not replace individual participant authorization.
+
+5. IMPLEMENTATION CONTRACT (PROPOSED, NOT FINAL API)
+
+Database migrations can add:
+- Verified contact-email records, tied to user UUIDs, with explicit change/recovery
+  flows. Email is private account data, not a public profile field by default.
+- Identity links: user_id, issuer, subject, authenticated_at; unique provider pair.
+- Invitations: ID, recipient binding, digest of a 256-bit random token, inviter,
+  expiry, revoked_at, redeemed_at, redeemed_by. Store no reusable plaintext token.
+- Beta membership plus append-only grant/revoke audit events. Suspension remains
+  an account-level fact. Administrative authority is distinct from reviewer IDs.
+- Short-lived verification/OIDC transactions with hashed secrets and consumption
+  state. Bind to the browser/account and purpose; do not log raw codes/tokens.
+- Explicit publication/audience records for evidence before any public launch.
+
+Redeem invitation and grant membership in a single database transaction with row
+locking/uniqueness constraints. Recheck recipient, expiry, suspension and token
+state at commit. Concurrent claims must not admit two users. Invalidated/expired
+invitations cannot be resurrected by delayed callbacks. Retry by the same admitted
+account may return the existing result without extending authority.
+
+Serialize revocation, credential/device exchange and final protected writes using
+a consistent per-account lock order; re-read authority after acquiring the lock.
+Permanently invalidate existing sessions, tokens and pending approvals so that a
+later membership regrant cannot accidentally revive old credentials. Ordinary
+reads authorize before delivery; already delivered responses cannot be recalled.
+
+Invitation, recovery and OAuth landing pages must keep secrets out of logs,
+referrers and third-party assets. Use appropriate referrer policy, scrub sensitive
+URL values on completion, and keep email/bootstrap responses from becoming an
+account-discovery interface. Rate limits cover both requests and delivery volume.
+
+Illustrative endpoint groups:
+  session/access summary; invitation preview/accept; email verify/resend;
+  ORCID start/callback/link completion; membership management; token revocation.
+Keep authentication bootstrap accessible without research access, rate limited,
+and explicit about its purpose. Operator commands may precede an admin web UI.
+The regular session response should expose only the user's own membership state
+and capabilities so the browser can show the right screen.
+
+Central enforcement should classify every route: public bootstrap, admitted
+participant, owner/reviewer, or operator. Unknown routes default to denial in
+private mode and fail a route-coverage test. Authorize before rendering or cache
+lookup, including HEAD, archives, downloads, schema/OpenAPI and static datasets.
+Return private/no-store cache behavior for protected responses and configure the
+proxy/CDN consistently. A hidden button, robots.txt, noindex or private GitHub
+repository is not an access boundary. Public bootstrap assets must contain no
+embedded private data. This follows the server-enforced access principles in [8].
+
+Concrete current-code gaps:
+- app.py: registration is open; several successful-evidence/catalogue reads are
+  anonymous. FastAPI docs are hidden but default /openapi.json still exists.
+- web/app.js: startup fetches session and catalogue concurrently. Authenticate and
+  resolve beta access before any protected data request; preserve internal links.
+- machine_auth.py: membership must be checked at approval, exchange and use.
+- app.py generation already rechecks user identity before/after compute; reuse
+  that hook for membership/release authorization and final transactional checks.
+- protocol/source, artifacts, method-source downloads, old research endpoints,
+  notebook seed/data and static mounts must be classified explicitly.
+- Error headers must cover early middleware denials too; prevent cached protected
+  data from surviving in hidden UI after sign-out or membership revocation.
+
+6. HOSTING AND THE ACTUAL BLOCKERS
+
+Recommended starting shape: one always-on application process behind HTTPS, one
+private managed PostgreSQL database, a versioned reviewed runtime image, an email
+provider for verification/recovery, and encrypted private backups. Source bundles
+already live in the database; do not add a public object bucket merely to host
+beta. Add private object storage later if volume warrants it, with the same
+application authorization on every download. No vendor or paid plan is chosen.
+
+Use production security settings for the private beta: stable secrets, Secure
+cookies, explicit origin, proxy trust limited to the real proxy, and private
+origin/database access. Never run development mode on the internet to get access
+to extra schemes. Separate audience=enrolled_beta from environment=production.
+
+Before hosting the present catalogue:
+A. Implement the membership gate, closed enrollment, recovery and revocation.
+B. Replace the current development-only issuance exception for six research
+   families with an explicit beta release allowlist. Independent scientific
+   admission remains separately labelled; beta access must not claim endorsement.
+C. Review native artifacts for the selected hosting platform. Current pins include
+   macOS-specific binaries/libraries. Merely rebuilding on Linux or disabling hash
+   checks is wrong. The database currently pins one artifact per scheme/version;
+   startup also validates archived adapters. Decide reviewed implementation
+   variants versus new immutable implementation releases before migrating.
+   Preserve old manifests/receipts; never silently replace their artifact hashes.
+D. Test real PostgreSQL migrations, invitation redemption races, idempotency,
+   concurrent generation/submission and revocation during an in-flight request.
+E. Bound total generation across ALL adapters. Today's two-slot limit applies to
+   research/named profiles, while current DH/RSA bypass it. Start with one app
+   process and a measured total budget; do not scale process count until admission
+   is shared. Account for memory used by concurrent password verification too.
+F. Test backup restoration, secret recovery, server-clock synchronization, alerts,
+   bounded logs, and rollback. Store secrets separately from code; preserve source
+   and build provenance. A second operator should be able to restore the service.
+
+The current implementation uses a fresh instance per account/profile/hour under
+a shared hourly deadline. It is not one global ciphertext for all participants.
+Hosting/access work should preserve this behavior; changing the game is a separate
+product/scientific decision. Capacity must be measured near the hourly boundary.
+Show retryable busy responses rather than letting a queue silently give users
+less time or issue an expired challenge. Keep submitted attack programs inert.
+
+Start with a small invited cohort and observe memory, generation latency, deadline
+misses, error rates, email delivery and actual agent usage before expanding it.
+A backup target such as at most one hour of data loss and a four-hour restore is
+a proposed pilot objective, not a current guarantee; validate cost and feasibility
+with the selected host. Budget caps and named operational ownership come before
+launch, not after an outage.
+
+7. DATA TRANSFER AND THE NOTEBOOK
+
+Preserve existing account UUIDs and historical records. Do not automatically grant
+all local accounts beta membership, and do not turn test data into public results.
+Copy only through an explicit, backed-up migration; keep the current local service
+available until staging is validated. A new HTTPS origin requires new browser
+sign-in and agent connection; local cookies do not port to another origin.
+Reset copied authentication sessions/tokens deliberately at cutover while retaining
+accounts and research data, with a clear reconnect message to participants.
+
+The notebook currently stores drafts only in the browser. Hosting does not make
+it shared, backed up by the server, private to a Crucible account, or moderated.
+For a numerical beta, keep this clearly labelled as a local demonstration, with
+no real server-side notes embedded in static JavaScript. If the beta is intended
+to test collaborative theoretical research, minimal account-scoped shared note
+storage and visibility become a separate prerequisite. Decide which beta promise
+we are making before inviting people; do not imply the local prototype is a shared
+repository. Later migration/import must preserve note revision identity/provenance. Do not
+silently upload browser drafts or assign them to whichever account signs in next.
+
+8. DELIVERY ORDER AND ACCEPTANCE CHECKS
+
+1. Implement recipient-bound invitations, membership, closure of registration and
+   centralized access checks locally. Preserve account IDs and ordinary sign-in.
+   Exercise outsider, invited, expired, active, revoked, suspended and reviewer
+   paths for every route, including guessed download URLs and new routes.
+2. Add verified contact/recovery, then ORCID sandbox sign-in/linking. Test canceled,
+   expired and replayed callbacks, wrong browser/account, duplicate iD, provider
+   outage and safe unlinking. ORCID must never bypass membership or suspension.
+3. Validate the actual CLI against beta policy, including revocation between
+   approval and polling and during challenge generation/submission. No agent
+   secret or invite should appear in copied prompts, logs or repository files.
+4. Build the reviewed hosting runtime, explicit beta issuance policy and isolated
+   PostgreSQL staging; run backup/restore, capacity and access-boundary checks.
+5. Configure the chosen domain, email sender and ORCID production callback; invite
+   a pilot cohort only after staging passes. Keep beta research unindexed and
+   access controlled, while treating noindex as presentation only.
+6. For public launch, review publication permissions and record audiences, then
+   open selected reading pages; open enrollment/contribution under the agreed
+   identity/moderation policy separately. Existing beta accounts remain valid.
+
+DELIBERATE DECISIONS TO REVIEW
+
+- Must ORCID be linked for every public contributor, only for research publication,
+  or merely encouraged? Default recommendation: optional initially.
+- Is the first beta numerical workflows plus a labelled notebook demonstration,
+  or must it support shared research notes from day one?
+- Who operates invitations/support and owns the domain, email and ORCID client?
+  Choose hosting region/provider and monthly budget before provisioning anything.
+- Which beta results may become public, under what contributor permission and
+  license? Default: no automatic publication of beta records.
+- How should reviewed platform-specific builds coexist with immutable historical
+  manifests? Resolve before moving existing cryptographic workers to Linux.
+
+PRIMARY SOURCES CHECKED 16 OCTOBER 2026
+
+[1] Hexagon sign-in: https://hexagonmath.org/access?next=/
+[2] Hexagon contributor/moderation policy: https://hexagonmath.org/about
+[3] ORCID sign-in and OIDC scopes:
+https://info.orcid.org/what-is-orcid/services/public-api/orcid-as-a-sign-in-option-to-your-system/
+[4] Public API registration, sandbox and exact HTTPS callbacks:
+https://info.orcid.org/what-is-orcid/services/public-api/
+[5] OIDC identity stability (issuer, subject):
+https://openid.net/specs/openid-connect-core-1_0.html#ClaimStability
+[6] ORCID discovery (claims and endpoints):
+https://orcid.org/.well-known/openid-configuration
+[7] ORCID Public API terms:
+https://info.orcid.org/public-client-terms-of-service/
+[8] Authorization boundaries:
+https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html
+Invitation-token handling also follows the relevant one-time-token principles:
+https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html
+
+Supporting implementation audit: app.py, config.py, db.py, machine_auth.py,
+method_sources.py, registry.py, generation.py, protocol_proposals.py, web/app.js,
+docs/hosting-plan.txt, docs/native-setup.txt and docs/research-notebook-draft.txt.
+
+
+HOSTING DECISIONS AND COST SCENARIOS — 16 OCTOBER 2026
+
+Provider choice, domain purchase and billing can wait while local implementation
+proceeds. No hosting or external service was provisioned by this planning pass.
+
+Ready to build locally without those decisions:
+- Membership/invitations/revocation and a membership-aware sign-in screen.
+- Verified-email and recovery workflows with a development-only local mail sink;
+  actual outbound delivery waits for sender-domain verification and credentials.
+- ORCID identity-linking code and callback tests; real provider end-to-end tests
+  need sandbox client credentials, but not the final production domain/provider.
+- Browser/CLI enforcement, explicit production beta release eligibility, route
+  coverage, and revocation concurrency tests.
+- PostgreSQL migration/concurrency fixtures, backup/restore tooling, capacity
+  instrumentation, and portable deployment configuration. These do not select
+  a paid database vendor or assume the native runtime is already portable.
+
+Information needed before external staging/pilot:
+- Account/billing owner, monthly budget ceiling, and operational contact.
+- Preferred hosting/data region and any institutional constraints.
+- Domain or subdomain and access to its DNS; a temporary staging hostname is fine.
+- Expected initial cohort and peak simultaneous challengers, not merely total
+  accounts. Use measured generation/load results to choose machine size.
+- Numerical beta versus shared research notebook scope; which existing accounts
+  and records are intended to migrate. Preserve IDs; migration is explicit.
+- Invitation administrators, email sender/provider credentials, and ORCID client
+  ownership/registered callbacks when that sign-in method is enabled.
+- Acceptable downtime and data-loss window to select backup/recovery arrangements.
+
+Current illustrative prices (USD, checked 16 October 2026):
+- DigitalOcean Basic shared-CPU VM: 2 vCPU/4 GiB $24/month; 4 vCPU/8 GiB
+  $48/month. These are candidate sizing scenarios, not validated requirements.
+  https://www.digitalocean.com/pricing/droplets
+- DigitalOcean managed PostgreSQL single-node starts at $15/month. This is not
+  a high-availability database; provider guidance positions it for preliminary
+  development/testing. It is an illustrative small-pilot floor, not an SLA.
+  https://docs.digitalocean.com/products/databases/postgresql/details/pricing/
+- Resend transactional email: free 3,000/month, capped at 100/day; Pro begins
+  at $20/month for 50,000 emails. Measure invitation/recovery bursts against caps.
+  https://resend.com/pricing
+- Porkbun ordinary .org renewal is currently $11.84/year. Premium names and
+  other extensions differ. Existing domains can use a subdomain without buying
+  a second domain.
+  https://porkbun.com/products/domains
+
+Thus a $24 app VM plus a $15 database starts at $39/month before backups,
+additional storage, email, domain, taxes and any excess transfer/build usage.
+As an engineering planning estimate, reserve about $50–150/month for a small
+invited beta, revising after profiling and choosing how much server operation
+we want the provider to handle. This is not a quote or promise that all current
+schemes fit on a $24 VM. A continuously running separate staging environment
+adds cost; local/synthetic staging can avoid a second full-time stack initially.
+
+These estimates exclude engineering/maintenance labor, participant attack compute
+and model/API usage. Crucible currently hosts challenge generation, validation
+and records; it does not fund or execute participants' attacks. If we later run
+research agents or submitted programs centrally, budget and isolation requirements
+must be evaluated separately. A public website does not intrinsically require a
+new architecture, but a substantial increase in generation, downloads or stored
+artifacts changes capacity and cost. No public-scale cost promise is made here.

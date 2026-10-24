@@ -1,0 +1,39 @@
+Offline native reference-operation measurements
+
+This harness is for operator-selected built-in implementations. It does not load proposal code, add an HTTP benchmark endpoint, or admit a scheme. Run it in a quiet measurement window after correctness/conformance review. Keep a report even if it contains failures; publish only after reviewing the raw outcomes.
+
+Targets
+  hqc       Current HQC growth research configurations.
+  mceliece  Current Classic McEliece length research configurations.
+  ntru      Current Streamlined NTRU Prime frontier configurations.
+  mlkem     Published ML-KEM-512, ML-KEM-768 and ML-KEM-1024.
+  module-v4 Six compressed module-LWE Python research configurations, if present.
+
+The original module target remains the packed v3 implementation. Selecting module-v4 does not activate it in the website. --selection all means every registered profile of the selected target; pilot means first/middle/last.
+
+Before measurement
+  python -m scripts.reference_benchmark --targets hqc mceliece ntru mlkem --selection all --prepare-only [input paths below]
+
+Measurement (one family/report is convenient)
+  python -m scripts.reference_benchmark --targets hqc --selection all --warmups 3 --trials 20 --profile-timeout 120 --output .local/hqc-timings.json [input paths below]
+
+Input path overrides for existing verified build caches:
+  --native-pq-root PATH       liboqs downloads, source and build directories
+  --native-code-root PATH     source/mceliece-N patched source directories
+  --native-hqc-root PATH      source/hqc-N patched source directories
+  --native-ntru-root PATH     reviewed frontier build directory's parent
+  --native-ntru-archive PATH  original pinned ntruprime-20201007 archive
+  --native-random-library PATH exact librandombytes-kernel.a
+  --native-openssl-prefix PATH pinned lib/libcrypto.a and include/openssl
+  --native-output PATH        must resolve within this checkout's .local
+
+The builder downloads nothing. It verifies the existing challenge implementation closure, original archive digests, adapted source hashes, parameter headers and static libraries before compiling. Every consumed source/header/library is copied into a content-addressed private build directory. Library digests intentionally pin the reviewed local builds; a new platform/build needs an explicit reviewed update, not bypassing a mismatch. Neither challenge workers nor symlinked native install roots are modified.
+
+Scope and interpretation
+Each trial generates a fresh random keypair, encapsulates once, decapsulates its valid ciphertext once and checks agreement. OS randomness and internal algorithm checks/encodings are included in the operation calls. Process startup, artifact checks, driver buffer allocation, library initialization and the final equality check are excluded. Native allocation scope differs from the Python API calls, which can allocate inside their timed operations. These numbers compare particular implementations and environments, not intrinsic mathematical costs.
+
+The compiler and flags in each native build receipt describe the timing driver and source files compiled with it. Prebuilt library code is separately pinned by its exact binary digest, with generated liboqs build configuration also fingerprinted. ML-KEM dispatches to the pinned library's AArch64 optimized implementation; it is labelled architecture-optimized. HQC/McEliece/NTRU use their reference cores, with native library primitives. There is no claim of equivalent optimization across families, FIPS certification, or independent cryptographic audit.
+
+A parent process enforces the profile wall deadline and bounded numeric-only output. The native worker also limits CPU/core dumps/stack (and address space where supported). It never emits keys, ciphertexts or seeds. Every completed operation and agreement/error/timeout outcome is retained; aborted or disagreeing trials are not silently resampled. A report contains source/parameter/challenge-artifact bindings, the harness snapshot digest, native compiler/options/input inventory/binary hashes, environment, actual sampling settings and raw trial receipts. The reader recomputes summaries and refuses mismatched/stale bindings.
+
+Reports are written to a new output file only, not published automatically. Historical reports retain their captured harness identity; changing the current harness does not rewrite old evidence. Only an explicit hash-pinned publication index makes a reviewed report available to the website, and matching current scheme-version/parameters/implementation are still required. Never change a source, parameter file, driver or library during collection.

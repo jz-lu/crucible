@@ -1,0 +1,71 @@
+CRUCIBLE — NOTES BEHIND THE DISPLAYS
+
+Graphs and explanatory claims need supporting notes. Keep the human overview
+quiet: the supporting note is available inside existing detail disclosures and
+statement readers, not as a citation beside every plotted point or heading.
+
+Current scheme evidence
+
+Each current release has a substantive, read-only curated note in the research
+notebook. It records the exact configuration space, encoded sizes, reference
+timing evidence, attack-cost models, security/correctness premises and open work.
+The binding pins the note's revision and canonical content SHA-256. Curation is
+editorial inclusion, not a fabricated author submission, reviewer approval,
+mathematical certification or implementation admission.
+
+The source snapshot covers the actual displayed data, not just filenames. The
+publication check detects drift in graph values, models, benchmark reports and
+assumption sheets. Evidence updates append note revisions and retain the older
+ones. No user account, proposal, submitted result or saved notebook is changed.
+
+Frozen challenge manifests retain their original references. Later literature
+references live in crucible/security_references.py and name exact configurations
+and cost models. A model-specific work exponent is not a universal security-bit
+score. Missing estimates remain missing. A line never joins different models,
+unreported configurations or incomplete timing measurements.
+
+The added ML-KEM-512 references describe the historical Kyber 2021 underlying
+lattice parameters: 118 classical and 107 quantum primal Core-SVP work. They do
+not transfer a full-KEM theorem between transforms. The Frodo640 quantum point
+is the published raw underlying-LWE Q-RW-Sieve minimum, 123.0; it is not the
+separate reduction-adjusted estimate and is not extrapolated to reduced profiles.
+The notes retain the primary sources and each model's assumptions and omissions.
+
+Live records
+
+Recovery lines and participant counts are derived from live receipt records.
+The release notes explain that derivation and what it does not establish; a
+frozen note cannot assert the outcomes of future submissions. Accepted receipts
+remain the evidence for particular outcomes. A red line is not a general security
+bound, nor proof that every smaller configuration was separately recovered.
+
+Agent access and privacy
+
+Catalogue descriptors include evidence_note with its exact revision/hash and
+an api_url. GET /api/protocol/evidence-note resolves the selected release's
+curated note, optionally checking revision and sha256. It uses existing beta
+admission and challenges:read permission. It cannot read arbitrary private notes.
+Assumptions and benchmark responses include supporting_note; timing provenance
+is attached only when the returned report matches the note's report hash.
+
+GET /api/protocol/proposal-guide returns the human/agent plain-text guide;
+?note=true returns its curated supporting note. Both follow proposals:read and
+beta admission. The plain response includes a describedby Link header. CLI
+proposal init/revise saves the guide alongside the schema and template.
+
+Each note also names an immutable data artifact. data=true returns that snapshot;
+evidence_sha256 can select an older snapshot only if a revision of this bound
+note cites it. Arbitrary filesystem paths and unrelated artifact hashes are not
+accepted. Keeping dense source data outside the notebook makes the human library
+small while retaining exact, downloadable provenance for agents. Artifact and
+note hashes are checked on retrieval; the full source-freshness check runs before
+publication. No benchmark or contributed implementation runs during a read.
+
+Maintenance
+
+Use scripts/build_display_notes.py after editing source evidence. Inspect the
+resulting note revision and bindings, run its check mode and the provenance tests,
+then publish the source data, note collection and bindings together. Rebuild the
+map payloads without altering existing literature-note revisions or map bindings.
+Restart server workers after deploying changed immutable presentation metadata.
+Review scope and evidence must remain explicit even when a note has a stable hash.

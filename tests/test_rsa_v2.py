@@ -98,7 +98,9 @@ def test_certificate_validation_rejects_forged_or_malformed_proofs(malformation)
 
 
 @pytest.mark.parametrize('tier', [1, 2, 17, 24, 25, 26, 35, 40, 50])
-def test_boundary_keys_have_fresh_certified_balanced_factors_and_exact_encodings(tier):
+def test_boundary_keys_have_fresh_certified_balanced_factors_and_exact_encodings(tier, monkeypatch):
+    # This checks arithmetic/encoding, not the separately tested production deadline.
+    monkeypatch.setattr(rsa_v2, 'MAX_GENERATION_SECONDS', 60.0)
     identifier = f'rsa-v2-tier-{tier}'
     manifest = rsa_v2.get_manifest(identifier)
     public_key, private = rsa_v2.keygen(identifier)

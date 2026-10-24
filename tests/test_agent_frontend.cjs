@@ -38,6 +38,16 @@ async function test(name, run) {await run();console.log('PASS '+name);passed++;}
     assert.doesNotMatch(app.document.body.textContent,/NEVER_RENDER_ME/);
     assert.equal(app.$('#connect-content').querySelector('[data-agent-decision]'),null);
   });
+  await test('opt-in notebook approval clearly describes private reads, writes and publication requests', async () => {
+    const app = await createApp({schemes,user,hash:'#connect?code=ABCD-EFGH',responder:(url,options,envelope) => {
+      if(url.pathname==='/api/agent/connect/ABCD-EFGH')return envelope({connection:connection({scopes:['notebook:read','notebook:write','notebook:publish']})});
+    }});
+    const text = app.$('#connect-content').querySelector('.agent-scope-list').textContent;
+    assert.match(text,/including private drafts/);
+    assert.match(text,/Create, import and revise/);
+    assert.match(text,/Request publication review/);
+    assert.equal(writes(app).length,0);
+  });
   await test('expiry, denial and a mismatched preview never leave an approval button', async () => {
     for(const value of [connection({expires_at:0}),connection({status:'denied'}),connection({user_code:'WRNG-CODE'})]){
       const app=await createApp({schemes,user,hash:'#connect?code=ABCD-EFGH',responder:(url,options,envelope)=>url.pathname.startsWith('/api/agent/connect/')?envelope({connection:value}):undefined});
@@ -144,8 +154,12 @@ async function test(name, run) {await run();console.log('PASS '+name);passed++;}
     assert.equal(app.$('#use-agent').getAttribute('aria-expanded'),'true');
     app.$('#copy-agent-instructions').click();await flush();
     assert.match(copied,/http:\/\/127.0.0.1:8000\/api\/agent\/client/);
+    assert.match(copied,/read and follow the model pipeline contract at http:\/\/127.0.0.1:8000\/api\/agent\/pipeline/);
+    assert.match(copied,/crucible_cli.py --server 'http:\/\/127.0.0.1:8000' guide/);
+    assert.match(copied,/pipeline.json.*never put credentials/);
     assert.match(copied,/get --challenge-id 'exact-challenge-id'/);
     assert.match(copied,/Deadline:.*UTC/);
+    assert.match(copied,/AI model\(s\).*implemented.*ai_model.*exact versions.*never guess/);
     assert.match(copied,/init 'fixture' --stage 1 --path NEW_EMPTY_FOLDER/);
     assert.match(app.$('#agent-followup-request').textContent,/Retrieve the newest Fixture challenge at Stage 1/);
     assert.doesNotMatch(copied,/test-csrf|public_key|ciphertext/);
@@ -165,6 +179,22 @@ async function test(name, run) {await run();console.log('PASS '+name);passed++;}
     app.sandbox.setSession(app.envelope({user:null,csrf_token:'next'}));
     assert.equal(app.$('#agent-instructions').hidden,true);
     assert.equal(app.$('#agent-instructions-text').textContent,'');
+  });
+  await test('new and revised proposal prompts start agents with the same pipeline contract', async () => {
+    const app=await createApp({schemes,user});
+    const before=app.requests.length;
+    for(const record of [null,{id:'proposal-one',revision:2,content_sha256:'a'.repeat(64)}]) {
+      const text=app.sandbox.proposalAgentPrompt(record);
+      assert.match(text,/read and follow the model pipeline contract at http:\/\/127.0.0.1:8000\/api\/agent\/pipeline/);
+      assert.match(text,/crucible_cli.py --server 'http:\/\/127.0.0.1:8000' guide/);
+      assert.ok(text.indexOf('/api/agent/pipeline') < text.indexOf('Prepare a fresh workspace:'));
+      assert.match(text,/pipeline.json.*never put credentials/);
+      assert.match(text,/Only when I ask you to submit/);
+      assert.match(text,record ? /proposal revise 'proposal-one'/ : /proposal init/);
+      assert.doesNotMatch(text,/test-csrf|Bearer|cru_/);
+    }
+    assert.equal(app.requests.length,before);
+    assert.equal(writes(app).length,0);
   });
   await test('source bundles link only through same-origin download endpoints', async () => {
     const app=await createApp({schemes});

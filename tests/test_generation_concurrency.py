@@ -90,6 +90,11 @@ def test_separate_apps_still_converge_on_one_durable_instance(generation, monkey
     assert challenges[0] == challenges[1] == challenges[2]
     assert count(generation, Challenge) == 1
     assert count(generation, ProfileIncident) == 0
+    with generation.app.state.db.transaction() as session:
+        attempts = session.scalars(select(generation_work.GenerationAttempt)).all()
+        assert len(attempts) == 3
+        assert all(row.outcome == "agreement" for row in attempts)
+        assert sorted(row.disposition for row in attempts) == ["duplicate_discarded", "duplicate_discarded", "issued"]
 
 
 def test_duplicate_does_not_consume_native_capacity_and_retry_reuses_instance(generation, monkeypatch):
@@ -116,7 +121,7 @@ def test_duplicate_does_not_consume_native_capacity_and_retry_reuses_instance(ge
             assert entered.wait(3)
             try:
                 duplicate = generation.actor.post("/api/challenges", body)
-                assert duplicate.status_code == 503 and duplicate.headers["retry-after"] == "3"
+                assert duplicate.status_code == 429 and duplicate.headers["retry-after"] == "3"
                 assert len(calls) == count(generation, generation_work.GenerationAttempt) == 1
                 independent = other.post("/api/challenges", body)
                 assert independent.status_code == 200, independent.text
@@ -164,6 +169,9 @@ def test_generation_finishing_at_the_deadline_cannot_issue_in_either_round(gener
     assert response.status_code == 409, response.text
     assert count(generation, Challenge) == 0
     assert count(generation, ProfileIncident) == 0
+    with generation.app.state.db.transaction() as session:
+        attempt, = session.scalars(select(generation_work.GenerationAttempt)).all()
+        assert (attempt.outcome, attempt.disposition) == ("agreement", "generated_unissued")
     account_id = generation.actor.client.get("/api/session").json()["user"]["id"]
     old_key = (generation.app.state.db.engine, account_id, ISSUE["scheme_id"], ISSUE["scheme_version"], ISSUE["profile_id"], original_round)
     with generation_work.instance_reservation(old_key):

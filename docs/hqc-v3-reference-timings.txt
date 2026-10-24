@@ -1,0 +1,68 @@
+HQC modeled-research-v3 reference operation pilot — 2026-10-17
+============================================================
+
+The explicit hqc-v3 benchmark target uses crucible.code_hqc_v3. The historical
+hqc target still uses code_hqc_v2; its reports and identities are unchanged.
+Native timing builds use a separate driver beneath .local/reference-native,
+never overwrite challenge workers, and verify the frozen patched source inventory,
+base library, parameter identity, adapter closure and resulting driver binary.
+
+BuildInputs.hqc_model_root defaults to .local/native-hqc-model. The optional
+--native-hqc-model-root command-line argument selects an existing reviewed input
+tree; it is not an arbitrary plugin, library download or uploaded-code loader.
+The report reader accepts the new target only for modeled-research-v3 and still
+requires exact profile/source/parameter/artifact bindings and an operator-selected
+publication digest. Adding a target never automatically publishes a report.
+
+Reproduction (Python environment with the repository dependencies installed):
+  PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m scripts.reference_benchmark \
+    --targets hqc-v3 --selection all --prepare-only \
+    --native-pq-root /path/to/verified-native-pq-inputs
+  PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m scripts.reference_benchmark \
+    --targets hqc-v3 --selection all --warmups 3 --trials 20 \
+    --profile-timeout 120 --native-pq-root /path/to/verified-native-pq-inputs \
+    --output /path/to/new-raw-report.json
+
+For this local collection, verified upstream source/build inputs came from
+work/recovery-upload/.native-pq, and the new challenge implementation inputs came
+from the isolated checkout's .local/native-hqc-model. Preparation completed for
+all 66 configurations before the sequential quiet-window measurement pass.
+
+Raw report in the working checkout:
+  .local/reference-hqc-v3-20261017.json
+  SHA256 da36da4accbf80c7c3799015e786646193179c92525ebd44edc0447ca3cebaef
+  1,056,052 bytes
+Adapter source:
+  404fda38d083d53139928b95b4dc38dae8f3854e6b84cca39638edd10785ee91
+Adapter artifact closure:
+  951bbc7f26418baff8b00b2d6e3babe55eb281f65fb12dcc4885da62e34b7e23
+
+Results: 66 complete profiles, 198 measured operation summaries, 1,518 successful
+honest exchanges including warmups. No disagreement, unexpected error, generation
+abort or timeout occurred. This finite sample does not validate a 2^-128 failure
+claim or its model-transfer premise.
+
+Selected medians (milliseconds):
+  configuration       key generation       encapsulation       decapsulation
+  1                       0.108                 0.208                0.3515
+  33                      0.316                 0.6175               0.930
+  66                      0.6565                1.3135               1.937
+
+These are native reference core calls with operating-system randomness included.
+Startup, artifact verification, driver buffer allocation, HTTP and database work
+are excluded. They are not deployment request latency, hosted-user capacity,
+invalid-ciphertext decapsulation timings or a cross-family performance ranking.
+The raw report retains its compiler, hardware, method, quartiles and all numeric
+trial receipts. The endpoint remains the explicitly identified 2025 construction.
+
+Validation: 79 benchmark target/native builder/runner/publication-reader tests
+passed, including separate old/new source-tree selection and wrong-version
+rejection. All ten existing indexed publications still validated after this
+extension. The new raw report was then checked through the real publication
+reader using a temporary isolated index: all 198 operation rows were measured.
+That temporary check did not modify the actual publication index.
+
+The suite-hardening publication explicitly selects the same raw report as
+crucible/data/reference_benchmarks/local-all-20261017-native-hqc-v3.json in
+index.json. Its digest is unchanged. All ten earlier entries remain selected
+for their own releases. Measurement collection never updates that index itself.

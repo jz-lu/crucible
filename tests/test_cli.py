@@ -22,7 +22,8 @@ CANDIDATE = "ba" * 32
 @pytest.fixture
 def server(tmp_path):
     state = {"requests": [], "issued": False, "answers": [], "methods": 0, "uploads": 0,
-             "fail_answer_once": False, "closed": False, "redirect": False, "wrong_hash": False}
+             "fail_answer_once": False, "closed": False, "redirect": False, "wrong_hash": False,
+             "pipeline": {"format": "crucible-agent-pipeline-v1", "purpose": "Fixture model contract"}}
     source = b'# Inert reference source.\nraise RuntimeError("Do not execute fetched reference source")\n'
     digest = hashlib.sha256(source).hexdigest()
     manifest = {"id": "rsa-v3-tier-1", "instance_size": 1, "shared_secret_bytes": 32,
@@ -64,11 +65,20 @@ def server(tmp_path):
                 self.end_headers()
                 return
             if path == "/api/agent/connect/start":
+                state["requested_scopes"] = body.get("scopes")
                 return self.reply({"device_code": "crd_" + "d" * 43, "user_code": "ABCD-EFGH",
-                    "verification_uri": state["origin"] + "/#connect?code=ABCD-EFGH", "expires_in": 600, "interval": 2})
+                    "verification_uri": state["origin"] + "/#connect?code=ABCD-EFGH", "expires_in": 600, "interval": 2,
+                    **({"scopes": state.get("offered_scopes", body["scopes"])} if "scopes" in body else {})})
             if path == "/api/agent/connect/poll":
                 return self.reply({"status": "authorized", "access_token": TOKEN,
-                    "expires_at": time.time() + 3600, "token_type": "Bearer", "user": {"handle": "solver"}})
+                    "expires_at": time.time() + 3600, "token_type": "Bearer", "user": {"handle": "solver"},
+                    **({"scopes": state.get("granted_scopes", state["requested_scopes"])} if state.get("requested_scopes") else {})})
+            if (path in {cli.AGENT_PIPELINE, "/api/schemes"} or path.startswith(cli.AGENT_GUIDANCE)) and state.get("beta_required") and self.headers.get("Authorization") != "Bearer " + TOKEN:
+                return self.reply({"detail": "Unauthorized"}, 401)
+            if path == cli.AGENT_GUIDANCE + "note-format.txt":
+                return self.reply(state.get("guidance", b"Note format fixture.\n"), raw=True)
+            if path == cli.AGENT_PIPELINE:
+                return self.reply(state["pipeline"], state.get("pipeline_status", 200))
             if path == "/api/schemes":
                 return self.reply({"schemes": [{"id": "rsa-kem", "name": "RSA", "version": "3", "profiles": [manifest],
                     "selection_kind": state.get("selection_kind", "tier"),
@@ -193,6 +203,28 @@ def test_login_stores_private_origin_bound_credentials_without_printing_them(ser
     assert all(request[3] is None for request in state["requests"])
 
 
+def test_notebook_login_requests_explicit_scopes_without_agent_browser_use(server, monkeypatch, capsys):
+    state, config, _ = server
+    monkeypatch.setattr(cli.time, "sleep", lambda _: None)
+    monkeypatch.setattr(cli.webbrowser, "open", lambda _: pytest.fail("The agent must not open a browser."))
+    assert invoke(server, "login", "--notebook", "--no-browser") == 0
+    output = capsys.readouterr()
+    assert state["requested_scopes"] == list(cli.DEFAULT_SCOPES + cli.NOTEBOOK_SCOPES)
+    assert cli.configuration(config)["servers"][state["origin"]]["scopes"] == state["requested_scopes"]
+    assert TOKEN not in output.out + output.err and "crd_" not in output.out + output.err
+
+
+@pytest.mark.parametrize("field", ["offered_scopes", "granted_scopes"])
+def test_explicit_login_refuses_a_changed_permission_set(server, monkeypatch, capsys, field):
+    state, config, _ = server
+    before = config.read_bytes()
+    monkeypatch.setattr(cli.time, "sleep", lambda _: None)
+    state[field] = list(cli.DEFAULT_SCOPES)
+    assert invoke(server, "login", "--notebook", "--no-browser") == 1
+    assert "permissions" in json.loads(capsys.readouterr().out)["error"]["message"]
+    assert config.read_bytes() == before
+
+
 def test_login_retries_lost_authorized_poll_with_same_private_code(server, monkeypatch, capsys):
     state, config, _ = server
     config.unlink()
@@ -224,8 +256,81 @@ def test_init_fetches_contract_and_verified_reference_without_executing_or_leaki
     assert report["challenge_id"] == "challenge-1" and report["tier"] == 1
     assert {"challenge.json", "protocol.json", "reference", "attack", "method.md", "result.json", ".crucible.json", "README.md", ".gitignore"} <= {item.name for item in root.iterdir()}
     assert state["issued"] and state["methods"] == 0 and not state["answers"]
+    assert report["pipeline_status"] == "saved"
+    assert cli.load_json(root / "pipeline.json") == state["pipeline"]
+    assert (root / "pipeline.json").stat().st_mode & 0o077 == 0
+    assert "read and follow pipeline.json" in (root / "README.md").read_text()
     assert all(TOKEN not in item.read_text() for item in root.rglob("*") if item.is_file())
     assert config.parent != root
+
+
+def test_beta_catalogue_and_model_guide_use_connection_without_exposing_it(server, capsys):
+    state, _, root = server
+    state["beta_required"] = True
+    assert invoke(server, "guide") == 0
+    assert json.loads(capsys.readouterr().out) == state["pipeline"]
+    assert invoke(server, "schemes") == 0
+    capsys.readouterr()
+    assert invoke(server, "init", "rsa-kem", "--tier", "1", "--path", root) == 0
+    output = capsys.readouterr()
+    assert TOKEN not in output.out + output.err
+    for path in (cli.AGENT_PIPELINE, "/api/schemes"):
+        attempts = [row[3] for row in state["requests"] if row[1] == path]
+        assert attempts == [None, "Bearer " + TOKEN] * 2
+    pipeline_read = next(i for i, row in enumerate(state["requests"]) if row[1] == cli.AGENT_PIPELINE)
+    issue = next(i for i, row in enumerate(state["requests"]) if row[0] == "POST" and row[1] == "/api/challenges")
+    assert pipeline_read < issue
+
+
+@pytest.mark.parametrize("status,document", [(200, {"format": "unsupported"}),
+    (403, {"detail": TOKEN}), (503, {"detail": TOKEN}),
+    (200, {"format": "crucible-agent-pipeline-v1", "large": "x" * cli.MAX_AGENT_PIPELINE})])
+def test_bad_pipeline_never_issues_challenge_or_creates_workspace(server, capsys, status, document):
+    state, _, root = server
+    state.update(pipeline_status=status, pipeline=document)
+    assert invoke(server, "init", "rsa-kem", "--tier", "1", "--path", root) == 1
+    assert not root.exists() and not state["issued"]
+    assert not any(row[0] == "POST" for row in state["requests"])
+    output = capsys.readouterr()
+    assert TOKEN not in output.out + output.err
+
+
+def test_missing_legacy_pipeline_is_explicit_but_standalone_guide_does_not_fake_one(server, capsys):
+    state, _, root = server
+    state["pipeline_status"] = 404
+    assert invoke(server, "init", "rsa-kem", "--tier", "1", "--path", root) == 0
+    assert json.loads(capsys.readouterr().out)["pipeline_status"] == "unavailable-legacy-server"
+    assert not (root / "pipeline.json").exists()
+    assert "No central model contract was downloaded" in (root / "README.md").read_text()
+    assert invoke(server, "guide") == 1
+    assert json.loads(capsys.readouterr().out)["error"]["code"] == "http_404"
+
+
+def test_guidance_resources_support_beta_json_and_plain_text_without_execution(server, capsys):
+    state, config, _ = server
+    state["beta_required"] = True
+    state["guidance"] = b"print('This is inert research text, not executed')\n"
+    assert invoke(server, "guide", "--resource", "note-format.txt") == 0
+    assert json.loads(capsys.readouterr().out) == {"resource": "note-format.txt", "content": state["guidance"].decode()}
+    assert cli.main(["--server", state["origin"], "--config", str(config), "guide", "--resource", "note-format.txt"]) == 0
+    assert capsys.readouterr().out == state["guidance"].decode()
+    assert [row[3] for row in state["requests"]] == [None, "Bearer " + TOKEN] * 2
+    assert all(row[0] == "GET" for row in state["requests"])
+
+
+@pytest.mark.parametrize("resource", ["../note-format.txt", "https://other.example/guide.txt", "/note-format.txt", "a%2fb.txt", "a?x.txt", "a\\b.txt"])
+def test_guidance_resource_paths_are_rejected_before_network(server, resource):
+    state, _, _ = server
+    assert invoke(server, "guide", "--resource", resource) == 1
+    assert state["requests"] == []
+
+
+@pytest.mark.parametrize("content", [b"", b"\xff", b"escape\x1b[31m", b"x" * (cli.MAX_AGENT_PIPELINE + 1)], ids=["empty", "utf8", "terminal-control", "oversized"])
+def test_guidance_resource_rejects_unsafe_or_oversized_text(server, content, capsys):
+    state, _, _ = server
+    state["guidance"] = content
+    assert invoke(server, "guide", "--resource", "note-format.txt") == 1
+    assert json.loads(capsys.readouterr().out)["error"]["code"] == "client_error"
 
 
 def test_exact_get_and_refusal_to_overwrite_existing_workspace(server):
@@ -399,11 +504,14 @@ def test_run_measures_only_local_command_then_submit_uploads_only_selected_sourc
     (root / "attack" / "not-selected.py").write_text("PRIVATE_UNSELECTED = True\n")
     (root / ".env").write_text("SECRET=DO_NOT_UPLOAD\n")
     capsys.readouterr()
-    assert invoke(server, "run", "--path", root, "--workers", "2", "--precomputation", "None", "--", sys.executable, "attack/solve.py") == 0
+    template = cli.load_json(root / "result.json")
+    assert template["ai_model"] == "" and "300 characters" in template["_instructions"]["ai_model"]
+    assert invoke(server, "run", "--path", root, "--workers", "2", "--precomputation", "None", "--ai-model", "  Model A v1; Model B v2  ", "--", sys.executable, "attack/solve.py") == 0
     output = capsys.readouterr().out
     assert CANDIDATE not in output and TOKEN not in output
     result = cli.load_json(root / "result.json")
     assert result["candidate"] == CANDIDATE
+    assert result["ai_model"] == "Model A v1; Model B v2"
     assert result["compute"]["wall_seconds"] >= 0 and result["compute"]["workers"] == 2
     assert result["compute"]["peak_memory"] == "Not measured"
     assert "Remote compute" in result["compute"]["notes"] and not state["answers"]
@@ -411,14 +519,17 @@ def test_run_measures_only_local_command_then_submit_uploads_only_selected_sourc
     assert [item["path"] for item in state["source"]["files"]] == ["attack/solve.py", "method.md"]
     assert "DO_NOT_UPLOAD" not in json.dumps(state["source"])
     assert state["methods"] == state["uploads"] == len(state["answers"]) == 1
+    assert state["answers"][0]["ai_model"] == result["ai_model"]
     assert (root / ".crucible" / "submission.json").stat().st_mode & 0o777 == 0o600
     assert cli.load_json(root / "receipt.json")["submission"]["status"] == "correct"
 
 
-def test_lost_receipt_retry_preserves_exact_answer_method_source_and_identifier_after_expiry(server, capsys):
+@pytest.mark.parametrize("ai_model", [None, "Model A v1"])
+def test_lost_receipt_retry_preserves_exact_answer_method_source_and_identifier_after_expiry(server, capsys, ai_model):
     state, _, _ = server
     root = ready(server)
-    assert invoke(server, "run", "--path", root, "--", sys.executable, "attack/solve.py") == 0
+    options = ["--ai-model", ai_model] if ai_model else []
+    assert invoke(server, "run", "--path", root, *options, "--", sys.executable, "attack/solve.py") == 0
     state["fail_answer_once"] = True
     capsys.readouterr()
     assert invoke(server, "submit", "--path", root) == 1
@@ -426,6 +537,10 @@ def test_lost_receipt_retry_preserves_exact_answer_method_source_and_identifier_
     assert CANDIDATE not in error and TOKEN not in error
     frozen = cli.load_json(root / ".crucible" / "submission.json")
     assert frozen["payload"] == state["answers"][0]
+    if ai_model:
+        assert frozen["result"]["ai_model"] == frozen["payload"]["ai_model"] == ai_model
+    else:
+        assert "ai_model" not in frozen["result"] and "ai_model" not in frozen["payload"]
     state["closed"] = True
     (root / "attack" / "solve.py").write_text("print('changed after first submission')\n")
     (root / "method.md").write_text("Changed after the original frozen submission.\n")
@@ -446,18 +561,61 @@ def test_new_submission_to_closed_challenge_is_not_sent(server):
     assert not state["answers"] and state["methods"] == state["uploads"] == 0
 
 
-def test_changed_result_cannot_replace_uncertain_submission(server):
+@pytest.mark.parametrize("change", [{"candidate": "cc" * 32}, {"ai_model": "Added after submission"}])
+def test_changed_result_cannot_replace_uncertain_submission(server, change):
     state, _, _ = server
     root = ready(server)
     assert invoke(server, "run", "--path", root, "--", sys.executable, "attack/solve.py") == 0
     state["fail_answer_once"] = True
     assert invoke(server, "submit", "--path", root) == 1
     result = cli.load_json(root / "result.json")
-    result["candidate"] = "cc" * 32
+    result.update(change)
     cli.save_json(root / "result.json", result)
     assert invoke(server, "submit", "--path", root) == 1
     assert len(state["answers"]) == 1
     assert invoke(server, "run", "--path", root, "--", sys.executable, "attack/solve.py") == 1
+
+
+@pytest.mark.parametrize("annotation,expected", [("", None), (" \t\n", None),
+    ("  Model A v1; Model B v2  ", "Model A v1; Model B v2"), ("🧪" * 300, "🧪" * 300)])
+def test_result_model_annotation_normalizes_without_changing_legacy_results(annotation, expected):
+    result = {"format": "crucible-recovery-v1", "challenge_id": "challenge-1", "candidate": CANDIDATE,
+              "method": {"name": "Method", "pseudocode": "Apply the method."},
+              "compute": {"hardware": "CPU", "workers": 1, "wall_seconds": 1,
+                          "precomputation": "None", "peak_memory": "Not measured"}}
+    package = {"challenge": {"id": "challenge-1"}, "scheme_manifest": {"shared_secret_bytes": 32}}
+    legacy = cli.validate_result(result, package)
+    normalized = cli.validate_result({**result, "ai_model": annotation}, package)
+    assert normalized == {**legacy, **({"ai_model": expected} if expected else {})}
+    if expected is None:
+        assert cli.encode(normalized) == cli.encode(legacy)
+
+
+@pytest.mark.parametrize("annotation", [None, False, 1, [], {}, "x" * 301, " " + "🧪" * 300, "a\x00b", "\ud800"])
+def test_invalid_model_annotations_are_rejected(annotation):
+    with pytest.raises(cli.ClientError, match="ai_model"):
+        cli.normalize_ai_model(annotation)
+
+
+def test_manual_result_model_annotation_is_submitted(server):
+    state, _, _ = server
+    root = ready(server)
+    assert invoke(server, "run", "--path", root, "--", sys.executable, "attack/solve.py") == 0
+    result = cli.load_json(root / "result.json")
+    assert "ai_model" not in result
+    result["ai_model"] = "  Manually reported model v3  "
+    cli.save_json(root / "result.json", result)
+    assert invoke(server, "submit", "--path", root) == 0
+    assert state["answers"][0]["ai_model"] == "Manually reported model v3"
+
+
+def test_invalid_run_model_annotation_does_not_execute_solver(server):
+    state, _, _ = server
+    root = ready(server)
+    marker = root / "ran.txt"
+    assert invoke(server, "run", "--path", root, "--ai-model", "x" * 301, "--", sys.executable,
+                  "-c", "from pathlib import Path; Path('ran.txt').write_text('ran')") == 1
+    assert not marker.exists() and not state["answers"]
 
 
 def test_no_redirect_is_followed_and_no_off_origin_or_expired_token_is_sent(server):

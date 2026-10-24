@@ -1,0 +1,27 @@
+Catalogue refresh — 17 October 2026
+
+GET /api/schemes preserves its full backward-compatible catalogue, including
+archived releases, and adds catalogue_revision. The browser loads this once.
+Its visible-page background refresh uses /api/schemes?progress_only=true:
+the same access boundary and no-store policy, with changing participation and
+recovery fields for every exact scheme/release. No private challenge is included.
+
+The browser merges only those whitelisted fields after matching the metadata
+revision and the complete set of release identities. Missing/duplicate releases
+or a revision mismatch trigger a full reload. A superseded request or access
+revocation cannot repopulate cleared state. Protocol bodies, exact integers,
+editors and selected configurations do not need to be re-created each minute.
+
+The revision hashes the static catalogue, not recovery records or server time.
+Its cached calculation invalidates on registered adapter/provider replacement or
+current-release changes. As with existing presentation caches, deployment edits
+to metadata require a worker restart. Identical worker catalogues produce the
+same revision. This is a client synchronization token, not an integrity/admission
+certificate, authorization credential or verification of installed artifacts.
+Dynamic records are still queried every request; no results are cached. Frozen
+implementation verification is unchanged. Full metadata is still transferred
+on first load and explicit full refresh; lazy archive loading is future work.
+
+Regression coverage: tests/test_catalogue_progress.py and
+tests/test_catalogue_progress_frontend.cjs, plus the existing access, navigation,
+read-performance and exact-JSON tests.

@@ -1,0 +1,145 @@
+CORRECTNESS CLAIMS AND ASSUMPTIONS — 17 OCTOBER 2026
+
+Admission requires a precise correctness guarantee and a scoped security claim.
+Both may depend on explicitly stated, unproved assumptions. Inclusion makes a
+scheme available for research; it does not certify the truth of those claims.
+New approval and admission require a claimed honest-failure probability at most
+2^-128 for every admitted configuration, or perfect agreement. This is a required
+claimed goal under explicit premises, not a requirement to prove every premise.
+The policy identifier remains crucible-honest-agreement-128-v1.
+
+Correctness claim
+
+State either perfect honest agreement (failure bound "0") or a precise statistical
+failure bound at most 2^-128, with probability scope, parameter coverage,
+assumptions and the reasoning connecting them to the bound. Bounds may be conditional,
+model-based or conjectural. Identify exactly which steps are proved, modeled or
+unproved. A scheme need not prove every premise before it can be studied.
+Unknown correctness and weaker claimed bounds are allowed in intake drafts.
+Before new proposal approval or live-challenge admission, the proposal must claim
+the required target and provide its dependencies and supporting reasoning. Merely
+changing the numerical label without a justified argument is insufficient.
+
+Security claim
+
+State the security notion, adversary/oracle model, claimed guarantee and parameter
+scope, along with its assumptions. Distinguish asymptotic claims from finite
+attack estimates. No invented numerical bit estimate is required for a novel
+claim, and deliberately small research stages may have different stated strength.
+Reviewers check that the claim and dependencies are explicit and worth studying;
+approval does not establish hardness, correctness or IND-CCA security. Where
+a security argument depends on a correctness bound, record the required threshold
+and dependency explicitly; claims must not silently borrow stronger assurances.
+
+Evidence and assumptions
+
+correctness.justification.kind distinguishes:
+  mathematical-proof — a mathematical proof under its listed premises;
+  analytical-bound — a derived bound with explicit conditions;
+  model-based-analysis — a calculation in an explicitly idealized model;
+  conjectural-claim — a precise claimed guarantee with motivated unproved steps.
+
+Each uses statement, conditions, configuration_coverage and derivation. For a
+conjectural claim, derivation records rationale and the unproved dependencies,
+not an invented proof. Independently motivate assumptions rather than merely
+restate the desired conclusion: assuming that the KEM already meets the target
+is tautological and does not supply a meaningful justification. Premises must
+specify mathematical or algorithmic properties that can be assessed or challenged
+independently of the target conclusion. Examine dependencies, rare events, weak keys,
+parameter changes and whether weaker assumptions would suffice. Identify what
+could support or refute the conjectural steps. A family argument can cover many
+configurations without redundant per-stage papers.
+
+A checked computation under model M does not establish that M describes the
+algorithm. If the modeled failure is <=delta and its probability differs from
+reality by at most epsilon, the real bound is only delta+epsilon. Ordinary
+empirical agreement cannot establish negligible epsilon. Finite tests may expose
+mistakes but cannot establish an extreme tail or prove an assumption. Preserve
+conditionality in downstream security arguments, graph summaries and reviews.
+
+Refutation and challenges to the justification
+
+A rigorous demonstration that the actual honest-failure probability exceeds
+2^-128 in the claimed configuration and experiment refutes the target claim for
+that scope. This need not refute a conditional theorem whose premises fail.
+Distinguish an actual lower bound from a loose upper bound: proving
+only delta<=2^-64 leaves the required target unestablished by that argument; it
+does not prove delta>2^-128. Disproving a narrower claimed bound may require its
+own comparison even when the common target still holds.
+
+A counterexample to an assumption, an invalid inference, a missing proof or a
+model mismatch undermines the justification. It does not alone establish that
+the actual failure probability exceeds the target; the scheme may meet the target
+for another reason. A single failing instance warrants investigation but does
+not by itself establish the failure probability under the declared honest
+sampling distribution. Statistical claims permit rare failures; distinguish
+properly scoped statistical inference from a rigorous probability bound. A single
+disagreement found adversarially can refute perfect agreement if it lies in the
+claimed honest-input support and satisfies the premises. It does not alone
+refute a statistical 2^-128 claim: probability under the specified distribution
+matters. Record separately which claim, assumption or reasoning step is affected.
+
+These distinctions guide manual review and research notes. They do not add an
+automatic refutation rule, visualizer or new attack-submission pipeline.
+
+Claim dependencies should remain understandable to humans and agents. The research
+notebook can hold precise assumptions, supporting arguments and counterexamples;
+curated scheme views can later explain their consequences. This policy does not
+claim a complete dependency visualizer has already been implemented.
+
+Experiment and execution
+
+For each configuration, sample an honest key pair, encapsulate honestly and
+decapsulate with its matching private key. Different output or honest rejection
+is a correctness failure. State the probability space, distributions, setup,
+conditioning and parameter scope; an average-over-keys claim is not a per-key
+or adversarial-ciphertext guarantee.
+
+Report generation/resource aborts separately, including rates and retry costs.
+A disagreement cannot be silently resampled into success. If alpha bounds
+excluded aborts and delta is conditional disagreement, total exchange failure
+is bounded by alpha+(1-alpha)*delta. This does not justify an unclaimed availability
+guarantee. The live service retains unexpected disagreements for review.
+
+Implementation conformance and safe execution remain separate requirements:
+precise pseudocode, encodings, reviewed pinned source/artifacts, malformed-input
+handling, bounded resources and reproducible checks. Submitted code stays inert
+until trusted integration. Relaxing evidentiary certainty does not relax these
+execution controls, access permissions or private-data protections.
+
+Required target and prospective metadata
+
+2^-128 is Crucible's required claimed correctness goal for new approvals and
+admissions. It is not a security-bit claim or a NIST-mandated numerical cutoff.
+Preserve stronger per-configuration bounds within the reviewed common envelope.
+A security reduction or usage requirement may demand a stricter bound.
+
+correctness.policy_id = "crucible-honest-agreement-128-v1" identifies this policy
+but is optional. For a statistical claim, new approval/admission requires
+correctness.failure_bound_exponent as a conservative integer b>=128 declaring
+delta<=2^-b under the stated premises. Review consistency with failure_bound,
+justification and parameter coverage; the server does not evaluate formulas or
+prove the assertion. Round fractional exponents down and retain the tighter
+expression in the reasoning. Perfect claims state failure_bound "0" and omit
+the exponent. Unknown claims also omit it and remain draft-only. Weak statistical
+claims and missing exponents remain valid drafts but cannot receive new approval
+or admission. Historical omitted fields retain their canonical hashes; prior
+records are not retroactively certified or rewritten.
+
+The six-profile module-v4 construction continues to claim this target:
+degrees8/16 have deterministic support arguments,32/64 conservative conditional
+bounds,128/256 explicitly modeled compression bounds. Its parameters, claims,
+source identities and timing receipts are unchanged by this admission refinement.
+See module-v4-design.txt for the current design. mlkem-correctness-candidates.txt
+is retained historical candidate analysis; its pending-decision language records
+that earlier stage and is not the current policy or review state. Its mathematical
+calculations and the accompanying evidence artifact are unchanged.
+
+Sources
+
+NIST SP800-227, Definition2: honest KEM correctness experiment.
+https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-227.pdf
+FIPS203, Section3.2 and Table1: parameter-specific modeled ML-KEM failure rates.
+https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf
+Barbosa et al., CCS2025: modeled-event bounds and concrete decryption correctness.
+https://doi.org/10.1145/3719027.3765218

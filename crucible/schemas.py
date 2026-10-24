@@ -10,6 +10,7 @@ class Input(BaseModel):
 class Credentials(Input):
     handle: str = Field(min_length=3, max_length=32, pattern=r"^[A-Za-z0-9_]+$")
     password: str = Field(min_length=12, max_length=128)
+    invitation_token: str | None = Field(default=None, min_length=32, max_length=128)
 
     @field_validator("handle")
     @classmethod
@@ -76,6 +77,19 @@ class NewSubmission(Input):
     method_id: UUID
     compute: Compute
     idempotency_key: UUID
+    ai_model: str = Field(default="", max_length=300)
+
+    @field_validator("ai_model")
+    @classmethod
+    def model_annotation(cls, value):
+        # This is participant attribution, not a verified model identity.
+        try:
+            value.encode("utf-8")
+        except UnicodeError:
+            raise ValueError("Use valid Unicode text for the model annotation.") from None
+        if "\x00" in value:
+            raise ValueError("The model annotation cannot contain NUL characters.")
+        return value.strip()
 
     @field_validator("candidate")
     @classmethod

@@ -1,4 +1,8 @@
 CRUCIBLE — INITIAL KEM CATALOGUE SELECTION
+Historical selection record. For what is actually executable now, see
+docs/scheme-reviews/current-releases-20261017.txt. Selecting a family does not
+transfer a published KEM's security claims to the research ladders below.
+
 Decision record, 2026-10-14
 Scope approved by the user: complete reviews and update the isolated trial first.
 New live challenges, runtime policy changes and admission awards are not in scope.

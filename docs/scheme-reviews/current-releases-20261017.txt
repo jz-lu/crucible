@@ -1,0 +1,107 @@
+Executable catalogue review — 17 October 2026
+===========================================
+
+This accompanies the historical 14 October selection review. That review chose
+eight families, often by a named published construction; it does not describe
+every subsequent experimental implementation. The following are the current
+research releases after the suite-hardening pass. All remain local beta targets
+with independent implementation admission pending. None is certified safe for
+deployment by being listed, benchmarked, scored or unrecovered on this website.
+
+Family               Current release             Configs / default stages
+Finite-field DH      7                            50 / 50
+RSA encapsulation   4                            50 / 50
+Elliptic-curve DH    curve-compressed-v2           50 / 50
+Module lattice      compressed-research-v4         6 / 6
+FrodoKEM            anchor-research-v3            80 / 80
+Streamlined NTRU    3                            27 / 25
+HQC                 modeled-research-v3           66 / 66
+Classic McEliece    length-research-v1            50 / 50
+
+There are 379 current configurations and 377 default navigation stages. The two
+remaining NTRU configurations are accessible intermediate settings. Stage counts
+are natural choices for these parameter paths, not measurements of security.
+All preceding releases and their original manifests/receipts remain available.
+
+What each endpoint actually means
+---------------------------------
+DH: registered certified 3072-bit field, subgroup and short-exponent interval,
+with a custom transcript KDF. The rho/NFS/interval reference is incomplete and
+does not establish full-KEM confidentiality. Perfect algebraic agreement.
+
+RSA: 3072-bit modulus, fresh certified balanced factors from the declared
+structured distribution, exponent 65537 and custom transcript KDF. Its restricted
+factoring reference is not a standardized RSA-KEM security reduction. Perfect
+algebraic agreement under the specified generation and arithmetic.
+
+Elliptic curves: 50 custom certified short-Weierstrass curves with compressed
+points and a custom transcript KDF. The endpoint is near a generic-rho reference;
+these are not 50 resized versions of X25519. Exact RFC 9180 DHKEM remains a
+separately identified reference. Perfect agreement under valid curve arithmetic.
+
+Module lattice: degrees 8,16,32,64,128,256 at the fixed rank/noise/compression of
+ML-KEM-512. The final configuration matches FIPS 203 ML-KEM-512; reduced degrees
+inherit no NIST security category. The shared <=2^-128 correctness claim includes
+explicit noise/compression assumptions where required. See module-v4-design.txt
+and mlkem-correctness-candidates.txt; a loose upper bound is not a failure proof.
+
+Frodo: dimensions 8 through 640 by 8, retaining the salted Frodo640 construction,
+noise distribution and message space. The endpoint is the published reference;
+reduced dimensions are experimental. Its <=2^-133 claim uses the stated ideal
+independent-noise model. Initial unestimated settings remain unestimated.
+
+NTRU: 27 reviewed tuples through sntrup653 (653,4621,288), not the originally
+selected sntrup761 endpoint. Ring and correctness certificates support perfect
+honest agreement. The restricted hybrid-inclusive estimate and full uniform
+research sampler do not transfer all claims about an SSH deployment or other
+published sampler. See ntru-parameter-frontier.txt.
+
+HQC: 66 configurations through the exact August 2025 HQC-1 parameters and wire
+format, with secret/encryption/error weights 66/75/75 at the endpoint. A restricted
+45-codec search replaces the old equal-weight, zero-failure ladder. Every row has
+an exact arithmetic certificate for a conditional <=2^-128 failure bound. Actual
+ring noise is correlated; conservativity of the independent-noise surrogate is
+a separately stated conjectural premise, not established by the certificate.
+The October 2026 revision and newer attacks change the current security picture.
+This historical endpoint is not advertised as a current calibrated128-bit bound.
+See hqc-model-v3.txt, including source versions and native conformance evidence.
+
+McEliece: lengths 840..3488 with m=12,t=64, through the published348864 anchor.
+Goppa distance supports perfect honest decoding under valid generation. Joint
+m/n/t optimization is unresolved. Recent structural key recovery makes current
+security reassessment necessary; the page supplies no numerical security curve.
+See mceliece-parameter-review-20261017.txt for primary sources and a bounded plan.
+That plan is not a completed attack-cost study or a replacement parameter ladder.
+
+Shared admission and evidence practice
+-------------------------------------
+Every admitted configuration must claim zero honest disagreement or probability
+at most2^-128, with exact distribution, scope, parameter coverage and assumptions.
+Modeled/conjectural premises are allowed when explicit and independently
+motivated. Machine checks do not certify those premises. Unknown/weaker claims
+stay draft-only; implementation review and safe trusted integration remain
+separate gates. No participant proposal source executes as part of intake.
+
+The current audit does not remove three open scientific/operational boundaries:
+1. Complete attack models and equal-security parameter optimization remain open,
+   most clearly for HQC and McEliece. Conditional correctness-model transfer also
+   remains open for the relevant lattice/code configurations.
+2. Source tests, vectors and local worker checks are not independent full
+   implementation review, side-channel certification or formal verification.
+3. The reviewed native runtime is still macOS arm64. A Linux deployment needs its
+   own reviewed build artifacts and validation; portable CI is source-only.
+
+Service and measurement changes in this pass
+-------------------------------------------
+- Exact JSON copy and protocol display preserve large integers.
+- All families use one generation-attempt ledger. Declared resource exhaustion
+  remains retryable; malformed results, changed provenance and unexplained
+  worker faults hold the profile. Honest disagreement is recorded separately.
+- Current policy v9 fixes a500-point progress ceiling and2000-point best-first
+  ceiling per family. This is incentive weighting, not equal-security scoring.
+  Old HQC receipts remain visible but do not transfer to its different release.
+- Background catalogue refresh transfers dynamic records only; full metadata
+  reloads when its revision changes, preserving archived links and access gates.
+- Timing publications remain explicitly selected, bound to their exact release
+  and implementation, and measured separately from process startup. Missing or
+  aborted measurements are not interpolated into invented results.

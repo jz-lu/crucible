@@ -14,12 +14,13 @@ from urllib.parse import quote
 from uuid import uuid4
 
 from fastapi import HTTPException, Query, Request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import Float, ForeignKey, JSON, String, and_, case, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base, User
+from . import beta_access, agent_guidance
 from .security import token_hash
 
 
@@ -29,7 +30,9 @@ TOKEN_SECONDS = 30 * 86400
 POLL_INTERVAL = 2
 LEGACY_SCOPES = ("challenges:read", "challenges:write", "methods:read", "methods:write",
                  "submissions:read", "submissions:write")
-SCOPES = LEGACY_SCOPES + ("proposals:read", "proposals:write")
+DEFAULT_SCOPES = LEGACY_SCOPES + ("proposals:read", "proposals:write", "notes:read", "notes:rate")
+NOTEBOOK_SCOPES = ("notebook:read", "notebook:write", "notebook:publish")
+SCOPES = DEFAULT_SCOPES + NOTEBOOK_SCOPES
 ANONYMOUS_POST_PATHS = frozenset({"/api/agent/connect/start", "/api/agent/connect/poll"})
 _UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 _TOKEN = re.compile(r"Bearer (cru_[A-Za-z0-9_-]{43})", re.IGNORECASE)
@@ -69,6 +72,14 @@ class DeviceConnection(Base):
 class ConnectInput(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     label: str = Field(default="Crucible agent", min_length=1, max_length=80)
+    scopes: list[str] = Field(default_factory=lambda: list(DEFAULT_SCOPES), min_length=1, max_length=len(SCOPES))
+
+    @field_validator("scopes")
+    @classmethod
+    def supported_scopes(cls, values):
+        if len(set(values)) != len(values) or any(value not in SCOPES for value in values):
+            raise ValueError("Request distinct supported permissions.")
+        return values
 
 
 class PollInput(BaseModel):
@@ -86,21 +97,38 @@ def source_upload_path(path):
 
 def required_scope(method, path):
     """An explicit route/method allowlist, never a prefix-wide authorization."""
+    if agent_guidance.is_guidance_read(method, path):
+        # Every existing agent role can learn its rules. This any-of allowance
+        # applies only to the fixed documentation paths, never account data.
+        return SCOPES
     if method == "GET":
+        if path in {"/api/notebook/notes", "/api/notebook/export"} or re.fullmatch(
+                rf"/api/notebook/(?:notes|imports)/{_UUID}", path):
+            return "notebook:read"
+        if path == "/api/agent/notes" or re.fullmatch(r"/api/agent/notes/[^/]{1,108}", path):
+            return "notes:read"
         if path in {"/api/schemes", "/api/leaderboard", "/api/challenges",
                     "/api/protocol/source", "/api/protocol/example", "/api/protocol/spec",
                     "/api/protocol/artifacts", "/api/protocol/artifact-source", "/api/protocol/correctness",
+                    "/api/protocol/reference-method", "/api/protocol/benchmarks", "/api/protocol/assumptions", "/api/protocol/evidence-note",
                     "/api/agent/client"} or re.fullmatch(rf"/api/challenges/{_UUID}/download", path):
             return "challenges:read"
         if path == "/api/methods" or re.fullmatch(rf"/api/methods/{_UUID}/source(?:/download)?", path):
             return "methods:read"
         if path == "/api/me/submissions" or re.fullmatch(rf"/api/submissions/{_UUID}", path):
             return "submissions:read"
-        if path in {"/api/protocol/spec-schema", "/api/protocol/spec-template",
+        if path in {"/api/protocol/spec-schema", "/api/protocol/spec-template", "/api/protocol/proposal-guide",
                     "/api/me/protocol-proposals"} or re.fullmatch(
                         rf"/api/protocol/proposals/{_UUID}(?:/revisions)?", path):
             return "proposals:read"
     if method == "POST":
+        if path in {"/api/notebook/notes", "/api/notebook/import"} or re.fullmatch(
+                rf"/api/notebook/notes/{_UUID}/(?:revisions|delete|restore)", path):
+            return "notebook:write"
+        if re.fullmatch(rf"/api/notebook/notes/{_UUID}/publication-requests", path):
+            return "notebook:publish"
+        if re.fullmatch(r"/api/agent/notes/[^/]{1,108}/rating", path):
+            return "notes:rate"
         if path == "/api/challenges":
             return "challenges:write"
         if path == "/api/methods" or source_upload_path(path):
@@ -126,13 +154,22 @@ def authorize(header, method, path, session, settings, clock, *, mutation=False)
     if scope is None:
         raise HTTPException(403, "Agent credentials cannot access this action. Use your browser account.")
     query = select(MachineToken).where(MachineToken.token_hash == token_hash(raw))
-    if mutation:
-        query = query.with_for_update()
     token = session.scalar(query)
     if token is None or token.revoked_at is not None or token.expires_at <= clock():
         raise HTTPException(401, "Invalid or expired agent credential.")
-    if not isinstance(token.scopes, list) or scope not in token.scopes:
+    accepted_scopes = scope if isinstance(scope, tuple) else (scope,)
+    if not isinstance(token.scopes, list) or not any(value in token.scopes for value in accepted_scopes):
         raise HTTPException(403, "This agent credential does not allow that action.")
+    user = session.get(User, token.user_id)
+    beta_access.require_access(session, settings, user, clock(), mutation=mutation)
+    if mutation:
+        # Membership revocation locks User before credentials. Match that order
+        # and re-read the token after waiting, so a stale approval cannot win.
+        token = session.scalar(query.with_for_update().execution_options(populate_existing=True))
+        if token is None or token.revoked_at is not None or token.expires_at <= clock():
+            raise HTTPException(401, "Invalid or expired agent credential.")
+        if not isinstance(token.scopes, list) or not any(value in token.scopes for value in accepted_scopes):
+            raise HTTPException(403, "This agent credential does not allow that action.")
     return token
 
 
@@ -180,14 +217,14 @@ def _token_data(token, now):
 def register_routes(app, db, settings, clock, user_for, throttle):
     @app.post("/api/agent/connect/start")
     def start(body: ConnectInput, request: Request):
-        throttle(request, "agent-connect-start", 10, 600)
+        throttle(request, "agent-connect-start", 300 if settings.access_mode == "beta" else 10, 600)
         for _ in range(3):
             raw = "crd_" + secrets.token_urlsafe(32)
             code = "".join(secrets.choice(_USER_ALPHABET) for _ in range(8))
             code = code[:4] + "-" + code[4:]
             now = clock()
             connection = DeviceConnection(id=str(uuid4()), device_hash=token_hash(raw), user_code=code,
-                                          label=body.label, scopes=list(SCOPES),
+                                          label=body.label, scopes=list(body.scopes),
                                           created_at=now, expires_at=now+DEVICE_SECONDS)
             try:
                 with db.transaction(write=True) as session:
@@ -207,15 +244,25 @@ def register_routes(app, db, settings, clock, user_for, throttle):
     @app.post("/api/agent/connect/poll")
     def poll(body: PollInput, request: Request):
         digest = token_hash(body.device_code)
-        throttle(request, "agent-connect-poll-ip", 120, 60)
+        # A cohort may share one institutional egress address. Per-device
+        # polling intervals and counters remain authoritative within this cap.
+        throttle(request, "agent-connect-poll-ip", 5000 if settings.access_mode == "beta" else 120, 60)
         throttle(request, "agent-connect-poll-device", 60, 60, digest)
         with db.transaction(write=True) as session:
-            connection = session.scalar(select(DeviceConnection).where(
-                DeviceConnection.device_hash == digest).with_for_update())
+            query = select(DeviceConnection).where(DeviceConnection.device_hash == digest)
+            connection = session.scalar(query)
+            observed_owner = connection.approved_user_id if connection else None
+            if observed_owner:
+                beta_access.lock_user(session, observed_owner)
+            connection = session.scalar(query.with_for_update().execution_options(populate_existing=True))
             now = clock()
             status = _status(connection, now) if connection else "expired"
             if status in {"expired", "denied"}:
                 return {"status": status, "interval": POLL_INTERVAL}
+            if connection.approved_user_id != observed_owner:
+                # Approval arrived while acquiring the connection lock. Retry
+                # in User->Connection order instead of inverting revocation.
+                return {"status": "pending", "interval": POLL_INTERVAL}
             if status == "pending":
                 if connection.last_polled_at is not None and now < connection.last_polled_at + POLL_INTERVAL:
                     raise HTTPException(429, "Wait before checking this connection again.", headers={"Retry-After": str(POLL_INTERVAL)})
@@ -224,6 +271,10 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             user = session.get(User, connection.approved_user_id)
             if user is None:
                 return {"status": "expired", "interval": POLL_INTERVAL}
+            try:
+                beta_access.require_access(session, settings, user, now)
+            except HTTPException:
+                return {"status": "denied", "interval": POLL_INTERVAL}
             raw = _derived_token(settings, body.device_code, connection.id)
             if connection.token_id is None:
                 token = MachineToken(id=str(uuid4()), user_id=user.id, token_hash=token_hash(raw),
@@ -252,7 +303,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
 
     @app.get("/api/agent/connect/{code}")
     def preview(code: str, request: Request):
-        throttle(request, "agent-connect-preview", 60, 60)
+        throttle(request, "agent-connect-preview", 600 if settings.access_mode == "beta" else 60, 60)
         with db.transaction() as session:
             user = user_for(request, session)
             connection = owned_connection(session, code, user)
@@ -260,7 +311,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
 
     @app.post("/api/agent/connect/{code}/approve")
     def approve(code: str, body: EmptyInput, request: Request):
-        throttle(request, "agent-connect-approve", 20, 600)
+        throttle(request, "agent-connect-approve", 600 if settings.access_mode == "beta" else 20, 600)
         with db.transaction(write=True) as session:
             user = user_for(request, session, mutation=True)
             connection = owned_connection(session, code, user, write=True)
@@ -274,7 +325,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
 
     @app.post("/api/agent/connect/{code}/deny")
     def deny(code: str, body: EmptyInput, request: Request):
-        throttle(request, "agent-connect-deny", 20, 600)
+        throttle(request, "agent-connect-deny", 600 if settings.access_mode == "beta" else 20, 600)
         with db.transaction(write=True) as session:
             user = user_for(request, session, mutation=True)
             connection = owned_connection(session, code, user, write=True)

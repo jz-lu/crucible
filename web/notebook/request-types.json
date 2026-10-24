@@ -1,0 +1,182 @@
+{
+  "format": "crucible-note-request-types-v1",
+  "version": 1,
+  "actions": [
+    {
+      "id": "visualization_nomination",
+      "label": "Content or visualization change",
+      "description": "Propose adding or updating a scheme entry, assumption sheet, graph or curated view.",
+      "question_prompt": "Where should this note be used, and what exact claim or data should appear? Describe the mapping, units, scope and assumptions, link the evidence, and identify conflicts or uncertainty.",
+      "requirements": [
+        "Name the target visualization and the exact scheme release and configurations where relevant.",
+        "Specify the claim, relationship or data to extract and how it maps to the view. Include units, probability or resource scope, assumptions and any missing values.",
+        "Select exact note revisions and cite the supporting sources or reproducible data. Distinguish measured results, derived bounds, model estimates and conjectures.",
+        "Explain conflicts with existing evidence, uncertainties and any changes needed before the material can be included."
+      ],
+      "review_requirements": [
+        "Check the sources and whether each proposed display element follows from the pinned evidence in its stated scope.",
+        "Check that the data fits the target view's structure, identities and units. Preserve assumptions, missing values and uncertainty; do not invent values, interpolate unsupported claims or combine incompatible models.",
+        "If the proposal also changes a playable challenge, use Scheme proposal for its specification, implementation and correctness review. Content inclusion alone does not admit executable schemes."
+      ],
+      "outcome": "Records a recommendation to include the specified evidence in a visualization, with any changes or limitations needed before curation.",
+      "limitations": [
+        "A recommendation does not itself update the site or publish private material. Inclusion requires an explicit curatorial update bound to the reviewed evidence.",
+        "Here, formalization means admission to a structured visualization. It is not formal proof verification, certification of a claim or a points award."
+      ],
+      "api": {
+        "method": "POST",
+        "path": "/api/notebook/research-requests",
+        "purpose": "visualization_nomination"
+      }
+    },
+    {
+      "id": "scheme_admission",
+      "label": "Scheme proposal",
+      "description": "Propose a new KEM challenge or improved parameters for an existing scheme.",
+      "requirements": [
+        "State whether this is a new scheme or an update. For an update, identify the exact existing release, proposed version and configurations being changed.",
+        "Save your latest note with the exact KEM specification in extensions.kem_specification, including algorithms, encodings, configurations, progression, correctness and scoped security claims.",
+        "For parameter improvements, compare the old and proposed choices under the same declared correctness target and explicit security models. Explain the cost objective, better parameters or competing tradeoffs, supporting evidence and uncertainty.",
+        "Use the proposal template and schema, and submit the saved note's exact revision and hash. Missing implementation evidence or unresolved correctness may remain explicit at intake; they can prevent approval."
+      ],
+      "review_requirements": [
+        "Approval needs a complete specification and parameter-selection plan, plus a pinned implementation reviewed for conformance, input/resource safety and reproducibility.",
+        "Every admitted configuration must claim perfect honest agreement or disagreement/rejection probability at most 2^-128, with probability scope, coverage and a motivated justification. Statistical claims require an integer failure_bound_exponent of at least 128.",
+        "Conditional, modeled and conjectural premises are allowed when explicit. Unknown or weaker correctness targets are draft-only; review does not certify that the premises are true.",
+        "Review challenge and recovery-scoring readiness together. Bind the reviewed specification, implementation closure and configurations. An accepted parameter update uses a reviewed new version and explicit enrollment; it must not rewrite historical results or weights. Development self-review cannot satisfy independent admission."
+      ],
+      "outcome": "Creates a private scheme-review submission linked to this note revision. Challenge and recovery-scoring readiness are considered together; trusted integration and enrollment remain explicit steps.",
+      "limitations": [
+        "Submitting or approving the proposal does not activate a challenge or award points.",
+        "An update to an existing scheme does not imply a new-family contribution award."
+      ],
+      "api": {
+        "method": "POST",
+        "path": "/api/notebook/notes/{note_id}/proposal-submissions"
+      }
+    },
+    {
+      "id": "source_check",
+      "label": "Source check",
+      "description": "Check whether cited sources support a specific claim.",
+      "question_prompt": "Which claim and source passages should be checked? Give versions, sections or pages, and explain the suspected mismatch or uncertainty.",
+      "requirements": [
+        "Select the exact note revisions containing the claim and citations.",
+        "Identify the source version and supporting section, theorem or page where available.",
+        "Explain what needs checking: attribution, quotation, applicability, missing hypotheses or an inaccessible source."
+      ],
+      "review_requirements": [
+        "Record which source passages were checked and whether they support the stated claim in its scope.",
+        "Distinguish source verification from an independent mathematical proof or reproduction. A recommendation requires checked sources."
+      ],
+      "outcome": "Records a recommendation, requested changes or a decline on the frozen evidence packet.",
+      "limitations": [
+        "A checked citation does not establish that a modified construction inherits the source's theorem.",
+        "The assessment does not publish notes or change scheme admission, graphs or points."
+      ],
+      "api": {
+        "method": "POST",
+        "path": "/api/notebook/research-requests",
+        "purpose": "source_check"
+      }
+    },
+    {
+      "id": "map_nomination",
+      "label": "Map inclusion",
+      "description": "Propose a research entry or relationship for the map.",
+      "question_prompt": "What should appear in the map, where does it belong, and what evidence distinguishes it from entries already present? Identify uncertain relationships.",
+      "requirements": [
+        "Select exact note revisions supporting the proposed entry or relationship.",
+        "Explain its relevance, intended placement and relationship to existing entries.",
+        "Compare the closest existing work; distinguish a new construction, a variant, a mathematical ingredient and a claim that remains conjectural."
+      ],
+      "review_requirements": [
+        "Check the sources and explain whether the proposed scope and relationships are supported.",
+        "Record overlap, unresolved applicability and any changes needed before curation."
+      ],
+      "outcome": "Records a recommendation for a separate map-curation decision.",
+      "limitations": [
+        "A recommendation does not itself add a map entry, publish a private note, admit a playable scheme or award points."
+      ],
+      "api": {
+        "method": "POST",
+        "path": "/api/notebook/research-requests",
+        "purpose": "map_nomination"
+      }
+    },
+    {
+      "id": "scoring_nomination",
+      "label": "Enable challenge scoring",
+      "description": "Request recovery-scoring enrollment for an existing scheme release.",
+      "question_prompt": "Which exact scheme release and configurations should earn recovery points? Cite their admission, correctness and verification evidence, and explain any current enrollment gap or proposed change.",
+      "requirements": [
+        "Identify the exact registered scheme release and configurations to enroll, with supporting note revisions.",
+        "Link the admission and correctness evidence, and explain how the server verifies shared-secret recoveries for those configurations within their challenge deadlines.",
+        "Describe the enrollment gap or requested change, including stable configuration identities, scoring weights and treatment of existing or replaced releases."
+      ],
+      "review_requirements": [
+        "Check the exact release's admission status, correctness claims, instance binding, recovery verification and deadline enforcement.",
+        "Check the proposed enrollment against the versioned scoring policy, including deduplication, record inheritance and preservation of earlier receipts and weights.",
+        "Normally consider this readiness during scheme-proposal review. Use a separate request when an existing release needs enrollment or a scoring-policy change."
+      ],
+      "outcome": "Records a recommendation for explicit challenge-scoring enrollment or a scoring-policy change.",
+      "limitations": [
+        "The request and recommendation do not themselves enroll a release or change scores. Recovery points require server-verified receipts under the adopted enrollment.",
+        "This action concerns participants' challenge recoveries; it does not create an award for the author of a note."
+      ],
+      "api": {
+        "method": "POST",
+        "path": "/api/notebook/research-requests",
+        "purpose": "scoring_nomination"
+      }
+    },
+    {
+      "id": "highlight_nomination",
+      "label": "Highlight consideration",
+      "description": "Suggest a contribution for editorial attention.",
+      "question_prompt": "What should be highlighted, for which audience, and why is it useful or timely? Include attribution, evidence, and the limitations a short presentation must retain.",
+      "requirements": [
+        "Select exact note revisions and identify the contribution and its authors.",
+        "Explain its relevance, intended audience and why it merits attention.",
+        "Identify the evidence, unresolved claims and disclosure permissions that a highlight must preserve."
+      ],
+      "review_requirements": [
+        "Check the supporting sources, attribution and whether the proposed presentation matches the evidence.",
+        "Record qualifications and any publication or disclosure step still needed."
+      ],
+      "outcome": "Records a recommendation for a separate editorial selection.",
+      "limitations": [
+        "A recommendation does not select a highlight, publish private material, certify the result or award points."
+      ],
+      "api": {
+        "method": "POST",
+        "path": "/api/notebook/research-requests",
+        "purpose": "highlight_nomination"
+      }
+    },
+    {
+      "id": "procedure",
+      "label": "Pipeline or process change",
+      "description": "Propose a concrete change to how the research, submission or review pipeline works.",
+      "question_prompt": "Which procedure should change, what exact change do you propose, and what evidence or example motivates it? Explain the expected benefit, tradeoffs and how to evaluate it.",
+      "requirements": [
+        "Select exact note revisions describing the current procedure, problem and proposed change.",
+        "Give a concrete example or evidence showing why the change is useful.",
+        "Explain affected workflows, tradeoffs and how to evaluate the proposed procedure."
+      ],
+      "review_requirements": [
+        "Check the source evidence and whether the recommendation addresses the stated problem.",
+        "Record unresolved tradeoffs, validation needs and the separate decision required to adopt the change."
+      ],
+      "outcome": "Records a recommendation for a separate procedural decision.",
+      "limitations": [
+        "A recommendation does not change a policy, permission, live challenge or score."
+      ],
+      "api": {
+        "method": "POST",
+        "path": "/api/notebook/research-requests",
+        "purpose": "procedure"
+      }
+    }
+  ]
+}

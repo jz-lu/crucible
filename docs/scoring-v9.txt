@@ -1,0 +1,62 @@
+CRUCIBLE — PROVISIONAL POINTS POLICY v9
+Decision date: 17 October 2026
+Policy ID: crucible-points-v9
+
+This revision explicitly replaces the HQC recovery enrollment with
+hqc@modeled-research-v3, configurations 1..66. It leaves the v8 incentive formula,
+the other seven enrolled releases and their frozen weights unchanged. See
+docs/scoring-v8.txt for that earlier decision and full calculation rules.
+
+The HQC replacement uses a different parameter construction and a conditional
+correctness model. Its configuration numbers do not translate the old release's
+recoveries. A new enrollment is therefore a deliberate policy change, not an
+automatic consequence of adding profiles to the registry.
+
+CURRENT HQC ENROLLMENT
+
+Exact release:      hqc / modeled-research-v3
+Exact profile IDs:  hqc-modeled-research-v3-tier-1 through
+                    hqc-modeled-research-v3-tier-66
+Personal weight:    W(i) = floor(500 * i / 66), frozen as 66 literal integers
+Record inheritance: disabled; first place belongs to the exact recovered profile
+
+For example W(1)=7, W(5)=37, W(24)=181 and W(66)=500. These are incentive
+weights, not estimates of equal security, attack cost or research value. Every
+configuration is positive. Runtime scoring uses the pinned exact-profile table,
+not the displayed navigation stages or a dynamically calculated denominator.
+Adding, hiding or relabelling stages cannot change an enrolled weight. A further
+release or configuration requires another explicit enrollment decision.
+
+Each enrolled family still contributes at most 2,500 recovery points:
+  Personal progress = the greatest recovered weight, at most 500.
+  First-record bonus = four times the greatest weight where first, at most 2,000.
+
+Only one maximum of each kind is counted per family. Repeated hourly recoveries
+and a sequence of intermediate solves do not add their weights together.
+Recovering an exact-only higher HQC profile does not imply a lower-profile solve
+or take its first place. The separate admitted-new-family award remains 1,000;
+replacing HQC's release does not award a new-family contribution.
+
+HISTORICAL EVIDENCE AND POLICY
+
+HQC growth-research-v2 is no longer enrolled for current recovery scores. Its
+receipts, methods, timestamps, historical standings and original manifests remain
+unchanged and accessible. They earn no v9 points, do not reserve places in the new
+release and are not converted into new configurations. A participant may retain
+an archived personal record in their profile until they have a current-release
+record, but the archived result remains unscored. There is no automatic transfer
+or simultaneous recovery award for both HQC releases.
+
+The v8 HQC enrollment, including its original 27 weights, remains in
+HISTORICAL_FAMILY_RELEASES in crucible/scoring.py solely as audit data. It is not
+joined into current score calculations. docs/scoring-v8.txt is retained as the
+historical policy document. Current totals are derived again from stored evidence
+under v9; no database migration or receipt rewrite is needed. API responses state
+the current policy ID.
+
+The seven unchanged enrollments are finite-field DH@7, RSA@4,
+elliptic-curve DH@curve-compressed-v2, module lattice@compressed-research-v4,
+FrodoKEM@anchor-research-v3, Streamlined NTRU Prime@3 and
+Classic McEliece@length-research-v1. Their v8 weights and inheritance rules remain
+exactly the same. All eight current families have equal 500/2,000 ceilings;
+this deliberately says nothing about equal difficulty or scientific merit.

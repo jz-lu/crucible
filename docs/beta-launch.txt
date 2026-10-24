@@ -1,0 +1,307 @@
+CRUCIBLE — FIRST HOSTED BETA
+Preparation checkpoint, 18 October; hosting and runtime work updated 22 October 2026
+
+Status: preparation only; not deployed or launch-ready. See the latest isolated
+image results in runtime-candidate-checkpoint.txt; app-platform-next-steps.txt
+gives the provider handoff. The user has completed
+DigitalOcean billing/2FA and created the Crucible (beta) team and beta project.
+The domain crucible.fail was purchased through Porkbun. No paid resource,
+remote migration or DNS change has been performed here. The user registered
+the GitHub OAuth application; hosted credentials are not configured yet.
+
+DECISIONS — UPDATED 22 OCTOBER
+
+Preferred hosting is now DigitalOcean App Platform, managed PostgreSQL and private
+Spaces, conditional on native Linux AMD64 and platform sandbox compatibility.
+This supersedes the initial Droplet preference. One remote beta plus local
+computer development; no second always-on hosted staging environment initially.
+Keep separate databases and preserve beta accounts, notes and submissions through
+every release. The planning ceiling remains about US$100/month, with lower
+initial spending preferred. See app-platform-readiness.txt for the concrete
+validation gates and cost candidates; the old Droplet assets remain a fallback.
+
+Canonical beta origin: https://crucible.fail
+GitHub OAuth callback: https://crucible.fail/api/auth/github/callback
+Porkbun can retain DNS management. Add the exact provider-supplied records after
+the app is configured; do not guess a target IP or change nameservers in advance.
+Both the local resolver and 1.1.1.1 returned NXDOMAIN during the 22 October check;
+this is an observation, not evidence that the reported purchase failed.
+
+Privacy is a launch requirement: only explicitly approved beta members may read
+site content or use protected APIs/downloads. GitHub sign-in is identity, not
+admission. The domain and minimal sign-in/invitation surface can be reachable,
+while notes, schemes, profiles, submissions and evidence remain access-controlled.
+Check the provider starter hostname as well as crucible.fail. Serve every route
+through Crucible; no public static-site deployment, object bucket or CDN bypass.
+Public beta publication means approved beta participants, not the open internet.
+
+Identity implementation prepared 18 October:
+GitHub is the primary sign-in when configured, with existing password sign-in
+available as a fallback. The user registered the hosted OAuth app on 22 October
+with the canonical callback and token expiration enabled. Provider credentials
+are not installed in the hosted environment; the feature remains disabled in the
+example until configured and verified. ORCID is a future optional attribution
+link, not implemented. Separate local and hosted OAuth apps keep callbacks and
+credentials separate. See deploy/beta.env.example for the exact callback shape.
+
+Keep stable Crucible UUIDs. Existing-account linking requires a signed-in browser
+and fresh password confirmation; there is no merge by matching email or handle.
+GitHub numerical IDs identify provider accounts. OAuth uses state, browser binding
+and PKCE; requests no repository scope; stores no provider access token. Provider
+login does not confer beta membership. Existing mailbox-bound invitations and
+reviewer/admin roles remain separate. Agent access still uses scoped Crucible
+tokens, never GitHub credentials.
+
+Password reset is available only through an already verified mailbox. Links are
+short-lived, one-use and tied to the current credentials; reset revokes browser
+and agent sessions while preserving contributions and linked identities. Delivery
+uses a bounded background task, not a durable queue: a process restart can lose
+that email and the user may request again. Unknown/unverified/provider-only
+accounts get the same request response. Mail must be configured before enabling
+recovery. Real GitHub authorization and real SMTP delivery still need end-to-end
+verification with operator-provided credentials; fixture tests do not replace it.
+
+Start with 5–10 invited testers as the recommended first cohort, then measure
+before expanding. This is a rollout recommendation, not a measured capacity
+claim or a replacement for any later 100–150 participant target.
+
+Historical Droplet budget, checked 18 October 2026 (fallback only):
+- 2 vCPU / 4 GiB regular Basic Droplet: $24/month.
+- Small managed PostgreSQL: allow approximately $20/month including modest
+  storage; confirm the exact node/storage invoice at creation.
+- Daily Droplet image backup at 30%: $7.20/month. A VM snapshot does not back up
+  the separately hosted PostgreSQL database or replace a logical restore test.
+- Private Spaces storage: $5/month base allowance, for encrypted logical backup
+  copies and associated recovery manifests. No public bucket or CDN publication.
+- Low-volume invitation/recovery email: Resend Free can cover the initial cohort
+  (3,000/month, at most 100/day); configure its SMTP transport and verified sender.
+
+This suggests about $56/month before tax/domain registration, additional usage,
+temporary build/restore resources and contingency. Aim for $60–80/month with a
+$100 planning ceiling. If measured runtime memory requires an 8 GiB/4 vCPU
+Droplet, its $48/month compute plus daily image backups brings this estimate to
+about $87/month before those extras. Re-evaluate rather than silently exceeding
+the budget. Billing alerts are notifications, not a provider-enforced hard cap.
+Participant model/API usage and attack compute are outside this hosting budget.
+
+Original Droplet rationale (fallback only): native cryptographic workers need a controlled Linux runtime;
+a VM allows that without splitting the application across multiple services.
+Managed PostgreSQL reduces routine database maintenance. VM patching, service
+restarts, monitoring and backup verification still need an operator. This is a
+single-server pilot with possible maintenance downtime, not a high-availability
+service. Keep source and deployment artifacts versioned to permit relocation.
+
+DEVELOPMENT AND RELEASES
+
+Local development keeps its own database and secret. The hosted database becomes
+authoritative for beta contributions after cutover. Never run experimental local
+code against the beta database. Do not automatically synchronize databases or
+overwrite beta records with a developer snapshot after initial migration.
+
+Before building a release, checkpoint the complete intended source tree. The
+earlier research pipeline is checkpointed at 3e96b26; this beta preparation is
+additional work that must also be included in the intended release. Deploying
+only that Git HEAD would omit these additions. Avoid including credentials,
+.local data, test outboxes,
+private notes or unreviewed build outputs in the checkpoint/image.
+
+Release procedure to rehearse on the target host:
+1. Build from an exact checkpoint and freeze its dependencies, Python patch
+   version, toolchain, trusted native artifacts and their review evidence.
+2. Run portable and native tests, then PostgreSQL integration tests against a
+   disposable isolated database. Do not present mocks or SQLite as PG execution.
+3. Back up beta before migrations; rehearse schema compatibility and restoration.
+   Apply schema changes as an explicit release step, not on every process restart.
+4. Promote the tested application release. Keep one app process initially because
+   generation and password-work capacity limits are process-local.
+5. Verify health, sign-in, browser/agent challenge submission and publication.
+   Keep the prior application artifact. Reverting application code must not wipe
+   new participant data; incompatible schema rollback requires a recovery plan.
+
+Fallback host assets: deploy/crucible.service and deploy/Caddyfile.example prepare unprivileged
+loopback hosting behind HTTPS with automatic restart and bounded logs.
+docs/beta-host.txt documents explicit deployment and encrypted backup/restore. Trust forwarded client addresses
+only from the actual local proxy; never trust arbitrary internet headers. Use a
+dedicated database role, verified TLS and restricted database network access.
+Credentials belong in protected runtime configuration, not Git or CLI arguments.
+Submitted attack/proposal code remains inert evidence, never server-executed.
+
+NATIVE PORTABILITY: REQUIRED BEFORE FULL-CATALOGUE HOSTING
+
+The current Mac installation validates 32 registered adapter releases. That is
+local artifact integrity evidence, not Linux execution evidence. Several workers
+and cryptography's native extension have Mac-specific hard pins. Some builders
+also pin Mac static dependencies. Startup currently validates archived adapters
+as well as current ones, so reducing the beta issuance allowlist alone does not
+remove the need for their runtime artifacts.
+
+AdapterVersion retains the original source/artifact pair per (scheme_id,
+version). A Linux rebuild has a different identity; even a Python patch-version
+change can alter some artifact identities. The additive implementation_builds
+ledger records explicitly reviewed alternatives without replacing that baseline.
+Do not delete old pins, rewrite receipts, edit digests to match whatever is
+installed, or weaken verification to make a host start.
+
+Build admission requires an existing release baseline, an exact manifest digest,
+an operator identity and review rationale, and retained build/evidence identities.
+This is an audit mechanism, not an automatic proof of equivalence. No Linux
+build has been admitted. Changed constructions still require new scheme versions.
+Do not alter stage parameters or scores merely to port the runtime. See
+docs/linux-runtime-build.txt for the isolated build procedure.
+
+For the first beta, rebuilding the complete registered inventory is less invasive
+than redesigning archived-generator loading. Build/runtime directories must be
+separate from account data, including HQC's currently .local-based output path.
+Linux known-answer vectors, codec/equivalence checks, honest agreement, resource
+limits and the full backend suite need a real Linux runner before acceptance.
+Existing Mac benchmark reports retain their original machine/artifact identity;
+Linux must not silently inherit or relabel those measurements.
+
+DATA TRANSFER AND RECOVERY
+
+scripts/beta_transfer.py now implements the initial SQLite-to-PostgreSQL copy;
+docs/beta-transfer.txt gives its command, cutover procedure and validation scope.
+The synthetic Linux/PostgreSQL 17 rehearsal passed all 21 transfer tests,
+including seven real PostgreSQL integration tests across all 41 schema tables
+at the 0020 preparation checkpoint. The later login pass repeats transfer and
+restore coverage at head 0022, including the three new authentication tables.
+One check creates an actual pg_dump archive, restores into a second fresh
+database, and compares every table's count and typed digest. This does not
+validate DigitalOcean managed backups or a recovery on the eventual beta host.
+The tool requires a consistent read-only source snapshot, matching schema heads, an empty
+destination and complete table inventory. Copy in foreign-key order within a
+destination transaction. Preserve UUIDs, password hashes, timestamps, JSON values,
+text, revision/content hashes, source bundles, reviews and historical flags.
+Compare row counts and stable per-table digests, not just account/note totals.
+Test large JSON integers, Unicode, whitespace, nulls and immutable revision links.
+Notebook export/import is participant portability, not a whole-service backup.
+
+The original secret is part of the recovery set: stored answer MACs and replay
+checks depend on it. Back up the database, secret, source/native release manifest
+and role configuration through appropriately restricted channels. Do not print
+or commit their contents. Do not generate a replacement key over migrated data.
+
+For final cutover, pause source writes briefly, take a consistent final snapshot,
+transfer and verify it, then open beta access. Preserve the original recovery set
+privately. Move routine local development to synthetic data and a separate key;
+avoid leaving active beta credentials in day-to-day development. Accounts and
+passwords can survive while users sign in and connect their agents afresh. Any
+session/token invalidation must be explicit and recorded, not an incidental loss.
+
+Migration does not enroll every old account. Grant the intended beta participants
+explicit membership, configure reviewer/admin UUIDs separately, and verify their
+access. No contribution becomes internet-public through this migration.
+
+Production hides development-only self-review approvals. Existing decided
+revisions cannot simply be reviewed again through the current API. The existing
+path is an author-created new revision followed by a new publish request and a
+different reviewer's approval. Preserve the old revision/decision unchanged; do
+not flip test-only flags or invent approval during transfer. Select another human
+reviewer before expecting countableclouds's own notes to be community-readable.
+
+Recovery target proposed for the pilot: at most one hour of lost work and restore
+within four hours. These are targets to validate, not current service promises.
+Verify managed database recovery and encrypted logical backups by restoring to
+a separate temporary database and checking content/revision digests and actual
+user workflows. VM backups alone cannot meet this requirement. Keep key recovery
+possible if the application host is lost.
+
+PREFLIGHT AVAILABLE NOW
+
+deploy/beta.env.example is a deliberately incomplete, secret-free template. The
+application does not automatically load it. Supply actual values using the host's
+protected process environment. With an explicitly configured production env:
+
+  .venv/bin/python -B -m scripts.beta_preflight
+  .venv/bin/python -B -m scripts.beta_preflight --runtime --database
+
+The first command checks configuration without connecting to a database, sending
+mail or reading native artifacts. The second opts into trusted native-manifest
+inspection and read-only PostgreSQL schema, role-membership and implementation-pin
+checks. PostgreSQL requires an explicit network host and sslmode=verify-full.
+Use the provider CA for Standard Edition. Connection/statement/lock timeouts and
+read-only transactions bound the checks; errors redact credentials. Neither
+command generates challenges, changes schema, grants access or repairs mismatches.
+Use -B to suppress Python bytecode writes as well.
+
+Reports label unselected checks not_checked and always say deployment_approval:
+false. Exit 0 means the selected automated checks passed, not that migration,
+email, backups, workload behavior or independent build review has been established.
+
+Recorded preparation validation: the final combined suite passed all 76 tests
+on Linux Python 3.13.5 and PostgreSQL 17.11, using synthetic records only. This
+includes 55 implementation-build, preflight and existing migration tests, plus
+21 transfer/recovery tests. They cover secret redaction, database guards,
+membership, legacy provenance, reviewed/revoked builds and preservation of issued
+challenge evidence. See the transfer
+runbook for exact scope. The earlier Mac runtime inspection passed all 32 adapter
+releases and eight current allowlist entries. The new local Linux VM has no host
+mounts, no automatic port forwarding and no real participant data. Its arm64
+runtime evidence does not establish readiness of the eventual x86_64 host.
+No hosted database, actual cutover or provider-managed recovery has been tested.
+
+The subsequent login/deployment preparation passed 109 tests on real Linux /
+PostgreSQL with no skips, covering GitHub identity/session races, single-use
+recovery races, transfer/restore, reviewed builds and migrations at head 0022.
+Locally, 194 authentication/beta/agent boundary tests passed with the existing
+native runtime available, as did all 23 standalone frontend regression files.
+Desktop and emulated-mobile login layouts were checked with synthetic fixtures.
+Four isolated deployment tests exercised real Caddy TLS/proxy behavior, systemd
+unit parsing, encrypted Restic backup/PostgreSQL restore and failed-dump handling.
+These checks use no participant data and do not establish public ACME/DNS, actual
+OAuth/SMTP, off-host object storage or full native application startup on Linux.
+
+Further preparation on 22 October: dedicated App Platform ingress, bounded
+pooling, explicit Linux dependency locking, additional-platform admission guards,
+Linux NTRU build support and a longer bounded SNTRUP compile option are tested.
+The compile option does not extend challenge-generation limits. The paired backup
+adapter passed real Linux/PostgreSQL encrypted restore and coordination checks;
+its separate job image remains blocked at the Restic probe under emulation;
+provider scheduling remains pending. See runtime-candidate-checkpoint.txt for
+the latest image results. The 189-test
+combined Mac check covers these focused changes, not the entire backend suite.
+
+Linux AMD64 builds now run in isolated QEMU containers with exact retained wheels
+and a recorded toolchain. This is not evidence of gVisor or native-host speed.
+Original Mac manifests are retained as original release anchors; the staged
+platform-binding changes are not applied to the live Mac site. No build is
+admitted, old receipt rewritten or participant data transferred by this work.
+
+WORK ORDER
+
+Completed: operating/provider choice; source audit; configuration template;
+read-only preflight; reviewed-build ledger and integration; isolated Linux build
+recipe; synthetic PostgreSQL transfer/recovery rehearsal; preservation rules.
+Prepared additionally: GitHub identity-only sign-in and explicit account linking;
+verified-mailbox password recovery; private reverse-proxy/service assets; paired
+encrypted backups and synthetic restore checks. These are not yet hosted.
+Next: finish the App Platform container and Linux AMD64 portability/conformance,
+then actual sandbox/access/concurrency tests. Configure and verify GitHub, email,
+DNS and restoration before cutover. Domain and cloud account setup are complete;
+operator access to the provider, sender verification, reviewer identity and the
+invite list remain external setup inputs. The hosted service is not online yet.
+
+SOURCES / EXACT CODE REFERENCES
+
+Implementation:
+crucible/config.py — production/beta configuration and independent-review guards.
+crucible/app.py:pin_adapter — existing and legacy historical implementation pins.
+crucible/registry.py:validate_registry — all current/archived manifest validation.
+crucible/benchmark_reports.py — benchmark source/artifact identity.
+crucible/notebook.py — immutable revisions and production publication decisions.
+docs/private-beta-setup.txt — existing invitation, agent and membership behavior.
+
+Provider documentation consulted 18 October 2026:
+https://www.digitalocean.com/pricing/droplets
+https://www.digitalocean.com/pricing/managed-databases
+https://docs.digitalocean.com/products/backups/details/pricing/
+https://www.digitalocean.com/pricing/spaces-object-storage
+https://resend.com/pricing
+https://docs.digitalocean.com/products/databases/postgresql/how-to/connect/
+https://docs.digitalocean.com/products/databases/postgresql/how-to/secure/
+https://docs.digitalocean.com/products/databases/postgresql/how-to/restore-from-backups/
+https://ecdsa.fail/privacy
+https://www.yukon.org/qsb/privacy
+https://hexagonmath.org/about
+https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps
+https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/best-practices-for-creating-an-oauth-app

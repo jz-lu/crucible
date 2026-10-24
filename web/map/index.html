@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Research landscape · Crucible</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="catalogue.js" defer></script>
+  <script src="notes-data.js" defer></script>
+  <script src="note-ui.js" defer></script>
+  <script src="map-views.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the map</a>
+  <header class="header site-map-header">
+    <a class="brand" href="/"><img src="/assets/crucible-logo.png" width="38" height="54" alt=""><span>Crucible</span></a>
+    <nav class="map-site-nav" aria-label="Main navigation">
+      <a href="/#challenge">Schemes</a><a href="/#people">Leaderboard</a>
+      <a href="/#notebook" aria-current="page">Research notebook</a>
+      <a href="/#about">About us</a>
+    </nav>
+  </header>
+  <main id="main">
+    <nav class="notebook-view-nav" aria-label="Notebook views"><a href="/#notebook">Notes</a><a href="index.html" aria-current="page">Map</a></nav>
+    <div class="page-title"><div><p class="eyebrow">Research landscape</p><h1>KEM research map</h1></div><a class="quiet-link" href="PIPELINE.txt">How this grows ↗</a></div>
+    <p class="intro">Explore KEMs and their connections. Open an entry for its research note, sources and tags.</p>
+    <div class="toolbar">
+      <div class="filters" role="group" aria-label="Map selection">
+        <button type="button" data-filter="all" aria-pressed="true">All</button>
+        <button type="button" data-filter="scored" aria-pressed="false">Scored</button>
+        <button type="button" data-filter="highlighted" aria-pressed="false">Highlighted</button>
+      </div>
+      <label class="search"><span class="sr-only">Find a scheme, family, or assumption</span><input type="search" id="search" placeholder="Find a scheme or an idea…" autocomplete="off"></label>
+    </div>
+    <p id="filter-description" class="filter-description">Documented KEMs, backed by research notes.</p>
+    <div class="map-meta"><p id="map-count" role="status" aria-live="polite"></p><span class="map-legend"><span class="scored-badge">Scored</span> Eligible for points <span class="focus-dot" aria-hidden="true"></span> Highlighted</span></div>
+    <div class="workspace">
+      <section id="landscape" class="landscape" aria-label="KEM research map"></section>
+      <aside id="inspector" class="inspector" aria-label="Selected scheme details" hidden></aside>
+    </div>
+    <details class="reading-guide"><summary>How to read the map</summary><div class="guide-content">
+      <p><strong>Areas → families → schemes.</strong> Families collect related mathematical questions. Selecting a scheme reveals its specific security basis, nearby constructions, variants, and sources.</p>
+      <p><strong>Families are a browsing model.</strong> Membership and distance do not establish security independence or a formal reduction. A scheme can have several relationships; this view gives it one primary home.</p>
+      <p><strong>Notes underneath, map on top.</strong> Every scheme entry links to a descriptive note. Comparisons, improvements and procedural notes live alongside it, without becoming extra scheme cards. Literature notes document existing work and do not require a new-scheme proposal.</p>
+      <p><strong>Mechanisms, development, analysis.</strong> Finding a public-key advantage, improving a construction, and testing its claims are different contributions. An entry can support all three; these are not maturity ranks.</p>
+      <p><strong>KEMs only for now.</strong> Each entry identifies a KEM. Standalone encryption constructions and key-agreement directions are outside the active map.</p>
+      <p><strong>All, Scored, Highlighted.</strong> All includes every mapped KEM. Scored includes schemes with an enrolled scoring release, using a snapshot of the current policy. Highlighted is our selected focus within Scored. Historical broken constructions are excluded from this map.</p>
+      <p><strong>Published does not mean validated.</strong> Sources establish what a construction is. Current attack estimates, correctness, code, and natural stage progressions need separate, version-specific review. Local challenge releases may differ from the named published standard.</p>
+    </div></details>
+    <section class="pipeline-preview" aria-label="Where entries come from"><span class="eyebrow">Built from notes</span><p>Descriptions <span aria-hidden="true">·</span> Comparisons <span aria-hidden="true">·</span> Improvements</p><a href="notes.html">Browse all research notes →</a></section>
+  </main>
+  <footer><span>Crucible · Research landscape</span><span>Curated, not exhaustive.</span><a href="catalogue.json" download>Download map data ↓</a></footer>
+  <dialog id="mobile-details" aria-labelledby="mobile-detail-title"><div class="dialog-heading"><h2 id="mobile-detail-title">Scheme details</h2><button type="button" id="close-details">Close</button></div><div id="mobile-inspector"></div></dialog>
+  <noscript><p>This interactive map needs JavaScript. <a href="catalogue.json">Read the underlying catalogue</a>.</p></noscript>
+</body>
+</html>

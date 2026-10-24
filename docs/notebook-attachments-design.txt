@@ -1,0 +1,94 @@
+NOTEBOOK ATTACHMENTS — EVALUATION, NOT IMPLEMENTED
+22 October 2026
+
+Recommendation
+
+Support code, data, scripts and proof sources as private attachments to exact
+notebook revisions. Keep note text, ownership, immutable manifests and review
+decisions in PostgreSQL; keep file bytes in private object storage. This fits
+the planned Spaces service. GitHub remains optional for collaboration and exact
+commit provenance. Retain the actual snapshot so external deletion or permission
+changes cannot silently erase Crucible's research evidence.
+
+For humans: one Attach files control and a compact list in the editor. For agents:
+equivalent upload/finalize/save commands. Do not require a Git repository per note
+or revive recipient-sharing permissions. Keep the existing draft -> publish
+request -> approved exact revision workflow. Approval to publish is not proof
+that the mathematics or attached program is correct.
+
+Existing behavior
+
+Notebook revisions and content hashes are already immutable. The artifacts field
+currently accepts bounded author/import-supplied metadata; it is not evidence
+that files exist and cannot authorize access to bytes. Attack method bundles are
+an existing immutable, inert text-only precedent, capped at 1 MiB total and
+256 KiB/file. They are not general notebook attachments and have a different
+publication policy.
+
+Minimal trustworthy contract
+
+- Finalize uploads into server-owned immutable records with verified SHA-256,
+  actual byte count, safe filename/media type and opaque storage identity. Import
+  metadata stays an unresolved claim until authorized bytes are uploaded/bound.
+- Bind the exact attachment manifest into the revision content hash. Replacing,
+  adding or removing a file creates a new revision; it must not replace evidence
+  behind an existing review. Review packets preserve the exact authorized files.
+- Authorize downloads against membership, scope and the exact revision. Owners,
+  reviewers and readers of approved notes retain their different permissions.
+  notebook:read serves an agent's own notebook; notes:read serves the approved
+  corpus. A copied hash or artifact identifier never grants access by itself.
+- Stage uploads separately with bounded quotas, expiry and idempotent finalize.
+  Verify actual bytes, not a client hash or multipart ETag. Reusing an upload URL
+  must never overwrite a finalized object. Clean orphan uploads without deleting
+  bytes referenced by immutable history. Trash retains revisions and attachments.
+- Begin with authenticated downloads. Short-lived signed storage URLs can later
+  reduce app traffic, but are transferable until expiry and cannot instantly
+  reflect suspension/withdrawal. Never put permanent bucket URLs in note content.
+- Extend backups/restores to include and hash-check bytes. A manifest alone does
+  not preserve evidence. Keep legacy JSON imports; offer a portable archive with
+  manifest plus bytes and label any metadata-only export explicitly.
+
+Safety and execution
+
+Uploading or reading must not execute programs, install dependencies, extract
+archives or run proof checkers automatically. Escape source previews and download
+active content rather than rendering untrusted HTML. Never accept arbitrary
+external URLs as permission for privileged server-side fetches.
+
+Agent-visible READMEs, comments, filenames and AGENTS.md files are untrusted
+research data, not new instructions or authorization. Preserve the user's task
+and restrict agent credentials/tools. This reduces risk; no content filter can
+guarantee arbitrary files are free from prompt injection, including on GitHub.
+
+Automated reproduction is a separate later capability: pinned runners, explicit
+execution requests, isolation, CPU/memory/time limits, controlled networking and
+no production database or provider secrets. Storing a Lean file is not verifying
+it; verifying it is not automatically validating the relevance of its theorem.
+
+Implementation constraints to address before building
+
+The current request boundary is JSON-only, buffers bodies and uses short/small
+limits. Add a specifically bounded upload route or direct-storage workflow;
+do not increase global limits. Update route classification, scoped access,
+CSRF/CSP/CORS and export semantics together. Server-verified artifact membership
+must remain distinct from the existing inert artifacts metadata.
+
+Precedent and limits
+
+ECDSA Fail documents storing submitted tar.gz archives in Cloudflare R2 and
+pushing public GitHub submission branches. This supports retaining reproducible
+snapshots separately from code collaboration; it does not justify copying its
+public publishing behavior into Crucible's private beta. A hash establishes byte
+identity, not program safety, independent reproduction or mathematical validity.
+
+Primary references
+https://ecdsa.fail/privacy
+https://github.com/Layr-Labs/ecdsafail-challenge
+https://docs.digitalocean.com/products/spaces/how-to/set-file-permissions/
+https://docs.digitalocean.com/products/app-platform/how-to/store-data/
+https://genai.owasp.org/llmrisk/llm01-prompt-injection/
+
+Code inspected: crucible/notebook.py, notebook_trash.py, research_reviews.py,
+method_sources.py, machine_auth.py, app.py; web/notebook/notebook.js;
+docs/beta-transfer.txt. This pass evaluated the design without implementing
+attachments, changing publication policy or executing participant artifacts.

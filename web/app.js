@@ -4,20 +4,24 @@ const $ = selector => document.querySelector(selector);
 // Keep the research interface dormant while the first MVP focuses on numerical challenges.
 const RESEARCH_ENABLED = false;
 const state = {
+  auth: {}, authPanel: 'signin', githubBusy: false, githubPending: false, githubCompleteBusy: false, authCallbackBusy: false, githubLinkContext: null,
+  passwordResetToken: null, passwordResetBusy: false, passwordRecoveryBusy: false,
+  access: null, sessionResolved: false, invitationToken: null, invitationBusy: false, invitationDelivery: null,
+  returnRoute: null, protectedLoaded: false, canManageBetaAccess: false,
   user: null, csrf: '', canReviewProposals: false, canSelfReviewProposals: false, schemes: [], profile: null, challenge: null,
   methods: [], view: 'leaderboard', authMode: 'login', round: null,
-  timeOffset: 0, ready: false, challengeLoading: false, issueBusy: false,
+  timeOffset: 0, ready: false, catalogueLoaded: false, challengeLoading: false, issueBusy: false,
   submitBusy: false, pendingAttempt: null, roundRefreshing: false,
   challengeRequest: 0, leaderboardRequest: 0, submissionChallenge: null,
   leaderboardDataKey: null, leaderboardPendingKey: null,
-  historyRequest: 0, recoveryRequest: 0, catalogueRequest: 0, sessionRevision: 0,
+  historyRequest: 0, recoveryRequest: 0, catalogueRequest: 0, catalogueRevision: null, sessionRevision: 0,
   peopleRequest: 0, personRequest: 0, personHandle: null, personDataKey: null,
   people: [], peoplePagination: null,
   connectCode: null, connectRequest: 0, connection: null, connectBusy: false,
   agentTokenRequest: 0,
   agentTokens: [], agentTokenPagination: null,
   agentInstructionsKey: null, challengeStartIntent: null, profileMetadataPending: null,
-  screen: 'catalogue', schemeId: null, schemeVersion: null,
+  screen: 'catalogue', reviewSection: 'publication', schemeId: null, schemeVersion: null,
   overviewMetrics: {computation: 'keygen', security: 'classical'},
   importBusy: false, recoveryImportRequest: 0, submissionFormRevision: 0,
   autoIssueAttempts: new Set(), autoIssuePaused: new Map()
@@ -26,6 +30,78 @@ let toastTimer;
 let roundRetryAt = 0;
 let sessionSynchronization = null;
 let notebookWorkspace = null;
+let reviewNotebookWorkspace = null;
+let notebookAssets = null;
+let notebookAssetsReady = false;
+const notebookAssetLoads = new Map();
+let notebookShowRequest = 0;
+let catalogueLoad = null;
+// Navigation contains labels/progress only. Charts and challenge controls must
+// resolve an exact complete release through this separate, page-memory cache.
+const releaseDetails = new Map();
+const releaseLoads = new Map();
+let releaseGeneration = 0;
+let navigationProjection = false;
+let workspaceLoadRequest = 0;
+let routeLoadingPanel = null;
+// Only previously authorized read results live here, never credentials or rights.
+// Revalidate reads on entry, sharing in-flight or recent user-intent requests.
+// Bound both lifetime and size; nothing is persisted in browser storage.
+const readViews = new Map();
+const pendingReads = new Map();
+const intendedReads = new Map();
+let readViewEpoch = 0;
+let renderedReads = new WeakMap();
+function invalidateReadViews() {
+  readViews.clear(); pendingReads.clear(); intendedReads.clear(); renderedReads = new WeakMap(); readViewEpoch++;
+}
+function primeRead(key, path) {
+  for (const [oldKey, entry] of intendedReads) if (entry.done && Date.now() - entry.at >= 10000) intendedReads.delete(oldKey);
+  if (!hasAccess() || navigator.connection?.saveData || cachedRead(key) || pendingReads.has(key) || intendedReads.has(key) || intendedReads.size + pendingReads.size >= 2) return;
+  const task = api(path), entry = {task, at: Date.now(), done: false};
+  task.then(() => { entry.done = true; }, () => { entry.done = true; });
+  intendedReads.set(key, entry);
+}
+function readAgain(key, path) {
+  const intended = intendedReads.get(key); intendedReads.delete(key);
+  if (pendingReads.has(key)) return pendingReads.get(key);
+  const response = intended && Date.now() - intended.at < 10000 ? intended.task : api(path);
+  const task = response.finally(() => { if (pendingReads.get(key) === task) pendingReads.delete(key); });
+  pendingReads.set(key, task); return task;
+}
+function cachedRead(key) {
+  const entry = readViews.get(key);
+  if (!entry || Date.now() - entry.at > 300000) { readViews.delete(key); return null; }
+  readViews.delete(key); readViews.set(key, entry);
+  return entry.data;
+}
+function rememberRead(key, data) {
+  const text = JSON.stringify(data);
+  readViews.delete(key);
+  if (text.length > 500000) return;
+  readViews.set(key, {data, at: Date.now(), size: text.length});
+  let size = [...readViews.values()].reduce((sum, entry) => sum + entry.size, 0);
+  while (readViews.size > 32 || size > 2000000) {
+    const first = readViews.keys().next().value;
+    size -= readViews.get(first).size; readViews.delete(first);
+  }
+}
+function paintRead(key, target, data, render) {
+  const signature = JSON.stringify(data), old = renderedReads.get(target);
+  if (old?.key === key && old.signature === signature && old.child === target.firstChild) return;
+  render(data);
+  renderedReads.set(target, {key, signature, child: target.firstChild});
+}
+function forbiddenRead(error) { return [401, 403, 404, 410].includes(error.status); }
+function readRefreshError(key, target, error, retry, cached) {
+  readViews.delete(key);
+  if (cached && !forbiddenRead(error)) toast('Refresh failed. ' + error.message);
+  else showInlineError(target, error.message, retry);
+}
+let assumptionsWorkspace = null;
+const referenceTimings = new Map();
+const REFERENCE_TIMING_MAX_AGE_MS = 60000;
+const protectedRequests = new Set();
 const dialogTriggers = new WeakMap();
 const authDialog = $('#auth-dialog');
 const submissionDialog = $('#submission-dialog');
@@ -47,6 +123,17 @@ const proposals = {
   agentRevision: null, agentRouteKey: null, agentKeys: {draft: null, revision: null}
 };
 
+function normalizeAIModel(value = '', label = 'AI model(s)') {
+  if (typeof value !== 'string' || [...value].length > 300) {
+    throw new Error(`${label} must be text of at most 300 characters.`);
+  }
+  // With the Unicode flag, the surrogate range matches only unpaired surrogates.
+  if (/[\u0000\uD800-\uDFFF]/u.test(value)) {
+    throw new Error(`${label} must be valid Unicode text without null characters.`);
+  }
+  return value.trim();
+}
+
 // Versioned data contract: imports never execute code or submit an answer.
 function readRecoveryDocument(text) {
   if (typeof text !== 'string' || new TextEncoder().encode(text).length > RECOVERY_FILE_MAX_BYTES) {
@@ -56,7 +143,7 @@ function readRecoveryDocument(text) {
   try { value = JSON.parse(text.replace(/^\uFEFF/, '')); }
   catch { throw new Error('This file is not valid JSON. Use the downloadable template, without Markdown code fences.'); }
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('The result must be a JSON object.');
-  const allowed = ['format', 'challenge_id', 'candidate', 'method', 'compute', '_instructions'];
+  const allowed = ['format', 'challenge_id', 'candidate', 'method', 'compute', 'ai_model', '_instructions'];
   if (Object.keys(value).some(key => !allowed.includes(key))) throw new Error('The result contains an unrecognized field. Use the template’s field names.');
   if (value.format !== 'crucible-recovery-v1') throw new Error('Set format to "crucible-recovery-v1", as in the template.');
   if (typeof value.challenge_id !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(value.challenge_id)) throw new Error('challenge_id must be the exact identifier from a downloaded challenge or result template.');
@@ -102,6 +189,7 @@ function parseRecoveryFile(text, challenge) {
   }
   return {
     format: value.format, challenge_id: value.challenge_id, candidate: value.candidate.toLowerCase(), method,
+    ai_model: normalizeAIModel(value.ai_model, 'ai_model'),
     compute: {
       hardware: string(compute.hardware, 'compute.hardware', 500),
       workers: compute.workers, wall_seconds: compute.wall_seconds,
@@ -117,26 +205,28 @@ function recoveryTemplate(challenge) {
   return {
     format: 'crucible-recovery-v1', challenge_id: challenge.id, candidate: '',
     method: {name: '', pseudocode: ''},
+    ai_model: '',
     compute: {hardware: '', workers: 1, wall_seconds: null, precomputation: '', peak_memory: '', notes: ''},
     _instructions: {
       file: 'Save one UTF-8 JSON object as a .json file, at most 131072 bytes (128 KiB), including these instructions. No Markdown fences or JSON comments. Escape line breaks inside strings as \\n.',
-      fields: 'Required: format, challenge_id, candidate, method.name, method.pseudocode, compute.hardware, compute.workers, compute.wall_seconds, compute.precomputation, compute.peak_memory. Optional: compute.notes and this _instructions object. No other fields are accepted.',
+      fields: 'Required: format, challenge_id, candidate, method.name, method.pseudocode, compute.hardware, compute.workers, compute.wall_seconds, compute.precomputation, compute.peak_memory. Optional: ai_model, compute.notes and this _instructions object. No other fields are accepted.',
       instructions: 'You may keep or remove _instructions. If kept, it must be an object of text values. It is guidance only, ignored when submitting; editing it cannot change validation rules.',
-      format: 'Keep format exactly "crucible-recovery-v1". Empty strings and the null attack-time placeholder must be filled in before import.',
+      format: 'Keep format exactly "crucible-recovery-v1". Required text fields and the null attack-time placeholder must be filled in before import.',
       challenge_id: 'Use the exact challenge.id from the downloaded challenge contract or this template. The website looks up that instance and selects its scheme, release, and parameter profile automatically, even if another profile is displayed. It must belong to the signed-in account, still be open, and have no final answer. Do not replace this ID with a stage number or parameter-set name.',
       candidate: `The complete ${keyBytes}-byte shared secret: exactly ${keyBytes * 2} hexadecimal characters. Uppercase or lowercase accepted; no spaces, line breaks, or 0x prefix.`,
       'method.name': 'Required nonblank text, at most 100 Unicode characters; a short descriptive name for the attack.',
       'method.pseudocode': 'Required nonblank text, at most 15000 Unicode characters. Describe the algorithm, key derivation, and preparation. The method object must also fit within a 65536-byte JSON request, including escapes. Pseudocode is stored as text, never executed.',
+      ai_model: 'Optional participant-reported text, at most 300 Unicode characters before trimming outer whitespace. Name the AI model(s) that implemented this result, including exact versions when known. Do not guess a model or version. Omit or leave empty when not reported; blank does not establish that no AI was used. Null and null characters are not accepted; text must be valid Unicode.',
       'compute.hardware': 'Required nonblank text, at most 500 Unicode characters. Describe the CPU/GPU model and configuration used.',
       'compute.workers': 'Required JSON number: an integer from 1 through 1000000. State the number of parallel workers; do not quote the number or use a boolean.',
       'compute.wall_seconds': 'Required finite JSON number from 0 through 315576000; fractions are allowed. Report attack wall-clock time in seconds, not the time since the challenge was downloaded. Replace null; do not quote the number.',
       'compute.precomputation': 'Required nonblank text, at most 2000 Unicode characters. Describe preparation, its cost, and reused data, or write "None".',
       'compute.peak_memory': 'Required nonblank text, at most 300 Unicode characters. Give an estimate with units, or write "Not measured".',
       'compute.notes': 'Optional text, at most 2000 Unicode characters. Include measurement uncertainty or other relevant details. An omitted or empty string is allowed; null is not.',
-      text: 'Text limits apply before trimming outer whitespace. Required text cannot consist only of whitespace. Keep method and compute declarations accurate; they are contributor-reported.',
+      text: 'Text limits apply before trimming outer whitespace. Required text cannot consist only of whitespace. Keep method, AI model and compute declarations accurate; they are participant-reported.',
       deadline: `This instance closes at ${utcDate(challenge.ends_at)}. The complete final answer must reach the server strictly before that deadline. Importing a file does not extend the deadline or submit an answer.`,
       submission: 'Review the imported fields, then explicitly submit. Each instance accepts one well-formed final answer, whether correct or incorrect. If a submission outcome is uncertain, retry the same answer; do not replace it with another file.',
-      publication: 'A correct recovery may publish your handle, method, pseudocode, and compute declaration on the leaderboard. Do not include passwords, API tokens, or other credentials.'
+      publication: 'A correct recovery may publish your handle, method, pseudocode, AI model annotation, and compute declaration with the result. Do not include passwords, API tokens, or other credentials.'
     }
   };
 }
@@ -215,6 +305,32 @@ function initialSecurityEstimate(scheme, profile) {
   return typeof model?.id === 'string' && model.id && estimate?.model_id === model.id &&
     Number.isFinite(estimate.bits) && estimate.bits >= 0 ? estimate.bits : null;
 }
+function securityReferences(scheme, metric) {
+  const evidence = scheme?.security_references;
+  const value = evidence?.metrics?.[metric];
+  return evidence?.format === 'crucible-security-references-v1' && evidence.scheme_id === scheme.id &&
+    String(evidence.version) === String(scheme.version) && Array.isArray(value?.models) && Array.isArray(value?.estimates) ? value : null;
+}
+function securityReference(scheme, profile, metric) {
+  // Frozen release references remain intact. Later literature evidence is
+  // separately identified, and applies only to the explicitly named profile.
+  const frozen = metric === 'classical' ? initialSecurityEstimate(scheme, profile) : null;
+  if (frozen !== null) return {bits: frozen, model: scheme.initial_security_model};
+  const evidence = securityReferences(scheme, metric);
+  const estimates = (evidence?.estimates || []).filter(item => item?.profile_id === profileId(profile));
+  if (estimates.length !== 1) return null;
+  const estimate = estimates[0];
+  const models = evidence.models.filter(model => model?.id === estimate.model_id);
+  return models.length === 1 && ['id', 'label', 'unit'].every(key => typeof models[0][key] === 'string' && models[0][key].trim()) && typeof estimate.bits === 'number' && Number.isFinite(estimate.bits) && estimate.bits >= 0 ?
+    {bits: estimate.bits, model: models[0]} : null;
+}
+function supportingNoteLink(note) {
+  if (typeof note?.id !== 'string' || !note.id.startsWith('curated:') || !Number.isSafeInteger(note.revision) ||
+      note.revision < 1 || !/^[a-f0-9]{64}$/.test(note.content_sha256 || '')) return null;
+  const link = node('a', 'Supporting research note →', 'text-button');
+  link.href = '#notebook?' + new URLSearchParams({note: note.id, revision: note.revision, sha256: note.content_sha256});
+  return link;
+}
 function estimateBits(value) { return value.toLocaleString('en-US', {maximumFractionDigits: 1}); }
 function attackReferenceModel(scheme) {
   const model = scheme?.initial_security_model;
@@ -226,11 +342,22 @@ function tierNote(scheme, profile) {
   if (intermediateConfiguration(profile)) return context?.before_stage != null && context?.after_stage != null ? `Between Stages ${context.before_stage} and ${context.after_stage}. ${profile.native_parameter_label || 'A reviewed intermediate configuration.'}` : 'A reviewed configuration outside the default progression.';
   const estimate = initialSecurityEstimate(scheme, profile);
   if (estimate !== null) return `${attackReferenceModel(scheme) ? 'Initial classical attack reference' : 'Initial classical estimate'}: ≈${estimateBits(estimate)} bits.`;
+  const published = securityReference(scheme, profile, 'classical');
+  if (published) return `Published classical attack reference: ${estimateBits(published.bits)} (${published.model.unit}). See Protocol for its scope.`;
   return researchTiers(scheme, profile) ? 'Stages follow this scheme’s default progression through reviewed configurations. Security estimates are not yet available.' : 'Stages follow this scheme’s default progression through reviewed configurations.';
 }
 function availableReleases() { return state.schemes.flatMap(scheme => [scheme, ...(scheme.previous_releases || [])]); }
+function releaseKey(id, version) { return JSON.stringify([id, String(version)]); }
+function completeRelease(id, version) {
+  const cached = releaseDetails.get(releaseKey(id, version));
+  if (cached?.revision === state.catalogueRevision) return cached.scheme;
+  // Older servers ignore the new projection argument and return full metadata.
+  // Keep that deployment/rollback path without treating navigation as complete.
+  if (!navigationProjection) return availableReleases().find(scheme => scheme.id === id && String(scheme.version) === String(version));
+  return null;
+}
 function selectedScheme() {
-  return availableReleases().find(scheme => scheme.id === state.schemeId && String(scheme.version) === state.schemeVersion);
+  return completeRelease(state.schemeId, state.schemeVersion);
 }
 function selectionKey() { return JSON.stringify([state.schemeId, state.schemeVersion, profileId()]); }
 function schemeRoute(scheme, profile, view = 'leaderboard') {
@@ -240,6 +367,23 @@ function schemeRoute(scheme, profile, view = 'leaderboard') {
 function overviewRoute(scheme, profile = null) {
   return '#scheme/' + encodeURIComponent(scheme.id) + '/' + encodeURIComponent(scheme.version) +
     (profile ? '?' + new URLSearchParams({profile: profileId(profile)}) : '');
+}
+function assumptionsRoute(scheme, profile = null, claim = null) {
+  const query = new URLSearchParams();
+  if (profile) query.set('profile', profileId(profile));
+  if (claim) query.set('claim', claim);
+  return '#scheme/' + encodeURIComponent(scheme.id) + '/' + encodeURIComponent(scheme.version) + '/assumptions' + (query.size ? '?' + query : '');
+}
+function renderAssumptions(scheme, profile, query) {
+  $('#assumptions-back').href = overviewRoute(scheme, profile);
+  setText('#assumptions-title', scheme.name);
+  setText('#assumptions-context', `Release ${scheme.version}${profile ? ' · ' + profileLabel(profile, scheme) : ''}`);
+  if (!assumptionsWorkspace) assumptionsWorkspace = window.CrucibleAssumptions.create({
+    root: $('#assumptions-content'), api, route: assumptionsRoute,
+    isVisible: () => hasAccess() && state.screen === 'assumptions',
+    account: () => state.user?.id || null
+  });
+  assumptionsWorkspace.show(scheme, profile, query.get('claim'));
 }
 function navigate(hash) {
   if (window.location.hash === hash) applyRoute();
@@ -251,11 +395,384 @@ function connectionCode(value) {
   const code = String(value || '').trim().toUpperCase().replace(/-/g, '');
   return /^[A-Z0-9]{8}$/.test(code) ? code.slice(0, 4) + '-' + code.slice(4) : null;
 }
+function hasAccess() { return state.sessionResolved && state.access?.allowed === true; }
+function captureInvitation() {
+  const [path, query = ''] = window.location.hash.split('?');
+  if (path !== '#join') return;
+  const token = new URLSearchParams(query).get('token');
+  if (!token || token.length > 512 || !/^[A-Za-z0-9_-]+$/.test(token)) {
+    state.invitationToken = null; state.invitationDelivery = null;
+    setError('#access-error', 'This invitation link is incomplete. Open the full link you received.');
+    return;
+  }
+  if (token && token.length <= 512 && /^[A-Za-z0-9_-]+$/.test(token) && token !== state.invitationToken) {
+    state.invitationToken = token;
+    state.invitationDelivery = null;
+    $('#access-code').value = '';
+    setError('#access-error', '');
+  }
+}
+function renderAccessGate() {
+  if (state.screen !== 'access' && window.location.hash && !window.location.hash.startsWith('#join') && !authenticationRoute()) state.returnRoute = window.location.hash;
+  state.screen = 'access';
+  showWorkspace('access');
+  const status = state.access?.status;
+  const blocked = ['revoked', 'suspended'].includes(status);
+  const joining = Boolean(state.invitationToken);
+  setText('#access-title', 'Private beta');
+  setText('#access-description', hasAccess() ? 'Your access is ready.' : blocked ?
+    'Your beta access is not active. Contact the person who invited you.' : joining ?
+    'Join Crucible with your invitation.' : state.user ?
+    'Open your invitation link to activate beta access.' : 'Sign in to continue, or open your invitation link to join.');
+  $('#access-auth-actions').hidden = Boolean(state.user);
+  $('#access-register').hidden = !joining;
+  $('#access-verification').hidden = !state.user || !joining || blocked || hasAccess();
+  $('#access-continue').hidden = !hasAccess();
+  setText('#access-account', state.user ? 'Joining as ' + state.user.handle : '');
+  $('#access-code-form').hidden = !state.invitationDelivery;
+  $('#access-send-code').disabled = state.invitationBusy;
+  $('#access-redeem').disabled = state.invitationBusy;
+  setText('#access-send-code', state.invitationDelivery ? 'Send a new code' : 'Email a verification code');
+  setText('#access-delivery', state.invitationDelivery ? 'Code sent to ' + state.invitationDelivery.masked_recipient + '. Check that inbox to continue.' : '');
+  $('#register-mode').hidden = state.access?.mode === 'beta' && !joining;
+  renderAuthMethods();
+  document.title = 'Private beta — Crucible';
+}
+function clearProtectedState() {
+  invalidateReadViews();
+  referenceTimings.clear();
+  assumptionsWorkspace?.clear();
+  notebookWorkspace?.setAccount(null);
+  reviewNotebookWorkspace?.setAccount(null);
+  const reloadShell = state.protectedLoaded;
+  state.protectedLoaded = false;
+  state.ready = false;
+  state.catalogueLoaded = false;
+  catalogueLoad = null;
+  releaseDetails.clear(); releaseLoads.clear(); releaseGeneration++;
+  navigationProjection = false; workspaceLoadRequest++;
+  for (const controller of protectedRequests) controller.abort();
+  for (const key of ['catalogueRequest', 'challengeRequest', 'leaderboardRequest', 'historyRequest', 'recoveryRequest', 'peopleRequest', 'personRequest', 'connectRequest']) state[key]++;
+  state.schemes = []; state.catalogueRevision = null; state.people = []; state.profile = null; state.challenge = null; state.methods = [];
+  state.schemeId = null; state.schemeVersion = null; state.personHandle = null; state.personDataKey = null;
+  state.pendingAttempt = null; state.submissionChallenge = null; state.connection = null; state.round = null;
+  state.challengeStartIntent = null; state.challengeLoading = false;
+  state.autoIssueAttempts.clear(); state.autoIssuePaused.clear();
+  state.canReviewProposals = false; state.canSelfReviewProposals = false; state.canManageBetaAccess = false;
+  resetAgentSettings(); resetAgentInstructions(); resetProposalAccount(state.user?.id);
+  research.request++; research.recoveriesRequest++; research.targets = []; research.target = null; research.findings = []; research.recoveries = [];
+  for (const selector of ['#kem-catalogue', '#people-content', '#person-content', '#leaderboard-content', '#history-content', '#recovery-content', '#connect-content', '#overview-graphs', '#target-catalogue']) $(selector).replaceChildren();
+  for (const dialog of document.querySelectorAll('dialog')) if (dialog.open && dialog !== authDialog) dialog.close();
+  $('#submission-form').reset();
+  // A fresh shell also releases notebook closures and private data held by the
+  // previous page. The next bootstrap stays on the access screen, without a loop.
+  if (reloadShell && typeof window.location.reload === 'function') window.location.reload();
+}
+async function loadAuthorizedCatalogue() {
+  if (!hasAccess()) return false;
+  if (catalogueLoad) return catalogueLoad;
+  const account = state.user?.id, csrf = state.csrf, request = ++state.catalogueRequest;
+  const current = () => hasAccess() && account === state.user?.id && csrf === state.csrf && request === state.catalogueRequest;
+  const task = (async () => {
+    let data;
+    try { data = await api('/api/schemes?projection=navigation'); }
+    catch (error) {
+      if (!current() || !routeNeedsCatalogue()) return false;
+      throw error;
+    }
+    if (!current()) return false;
+    installNavigation(data);
+    state.catalogueLoaded = true;
+    state.ready = true;
+    state.protectedLoaded = true;
+    // A slow catalogue request must not reload an independent page entered
+    // meanwhile. Its eventual data is available when a scheme route needs it.
+    if (routeNeedsCatalogue()) applyRoute();
+    return true;
+  })();
+  catalogueLoad = task;
+  try { return await task; }
+  finally { if (catalogueLoad === task) catalogueLoad = null; }
+}
+const RELEASE_PROGRESS_FIELDS = ['participant_count', 'recovered_profile_ids', 'largest_recovered_profile_id', 'next_profile_id', 'profile_recoveries', 'first_recovery'];
+function installNavigation(data) {
+  if (!Array.isArray(data.schemes) || (data.projection && data.projection !== 'navigation')) throw new Error('Scheme navigation could not be loaded.');
+  const revision = data.catalogue_revision || null;
+  const releases = data.schemes.flatMap(scheme => [scheme, ...(scheme.previous_releases || [])]);
+  const keys = new Set();
+  for (const scheme of releases) {
+    if (!scheme || typeof scheme.id !== 'string' || !scheme.id || scheme.version == null ||
+        !Array.isArray(scheme.profiles) || keys.has(releaseKey(scheme.id, scheme.version))) throw new Error('Scheme navigation could not be loaded.');
+    keys.add(releaseKey(scheme.id, scheme.version));
+  }
+  if (state.catalogueRevision !== null && state.catalogueRevision !== revision) {
+    invalidateReadViews();
+    releaseLoads.clear(); releaseGeneration++;
+  }
+  state.schemes = data.schemes;
+  state.catalogueRevision = revision;
+  navigationProjection = data.projection === 'navigation';
+  for (const [key, entry] of releaseDetails) {
+    const current = data.schemes.find(item => item.id === entry.scheme.id);
+    if (entry.revision !== revision || !keys.has(key) || (entry.currentVersion != null && String(entry.currentVersion) !== String(current?.version))) releaseDetails.delete(key);
+  }
+  if (!navigationProjection) {
+    for (const scheme of releases) releaseDetails.set(releaseKey(scheme.id, scheme.version), {revision, scheme});
+  } else {
+    for (const scheme of releases) {
+      const entry = releaseDetails.get(releaseKey(scheme.id, scheme.version));
+      if (!entry) continue;
+      const updated = {...entry.scheme};
+      for (const field of RELEASE_PROGRESS_FIELDS) {
+        if (Object.hasOwn(scheme, field)) updated[field] = scheme[field]; else delete updated[field];
+      }
+      entry.scheme = updated;
+    }
+  }
+}
+function routeRelease() {
+  const match = window.location.hash.split('?')[0].match(/^#(?:scheme|challenge)\/([^/]+)\/([^/]+)(?:\/assumptions)?$/);
+  if (!match) return null;
+  try {
+    const id = decodeURIComponent(match[1]), version = decodeURIComponent(match[2]);
+    return id && version && id.length <= 100 && version.length <= 100 ? {id, version} : null;
+  } catch { return null; }
+}
+async function loadRelease(id, version) {
+  if (!hasAccess()) return false;
+  const key = releaseKey(id, version);
+  if (state.catalogueLoaded && completeRelease(id, version)) return true;
+  if (releaseLoads.has(key)) return releaseLoads.get(key);
+  const account = state.user?.id, csrf = state.csrf, generation = releaseGeneration;
+  const current = () => hasAccess() && account === state.user?.id && csrf === state.csrf && generation === releaseGeneration;
+  const task = (async () => {
+    const data = await api('/api/schemes?' + new URLSearchParams({projection: 'release', scheme_id: id, version}));
+    if (!current()) return false;
+    let scheme = data.scheme;
+    if (!data.projection && Array.isArray(data.schemes)) scheme = data.schemes.flatMap(item => [item, ...(item.previous_releases || [])]).find(item => item.id === id && String(item.version) === String(version));
+    if ((data.projection && data.projection !== 'release') || !scheme || scheme.id !== id || String(scheme.version) !== String(version) || !Array.isArray(scheme.profiles) || !scheme.protocol) throw new Error('This scheme release could not be loaded.');
+    const revision = data.catalogue_revision || null;
+    if (state.catalogueLoaded && revision !== state.catalogueRevision) throw new Error('Scheme information changed. Refresh the page to load the current description.');
+    const latest = state.schemes.find(item => item.id === id);
+    if (state.catalogueLoaded && data.projection === 'release' && String(data.current_version) !== String(latest?.version)) throw new Error('The current scheme release changed. Refresh the page to continue.');
+    releaseDetails.set(key, {revision, scheme, currentVersion: data.current_version});
+    return true;
+  })();
+  releaseLoads.set(key, task);
+  try { return await task; }
+  finally { if (releaseLoads.get(key) === task) releaseLoads.delete(key); }
+}
+function showRouteLoading() {
+  if (!routeLoadingPanel) {
+    routeLoadingPanel = node('section'); routeLoadingPanel.id = 'route-loading'; routeLoadingPanel.tabIndex = -1;
+    document.querySelector('main').append(routeLoadingPanel);
+  }
+  const path = window.location.hash.split('?')[0], release = routeRelease();
+  const known = release && availableReleases().find(item => item.id === release.id && String(item.version) === release.version);
+  const title = known?.name || (release ? 'Scheme' : path.startsWith('#person/') ? 'Profile' : path === '#notebook' ? 'Research notebook' : path === '#reviews' ? 'Review center' : path === '#propose' ? 'Propose a scheme' : 'KEM Schemes');
+  state.screen = 'loading';
+  state.challengeRequest++; state.leaderboardRequest++; state.peopleRequest++; state.personRequest++;
+  const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
+  const intent = state.challengeStartIntent;
+  if (intent && (!release || release.id !== intent.schemeId || release.version !== intent.schemeVersion ||
+      params.get('profile') !== intent.profileId || params.get('view') !== 'challenge')) state.challengeStartIntent = null;
+  routeLoadingPanel.replaceChildren(node('h1', title));
+  const status = node('p', 'Loading…', 'empty-state'); status.setAttribute('role', 'status'); routeLoadingPanel.append(status);
+  showWorkspace('loading');
+  document.title = title + ' — Crucible';
+}
+function routeNeedsCatalogue() {
+  const [path, query = ''] = window.location.hash.split('?');
+  if (['#about', '#people', '#connect'].includes(path)) return false;
+  // Profile records still need the catalogue's mapping from native parameters
+  // to human stage labels. Keep that dependency until the record API supplies it.
+  // The map consumes scheme metadata; ordinary notes and their editors do not.
+  if (path === '#notebook' && new URLSearchParams(query).get('view') !== 'map') return false;
+  return true;
+}
+async function loadAuthorizedWorkspace() {
+  if (!hasAccess()) return false;
+  state.ready = true;
+  state.protectedLoaded = true;
+  if (routeNeedsCatalogue() && !state.catalogueLoaded) {
+    showRouteLoading();
+    const catalogue = loadAuthorizedCatalogue();
+    // Deep links can overlap the two independent reads. The response revision
+    // must match navigation before a complete release can reach a renderer.
+    const target = routeRelease();
+    if (target) void loadRelease(target.id, target.version).catch(() => {});
+    const person = window.location.hash.split('?')[0].match(/^#person\/([^/]+)$/);
+    if (person) {
+      try {
+        const handle = decodeURIComponent(person[1]);
+        if (handle && handle.length <= 100) primeRead('person:' + handle.toLowerCase(), '/api/people/' + encodeURIComponent(handle) + '?include_milestones=false');
+      } catch { /* Invalid routes do not prefetch another account. */ }
+    }
+    return catalogue;
+  }
+  applyRoute();
+  return true;
+}
+function reviewerRoute(section = 'publication', values = {}) {
+  return '#reviews?' + new URLSearchParams({section, ...values});
+}
+function proposalPageActive() {
+  return state.screen === 'propose' || (state.screen === 'reviews' && state.reviewSection === 'schemes' && state.canReviewProposals);
+}
+function renderReviewAccountLink() {
+  $('#profile-review-link').hidden = !ownsViewedProfile() || !state.canReviewProposals || !hasAccess();
+  renderAccountSignIn();
+}
+function renderReviewPage(query) {
+  const params = new URLSearchParams(query);
+  const allowed = hasAccess() && Boolean(state.user) && state.canReviewProposals;
+  $('#review-account-back').href = state.user ? personRoute(state.user.handle) : '#people';
+  $('#review-navigation').hidden = !allowed;
+  $('#review-access-message').hidden = allowed;
+  for (const section of ['publication', 'schemes', 'research']) {
+    const link = $('#review-nav-' + section), selected = state.reviewSection === section;
+    if (selected) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+  }
+  $('#review-notebook-workspace').hidden = !allowed || state.reviewSection === 'schemes';
+  $('#proposal-workspace').hidden = !allowed || state.reviewSection !== 'schemes';
+  if (!allowed) {
+    reviewNotebookWorkspace?.setAccount(null);
+    reviewNotebookWorkspace?.hide();
+    return;
+  }
+  if (state.reviewSection === 'schemes') {
+    params.set('review', '1');
+    enterProposalPage(params, true);
+  } else {
+    if (state.reviewSection === 'publication') {
+      params.set('review', '1');
+      for (const key of ['research', 'research_review', 'research_request']) params.delete(key);
+    } else {
+      params.set('research', '1'); params.set('research_review', '1');
+      for (const key of ['review', 'note', 'revision']) params.delete(key);
+    }
+    showNotebook(params, true);
+  }
+}
+function loadNotebookAsset(path, stylesheet = false) {
+  if (notebookAssetLoads.has(path)) return notebookAssetLoads.get(path);
+  const element = node(stylesheet ? 'link' : 'script');
+  if (stylesheet) { element.rel = 'stylesheet'; element.href = path; }
+  else { element.async = false; element.src = path; }
+  const task = new Promise((resolve, reject) => {
+    element.onload = resolve;
+    element.onerror = () => {
+      element.remove(); notebookAssetLoads.delete(path);
+      reject(new Error('The notebook could not be loaded. Please try again.'));
+    };
+  });
+  notebookAssetLoads.set(path, task);
+  (stylesheet ? document.querySelector('head') : document.body).append(element);
+  return task;
+}
+async function showNotebook(query, reviewing = false) {
+  const account = state.user?.id, section = state.reviewSection, request = ++notebookShowRequest;
+  const target = $(reviewing ? '#review-notebook-workspace' : '#notebook-workspace');
+  const current = () => request === notebookShowRequest && hasAccess() && account === state.user?.id &&
+    (reviewing ? state.screen === 'reviews' && state.canReviewProposals && state.reviewSection === section && section !== 'schemes' : state.screen === 'notebook');
+  if (!current()) return;
+  if (!window.CrucibleNotebook || (!notebookAssetsReady && notebookAssetLoads.size)) {
+    setLoading(target, reviewing ? 'Loading review workspace…' : 'Loading notebook…');
+    notebookAssets ||= (async () => {
+      // All four downloads begin together. async=false keeps script execution
+      // in insertion order without serializing their network round trips.
+      const results = await Promise.allSettled([
+        loadNotebookAsset('/notebook/notebook.css', true),
+        ...['/notebook/seed.js', '/notebook/store.js', '/notebook/notebook.js'].map(src => loadNotebookAsset(src))
+      ]);
+      const failed = results.find(result => result.status === 'rejected');
+      if (failed) throw failed.reason;
+      if (!hasAccess()) throw new Error('Sign in to open the notebook.');
+      notebookAssetsReady = true;
+    })().catch(error => { notebookAssets = null; throw error; });
+    try { await notebookAssets; }
+    catch (error) { if (current()) showInlineError(target, error.message, () => showNotebook(query, reviewing)); return; }
+  }
+  if (!current()) return;
+  const options = {navigate, api, account: () => hasAccess() && (!reviewing || state.canReviewProposals) ? state.user : null,
+    currentReleases: () => hasAccess() ? state.schemes : [], session: () => state.csrf, reviewOnly: reviewing};
+  if (reviewing) reviewNotebookWorkspace ||= window.CrucibleNotebook.mount(target, options);
+  else notebookWorkspace ||= window.CrucibleNotebook.mount(target, options);
+  await (reviewing ? reviewNotebookWorkspace : notebookWorkspace).show(new URLSearchParams(query || window.location.hash.split('?')[1] || ''));
+}
+$('#access-sign-in').addEventListener('click', () => { setAuthMode('login'); openAuth($('#access-sign-in')); $('#auth-password-options').open = true; });
+$('#access-register').addEventListener('click', () => { setAuthMode('register'); openAuth($('#access-register')); });
+$('#access-send-code').addEventListener('click', async () => {
+  if (!state.user || !state.invitationToken || state.invitationBusy) return;
+  const account = state.user.id, token = state.invitationToken;
+  state.invitationBusy = true; setError('#access-error', ''); renderAccessGate();
+  try {
+    const data = await api('/api/access/invitations/verify/start', {token});
+    if (state.user?.id !== account || state.invitationToken !== token) return;
+    state.invitationDelivery = data;
+    $('#access-code').value = '';
+  } catch (error) { if (state.user?.id === account) setError('#access-error', error.message); }
+  finally {
+    state.invitationBusy = false;
+    if (!hasAccess() || state.screen === 'access') { renderAccessGate(); if (state.invitationDelivery) $('#access-code').focus(); }
+  }
+});
+$('#access-code-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!state.user || !state.invitationToken || state.invitationBusy) return;
+  const account = state.user.id, token = state.invitationToken;
+  state.invitationBusy = true; setError('#access-error', ''); renderAccessGate();
+  try {
+    await api('/api/access/invitations/redeem', {token, code: $('#access-code').value.trim()});
+    if (state.user?.id !== account || state.invitationToken !== token) return;
+    const session = await api('/api/session');
+    if (state.user?.id !== account) return;
+    setSession(session);
+    if (!hasAccess()) throw new Error('Your access is not active yet. Please try again.');
+    state.invitationToken = null; state.invitationDelivery = null; $('#access-code').value = '';
+    window.history.replaceState(null, '', state.returnRoute || '#challenge');
+    await loadAuthorizedWorkspace();
+  } catch (error) { if (state.user?.id === account) setError('#access-error', error.message); }
+  finally { state.invitationBusy = false; if (!hasAccess() || state.screen === 'access') renderAccessGate(); }
+});
+$('#access-continue').addEventListener('click', async () => {
+  state.invitationToken = null; state.invitationDelivery = null;
+  window.history.replaceState(null, '', state.returnRoute || '#challenge');
+  try { await loadAuthorizedWorkspace(); }
+  catch (error) { globalError(error.message); }
+});
 function workspaceSelector(screen) {
-  return {scheme: '#workspace', overview: '#overview-workspace', notebook: '#notebook-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
+  return {loading: '#route-loading', access: '#access-workspace', scheme: '#workspace', overview: '#overview-workspace', assumptions: '#assumptions-workspace', notebook: '#notebook-workspace', reviews: '#review-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
 }
 function applyRoute(focus = false) {
+  const routeRequest = ++workspaceLoadRequest;
+  if (authenticationRoute() && state.sessionResolved) { void handleAuthenticationRoute().catch(error => globalError(error.message)); return; }
+  captureInvitation();
+  if (state.sessionResolved && (!hasAccess() || window.location.hash.split('?')[0] === '#join')) {
+    renderAccessGate();
+    if (focus) $('#access-workspace').focus();
+    return;
+  }
   if (!state.ready) return;
+  if (routeNeedsCatalogue() && !state.catalogueLoaded) {
+    void loadAuthorizedWorkspace().catch(error => {
+      if (hasAccess() && routeRequest === workspaceLoadRequest) showInlineError(routeLoadingPanel, error.message, initialize);
+    });
+    return;
+  }
+  const targetRelease = routeRelease();
+  const knownRelease = targetRelease && availableReleases().some(scheme => scheme.id === targetRelease.id && String(scheme.version) === targetRelease.version);
+  if (knownRelease && !completeRelease(targetRelease.id, targetRelease.version)) {
+    const route = window.location.hash, account = state.user?.id, csrf = state.csrf;
+    const current = () => hasAccess() && routeRequest === workspaceLoadRequest && window.location.hash === route && account === state.user?.id && csrf === state.csrf;
+    showRouteLoading();
+    void loadRelease(targetRelease.id, targetRelease.version).then(loaded => {
+      if (loaded && current()) applyRoute(focus);
+    }).catch(error => {
+      if (current()) showInlineError(routeLoadingPanel, error.message, () => { state.catalogueLoaded = false; void loadAuthorizedWorkspace().catch(error => globalError(error.message)); });
+    });
+    return;
+  }
   const previous = selectionKey();
   const previousScreen = state.screen;
   const previousView = state.view;
@@ -264,10 +781,24 @@ function applyRoute(focus = false) {
     hash = '#challenge';
     window.history.replaceState(null, '', hash);
   }
-  const [path, query = ''] = hash.split('?');
+  let [path, query = ''] = hash.split('?');
+  const legacyParams = new URLSearchParams(query);
+  if ((path === '#propose' && legacyParams.get('review') === '1') ||
+      (path === '#notebook' && (legacyParams.get('review') === '1' || legacyParams.get('research_review') === '1'))) {
+    const section = path === '#propose' ? 'schemes' : legacyParams.get('research_review') === '1' ? 'research' : 'publication';
+    legacyParams.delete('review'); legacyParams.delete('research'); legacyParams.delete('research_review');
+    legacyParams.set('section', section); path = '#reviews'; query = legacyParams.toString();
+    window.history.replaceState(null, '', path + '?' + query);
+  }
+  const reviewParams = new URLSearchParams(query);
+  if (path === '#reviews') {
+    const section = reviewParams.get('section');
+    state.reviewSection = ['publication', 'schemes', 'research'].includes(section) ? section : 'publication';
+    if (section !== state.reviewSection) { reviewParams.set('section', state.reviewSection); query = reviewParams.toString(); window.history.replaceState(null, '', '#reviews?' + query); }
+  }
   let scheme, profile, handle, view = 'leaderboard';
-  let screen = path === '#connect' ? 'connect' : path === '#people' ? 'people' : path === '#propose' ? 'propose' : path === '#about' ? 'about' : path === '#notebook' ? 'notebook' : path === '#research' ? 'research' : 'catalogue';
-  let invalid = !['#challenge', '#notebook', '#research', '#about', '#propose', '#people', '#connect'].includes(path);
+  let screen = path === '#connect' ? 'connect' : path === '#people' ? 'people' : path === '#propose' ? 'propose' : path === '#reviews' ? 'reviews' : path === '#about' ? 'about' : path === '#notebook' ? 'notebook' : path === '#research' ? 'research' : 'catalogue';
+  let invalid = !['#challenge', '#notebook', '#research', '#about', '#propose', '#reviews', '#people', '#connect'].includes(path);
   const personMatch = path.match(/^#person\/([^/]+)$/);
   if (personMatch) {
     try {
@@ -280,7 +811,7 @@ function applyRoute(focus = false) {
     try {
       const id = decodeURIComponent(match[1]);
       const version = decodeURIComponent(match[2]);
-      scheme = availableReleases().find(item => item.id === id && String(item.version) === version);
+      scheme = completeRelease(id, version);
       const params = new URLSearchParams(query);
       profile = scheme?.profiles?.find(item => profileId(item) === params.get('profile'));
       if (!params.has('profile')) profile = scheme?.profiles?.find(item => profileId(item) === scheme.next_profile_id) || scheme?.profiles?.[0];
@@ -292,15 +823,15 @@ function applyRoute(focus = false) {
       }
     } catch { /* A malformed link must never select a different protocol. */ }
   }
-  const overviewMatch = path.match(/^#scheme\/([^/]+)\/([^/]+)$/);
+  const overviewMatch = path.match(/^#scheme\/([^/]+)\/([^/]+)(\/assumptions)?$/);
   if (overviewMatch) {
     try {
       const id = decodeURIComponent(overviewMatch[1]);
       const version = decodeURIComponent(overviewMatch[2]);
-      scheme = availableReleases().find(item => item.id === id && String(item.version) === version);
+      scheme = completeRelease(id, version);
       const params = new URLSearchParams(query);
       profile = scheme?.profiles?.find(item => profileId(item) === params.get('profile'));
-      if (scheme && (!params.has('profile') || profile)) { screen = 'overview'; invalid = false; }
+      if (scheme && (!params.has('profile') || profile)) { screen = overviewMatch[3] ? 'assumptions' : 'overview'; invalid = false; }
     } catch { /* Unknown or malformed releases fail closed to the catalogue. */ }
   }
   state.screen = screen;
@@ -312,8 +843,8 @@ function applyRoute(focus = false) {
   state.connectBusy = false;
   state.connectCode = screen === 'connect' ? connectionCode(new URLSearchParams(query).get('code')) : null;
   resetAgentSettings();
-  state.schemeId = ['scheme', 'overview'].includes(screen) ? scheme.id : null;
-  state.schemeVersion = ['scheme', 'overview'].includes(screen) ? String(scheme.version) : null;
+  state.schemeId = ['scheme', 'overview', 'assumptions'].includes(screen) ? scheme.id : null;
+  state.schemeVersion = ['scheme', 'overview', 'assumptions'].includes(screen) ? String(scheme.version) : null;
   state.profile = screen === 'scheme' ? profile : null;
   if (state.challengeStartIntent && !challengeStartSelectionMatches(state.challengeStartIntent, view)) state.challengeStartIntent = null;
   const changed = previous !== selectionKey();
@@ -327,7 +858,8 @@ function applyRoute(focus = false) {
     $('#leaderboard-content').replaceChildren();
   }
   showWorkspace(screen);
-  if (previousScreen === 'propose' && screen !== 'propose') leaveProposalPage();
+  if (['propose', 'reviews'].includes(previousScreen) && (screen !== previousScreen || screen === 'reviews')) leaveProposalPage();
+  if (screen === 'reviews') renderReviewPage(query);
   if (screen === 'propose') enterProposalPage(new URLSearchParams(query), previousScreen !== 'propose');
   const routeError = 'That KEM, version, or profile is unavailable. Choose a published KEM below.';
   if (invalid) globalError(routeError);
@@ -336,22 +868,25 @@ function applyRoute(focus = false) {
     $('#scheme-back').href = overviewRoute(scheme, profile);
     renderProfiles(null, {details: changed || previousScreen !== 'scheme'});
     renderView(view);
-    if (changed || previousScreen !== 'scheme' || (view === 'challenge' && previousView !== view)) loadChallenge();
+    if (view === 'challenge' && (changed || previousScreen !== 'scheme' || previousView !== view)) loadChallenge();
     if (view === 'leaderboard' && (changed || previousView !== view || previousScreen !== 'scheme')) loadLeaderboard();
   }
   if (screen === 'catalogue') renderCatalogue();
   if (screen === 'overview') renderOverview(scheme, profile);
+  if (screen === 'assumptions') renderAssumptions(scheme, profile, new URLSearchParams(query));
   if (screen === 'people') loadPeople();
   if (screen === 'person') loadPerson(handle);
   if (screen === 'connect') loadConnection();
   if (screen === 'notebook') {
-    notebookWorkspace ||= window.CrucibleNotebook.mount($('#notebook-workspace'), {navigate});
-    notebookWorkspace.show(new URLSearchParams(query));
+    showNotebook(query);
   }
   document.title = ['scheme', 'overview'].includes(screen) ? scheme.name + (screen === 'overview' ? ' overview' : '') + ' — Crucible' : screen === 'person' ? handle + ' — Crucible' : screen === 'people' ? 'Leaderboard — Crucible' : screen === 'research' ? 'Research — Crucible' : screen === 'about' ? 'About us — Crucible' : screen === 'propose' ? 'Propose a scheme — Crucible' : 'Schemes — Crucible';
+  if (screen === 'assumptions') document.title = `Assumptions · ${scheme.name} — Crucible`;
   if (screen === 'connect') document.title = 'Connect an agent — Crucible';
   if (screen === 'notebook') document.title = 'Research notebook — Crucible';
-  if (focus && previousScreen !== screen) $(workspaceSelector(screen)).focus();
+  if (screen === 'reviews') document.title = 'Review center — Crucible';
+  renderReviewAccountLink();
+  if (focus && previousScreen !== screen) $(workspaceSelector(screen)).focus({preventScroll: screen === 'catalogue'});
 }
 function sharedKeyBytes(challenge) {
   const bytes = challenge?.public?.encoding?.shared_secret_bytes;
@@ -371,24 +906,38 @@ function absorbClock(data) {
   }
   updateClock();
 }
-async function api(path, body) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20000);
+async function api(path, body, {raw = false, method = body === undefined ? 'GET' : 'POST', initialSession = false} = {}) {
+  const protectedRequest = !/^\/api\/(?:session(?:\?|$)|auth\/|access\/)/.test(path);
+  if (protectedRequest && !hasAccess()) {
+    const error = new Error('Sign in with an active beta membership to continue.');
+    error.status = 403;
+    throw error;
+  }
+  let bootstrap;
+  if (initialSession && path === '/api/session' && body === undefined && method === 'GET') {
+    bootstrap = window.CrucibleSessionBootstrap?.response ? window.CrucibleSessionBootstrap : null;
+    // Mark this before fetching if app.js wins the race. A late bootstrap
+    // download must not launch another session request with an older lifecycle.
+    window.CrucibleSessionBootstrap = {consumed: true};
+  }
+  const controller = bootstrap?.controller || new AbortController();
+  if (protectedRequest) protectedRequests.add(controller);
+  const timeout = bootstrap ? null : setTimeout(() => controller.abort(), body !== undefined && path === '/api/challenges' ? 30000 : 20000);
   try {
     let response;
-    try { response = await fetch(path, {
-      method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
+    try { response = await (bootstrap?.response || fetch(path, {
+      method, credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
       headers: body === undefined ? {Accept: 'application/json'} : {
         Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': state.csrf
       },
       ...(body === undefined ? {} : {body: JSON.stringify(body)})
-    }); } catch {
+    })); } catch {
       const error = new Error(controller.signal.aborted ? 'The server took too long to respond. Please try again.' : 'The server could not be reached. Check your connection and try again.');
       error.status = 0;
       throw error;
     }
     let data;
-    try { data = await response.json(); } catch {
+    try { data = raw && response.ok ? await response.text() : await response.json(); } catch {
       if (controller.signal.aborted || response.ok) {
         const error = new Error(controller.signal.aborted ? 'The server took too long to respond. Please try again.' : 'The server returned an unreadable response. Please try again.');
         error.status = 0;
@@ -404,23 +953,63 @@ async function api(path, body) {
         'The request could not be completed. Please try again.';
       const error = new Error(detail || fallback);
       error.status = response.status;
+      if ((protectedRequest || path.startsWith('/api/access/')) && state.access?.mode === 'beta' && [401, 403].includes(response.status)) {
+        // Recheck membership without making a rejected child request await its parent refresh.
+        void synchronizeSession();
+      }
       if (Array.isArray(data?.errors)) error.fieldErrors = data.errors.filter(item => item && typeof item.path === 'string' && typeof item.message === 'string');
       throw error;
     }
-    absorbClock(data);
+    if (protectedRequest && !hasAccess()) {
+      const error = new Error('Beta access is no longer active.'); error.status = 403; throw error;
+    }
+    if (protectedRequest && !['GET', 'HEAD'].includes(method)) {
+      invalidateReadViews(); notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
+    }
+    if (!raw) absorbClock(data);
     return data;
-  } finally { clearTimeout(timeout); }
+  } finally {
+    if (bootstrap) bootstrap.finish(); else clearTimeout(timeout);
+    protectedRequests.delete(controller);
+  }
 }
 function setSession(data) {
   state.sessionRevision++;
   const previousId = state.user?.id;
+  const previousCsrf = state.csrf;
   const previousReview = state.canReviewProposals;
   const previousSelfReview = state.canSelfReviewProposals;
   state.user = data.user || null;
+  state.auth = data.auth || {};
   state.csrf = data.csrf_token || '';
+  if (state.authPanel === 'github-link' && state.githubLinkContext && (state.githubLinkContext.accountId !== state.user?.id || state.githubLinkContext.csrf !== state.csrf)) {
+    state.githubLinkContext = null; $('#github-link-password').value = '';
+    state.authPanel = 'signin'; if (authDialog.open) authDialog.close();
+  }
+  state.sessionResolved = true;
+  state.access = data.access || (state.access?.mode === 'beta' ?
+    {mode: 'beta', allowed: false, status: state.user ? 'pending' : 'anonymous'} :
+    {mode: 'open', allowed: true, status: state.user ? 'active' : 'anonymous'});
+  state.canManageBetaAccess = Boolean(state.user && data.capabilities?.manage_beta_access);
   state.canReviewProposals = Boolean(state.user && data.capabilities?.review_protocol_proposals);
   state.canSelfReviewProposals = Boolean(state.canReviewProposals && data.capabilities?.self_review_protocol_proposals);
+  notebookWorkspace?.setAccount(hasAccess() ? state.user : null);
+  reviewNotebookWorkspace?.setAccount(hasAccess() && state.canReviewProposals ? state.user : null);
+  if (previousId !== state.user?.id || previousCsrf !== state.csrf) {
+    invalidateReadViews();
+    notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
+    // An in-flight catalogue belongs to this browser session. A changed account
+    // or rotated session must be able to start a fresh read immediately.
+    catalogueLoad = null;
+    state.catalogueRequest++;
+    releaseDetails.clear(); releaseLoads.clear(); releaseGeneration++;
+    if (navigationProjection) state.catalogueLoaded = false;
+  }
   if (previousId !== state.user?.id) {
+    referenceTimings.clear();
+    assumptionsWorkspace?.clear();
+    state.invitationDelivery = null;
+    $('#access-code').value = '';
     state.challengeStartIntent = null;
     state.connectRequest++;
     state.connection = null;
@@ -455,19 +1044,34 @@ function setSession(data) {
     if (findingDialog.open) findingDialog.close();
     if (research.visible) renderFindings();
   }
-  if (previousId === state.user?.id && (previousReview !== state.canReviewProposals || previousSelfReview !== state.canSelfReviewProposals)) resetProposalAccount(previousId);
+  if (previousId === state.user?.id && (previousReview !== state.canReviewProposals || previousSelfReview !== state.canSelfReviewProposals)) {
+    invalidateReadViews(); notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
+    resetProposalAccount(previousId);
+  }
   $('#auth-button').hidden = Boolean(state.user);
   $('#auth-button').disabled = false;
-  $('#account-handle').hidden = !state.user;
+  $('#account-handle').hidden = !state.user || !hasAccess();
   setText('#account-handle', state.user?.handle || '');
   $('#account-handle').href = state.user ? personRoute(state.user.handle) : '#people';
   $('#logout-button').hidden = !state.user;
-  $('#history-button').hidden = !state.user;
+  $('#history-button').hidden = !state.user || !hasAccess();
+  $('#register-mode').hidden = state.access.mode === 'beta' && !state.invitationToken;
+  renderAuthMethods();
+  if (!hasAccess()) {
+    clearProtectedState();
+    renderAccessGate();
+    return;
+  }
   absorbClock(data);
+  renderReviewAccountLink();
+  if (state.screen === 'reviews' && state.ready && (previousId !== state.user?.id || previousCsrf !== state.csrf || previousReview !== state.canReviewProposals || previousSelfReview !== state.canSelfReviewProposals)) renderReviewPage(window.location.hash.split('?')[1] || '');
   if (previousId !== state.user?.id && state.ready) {
     if (state.screen === 'connect') loadConnection();
     if (state.screen === 'person') renderAgentSettings();
+    if (state.screen === 'notebook') showNotebook();
   }
+  if (previousId === state.user?.id && previousCsrf !== state.csrf && state.ready && state.screen === 'notebook') showNotebook();
+  if (state.ready && navigationProjection && !state.catalogueLoaded && routeNeedsCatalogue()) applyRoute();
 }
 function globalError(message) {
   setText('#global-message-text', message);
@@ -495,6 +1099,7 @@ function showInlineError(target, message, retry) {
 function showEmpty(target, message) { target.replaceChildren(node('div', message, 'empty-state')); }
 
 function updateClock() {
+  if (!hasAccess()) return;
   updateConnectionExpiry();
   const remaining = roundRemaining();
   if (remaining === null) return;
@@ -521,7 +1126,7 @@ function canSubmitChallenge(challenge) {
     Number.isFinite(challenge.ends_at) && now() < challenge.ends_at && sharedKeyBytes(challenge) !== null);
 }
 async function refreshRound() {
-  if (state.roundRefreshing) return;
+  if (state.roundRefreshing || !hasAccess()) return;
   state.roundRefreshing = true;
   const oldRound = state.round?.id;
   const sessionRevision = state.sessionRevision;
@@ -529,6 +1134,7 @@ async function refreshRound() {
     const data = await api('/api/session');
     if (state.sessionRevision !== sessionRevision) return;
     setSession(data);
+    if (!hasAccess()) return;
     if (state.round?.id !== oldRound || (state.challenge && state.challenge.round_id !== state.round.id)) {
       await loadChallenge();
       if (state.view === 'leaderboard') await loadLeaderboard();
@@ -542,7 +1148,7 @@ async function refreshRound() {
   }
 }
 async function synchronizeSession() {
-  if (!state.ready || state.roundRefreshing) return;
+  if (!state.sessionResolved || state.roundRefreshing) return;
   if (sessionSynchronization) return sessionSynchronization;
   sessionSynchronization = (async () => {
     const oldRound = state.round?.id;
@@ -555,11 +1161,17 @@ async function synchronizeSession() {
       if (revision !== state.sessionRevision) return;
       setSession(data);
       revision = state.sessionRevision;
+      if (!hasAccess()) return;
+      if (!state.ready || (routeNeedsCatalogue() && !state.catalogueLoaded)) { await loadAuthorizedWorkspace(); return; }
       const changed = oldRound !== state.round?.id || oldUser !== state.user?.id;
       if (['catalogue', 'overview', 'scheme'].includes(state.screen) && await refreshProfiles({background: true}) === false) return;
       if (state.screen === 'person') await loadPerson(state.personHandle, {preserve: true});
       if (revision !== state.sessionRevision) return;
       globalError('');
+      if (state.screen === 'overview' && !document.hidden) {
+        const scheme = selectedScheme();
+        if (scheme) loadReferenceTimings(scheme);
+      }
       if (state.screen === 'scheme') {
         // Do not await a child that may itself request a session refresh on 401.
         if (changed && state.view === 'challenge') loadChallenge();
@@ -579,23 +1191,62 @@ function catalogueDisplayKey(scheme) {
     scheme.participant_count, scheme.largest_recovered_profile_id, scheme.next_profile_id,
     scheme.first_recovery, recoveredProfileIds(scheme)]);
 }
+function mergeCatalogueProgress(data) {
+  if (data.projection !== 'progress' || !state.catalogueRevision || data.catalogue_revision !== state.catalogueRevision || !Array.isArray(data.releases)) return null;
+  if (data.releases.some(row => !row || typeof row.id !== 'string' || typeof row.version !== 'string')) return null;
+  const key = release => JSON.stringify([release.id, release.version]);
+  const known = state.schemes.flatMap(scheme => [scheme, ...(scheme.previous_releases || [])]);
+  const rows = new Map(data.releases.map(row => [key(row), row]));
+  if (rows.size !== data.releases.length || rows.size !== known.length || known.some(release => !rows.has(key(release)))) return null;
+  const fields = ['participant_count', 'recovered_profile_ids', 'largest_recovered_profile_id', 'next_profile_id', 'profile_recoveries', 'first_recovery'];
+  if (data.releases.some(row => fields.some(field => field !== 'profile_recoveries' && !Object.hasOwn(row, field)))) return null;
+  const update = release => {
+    const result = {...release}, row = rows.get(key(release));
+    // Only dynamic fields can replace metadata. In particular, a partial reply
+    // cannot supply parameter sets, protocol links or a new release identity.
+    for (const field of fields) { if (Object.hasOwn(row, field)) result[field] = row[field]; else delete result[field]; }
+    return result;
+  };
+  return state.schemes.map(scheme => ({...update(scheme), previous_releases: (scheme.previous_releases || []).map(update)}));
+}
 async function refreshProfiles({background = false} = {}) {
+  if (!hasAccess()) return false;
   const request = ++state.catalogueRequest;
+  const oldRevision = state.catalogueRevision;
   const oldCatalogue = JSON.stringify(state.schemes.map(catalogueDisplayKey));
   const oldSelection = catalogueDisplayKey(selectedScheme());
+  const route = window.location.hash;
   let data;
-  try { data = await api('/api/schemes'); }
+  let merged;
+  try {
+    data = await api('/api/schemes' + (background && state.catalogueRevision ? '?progress_only=true' : '?projection=navigation'));
+    if (request !== state.catalogueRequest) return false;
+    if (data.projection === 'progress') {
+      merged = mergeCatalogueProgress(data);
+      if (!merged) data = await api('/api/schemes?projection=navigation');
+    }
+  }
   catch (error) {
     if (request !== state.catalogueRequest) return false;
     throw error;
   }
   if (request !== state.catalogueRequest) return false;
-  state.schemes = data.schemes || [];
-  const scheme = selectedScheme();
+  installNavigation(merged ? {schemes: merged, catalogue_revision: data.catalogue_revision, ...(navigationProjection ? {projection: 'navigation'} : {})} : data);
+  state.catalogueLoaded = true;
+  const metadataChanged = oldRevision !== state.catalogueRevision;
+  let scheme = selectedScheme();
+  if (['scheme', 'overview', 'assumptions'].includes(state.screen) && !scheme) {
+    const target = routeRelease();
+    if (target && availableReleases().some(item => item.id === target.id && String(item.version) === target.version)) {
+      await loadRelease(target.id, target.version);
+      if (request !== state.catalogueRequest || route !== window.location.hash) return false;
+      scheme = selectedScheme();
+    }
+  }
   const selectionChanged = oldSelection !== catalogueDisplayKey(scheme);
-  if (state.screen === 'catalogue' && (!background || oldCatalogue !== JSON.stringify(state.schemes.map(catalogueDisplayKey)))) renderCatalogue();
-  if (['scheme', 'overview'].includes(state.screen) && !scheme) return applyRoute();
-  if (state.screen === 'overview' && (!background || selectionChanged)) {
+  if (state.screen === 'catalogue' && (!background || metadataChanged || oldCatalogue !== JSON.stringify(state.schemes.map(catalogueDisplayKey)))) renderCatalogue();
+  if (['scheme', 'overview', 'assumptions'].includes(state.screen) && !scheme) return applyRoute();
+  if (state.screen === 'overview' && (!background || metadataChanged || selectionChanged)) {
     const openCards = Object.keys(OVERVIEW_CARDS).filter(id => $('#overview-chart-' + id)?.querySelector('details')?.open);
     const context = new URLSearchParams(window.location.hash.split('?')[1] || '').get('profile');
     renderOverview(scheme, scheme.profiles.find(profile => profileId(profile) === context));
@@ -608,9 +1259,9 @@ async function refreshProfiles({background = false} = {}) {
     // Metadata refresh is not navigation. Preserve editors, disclosure state,
     // in-flight connections, and a slider/jump input currently being edited.
     const editing = [$('#size-slider'), $('#profile-select')].includes(document.activeElement);
-    if (!background || selectionChanged || state.profileMetadataPending === selectionKey()) {
+    if (!background || metadataChanged || selectionChanged || state.profileMetadataPending === selectionKey()) {
       if (editing) state.profileMetadataPending = selectionKey();
-      else renderProfiles(null, {details: !background && state.view === 'protocol'});
+      else renderProfiles(null, {details: (!background || metadataChanged || state.profileMetadataPending === selectionKey()) && state.view === 'protocol'});
     }
   }
   return true;
@@ -623,6 +1274,13 @@ function profileBytes(scheme, profile, metric) {
 function participantCount(scheme) {
   const value = scheme?.participant_count;
   return Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+function prepareSchemeLink(link, scheme) {
+  const prepare = () => {
+    if (!hasAccess() || !state.catalogueLoaded || navigator.connection?.saveData || releaseLoads.size >= 2) return;
+    void loadRelease(scheme.id, String(scheme.version)).catch(() => {});
+  };
+  link.addEventListener('pointerenter', prepare); link.addEventListener('focus', prepare);
 }
 function renderCatalogue() {
   const target = $('#kem-catalogue');
@@ -681,6 +1339,7 @@ function renderCatalogue() {
     const name = node('td');
     const link = node('a', scheme.name, 'kem-name');
     link.href = overviewRoute(scheme);
+    prepareSchemeLink(link, scheme);
     name.append(link);
     const progress = node('td');
     progress.dataset.label = 'Largest recovery';
@@ -689,7 +1348,7 @@ function renderCatalogue() {
       record.href = schemeRoute(scheme, largest, 'leaderboard');
       record.setAttribute('aria-label', `View recoveries for ${profileLabel(largest, scheme)}`);
       progress.append(record);
-    } else progress.append(node('span', 'No recoveries yet', 'kem-record-empty'));
+    }
     const firstCell = node('td');
     firstCell.dataset.label = 'Recovered by';
     if (largest && scheme.first_recovery?.profile_id === profileId(largest)) {
@@ -716,7 +1375,12 @@ const AGENT_SCOPE_LABELS = {
   'submissions:read': 'Read your submission receipts',
   'submissions:write': 'Submit recovered keys on your behalf',
   'proposals:read': 'Read your private proposals and reviewer feedback',
-  'proposals:write': 'Submit your proposals and revisions for human review'
+  'proposals:write': 'Submit your proposals and revisions for human review',
+  'notes:read': 'Read published and curated research notes and their reading priorities',
+  'notes:rate': 'Rate other authors’ notes on your behalf, influencing reading priorities and author points',
+  'notebook:read': 'Read and export your own notebook, including private drafts and feedback',
+  'notebook:write': 'Create, import and revise your own private notes; delete and restore unsubmitted drafts',
+  'notebook:publish': 'Request publication review of your exact saved note revisions'
 };
 function agentScopeList(scopes) {
   const list = node('ul', undefined, 'agent-scope-list');
@@ -882,7 +1546,7 @@ function agentInstructions(challenge) {
   const folder = './crucible-attack-' + challenge.id.slice(0, 8);
   const schemeId = challenge.public?.scheme_id || state.schemeId;
   const selection = namedParameters(selectedScheme(), state.profile) || intermediateConfiguration(state.profile) ? '--profile-id ' + quote(profileId()) : '--stage ' + instanceSize(state.profile);
-  return `Retrieve my selected ${selectedScheme()?.name || schemeId} challenge ${namedParameters(selectedScheme(), state.profile) ? 'for' : 'at'} ${profileLabel(state.profile, selectedScheme())}.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running. If login is needed, run ${client} login and let me approve in my browser.\n\nFetch this exact instance into a fresh folder:\n${client} get --challenge-id ${quote(challenge.id)} --path ${quote(folder)}\nDeadline: ${utcDate(challenge.ends_at)}. Follow the workspace README for the attack and submission workflow.\n\nNext time I can just ask: “${agentFollowupRequest()}”\nFor those future requests, use ${client} init ${quote(schemeId)} ${selection} --path NEW_EMPTY_FOLDER. No website visit needed while connected.`;
+  return `Retrieve my selected ${selectedScheme()?.name || schemeId} challenge ${namedParameters(selectedScheme(), state.profile) ? 'for' : 'at'} ${profileLabel(state.profile, selectedScheme())}.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running. If login is needed, run ${client} login and let me approve in my browser.\n\nBefore work, read and follow the model pipeline contract at ${origin}/api/agent/pipeline: run ${client} guide. It identifies the supported workflows, exact source contracts and permission boundaries. The workspace saves a copy as pipeline.json; never put credentials in prompts or research files.\n\nFetch this exact instance into a fresh folder:\n${client} get --challenge-id ${quote(challenge.id)} --path ${quote(folder)}\nDeadline: ${utcDate(challenge.ends_at)}. Follow the workspace README for the attack and submission workflow. Record the AI model(s) that implemented the result in ai_model, with exact versions when known; never guess. Leave it blank when not reported.\n\nNext time I can just ask: “${agentFollowupRequest()}”\nFor those future requests, use ${client} init ${quote(schemeId)} ${selection} --path NEW_EMPTY_FOLDER. No website visit needed while connected.`;
 }
 function agentInstructionsKey() {
   return state.user && state.challenge ? JSON.stringify([state.user.id, state.challenge.id]) : null;
@@ -975,13 +1639,20 @@ function renderPeople(scoring) {
 }
 async function loadPeople(more = false) {
   if (state.screen !== 'people') return;
-  const request = ++state.peopleRequest;
-  const current = () => state.screen === 'people' && request === state.peopleRequest;
+  const request = ++state.peopleRequest, epoch = readViewEpoch;
+  const current = () => hasAccess() && epoch === readViewEpoch && state.screen === 'people' && request === state.peopleRequest;
   const target = $('#people-content');
   const offset = more && state.peoplePagination ? state.peoplePagination.offset + state.peoplePagination.limit : 0;
   $('#refresh-people').disabled = true;
   $('#more-people').disabled = true;
-  if (!more) {
+  const key = 'people', cached = !more && cachedRead(key);
+  const paint = data => {
+    state.people = data.people; state.peoplePagination = data.pagination || null;
+    paintRead(key, target, data, value => renderPeople(value.scoring));
+    $('#more-people').hidden = !data.pagination?.has_more;
+  };
+  if (cached) paint(cached);
+  if (!more && !cached) {
     state.people = [];
     state.peoplePagination = null;
     $('#more-people').hidden = true;
@@ -989,15 +1660,13 @@ async function loadPeople(more = false) {
     setLoading(target, 'Loading participants…');
   }
   try {
-    const data = await api('/api/people?' + new URLSearchParams({limit: '50', offset: String(offset), include_records: 'false'}));
+    const data = await readAgain(offset ? key + ':' + offset : key, '/api/people?' + new URLSearchParams({limit: '50', offset: String(offset), include_records: 'false'}));
     if (!current()) return;
     if (!Array.isArray(data.people) || data.people.some(person => typeof person.handle !== 'string' || !person.handle)) throw new Error('The participant list could not be loaded.');
-    state.people = more ? [...state.people, ...data.people.filter(person => !state.people.some(existing => existing.handle === person.handle))] : data.people;
-    state.peoplePagination = data.pagination || null;
-    renderPeople(data.scoring);
-    $('#more-people').hidden = !data.pagination?.has_more;
+    if (!more) rememberRead(key, {people: data.people, pagination: data.pagination, scoring: data.scoring});
+    paint({people: more ? [...state.people, ...data.people.filter(person => !state.people.some(existing => existing.handle === person.handle))] : data.people, pagination: data.pagination, scoring: data.scoring});
   } catch (error) {
-    if (current()) showInlineError(target, error.message, () => loadPeople());
+    if (current()) readRefreshError(key, target, error, () => loadPeople(), cached);
   } finally {
     if (current()) { $('#refresh-people').disabled = false; $('#more-people').disabled = false; }
   }
@@ -1077,12 +1746,13 @@ function renderPerson(person) {
     const breakdown = node('details', undefined, 'person-score-breakdown');
     breakdown.append(node('summary', 'Points breakdown'));
     const values = node('dl', undefined, 'person-score-parts');
-    for (const [label, key] of [['Personal progress', 'progress'], ['First-record bonus', 'early_recovery'], ['Accepted proposals', 'scheme_contributions']]) {
+    for (const [label, key] of [['Personal progress', 'progress'], ['First-record bonus', 'early_recovery'], ['Accepted proposals', 'scheme_contributions'], ['Research notes', 'note_contributions']]) {
       const part = node('div'); part.append(node('dt', label), node('dd', peopleNumber(person.score_breakdown[key]))); values.append(part);
     }
     breakdown.append(values);
-    breakdown.append(node('p', 'For each eligible scheme, your highest configuration weight earns 10 × that weight; your highest first-record weight earns a further 40 × that weight. Weights stay attached to configurations when the default progression changes. Each explicitly admitted new scheme earns 1,000 points.'));
+    breakdown.append(node('p', 'Each eligible scheme offers up to 500 personal-progress points and 2,000 points for your best first record. Configuration weights are fixed by the points policy; equal points do not imply equal attack difficulty. Each explicitly admitted new scheme earns 1,000 points.'));
     breakdown.append(node('p', 'Intermediate stages and repeated solves do not accumulate extra points. Archived releases keep their records and are labelled when they are not scored. This is the provisional points policy.'));
+    breakdown.append(node('p', 'Research-note contributions earn 1 or 2 points per supporting account through agent ratings. Changed or removed ratings update that credit. These points do not certify a claim or admit a scheme.'));
     target.append(breakdown);
   }
   target.append(renderFirstRecords(person));
@@ -1115,33 +1785,37 @@ function renderPerson(person) {
   target.append(recent);
   state.personDataKey = JSON.stringify(person);
   renderAgentSettings();
+  renderReviewAccountLink();
 }
 async function loadPerson(handle, {preserve = false} = {}) {
   const request = ++state.personRequest;
-  const revision = state.sessionRevision;
-  const current = () => state.screen === 'person' && state.personHandle === handle && request === state.personRequest &&
+  const revision = state.sessionRevision, epoch = readViewEpoch;
+  const current = () => hasAccess() && epoch === readViewEpoch && state.screen === 'person' && state.personHandle === handle && request === state.personRequest &&
     (!preserve || revision === state.sessionRevision);
-  const target = $('#person-content');
+  const target = $('#person-content'), key = 'person:' + handle.toLowerCase();
+  const cached = cachedRead(key);
+  const paint = person => paintRead(key, target, person, renderPerson);
+  if (cached) { paint(cached); preserve = true; }
   if (!preserve) {
     state.personDataKey = null;
     setText('#person-title', handle);
     setLoading(target, 'Loading profile…');
   }
   try {
-    const data = await api('/api/people/' + encodeURIComponent(handle) + '?include_milestones=false');
+    const data = await readAgain(key, '/api/people/' + encodeURIComponent(handle) + '?include_milestones=false');
     if (!current()) return;
     if (!data.person || typeof data.person.handle !== 'string' || data.person.handle.toLowerCase() !== handle.toLowerCase()) throw new Error('That profile could not be loaded.');
     // The server envelope changes on each poll; only actual public profile
     // changes should replace these sections and their focused controls.
-    if (preserve && state.personDataKey === JSON.stringify(data.person)) return;
+    rememberRead(key, data.person);
+    if (preserve && state.personDataKey === JSON.stringify(data.person) && renderedReads.get(target)?.child === target.firstChild) return;
     const disclosureKey = element => element.id || element.className;
     const expanded = preserve ? new Set([...target.querySelectorAll('details')].filter(element => element.open).map(disclosureKey)) : new Set();
-    renderPerson(data.person);
+    paint(data.person);
     if (preserve) for (const element of target.querySelectorAll('details')) element.open = expanded.has(disclosureKey(element));
   } catch (error) {
     if (current()) {
-      if (preserve) toast('Profile refresh failed. ' + error.message);
-      else showInlineError(target, error.message, () => loadPerson(handle));
+      readRefreshError(key, target, error, () => loadPerson(handle), cached || preserve);
     }
   }
 }
@@ -1150,6 +1824,206 @@ async function refreshRecoveryViews() {
   if (state.screen === 'people') refreshes.push(loadPeople());
   if (state.screen === 'person') refreshes.push(loadPerson(state.personHandle, {preserve: true}));
   await Promise.allSettled(refreshes);
+}
+function referenceTimingKey(scheme) { return JSON.stringify([scheme.id, String(scheme.version)]); }
+function referenceTimingState(scheme) { return referenceTimings.get(referenceTimingKey(scheme)); }
+function measuredTiming(result) {
+  return result?.status === 'measured' && Number.isSafeInteger(result.samples) && result.samples > 0 &&
+    result.failure_count === 0 && [result.median_seconds, result.q1_seconds, result.q3_seconds].every(value => typeof value === 'number' && Number.isFinite(value) && value >= 0) &&
+    result.q1_seconds <= result.median_seconds && result.median_seconds <= result.q3_seconds;
+}
+function conditionalTiming(result) {
+  return result?.status === 'partial' && result.sample_scope === 'successful-key-generation' &&
+    Number.isSafeInteger(result.samples) && result.samples > 0 &&
+    [result.outcomes?.warmup?.abort, result.outcomes?.measured?.abort].every(value => Number.isSafeInteger(value) && value >= 0) &&
+    [result.median_seconds, result.q1_seconds, result.q3_seconds].every(value => typeof value === 'number' && Number.isFinite(value) && value >= 0) &&
+    result.q1_seconds <= result.median_seconds && result.median_seconds <= result.q3_seconds;
+}
+function plottedTiming(result) { return measuredTiming(result) || conditionalTiming(result); }
+function timingAbortLabel(result) {
+  return `${result.outcomes.measured.abort} measured-trial key-generation aborts; ${result.outcomes.warmup.abort} warmup aborts`;
+}
+function timingResult(scheme, profile, operation) {
+  return referenceTimingState(scheme)?.report?.results.find(result => result.profile_id === profileId(profile) && result.operation === operation);
+}
+function timingNumber(value) { return value.toLocaleString('en-US', {maximumSignificantDigits: 4}); }
+function timingDuration(seconds) {
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) return '—';
+  return timingNumber(seconds < 1 ? seconds * 1000 : seconds) + (seconds < 1 ? ' ms' : ' s');
+}
+function validTimingReport(report, method, scheme) {
+  if (report === null) return true;
+  if (!report || report.scheme_id !== scheme.id || String(report.scheme_version) !== String(scheme.version) ||
+      report.method_id !== method.id || report.status !== 'local-pilot' || !Array.isArray(report.results) ||
+      !(/^[a-f0-9]{64}$/.test(report.implementation?.artifact_sha256 || '') ||
+        (report.implementation?.artifact_sha256 === null && /^[a-f0-9]{64}$/.test(report.implementation?.source_sha256 || '')))) return false;
+  const keys = new Set();
+  for (const result of report.results) {
+    if (!result || typeof result.profile_id !== 'string' || !['keygen', 'encapsulate', 'decapsulate'].includes(result.operation) ||
+        !['measured', 'failed', 'timeout', 'partial'].includes(result.status) ||
+        !Number.isSafeInteger(result.samples) || result.samples < 0 || !Number.isSafeInteger(result.failure_count) || result.failure_count < 0 ||
+        (result.status === 'measured' && !measuredTiming(result))) return false;
+    const key = JSON.stringify([result.profile_id, result.operation]);
+    if (keys.has(key)) return false;
+    keys.add(key);
+  }
+  return true;
+}
+async function loadReferenceTimings(scheme, {refresh = false} = {}) {
+  if (!hasAccess()) return;
+  const key = referenceTimingKey(scheme), existing = referenceTimings.get(key);
+  if (existing && (existing.status === 'loading' || (!refresh && Date.now() - existing.checkedAt < REFERENCE_TIMING_MAX_AGE_MS))) return;
+  // Reports may be published after the catalogue release. Recheck on a revisit
+  // or the visible page's session poll, while keeping its current graph steady.
+  const entry = {status: 'loading', method: existing?.method || null, report: existing?.report || null, supportingNote: existing?.supportingNote || null, error: null, checkedAt: null};
+  referenceTimings.set(key, entry);
+  const current = () => hasAccess() && referenceTimings.get(key) === entry;
+  const visible = () => current() && state.screen === 'overview' && selectedScheme() && referenceTimingKey(selectedScheme()) === key;
+  if (refresh && visible()) renderOverviewChart(selectedScheme(), 'computation');
+  try {
+    const data = await api('/api/protocol/benchmarks?' + new URLSearchParams({scheme_id: scheme.id, version: scheme.version}));
+    if (!current()) return;
+    if (!data.method || typeof data.method.id !== 'string' || !Number.isSafeInteger(data.method.version) ||
+        !validTimingReport(data.report, data.method, scheme)) throw new Error('The reference timing report could not be loaded.');
+    entry.method = data.method; entry.report = data.report; entry.supportingNote = data.supporting_note || null; entry.status = 'loaded';
+  } catch (error) { if (current()) { entry.status = 'error'; entry.report = null; entry.error = error.message; } }
+  if (!current()) return;
+  entry.checkedAt = Date.now();
+  const unchanged = existing?.status === 'loaded' && entry.status === 'loaded' &&
+    JSON.stringify([existing.method, existing.report, existing.supportingNote]) === JSON.stringify([entry.method, entry.report, entry.supportingNote]);
+  if (visible() && (refresh || !unchanged)) renderOverviewChart(selectedScheme(), 'computation');
+}
+function renderReferenceMethod(target, method) {
+  if (!method) return;
+  if (typeof method.summary === 'string') target.append(node('p', method.summary));
+  const facts = node('dl', undefined, 'detail-list reference-method-facts');
+  for (const [label, value] of [
+    ['Method', method.id + ' · version ' + method.version], ['Workload', method.workload],
+    ['Included', Array.isArray(method.includes) ? method.includes.join('; ') : null],
+    ['Excluded', Array.isArray(method.excludes) ? method.excludes.join('; ') : null],
+    ['Statistics', method.statistics], ['Correctness checks', method.correctness], ['Limits', method.limits],
+    ['Interpretation', method.interpretation], ['TLS context', method.tls_context]
+  ]) if (typeof value === 'string' && value) addFact(facts, label, value);
+  const baseline = method.baseline;
+  if (baseline && typeof baseline.name === 'string') {
+    const sizes = [['public key', baseline.public_key_bytes], ['ciphertext', baseline.ciphertext_bytes], ['shared secret', baseline.shared_secret_bytes]]
+      .filter(([, bytes]) => Number.isSafeInteger(bytes) && bytes > 0).map(([label, bytes]) => `${label} ${bytes.toLocaleString('en-US')} bytes`);
+    addFact(facts, baseline.name, sizes.join(' · ') + (baseline.note ? '. ' + baseline.note : ''));
+  }
+  target.append(facts);
+  const sources = node('ul', undefined, 'reference-sources');
+  for (const source of Array.isArray(method.sources) ? method.sources : []) {
+    const url = safeArtifactLink(source?.url);
+    if (!url || typeof source.title !== 'string') continue;
+    const link = node('a', source.title); link.href = url.href;
+    const item = node('li'); item.append(link); sources.append(item);
+  }
+  if (sources.childElementCount) target.append(sources);
+}
+function renderTimingDetails(target, scheme, metric) {
+  const entry = referenceTimingState(scheme), report = entry?.report;
+  const details = node('details', undefined, 'overview-values reference-timing-details');
+  details.append(node('summary', 'Method and results'));
+  const content = node('div', undefined, 'reference-timing-content');
+  const metadata = node('div');
+  const supportingNote = supportingNoteLink(entry?.supportingNote);
+  if (supportingNote) content.append(supportingNote);
+  content.append(node('p', 'NIST/TLS-informed methodology. These are implementation operation timings, not a TLS handshake, a security estimate, or NIST certification.'));
+  if (entry?.status === 'error') content.append(node('p', 'Timings unavailable. ' + entry.error, 'form-error'));
+  if (report) {
+    content.append(node('p', 'Local pilot · not independently reproduced.', 'reference-pilot-note'));
+    const facts = node('dl', undefined, 'detail-list reference-method-facts');
+    const implementation = report.implementation || {}, environment = report.environment || {}, sampling = report.sampling || {};
+    for (const [label, value] of [
+      ['Implementation', implementation.label], ['Language', implementation.language], ['Performance level', implementation.performance_level],
+      ['CPU', environment.cpu], ['OS', environment.os], ['Runtime', environment.runtime], ['Compiler', environment.compiler],
+      ['Threads', environment.threads], ['CPU affinity', environment.cpu_affinity],
+      ['Warmups per configuration', sampling.warmups], ['Requested measured trials', sampling.trials],
+      ['Configuration time budget', typeof sampling.profile_timeout_seconds === 'number' ? timingDuration(sampling.profile_timeout_seconds) : null],
+      ['Measured', report.measured_at], ['Report', report.id],
+      ['Implementation closure SHA-256', implementation.artifact_sha256], ['Source SHA-256', implementation.source_sha256]
+    ]) if (typeof value === 'string' || typeof value === 'number') addFact(facts, label, String(value));
+    metadata.append(facts);
+    for (const note of Array.isArray(report.notes) ? report.notes : []) if (typeof note === 'string') metadata.append(node('p', note));
+  }
+  const table = node('table'), head = node('thead'), headings = node('tr');
+  table.append(node('caption', OVERVIEW_METRICS[metric].label + ' · ' + scheme.name + ' · release ' + scheme.version));
+  for (const label of [namedParameters(scheme) ? 'Parameter set' : 'Configuration', 'Result', 'Samples', 'Median', 'Middle 50%']) {
+    const th = node('th', label); th.scope = 'col'; headings.append(th);
+  }
+  head.append(headings); table.append(head);
+  const body = node('tbody');
+  const profiles = overviewProfiles(scheme), reportedProfiles = profiles.filter(profile => timingResult(scheme, profile, metric));
+  if (report) {
+    const complete = reportedProfiles.filter(profile => measuredTiming(timingResult(scheme, profile, metric))).length;
+    const incomplete = reportedProfiles.length - complete, unattempted = profiles.length - reportedProfiles.length;
+    const counts = [`${complete} complete`];
+    if (incomplete) counts.push(`${incomplete} incomplete`);
+    if (unattempted) counts.push(`${unattempted} not attempted`);
+    content.append(node('p', `${reportedProfiles.length} of ${profiles.length} configurations attempted. ${counts.join(' · ')}.`, 'reference-timing-coverage'));
+  }
+  for (const profile of reportedProfiles) {
+    const result = timingResult(scheme, profile, metric), measured = plottedTiming(result), conditional = conditionalTiming(result), row = node('tr');
+    const status = result ? {measured: 'Measured', failed: 'Run failed', timeout: 'Timed out', partial: 'Partial run'}[result.status] : entry?.status === 'loading' ? 'Loading' : entry?.status === 'error' ? 'Unavailable' : 'Not measured';
+    const label = node('th', profileLabel(profile, scheme)); label.scope = 'row'; label.title = profileId(profile);
+    row.append(label, node('td', conditional ? 'Successful exchanges only · ' + timingAbortLabel(result) : status + (result?.failure_count ? ` · ${result.failure_count} failed` : '')),
+      node('td', result ? result.samples : '—'), node('td', measured ? timingDuration(result.median_seconds) : '—'),
+      node('td', measured ? timingDuration(result.q1_seconds) + '–' + timingDuration(result.q3_seconds) : '—'));
+    body.append(row);
+  }
+  if (!reportedProfiles.length) {
+    const row = node('tr'), cell = node('td', entry?.status === 'loading' ? 'Loading measurements…' : entry?.status === 'error' ? 'Measurements unavailable.' : 'Not measured.');
+    cell.colSpan = 5; row.append(cell); body.append(row);
+  }
+  table.append(body);
+  const scroll = node('div', undefined, 'overview-values-scroll');
+  scroll.tabIndex = 0; scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Reference timing results');
+  scroll.append(table); content.append(scroll);
+  const actions = node('div', undefined, 'reference-timing-actions');
+  const refresh = node('button', entry?.status === 'loading' ? 'Loading…' : entry?.status === 'error' ? 'Try again' : 'Refresh results', 'text-button');
+  refresh.type = 'button'; refresh.disabled = entry?.status === 'loading';
+  refresh.addEventListener('click', () => loadReferenceTimings(scheme, {refresh: true}));
+  const download = node('a', 'Download method and results', 'text-button');
+  download.href = '/api/protocol/benchmarks?' + new URLSearchParams({scheme_id: scheme.id, version: scheme.version});
+  download.download = 'crucible-reference-timings.json';
+  actions.append(refresh, download); content.append(actions, metadata);
+  renderReferenceMethod(content, entry?.method);
+  details.append(content); target.append(details);
+}
+function renderSecurityModels(target, scheme, metric, plottedModels) {
+  const evidence = securityReferences(scheme, metric);
+  const content = node('div', undefined, 'reference-timing-content');
+  const supportingNote = supportingNoteLink(scheme.evidence_note);
+  if (supportingNote) content.append(supportingNote);
+  if (typeof evidence?.explanation === 'string') content.append(node('p', evidence.explanation));
+  const models = new Map(plottedModels);
+  for (const model of evidence?.models || []) if (typeof model?.id === 'string' && model.id && !models.has(model.id)) models.set(model.id, model);
+  if (!models.size && metric === 'classical' && scheme.initial_security_model?.id) models.set(scheme.initial_security_model.id, scheme.initial_security_model);
+  for (const model of models.values()) {
+    const section = node('section', undefined, 'security-model-details');
+    section.append(node('h3', model.label || model.name || model.id));
+    for (const key of ['scope', 'description', 'summary', 'formula', 'assumptions', 'limitations']) {
+      const value = model[key];
+      if (typeof value === 'string' && value) section.append(node('p', value));
+      else if (Array.isArray(value)) {
+        const list = node('ul');
+        for (const item of value) if (typeof item === 'string') list.append(node('li', item));
+        if (list.childElementCount) section.append(list);
+      }
+    }
+    const sources = node('ul', undefined, 'reference-sources');
+    for (const source of model.sources || model.references || []) {
+      const url = safeArtifactLink(source?.url);
+      if (!url || typeof source.title !== 'string') continue;
+      const link = node('a', source.title); link.href = url.href;
+      const item = node('li'); item.append(link); sources.append(item);
+    }
+    if (sources.childElementCount) section.append(sources);
+    content.append(section);
+  }
+  const assumptions = node('a', 'View the scheme’s assumptions →', 'text-button');
+  assumptions.href = assumptionsRoute(scheme);
+  content.append(assumptions); target.append(content);
 }
 const OVERVIEW_METRICS = {
   public_key_bytes: {label: 'Public key', title: 'Public-key size', unit: 'Bytes', kind: 'encoding'},
@@ -1172,7 +2046,11 @@ function overviewProfiles(scheme) {
     .slice().sort((a, b) => stagePosition(a) - stagePosition(b));
 }
 function overviewValue(scheme, profile, metric) {
-  if (metric === 'classical') return initialSecurityEstimate(scheme, profile);
+  if (['classical', 'quantum'].includes(metric)) return securityReference(scheme, profile, metric)?.bits ?? null;
+  if (OVERVIEW_METRICS[metric]?.kind === 'timing') {
+    const result = timingResult(scheme, profile, metric);
+    return plottedTiming(result) ? result.median_seconds : null;
+  }
   return ['public_key_bytes', 'ciphertext_bytes'].includes(metric) ? profileBytes(scheme, profile, metric) : null;
 }
 function svgNode(tag, attributes = {}, text) {
@@ -1183,14 +2061,33 @@ function svgNode(tag, attributes = {}, text) {
 }
 function renderOverviewChart(scheme, cardId) {
   const metric = state.overviewMetrics[cardId] || OVERVIEW_CARDS[cardId][0];
-  const descriptor = OVERVIEW_METRICS[metric];
+  const descriptor = {...OVERVIEW_METRICS[metric]};
   const target = $('#overview-chart-' + cardId);
+  const detailsOpen = target.querySelector('details')?.open === true;
+  const timing = descriptor.kind === 'timing' ? referenceTimingState(scheme) : null;
   const card = target.closest('.overview-card');
   const profiles = overviewProfiles(scheme);
   const named = namedParameters(scheme);
   const exact = exactProfileRecords(scheme);
   const axisLabel = named ? 'Parameter set' : 'Challenge stage';
-  const values = profiles.map((profile, index) => ({tier: named ? index : stagePosition(profile), intermediate: intermediateConfiguration(profile), label: profileLabel(profile, scheme), profileId: profileId(profile), value: overviewValue(scheme, profile, metric)}));
+  const security = ['classical', 'quantum'].includes(metric);
+  const evidence = security ? securityReferences(scheme, metric) : null;
+  const polynomialQuantum = metric === 'quantum' && evidence?.models?.some(model => model?.id === 'shor-polynomial-quantum-v1');
+  const values = profiles.map((profile, index) => ({tier: named ? index : stagePosition(profile), intermediate: intermediateConfiguration(profile), label: profileLabel(profile, scheme), profileId: profileId(profile), value: overviewValue(scheme, profile, metric), model: security ? securityReference(scheme, profile, metric)?.model : null, conditional: descriptor.kind === 'timing' && conditionalTiming(timingResult(scheme, profile, metric)), timingResult: descriptor.kind === 'timing' ? timingResult(scheme, profile, metric) : null}));
+  const referenceModels = new Map(values.filter(point => point.model).map(point => [point.model.id, point.model]));
+  const singleModel = referenceModels.size === 1 ? [...referenceModels.values()][0] : null;
+  const literatureOnly = security && singleModel && (metric !== 'classical' || !profiles.some(profile => initialSecurityEstimate(scheme, profile) !== null));
+  if (literatureOnly) {
+    descriptor.title = metric === 'quantum' ? 'Quantum attack reference' : 'Classical attack reference';
+    descriptor.unit = singleModel.unit;
+  } else if (polynomialQuantum) {
+    descriptor.title = 'Quantum recovery';
+    descriptor.unit = 'Resource estimate pending';
+  }
+  if (descriptor.kind === 'timing' && values.some(point => point.value !== null) && Math.max(...values.map(point => point.value || 0)) < 1) {
+    descriptor.unit = 'Milliseconds';
+    for (const point of values) if (point.value !== null) point.value *= 1000;
+  }
   const indexedLabels = named && (profiles.length > 3 || values.some(point => point.label.length > 16));
   const measured = values.filter(point => point.value !== null);
   const minTier = values[0]?.tier, maxTier = values.at(-1)?.tier;
@@ -1203,7 +2100,7 @@ function renderOverviewChart(scheme, cardId) {
   const recoveredTier = !named ? recoveredPoints[0]?.tier : null;
   const recoveredLabel = !recoveredPoints.length ? '' : !named ? 'Largest recovered · ' + recoveredPoints[0].label :
     'Recovered · ' + (recoveredPoints.length > 3 ? `${recoveredPoints.length} parameter sets` : recoveredPoints.map(point => point.label).join(', '));
-  setText('#overview-title-' + cardId, descriptor.title);
+  setText('#overview-title-' + cardId, cardId === 'computation' ? 'Operation time' : descriptor.title);
   for (const button of card.querySelectorAll('[data-overview-metric]')) button.setAttribute('aria-pressed', String(button.dataset.overviewMetric === metric));
   const svg = svgNode('svg', {viewBox: '0 0 480 240', role: 'img', 'aria-labelledby': 'graph-title-' + cardId + ' graph-description-' + cardId, class: 'overview-svg'});
   svg.append(svgNode('title', {id: 'graph-title-' + cardId}, descriptor.title + ' by ' + axisLabel.toLowerCase()));
@@ -1225,7 +2122,7 @@ function renderOverviewChart(scheme, cardId) {
   }
   svg.append(svgNode('path', {d: `M${left} ${top}V${bottom}H${right}`, class: 'chart-axis'}));
   if (measured.length) {
-    for (const value of [0, ceiling]) svg.append(svgNode('text', {x: left - 9, y: y(value) + 4, 'text-anchor': 'end', class: 'chart-tick'}, value.toLocaleString('en-US')));
+    for (const value of [0, ceiling]) svg.append(svgNode('text', {x: left - 9, y: y(value) + 4, 'text-anchor': 'end', class: 'chart-tick'}, descriptor.kind === 'timing' ? timingNumber(value) : value.toLocaleString('en-US')));
   }
   if (values.length) {
     const defaultValues = values.filter(point => !point.intermediate);
@@ -1238,21 +2135,23 @@ function renderOverviewChart(scheme, cardId) {
   }
   svg.append(svgNode('text', {x: (left + right) / 2, y: 235, 'text-anchor': 'middle', class: 'chart-axis-title'}, axisLabel));
   if (measured.length) {
-    let path = '', connected = false;
+    let path = '', connected = false, previousModel = null;
     for (const point of values) {
-      if (point.value === null) { connected = false; continue; }
-      path += `${connected ? 'L' : 'M'}${x(point.tier).toFixed(2)} ${y(point.value).toFixed(2)} `;
+      if (point.value === null || point.conditional) { connected = false; continue; }
+      path += `${connected && (!security || previousModel === point.model?.id) ? 'L' : 'M'}${x(point.tier).toFixed(2)} ${y(point.value).toFixed(2)} `;
       connected = true;
+      previousModel = point.model?.id;
     }
     if (!named) svg.append(svgNode('path', {d: path.trim(), class: 'chart-series'}));
     for (const point of measured) {
-      const dot = svgNode('circle', {cx: x(point.tier), cy: y(point.value), r: named ? 4 : values.length > 60 ? 1.6 : 2.8, class: 'chart-point', 'data-tier': point.tier, 'data-profile-id': point.profileId, 'data-value': point.value});
-      dot.append(svgNode('title', {}, `${point.label}: ${point.value.toLocaleString('en-US')} ${descriptor.unit.toLowerCase()}`));
+      const dot = svgNode('circle', {cx: x(point.tier), cy: y(point.value), r: named || measured.length === 1 ? 4 : values.length > 60 ? 1.6 : 2.8, class: 'chart-point' + (point.conditional ? ' chart-point-conditional' : ''), 'data-tier': point.tier, 'data-profile-id': point.profileId, 'data-value': point.value});
+      dot.append(svgNode('title', {}, `${point.label}: ${descriptor.kind === 'timing' ? timingNumber(point.value) : point.value.toLocaleString('en-US')} ${descriptor.unit.toLowerCase()}${point.conditional ? '; median of ' + point.timingResult.samples + ' successful exchanges only; ' + timingAbortLabel(point.timingResult) : ''}`));
       svg.append(dot);
     }
   } else {
-    svg.append(svgNode('text', {x: (left + right) / 2, y: 106, 'text-anchor': 'middle', class: 'chart-empty-label'}, ['security', 'baseline'].includes(descriptor.kind) ? 'No estimates published' : descriptor.kind === 'timing' ? 'No timings published' : 'No values published'));
-    svg.append(svgNode('text', {x: (left + right) / 2, y: 128, 'text-anchor': 'middle', class: 'chart-empty-detail'}, 'Awaiting evidence'));
+    const timingLabel = timing?.status === 'loading' ? 'Loading timings' : timing?.status === 'error' ? 'Timings unavailable' : 'No timings published';
+    svg.append(svgNode('text', {x: (left + right) / 2, y: 106, 'text-anchor': 'middle', class: 'chart-empty-label'}, polynomialQuantum ? 'Polynomial-time quantum attack' : ['security', 'baseline'].includes(descriptor.kind) ? 'No estimates published' : descriptor.kind === 'timing' ? timingLabel : 'No values published'));
+    svg.append(svgNode('text', {x: (left + right) / 2, y: 128, 'text-anchor': 'middle', class: 'chart-empty-detail'}, polynomialQuantum ? 'Shor’s algorithm · not a zero-cost estimate' : descriptor.kind === 'timing' ? timing?.status === 'loading' ? 'Fetching the reference report' : timing?.status === 'error' ? 'Retry in Method and results' : 'No completed measurements for this operation' : evidence?.explanation ? 'See model and values below' : 'Awaiting evidence'));
   }
   for (const point of recoveredPoints) {
     const marker = svgNode('line', {x1: x(point.tier), y1: top, x2: x(point.tier), y2: bottom, class: 'chart-recovery-line', 'data-tier': point.tier, 'data-profile-id': point.profileId});
@@ -1264,7 +2163,7 @@ function renderOverviewChart(scheme, cardId) {
     const label = node('p', recoveredLabel, 'overview-recovery-note');
     target.append(label);
   }
-  const note = descriptor.kind === 'timing' ? 'Key generation, encapsulation, and decapsulation await a shared benchmark and measurement method.' :
+  const note = literatureOnly ? `${singleModel.label}. ${measured.length} of ${values.length} configurations. Published attack-model reference, not full-KEM security bits; see model and values.` : descriptor.kind === 'timing' ? timing?.report ? 'Median wall time · ' + [timing.report.implementation?.language, timing.report.implementation?.performance_level].filter(Boolean).join(' · ') + '. ' + (named ? '' : 'Lines join adjacent measured configurations. ') + 'See method and results for the environment and spread.' : 'Reference implementation timings use a shared measurement method. Missing measurements are left empty.' :
     descriptor.kind === 'baseline' ? (measured.length ? attackReferenceModel(scheme) ? 'A stated classical attack reference, not a security lower bound. Other attacks may be faster.' : 'Frozen classical reference; not a measured security guarantee.' : 'No initial classical estimate is published for this release.') :
     descriptor.kind === 'security' ? 'An estimate needs a stated security game, attack model, and source. Recovery records are not estimates.' :
     'Canonical encoded bytes. Excludes JSON and shared domain parameters. ' + (named ? 'Dots mark distinct parameter sets; no interpolation is implied.' : 'Dots mark reviewed configurations; intermediate configurations sit between the surrounding stages.');
@@ -1274,12 +2173,24 @@ function renderOverviewChart(scheme, cardId) {
     target.append(legend);
   }
   target.append(node('p', note, 'overview-chart-note'));
+  if (descriptor.kind === 'timing' && timing?.report) {
+    const incomplete = profiles.filter(profile => { const result = timingResult(scheme, profile, metric); return result && !plottedTiming(result); });
+    if (values.some(point => point.conditional)) target.append(node('p', 'Hollow points: medians conditional on successful key generation. Aborted attempts are retained in Method and results; these points are not joined by lines.', 'overview-chart-note chart-conditional-note'));
+    if (incomplete.length) target.append(node('p', `${incomplete.length} incomplete ${incomplete.length === 1 ? 'run' : 'runs'} left empty: ${incomplete.map(profile => profileLabel(profile, scheme)).join(', ')}. Recorded aborts or incomplete trials are listed in Method and results.`, 'overview-chart-note chart-coverage-note'));
+  } else if (security && measured.length && measured.length < values.length && !literatureOnly) {
+    target.append(node('p', `${measured.length} of ${values.length} configurations have a reference. Gaps are not interpolated; see model and values.`, 'overview-chart-note'));
+  }
   const badge = $('#overview-badge-' + cardId);
-  badge.textContent = measured.length ? (descriptor.kind === 'baseline' ? attackReferenceModel(scheme) ? 'Attack reference' : 'Initial model' : 'Published values') : 'Not reported';
+  badge.textContent = literatureOnly ? 'Published reference' : descriptor.kind === 'timing' ? timing?.report ? 'Local pilot' : timing?.status === 'loading' ? 'Loading' : timing?.status === 'error' ? 'Unavailable' : 'Not measured' : measured.length ? (descriptor.kind === 'baseline' ? attackReferenceModel(scheme) ? 'Attack reference' : 'Initial model' : 'Published values') : 'Not reported';
   badge.classList.toggle('is-empty', !measured.length);
-  if ((descriptor.kind === 'encoding' || descriptor.kind === 'baseline') && values.length) {
+  if ((descriptor.kind === 'encoding' || security) && values.length) {
     const details = node('details', undefined, 'overview-values');
-    details.append(node('summary', 'View values'));
+    details.append(node('summary', security ? 'Model and values' : 'View values'));
+    if (security) renderSecurityModels(details, scheme, metric, referenceModels);
+    else {
+      const supportingNote = supportingNoteLink(scheme.evidence_note);
+      if (supportingNote) { const source = node('p', undefined, 'overview-chart-note'); source.append(supportingNote); details.append(source); }
+    }
     const table = node('table');
     const caption = node('caption', descriptor.title + ' · version ' + scheme.version);
     const head = node('thead'), row = node('tr');
@@ -1298,6 +2209,8 @@ function renderOverviewChart(scheme, cardId) {
     scroll.setAttribute('aria-label', descriptor.title + ' values by ' + axisLabel.toLowerCase());
     scroll.append(table); details.append(scroll); target.append(details);
   }
+  if (descriptor.kind === 'timing') renderTimingDetails(target, scheme, metric);
+  if (detailsOpen && target.querySelector('details')) target.querySelector('details').open = true;
 }
 function renderOverview(scheme, contextProfile = null) {
   setText('#overview-title', scheme.name);
@@ -1309,25 +2222,29 @@ function renderOverview(scheme, contextProfile = null) {
   const archived = String(current?.version) !== String(scheme.version);
   setText('#overview-release', `${archived ? 'Archived release ' + scheme.version + ' · ' : ''}${namedParameters(scheme) ? profiles.length : scheme.default_progression?.stage_count ?? profiles.length} ${namedParameters(scheme) ? 'parameter set' + (profiles.length === 1 ? '' : 's') : 'challenge stages'}`);
   const entry = contextProfile || profiles.find(profile => profileId(profile) === scheme.next_profile_id) || profiles[0];
+  $('#overview-assumptions').href = assumptionsRoute(scheme, contextProfile);
   const challengeLink = $('#overview-challenges');
   challengeLink.hidden = !entry;
   challengeLink.href = entry ? schemeRoute(scheme, entry) : '#challenge';
   const record = profiles.find(profile => profileId(profile) === scheme.largest_recovered_profile_id);
-  setText('#overview-progress', record ? `${namedParameters(scheme) ? 'Recovered parameter set' : 'Largest recovery'} · ${profileLabel(record, scheme)}` : 'No recoveries yet');
+  setText('#overview-progress', record ? `${namedParameters(scheme) ? 'Recovered parameter set' : 'Largest recovery'} · ${profileLabel(record, scheme)}` : '');
+  $('#overview-progress').hidden = !record;
   const grid = $('#overview-graphs');
   if (!grid.childElementCount) {
     for (const id of Object.keys(OVERVIEW_CARDS)) {
       const card = node('article', undefined, 'overview-card');
+      if (id === 'computation') card.classList.add('overview-computation');
       card.setAttribute('aria-labelledby', 'overview-title-' + id);
       const heading = node('div', undefined, 'overview-card-heading');
       const title = node('h2'); title.id = 'overview-title-' + id;
       const badge = node('span', undefined, 'overview-badge'); badge.id = 'overview-badge-' + id;
       heading.append(title, badge);
       card.append(heading);
+      if (id === 'computation') card.append(node('p', 'Reference implementation timings', 'reference-timing-caption'));
       const metrics = OVERVIEW_CARDS[id];
       if (metrics.length > 1) {
         const options = node('div', undefined, 'overview-metric-options');
-        options.setAttribute('role', 'group'); options.setAttribute('aria-label', 'Choose metric for ' + id + ' chart');
+        options.setAttribute('role', 'group'); options.setAttribute('aria-label', id === 'computation' ? 'Choose operation to time' : 'Choose metric for ' + id + ' chart');
         for (const metric of metrics) {
           const button = node('button', OVERVIEW_METRICS[metric].label);
           button.type = 'button'; button.dataset.overviewMetric = metric;
@@ -1344,6 +2261,7 @@ function renderOverview(scheme, contextProfile = null) {
       card.append(chart); grid.append(card);
     }
   }
+  loadReferenceTimings(scheme);
   for (const id of Object.keys(OVERVIEW_CARDS)) renderOverviewChart(scheme, id);
   const overview = scheme.overview || {};
   for (const field of ['strengths', 'limitations']) {
@@ -1589,6 +2507,14 @@ function renderProtocol() {
     const scope = [model.summary, model.scope].filter(value => typeof value === 'string' && value.trim()).join(' ');
     if (scope) addFact(facts, attackReferenceModel(scheme) ? 'Reference scope' : 'Estimate scope', configurationProse(scope));
   }
+  for (const metric of ['classical', 'quantum']) {
+    if (metric === 'classical' && estimate !== null) continue;
+    const reference = securityReference(scheme, profile, metric);
+    if (!reference) continue;
+    addFact(facts, `Published ${metric} attack reference`, `${estimateBits(reference.bits)} (${reference.model.unit})`);
+    addFact(facts, `${metric === 'classical' ? 'Classical' : 'Quantum'} reference model`, reference.model.label);
+    addFact(facts, 'Reference scope', reference.model.scope);
+  }
   setText('#protocol-size-caveat', 'An incorrect answer locks that instance. An expired instance without an accepted recovery is simply unsolved here; it is not evidence of a security bound. ' +
     (namedParameters(scheme, profile) ? 'This named parameter set is a distinct target. A recovery is not inherited by other parameter sets, and no stage or security estimate is implied.' : estimate === null ? 'A configuration selects exact scheme parameters, not an estimate of security bits.' :
       attackReferenceModel(scheme) ? 'This configuration has a stated classical attack reference, not a security lower bound; other attacks may be faster.' : 'This configuration selects parameters using a frozen initial classical reference. The estimate is not a measured security guarantee; actual attack costs may differ.'));
@@ -1607,12 +2533,17 @@ function renderProtocol() {
   setText('#parameter-measurement-basis', basisText);
   $('#parameter-measurement-basis').hidden = false;
   addFact(facts, 'Shared-key output', profile.shared_secret_bytes == null ? null : `${profile.shared_secret_bytes} bytes`);
-  setText('#parameter-json', JSON.stringify({algorithms: profile.algorithms, parameters: profile.parameters, encoding: profile.encoding, kdf: profile.kdf}, null, 2));
+  // Exact public integers may exceed JavaScript Number's precision. The server
+  // supplies display-only JSON text for those profiles; frozen manifests stay intact.
+  setText('#parameter-json', typeof profile.exact_parameter_json === 'string' ? profile.exact_parameter_json : JSON.stringify({algorithms: profile.algorithms, parameters: profile.parameters, encoding: profile.encoding, kdf: profile.kdf}, null, 2));
   const claim = profile.correctness || {};
   addFact(correctness, 'Claim type', claim.kind);
   addFact(correctness, 'Failure bound', claim.failure_bound);
+  addFact(correctness, 'Configuration bound', claim.per_profile_failure_bound);
+  addFact(correctness, 'Evidence class', {'deterministic-support-proof': 'Deterministic support proof', 'conditional-analytical-bound': 'Conditional analytical bound', 'heuristic-model-analytical-bound': 'Bound in a heuristic model'}[claim.evidence_class] || configurationProse(claim.evidence_class));
   addFact(correctness, 'Argument', scheme?.protocol?.correctness_argument_math || configurationProse(claim.argument), true);
   addFact(correctness, 'Scope', configurationProse(claim.scope));
+  addFact(correctness, 'Assumptions', configurationProse(claim.assumptions));
   addFact(correctness, 'Evidence status', configurationProse(claim.evidence_status));
 }
 function renderChallenge() {
@@ -1834,35 +2765,20 @@ async function loadLeaderboard({preserve = false} = {}) {
   const exact = exactProfileRecords(selectedScheme(), state.profile);
   const scope = exact ? `The earliest accepted recovery of this exact ${named ? 'parameter set' : intermediateConfiguration(state.profile) ? 'configuration' : 'stage'}, across all rounds. Ties use the server receipt identifier.` : 'The earliest accepted recovery at this stage or higher, across all rounds. Ties use the server receipt identifier.';
   const footnote = (exact ? 'Recoveries do not transfer between profiles. ' : '“Via Stage” credits a recovery at a higher stage; the result describes that actual instance. ') + 'A recovery verifies one challenge answer. It does not establish a new attack method or a general break of the scheme. Method and compute details are contributor-reported.';
-  const request = ++state.leaderboardRequest;
+  const request = ++state.leaderboardRequest, epoch = readViewEpoch;
   const selected = profileId();
   const schemeId = state.schemeId, schemeVersion = state.schemeVersion;
   const selection = selectionKey(), dataKey = leaderboardRecoveryKey();
-  const current = () => request === state.leaderboardRequest && state.screen === 'scheme' &&
+  const current = () => hasAccess() && epoch === readViewEpoch && request === state.leaderboardRequest && state.screen === 'scheme' &&
     state.view === 'leaderboard' && selection === selectionKey();
-  if (state.screen !== 'scheme' || !selected) return showEmpty(target, named ? 'Choose an available parameter set to see its record.' : 'Choose an available stage to see its record.');
-  state.leaderboardPendingKey = dataKey;
-  if (!preserve) {
-    state.leaderboardDataKey = null;
-    setText('#leaderboard-title', 'Recovery record');
-    card.setAttribute('data-state', 'loading');
-    $('#tier-record-notes').hidden = true;
-    $('#tier-record-notes').open = false;
-    $('#leaderboard-scope').hidden = true;
-    $('#leaderboard-footnote').hidden = true;
-    setText('#leaderboard-scope', scope);
-    setText('#leaderboard-footnote', footnote);
-    setLoading(target, 'Loading the recovery record…');
+  if (state.screen !== 'scheme' || !selected) {
+    setText('#leaderboard-title', 'Recovery record'); card.setAttribute('data-state', 'empty');
+    $('#tier-record-notes').hidden = true; $('#leaderboard-scope').hidden = true; $('#leaderboard-footnote').hidden = true;
+    return showEmpty(target, named ? 'Choose an available parameter set to see its record.' : 'Choose an available stage to see its record.');
   }
-  $('#refresh-leaderboard').disabled = true;
-  try {
-    const data = await api('/api/leaderboard?' + new URLSearchParams({profile_id: selected, scheme_id: schemeId, scheme_version: schemeVersion}));
-    if (!current()) return;
-    if (!Array.isArray(data.entries) || (data.profile_id != null && data.profile_id !== selected) ||
-        (data.scheme_id != null && data.scheme_id !== schemeId) ||
-        (data.scheme_version != null && data.scheme_version !== schemeVersion)) {
-      throw new Error('The recovery record could not be loaded. Please try again.');
-    }
+  state.leaderboardPendingKey = dataKey;
+  const key = 'record:' + dataKey, cached = cachedRead(key);
+  const paint = data => paintRead(key, target, data, data => {
     if (!data.entries.length) {
       setText('#leaderboard-title', 'Unsolved');
       card.setAttribute('data-state', 'unsolved');
@@ -1882,12 +2798,6 @@ async function loadLeaderboard({preserve = false} = {}) {
       return;
     }
     const entry = data.entries[0];
-    if (entry.rank !== 1 || typeof entry.handle !== 'string' || !entry.handle || !Number.isFinite(entry.received_at)) {
-      throw new Error('The recovery record could not be loaded. Please try again.');
-    }
-    if (exact && (entry.is_inherited || (entry.profile_id != null && entry.profile_id !== selected))) {
-      throw new Error('The recovery record does not belong to this exact profile. Please refresh.');
-    }
     setText('#leaderboard-title', 'Broken by');
     card.setAttribute('data-state', 'solved');
     $('#tier-record-notes').hidden = false;
@@ -1921,9 +2831,46 @@ async function loadLeaderboard({preserve = false} = {}) {
     winner.append(evidence);
     target.replaceChildren(winner);
     state.leaderboardDataKey = dataKey;
+  });
+  if (cached) { paint(cached); preserve = true; }
+
+  if (!preserve) {
+    state.leaderboardDataKey = null;
+    setText('#leaderboard-title', 'Recovery record');
+    card.setAttribute('data-state', 'loading');
+    $('#tier-record-notes').hidden = true;
+    $('#tier-record-notes').open = false;
+    $('#leaderboard-scope').hidden = true;
+    $('#leaderboard-footnote').hidden = true;
+    setText('#leaderboard-scope', scope);
+    setText('#leaderboard-footnote', footnote);
+    setLoading(target, 'Loading the recovery record…');
+  }
+  $('#refresh-leaderboard').disabled = true;
+  try {
+    const data = await readAgain(key, '/api/leaderboard?' + new URLSearchParams({profile_id: selected, scheme_id: schemeId, scheme_version: schemeVersion}));
+    if (!current()) return;
+    if (!Array.isArray(data.entries) || (data.profile_id != null && data.profile_id !== selected) ||
+        (data.scheme_id != null && data.scheme_id !== schemeId) ||
+        (data.scheme_version != null && data.scheme_version !== schemeVersion)) {
+      throw new Error('The recovery record could not be loaded. Please try again.');
+    }
+    if (data.entries.length) {
+      const entry = data.entries[0];
+      if (entry.rank !== 1 || typeof entry.handle !== 'string' || !entry.handle || !Number.isFinite(entry.received_at)) {
+      throw new Error('The recovery record could not be loaded. Please try again.');
+      }
+      if (exact && (entry.is_inherited || (entry.profile_id != null && entry.profile_id !== selected))) {
+      throw new Error('The recovery record does not belong to this exact profile. Please refresh.');
+      }
+    }
+    const record = {entries: data.entries, includes_compatible_versions: data.includes_compatible_versions};
+    rememberRead(key, record);
+    paint(record);
   } catch (error) {
     if (current()) state.leaderboardDataKey = null;
-    if (current() && preserve) toast('Recovery record refresh failed. ' + error.message);
+    readViews.delete(key);
+    if (current() && preserve && !forbiddenRead(error)) toast('Recovery record refresh failed. ' + error.message);
     else if (current()) {
       setText('#leaderboard-title', 'Recovery record');
       card.setAttribute('data-state', 'error');
@@ -1950,6 +2897,7 @@ function renderRecovery(entry, context) {
   addFact(facts, 'Result', incorrect ? 'Incorrect' : 'Recovered');
   addFact(facts, 'Answer received', utcDate(entry.received_at));
   addFact(facts, 'Time to submit', duration(entry.elapsed_seconds) + ' from issue to receipt, including delays');
+  addFact(facts, 'AI model(s)', typeof entry.ai_model === 'string' && entry.ai_model.trim() ? entry.ai_model.trim() : 'Not reported');
   addFact(facts, 'Reported attack time', compute.wall_seconds == null ? null : duration(compute.wall_seconds));
   addFact(facts, 'Hardware', compute.hardware);
   addFact(facts, 'Parallel workers', compute.workers);
@@ -1957,7 +2905,7 @@ function renderRecovery(entry, context) {
   addFact(facts, 'Peak memory', compute.peak_memory);
   if (compute.notes) addFact(facts, 'Notes', compute.notes);
   content.replaceChildren(node('pre', entry.method?.pseudocode || 'No pseudocode recorded.', 'code-block'), facts,
-    node('p', 'Method and resources are contributor-reported. The server checks the submitted key, not the accuracy of these claims.', 'panel-footnote'));
+    node('p', 'Method, AI model attribution and resources are participant-reported. The server checks the submitted key, not the accuracy of these claims. An unreported model does not establish that no AI was used.', 'panel-footnote'));
   if (typeof entry.method?.source?.download_url === 'string') {
     try {
       const source = new URL(entry.method.source.download_url, siteOrigin());
@@ -2057,6 +3005,11 @@ for (const dialog of document.querySelectorAll('dialog')) {
     }
     if (dialog === authDialog) {
       $('#auth-password').value = '';
+      $('#password-reset-form').reset();
+      $('#github-link-password').value = ''; state.githubLinkContext = null;
+      state.passwordResetToken = null;
+      if (authenticationRoute() && !state.authCallbackBusy) window.history.replaceState(null, '', safeAuthReturnRoute(state.returnRoute));
+      if (hasAccess() && !state.ready && !state.authCallbackBusy && !state.githubCompleteBusy) void loadAuthorizedWorkspace().catch(error => globalError(error.message));
       if (state.challengeStartIntent?.awaitingSignIn) state.challengeStartIntent = null;
     }
     if (dialog === submissionDialog && !state.pendingAttempt && !state.submitBusy) $('#candidate').value = '';
@@ -2068,20 +3021,253 @@ for (const dialog of document.querySelectorAll('dialog')) {
     }
   });
 }
+function safeAuthReturnRoute(value) {
+  return typeof value === 'string' && value.length <= 2048 && !/[\u0000-\u0020\\]/.test(value) &&
+    /^#(?:challenge|scheme|assumptions|person|people|notebook|propose|reviews|about|connect)(?:[/?]|$)/.test(value) ? value : '#challenge';
+}
+function authenticationRoute() { return /^#(?:auth|reset-password)(?:\?|$)/.test(window.location.hash); }
+function renderAuthMethods() {
+  const github = state.auth?.github_enabled === true;
+  $('#access-github').hidden = !github;
+  $('#access-github').disabled = state.githubBusy;
+  $('#access-sign-in').classList.toggle('button-primary', !github);
+  $('#access-sign-in').classList.toggle('button-quiet', github);
+  setText('#access-sign-in', github ? 'Use a password' : 'Sign in');
+  $('#access-register').hidden = github || !state.invitationToken;
+  $('#auth-github').hidden = !github;
+  $('#auth-github').disabled = state.githubBusy;
+  setText('#auth-github', state.githubBusy ? 'Connecting to GitHub…' : 'Continue with GitHub');
+  setText('#access-github', state.githubBusy ? 'Connecting to GitHub…' : 'Continue with GitHub');
+  $('#auth-password-options').classList.toggle('sole-method', !github);
+  if (!github) $('#auth-password-options').open = true;
+  $('#auth-forgot-password').hidden = !state.auth?.password_recovery || state.authMode !== 'login';
+  $('#auth-sign-in-methods').hidden = state.authPanel !== 'signin';
+  $('#github-handle-form').hidden = state.authPanel !== 'github-handle';
+  $('#github-link-form').hidden = state.authPanel !== 'github-link';
+  $('#github-link-submit').disabled = state.githubBusy;
+  $('#password-reset-request-form').hidden = state.authPanel !== 'reset-request';
+  $('#password-reset-form').hidden = state.authPanel !== 'reset-password';
+  renderAccountSignIn();
+}
+function renderAccountSignIn() {
+  const visible = Boolean(ownsViewedProfile() && hasAccess() && state.auth?.github_enabled);
+  $('#account-sign-in').hidden = !visible;
+  if (!visible) { $('#account-sign-in').open = false; setError('#account-sign-in-error', ''); }
+  const linked = state.auth?.github_linked === true;
+  setText('#account-github-status', linked ? 'Linked' + (state.auth.github_login ? ' as ' + state.auth.github_login : '') + '.' : 'Use GitHub to sign in to this same account.');
+  $('#account-link-github').hidden = linked;
+  $('#account-link-github').disabled = state.githubBusy;
+  setText('#account-link-github', state.githubBusy ? 'Connecting…' : 'Link GitHub');
+}
+async function startGitHub(mode = 'login', trigger = $('#auth-github'), password) {
+  if (!state.auth?.github_enabled || state.githubBusy || (mode === 'link' ? !state.user : Boolean(state.user))) return;
+  const account = state.user?.id, csrf = state.csrf, dialogStart = trigger === $('#auth-github') || trigger === $('#github-link-submit');
+  const destination = mode === 'link' ? personRoute(state.user.handle) : safeAuthReturnRoute(state.returnRoute || window.location.hash);
+  const errorTarget = mode === 'link' ? (dialogStart ? '#github-link-error' : '#account-sign-in-error') : dialogStart ? '#auth-github-error' : '#access-error';
+  state.githubBusy = true; renderAuthMethods(); setError(errorTarget, '');
+  try {
+    const data = await api('/api/auth/github/start', {mode, return_route: destination,
+      ...(mode === 'link' && typeof password === 'string' ? {password} : {}),
+      ...(mode === 'login' && state.invitationToken ? {invitation_token: state.invitationToken} : {})});
+    if (state.user?.id !== account || state.csrf !== csrf || (dialogStart && !authDialog.open) || (mode === 'link' && !ownsViewedProfile())) return;
+    const destinationURL = new URL(data.authorization_url);
+    if (destinationURL.origin !== 'https://github.com' || destinationURL.pathname !== '/login/oauth/authorize' || destinationURL.username || destinationURL.password) throw new Error('GitHub sign-in could not be started. Please try again.');
+    window.location.assign(destinationURL.href);
+  } catch (error) {
+    if (state.user?.id === account && (!dialogStart || authDialog.open)) setError(errorTarget, error.message);
+  } finally { $('#github-link-password').value = ''; state.githubBusy = false; renderAuthMethods(); }
+}
+function showAuthPanel(panel, trigger) {
+  state.authPanel = panel;
+  renderAuthMethods();
+  if (!authDialog.open) openDialog(authDialog, trigger);
+}
+async function finishAuthentication(returnRoute = state.returnRoute) {
+  const destination = safeAuthReturnRoute(returnRoute);
+  state.returnRoute = destination;
+  const route = !hasAccess() && state.invitationToken ? '#join?' + new URLSearchParams({token: state.invitationToken}) : destination;
+  window.history.replaceState(null, '', route);
+  if (!hasAccess()) { renderAccessGate(); return; }
+  state.invitationToken = null; state.invitationDelivery = null;
+  try { await loadAuthorizedWorkspace(); }
+  catch (error) { globalError(error.message); }
+}
+function capturePasswordResetLink() {
+  const [path, query = ''] = window.location.hash.split('?');
+  if (path !== '#reset-password') return;
+  const token = new URLSearchParams(query).get('token');
+  // Scrub before even requesting a session; never put reset secrets in storage.
+  window.history.replaceState(null, '', '#auth?password=reset');
+  state.passwordResetToken = typeof token === 'string' && /^[A-Za-z0-9_-]{43}$/.test(token) ? token : null;
+}
+async function handleAuthenticationRoute() {
+  capturePasswordResetLink();
+  const [path, query = ''] = window.location.hash.split('?');
+  if (path === '#auth' && new URLSearchParams(query).get('password') === 'reset') {
+    $('#password-reset-form').reset();
+    setText('#auth-title', 'Reset your password');
+    setText('#auth-description', 'Choose a new password for your Crucible account.');
+    setError('#password-reset-error', state.passwordResetToken ? '' : 'This reset link is incomplete. Request a new link.');
+    $('#password-reset-submit').disabled = !state.passwordResetToken;
+    showAuthPanel('reset-password');
+    if (state.passwordResetToken) $('#password-reset-new').focus();
+    return true;
+  }
+  if (path !== '#auth') return false;
+  if (state.authCallbackBusy) return true;
+  const outcome = new URLSearchParams(query).get('github');
+  if (!outcome) { openAuth(); return true; }
+  state.authCallbackBusy = true;
+  const callbackHash = window.location.hash, account = state.user?.id;
+  let returnRoute = '#challenge';
+  try {
+    const result = await api('/api/auth/github/pending');
+    if (window.location.hash !== callbackHash || state.user?.id !== account) return true;
+    returnRoute = safeAuthReturnRoute(result.return_route);
+    state.returnRoute = returnRoute;
+    if (typeof result.invitation_token === 'string' && /^[A-Za-z0-9_-]{1,512}$/.test(result.invitation_token)) state.invitationToken = result.invitation_token;
+    if (outcome === 'choose-handle' && result.pending === true && !state.user) {
+      state.githubPending = true;
+      $('#github-handle-form').reset();
+      const suggested = result.suggested_handle;
+      $('#github-handle').value = typeof suggested === 'string' && /^[A-Za-z0-9_]{3,32}$/.test(suggested) ? suggested : '';
+      setText('#github-handle-context', result.github_login ? 'Connected to GitHub as ' + result.github_login + '.' : 'Your GitHub account is connected.');
+      setText('#auth-title', 'Choose your handle');
+      setText('#auth-description', state.access?.mode === 'beta' ? 'Create your Crucible account, then verify your invitation email.' : 'Create your Crucible account.');
+      setError('#github-handle-error', '');
+      showAuthPanel('github-handle');
+      $('#github-handle').focus();
+      return true;
+    }
+    if (['complete', 'linked'].includes(outcome) && state.user) {
+      await finishAuthentication(returnRoute);
+      toast(outcome === 'linked' ? 'GitHub is linked to your account.' : 'Signed in as ' + state.user.handle + '.');
+      return true;
+    }
+    const messages = {
+      denied: 'GitHub sign-in was cancelled. You can try again or use your password.',
+      expired: 'This GitHub sign-in has expired. Please try again.',
+      'invite-required': 'Open your invitation link before creating an account with GitHub.',
+      'identity-in-use': 'This GitHub account is already linked to another Crucible account. Sign in to that account or contact the operator.',
+      'session-changed': 'Your session changed during GitHub sign-in. Please try again from your current account.'
+    };
+    throw new Error(messages[outcome] || 'GitHub sign-in could not be completed. Please try again.');
+  } catch (error) {
+    if (window.location.hash !== callbackHash || state.user?.id !== account) return true;
+    await finishAuthentication(returnRoute);
+    if (state.user) { globalError(error.message); }
+    else { openAuth(); setError('#auth-github-error', error.message); }
+  } finally { state.authCallbackBusy = false; }
+  return true;
+}
+$('#access-github').addEventListener('click', () => startGitHub('login', $('#access-github')));
+$('#auth-github').addEventListener('click', () => startGitHub('login', $('#auth-github')));
+$('#account-link-github').addEventListener('click', () => {
+  if (!ownsViewedProfile() || !hasAccess() || !state.auth?.github_enabled || state.auth.github_linked || state.githubBusy) return;
+  if (!state.auth.password_enabled) return startGitHub('link', $('#account-link-github'));
+  state.githubLinkContext = {accountId: state.user.id, csrf: state.csrf};
+  $('#github-link-form').reset(); setError('#github-link-error', '');
+  setText('#auth-title', 'Link GitHub');
+  setText('#auth-description', 'Confirm your password to add GitHub sign-in to this account.');
+  setText('#github-link-context', 'Your Crucible account: ' + state.user.handle);
+  showAuthPanel('github-link', $('#account-link-github')); $('#github-link-password').focus();
+});
+$('#github-link-form').addEventListener('submit', event => {
+  event.preventDefault();
+  const context = state.githubLinkContext;
+  if (!context || context.accountId !== state.user?.id || context.csrf !== state.csrf || !ownsViewedProfile() || state.authPanel !== 'github-link' || state.githubBusy) return;
+  const password = $('#github-link-password').value;
+  $('#github-link-password').value = '';
+  void startGitHub('link', $('#github-link-submit'), password);
+});
+$('#github-existing-account').addEventListener('click', () => { state.githubPending = false; window.history.replaceState(null, '', safeAuthReturnRoute(state.returnRoute)); setAuthMode('login'); $('#auth-password-options').open = true; $('#auth-handle').focus(); });
+$('#github-handle-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!state.githubPending || state.githubCompleteBusy || state.user) return;
+  const csrf = state.csrf;
+  state.githubCompleteBusy = true;
+  $('#github-handle-submit').disabled = true; setError('#github-handle-error', '');
+  try {
+    const data = await api('/api/auth/github/complete', {handle: $('#github-handle').value.trim()});
+    if (state.user || state.csrf !== csrf) return;
+    state.githubPending = false;
+    setSession(data); authDialog.close();
+    await finishAuthentication();
+  } catch (error) {
+    if (authDialog.open && state.authPanel === 'github-handle') setError('#github-handle-error', error.message);
+  } finally { state.githubCompleteBusy = false; $('#github-handle-submit').disabled = false; }
+});
+function openPasswordRecovery() {
+  if (!state.auth?.password_recovery) return;
+  $('#password-reset-request-form').reset();
+  $('#password-reset-handle').value = $('#auth-handle').value.trim();
+  setError('#password-reset-request-error', '');
+  $('#password-reset-request-status').hidden = true;
+  setText('#auth-title', 'Reset your password');
+  setText('#auth-description', 'We’ll send a reset link to your verified email address.');
+  showAuthPanel('reset-request', $('#auth-forgot-password'));
+  $('#password-reset-handle').focus();
+}
+$('#auth-forgot-password').addEventListener('click', openPasswordRecovery);
+for (const id of ['#password-reset-request-back', '#password-reset-back']) $(id).addEventListener('click', () => {
+  state.passwordResetToken = null; $('#password-reset-form').reset();
+  setAuthMode('login'); $('#auth-password-options').open = true; $('#auth-handle').focus();
+});
+$('#password-reset-request-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (state.passwordRecoveryBusy || !state.auth?.password_recovery) return;
+  const csrf = state.csrf;
+  state.passwordRecoveryBusy = true; $('#password-reset-request-submit').disabled = true;
+  setError('#password-reset-request-error', '');
+  try {
+    await api('/api/auth/password/reset/start', {handle: $('#password-reset-handle').value.trim()});
+    if (state.csrf !== csrf || !authDialog.open || state.authPanel !== 'reset-request') return;
+    setText('#password-reset-request-status', 'If this account has a verified email address, a reset link will arrive shortly.');
+    $('#password-reset-request-status').hidden = false;
+  } catch (error) {
+    if (authDialog.open && state.authPanel === 'reset-request' && state.csrf === csrf) setError('#password-reset-request-error', error.message);
+  } finally { state.passwordRecoveryBusy = false; $('#password-reset-request-submit').disabled = false; }
+});
+$('#password-reset-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!state.passwordResetToken || state.passwordResetBusy) return;
+  const password = $('#password-reset-new').value;
+  if (password !== $('#password-reset-confirm').value) { setError('#password-reset-error', 'The passwords do not match.'); $('#password-reset-confirm').focus(); return; }
+  if (password.length < 12 || password.length > 128) { setError('#password-reset-error', 'Use a password of 12–128 characters.'); return; }
+  const token = state.passwordResetToken, csrf = state.csrf;
+  state.passwordResetBusy = true; $('#password-reset-submit').disabled = true; setError('#password-reset-error', '');
+  try {
+    const data = await api('/api/auth/password/reset/complete', {token, password});
+    if (state.csrf !== csrf) return;
+    state.passwordResetToken = null; $('#password-reset-form').reset();
+    window.history.replaceState(null, '', safeAuthReturnRoute(state.returnRoute));
+    setSession(data);
+    setAuthMode('login'); $('#auth-password-options').open = true;
+    setText('#auth-description', 'Your password has been reset. Sign in with your new password.');
+    $('#auth-handle').focus();
+  } catch (error) {
+    if (authDialog.open && state.authPanel === 'reset-password' && state.csrf === csrf) setError('#password-reset-error', error.message);
+  } finally { state.passwordResetBusy = false; $('#password-reset-submit').disabled = !state.passwordResetToken; }
+});
+
 function setAuthMode(mode) {
+  if (mode === 'register' && state.access?.mode === 'beta' && !state.invitationToken) mode = 'login';
   state.authMode = mode;
+  state.authPanel = 'signin';
   $('#login-mode').classList.toggle('selected', mode === 'login');
   $('#register-mode').classList.toggle('selected', mode === 'register');
   $('#login-mode').setAttribute('aria-pressed', String(mode === 'login'));
   $('#register-mode').setAttribute('aria-pressed', String(mode === 'register'));
   setText('#auth-title', mode === 'login' ? 'Welcome back.' : 'Join the challenge.');
-  setText('#auth-description', mode === 'login' ? 'Sign in to receive your instance for the current round.' : 'Create an account to investigate challenges and share your results.');
+  setText('#auth-description', state.access?.mode === 'beta' ? (mode === 'login' ? 'Sign in to your Crucible account.' : 'Create your account, then verify your invitation email.') : mode === 'login' ? 'Sign in to receive your instance for the current round.' : 'Create an account to investigate challenges and share your results.');
   setText('#auth-submit', mode === 'login' ? 'Sign in →' : 'Create account →');
   $('#auth-password').autocomplete = mode === 'login' ? 'current-password' : 'new-password';
   $('#auth-password').minLength = 12;
   setError('#auth-error', '');
+  setError('#auth-github-error', '');
+  renderAuthMethods();
 }
-function openAuth(trigger) { setError('#auth-error', ''); openDialog(authDialog, trigger); }
+function openAuth(trigger) { setAuthMode(state.authMode); $('#auth-password-options').open = !state.auth?.github_enabled; if (!authDialog.open) openDialog(authDialog, trigger); }
 $('#auth-form').addEventListener('submit', async event => {
   event.preventDefault();
   const startIntent = state.challengeStartIntent;
@@ -2092,7 +3278,8 @@ $('#auth-form').addEventListener('submit', async event => {
   setError('#auth-error', '');
   setText('#auth-submit', state.authMode === 'login' ? 'Signing in…' : 'Creating your account…');
   try {
-    const data = await api('/api/auth/' + state.authMode, {handle: $('#auth-handle').value.trim(), password: $('#auth-password').value});
+    const data = await api('/api/auth/' + state.authMode, {handle: $('#auth-handle').value.trim(), password: $('#auth-password').value,
+      ...(state.authMode === 'register' && state.invitationToken ? {invitation_token: state.invitationToken} : {})});
     const dialogStillOpen = authDialog.open;
     const resumeStart = startIntent?.awaitingSignIn && state.challengeStartIntent === startIntent &&
       !state.user && dialogStillOpen && challengeStartSelectionMatches(startIntent);
@@ -2100,10 +3287,15 @@ $('#auth-form').addEventListener('submit', async event => {
     if (resumeStart && state.user) state.challengeStartIntent = {...startIntent, accountId: state.user.id, awaitingSignIn: false};
     $('#auth-form').reset();
     authDialog.close();
+    if (!hasAccess()) { renderAccessGate(); return; }
+    if (!state.ready) { await loadAuthorizedWorkspace(); return; }
     await loadChallenge({allowAutomatic: dialogStillOpen && (!startIntent || resumeStart)});
     if (state.screen === 'scheme' && state.view === 'leaderboard') await loadLeaderboard();
     toast('Signed in as ' + state.user.handle + '.');
-  } catch (error) { setError('#auth-error', error.message); }
+  } catch (error) {
+    if (authDialog.open) setError('#auth-error', error.message);
+    else globalError(error.message);
+  }
   finally {
     button.disabled = false;
     $('#login-mode').disabled = false;
@@ -2116,6 +3308,7 @@ async function logout() {
   try {
     const data = await api('/api/auth/logout', {});
     setSession(data);
+    if (!hasAccess()) { toast('You are signed out.'); return; }
     renderChallenge();
     if (state.screen === 'scheme' && state.view === 'leaderboard') loadLeaderboard();
     toast('You are signed out.');
@@ -2195,7 +3388,7 @@ async function importRecoveryFile(file) {
       '#method-pseudocode': result.method.pseudocode, '#hardware': result.compute.hardware,
       '#workers': result.compute.workers, '#wall-seconds': result.compute.wall_seconds,
       '#precomputation': result.compute.precomputation, '#peak-memory': result.compute.peak_memory,
-      '#compute-notes': result.compute.notes
+      '#compute-notes': result.compute.notes, '#ai-model': result.ai_model
     };
     for (const [selector, value] of Object.entries(fields)) $(selector).value = String(value);
     state.submissionFormRevision++;
@@ -2305,6 +3498,7 @@ $('#submission-form').addEventListener('submit', async event => {
       if (!new RegExp(`^[0-9a-fA-F]{${keyBytes * 2}}$`).test($('#candidate').value)) {
         throw new Error(`Enter the complete ${keyBytes}-byte key as exactly ${keyBytes * 2} hexadecimal characters.`);
       }
+      const aiModel = normalizeAIModel($('#ai-model').value);
       let methodId = $('#method-select').value;
       if (methodId === 'new') {
         const name = $('#method-name').value.trim();
@@ -2323,7 +3517,7 @@ $('#submission-form').addEventListener('submit', async event => {
       if (!compute.hardware || !compute.precomputation || !compute.peak_memory) throw new Error('Complete the hardware, preparation, and memory fields.');
       state.pendingAttempt = {
         challengeId: challenge.id,
-        payload: {candidate: $('#candidate').value.toLowerCase(), method_id: methodId, compute, idempotency_key: crypto.randomUUID()}
+        payload: {candidate: $('#candidate').value.toLowerCase(), method_id: methodId, compute, ai_model: aiModel, idempotency_key: crypto.randomUUID()}
       };
     }
     lockSubmissionFields(true);
@@ -2362,14 +3556,12 @@ $('#submission-form').addEventListener('submit', async event => {
 
 async function showHistory() {
   const request = ++state.historyRequest;
-  const accountId = state.user?.id;
-  const current = () => request === state.historyRequest && historyDialog.open && state.user?.id === accountId;
+  const accountId = state.user?.id, epoch = readViewEpoch;
+  const current = () => hasAccess() && epoch === readViewEpoch && request === state.historyRequest && historyDialog.open && state.user?.id === accountId;
   openDialog(historyDialog, $('#history-button'));
   const target = $('#history-content');
-  setLoading(target, 'Loading your submissions…');
-  try {
-    const data = await api('/api/me/submissions');
-    if (!current()) return;
+  const key = 'history:' + (state.catalogueRevision || ''), cached = cachedRead(key);
+  const paint = data => paintRead(key, target, data, data => {
     if (!data.submissions?.length) return showEmpty(target, 'No submissions yet. Your received answers will appear here.');
     const items = [];
     for (const submission of data.submissions) {
@@ -2389,8 +3581,15 @@ async function showHistory() {
       items.push(item);
     }
     target.replaceChildren(...items);
+  });
+  if (cached) paint(cached); else setLoading(target, 'Loading your submissions…');
+  try {
+    const data = await readAgain(key, '/api/me/submissions');
+    if (!current()) return;
+    rememberRead(key, {submissions: data.submissions});
+    paint({submissions: data.submissions});
   } catch (error) {
-    if (current()) showInlineError(target, error.message, async () => { historyDialog.close(); await showHistory(); });
+    if (current()) readRefreshError(key, target, error, async () => { historyDialog.close(); await showHistory(); }, cached);
   }
 }
 async function copyInstance() {
@@ -2400,9 +3599,8 @@ async function copyInstance() {
   $('#copy-instance').disabled = true;
   try {
     // Copy and Download must use the same authoritative challenge contract.
-    const contract = await api('/api/challenges/' + encodeURIComponent(id) + '/download');
+    const payload = await api('/api/challenges/' + encodeURIComponent(id) + '/download', undefined, {raw: true});
     if (state.challenge?.id !== id || state.user?.id !== accountId) return;
-    const payload = JSON.stringify(contract, null, 2);
     try { await navigator.clipboard.writeText(payload); toast('Challenge JSON copied. It contains the same information as the download.'); }
     catch {
       toast('Clipboard access is unavailable. Use Download challenge JSON to save the same information.');
@@ -2532,7 +3730,7 @@ function proposalAgentPrompt(record) {
   const initialize = record ? `proposal revise ${quote(record.id)}` : 'proposal init';
   const base = record ? `\nExpected base: revision ${record.revision}, content SHA-256 ${record.content_sha256}. If the fetched revision or hash differs, show me the change before editing.\n` : '\n';
   const login = `${client} login`;
-  return `${record ? 'Help me revise my KEM proposal' : 'Help me prepare a new KEM proposal'} for Crucible.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running.\nBefore private access or submission, run ${login} if needed and let me approve the proposal permissions in my browser. Existing connections need login once to add those permissions.\n\nPrepare a fresh workspace:\n${client} ${initialize} --path ${quote(folder)}\n${base}\nFollow its README, template and schema. Explain what it adds over the closest existing scheme. Describe the exact algorithms and sampling distributions, correctness bound and scope, security assumptions, and identified implementation/evidence. Complete the template’s tier_design plan: describe the supported configuration space or reviewed generation rule, with stable configuration identities, and a default progression through natural parameter settings. Its positions are stages; their count is scheme-specific and equal stage numbers do not imply equal security. Preserve the construction and sampling distributions, explaining any coordinated parameter changes. Hold a common correctness requirement across the progression; negligible nonzero failure is allowed, and material per-configuration differences must be disclosed. State the endpoint target, evidence and status (supported-estimate, provisional or unestimated), retaining meaningful published or justified endpoints; justify useful intermediate stages. Prefer a default stage count in multiples of ten, with multiples of five as a fallback when the reviewed configurations support it; preserve endpoints and useful intermediate configurations, and never invent settings or compromise correctness or fidelity to meet a count. Complete parameter_selection: justify efficient admissible configurations under a stated cost objective, constraints, pinned security model and candidate domain; document comparison evidence, tradeoffs and uncertainty without claiming global optimality. Never add padding or restrict entropy just to manufacture stages. Keep unknowns explicit. Ask me for missing information; do not invent proofs, benchmarks or security claims.\n\nCheck the specification:\n${client} proposal validate --path ${quote(folder)}\nShow me the specification and validation result. Only when I ask you to submit, run:\n${client} proposal submit --path ${quote(folder)}\nReturn the private proposal link from the receipt. Submission requests human review; it does not approve or activate the scheme.`;
+  return `${record ? 'Help me revise my KEM proposal' : 'Help me prepare a new KEM proposal'} for Crucible.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running.\nBefore private access or submission, run ${login} if needed and let me approve the proposal permissions in my browser. Existing connections need login once to add those permissions.\n\nBefore work, read and follow the model pipeline contract at ${origin}/api/agent/pipeline: run ${client} guide. It identifies the supported workflows, exact source contracts and permission boundaries. The workspace saves a copy as pipeline.json; never put credentials in prompts or research files.\n\nPrepare a fresh workspace:\n${client} ${initialize} --path ${quote(folder)}\n${base}\nRead the proposal guide saved in that workspace (also at ${origin}/api/protocol/proposal-guide), then follow its README, template and schema. Explain what it adds over the closest existing scheme. Describe complete reproducible algorithms and sampling distributions, public and private encodings, correctness bound and scope, security assumptions, and identified implementation/evidence. Complete correctness.justification with a precise statement, conditions, configuration coverage and supporting reasoning; distinguish proved, modeled and conjectural steps. Empirical tests are supplemental. Formal verification is optional and conditional guarantees must state their conditions. Reference implementation measurement policy: ${origin}/api/protocol/reference-method. Timings describe the identified implementation, not a full TLS handshake or a security guarantee. Complete the template’s tier_design plan: describe the supported configuration space or reviewed generation rule, with stable configuration identities, and a default progression through natural parameter settings. Its positions are stages; their count is scheme-specific and equal stage numbers do not imply equal security. Preserve the construction and sampling distributions, explaining any coordinated parameter changes. For approval, state a precise correctness guarantee: zero honest disagreement or failure probability at most 2^-128 for every admitted configuration, with probability scope and assumptions. Also state the security notion, claimed guarantee and applicable parameters, with all underlying assumptions. If security depends on a correctness bound, identify that dependency and its required threshold. A claim may depend on conjectures or a heuristic model; distinguish the conditional argument from the evidence for each premise, independently motivate those premises and identify unproved steps for stress testing. Use justification.kind conjectural-claim where appropriate. Unknown correctness is acceptable in an early draft but needs a stated guarantee before approval. The common correctness target remains at most 2^-128; the claim may be conditional, but the target is not optional. For a statistical claim, declare correctness.failure_bound_exponent as an integer at least 128, consistent with the bound and assumptions. Perfect correctness states failure_bound "0" and omits the exponent; correctness.policy_id is optional. A proof gap undermines justification; a rigorous demonstration that actual failure probability exceeds the target refutes the guarantee. A looser upper bound alone is not a refutation. Report generation aborts separately. State the endpoint target, evidence and status (supported-estimate, provisional or unestimated), retaining meaningful published or justified endpoints; justify useful intermediate stages. Prefer a default stage count in multiples of ten, with multiples of five as a fallback when the reviewed configurations support it; preserve endpoints and useful intermediate configurations, and never invent settings or compromise correctness or fidelity to meet a count. Complete parameter_selection: justify efficient admissible configurations under a stated cost objective, constraints, pinned security model and candidate domain; document comparison evidence, tradeoffs and uncertainty without claiming global optimality. Never add padding or restrict entropy just to manufacture stages. Keep unknowns explicit. Ask me for missing information; do not invent proofs, benchmarks or security claims. Spend a separate, deliberate pass on citations: read the primary sources, check exact versions and claim scope, and identify the supporting section, theorem or page in the relevant argument. Cite existing Crucible notes by their exact revision link and content hash, with permission for any private material. Separate mathematical ingredients from a published complete KEM and from inherited security claims. Mark inaccessible or unverified sources and originality uncertainty explicitly; never invent citations or add unrelated ones for appearance.\n\nCheck the specification:\n${client} proposal validate --path ${quote(folder)}\nShow me the specification and validation result. Only when I ask you to submit, run:\n${client} proposal submit --path ${quote(folder)}\nSubmission creates a private research note containing the exact specification and its readable explanation; revisions preserve the earlier notes and reviews. Return the note link and review link from the receipt. Submission requests human review; it does not approve or activate the scheme.`;
 }
 function resetProposalAgentInstructions(kind = null) {
   for (const name of kind ? [kind] : Object.keys(PROPOSAL_AGENT_UI)) {
@@ -2578,14 +3776,16 @@ async function copyProposalAgentInstructions(kind) {
 const SPECIFICATION_LABELS = {
   setup: 'Setup', keygen: 'Key generation', encapsulate: 'Encapsulation', decapsulate: 'Decapsulation',
   tier_meaning: 'Meaning of a stage', supported_tiers: 'Supported stages', mapping: 'Parameter mapping',
-  distribution: 'Sampling distribution', reuse: 'Parameter reuse', public_key: 'Public key',
+  distribution: 'Sampling distribution', reuse: 'Parameter reuse', public_key: 'Public key', private_key: 'Private key',
   ciphertext: 'Ciphertext', shared_secret: 'Shared secret', shared_secret_bytes: 'Shared-secret bytes',
   kind: 'Claim type', failure_bound: 'Failure bound', argument: 'Argument', scope: 'Scope', evidence: 'Evidence',
+  policy_id: 'Common correctness policy', failure_bound_exponent: 'Failure probability at most 2 to the negative exponent',
   notion: 'Security notion', model: 'Attack model', claim: 'Claim', assumptions: 'Assumptions',
   url: 'URL', sha256: 'SHA-256', runtime: 'Runtime', entrypoint: 'Entry point',
   parameter_progression: 'Parameter progression', cost_tradeoff: 'Resource costs', fixed_correctness: 'Common correctness requirement',
   endpoint_status: 'Endpoint status', endpoint_target: 'Endpoint target', endpoint_evidence: 'Endpoint evidence', intermediate_steps: 'Intermediate steps', parameter_selection: 'Parameter selection',
   objective: 'Cost objective', constraints: 'Fixed constraints', security_model: 'Security and cost model',
+  statement: 'Mathematical statement', conditions: 'Conditions', configuration_coverage: 'Configuration coverage', derivation: 'Derivation',
   search_domain: 'Candidate search domain', comparison_evidence: 'Candidate comparison evidence', tradeoffs_and_uncertainty: 'Tradeoffs and uncertainty'
 };
 function proposalError(error) {
@@ -2631,6 +3831,7 @@ function proposalStatusLabel(status) {
 function previewValue(key, value) {
   if (value === null || value === undefined) return key === 'shared_secret_bytes' ? 'See shared-secret encoding' : 'Not provided';
   if (key === 'endpoint_status') return {'supported-estimate': 'Supported estimate', provisional: 'Provisional', unestimated: 'Unestimated'}[value] || String(value);
+  if (key === 'kind' && ['mathematical-proof', 'analytical-bound', 'model-based-analysis', 'conjectural-claim'].includes(value)) return {'mathematical-proof': 'Mathematical proof', 'analytical-bound': 'Analytical bound', 'model-based-analysis': 'Model-based analysis', 'conjectural-claim': 'Conjectural claim'}[value];
   if (key === 'supported_tiers' && value && typeof value === 'object') {
     if (value.kind === 'range') return `${value.min}–${value.max} · step ${value.step}`;
     if (value.kind === 'list' && Array.isArray(value.values)) return value.values.join(', ');
@@ -2648,8 +3849,10 @@ function renderSpecification(target, spec) {
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       const facts = node('dl', undefined, 'detail-list proposal-facts');
       for (const [field, content] of Object.entries(value)) {
-        if (field === 'parameter_selection' && content && typeof content === 'object') {
-          for (const [choice, description] of Object.entries(content)) addFact(facts, SPECIFICATION_LABELS[choice] || choice, previewValue(choice, description));
+        if (['parameter_selection', 'justification'].includes(field) && content && typeof content === 'object' && !Array.isArray(content)) {
+          for (const [choice, description] of Object.entries(content)) addFact(facts,
+            field === 'justification' && choice === 'kind' ? 'Justification type' : SPECIFICATION_LABELS[choice] || choice,
+            previewValue(choice, description));
         } else addFact(facts, SPECIFICATION_LABELS[field] || field, previewValue(field, content));
       }
       section.append(facts);
@@ -2680,13 +3883,10 @@ function renderProposalDraft() {
   setText('#submit-proposal', proposals.submitting ? 'Submitting…' : !state.user ? 'Sign in to submit' : proposals.pending ? 'Retry submission' : proposals.revisingId ? 'Submit revised specification' : 'Submit proposal');
   $('#proposal-sign-in').hidden = Boolean(state.user);
   $('#refresh-proposals').hidden = !state.user || (proposals.reviewMode && !state.canReviewProposals);
-  $('#proposal-review-link').hidden = !state.canReviewProposals;
-  $('#proposal-review-link').href = proposals.reviewMode ? '#propose' : '#propose?review=1';
-  setText('#proposal-review-link', proposals.reviewMode ? 'My proposals →' : 'Review proposals →');
   if (proposals.receipt) {
     proposalStatus('Submitted for review. ');
     const link = node('a', 'View your proposal', 'text-button');
-    link.href = '#propose?proposal=' + encodeURIComponent(proposals.receipt.id);
+    link.href = proposals.receipt.source_note?.url || '#propose?proposal=' + encodeURIComponent(proposals.receipt.id);
     $('#proposal-status').append(link);
   }
 }
@@ -2762,10 +3962,15 @@ function enterProposalPage(params, entering) {
     proposals.validating = false;
     proposalStatus('Choose the file again to finish checking it.');
   }
+  $('#proposal-page-back').hidden = reviewMode;
+  $('#proposal-context').hidden = reviewMode;
+  $('#proposal-detail-back').href = reviewMode ? reviewerRoute('schemes') : '#notebook?compose=proposal';
+  setText('#proposal-detail-back', reviewMode ? '← Scheme proposals' : '← New proposal note');
+  $('#proposal-workspace').classList.toggle('proposal-review-workspace', reviewMode);
   $('#proposal-draft').hidden = Boolean(id) || reviewMode;
   $('#proposal-detail').hidden = !id;
   $('#proposal-revision-context').hidden = !revise;
-  setText('#proposal-title', revise ? 'Revise your proposal' : reviewMode ? 'Review proposals' : 'Propose a scheme');
+  setText('#proposal-title', revise ? 'Revise your proposal' : reviewMode ? 'Scheme proposals' : 'Propose a scheme');
   setText('#proposal-history-title', reviewMode ? 'Review queue' : 'My proposals');
   renderProposalDraft();
   const listKey = JSON.stringify([state.user?.id, reviewMode]);
@@ -2779,6 +3984,7 @@ function enterProposalPage(params, entering) {
     clearProposalReview();
   }
   renderProposalAgentControls();
+  if (params.get("agent") === "1" && !id && !reviewMode) showProposalAgentInstructions("draft");
 }
 async function importProposal(file) {
   if (!file || proposals.submitting || proposals.pending || state.screen !== 'propose') return;
@@ -2872,7 +4078,7 @@ async function loadProposals(cursor = null) {
   if (reviewing && !state.canReviewProposals) return showEmpty(target, 'The review queue is available to configured reviewers.');
   if (!after) setLoading(target, reviewing ? 'Loading the review queue…' : 'Loading your proposals…');
   $('#refresh-proposals').disabled = true;
-  const current = () => request === proposals.listRequest && account === state.user?.id && state.screen === 'propose' && proposals.reviewMode === reviewing;
+  const current = () => request === proposals.listRequest && account === state.user?.id && proposalPageActive() && proposals.reviewMode === reviewing;
   try {
     const result = await api(reviewing ? '/api/protocol/review-queue' + (after ? '?' + new URLSearchParams({after}) : '') : '/api/me/protocol-proposals');
     if (!current()) return;
@@ -2881,8 +4087,8 @@ async function loadProposals(cursor = null) {
     if (!result.proposals.length && !after) return showEmpty(target, reviewing ? 'No proposals awaiting your review.' : 'No submitted proposals yet.');
     for (const record of result.proposals) {
       const link = node('a', undefined, 'proposal-list-entry');
-      link.href = '#propose?' + (reviewing ? 'review=1&' : '') + 'proposal=' + encodeURIComponent(record.id);
-      link.append(node('span', record.specification.name, 'proposal-list-name'), node('span', 'Revision ' + record.revision + ' · ' + proposalStatusLabel(record.status) + (reviewing && record.author?.handle ? ' · ' + record.author.handle : '') + ' · ' + utcDate(record.created_at), 'proposal-list-meta'));
+      link.href = reviewing ? reviewerRoute('schemes', {proposal: record.id}) : '#propose?proposal=' + encodeURIComponent(record.id);
+      link.append(node('span', record.specification.name, 'proposal-list-name'), node('span', 'Revision ' + record.revision + ' · ' + (record.retracted ? 'Retracted' : proposalStatusLabel(record.status)) + (reviewing && record.author?.handle ? ' · ' + record.author.handle : '') + ' · ' + utcDate(record.created_at), 'proposal-list-meta'));
       target.append(link);
     }
     if (reviewing && typeof result.next_after === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(result.next_after)) {
@@ -2904,7 +4110,7 @@ async function loadProposalDetail(id) {
   if (!account) return showEmpty(target, 'Sign in to view your submitted proposal.');
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) return showEmpty(target, 'This proposal link is invalid.');
   setLoading(target, 'Loading your submitted specification…');
-  const current = () => request === proposals.detailRequest && account === state.user?.id && state.screen === 'propose' && proposals.detailId === id;
+  const current = () => request === proposals.detailRequest && account === state.user?.id && proposalPageActive() && proposals.detailId === id;
   try {
     const result = await api('/api/protocol/proposals/' + encodeURIComponent(id));
     if (!current()) return;
@@ -2913,18 +4119,25 @@ async function loadProposalDetail(id) {
     proposals.detailRecord = record;
     proposals.detailOwn = result.author?.id === account;
     renderSpecification(target, record.specification);
-    target.prepend(node('p', 'Revision ' + record.revision + ' · ' + proposalStatusLabel(record.status) + ' · ' + utcDate(record.created_at), 'proposal-status'));
+    if (record.source_note?.id) {
+      const source = node('a', 'Read proposal note →', 'text-button');
+      source.href = '#notebook?' + new URLSearchParams({note:record.source_note.id, revision:String(record.source_note.revision)});
+      target.prepend(source);
+    }
+    target.prepend(node('p', 'Revision ' + record.revision + ' · ' + (record.retracted ? 'Retracted' : proposalStatusLabel(record.status)) + ' · ' + utcDate(record.created_at), 'proposal-status'));
+    window.CrucibleRetractions.mount(target, {record, kind:'scheme', api, current, onSuccess:async () => { await loadProposalDetail(id); if (proposalPageActive()) loadProposals(); }});
     const testOnlyReview = (result.reviews || []).some(review => review.revision === record.revision && review.checks?.test_only_self_review === true);
-    target.append(node('p', testOnlyReview ? 'Development self-review only. This decision does not satisfy independent admission review or earn scheme contribution points.' : record.status === 'approved' ? 'A manual reviewer approved this revision for trusted integration. Approval does not activate a live challenge or certify security.' : 'Format checked only. This submitted specification has not been approved or activated as a live challenge.', 'panel-footnote'),
+    target.append(node('p', record.retracted ? 'The proposer withdrew this request. Earlier evidence and review decisions remain in the history.' : testOnlyReview ? 'Development self-review only. This decision does not satisfy independent admission review or earn scheme contribution points.' : record.status === 'approved' ? 'A manual reviewer approved this revision for trusted integration. Approval does not activate a live challenge or certify security.' : 'Format checked only. This submitted specification has not been approved or activated as a live challenge.', 'panel-footnote'),
       node('p', 'Content SHA-256 · ' + record.content_sha256, 'proposal-digest'));
     renderProposalAudit(target, result);
     const own = result.author?.id === account;
-    proposals.agentRevision = own ? record : null;
+    proposals.agentRevision = own && !record.retracted ? record : null;
     renderProposalAgentControls();
     $('#proposal-detail-actions').hidden = !own && !(state.canReviewProposals && result.author?.id);
-    $('#revise-proposal').hidden = !own;
-    $('#revise-proposal').href = '#propose?revise=' + encodeURIComponent(record.id);
-    if ((!own || state.canSelfReviewProposals) && result.author?.id && state.canReviewProposals && (record.status === 'submitted' || proposals.reviewPending?.id === record.id)) showProposalReview(record, true);
+    $('#revise-proposal').hidden = !own || record.retracted;
+    $('#revise-proposal').href = record.source_note?.id ? '#notebook?note=' + encodeURIComponent(record.source_note.id) : '#propose?revise=' + encodeURIComponent(record.id);
+    $('#revise-proposal').textContent = record.source_note ? 'Revise proposal note →' : 'Upload a revised specification →';
+    if (proposals.reviewMode && !record.retracted && (!own || state.canSelfReviewProposals) && result.author?.id && state.canReviewProposals && (record.status === 'submitted' || proposals.reviewPending?.id === record.id)) showProposalReview(record, true);
   } catch (error) { if (current()) showInlineError(target, error.message, () => loadProposalDetail(id)); }
 }
 async function loadProposalRevision(id) {
@@ -2935,13 +4148,14 @@ async function loadProposalRevision(id) {
   clearProposalReview();
   setText('#proposal-revision-context', 'Loading the revision to replace…');
   renderProposalDraft();
-  const current = () => request === proposals.detailRequest && account === state.user?.id && state.screen === 'propose' && proposals.revisingId === id && !proposals.detailId;
+  const current = () => request === proposals.detailRequest && account === state.user?.id && proposalPageActive() && proposals.revisingId === id && !proposals.detailId;
   if (!account) { setText('#proposal-revision-context', 'Sign in to upload a revised specification.'); return; }
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) { setText('#proposal-revision-context', 'This proposal link is invalid.'); return; }
   try {
     const result = await api('/api/protocol/proposals/' + encodeURIComponent(id));
     if (!current()) return;
     if (!validProposal(result.proposal, id) || result.author?.id !== account) throw new Error('Only the proposer can upload a revised specification.');
+    if (result.proposal.retracted) throw new Error('This proposal was retracted. Start a new proposal to pursue a revised idea.');
     proposals.revisionBase = result.proposal;
     setText('#proposal-revision-context', `Replacing revision ${result.proposal.revision} of ${result.proposal.specification.name}. The earlier revision and reviews remain recorded. A new revision returns to review pending.`);
   } catch (error) { if (current()) { proposalError(error); setText('#proposal-revision-context', 'The revision could not be loaded. Reopen this proposal to retry.'); } }
@@ -2961,6 +4175,11 @@ function renderProposalAudit(target, result) {
     const content = node('div');
     renderSpecification(content, revision.specification);
     content.append(node('p', 'Content SHA-256 · ' + revision.content_sha256, 'proposal-digest'));
+    if (revision.source_note?.id) {
+      const source = node('a', 'Read the note submitted with this revision →', 'text-button');
+      source.href = '#notebook?' + new URLSearchParams({note:revision.source_note.id, revision:String(revision.source_note.revision)});
+      content.append(source);
+    }
     item.append(content);
     history.append(item);
     for (const review of reviews.filter(review => review.revision === revision.revision)) {
@@ -2984,7 +4203,7 @@ function renderProposalAudit(target, result) {
       more.disabled = true;
       try {
         const earlier = await api('/api/protocol/proposals/' + encodeURIComponent(id) + '/revisions?' + new URLSearchParams({before_revision: result.next_before_revision}));
-        if (request !== proposals.detailRequest || account !== state.user?.id || state.screen !== 'propose' || proposals.detailId !== id) return;
+        if (request !== proposals.detailRequest || account !== state.user?.id || !proposalPageActive() || proposals.detailId !== id) return;
         renderProposalAudit(history, earlier);
         more.hidden = true;
       } catch (error) { if (request === proposals.detailRequest && account === state.user?.id) { more.textContent = 'Try loading earlier revisions again'; more.title = error.message; } }
@@ -3012,6 +4231,7 @@ function clearProposalReview() {
   $('#proposal-review-status').hidden = true;
 }
 function showProposalReview(record, initialize = false) {
+  if (state.screen !== 'reviews' || state.reviewSection !== 'schemes' || !proposals.reviewMode || !state.canReviewProposals) return;
   $('#proposal-review-form').hidden = false;
   $('#proposal-self-review-notice').hidden = !proposals.detailOwn;
   const approvalOption = $('#proposal-decision').querySelector('[value="approved"]');
@@ -3036,7 +4256,7 @@ function showProposalReview(record, initialize = false) {
   if (pending && pending.id !== record.id) {
     setText('#proposal-review-status', 'A previous review is awaiting confirmation. ');
     const link = node('a', 'Return to that proposal and retry.', 'text-button');
-    link.href = '#propose?review=1&proposal=' + encodeURIComponent(pending.id);
+    link.href = reviewerRoute('schemes', {proposal: pending.id});
     $('#proposal-review-status').append(link);
     $('#proposal-review-status').hidden = false;
   }
@@ -3044,7 +4264,7 @@ function showProposalReview(record, initialize = false) {
 async function submitProposalReview(event) {
   event.preventDefault();
   const record = proposals.detailRecord;
-  if (!record || proposals.reviewBusy || !state.canReviewProposals || $('#proposal-review-form').hidden || (proposals.reviewPending && proposals.reviewPending.id !== record.id)) return;
+  if (!proposalPageActive() || !proposals.reviewMode || !record || proposals.reviewBusy || !state.canReviewProposals || $('#proposal-review-form').hidden || (proposals.reviewPending && proposals.reviewPending.id !== record.id)) return;
   const account = state.user?.id;
   const request = ++proposals.reviewRequest;
   const checks = Object.fromEntries([...document.querySelectorAll('[data-proposal-check]')].map(input => [input.dataset.proposalCheck, input.checked === true]));
@@ -3057,6 +4277,13 @@ async function submitProposalReview(event) {
     if (!['approved', 'changes_requested'].includes(decision) || !notes || !evidence) return setError('#proposal-review-error', 'Choose a decision and include notes and supporting evidence.');
     if (decision === 'approved' && !hasProposalTierDesign(record.specification)) return setError('#proposal-review-error', 'Approval requires a default-progression plan in this specification. Ask the proposer to submit a new revision with the completed plan.');
     if (decision === 'approved' && !hasProposalParameterSelection(record.specification)) return setError('#proposal-review-error', 'Approval requires a parameter-selection plan: objective, constraints, pinned model, search domain, candidate comparisons and uncertainty. Submit a completed revision first.');
+    const correctness = record.specification.correctness;
+    const meetsCorrectnessTarget = correctness?.kind === 'perfect' && correctness.failure_bound === '0' ||
+      correctness?.kind === 'statistical' && Number.isInteger(correctness.failure_bound_exponent) &&
+      correctness.failure_bound_exponent >= 128 && correctness.failure_bound_exponent <= 1_000_000;
+    if (decision === 'approved' && !meetsCorrectnessTarget) return setError('#proposal-review-error', 'Approval requires an explicit correctness claim of perfect agreement or failure probability at most 2^-128. For a statistical claim, declare failure_bound_exponent as an integer at least 128. Assumptions may remain conjectural; weaker or unknown claims remain drafts.');
+    const justification = correctness?.justification;
+    if (decision === 'approved' && (!['mathematical-proof', 'analytical-bound', 'model-based-analysis', 'conjectural-claim'].includes(justification?.kind) || !['statement', 'conditions', 'configuration_coverage', 'derivation'].every(key => typeof justification?.[key] === 'string' && justification[key].trim()) || typeof record.specification.encoding?.private_key !== 'string' || !record.specification.encoding.private_key.trim())) return setError('#proposal-review-error', 'Approval requires an explicit correctness claim, supporting reasoning and assumptions covering every admitted configuration, plus the private-key representation. Conjectural dependencies must be identified; proof of every assumption is not required. Ask for a completed revision first.');
     if (decision === 'approved' && (!checks.parameter_selection || !checks.tier_design || !Object.values(checks).every(Boolean) || !/^[a-f0-9]{64}$/.test(implementation || '') || [...evidence].length < 20 || record.specification.correctness.kind === 'unknown')) return setError('#proposal-review-error', 'Approval requires all review checks, an explicit correctness claim, an identified implementation artifact, and a documented reproduction record.');
     proposals.reviewPending = {id: record.id, payload: {
       expected_revision: record.revision, content_sha256: record.content_sha256, decision,
@@ -3074,7 +4301,7 @@ async function submitProposalReview(event) {
     if (!validProposal(result.proposal, pending.id) || result.review?.revision !== pending.payload.expected_revision ||
         result.review?.content_sha256 !== pending.payload.content_sha256 || result.review?.decision !== pending.payload.decision) throw new Error('The review receipt could not be confirmed.');
     proposals.reviewPending = null;
-    if (state.screen === 'propose') {
+    if (proposalPageActive()) {
       if (proposals.detailId === pending.id) loadProposalDetail(pending.id);
       loadProposals();
     }
@@ -3082,7 +4309,7 @@ async function submitProposalReview(event) {
     if (request !== proposals.reviewRequest || account !== state.user?.id) return;
     const uncertain = !error.status || error.status >= 500;
     if (!uncertain) proposals.reviewPending = null;
-    if (state.screen === 'propose' && proposals.detailId === pending.id) {
+    if (proposalPageActive() && proposals.detailId === pending.id) {
       setError('#proposal-review-error', error.message + (error.fieldErrors?.length ? ' ' + error.fieldErrors.map(item => item.path + ': ' + item.message).join(' ') : ''));
       setText('#proposal-review-status', uncertain ? 'The review could not be confirmed. Retry to recover the same decision receipt.' : 'The review was not recorded. Reopen the proposal if its revision has changed.');
       $('#proposal-review-status').hidden = false;
@@ -3090,7 +4317,7 @@ async function submitProposalReview(event) {
   } finally {
     if (request === proposals.reviewRequest) {
       proposals.reviewBusy = false;
-      if (state.screen === 'propose' && proposals.detailId === pending.id && proposals.detailRecord) showProposalReview(proposals.detailRecord);
+      if (proposalPageActive() && proposals.detailId === pending.id && proposals.detailRecord) showProposalReview(proposals.detailRecord);
     }
   }
 }
@@ -3121,22 +4348,33 @@ $('#download-proposal').addEventListener('click', () => {
 
 // Research records keep claims and their conditions separate from hourly ranking.
 function showWorkspace(name) {
+  if (!hasAccess()) name = 'access';
   if (!RESEARCH_ENABLED && name === 'research') name = 'catalogue';
+  if (name !== 'notebook') notebookWorkspace?.hide();
+  if (name !== 'reviews' || state.reviewSection === 'schemes') reviewNotebookWorkspace?.hide();
+  if (name !== 'assumptions') assumptionsWorkspace?.clear();
   const enteringResearch = !research.visible && name === 'research';
   research.visible = name === 'research';
+  $('#access-workspace').hidden = name !== 'access';
+  if (routeLoadingPanel) routeLoadingPanel.hidden = name !== 'loading';
+  $('.primary-nav').hidden = name === 'access';
+  $('#nav-people').hidden = name === 'access';
   $('#catalogue-workspace').hidden = name !== 'catalogue';
   $('#workspace').hidden = name !== 'scheme';
   $('#overview-workspace').hidden = name !== 'overview';
+  $('#assumptions-workspace').hidden = name !== 'assumptions';
   $('#notebook-workspace').hidden = name !== 'notebook';
+  $('#review-workspace').hidden = name !== 'reviews';
+  $('#review-notebook-workspace').hidden = name !== 'reviews' || state.reviewSection === 'schemes' || !state.canReviewProposals;
   $('#research-workspace').hidden = !research.visible;
   $('#about-workspace').hidden = name !== 'about';
-  $('#proposal-workspace').hidden = name !== 'propose';
+  $('#proposal-workspace').hidden = name !== 'propose' && !(name === 'reviews' && state.reviewSection === 'schemes' && state.canReviewProposals);
   $('#people-workspace').hidden = name !== 'people';
   $('#person-workspace').hidden = name !== 'person';
   $('#connect-workspace').hidden = name !== 'connect';
   for (const kind of ['challenge', 'people', 'notebook', 'research', 'about']) {
     const button = $('#nav-' + kind);
-    const selected = kind === 'challenge' ? ['catalogue', 'scheme', 'overview', 'propose'].includes(name) : kind === 'people' ? ['people', 'person'].includes(name) : kind === name;
+    const selected = kind === 'challenge' ? ['catalogue', 'scheme', 'overview', 'assumptions', 'propose'].includes(name) : kind === 'people' ? ['people', 'person'].includes(name) : kind === name;
     button.classList.toggle('selected', selected);
     if (selected) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
@@ -3575,22 +4813,33 @@ for (const [index, tab] of targetTabs.entries()) {
   });
 }
 
+for (const event of ['pointerenter', 'focus']) {
+  $('#nav-people').addEventListener(event, () => primeRead('people', '/api/people?limit=50&offset=0&include_records=false'));
+  $('#account-handle').addEventListener(event, () => {
+    if (state.user) primeRead('person:' + state.user.handle.toLowerCase(), '/api/people/' + encodeURIComponent(state.user.handle) + '?include_milestones=false');
+  });
+  $('#nav-notebook').addEventListener(event, () => {
+    if (!hasAccess() || navigator.connection?.saveData || notebookAssetsReady) return;
+    void loadNotebookAsset('/notebook/notebook.css', true).catch(() => {});
+    for (const path of ['/notebook/seed.js', '/notebook/store.js', '/notebook/notebook.js']) void loadNotebookAsset(path).catch(() => {});
+  });
+}
 async function initialize() {
   globalError('');
   $('#retry-button').disabled = true;
   $('#challenge-loading').hidden = false;
-  const [session, catalogue] = await Promise.allSettled([api('/api/session'), api('/api/schemes')]);
-  if (session.status === 'fulfilled') setSession(session.value);
-  if (catalogue.status === 'fulfilled') {
-    state.schemes = catalogue.value.schemes || [];
-    state.ready = true;
-    applyRoute();
-  } else {
-    showInlineError($('#kem-catalogue'), catalogue.reason.message, initialize);
+  capturePasswordResetLink();
+  captureInvitation();
+  try {
+    setSession(await api('/api/session', undefined, {initialSession: true}));
+    if (await handleAuthenticationRoute()) return;
+    if (!hasAccess()) return;
+    await loadAuthorizedWorkspace();
+  } catch (error) {
+    if (hasAccess()) { showRouteLoading(); showInlineError(routeLoadingPanel, error.message, initialize); }
+    else { globalError(error.message); if (!state.sessionResolved) setText('#access-description', 'Access could not be checked. Try again.'); }
     $('#challenge-loading').hidden = true;
-  }
-  if (session.status === 'rejected') globalError('Sign-in could not be loaded. ' + session.reason.message);
-  $('#retry-button').disabled = false;
+  } finally { $('#retry-button').disabled = false; }
 }
 setInterval(updateClock, 1000);
 setInterval(() => { if (!document.hidden) synchronizeSession(); }, 60000);

@@ -12,12 +12,13 @@ from scripts.hqc_growth_solve_tier1 import solve
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = Path(os.environ.get('CRUCIBLE_HQC_TEST_BASE_NATIVE', ROOT/'.native-pq'))
+GROWTH = Path(os.environ.get('CRUCIBLE_HQC_TEST_GROWTH_ROOT', ROOT/'.native-hqc-growth'))
 SOURCE = BASE/'source'/('liboqs-'+hqc.COMMIT)
 CODECS = {tuple(row[key] for key in ('rs_length', 'rm_length')): row for row in hqc.PROFILES}
 
 
 def compile_harness(tmp_path, row, harness, directory=None, sanitize=False):
-    directory = directory or ROOT/'.native-hqc-growth/source'/f"hqc-{row['tier']}"
+    directory = directory or GROWTH/'source'/f"hqc-{row['tier']}"
     output = tmp_path/(harness + str(row['tier']) + ('-sanitized' if sanitize else ''))
     flags = ['-DCODE_FAMILY=1', '-DHQC_ARCH_REF=1', '-DPQCHQC_NAMESPACE_PREFIX=PQCHQC_HQC1_C_', '-DUSE_OQS_RANDOMBYTES']
     if sanitize:

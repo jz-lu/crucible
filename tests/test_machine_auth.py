@@ -59,7 +59,7 @@ def test_device_handoff_needs_explicit_browser_approval_and_persists_only_hashes
     assert TestClient(app).get(url).status_code == 401
     preview = browser.client.get(url.lower()).json()["connection"]
     assert preview["status"] == "pending" and preview["label"] == "Local solver"
-    assert preview["scopes"] == list(machine_auth.SCOPES)
+    assert preview["scopes"] == list(machine_auth.DEFAULT_SCOPES)
     assert "device_code" not in preview
     approved = browser.post(url + "/approve", {})
     assert approved.status_code == 200 and approved.json()["connection"]["status"] == "approved"

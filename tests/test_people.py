@@ -81,7 +81,7 @@ def test_zero_result_accounts_have_shared_zero_rank_and_bounded_pagination(curre
     assert first["pagination"] == {"limit": 2, "offset": 0, "total": 3, "has_more": True}
     for row in first["people"]:
         assert row["points"] == 0 and row["rank"] == 1
-        assert row["score_breakdown"] == {"progress": 0, "early_recovery": 0, "scheme_contributions": 0}
+        assert row["score_breakdown"] == {"progress": 0, "early_recovery": 0, "scheme_contributions": 0, "note_contributions": 0}
         assert row["correct_submission_count"] == row["schemes_recovered"] == 0
         assert row["accepted_proposal_count"] == 0
         assert row["records"] == [] and row["score_status"] == "active"
@@ -89,7 +89,7 @@ def test_zero_result_accounts_have_shared_zero_rank_and_bounded_pagination(curre
     assert [row["handle"] for row in last["people"]] == ["charlie"]
     assert not last["pagination"]["has_more"]
     assert people(app, offset=99)["people"] == []
-    assert first["scoring"]["policy_id"] == "crucible-points-v6"
+    assert first["scoring"]["policy_id"] == "crucible-points-v10"
 
 
 @pytest.mark.parametrize("query", [{"limit": 0}, {"limit": 101}, {"offset": -1}, {"limit": "x"}])
@@ -165,7 +165,7 @@ def test_only_single_best_bonus_survives_when_personal_best_later_increases(curr
     receipt(app, alice, 11, 20)
     data = person(app, "alice")
     assert data["points"] == 110 + 400
-    assert data["score_breakdown"] == {"progress": 110, "early_recovery": 400, "scheme_contributions": 0}
+    assert data["score_breakdown"] == {"progress": 110, "early_recovery": 400, "scheme_contributions": 0, "note_contributions": 0}
     record = data["records"][0]
     assert record["tier"] == 11 and record["score"]["early_recovery_tier"] == 10
     assert record["score"]["early_recovery_submission_id"] == first["submission_id"]
@@ -197,7 +197,7 @@ def test_first_nineteen_then_second_twenty_retains_only_first_nineteen_bonus(cur
     receipt(app, carol, 20, 3)
     data = person(app, "alice")
     assert data["points"] == 960
-    assert data["score_breakdown"] == {"progress": 200, "early_recovery": 760, "scheme_contributions": 0}
+    assert data["score_breakdown"] == {"progress": 200, "early_recovery": 760, "scheme_contributions": 0, "note_contributions": 0}
     score = data["records"][0]["score"]
     assert score["early_recovery_tier"] == 19 and score["early_recovery_rank"] == 1
     assert score["early_recovery_submission_id"] == first["submission_id"]
@@ -214,7 +214,7 @@ def test_second_at_twenty_without_any_first_receipt_gets_only_progress(current_s
     receipt(app, bob, 20, 3)
     data = person(app, "bob")
     assert data["points"] == 200
-    assert data["score_breakdown"] == {"progress": 200, "early_recovery": 0, "scheme_contributions": 0}
+    assert data["score_breakdown"] == {"progress": 200, "early_recovery": 0, "scheme_contributions": 0, "note_contributions": 0}
 
 
 def test_archives_keep_exact_tiers_but_never_gain_current_score_or_double_family_credit(current_system, monkeypatch):

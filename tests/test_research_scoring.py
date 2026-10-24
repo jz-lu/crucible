@@ -19,8 +19,10 @@ def test_existing_research_receipts_earn_progress_and_single_first_bonus(current
         registered_receipt(app, user, adapter, tier, tier)
     registered_receipt(app, user, adapter, 5, 6)
     data = person(app, "alice")
-    assert data["points"] == 250
-    assert data["score_breakdown"] == {"progress": 50, "early_recovery": 200, "scheme_contributions": 0}
+    weight = {"dhkem-x25519": 50, "ml-kem": 416, "frodokem": 31, "sntrup": 92,
+              "hqc": 37, "classic-mceliece": 50}[adapter.SCHEME_ID]
+    assert data["points"] == 5 * weight
+    assert data["score_breakdown"] == {"progress": weight, "early_recovery": 4 * weight, "scheme_contributions": 0, "note_contributions": 0}
     assert all(record["scoring_eligible"] for record in data["records"])
     profile = adapter.manifests()[4]
     assert standard_schemes.profile_presentation(profile)["scoring_eligible"]
@@ -55,14 +57,14 @@ def test_hqc_bounds_and_other_releases_do_not_silently_enroll(current_system):
     app, _, _ = current_system
     alice = add_user(app, "alice")
     release = scoring.FAMILY_RELEASES["hqc"]
-    assert scoring.eligible_record("hqc", release["version"], release["profile_prefix"] + "27", 27)
-    assert not scoring.eligible_record("hqc", release["version"], release["profile_prefix"] + "28", 28)
+    assert scoring.eligible_record("hqc", release["version"], release["profile_prefix"] + "66", 66)
+    assert not scoring.eligible_record("hqc", release["version"], release["profile_prefix"] + "67", 67)
     assert not scoring.eligible_record("hqc", "next-release", release["profile_prefix"] + "1", 1)
     from crucible.db import Challenge
     def bind_unregistered(result, session):
         challenge = session.get(Challenge, result.challenge_id)
-        challenge.profile_id = result.profile_id = release["profile_prefix"] + "28"
-    receipt(app, alice, 28, scheme="hqc", version=release["version"], mutate=bind_unregistered)
+        challenge.profile_id = result.profile_id = release["profile_prefix"] + "67"
+    receipt(app, alice, 67, scheme="hqc", version=release["version"], mutate=bind_unregistered)
     participants, _ = scoring.score_relations()
     with app.state.db.transaction() as session:
         assert session.scalar(select(participants.c.points).where(participants.c.id == alice)) == 0

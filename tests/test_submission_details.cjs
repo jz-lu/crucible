@@ -73,6 +73,23 @@ async function test(name,run) {await run();console.log('PASS '+name);passed++;}
     assert.equal(app.document.activeElement===button,true,'Focus returns to the profile recovery');
     assertReadOnly(app);
   });
+  await test('AI model attribution is shown as participant-reported text without executing markup', async () => {
+    const model = '<img src=x onerror=unexpected()> Fixture Model 1; Other Model 2';
+    const app = await boot({hook:(url,options,envelope)=>url.pathname === '/api/submissions/public-first' ? envelope({submission:receipt({ai_model:model})}) : undefined});
+    (await publicButton(app)).click(); await flush();
+    assert.equal(fact(app, 'AI model(s)'), model);
+    assert.equal(app.$('#recovery-content').querySelectorAll('img').length, 0);
+    assert.match(app.$('#recovery-content').textContent, /AI model attribution and resources are participant-reported/);
+    assertReadOnly(app);
+  });
+  await test('old and blank model annotations are displayed as not reported, not human-only', async () => {
+    for (const fields of [{}, {ai_model:''}, {ai_model:'   '}]) {
+      const app = await boot({hook:(url,options,envelope)=>url.pathname === '/api/submissions/public-first' ? envelope({submission:receipt(fields)}) : undefined});
+      (await publicButton(app)).click(); await flush();
+      assert.equal(fact(app, 'AI model(s)'), 'Not reported');
+      assert.match(app.$('#recovery-content').textContent, /unreported model does not establish that no AI was used/);
+    }
+  });
   await test('history entries are whole keyboard buttons and owner-only incorrect details keep history beneath',async()=>{
     const app=await boot();
     const historyTrigger=app.$('#history-button');

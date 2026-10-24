@@ -75,7 +75,8 @@ def _headline(user):
     return {"handle": user.handle, "points": user.points, "rank": user.rank,
             "score_status": "active",
             "score_breakdown": {"progress": user.progress, "early_recovery": user.early_recovery,
-                                "scheme_contributions": user.scheme_contributions},
+                                "scheme_contributions": user.scheme_contributions,
+                                "note_contributions": user.note_contributions},
             "accepted_proposal_count": user.accepted_proposal_count}
 
 

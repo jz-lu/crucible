@@ -25,6 +25,7 @@ Explicitly fetch and verify upstream sources, then build the reference workers:
   .venv/bin/python scripts/build_ntru_frontier.py
   .venv/bin/python scripts/code_build_backend.py
   .venv/bin/python scripts/build_hqc_growth.py --base-native .native-pq
+  .venv/bin/python scripts/build_hqc_model.py --base-native .native-pq
 
 The source archives and build products stay in ignored .native-pq/, .native/
 and .native-code/, plus .native-hqc-growth/. Each builder checks source digests
@@ -54,17 +55,36 @@ Runtime files for an already verified installation:
   .native-pq/install/ (worker, build manifest and licenses)
   .native-code/install/ (77 workers, build manifest and licenses)
   .native-hqc-growth/install/ (27 growing-code HQC workers, separate manifest/licenses)
+  .local/native-hqc-model/install/ (66 current modeled HQC workers, separate manifest/licenses)
   .native/sntrup/crucible-sntrup-worker
   .native/ntru-tiers/crucible-ntru-tier-worker (archived v2)
   .native/ntru-frontier/crucible-ntru-frontier-worker (current v3, 27 profiles)
 All first-party source and parameter files referenced by their closure must also
 be present. Keep upstream license files when copying native build products.
+The new HQC builder writes only beneath this checkout's .local directory and
+does not overwrite the archived HQC workers. Runtime needs its install directory;
+offline timing reproduction additionally needs the verified source tree created
+alongside it. See docs/hqc-model-v3.txt and docs/hqc-v3-reference-timings.txt.
 
 Accounts, sessions, server keys and submissions live in .local/ by default;
 none belong in a source or build artifact. Preserve that directory during code
 updates and use an isolated CRUCIBLE_DATA_DIR for tests.
 
 CI coverage
+
+Native regression tests need verified source trees and static libraries as well
+as installed workers. A runtime-only installation is insufficient for tests that
+compile independent codec checks. Keep the registered runtime untouched when
+rebuilding these test dependencies. Code-family tests accept
+CRUCIBLE_CODE_TEST_BASE_NATIVE and CRUCIBLE_CODE_TEST_ROOT; HQC tests accept
+CRUCIBLE_HQC_TEST_BASE_NATIVE, CRUCIBLE_HQC_TEST_GROWTH_ROOT,
+CRUCIBLE_HQC_TEST_LEGACY_SOURCE and CRUCIBLE_HQC_MODEL_TEST_ROOT.
+Point these at the corresponding verified base build, code-family build,
+HQC-growth build, legacy HQC source and modeled-HQC build roots. They affect
+test compilation only and do not replace the registered artifact identities.
+
+The CLI integration tests also bind localhost test servers. Run them in an
+environment that permits loopback sockets, with isolated test databases.
 
 The portable-source-checks workflow checks Python compilation, migrations, its
 explicitly listed source-only Python tests and all standalone frontend regression

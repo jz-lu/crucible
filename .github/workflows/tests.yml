@@ -1,5 +1,5 @@
-name: portable-source-checks
-on: [push, pull_request]
+name: CI
+on: [push, pull_request, workflow_call]
 permissions:
   contents: read
 jobs:
@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.11', '3.14']
+        python-version: ['3.11', '3.13', '3.14']
     env:
       CRUCIBLE_ENV: development
     steps:
@@ -39,6 +39,27 @@ jobs:
           tests/test_classical_frontier_audit.py
           tests/test_cli.py
           tests/test_kem.py
+          tests/test_module_compressed_v4_core.py
+          tests/test_mlkem_correctness_certificate.py
+          tests/test_common_correctness_policy.py
+          tests/test_exact_parameters.py
+          tests/test_beta_invitations.py
+          tests/test_beta_operator.py
+          tests/test_beta_preflight.py
+          tests/test_beta_migration.py
+          tests/test_beta_transfer.py
+          tests/test_beta_release_baselines.py
+          tests/test_implementation_builds.py
+          tests/test_app_platform.py
+          tests/test_app_platform_backup.py
+          tests/test_dependency_lock.py
+          tests/test_db_pool.py
+          tests/test_sntrup_builder.py
+          tests/test_ntru_linux_builder.py
+          tests/test_github_auth.py
+          tests/test_password_recovery.py
+          tests/test_password_recovery_races.py
+          tests/test_release_pipeline.py
       - name: Run all standalone frontend regressions
         run: |
           node --version
@@ -54,8 +75,29 @@ jobs:
           Python tests, and all standalone JavaScript regressions. It does not build
           or validate the registered native cryptographic workers.
 
-          Before release, run the full backend suite and registry validation on the
-          reviewed native runtime described in docs/native-setup.txt. Current macOS
-          artifact pins are not portable Ubuntu CI artifacts; this workflow does not
-          bypass them, replace them with mocks, or claim full native verification.
+          The separate manual Release beta workflow validates the exact reviewed
+          Linux AMD64 image, every registered scheme manifest and its selected
+          native application regression suites before publication. See
+          docs/releasing-beta.txt for the precise scope. This portable job does not
+          bypass native pins or claim full native/backend verification.
           EOF
+  release-contract:
+    name: Reviewed runtime source contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - run: python -B deploy/release.py contract
+  ci:
+    name: CI passed
+    if: always()
+    needs: [portable-source-checks, release-contract]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every source check
+        env:
+          SOURCE_RESULT: ${{ needs.portable-source-checks.result }}
+          CONTRACT_RESULT: ${{ needs.release-contract.result }}
+        run: test "$SOURCE_RESULT" = success && test "$CONTRACT_RESULT" = success

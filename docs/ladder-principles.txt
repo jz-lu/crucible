@@ -36,14 +36,17 @@ Principles for constructing and reviewing a progression
    extrapolate to larger instances. Small-instance recovery alone is not evidence
    against the published endpoint or its security assumption.
 
-3. Stable correctness contract. Choose an acceptable strong common failure upper
-   bound and justify that every admitted configuration meets it, including any
+3. Stable correctness contract. Choose and justify a claimed common failure upper
+   bound, with explicit assumptions for every admitted configuration, including any
    off-route configuration. Zero failure is allowed, not required; equal actual
    probabilities are not required. Publish stronger individual bounds and material
    variation, rather than conceal them under a loose envelope. Keep availability
    and resource aborts separate. Do not silently change perfect to statistical
-   correctness within a frozen release. No universal numeric threshold for all
-   constructions has been adopted; the chosen bound and scope require review.
+   correctness within a frozen release. New approval/admission requires a claimed
+   common failure bound at most 2^-128, or perfect agreement. Meaningful explicit
+   conjectural assumptions are allowed; weaker or unknown claims remain drafts.
+   This target is not unconditional certification; see correctness-policy-v1.txt.
+   Bounds, evidence models and their scope require substantive review.
 
 4. Defensible efficiency. Specify workload and communication/computation/memory
    objectives. Reject demonstrably inferior choices within the declared family,

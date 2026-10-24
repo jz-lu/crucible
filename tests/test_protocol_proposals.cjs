@@ -14,6 +14,7 @@ const tierDesign = () => ({parameter_progression:'Increase the dimension.',cost_
   fixed_correctness:'Keep the same zero-disagreement bound.',endpoint_status:'provisional',endpoint_target:'A declared research endpoint.',
   endpoint_evidence:'<script>never_execute_tier_plan()</script> No calibration yet.',intermediate_steps:'Each step increases the dimension.',
   parameter_selection:{objective:'Minimize wire bytes.',constraints:'Fixed correctness and construction.',security_model:'No calibrated target; research comparison only.',search_domain:'The declared parameter table.',comparison_evidence:'Compare exact byte lengths and known parameter restrictions.',tradeoffs_and_uncertainty:'Unsearched alternatives and computation costs remain uncertain.'}});
+const justify = value => { value.correctness.policy_id='crucible-honest-agreement-128-v1'; if(value.correctness.kind==='statistical')value.correctness.failure_bound_exponent=128; value.encoding.private_key='A fixed-width secret scalar, erased after use.'; value.correctness.justification={kind:'mathematical-proof',statement:'Honest outputs agree.',conditions:'Declared independent sampling.',configuration_coverage:'Every listed configuration.',derivation:'A fixture-only symbolic derivation.'}; return value; };
 const receipt = (overrides={}) => ({id:'proposal-one',status:'submitted',revision:1,created_at:100,content_sha256:digest,specification:spec(),...overrides});
 const deferred = () => {let resolve; const promise=new Promise(r=>{resolve=r;}); return {promise,resolve};};
 async function boot({account=user,hash='#propose',canReview=false,canSelfReview=false,hook}={}) {
@@ -49,19 +50,15 @@ async function recordReview(app){app.$('#proposal-review-form').dispatchEvent({t
 let passed=0;
 async function test(name,run){await run();console.log('PASS '+name);passed++;}
 (async()=>{
-  await test('proposal route has no new top-level navigation and downloads are explicit same-origin links',async()=>{
-    const app=await boot({account:null,hash:'#challenge'});
-    const entry=app.$('#catalogue-workspace').querySelectorAll('a').find(link=>link.href==='#propose');
-    assert.ok(entry);entry.click();await flush();
+  await test('proposal creation stays in the notebook while the agent intake and review route stay available',async()=>{
+    const app=await boot({account:null,hash:'#propose'});
+    const entry=app.$('#catalogue-workspace').querySelectorAll('a').find(link=>link.href==='#notebook?compose=proposal');
+    assert.equal(entry,undefined);
     assert.equal(app.$('#proposal-workspace').hidden,false);
-    assert.equal(app.$('#catalogue-workspace').hidden,true);
-    assert.equal(app.$('#nav-challenge').getAttribute('aria-current'),'page');
-    assert.equal(app.document.title,'Propose a scheme — Crucible');
-    assert.equal(app.document.activeElement===app.$('#proposal-workspace'),true);
     const links=app.$('#proposal-workspace').querySelectorAll('a').map(a=>a.href);
     assert.ok(links.includes('/api/protocol/spec-template'));assert.ok(links.includes('/api/protocol/spec-schema'));
+    assert.ok(links.includes('#notebook?compose=proposal'));
     assert.equal(app.requests.some(r=>r.url.pathname.includes('protocol')),false);
-    app.history.back();await flush();assert.equal(app.$('#proposal-workspace').hidden,true);
   });
   await test('anonymous agent preparation is explicit, copyable and inert, with manual upload retained',async()=>{
     const app=await boot({account:null});let copied='';app.sandbox.navigator.clipboard={writeText:async text=>{copied=text;}};
@@ -79,7 +76,7 @@ async function test(name,run){await run();console.log('PASS '+name);passed++;}
     for(const verb of ['init','validate','submit'])assert.match(copied,new RegExp('proposal '+verb+' --path'));
     assert.match(copied,/Only when I ask you to submit/);assert.match(copied,/do not invent proofs/);
     assert.match(copied,/Existing connections need login once/);
-    assert.match(copied,/template’s tier_design plan/);assert.match(copied,/common correctness requirement across the progression/);
+    assert.match(copied,/template’s tier_design plan/);assert.match(copied,/precise correctness guarantee/);assert.match(copied,/target is not optional/);
     assert.match(copied,/endpoint target, evidence and status.*provisional or unestimated/);assert.match(copied,/useful intermediate stages/);
     assert.doesNotMatch(copied,/test-csrf|access_token|never_execute/);
     assert.match(app.$('#proposal-agent-followup').textContent,/prepare a new KEM proposal/);
@@ -108,7 +105,7 @@ async function test(name,run){await run();console.log('PASS '+name);passed++;}
     app.$('#copy-proposal-revise-agent').click();await flush();
     assert.match(copied,/proposal revise 'proposal-one' --path/);assert.match(copied,/Expected base: revision 7/);
     assert.ok(copied.includes(digest));assert.match(copied,/If the fetched revision or hash differs/);
-    assert.match(copied,/private proposal link from the receipt/);assert.doesNotMatch(copied,/never_execute|test-csrf/);
+    assert.match(copied,/note link and review link from the receipt/);assert.doesNotMatch(copied,/never_execute|test-csrf/);
     assert.equal(app.requests.length,before);assert.equal(reviews(app).length,0);assert.equal(app.$('#proposal-review-form').hidden,true);
     app.$('#proposal-revise-agent').click();assert.equal(app.$('#proposal-revise-agent-instructions').hidden,true);
     app.$('#proposal-revise-agent').click();await app.navigate('#propose');
@@ -252,15 +249,30 @@ async function test(name,run){await run();console.log('PASS '+name);passed++;}
   });
   await test('review navigation is capability-gated and self-review defaults off',async()=>{
     const ordinary=await boot({hash:'#propose?review=1'});
-    assert.equal(ordinary.$('#proposal-review-link').hidden,true);
+    assert.equal(ordinary.document.querySelector('#proposal-review-link'),null);
     assert.equal(ordinary.requests.some(r=>r.url.pathname==='/api/protocol/review-queue'),false);
-    assert.match(ordinary.$('#proposal-list').textContent,/configured reviewers/);
+    assert.match(ordinary.$('#review-access-message').textContent,/configured reviewers/);
+    assert.equal(ordinary.$('#proposal-workspace').hidden,true);
     const own=await boot({canReview:true,hash:'#propose?review=1&proposal=proposal-one'});
-    assert.equal(own.$('#proposal-review-link').hidden,false);
+    assert.equal(own.document.querySelector('#proposal-review-link'),null);
+    assert.equal(own.$('#review-workspace').hidden,false);
     assert.equal(own.$('#proposal-review-form').hidden,true);
     assert.equal(own.$('#proposal-detail-actions').hidden,false);
     assert.equal(own.$('#revise-proposal').hidden,false);
     assert.equal(own.$('#revise-proposal').href,'#propose?revise=proposal-one');
+  });
+  await test('ordinary proposal receipt links never open reviewer controls, including a late review response',async()=>{
+    const direct=await boot({account:reviewer,canReview:true,hash:'#propose?proposal=proposal-one'});
+    assert.equal(direct.$('#proposal-review-form').hidden,true);
+    assert.equal(direct.$('#review-workspace').hidden,true);
+    assert.equal(direct.requests.some(r=>r.url.pathname==='/api/protocol/review-queue'),false);
+    const pending=deferred();const app=await boot({account:reviewer,canReview:true,hash:'#reviews?section=schemes&proposal=proposal-one',hook:url=>url.pathname.endsWith('/reviews')?pending.promise:undefined});
+    fillReview(app);app.$('#proposal-review-form').dispatchEvent({type:'submit'});await flush();
+    const body=JSON.parse(reviews(app)[0].options.body);
+    await app.navigate('#propose?proposal=proposal-one');
+    pending.resolve({proposal:receipt({status:'changes_requested'}),review:{revision:body.expected_revision,content_sha256:body.content_sha256,decision:body.decision}});await flush();
+    assert.equal(app.$('#proposal-review-form').hidden,true);
+    assert.equal(app.$('#review-workspace').hidden,true);
   });
   await test('development self-review requires its own capability and is visibly test-only',async()=>{
     const app=await boot({canReview:true,canSelfReview:true,hash:'#propose?review=1&proposal=proposal-one'});
@@ -275,7 +287,7 @@ async function test(name,run){await run();console.log('PASS '+name);passed++;}
   await test('legacy parameter selections are readable but new approval requires completed comparison evidence',async()=>{
     for(const selection of [undefined,{}, {...tierDesign().parameter_selection,comparison_evidence:' '}]) {
       const value=spec();value.tier_design=tierDesign();value.tier_design.parameter_selection=selection;
-      value.correctness.kind='perfect';value.correctness.failure_bound='0';value.implementation={sha256:'b'.repeat(64)};
+      value.correctness.kind='perfect';value.correctness.failure_bound='0';justify(value);value.implementation={sha256:'b'.repeat(64)};
       const app=await boot({account:reviewer,canReview:true,hash:'#propose?review=1&proposal=proposal-one',hook:url=>url.pathname.endsWith('/proposal-one')?{proposal:receipt({specification:value}),author:user}:undefined});
       fillReview(app,'approved');await recordReview(app);
       assert.equal(reviews(app).length,0);assert.match(app.$('#proposal-review-error').textContent,/parameter-selection plan/);
@@ -283,7 +295,7 @@ async function test(name,run){await run();console.log('PASS '+name);passed++;}
   });
   await test('configured reviewers see the private queue and its author-labelled exact detail links',async()=>{
     const app=await boot({account:reviewer,canReview:true,hash:'#propose?review=1',hook:url=>url.pathname==='/api/protocol/review-queue'?{proposals:[{...receipt(),author:user}]}:undefined});
-    const link=app.$('#proposal-list').querySelector('a');assert.equal(link.href,'#propose?review=1&proposal=proposal-one');
+    const link=app.$('#proposal-list').querySelector('a');assert.equal(link.href,'#reviews?section=schemes&proposal=proposal-one');
     assert.match(link.textContent,/Revision 1.*Review pending.*owner/);
     link.click();await flush();assert.equal(app.$('#proposal-review-form').hidden,false);
     assert.equal(app.$('#proposal-detail-actions').hidden,false);assert.equal(app.$('#revise-proposal').hidden,true);assert.equal(reviews(app).length,0);
@@ -291,20 +303,20 @@ async function test(name,run){await run();console.log('PASS '+name);passed++;}
   });
   await test('approval needs every check, an exact implementation artifact, and substantive evidence',async()=>{
     for(const missing of ['artifact','check','tier-check','evidence','correctness']){
-      const value=spec();value.tier_design=tierDesign();if(missing!=='artifact')value.implementation={url:'https://example.invalid/artifact',sha256:'b'.repeat(64)};
-      if(missing!=='correctness'){value.correctness.kind='perfect';value.correctness.failure_bound='0';}
+      const value=justify(spec());value.tier_design=tierDesign();if(missing!=='artifact')value.implementation={url:'https://example.invalid/artifact',sha256:'b'.repeat(64)};
+      if(missing!=='correctness'){value.correctness.kind='perfect';value.correctness.failure_bound='0';justify(value);}
       const app=await boot({account:reviewer,canReview:true,hash:'#propose?review=1&proposal=proposal-one',hook:url=>url.pathname.endsWith('/proposal-one')?{proposal:receipt({specification:value}),author:user}:undefined});
       fillReview(app,'approved');
       if(missing==='check')app.document.querySelector('[data-proposal-check]').checked=false;
       if(missing==='tier-check')app.document.querySelector('[data-proposal-check="tier_design"]').checked=false;
       if(missing==='evidence')app.$('#proposal-review-evidence').value='Too short';
-      await recordReview(app);assert.equal(reviews(app).length,0);assert.match(app.$('#proposal-review-error').textContent,/all review checks/);
+      await recordReview(app);assert.equal(reviews(app).length,0);assert.match(app.$('#proposal-review-error').textContent,missing==='correctness'?/explicit correctness claim/:/all review checks/);
     }
   });
   await test('legacy or incomplete plans remain readable but cannot receive a new approval',async()=>{
     for(const plan of [undefined,null,{}, {...tierDesign(),fixed_correctness:' '}, {...tierDesign(),endpoint_status:'proved'}]){
       const value=spec();value.implementation={url:'https://example.invalid/artifact',sha256:'b'.repeat(64)};
-      value.correctness.kind='perfect';value.correctness.failure_bound='0';
+      value.correctness.kind='perfect';value.correctness.failure_bound='0';justify(value);
       if(plan!==undefined)value.tier_design=plan;
       const app=await boot({account:reviewer,canReview:true,hash:'#propose?review=1&proposal=proposal-one',hook:url=>url.pathname.endsWith('/proposal-one')?{proposal:receipt({specification:value}),author:user}:undefined});
       assert.match(app.$('#proposal-detail-content').textContent,/Fixture KEM/);assert.equal(app.$('#proposal-review-form').hidden,false);
@@ -315,7 +327,7 @@ async function test(name,run){await run();console.log('PASS '+name);passed++;}
   });
   await test('explicit approval binds the decision and evidence to the displayed revision and hashes without activation',async()=>{
     const value=spec();value.tier_design=tierDesign();value.implementation={url:'https://example.invalid/artifact',sha256:'b'.repeat(64)};
-    value.correctness.kind='perfect';value.correctness.failure_bound='0';
+    value.correctness.kind='perfect';value.correctness.failure_bound='0';justify(value);
     let current=receipt({specification:value,revision:3});let decision;
     const app=await boot({account:reviewer,canReview:true,hash:'#propose?review=1&proposal=proposal-one',hook:(url,options)=>{
       if(url.pathname.endsWith('/proposal-one'))return{proposal:current,author:user};
@@ -332,6 +344,43 @@ async function test(name,run){await run();console.log('PASS '+name);passed++;}
     assert.equal(app.$('#proposal-review-form').hidden,true);
     assert.match(app.$('#proposal-detail-content').textContent,/Approved.*does not activate a live challenge or certify security/);
     assert.equal(app.requests.some(r=>r.url.hostname==='example.invalid'||r.url.pathname==='/api/challenges'),false);
+  });
+  await test('historical correctness summaries remain readable but new approval needs a derivation and private encoding',async()=>{
+    for(const missing of ['justification','conditions','configuration_coverage','private_key']){
+      const value=justify(spec());value.tier_design=tierDesign();value.correctness.kind='perfect';value.correctness.failure_bound='0';value.implementation={sha256:'b'.repeat(64)};
+      if(missing==='justification')delete value.correctness.justification;
+      else if(missing==='private_key')delete value.encoding.private_key;
+      else value.correctness.justification[missing]=' ';
+      const app=await boot({account:reviewer,canReview:true,hash:'#propose?review=1&proposal=proposal-one',hook:url=>url.pathname.endsWith('/proposal-one')?{proposal:receipt({specification:value}),author:user}:undefined});
+      assert.match(app.$('#proposal-detail-content').textContent,/Fixture KEM/);
+      fillReview(app,'approved');await recordReview(app);
+      assert.equal(reviews(app).length,0);assert.match(app.$('#proposal-review-error').textContent,/explicit correctness claim/);
+    }
+    const app=await boot();const value=justify(spec());value.correctness.justification.derivation='<script>not executable</script>';
+    await upload(app,value);const preview=app.$('#proposal-preview');
+    for(const label of ['Private key','Mathematical statement','Conditions','Configuration coverage','Derivation','Mathematical proof'])assert.ok(preview.textContent.includes(label));
+    assert.match(preview.textContent,/<script>not executable<\/script>/);assert.equal(preview.querySelector('script'),null);
+  });
+  await test('conditional target claims can be reviewed while weaker or incomplete targets remain drafts',async()=>{
+    for(const variant of ['missing-policy','weaker-bound','just-below-target','missing-exponent','boolean-exponent','model','stronger-bound','unknown']){
+      const value=justify(spec());value.tier_design=tierDesign();value.implementation={sha256:'b'.repeat(64)};
+      value.correctness.kind='statistical';value.correctness.failure_bound='2^-128';value.correctness.failure_bound_exponent=128;
+      value.correctness.justification.kind=variant==='model'?'model-based-analysis':'conjectural-claim';
+      value.correctness.justification.conditions='Explicit conjectural dependencies, independently motivated but not proved.';
+      if(variant==='missing-policy')delete value.correctness.policy_id;
+      if(variant==='weaker-bound'){value.correctness.failure_bound_exponent=64;value.correctness.failure_bound='2^-64';}
+      if(variant==='just-below-target'){value.correctness.failure_bound_exponent=127;value.correctness.failure_bound='2^-127';}
+      if(variant==='missing-exponent')delete value.correctness.failure_bound_exponent;
+      if(variant==='boolean-exponent')value.correctness.failure_bound_exponent=true;
+      if(variant==='stronger-bound'){value.correctness.failure_bound_exponent=138;value.correctness.failure_bound='2^-138';}
+      if(variant==='unknown'){value.correctness.kind='unknown';value.correctness.failure_bound=null;delete value.correctness.failure_bound_exponent;}
+      const app=await boot({account:reviewer,canReview:true,hash:'#propose?review=1&proposal=proposal-one',hook:url=>url.pathname.endsWith('/proposal-one')?{proposal:receipt({specification:value}),author:user}:undefined});
+      assert.match(app.$('#proposal-detail-content').textContent,variant==='model'?/Model-based analysis/:/Conjectural claim/);
+      fillReview(app,'approved');await recordReview(app);
+      const accepted=['missing-policy','model','stronger-bound'].includes(variant);
+      assert.equal(reviews(app).length,accepted?1:0);
+      if(!accepted)assert.match(app.$('#proposal-review-error').textContent,/explicit correctness claim.*at most 2\^-128/);
+    }
   });
   await test('changes can be requested without an implementation, but require notes and evidence',async()=>{
     let current=receipt();const app=await boot({account:reviewer,canReview:true,hash:'#propose?review=1&proposal=proposal-one',hook:(url,options)=>{
@@ -396,7 +445,7 @@ async function test(name,run){await run();console.log('PASS '+name);passed++;}
     app.sandbox.setSession(app.envelope({user:reviewer,csrf_token:'same',capabilities:{review_protocol_proposals:false}}));
     pending.resolve({proposal:receipt({status:'changes_requested'}),review:{revision:1,content_sha256:digest,decision:'changes_requested'}});await flush();
     assert.equal(app.$('#proposal-review-form').hidden,true);assert.equal(app.$('#proposal-review-notes').value,'');
-    assert.equal(app.$('#proposal-review-link').hidden,true);assert.doesNotMatch(app.$('#proposal-detail-content').textContent,/Fixture KEM|never_execute/);
+    assert.equal(app.document.querySelector('#proposal-review-link'),null);assert.doesNotMatch(app.$('#proposal-detail-content').textContent,/Fixture KEM|never_execute/);
   });
   await test('an uncertain committed review remains retryable after reopening a decided revision',async()=>{
     let current=receipt();let attempts=0;
@@ -430,6 +479,47 @@ async function test(name,run){await run();console.log('PASS '+name);passed++;}
     const more=app.$('#proposal-list').querySelector('button');assert.equal(more.textContent,'Load more proposals');more.click();await flush();
     assert.equal(app.$('#proposal-list').querySelectorAll('a').length,2);
     const requests=app.requests.filter(r=>r.url.pathname==='/api/protocol/review-queue');assert.equal(requests.length,2);assert.equal(requests[1].url.searchParams.get('after'),'proposal-one');
+  });
+  await test('author retraction reloads the trusted receipt and removes revision and approval actions',async()=>{
+    let retracted=false;
+    const detail=()=>({proposal:receipt({can_retract:!retracted,retracted,...(retracted?{retraction:{reason:'Withdrawn after a scoped counterexample.'}}:{})}),author:user,reviews:[]});
+    const app=await boot({canReview:true,canSelfReview:true,hash:'#propose?proposal=proposal-one',hook:(url,options)=>{
+      if(url.pathname==='/api/protocol/proposals/proposal-one/retraction'){retracted=true;return detail();}
+      if(url.pathname==='/api/protocol/proposals/proposal-one')return detail();
+    }});
+    const host=app.$('#proposal-detail-content').querySelector('.proposal-retraction');
+    assert.ok(host);assert.equal(app.$('#revise-proposal').hidden,false);
+    host.querySelector('textarea').value='Withdrawn after a scoped counterexample.';host.querySelector('form').dispatchEvent({type:'submit'});await flush();
+    const call=app.requests.find(r=>r.url.pathname.endsWith('/retraction'));
+    assert.equal(call.options.method,'POST');assert.equal(JSON.parse(call.options.body).expected_revision,1);
+    assert.equal(JSON.parse(call.options.body).content_sha256,digest);
+    assert.match(app.$('#proposal-detail-content').textContent,/Retracted/);
+    assert.equal(app.$('#revise-proposal').hidden,true);assert.equal(app.$('#proposal-revise-agent').hidden,true);
+    assert.equal(app.$('#proposal-review-form').hidden,true);
+    assert.equal(app.$('#proposal-detail-content').querySelector('textarea'),null);
+  });
+  await test('historical approval remains visible but a retracted scheme cannot reopen revision or review controls',async()=>{
+    const saved=receipt({status:'approved',retracted:true,can_retract:false,retraction:{reason:'A later analysis changed our recommendation.'}});
+    const hook=url=>url.pathname==='/api/protocol/proposals/proposal-one'?{proposal:saved,author:user,reviews:[]}:undefined;
+    const app=await boot({canReview:true,canSelfReview:true,hash:'#propose?proposal=proposal-one',hook});
+    assert.match(app.$('#proposal-detail-content').textContent,/Retracted.*Earlier evidence and review decisions remain/);
+    assert.doesNotMatch(app.$('#proposal-detail-content').textContent,/reviewer approved this revision/);
+    assert.equal(app.$('#proposal-review-form').hidden,true);assert.equal(app.$('#revise-proposal').hidden,true);
+    await app.navigate('#propose?revise=proposal-one');
+    assert.match(app.$('#proposal-error').textContent,/retracted.*new proposal/);
+    assert.equal(app.$('#submit-proposal').disabled,true);
+  });
+  await test('a late retraction acknowledgement cannot navigate or reveal a former account proposal',async()=>{
+    const pending=deferred();const app=await boot({hash:'#propose?proposal=proposal-one',hook:url=>{
+      if(url.pathname.endsWith('/retraction'))return pending.promise;
+      if(url.pathname==='/api/protocol/proposals/proposal-one')return{proposal:receipt({can_retract:true}),author:user};
+    }});
+    const host=app.$('#proposal-detail-content').querySelector('.proposal-retraction');host.querySelector('textarea').value='PRIVATE reason';host.querySelector('form').dispatchEvent({type:'submit'});await flush();
+    const priorReads=app.requests.filter(r=>r.url.pathname==='/api/protocol/proposals/proposal-one').length;
+    app.sandbox.setSession(app.envelope({user:null,csrf_token:'guest'}));await app.navigate('#about');
+    pending.resolve({proposal:receipt({retracted:true,retraction:{reason:'PRIVATE reason'}})});await flush();
+    assert.equal(app.location.hash,'#about');assert.equal(app.requests.filter(r=>r.url.pathname==='/api/protocol/proposals/proposal-one').length,priorReads);
+    assert.doesNotMatch(app.$('#proposal-detail-content').textContent,/PRIVATE reason/);
   });
   console.log(`\n${passed} protocol-proposal regressions passed.`);
 })().catch(error=>{console.error(error);process.exitCode=1;});

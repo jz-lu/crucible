@@ -52,7 +52,9 @@ def test_native_sources_are_bound_and_old_release_remains_distinct():
     from crucible import ntru_tiers as old
     assert set(m['profile_id'] for m in old.manifests()).isdisjoint(m['profile_id'] for m in kem.manifests())
     artifact=kem.verify_artifact(kem.profile_for_size(1))
-    assert artifact['scheme_version']=='3' and artifact['worker_sha256']==kem.WORKER_SHA256
+    assert artifact['scheme_version']=='3'
+    assert artifact['worker_sha256']==hashlib.sha256(kem.WORKER.read_bytes()).hexdigest()
+    assert artifact['worker_sha256']==kem._verify_artifact_files().pins['worker']
     for name,pin in kem.FILE_PINS.items():
         assert hashlib.sha256((kem.ROOT/name).read_bytes()).hexdigest()==pin
     assert 'ntru_frontier' in str(kem.WORKER).replace('-','_')

@@ -1,0 +1,66 @@
+Generation outcomes and implementation holds
+==========================================
+
+The service applies one policy to all registered challenge families, including
+DH and RSA. It does not alter their frozen sources, native artifacts, source
+hashes, parameters, benchmark identities, or generation budgets.
+
+crucible/generation_policy.py explicitly lists reviewed resource-limit exception
+classes. A recognized exhausted search or time/resource limit records
+generation_abort / unissued and can be retried. The service does not infer a
+resource limit from an exception's name or text.
+
+Malformed worker output, inconsistent agreement flags, changed source/artifact
+identities, unexpected worker exits and other unexplained exceptions record
+implementation_fault / unissued and create a profile review hold. Later fresh
+requests to that profile are rejected before starting another worker. A profile
+hold does not cancel a generation already in flight in another process, but the
+final issuance check observes the hold before persisting an instance.
+
+Some archived worker interfaces use GenerationUnavailable for both setup errors
+and integrity faults. This ambiguous category is conservatively held for review;
+an operator must diagnose a missing/incorrect deployment artifact rather than
+blindly retry it. Explicit integrity exception declarations override resource
+inheritance. Exception text, child output and generated secrets never enter the
+public response or incident diagnostics.
+
+The service also checks each adapter result before it can leave the same guarded
+execution block: public inputs must be a dictionary, the target must be bytes of
+the declared length, and diagnostics must contain an explicit boolean agreement
+result. Missing fields or truthy strings/integers are implementation faults.
+This boundary check does not replace scheme-specific public-encoding validation.
+
+An actual honest encapsulation/decapsulation mismatch is different: it records
+agreement_failure_under_review / quarantined. It also holds the profile, without
+resampling or claiming the observation proves an implementation bug. The review
+must distinguish implementation failure, a valid statistical failure and a
+problem with the stated mathematical argument/model.
+
+Every newly started draw gets a durable attempt before adapter execution, with
+no database transaction held during generation. Quota rejection, busy admission
+and reuse of an existing instance create no draw. Duplicate generated instances
+and generation that finishes after the round closes remain visible as discarded
+or generated-but-unissued outcomes. Database/quota setup failures remain outside
+adapter fault classification. Interrupted started records are not assumed to be
+successful draws.
+
+The correctness endpoint now exposes recorded aggregate attempts for DH/RSA too.
+It does not reconstruct their previously unrecorded history. These empirical
+counts do not certify a 2^-128 bound; issued instances remain conditioned on the
+one honest agreement check. Existing accounts and challenge history are intact.
+
+Regression coverage
+-------------------
+tests/test_generation_fault_policy.py exercises real bounded process/decoder
+paths with synthetic child output and exits, provenance/flag corruption,
+resource-vs-fault classification, repeated holds, redaction, RSA abort accounting,
+DH/RSA reuse and distinct honest disagreements. All databases are temporary.
+tests/test_module_generation_integrity.py preserves the module integrity cases.
+tests/test_generation_capacity.py covers no-charge busy/reuse and setup errors.
+tests/test_generation_concurrency.py covers cross-process duplicate disposition,
+deadline expiry, revalidation and short database transactions.
+
+Run from the checkout with its installed Python environment:
+  PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider \
+    tests/test_generation_fault_policy.py tests/test_module_generation_integrity.py \
+    tests/test_generation_capacity.py tests/test_generation_concurrency.py

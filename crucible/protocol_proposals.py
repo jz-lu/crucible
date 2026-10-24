@@ -14,9 +14,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from sqlalchemy import Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, and_, or_, select
 from sqlalchemy.orm import Mapped, mapped_column
 
-from . import kem
+from . import kem, proposal_notes, proposal_retractions
 from .db import Base, User
-from .protocol_specs import ProtocolSpec, SPEC_MAX_BYTES, builtin_spec, canonical_spec, template_spec
+from .protocol_specs import ProtocolSpec, SPEC_MAX_BYTES, builtin_spec, canonical_spec, correctness_review_gaps, template_spec
 
 
 VALIDATION_SCOPE = (
@@ -95,8 +95,8 @@ class RevisionInput(ProposalInput):
 
 class ReviewChecks(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-    specification_complete: bool
-    correctness: bool
+    specification_complete: bool = Field(description="Manually reviewed the complete specification, including an explicit scoped security claim, its game/model, dependencies and unproved steps. Conjectural claims are allowed; this check does not certify their truth or require a numerical security estimate.")
+    correctness: bool = Field(description="Manually reviewed the precise correctness guarantee, probability scope, per-configuration coverage and reasoning, with assumptions and unproved steps clearly labelled. The common claimed failure goal is <=2^-128 or zero, including every admitted configuration. Conditional or conjectural guarantees are allowed without proving all dependencies. Check that bound text, numeric declaration and reasoning agree; a proof gap alone is not a refutation, but rigorous evidence contradicting the claimed bound is grounds to reject or invalidate it. Unknown or weaker targets are draft-only. This check is not proof certification.")
     tier_design: bool = False
     parameter_selection: bool = False
     implementation_conformance: bool
@@ -168,10 +168,15 @@ def _validation():
     return {"status": "format-valid", "scope": VALIDATION_SCOPE}
 
 
-def _proposal_data(record):
+def _proposal_data(record, session=None, user=None):
+    withdrawal = proposal_retractions.get(session, proposal_retractions.SCHEME, record.id) if session is not None else None
+    state = proposal_retractions.detail(session, withdrawal, user) if user is not None else {
+        "retracted": withdrawal is not None, "retraction": {"created_at": withdrawal.created_at} if withdrawal else None}
     return {"id": record.id, "status": record.status, "created_at": record.created_at,
             "revision": record.revision,
-            "content_sha256": record.content_sha256, "specification": record.specification}
+            "content_sha256": record.content_sha256, "specification": record.specification,
+            **state, "can_retract": bool(user and user.id == record.author_id and withdrawal is None),
+            "source_note": proposal_notes.source_record(session, record.id, record.revision) if session is not None else None}
 
 
 def is_reviewer(settings, user):
@@ -194,9 +199,10 @@ def _review_data(session, record):
                       "Manual reviewer assessment. Approval permits trusted integration review; it does not activate a challenge or prove correctness or security.")}
 
 
-def _revision_data(record):
+def _revision_data(record, session=None):
     return {"revision": record.revision, "created_at": record.created_at,
-            "content_sha256": record.content_sha256, "specification": record.specification}
+            "content_sha256": record.content_sha256, "specification": record.specification,
+            "source_note": proposal_notes.source_record(session, record.proposal_id, record.revision) if session is not None else None}
 
 
 def _history(session, record, before_revision=None, limit=20):
@@ -209,17 +215,17 @@ def _history(session, record, before_revision=None, limit=20):
         ProtocolProposalReview.proposal_id == record.id,
         ProtocolProposalReview.revision.in_([row.revision for row in page]))
         .order_by(ProtocolProposalReview.revision.desc())).all() if page else []
-    return {"revisions": [_revision_data(row) for row in page],
+    return {"revisions": [_revision_data(row, session) for row in page],
             "reviews": [_review_data(session, row) for row in reviews],
             "next_before_revision": page[-1].revision if len(rows) > limit else None}
 
 
-def _historical_proposal(session, record, revision):
+def _historical_proposal(session, record, revision, user=None):
     if revision.revision == record.revision:
-        return _proposal_data(record)
+        return _proposal_data(record, session, user)
     review = session.scalar(select(ProtocolProposalReview).where(
         ProtocolProposalReview.proposal_id == record.id, ProtocolProposalReview.revision == revision.revision))
-    return {**_proposal_data(record), **_revision_data(revision),
+    return {**_proposal_data(record, session, user), **_revision_data(revision, session),
             "created_at": record.created_at, "status": review.decision if review else "submitted"}
 
 
@@ -283,7 +289,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             return result
         specification, content_sha256 = result
         return {"specification": specification, "content_sha256": content_sha256,
-                "validation": _validation()}
+                "validation": _validation(), "note_content": proposal_notes.content_from_spec(specification)}
 
     @app.post("/api/protocol/proposals")
     def submit_proposal(body: ProposalInput, request: Request):
@@ -305,18 +311,20 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                     ProtocolProposalRevision.proposal_id == record.id, ProtocolProposalRevision.revision == 1))
                 if initial is None or initial.content_sha256 != content_sha256:
                     raise HTTPException(409, "This submission identifier was already used for a different specification.")
-                result = _historical_proposal(session, record, initial)
+                result = _historical_proposal(session, record, initial, user)
             else:
                 record = ProtocolProposal(id=str(uuid4()), author_id=user.id,
                     idempotency_key=key, created_at=clock(), status="submitted", revision=1,
                     content_sha256=content_sha256, specification=specification)
                 session.add(record)
                 session.flush()
-                session.add(ProtocolProposalRevision(id=str(uuid4()), proposal_id=record.id,
+                revision = ProtocolProposalRevision(id=str(uuid4()), proposal_id=record.id,
                     revision=1, created_at=record.created_at, idempotency_key=key,
-                    request_sha256=content_sha256, content_sha256=content_sha256, specification=specification))
+                    request_sha256=content_sha256, content_sha256=content_sha256, specification=specification)
+                session.add(revision)
                 session.flush()
-                result = _proposal_data(record)
+                proposal_notes.capture_submission(session, user, record, revision, clock())
+                result = _proposal_data(record, session, user)
             return {"proposal": result, "validation": _validation(), "server_time": clock()}
 
     @app.get("/api/me/protocol-proposals")
@@ -325,7 +333,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             user = user_for(request, session)
             records = session.scalars(select(ProtocolProposal).where(ProtocolProposal.author_id == user.id)
                 .order_by(ProtocolProposal.created_at.desc(), ProtocolProposal.id.desc()).limit(50)).all()
-            return {"proposals": [{**_proposal_data(record), "author": {"id": user.id, "handle": user.handle}}
+            return {"proposals": [{**_proposal_data(record, session, user), "author": {"id": user.id, "handle": user.handle}}
                                   for record in records]}
 
     @app.get("/api/protocol/review-queue")
@@ -333,7 +341,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                      limit: int = Query(default=20, ge=1, le=50)):
         with db.transaction() as session:
             user = reviewer_for(request, session)
-            query = select(ProtocolProposal).where(ProtocolProposal.status == "submitted")
+            query = select(ProtocolProposal).where(ProtocolProposal.status == "submitted",
+                ~ProtocolProposal.id.in_(proposal_retractions.target_ids(proposal_retractions.SCHEME)))
             if not can_self_review(settings, user):
                 query = query.where(ProtocolProposal.author_id != user.id)
             if after:
@@ -344,7 +353,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                     and_(ProtocolProposal.created_at == anchor.created_at, ProtocolProposal.id > anchor.id)))
             records = session.scalars(query.order_by(ProtocolProposal.created_at, ProtocolProposal.id).limit(limit + 1)).all()
             page = records[:limit]
-            return {"proposals": [{**_proposal_data(record),
+            return {"proposals": [{**_proposal_data(record, session, user),
                     "author": {"id": record.author_id, "handle": session.get(User, record.author_id).handle}}
                     for record in page], "next_after": page[-1].id if len(records) > limit else None}
 
@@ -352,7 +361,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
     def revise_proposal(proposal_id: str, body: RevisionInput, request: Request):
         throttle(request, "protocol-proposal-write", 10, 3600)
         with db.transaction(write=True) as session:
-            user_for(request, session, mutation=True)
+            writer = user_for(request, session, mutation=True)
+            session.execute(select(User.id).where(User.id == writer.id).with_for_update())
             record, user = accessible(session, request, proposal_id, owner_only=True, lock=True)
             result = _validated(body.specification)
             if isinstance(result, JSONResponse):
@@ -366,8 +376,9 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             if replay:
                 if replay.request_sha256 != commitment:
                     raise HTTPException(409, "This revision identifier was already used for a different request.")
-                return {"proposal": _historical_proposal(session, record, replay),
+                return {"proposal": _historical_proposal(session, record, replay, user),
                         "validation": _validation(), "server_time": clock()}
+            proposal_retractions.ensure_active(session, proposal_retractions.SCHEME, record.id)
             if record.revision != body.expected_revision or record.content_sha256 != body.content_sha256:
                 raise HTTPException(409, "The proposal changed. Refresh its latest revision before submitting.")
             revision = ProtocolProposalRevision(id=str(uuid4()), proposal_id=record.id,
@@ -377,7 +388,23 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             record.revision, record.status = revision.revision, "submitted"
             record.content_sha256, record.specification = content_sha256, specification
             session.flush()
-            return {"proposal": _proposal_data(record), "validation": _validation(), "server_time": clock()}
+            proposal_notes.capture_submission(session, user, record, revision, clock())
+            return {"proposal": _proposal_data(record, session, user), "validation": _validation(), "server_time": clock()}
+
+    @app.post("/api/protocol/proposals/{proposal_id}/retraction")
+    def retract_proposal(proposal_id: UUID, body: proposal_retractions.SchemeRetractionInput, request: Request):
+        if "authorization" in request.headers:
+            raise HTTPException(403, "Proposal retraction requires your browser account.")
+        throttle(request, "protocol-proposal-retraction", 20, 3600)
+        with db.transaction(write=True) as session:
+            user = user_for(request, session, mutation=True)
+            session.execute(select(User.id).where(User.id == user.id).with_for_update())
+            record = session.scalar(select(ProtocolProposal).where(ProtocolProposal.id == str(proposal_id)).with_for_update())
+            if record is None or record.author_id != user.id:
+                raise HTTPException(404, "Proposal not found.")
+            proposal_retractions.withdraw(session, proposal_retractions.SCHEME, record, user, clock(), body,
+                revision=record.revision, digest=record.content_sha256)
+            return {"proposal": _proposal_data(record, session, user), "server_time": clock()}
 
     @app.post("/api/protocol/proposals/{proposal_id}/reviews")
     def review_proposal(proposal_id: str, body: ReviewInput, request: Request):
@@ -407,7 +434,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             if replay:
                 if replay.request_sha256 != commitment:
                     raise HTTPException(409, "This review identifier was already used for a different request.")
-                return {"proposal": _proposal_data(record), "review": _review_data(session, replay), "server_time": clock()}
+                return {"proposal": _proposal_data(record, session, reviewer), "review": _review_data(session, replay), "server_time": clock()}
+            proposal_retractions.ensure_active(session, proposal_retractions.SCHEME, record.id)
             if record.revision != body.expected_revision or record.content_sha256 != body.content_sha256:
                 raise HTTPException(409, "The proposal changed. Review its latest revision before deciding.")
             if record.status != "submitted":
@@ -422,7 +450,10 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 if not record.specification["tier_design"].get("parameter_selection"):
                     raise HTTPException(422, "Approval requires the parameter-selection objective, constraints, model, search domain, comparison evidence and uncertainty in this exact revision.")
                 if record.specification.get("correctness", {}).get("kind") == "unknown":
-                    raise HTTPException(422, "Approval requires an explicit correctness claim for review.")
+                    raise HTTPException(422, "Approval requires a precise correctness guarantee for review; its dependencies may be conjectural when explicit.")
+                gaps = correctness_review_gaps(record.specification)
+                if gaps:
+                    raise HTTPException(422, " ".join(gaps) + " Add these in a new revision before approval.")
                 if not expected_sha or body.implementation_sha256 != expected_sha:
                     raise HTTPException(422, "Approval requires the exact implementation artifact SHA-256 from this specification.")
                 if not all(body.checks.model_dump().values()):
@@ -440,22 +471,22 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             session.add(review)
             record.status = body.decision
             session.flush()
-            return {"proposal": _proposal_data(record), "review": _review_data(session, review), "server_time": clock()}
+            return {"proposal": _proposal_data(record, session, reviewer), "review": _review_data(session, review), "server_time": clock()}
 
     @app.get("/api/protocol/proposals/{proposal_id}/revisions")
     def revision_history(proposal_id: str, request: Request,
                          before_revision: int | None = Query(default=None, ge=1, le=2147483647),
                          limit: int = Query(default=20, ge=1, le=50)):
         with db.transaction() as session:
-            record, _ = accessible(session, request, proposal_id)
+            record, user = accessible(session, request, proposal_id)
             author = session.get(User, record.author_id)
-            return {"proposal": _proposal_data(record), "author": {"id": author.id, "handle": author.handle},
+            return {"proposal": _proposal_data(record, session, user), "author": {"id": author.id, "handle": author.handle},
                     **_history(session, record, before_revision, limit)}
 
     @app.get("/api/protocol/proposals/{proposal_id}")
     def proposal_detail(proposal_id: str, request: Request):
         with db.transaction() as session:
-            record, _ = accessible(session, request, proposal_id)
+            record, user = accessible(session, request, proposal_id)
             author = session.get(User, record.author_id)
-            return {"proposal": _proposal_data(record), "author": {"id": author.id, "handle": author.handle},
+            return {"proposal": _proposal_data(record, session, user), "author": {"id": author.id, "handle": author.handle},
                     **_history(session, record)}
