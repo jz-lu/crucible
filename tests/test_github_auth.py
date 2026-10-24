@@ -166,13 +166,44 @@ def test_invited_provider_signup_chooses_handle_then_still_requires_mailbox_rede
 def test_existing_linked_account_uses_numeric_id_despite_provider_rename(system):
     user_id = local_user(system, linked_id="123456")
     actor = Actor(system.app)
-    query = start(system, actor)
+    old_session = actor.client.cookies[system.settings.cookie_name]
+    query = start(system, actor, return_route="#notebook?view=map")
     system.profile["login"] = "renamed-person"
-    assert status(callback(system, actor, query)) == "complete"
+    response = callback(system, actor, query)
+    assert response.status_code == 303 and response.headers["location"] == "/#notebook?view=map"
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert actor.client.cookies[system.settings.cookie_name] != old_session
     payload = actor.client.get("/api/session").json()
     assert payload["user"] == {"id": user_id, "handle": "existing"}
     assert payload["auth"]["github_login"] == "renamed-person"
     assert actor.client.get("/api/auth/github/pending").json()["pending"] is False
+
+
+def test_existing_linked_invitee_keeps_browser_bound_invitation_continuation(system):
+    user_id = local_user(system, linked_id="123456")
+    with system.db.transaction(write=True) as session:
+        session.execute(delete(beta.BetaMembership).where(beta.BetaMembership.user_id == user_id))
+    _, token = invitation(system)
+    actor = Actor(system.app)
+    query = start(system, actor, invitation_token=token, return_route="#notebook")
+    assert status(callback(system, actor, query)) == "complete"
+    pending = actor.client.get("/api/auth/github/pending").json()
+    assert pending["invitation_token"] == token and pending["return_route"] == "#notebook"
+    assert actor.client.get("/api/session").json()["access"]["allowed"] is False
+    assert actor.client.get("/api/schemes").status_code == 403
+
+
+@pytest.mark.parametrize("stored_route", ["https://evil.invalid", "//evil.invalid", "#challenge\r\nLocation: https://evil.invalid"])
+def test_completed_login_rechecks_stored_return_route(system, stored_route):
+    local_user(system, linked_id="123456")
+    actor = Actor(system.app)
+    query = start(system, actor)
+    with system.db.transaction(write=True) as session:
+        session.get(github.GitHubFlow, token_hash(query["state"][0])).return_route = stored_route
+    response = callback(system, actor, query)
+    assert response.status_code == 303 and response.headers["location"] == "/#challenge"
+    assert actor.client.get("/api/session").json()["user"]["handle"] == "existing"
 
 
 def test_no_email_or_handle_merge_and_no_new_account_without_invitation(system):
@@ -198,7 +229,8 @@ def test_existing_account_links_explicitly_without_changing_password_or_account(
     with system.db.transaction() as session:
         before = session.get(User, user_id).password_hash
     query = start(system, actor, mode="link", return_route="#person/existing")
-    assert status(callback(system, actor, query)) == "linked"
+    response = callback(system, actor, query)
+    assert response.status_code == 303 and response.headers["location"] == "/#person/existing"
     payload = actor.client.get("/api/session").json()
     assert payload["user"]["id"] == user_id and payload["auth"]["github_linked"]
     with system.db.transaction() as session:
@@ -323,7 +355,8 @@ def test_callback_one_use_before_outbound_http_and_expiry(system, monkeypatch):
             assert status(callback(system, actor, query)) == "expired"
         finally:
             release.set()
-        assert status(future.result(timeout=5)) == "complete"
+        completed = future.result(timeout=5)
+        assert completed.status_code == 303 and completed.headers["location"] == "/#challenge"
     assert len(system.calls) == 2
     actor = Actor(system.app)
     query = start(system, actor)

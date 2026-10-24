@@ -1,5 +1,52 @@
 const {test, expect, signIn, notebookReady, gate, holdResponse} = require('./helpers.cjs');
 
+test('GitHub return opens the requested page without a continuation round trip', async ({page}) => {
+  const requests = [];
+  page.on('request', request => requests.push(new URL(request.url()).pathname));
+  await page.route('https://github.com/login/oauth/authorize?*', route => {
+    const query = new URL(route.request().url()).searchParams;
+    return route.fulfill({status: 302, headers: {location: 'http://127.0.0.1:8029/api/auth/github/callback?' +
+      new URLSearchParams({state: query.get('state'), code: 'synthetic-browser-code'})}, body: ''});
+  });
+  await page.goto('/#notebook');
+  await page.locator('#access-github').click();
+  await notebookReady(page);
+  await expect(page.locator('#account-handle')).toHaveText('browser_alice');
+  expect(requests).toContain('/api/auth/github/callback');
+  expect(requests).not.toContain('/api/auth/github/pending');
+  expect(new URL(page.url()).hash).toBe('#notebook');
+});
+
+test('the landing page works before unused math assets and equations hydrate when needed', async ({page}) => {
+  const release = gate(), started = [];
+  await page.route(url => /^\/vendor\/katex\/katex\.min\.(js|css)$/.test(url.pathname), async route => {
+    started.push(new URL(route.request().url()).pathname);
+    await release.promise;
+    await route.continue();
+  });
+  try {
+    await signIn(page);
+    await page.locator('#nav-challenge').click();
+    await expect(page.locator('#kem-catalogue')).toContainText('Diffie');
+    expect(started).toEqual([]);
+    // Use the real math helper on connected content; no backend/provider mocks.
+    await page.evaluate(() => {
+      const field = document.createElement('p');
+      field.id = 'browser-math-target';
+      document.querySelector('#catalogue-workspace').append(field);
+      window.CrucibleMath.render(field, 'Equation: \\(x^2\\).');
+    });
+    await expect.poll(() => started.length).toBe(2);
+    await expect(page.locator('#browser-math-target')).toContainText('Equation:');
+    await expect(page.locator('#browser-math-target .katex')).toHaveCount(0);
+    await page.locator('#nav-about').click();
+    await expect(page.locator('#about-workspace')).toBeVisible();
+    release.resolve();
+    await expect(page.locator('#browser-math-target .katex')).toHaveCount(1);
+    await expect(page.locator('#about-workspace')).toBeVisible();
+  } finally {release.resolve();}
+});
+
 test('cached navigation paints while its fresh read is held; the brand never reloads the document', async ({page}, testInfo) => {
   await signIn(page); await notebookReady(page);
   const reads = [];

@@ -137,10 +137,49 @@ jobs:
           hosted beta, PostgreSQL, OAuth/mail providers or native KEM workers.
           There are no test retries or skips. Only synthetic failure traces are saved.
           EOF
+  metadata-postgresql:
+    name: SQLite and PostgreSQL 17 metadata-query parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        # Exact official AMD64 PostgreSQL 17 image used by the transfer rehearsal.
+        image: postgres@sha256:3518071376d0b6156b02e1db2747a78511b5b9dc3763cc79c506ebe2dc2ee71c
+        env:
+          POSTGRES_USER: crucible_metadata
+          POSTGRES_PASSWORD: synthetic-only
+          POSTGRES_DB: crucible_metadata_test
+        ports:
+          - 127.0.0.1:5433:5432
+        options: >-
+          --health-cmd "pg_isready -U crucible_metadata -d crucible_metadata_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      CRUCIBLE_METADATA_POSTGRES: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Install pinned test dependencies
+        run: |
+          python -m pip install -r requirements.lock
+          python -m pip install --no-deps -e .
+      - name: Compare fresh synthetic metadata and scoring queries
+        run: python -m pytest -q tests/test_metadata_relations.py
+      - name: State verification boundary
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          Actual SQLite and PostgreSQL 17 queries compare the optimized typed
+          metadata relation with the previous VALUES implementation, including
+          score/milestone parity and malformed receipt tiers. The PostgreSQL
+          connection is fixed to this disposable loopback service. This job
+          neither reads deployed configuration nor exercises native KEM workers.
+          EOF
   ci:
     name: CI passed
     if: always()
-    needs: [portable-source-checks, release-contract, browser-checks]
+    needs: [portable-source-checks, release-contract, browser-checks, metadata-postgresql]
     runs-on: ubuntu-latest
     steps:
       - name: Require every source check
@@ -148,4 +187,5 @@ jobs:
           SOURCE_RESULT: ${{ needs.portable-source-checks.result }}
           CONTRACT_RESULT: ${{ needs.release-contract.result }}
           BROWSER_RESULT: ${{ needs.browser-checks.result }}
-        run: test "$SOURCE_RESULT" = success && test "$CONTRACT_RESULT" = success && test "$BROWSER_RESULT" = success
+          METADATA_RESULT: ${{ needs.metadata-postgresql.result }}
+        run: test "$SOURCE_RESULT" = success && test "$CONTRACT_RESULT" = success && test "$BROWSER_RESULT" = success && test "$METADATA_RESULT" = success

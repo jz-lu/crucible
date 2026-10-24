@@ -1,0 +1,46 @@
+Read-path preparation and metadata SQL
+
+Startup prepares one immutable compact scheme index and its catalogue revision.
+The revision remains the SHA256 of the same canonical complete catalogue. Each
+request receives independent mutable copies of its small label metadata, then
+fresh recovery/participant SQL. No account permission, score or receipt is cached.
+
+Scoring and milestones join the same trusted profile tuples through a typed,
+materialized JSON relation. This replaces thousands of individual VALUES bind
+parameters that prevented SQLAlchemy compilation caching. SQLite uses json_each;
+PostgreSQL17 uses jsonb_to_recordset with explicit column types. Materialization
+keeps JSON extraction outside the per-receipt join. Score weights, validation of
+the original receipt tier's JSON type, ordering and all ranking windows remain
+unchanged. The database schema is unchanged.
+
+The release contract pins the reviewed scoring.py query implementation to its
+new exact hash; it is not added to the ordinary mutable-file list. This specific
+change replaces the metadata relation only, with old/new query parity required
+on actual PostgreSQL 17 before CI passes. Scoring policy/constants and native
+runtime, dependency and schema pins remain unchanged.
+
+Checks:
+- tests/test_read_performance.py and test_scheme_projections.py verify the full
+  catalogue fingerprint, all32 release/1466 profile labels, mutation isolation,
+  provider invalidation and fresh progress.
+- tests/test_metadata_relations.py compares actual typed rows and scoring /
+  milestone query outputs to the original VALUES implementation. Cases include
+  strings/booleans/floats/null or forged tiers, late/incorrect receipts, named
+  parameter sets, inheriting/non-inheriting releases and new live results.
+- The required metadata-postgresql CI job runs those tests against both SQLite
+  and the digest-pinned official PostgreSQL17 service. Its database address and
+  synthetic credentials are fixed to loopback; each PG test uses a new schema in
+  a rolled-back transaction. No hosted settings or databases are read.
+
+Local SQLite-only check:
+  python -m pytest -q tests/test_metadata_relations.py -k sqlite
+
+CRUCIBLE_METADATA_POSTGRES=1 enables only the fixed disposable CI connection
+defined in that test file; it is not an arbitrary database URL override. A local
+run with PG tests skipped does not certify PostgreSQL behavior. Existing broader
+scoring, people and milestone tests remain necessary; no performance benchmark
+is a correctness replacement or a hosted latency guarantee.
+
+Primary SQL semantics:
+https://www.postgresql.org/docs/17/functions-json.html
+https://www.sqlite.org/lang_with.html#materialization_hints

@@ -1,6 +1,7 @@
 """Avoid repeated read work without stale scores or relaxed artifact checks."""
 from copy import deepcopy
 import gzip
+import hashlib
 import json
 
 from fastapi.testclient import TestClient
@@ -11,6 +12,42 @@ from crucible import milestones, registry, scoring
 from crucible.public_json import accepts_gzip, catalogue_response
 from test_calibrated_api import current_system
 from test_people import add_user, person, registered_receipt
+
+
+def test_navigation_and_revision_share_one_immutable_presentation_snapshot(current_system, monkeypatch):
+    expected = registry.catalogue()
+    expected_revision = hashlib.sha256(json.dumps(expected, sort_keys=True, separators=(',', ':'),
+                                                   ensure_ascii=False).encode()).hexdigest()
+    original, calls = registry.catalogue, []
+    def counted():
+        calls.append(1)
+        return original()
+    monkeypatch.setattr(registry, 'catalogue', counted)
+    registry._navigation_metadata.cache_clear()
+    registry.warm_navigation_metadata()
+    before = registry.navigation_catalogue()
+    assert registry.catalogue_revision() == expected_revision
+    assert len(calls) == 1
+    frozen, _ = registry._navigation_metadata(registry.metadata_identity(), tuple(registry.CURRENT.items()))
+    with pytest.raises(TypeError):
+        frozen[0]['name'] = 'cannot mutate shared state'
+    with pytest.raises(TypeError):
+        frozen[0]['profiles'][0]['id'] = 'cannot mutate shared state'
+    changed = registry.navigation_catalogue()
+    changed[0]['profiles'][0]['id'] = 'only this caller'
+    nested = next(profile for scheme in changed for release in [scheme, *scheme['previous_releases']]
+                  for profile in release['profiles'] if isinstance(profile.get('stage_context'), dict))
+    nested['stage_context']['only_this_caller'] = True
+    changed[0]['previous_releases'].clear()
+    assert registry.navigation_catalogue() == before
+    assert registry.catalogue_revision() == expected_revision and len(calls) == 1
+
+
+def test_application_start_prepares_navigation_before_first_request(current_system, monkeypatch):
+    app, _, _ = current_system
+    monkeypatch.setattr(registry, 'catalogue', lambda: pytest.fail('First request must not build the full catalogue'))
+    response = TestClient(app).get('/api/schemes?projection=navigation')
+    assert response.status_code == 200 and len(response.json()['schemes']) == 8
 
 
 def test_record_profile_projection_preserves_all_registered_scalar_fields(monkeypatch):

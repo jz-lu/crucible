@@ -12,10 +12,8 @@
     <title>
       Crucible — shared cryptographic scrutiny
     </title>
-    <link rel="stylesheet" href="/vendor/katex/katex.min.css">
     <link rel="stylesheet" href="/styles.css">
-    <script src="/vendor/katex/katex.min.js" defer></script>
-    <script src="/math.js" defer></script>
+    <script src="/math.js" data-katex-script="/vendor/katex/katex.min.js" data-katex-style="/vendor/katex/katex.min.css" defer></script>
     <script src="/assumptions.js" defer></script>
     <script src="/proposal-retractions.js" defer></script>
     <script src="/app.js" defer>
@@ -28,7 +26,7 @@
     <header class="site-header">
       <div class="header-inner">
         <a class="brand" href="#challenge" aria-label="Crucible home">
-          <img class="brand-mark" src="/assets/crucible-logo.png" width="38" height="54" alt="">
+          <img class="brand-mark" src="/assets/crucible-logo.png" width="38" height="54" alt="" decoding="async" fetchpriority="low">
           <span>
             Crucible
           </span>
@@ -773,7 +771,7 @@
       <section id="route-loading" aria-label="Loading page" tabindex="-1" hidden></section>
       <footer class="site-footer">
         <a class="brand footer-brand" href="#challenge" aria-label="Crucible home">
-          <img class="brand-mark" src="/assets/crucible-logo.png" width="30" height="42" alt="">
+          <img class="brand-mark" src="/assets/crucible-logo.png" width="30" height="42" alt="" decoding="async" fetchpriority="low" loading="lazy">
           <span>Crucible</span>
         </a>
       </footer>

@@ -9,7 +9,7 @@ before pagination and collapses repeated attempts before comparison.
 """
 from functools import lru_cache
 
-from sqlalchemy import Boolean, Integer, String, and_, case, cast, column, func, literal, or_, select, values
+from sqlalchemy import Boolean, Integer, String, and_, case, cast, column, func, literal, or_, select
 
 from . import registry, scoring
 from .db import Challenge
@@ -30,21 +30,21 @@ def _profile_rows(identity, include_standard):
     return tuple(rows)
 
 
-def _registered_profiles(*, include_standard=False):
+def _registered_profiles(dialect="sqlite", *, include_standard=False):
     # Reuse small immutable tuples, not the full manifests and artifact hashes,
     # across receipt queries. Registry/provider identity changes invalidate it.
     rows = _profile_rows(registry.metadata_identity(), include_standard)
-    # VALUES avoids SQLite's compound-SELECT limit with the >500 historical
-    # profile tuples. This relation contains trusted metadata, never user data.
-    return values(column("scheme_id", String), column("scheme_version", String),
+    # One typed JSON input avoids recompiling thousands of VALUES parameters
+    # on every request. This relation contains trusted metadata, never user data.
+    return scoring.metadata_relation("milestone_profiles", (column("scheme_id", String), column("scheme_version", String),
                   column("profile_id", String), column("tier", Integer),
                   column("profile_kind", String), column("profile_label", String),
-                  column("record_inheritance", Boolean)).data(rows).cte("milestone_profiles")
+                  column("record_inheritance", Boolean)), rows, dialect)
 
 
 def registered_receipts(dialect, user_ids=None, *, include_standard=False):
     """Validate actual frozen profile identity and integer tier before ranking."""
-    profiles = _registered_profiles(include_standard=include_standard)
+    profiles = _registered_profiles(dialect, include_standard=include_standard)
     receipts = scoring.correct_receipts(user_ids)
     registered_fields = ("tier", "profile_kind", "profile_label", "record_inheritance")
     public_columns = [field for field in receipts.selected_columns if field.key not in registered_fields]

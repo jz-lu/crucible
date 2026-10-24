@@ -689,11 +689,26 @@ function loadNotebookAsset(path, stylesheet = false) {
   return task;
 }
 async function showNotebook(query, reviewing = false) {
-  const account = state.user?.id, section = state.reviewSection, request = ++notebookShowRequest;
+  const account = state.user?.id, csrf = state.csrf, section = state.reviewSection, request = ++notebookShowRequest;
+  const params = new URLSearchParams(query || window.location.hash.split('?')[1] || '');
   const target = $(reviewing ? '#review-notebook-workspace' : '#notebook-workspace');
-  const current = () => request === notebookShowRequest && hasAccess() && account === state.user?.id &&
+  const current = () => request === notebookShowRequest && hasAccess() && account === state.user?.id && csrf === state.csrf &&
     (reviewing ? state.screen === 'reviews' && state.canReviewProposals && state.reviewSection === section && section !== 'schemes' : state.screen === 'notebook');
   if (!current()) return;
+  // Only the cold, ordinary first page has a query known before notebook code
+  // arrives. Share that authorized read with its eventual consumer; all other
+  // views and filters continue to decide their own requests inside the notebook.
+  const firstListPath = '/api/notebook/notes?limit=25&include_curated=true&scope=all';
+  const readEpoch = readViewEpoch, startedAt = Date.now();
+  let firstListRead = !reviewing && !notebookWorkspace && account != null && !params.size ?
+    readAgain('notebook:first-list', firstListPath) : null;
+  firstListRead?.catch(() => {}); // A failed request can finish before assets.
+  const notebookAPI = (path, body, options) => {
+    const first = firstListRead; firstListRead = null;
+    if (first && current() && readEpoch === readViewEpoch && Date.now() - startedAt < 10000 &&
+        path === firstListPath && body === undefined && (!options?.method || options.method === 'GET')) return first;
+    return api(path, body, options);
+  };
   if (!window.CrucibleNotebook || (!notebookAssetsReady && notebookAssetLoads.size)) {
     setLoading(target, reviewing ? 'Loading review workspace…' : 'Loading notebook…');
     notebookAssets ||= (async () => {
@@ -713,11 +728,11 @@ async function showNotebook(query, reviewing = false) {
     catch (error) { if (current()) showInlineError(target, error.message, () => showNotebook(query, reviewing)); return; }
   }
   if (!current()) return;
-  const options = {navigate, api, account: () => hasAccess() && (!reviewing || state.canReviewProposals) ? state.user : null,
+  const options = {navigate, api: notebookAPI, account: () => hasAccess() && (!reviewing || state.canReviewProposals) ? state.user : null,
     currentReleases: () => hasAccess() ? state.schemes : [], session: () => state.csrf, reviewOnly: reviewing};
   if (reviewing) reviewNotebookWorkspace ||= window.CrucibleNotebook.mount(target, options);
   else notebookWorkspace ||= window.CrucibleNotebook.mount(target, options);
-  await (reviewing ? reviewNotebookWorkspace : notebookWorkspace).show(new URLSearchParams(query || window.location.hash.split('?')[1] || ''));
+  await (reviewing ? reviewNotebookWorkspace : notebookWorkspace).show(params);
 }
 $('#access-sign-in').addEventListener('click', () => { setAuthMode('login'); openAuth($('#access-sign-in')); $('#auth-password-options').open = true; });
 $('#access-register').addEventListener('click', () => { setAuthMode('register'); openAuth($('#access-register')); });
@@ -885,8 +900,8 @@ function applyRoute(focus = false) {
   else if ($('#global-message-text').textContent === routeError) globalError('');
   if (screen === 'scheme') {
     $('#scheme-back').href = overviewRoute(scheme, profile);
-    renderProfiles(null, {details: changed || previousScreen !== 'scheme'});
     renderView(view);
+    renderProfiles(null, {details: changed || previousScreen !== 'scheme' || (view === 'protocol' && previousView !== view)});
     if (view === 'challenge' && (changed || previousScreen !== 'scheme' || previousView !== view)) loadChallenge();
     if (view === 'leaderboard' && (changed || previousView !== view || previousScreen !== 'scheme')) loadLeaderboard();
   }
@@ -1281,7 +1296,7 @@ async function refreshProfiles({background = false} = {}) {
     const editing = [$('#size-slider'), $('#profile-select')].includes(document.activeElement);
     if (!background || metadataChanged || selectionChanged || state.profileMetadataPending === selectionKey()) {
       if (editing) state.profileMetadataPending = selectionKey();
-      else renderProfiles(null, {details: (!background || metadataChanged || state.profileMetadataPending === selectionKey()) && state.view === 'protocol'});
+      else renderProfiles(null, {details: (!background || metadataChanged || state.profileMetadataPending === selectionKey()) && (state.view === 'protocol' || $('#scheme-specifics').open)});
     }
   }
   return true;
@@ -1297,7 +1312,8 @@ function participantCount(scheme) {
 }
 function prepareSchemeLink(link, scheme) {
   const prepare = () => {
-    if (!hasAccess() || !state.catalogueLoaded || navigator.connection?.saveData || releaseLoads.size >= 2) return;
+    if (!hasAccess() || !state.catalogueLoaded || navigator.connection?.saveData || releaseLoads.size >= 2 ||
+        !availableReleases().some(item => item.id === scheme.id && String(item.version) === String(scheme.version))) return;
     void loadRelease(scheme.id, String(scheme.version)).catch(() => {});
   };
   link.addEventListener('pointerenter', prepare); link.addEventListener('focus', prepare);
@@ -1366,6 +1382,7 @@ function renderCatalogue() {
     if (largest) {
       const record = node('a', profileLabel(largest, scheme), 'kem-progress');
       record.href = schemeRoute(scheme, largest, 'leaderboard');
+      prepareSchemeLink(record, scheme);
       record.setAttribute('aria-label', `View recoveries for ${profileLabel(largest, scheme)}`);
       progress.append(record);
     }
@@ -1704,6 +1721,7 @@ function personalRecordTable(records) {
     const name = node('span', undefined, 'person-record-scheme');
     const link = node('a', record.scheme_name || record.scheme_id, 'person-scheme-link');
     link.href = overviewRoute({id: record.scheme_id, version: record.scheme_version});
+    prepareSchemeLink(link, {id: record.scheme_id, version: record.scheme_version});
     name.append(link);
     if (!record.is_current) name.append(node('span', 'Archived · release ' + record.scheme_version, 'person-record-release'));
     const result = node('button', recordProfileLabel(record), 'person-record-result');
@@ -2320,6 +2338,7 @@ function renderIntermediateConfigurations(scheme, current) {
   if (restoreFocus) buttons.find(button => button.getAttribute('aria-pressed') === 'true')?.focus();
 }
 function renderProfiles(previewProfile = null, {details = true} = {}) {
+  if (!previewProfile) renderSchemeHeading();
   if (!previewProfile) state.profileMetadataPending = null;
   const input = $('#profile-select');
   const scheme = selectedScheme();
@@ -2359,7 +2378,7 @@ function renderProfiles(previewProfile = null, {details = true} = {}) {
     $('#advance-size').setAttribute('aria-label', `Go to next unsolved parameter set ${frontier ? profileLabel(frontier, scheme) : ''}`);
     setError('#profile-error', '');
     setText('#profile-note', tierNote(scheme, current));
-    if (!previewProfile && details) renderProtocol();
+    if (!previewProfile && details && (state.view === 'protocol' || $('#scheme-specifics').open)) renderProtocol();
     return;
   }
   const intermediate = intermediateConfiguration(current);
@@ -2435,7 +2454,7 @@ function renderProfiles(previewProfile = null, {details = true} = {}) {
   if (restoreFocus) choices.find(button => button.getAttribute('aria-pressed') === 'true')?.focus();
   setError('#profile-error', '');
   setText('#profile-note', tierNote(scheme, current));
-  if (!previewProfile && details) renderProtocol();
+  if (!previewProfile && details && (state.view === 'protocol' || $('#scheme-specifics').open)) renderProtocol();
 }
 function configurationProse(value) {
   // Legacy descriptions refer to immutable configurations, not today's stage order.
@@ -2459,14 +2478,21 @@ function addFact(list, label, value, typeset = false) {
   row.append(node('dt', label), description);
   list.append(row);
 }
+function renderSchemeHeading() {
+  const scheme = selectedScheme();
+  if (!scheme) return;
+  setText('#scheme-title', scheme.name);
+  setText('#scheme-summary', scheme.summary);
+  $('#scheme-beta').hidden = scheme.review_status !== 'local-beta';
+  setText('#scheme-beta', (researchTiers(scheme, state.profile) ? 'Research stages · ' : '') + 'Local beta. Independent admission review pending.' + (scheme.scoring_eligible === false ? ' These profiles are not scored.' : ''));
+}
+$('#scheme-specifics').addEventListener('toggle', () => {
+  if ($('#scheme-specifics').open && hasAccess() && state.screen === 'scheme') renderProtocol();
+});
 function renderProtocol() {
   const profile = state.profile;
   const scheme = selectedScheme();
   if (scheme) {
-    setText('#scheme-title', scheme.name);
-    setText('#scheme-summary', scheme.summary);
-    $('#scheme-beta').hidden = scheme.review_status !== 'local-beta';
-    setText('#scheme-beta', (researchTiers(scheme, profile) ? 'Research stages · ' : '') + 'Local beta. Independent admission review pending.' + (scheme.scoring_eligible === false ? ' These profiles are not scored.' : ''));
     setText('#protocol-version', scheme.version ? `${scheme.name} · version ${scheme.version}` : scheme.name);
     const protocol = scheme.protocol || {};
     mathText($('#protocol-construction'), protocol.construction_math || configurationProse(protocol.construction) || 'The parameter contract below defines this KEM. Consult its registered specification for the full construction.');

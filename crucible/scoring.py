@@ -4,7 +4,11 @@ Only explicitly enrolled releases earn recovery points. Publishing a replacement
 release cannot silently multiply points or reinterpret an archived raw tier.
 Repeated hourly receipts and intermediate tiers never add cumulative points.
 """
-from sqlalchemy import Boolean, Integer, String, and_, case, cast, column, func, or_, select, values
+from functools import lru_cache
+import json
+
+from sqlalchemy import Boolean, Integer, JSON, String, and_, case, cast, column, func, literal, or_, select
+from sqlalchemy.dialects.postgresql import JSONB
 
 from .db import Challenge, Method, Submission, User
 from .scoring_awards import SchemeAdmissionCredit
@@ -89,6 +93,45 @@ def correct_receipts(user_ids=None):
     return query.where(Submission.user_id.in_(user_ids)) if user_ids is not None else query
 
 
+@lru_cache(maxsize=16)
+def _metadata_json(names, rows):
+    """Serialize immutable, trusted profile metadata, never receipts or rights."""
+    return json.dumps([dict(zip(names, row, strict=True)) for row in rows],
+                      separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+
+
+def metadata_relation(name, columns, rows, dialect):
+    """A typed static relation using one JSON bind instead of thousands of cells.
+
+    The resulting statement remains SQLAlchemy-cacheable. Bound metadata is
+    refreshed from the supplied immutable tuples; database results are never
+    cached. Only the existing SQLite and PostgreSQL backends are supported.
+    """
+    payload = literal(_metadata_json(tuple(field.name for field in columns), tuple(rows)))
+    if dialect == "postgresql":
+        source = func.jsonb_to_recordset(cast(payload, JSONB)).table_valued(*columns).render_derived(
+            name=name + "_rows", with_types=True)
+        return select(*source.c).cte(name).prefix_with("MATERIALIZED")
+    if dialect == "sqlite":
+        source = func.json_each(payload).table_valued(column("value", JSON))
+        fields = []
+        for field in columns:
+            value = source.c.value[field.name]
+            if isinstance(field.type, Boolean):
+                value = value.as_boolean()
+            elif isinstance(field.type, Integer):
+                value = value.as_integer()
+            elif isinstance(field.type, String):
+                value = value.as_string()
+            else:
+                raise TypeError("Unsupported trusted metadata column")
+            fields.append(value.label(field.name))
+        # Materialize once so JSON extraction is not repeated per receipt and
+        # SQLite can index the typed columns for the subsequent profile joins.
+        return select(*fields).select_from(source).cte(name).prefix_with("MATERIALIZED")
+    raise ValueError("Unsupported metadata database dialect")
+
+
 def score_relations(dialect="sqlite"):
     """Build portable SQL aggregates; never load all receipts into Python.
 
@@ -104,10 +147,10 @@ def score_relations(dialect="sqlite"):
         profile_rows.extend((family, release["version"], f'{release["profile_prefix"]}{tier}', tier,
                              release["record_inheritance"], weight)
                             for tier, weight in enumerate(release["progress_weights"], 1))
-    profiles = values(column("scheme_id", String), column("scheme_version", String),
+    profiles = metadata_relation("score_profiles", (column("scheme_id", String), column("scheme_version", String),
                       column("profile_id", String), column("tier", Integer),
                       column("record_inheritance", Boolean),
-                      column("progress_points", Integer)).data(profile_rows).cte("score_profiles")
+                      column("progress_points", Integer)), profile_rows, dialect)
     receipts = correct_receipts()
     fields = [field for field in receipts.selected_columns if field.key not in {"tier", "record_inheritance"}]
     # Validate the original JSON scalar before ranking. In particular strings,

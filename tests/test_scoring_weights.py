@@ -1,5 +1,6 @@
 """Equal ceilings use pinned configurations, never mutable navigation stages."""
 import pytest
+import json
 from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
 
@@ -96,7 +97,13 @@ def test_postgresql_scoring_compiles_with_pinned_threshold_weights():
         assert "4 * score_ranked.threshold_weight" in sql
         assert "max(score_achievements.progress_points)" in sql
         assert "json_type(" not in sql  # SQLite-only validation must not leak.
-        assert "frodo-lwe-v3-tier-80', 80, false, 500" in sql
+        bound = select(relation).compile(dialect=postgresql.dialect()).params.values()
+        profiles = next(json.loads(value) for value in bound
+                        if isinstance(value, str) and value.startswith('[{"scheme_id":'))
+        assert next(row for row in profiles if row['profile_id'] == 'frodo-lwe-v3-tier-80') == {
+            'scheme_id': 'frodokem', 'scheme_version': 'anchor-research-v3',
+            'profile_id': 'frodo-lwe-v3-tier-80', 'tier': 80,
+            'record_inheritance': False, 'progress_points': 500}
 
 
 def test_v8_hqc_enrollment_is_preserved_as_history_not_current_eligibility():

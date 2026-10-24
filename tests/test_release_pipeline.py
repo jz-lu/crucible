@@ -187,6 +187,7 @@ def test_workflow_is_manual_publish_only_with_always_credential_cleanup():
     assert 'if: always()\n        run: rm -rf -- "$RUNNER_TEMP/crucible-registry-auth"' in workflow
     aggregate = (ROOT / '.github/workflows/tests.yml').read_text()
     assert 'name: CI passed' in aggregate
-    assert 'needs: [portable-source-checks, release-contract, browser-checks]' in aggregate
+    assert 'needs: [portable-source-checks, release-contract, browser-checks, metadata-postgresql]' in aggregate
     assert 'BROWSER_RESULT: ${{ needs.browser-checks.result }}' in aggregate
     assert 'test "$BROWSER_RESULT" = success' in aggregate
+    assert 'test "$METADATA_RESULT" = success' in aggregate

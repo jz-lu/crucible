@@ -13,7 +13,7 @@ from uuid import uuid4
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from crucible import beta_access, dh_v4, notebook, registry
+from crucible import beta_access, dh_v4, github_auth, notebook, registry
 from crucible.app import create_app
 from crucible.config import Settings
 from crucible.db import LoginSession, User
@@ -31,8 +31,13 @@ def main():
     registry.CURRENT = {dh_v4.SCHEME_ID: dh_v4.SCHEME_VERSION}
     with tempfile.TemporaryDirectory(prefix="crucible-browser-checks-") as tmp:
         settings = Settings("sqlite:///" + tmp + "/fixture.db", secrets.token_bytes(32),
-                            origins=(ORIGIN,), access_mode="beta", rate_limits=False)
+                            origins=(ORIGIN,), access_mode="beta", rate_limits=False,
+                            github_login_enabled=True, github_client_id="synthetic-browser-client",
+                            github_client_secret="synthetic-browser-provider-secret")
         app = create_app(settings, initialize=True)
+        # Browser tests intercept the provider navigation. The application still
+        # performs its real state/binding/session checks; no external token call.
+        github_auth.fetch_identity = lambda *args: ("123456", "browser-alice")
         now = time.time()
         encoded = passwords.hash(PASSWORD)
         with app.state.db.transaction(write=True) as session:
@@ -43,6 +48,9 @@ def main():
                 session.flush()
                 beta_access.set_membership(session, user.id,
                                            "revoked" if actor == "revoked" else "active", now)
+                if actor == "alice":
+                    session.add(github_auth.GitHubIdentity(github_user_id="123456", user_id=user.id,
+                        github_login="browser-alice", created_at=now, last_login_at=now))
                 if actor == "revoked":
                     session.add(LoginSession(token_hash=token_hash("synthetic-revoked-browser-cookie"),
                                              user_id=user.id, expires_at=now + 3600))
