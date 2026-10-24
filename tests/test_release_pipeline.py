@@ -184,6 +184,6 @@ def test_workflow_is_manual_publish_only_with_always_credential_cleanup():
     assert release.DOCKER == ['docker', '--host', 'unix:///var/run/docker.sock']
     assert '--network none' in workflow and '--provenance=false --load' in workflow
     assert 'deploy create' not in workflow and 'apps update' not in workflow
-    assert 'if: always()\n        run: rm -rf -- "$DOCKER_CONFIG"' in workflow
+    assert 'if: always()\n        run: rm -rf -- "$RUNNER_TEMP/crucible-registry-auth"' in workflow
     aggregate = (ROOT / '.github/workflows/tests.yml').read_text()
     assert 'name: CI passed' in aggregate and 'needs: [portable-source-checks, release-contract]' in aggregate
