@@ -37,56 +37,80 @@
 
   let researchMapAssets = null;
   async function mountResearchMap(host, current, {currentReleases} = {}) {
-    researchMapAssets ||= (async () => {
-      for (const [name, global] of [['catalogue.js', 'CRUCIBLE_LANDSCAPE'], ['notes-data.js', 'CRUCIBLE_NOTES'], ['note-ui.js', 'NoteUI'], ['map-views.js', 'LandscapeViews'], ['app.js', 'CrucibleResearchMap']]) {
-        if (!current()) throw new Error('Map view closed.');
-        if (window[global]) continue;
-        await new Promise((resolve, reject) => {
-          const script = el('script'); script.src = '/map/' + name;
-          const timer = setTimeout(() => fail(), 15000);
-          function fail() { clearTimeout(timer); script.remove(); reject(new Error('Map asset unavailable.')); }
-          script.onload = () => { clearTimeout(timer); resolve(); };
-          script.onerror = fail; document.querySelector('head').append(script);
-        });
-      }
-    })().catch(error => { researchMapAssets = null; throw error; });
-    await researchMapAssets;
     if (!current()) return null;
-    const abort = new AbortController();
-    const timeout = setTimeout(() => abort.abort(), 15000);
-    let template;
-    try {
-      const response = await fetch('/map/index.html', {credentials:'same-origin', cache:'no-store', signal:abort.signal});
-      if (!response.ok) throw new Error('Map template unavailable.');
-      template = new DOMParser().parseFromString(await response.text(), 'text/html');
-    } finally { clearTimeout(timeout); }
-    if (!current()) return null;
-    // Import only the trusted static template's main and dialog, never scripts
-    // or a second site header. Styles are confined to this shadow root.
-    const main = template.querySelector('main'), dialog = template.querySelector('dialog');
-    if (!main || !dialog) throw new Error('Invalid map template.');
-    for (const node of main.querySelectorAll('.notebook-view-nav, .page-title, .intro, .pipeline-preview')) node.remove();
-    for (const link of main.querySelectorAll('a[href]')) {
-      const href = link.getAttribute('href');
-      if (!href.startsWith('#')) link.href = new URL(href, window.location.origin + '/map/').href;
-    }
-    const surface = el('div');
+    // Start the stylesheet, template and ordered scripts together. The surface
+    // must be connected for its shadow stylesheet to load, but stays hidden
+    // until every dependency is ready; the existing loading message stays put.
+    const surface = el('div'); surface.hidden = true;
     const shadow = surface.attachShadow({mode:'open'});
     const stylesheet = el('link'); stylesheet.rel = 'stylesheet'; stylesheet.href = '/map/styles.css';
     const styled = new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('Map styles unavailable.')), 15000);
-      stylesheet.onload = () => { clearTimeout(timer); resolve(); };
-      stylesheet.onerror = () => { clearTimeout(timer); reject(new Error('Map styles unavailable.')); };
+      const timer = setTimeout(() => finish(new Error('Map styles unavailable.')), 15000);
+      function finish(error) {
+        clearTimeout(timer); stylesheet.onload = stylesheet.onerror = null;
+        if (error) reject(error); else resolve();
+      }
+      stylesheet.onload = () => finish();
+      stylesheet.onerror = () => finish(new Error('Map styles unavailable.'));
     });
-    shadow.append(stylesheet); host.replaceChildren(surface);
-    try { await styled; } catch (error) { surface.remove(); throw error; }
-    if (!current()) { surface.remove(); return null; }
-    shadow.append(document.importNode(main, true), document.importNode(dialog, true));
-    const controller = window.CrucibleResearchMap.mount(shadow, {currentReleases});
-    return {
-      show: () => controller.show(), hide: () => controller.hide(),
-      destroy: () => { controller.destroy(); surface.remove(); }
-    };
+    shadow.append(stylesheet); host.append(surface);
+    const templateRead = (async () => {
+      const abort = new AbortController();
+      const timeout = setTimeout(() => abort.abort(), 15000);
+      try {
+        const response = await fetch('/map/index.html', {credentials:'same-origin', cache:'no-store', signal:abort.signal});
+        if (!response.ok) throw new Error('Map template unavailable.');
+        return await response.text();
+      } finally { clearTimeout(timeout); }
+    })();
+    researchMapAssets ||= (async () => {
+      const scripts = [['catalogue.js', 'CRUCIBLE_LANDSCAPE'], ['notes-data.js', 'CRUCIBLE_NOTES'], ['note-ui.js', 'NoteUI'], ['map-views.js', 'LandscapeViews'], ['app.js', 'CrucibleResearchMap']];
+      const results = await Promise.allSettled(scripts.map(([name, global]) => {
+        if (window[global]) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+          const script = el('script'); script.src = '/map/' + name; script.async = false;
+          const timer = setTimeout(() => finish(new Error('Map asset unavailable.')), 15000);
+          function finish(error) {
+            clearTimeout(timer); script.onload = script.onerror = null;
+            if (error) { script.remove(); reject(error); } else resolve();
+          }
+          script.onload = () => finish(window[global] ? null : new Error('Map asset unavailable.'));
+          script.onerror = () => finish(new Error('Map asset unavailable.'));
+          document.querySelector('head').append(script);
+        });
+      }));
+      // Do not retry a failed dependency while later ordered scripts are still
+      // loading. Successfully loaded globals are reused on a subsequent try.
+      const failed = results.find(result => result.status === 'rejected');
+      if (failed) throw failed.reason;
+    })().catch(error => { researchMapAssets = null; throw error; });
+    try {
+      const results = await Promise.allSettled([researchMapAssets, templateRead, styled]);
+      if (!current()) { surface.remove(); return null; }
+      const failed = results.find(result => result.status === 'rejected');
+      if (failed) throw failed.reason;
+      const template = new DOMParser().parseFromString(results[1].value, 'text/html');
+      // Import only the trusted static template's main and dialog, never scripts
+      // or a second site header. Styles are confined to this shadow root.
+      const main = template.querySelector('main'), dialog = template.querySelector('dialog');
+      if (!main || !dialog) throw new Error('Invalid map template.');
+      for (const node of main.querySelectorAll('.notebook-view-nav, .page-title, .intro, .pipeline-preview')) node.remove();
+      for (const link of main.querySelectorAll('a[href]')) {
+        const href = link.getAttribute('href');
+        if (!href.startsWith('#')) link.href = new URL(href, window.location.origin + '/map/').href;
+      }
+      if (!current()) { surface.remove(); return null; }
+      shadow.append(document.importNode(main, true), document.importNode(dialog, true));
+      const controller = window.CrucibleResearchMap.mount(shadow, {currentReleases});
+      // Moving a connected shadow root restarts its no-store stylesheet fetch.
+      // Keep the prepared surface in place and remove only the loading content.
+      for (const child of [...host.childNodes]) if (child !== surface) child.remove();
+      surface.hidden = false;
+      return {
+        show: () => controller.show(), hide: () => controller.hide(),
+        destroy: () => { controller.destroy(); surface.remove(); }
+      };
+    } catch (error) { surface.remove(); throw error; }
   }
 
   function mount(root, {navigate, api: requestAPI, account, session = () => null, currentReleases = () => [], mapFactory = mountResearchMap, reviewOnly = false}) {
