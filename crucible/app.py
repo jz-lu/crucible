@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy import and_, delete, func, or_, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, TimeoutError as DatabasePoolTimeout
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.concurrency import run_in_threadpool
 
@@ -32,6 +32,11 @@ from . import github_auth, password_recovery
 def current_round(now):
     number = int(now) // 3600
     return {"id": number, "starts_at": number * 3600, "ends_at": (number + 1) * 3600}
+
+
+def database_busy_response():
+    return JSONResponse({"detail": "The service is busy. Please retry shortly."}, 503,
+                        headers={"Retry-After": "2", "Cache-Control": "no-store"})
 
 
 def generation_admission(settings, manifest, *, current_version):
@@ -115,6 +120,8 @@ class RequestBoundary:
                                            session, self.settings, self.clock)
             try:
                 await run_in_threadpool(authenticate_machine)
+            except DatabasePoolTimeout:
+                return await database_busy_response()(scope, receive, send)
             except HTTPException as error:
                 return await JSONResponse({"detail": error.detail}, error.status_code,
                                           headers={"Cache-Control": "no-store"})(scope, receive, send)
@@ -130,6 +137,8 @@ class RequestBoundary:
                         beta_access.browser_account(session, raw, self.clock, require_membership=True)
                 try:
                     await run_in_threadpool(admit_browser)
+                except DatabasePoolTimeout:
+                    return await database_busy_response()(scope, receive, send)
                 except HTTPException as error:
                     code = "authentication_required" if error.status_code == 401 else "membership_required"
                     return await JSONResponse({"detail": error.detail, "code": code}, error.status_code)(scope, receive, send)
@@ -198,6 +207,10 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     protected_assets = ProtectedAssets(ROOT / "web")
     app.add_middleware(RequestBoundary, settings=settings, clock=clock, db=db, policy=policy)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.hosts)
+
+    @app.exception_handler(DatabasePoolTimeout)
+    async def database_busy(request, error):
+        return database_busy_response()
 
     @app.exception_handler(RequestValidationError)
     async def safe_validation_error(request, error):
@@ -383,18 +396,29 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                 "received_at": submission.received_at, "method_id": submission.method_id,
                 "ai_model": submission.ai_model or ""}
 
-    def challenge_data(session, challenge):
-        submission = session.scalar(select(Submission).where(Submission.challenge_id == challenge.id))
+    def serialize_challenge(challenge, submission, *, summary=False):
         status = "open" if clock() < challenge.ends_at else "expired"
         if submission:
             status = "solved" if submission.correct else "incorrect"
-        return {**standard_schemes.profile_presentation(challenge.manifest),
+        data = {**standard_schemes.profile_presentation(challenge.manifest),
                 "id": challenge.id, "profile_id": challenge.profile_id, "round_id": challenge.round_id,
                 "scheme_id": challenge.scheme_id, "scheme_version": challenge.scheme_version,
                 "issued_at": challenge.issued_at, "starts_at": challenge.starts_at, "ends_at": challenge.ends_at,
                 "public": challenge.public_data, "status": status,
                 "submission": submission_data(submission) if submission else None,
                 "download_url": f"/api/challenges/{challenge.id}/download"}
+        if summary:
+            # The browser displays status and a download link, not the public
+            # key/ciphertext. Keep full, exact inputs on the default API/download.
+            encoding = challenge.public_data.get("encoding")
+            data.pop("public")
+            data.update(projection="summary", shared_secret_bytes=
+                        encoding.get("shared_secret_bytes") if isinstance(encoding, dict) else None)
+        return data
+
+    def challenge_data(session, challenge, *, summary=False):
+        submission = session.scalar(select(Submission).where(Submission.challenge_id == challenge.id))
+        return serialize_challenge(challenge, submission, summary=summary)
 
     @app.get("/api/session")
     def get_session(request: Request):
@@ -498,11 +522,17 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     @app.get("/api/schemes")
     def schemes(request: Request, progress_only: bool = False, projection: str | None = None,
                 scheme_id: str | None = None, version: str | None = None):
-        if (projection not in {None, "navigation", "release"}
+        if (projection not in {None, "navigation", "release", "map"}
                 or projection is not None and "progress_only" in request.query_params
                 or projection != "release" and (scheme_id is not None or version is not None)
                 or projection == "release" and (not scheme_id or not version)):
             raise HTTPException(422, "Choose a navigation projection, an exact release, or the existing catalogue/progress view.")
+        if projection == "map":
+            # Graph layout is bundled separately. Its action links need only
+            # current release identities, never all profile labels/live scores.
+            return catalogue_response(envelope(projection="map", schemes=[
+                {"id": identifier, "version": version} for identifier, version in registry.CURRENT.items()],
+                catalogue_revision=registry.catalogue_revision()), request.headers.get("accept-encoding"))
         if projection == "release":
             releases = [registry.descriptor(adapter_for(version, scheme_id))]
             catalogue = None
@@ -593,29 +623,31 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
 
     @app.get("/api/challenges")
     def current_challenge(profile_id: str, request: Request, scheme_id: str | None = None,
-                          scheme_version: str | None = None):
+                          scheme_version: str | None = None, summary: bool = False):
         manifest = manifest_for(profile_id, scheme_version, scheme_id)
         with db.transaction() as session:
             user = user_for(request, session)
             observed_at = clock()
             round_ = current_round(observed_at)
-            challenge = session.scalar(select(Challenge).where(Challenge.user_id == user.id, Challenge.profile_id == profile_id,
+            row = session.execute(select(Challenge, Submission).outerjoin(Submission, Submission.challenge_id == Challenge.id)
+                      .where(Challenge.user_id == user.id, Challenge.profile_id == profile_id,
                       Challenge.scheme_id == manifest["scheme_id"], Challenge.scheme_version == manifest["version"],
-                      Challenge.round_id == round_["id"]))
-            started = manifest["version"] == registry.CURRENT[manifest["scheme_id"]] and session.scalar(
+                      Challenge.round_id == round_["id"])).one_or_none()
+            challenge, submission = row if row is not None else (None, None)
+            started = manifest["version"] == registry.CURRENT[manifest["scheme_id"]] and (challenge is not None or session.scalar(
                 select(Challenge.id).where(Challenge.user_id == user.id,
                     Challenge.scheme_id == manifest["scheme_id"], Challenge.scheme_version == manifest["version"],
-                    Challenge.round_id == round_["id"]).limit(1)) is not None
+                    Challenge.round_id == round_["id"]).limit(1)) is not None)
             # Describe the exact queried round, even if the hour turns while
             # reading. A later guarded POST must still match the server's round.
-            return {"challenge": challenge_data(session, challenge) if challenge else None,
+            return {"challenge": serialize_challenge(challenge, submission, summary=summary) if challenge else None,
                     "generation_admission": generation_admission(settings, manifest,
                         current_version=registry.CURRENT[manifest["scheme_id"]]),
                     "round_started": started, "round_started_round_id": round_["id"],
                     "server_time": observed_at, "round": round_}
 
     @app.post("/api/challenges")
-    def start_challenge(body: NewChallenge, request: Request):
+    def start_challenge(body: NewChallenge, request: Request, summary: bool = False):
         throttle(request, "issue", 1200, 60)
         manifest = challenge_manifest(body)
         profile_id = manifest["id"]
@@ -660,7 +692,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             return user.id, round_, None
 
         def existing_response(session, existing, round_):
-            return envelope(challenge=challenge_data(session, existing), round_started=True,
+            return envelope(challenge=challenge_data(session, existing, summary=summary), round_started=True,
                             round_started_round_id=round_["id"])
 
         with db.transaction(write=True) as session:
@@ -730,7 +762,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                 session.add(challenge)
                 session.get(generation.GenerationAttempt, attempt_id).disposition = "issued"
                 session.flush()
-                return envelope(challenge=challenge_data(session, challenge), round_started=True,
+                return envelope(challenge=challenge_data(session, challenge, summary=summary), round_started=True,
                                 round_started_round_id=round_["id"])
 
         key = (db.engine, user_id, manifest["scheme_id"], manifest["version"], profile_id, round_["id"])

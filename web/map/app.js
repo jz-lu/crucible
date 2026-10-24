@@ -1,7 +1,7 @@
 /* Read-only network view, mounted inside the research notebook. */
 (() => {
   'use strict';
-  function mount(root, {currentReleases = () => [], loadNotes = async () => window.CRUCIBLE_NOTES} = {}) {
+  function mount(root, {currentReleases = () => [], loadReleases = async () => {}, loadNotes = async () => window.CRUCIBLE_NOTES} = {}) {
     const data = window.CRUCIBLE_LANDSCAPE;
     let notes = window.CRUCIBLE_NOTES || null;
     const {el, body, tag, noteHref} = window.NoteUI;
@@ -69,19 +69,38 @@
       card.append(el('p', 'detail-summary', scheme.summary));
       const actions = el('div', 'detail-actions');
       const read = el('a', '', 'Read research note'); read.href = noteHref(scheme.note_ref.note_id, scheme.note_ref.revision);
+      actions.append(read);
       // The map's scoring snapshot is historical context, not navigation
       // authority. Resolve actions against the shell's current catalogue.
-      const releases = currentReleases();
-      const release = Array.isArray(releases) && releases.find(item => item.id === id && item.version != null);
-      if (release) {
+      const addReleaseActions = () => {
+        const releases = currentReleases();
+        const release = Array.isArray(releases) && releases.find(item => item.id === id && item.version != null);
+        if (!release || actions.querySelector('.challenge-action')) return;
         const href = '#scheme/' + encodeURIComponent(release.id) + '/' + encodeURIComponent(release.version);
         const challenge = el('a', 'challenge-action', 'Open challenge');
         challenge.href = '#challenge/' + encodeURIComponent(release.id) + '/' + encodeURIComponent(release.version) + '?view=challenge';
         const parameters = el('a', '', 'View parameters');
         parameters.href = href;
-        actions.append(challenge, read, parameters);
-      } else actions.append(read);
+        actions.prepend(challenge); actions.append(parameters);
+      };
+      addReleaseActions();
       card.append(actions); popup('Scheme', card);
+      const token = detailRequest;
+      const current = () => !destroyed && visible && modal.open && token === detailRequest;
+      let linksPending = false;
+      const refreshLinks = () => {
+        if (linksPending) return;
+        linksPending = true;
+        actions.querySelector('.map-links-retry')?.remove();
+        Promise.resolve().then(loadReleases).then(() => {
+          if (current()) addReleaseActions();
+        }).catch(() => {
+          if (!current()) return;
+          const retry = el('button', 'map-links-retry', 'Retry challenge links'); retry.type = 'button';
+          retry.addEventListener('click', refreshLinks); actions.append(retry);
+        }).finally(() => { linksPending = false; });
+      };
+      refreshLinks();
     }
     function withNotes(renderNote) {
       if (destroyed || !visible) return;

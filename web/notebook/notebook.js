@@ -65,7 +65,7 @@
     researchMapScripts.set(name, task); document.querySelector('head').append(script);
     return task;
   }
-  async function mountResearchMap(host, current, {currentReleases, canRead = current} = {}) {
+  async function mountResearchMap(host, current, {currentReleases, loadReleases, canRead = current} = {}) {
     if (!current()) return null;
     // Start the stylesheet, template and independent scripts together. The surface
     // must be connected for its shadow stylesheet to load, but stays hidden
@@ -120,7 +120,7 @@
       }
       if (!current()) { surface.remove(); return null; }
       shadow.append(document.importNode(main, true), document.importNode(dialog, true));
-      const controller = window.CrucibleResearchMap.mount(shadow, {currentReleases, loadNotes: async () => {
+      const controller = window.CrucibleResearchMap.mount(shadow, {currentReleases, loadReleases, loadNotes: async () => {
         if (!canRead()) throw new Error('Map no longer active.');
         await loadResearchMapScript('notes-data.js', 'CRUCIBLE_NOTES');
         if (!canRead()) throw new Error('Map no longer active.');
@@ -319,11 +319,12 @@
       if (mapIdle !== null) clearTimeout(mapIdle); mapIdle = null;
       const owner = accountId, generation = epoch, token = ++mapRequest;
       const current = () => active && accountId === owner && identity() === owner && epoch === generation && token === mapRequest;
-      // The shell shares its existing bounded catalogue read; actions resolve
-      // against that current catalogue when the map is opened.
+      // Resolve action links through the small identity index, independently of
+      // graph assets. No profile catalogue is needed to paint the visualization.
       void Promise.resolve(prepareMapCatalogue()).catch(() => {});
       const task = (async () => {
         const controller = await mapFactory(q('map'), current, {currentReleases,
+          loadReleases: prepareMapCatalogue,
           canRead: () => active && accountId === owner && identity() === owner && epoch === generation});
         if (!current()) { controller?.destroy(); return null; }
         mapController = controller;

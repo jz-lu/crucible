@@ -67,19 +67,18 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.match(app.$('#kem-catalogue').textContent, /Fixture scheme/);
     assert.equal(app.requests.filter(request => request.url.searchParams.get('projection') === 'navigation').length, 1);
   });
-  await test('direct map route downloads notebook code while its catalogue is still pending', async () => {
-    const gate=deferred();
+  await test('direct map route mounts without downloading the full profile catalogue', async () => {
     const app=await createApp({schemes:[scheme],hash:'#notebook?view=map',responder:(url,options,envelope)=>{
       if(url.pathname==='/api/session')return active(envelope);
-      if(url.pathname==='/api/schemes')return gate.promise;
+      if(url.pathname==='/api/schemes')throw new Error('Map graph must not wait for profile metadata');
     }});
     assert.equal(assets(app).length,4,'Assets start without waiting for navigation metadata');
-    assert.equal(app.$('#notebook-workspace').hidden,true,'No partially authorized or unlabelled map is painted');
+    assert.equal(app.$('#notebook-workspace').hidden,false,'The authorized map has its own data');
     const notebook=notebookDouble();app.window.CrucibleNotebook=notebook;
-    for(const asset of assets(app))asset.onload();await flush();assert.equal(notebook.calls.mount,0);
-    gate.resolve(app.envelope({schemes:[scheme]}));await flush();
+    for(const asset of assets(app))asset.onload();await flush();
     assert.equal(notebook.calls.mount,1);assert.equal(notebook.calls.show,1);
     assert.equal(app.requests.some(request=>request.options.method==='POST'),false);
+    assert.equal(paths(app).includes('/api/schemes'),false);
   });
   await test('ordinary session refresh cannot strand the initial catalogue read', async () => {
     const gate = deferred();
@@ -249,11 +248,11 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.$('#access-workspace').hidden, false);
     assert.deepEqual(paths(app), ['/api/session', '/api/notebook/notes'], 'No new request follows revocation');
   });
-  await test('the notebook map still obtains scheme metadata before its renderer runs', async () => {
+  await test('the notebook map never blocks its renderer on full scheme metadata', async () => {
     const notebook = notebookDouble();
     const app = await createApp({schemes: [scheme], user, hash: '#notebook?view=map', notebook});
-    assert.equal(app.requests.filter(request => request.url.searchParams.get('projection') === 'navigation').length, 1);
-    assert.equal(read(app, 'state.schemes.length'), 1);
+    assert.equal(app.requests.filter(request => request.url.searchParams.get('projection') === 'navigation').length, 0);
+    assert.equal(read(app, 'state.schemes.length'), 0);
     assert.equal(notebook.calls.show, 1);
   });
   await test('scheme leaderboard and protocol navigation skip challenge reads; challenge view still reads once', async () => {

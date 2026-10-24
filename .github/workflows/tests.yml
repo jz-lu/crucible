@@ -59,6 +59,7 @@ jobs:
           tests/test_app_platform_backup.py
           tests/test_dependency_lock.py
           tests/test_db_pool.py
+          tests/test_loading_projections.py
           tests/test_sntrup_builder.py
           tests/test_ntru_linux_builder.py
           tests/test_github_auth.py

@@ -59,6 +59,24 @@ assert.equal(listeners.size, 0);
 console.log('PASS network-only map, compact popup, inline research note, retained filters, viewport centering/reduced motion and lifecycle cleanup');
 
 (async () => {
+  let releases=[], linkRead, linkCalls=0;
+  const linked = sandbox.CrucibleResearchMap.mount(document, {currentReleases:()=>releases,
+    loadReleases:()=>{linkCalls++;return new Promise((resolve,reject)=>{linkRead={resolve,reject};});}});
+  linked.show();$('[data-scheme="ml-kem"]').click();await new Promise(setImmediate);
+  const readLink=$('#mobile-inspector').querySelector('a');readLink.focus();
+  releases=[{id:'ml-kem',version:'current-live'}];linkRead.resolve();await new Promise(setImmediate);
+  assert.equal($('#mobile-inspector').querySelector('.challenge-action').href,'#challenge/ml-kem/current-live?view=challenge');
+  assert.equal(document.activeElement,readLink,'Updating links keeps the focused research-note link');
+  releases=[];$('[data-scheme="ml-kem"]').click();await new Promise(setImmediate);
+  linkRead.reject(new Error('Unavailable'));await new Promise(setImmediate);
+  const retry=$('.map-links-retry'),before=linkCalls;retry.click();retry.click();await new Promise(setImmediate);
+  assert.equal(linkCalls,before+1,'Repeated retry clicks share one read');
+  Array.from($('#mobile-inspector').querySelectorAll('a')).find(link=>link.textContent==='Read research note').click();
+  releases=[{id:'ml-kem',version:'late-live'}];linkRead.resolve();await new Promise(setImmediate);
+  assert.equal($('#mobile-detail-title').textContent,'Research note');
+  assert.equal($('#mobile-inspector').querySelector('.challenge-action'),null,'Late metadata cannot replace an opened note');
+  linked.destroy();
+  console.log('PASS small map-link reads preserve focus, retry once, and cannot replace a later popup');
   const bundle = sandbox.CRUCIBLE_NOTES; vm.runInContext('window.CRUCIBLE_NOTES = null', sandbox);
   let pending, reads=0;
   const lazy = sandbox.CrucibleResearchMap.mount(document, {loadNotes:()=>{reads++;return new Promise((resolve,reject)=>{pending={resolve,reject};});}});
