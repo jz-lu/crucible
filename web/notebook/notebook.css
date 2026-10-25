@@ -89,18 +89,23 @@
 .nb-request-requirements > ul { margin-top:12px; }
 .nb-requests .nb-scheme-panel { margin:14px 0; }
 
+.nb-view-scroll-held{overflow-anchor:none}
 .nb-timeline-card{padding:26px 28px 20px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}
 .nb-timeline-heading{display:flex;align-items:baseline;justify-content:space-between;gap:18px;margin-bottom:10px}
 .nb-timeline-heading h2{font:650 25px/1.2 var(--display);color:var(--ink);margin:0}
-.nb-timeline-total{font:600 17px/1.3 var(--sans);color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums}
-.nb-timeline-card>svg{display:block;width:100%;height:auto;margin-top:22px;overflow:visible}
+.nb-timeline-total{min-width:8ch;text-align:right;font:600 17px/1.3 var(--sans);color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums}
+.nb-timeline-plot{position:relative;height:340px;margin-top:22px}
+.nb-timeline-plot>svg{display:block;width:100%;height:100%;overflow:visible}
+.nb-timeline-frame{position:absolute;inset:24px 16px 50px 50px;border-left:1px solid var(--line);border-bottom:1px solid var(--line)}
+.nb-timeline-message{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;margin:0;padding:24px;text-align:center}
+.nb-timeline-undated{min-height:3.2em}
 .nb-timeline-card svg text{font:13px var(--sans);fill:var(--muted)}
 .nb-timeline-grid{stroke:var(--line);stroke-dasharray:3 5}
 .nb-timeline-area{fill:var(--primary);opacity:.055}
 .nb-timeline-line{fill:none;stroke:var(--primary);stroke-width:2.5;stroke-linejoin:round;vector-effect:non-scaling-stroke}
 .nb-timeline-point{fill:var(--primary)}
 .nb-timeline-footnote{font-size:12px;line-height:1.6;color:var(--muted);margin:10px 0 0}
-@media(max-width:650px){.nb-timeline-card{padding:20px 14px 16px}.nb-timeline-heading h2{font-size:23px}.nb-timeline-total{font-size:15px}}
+@media(max-width:650px){.nb-timeline-plot{height:280px}.nb-timeline-undated{min-height:4.8em}.nb-timeline-card{padding:20px 14px 16px}.nb-timeline-heading h2{font-size:23px}.nb-timeline-total{font-size:15px}}
 @media(max-width:420px){#notebook-workspace .nb-views{gap:12px}#notebook-workspace .nb-visualizations{padding-left:13px}#notebook-workspace .nb-visualization-tabs{gap:12px}#notebook-workspace .nb-view{font-size:13px;gap:6px}#notebook-workspace .nb-view svg{width:16px;height:16px}}
 
 /* Author actions remain beside the note; review decisions belong to their own page. */

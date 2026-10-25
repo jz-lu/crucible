@@ -1,3 +1,87 @@
+// Public route structure only: no account, scheme description or research data
+// is needed to choose the first frame. Unknown routes stay deliberately neutral.
+(() => {
+  if (window.CruciblePendingPage) return;
+  const presentationKey = 'crucible.pending-presentation';
+  function remember(allowed) {
+    if (typeof allowed !== 'boolean') return;
+    // This hint changes only the public frame on the next document load. It
+    // contains no identity or rights and is never used to authorize a request.
+    try { window.sessionStorage.setItem(presentationKey, allowed ? 'workspace' : 'gate'); } catch {}
+  }
+  function describe(hash = window.location?.hash || '') {
+    if (typeof hash !== 'string' || hash.length > 4096) return {page: 'neutral', title: 'Crucible'};
+    const [path, query = ''] = hash.split('?');
+    const params = new URLSearchParams(query);
+    if (['', '#', '#challenge'].includes(path)) return {page: 'catalogue', title: 'KEM Schemes'};
+    if (path === '#people') return {page: 'people', title: 'Leaderboard'};
+    if (path === '#notebook') {
+      if (params.get('review') === '1' || params.get('research_review') === '1') return {page: 'list', title: 'Review center'};
+      const view = params.get('view');
+      return {page: view === 'timeline' ? 'timeline' : view === 'map' ? 'chart' : 'list', title: 'Research notebook'};
+    }
+    if (path.startsWith('#person/')) {
+      let title = 'Profile';
+      try {
+        const value = decodeURIComponent(path.slice('#person/'.length));
+        if (value && value.length <= 100 && !/[\/\u0000-\u001f\u007f]/.test(value)) title = value;
+      } catch { /* Malformed addresses never become markup or private reads. */ }
+      return {page: 'neutral', title};
+    }
+    if (/^#scheme\/[^/]+\/[^/]+\/assumptions$/.test(path)) return {page: 'list', title: 'Assumptions'};
+    if (/^#scheme\/[^/]+\/[^/]+$/.test(path)) return {page: 'chart', title: 'Scheme'};
+    if (/^#challenge\/[^/]+\/[^/]+$/.test(path)) return {page: 'list', title: 'Challenge'};
+    if (path === '#reviews' || (path === '#propose' && params.get('review') === '1')) return {page: 'list', title: 'Review center'};
+    const title = {'#about': 'About us', '#propose': 'Propose a scheme', '#connect': 'Connect an agent',
+      '#join': 'Private beta', '#auth': 'Sign in', '#reset-password': 'Reset password'}[path];
+    return {page: 'neutral', title: title || 'Crucible'};
+  }
+  function apply() {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement || document.querySelector('html');
+    if (typeof root?.setAttribute !== 'function') return;
+    // app.js owns the resolved gate, including errors. A late bootstrap or
+    // queued DOM-ready callback must not overwrite that newer state.
+    if (document.body && document.body.getAttribute('data-access-pending') !== 'true') {
+      // The app can win the script race. Copy only its resolved presentation
+      // label; do not change its completed gate, heading or navigation.
+      const resolved = document.body.getAttribute('data-access-view');
+      if (resolved === 'workspace' || resolved === 'gate') remember(resolved === 'workspace');
+      return;
+    }
+    const access = document.querySelector('#access-workspace');
+    if (access && access.getAttribute('aria-busy') !== 'true') return;
+    let hint;
+    try { hint = window.sessionStorage.getItem(presentationKey); } catch {}
+    const described = describe();
+    const route = hint === 'gate' ? {page: 'gate', title: 'Private beta'} :
+      hint !== 'workspace' && described.page === 'catalogue' ? {page: 'neutral', title: 'Crucible'} : described;
+    root.setAttribute('data-pending-page', route.page);
+    root.classList.toggle('pending-notebook', route.title === 'Research notebook');
+    const title = document.querySelector('#access-title');
+    if (title) { title.textContent = route.title; title.removeAttribute('aria-hidden'); }
+    const path = (window.location?.hash || '').split('?')[0];
+    const selected = route.page === 'gate' ? null : path === '#notebook' ? '#nav-notebook' : path === '#about' ? '#nav-about' :
+      ['', '#', '#challenge'].includes(path) || /^#(?:scheme|challenge)\//.test(path) ? '#nav-challenge' : null;
+    for (const selector of ['#nav-challenge', '#nav-notebook', '#nav-about']) {
+      const tab = document.querySelector(selector);
+      if (!tab) continue;
+      tab.classList.toggle('selected', selector === selected);
+      if (selector === selected) tab.setAttribute('aria-current', 'page');
+      else tab.removeAttribute('aria-current');
+    }
+    return route;
+  }
+  window.CruciblePendingPage = Object.freeze({describe, apply, remember});
+  apply();
+  if (typeof document !== 'undefined' && typeof (document.documentElement || document.querySelector('html'))?.setAttribute === 'function') {
+    // Interactive fires once parsing finishes, before a stalled deferred app
+    // script can hold DOMContentLoaded. The route frame must not wait for it.
+    if (document.readyState === 'loading') document.addEventListener('readystatechange', apply, {once: true});
+    window.addEventListener?.('hashchange', apply);
+  }
+})();
+
 // Keep the logo's reserved frame, but paint the whole decoded image at once.
 // This is independent of access/API readiness. Without this small script the
 // normal image remains a fallback; a failed image still leaves the wordmark.

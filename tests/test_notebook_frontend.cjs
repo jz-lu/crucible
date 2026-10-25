@@ -1129,6 +1129,98 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   pending.resolve({request:{...record,retracted:true}});await flush();assert.equal(app.requests.filter(r=>r.url==='/api/notebook/research-requests/r').length,reads);
   assert.doesNotMatch(app.root.textContent,/PRIVATE proposal|PRIVATE change|PRIVATE reason/);
  });
+ await test('cold Timeline preserves one truthful card frame through count, curve, empty and error states',async()=>{
+  for(const outcome of ['curve','empty','error']){
+   const late=deferred();const app=await boot({respond:url=>url==='/api/notebook/timeline'?late.promise:undefined});
+   const pending=app.controller.show(new URLSearchParams('view=timeline'));
+   const card=app.q('timeline').querySelector('.nb-timeline-card'),plot=card.querySelector('.nb-timeline-plot'),heading=card.querySelector('.nb-timeline-heading'),footer=card.querySelector('.nb-timeline-footnote');
+   assert.ok(plot.querySelector('.nb-timeline-frame'));assert.equal(card.querySelector('.nb-timeline-total').textContent,'');
+   assert.equal(plot.querySelector('svg'),null);assert.equal(plot.querySelector('.nb-timeline-line'),null);assert.equal(plot.querySelectorAll('text').length,0);
+   assert.equal(card.getAttribute('aria-busy'),'true');assert.match(plot.querySelector('[role="status"]').textContent,/Loading/);
+   app.q('timeline-view').focus();
+   if(outcome==='error')late.reject(Object.assign(Error('Unavailable'),{status:503}));
+   else late.resolve(outcome==='empty'?timeline({total:0,points:[]}):timeline());
+   await pending;
+   assert.equal(app.q('timeline').querySelector('.nb-timeline-card')===card,true);
+   assert.equal(card.querySelector('.nb-timeline-plot')===plot,true);assert.equal(card.querySelector('.nb-timeline-heading')===heading,true);assert.equal(card.querySelector('.nb-timeline-footnote')===footer,true);
+   assert.equal(app.document.activeElement,app.q('timeline-view'));assert.equal(card.getAttribute('aria-busy'),null);
+   assert.equal(Boolean(plot.querySelector('.nb-timeline-line')),outcome==='curve');
+   assert.equal(card.querySelector('.nb-timeline-total').textContent,outcome==='curve'?'3 notes':outcome==='empty'?'0 notes':'');
+  }
+ });
+ await test('an expired same-route Timeline cache cannot leave the placeholder after unchanged data returns',async()=>{
+  const late=deferred();let delay=false;
+  const app=await boot({initialParams:new URLSearchParams('view=timeline'),respond:url=>url==='/api/notebook/timeline'?(delay?late.promise:timeline()):undefined});
+  const card=app.q('timeline').querySelector('.nb-timeline-card');
+  vm.runInContext('Date.now = () => '+(Date.now()+300001),app.sandbox);delay=true;
+  const pending=app.controller.show(new URLSearchParams('view=timeline'));
+  assert.ok(app.q('timeline').querySelector('.nb-timeline-frame'));assert.equal(app.q('timeline').querySelector('.nb-timeline-line'),null);
+  late.resolve(timeline());await pending;
+  assert.equal(app.q('timeline').querySelector('.nb-timeline-card')===card,true);assert.ok(card.querySelector('.nb-timeline-line'));assert.equal(card.getAttribute('aria-busy'),null);
+ });
+ await test('notebook tab changes reserve only current viewport space and clear it on access or route changes',async()=>{
+  let session='one';const app=await boot({session:()=>session,respond:url=>url==='/api/notebook/timeline'?timeline():undefined});
+  app.root.hidden=false;app.window.scrollY=180;app.window.innerHeight=900;
+  app.root.getBoundingClientRect=()=>({top:-40,height:9000});
+  app.q('timeline-view').click();await flush();
+  assert.equal(app.root.style.minHeight,'940px','Reserve the viewport, not the previous9000px page');
+  assert.equal(app.root.classList.contains('nb-view-scroll-held'),true);
+  assert.doesNotMatch(app.root.textContent,/Cumulative notes currently visible|Each note counts once|Your notes and the research behind the map/);
+  session='two';app.setAccount(user);assert.equal(app.root.style.minHeight,'');assert.equal(app.root.classList.contains('nb-view-scroll-held'),false);
+  await app.show();app.q('timeline-view').click();await flush();assert.equal(app.root.style.minHeight,'940px');
+  app.controller.hide();assert.equal(app.root.style.minHeight,'');
+  await app.show();app.window.scrollY=0;app.q('timeline-view').click();await flush();assert.equal(app.root.style.minHeight,'');
+ });
+ await test('Timeline intent is lazy and a hover-focus-click shares one pending aggregate read',async()=>{
+  const late=deferred();const app=await boot({respond:url=>url==='/api/notebook/timeline'?late.promise:undefined});
+  assert.equal(app.requests.filter(row=>row.url==='/api/notebook/timeline').length,0);
+  app.q('timeline-view').dispatchEvent({type:'pointerenter'});app.q('timeline-view').dispatchEvent({type:'focus'});
+  const pending=app.controller.show(new URLSearchParams('view=timeline'));
+  assert.equal(app.requests.filter(row=>row.url==='/api/notebook/timeline').length,1);assert.equal(app.q('timeline').querySelector('svg'),null);
+  late.resolve(timeline());await pending;assert.ok(app.q('timeline').querySelector('.nb-timeline-line'));
+  await app.show();const refreshed=app.controller.show(new URLSearchParams('view=timeline'));await refreshed;
+  assert.equal(app.requests.filter(row=>row.url==='/api/notebook/timeline').length,2,'A consumed intent does not replace later fresh validation');
+ });
+ await test('a completed recent Timeline intent paints immediately without a duplicate read',async()=>{
+  const app=await boot({respond:url=>url==='/api/notebook/timeline'?timeline():undefined});
+  app.q('timeline-view').dispatchEvent({type:'pointerenter'});await flush();
+  assert.equal(app.q('timeline').querySelector('svg'),null,'Intent cannot paint a hidden chart');
+  const pending=app.controller.show(new URLSearchParams('view=timeline'));assert.ok(app.q('timeline').querySelector('.nb-timeline-line'));await pending;
+  assert.equal(app.requests.filter(row=>row.url==='/api/notebook/timeline').length,1);
+ });
+ await test('Timeline intent expires after ten seconds and cannot be reused after session rotation or mutation',async()=>{
+  for(const invalidate of ['age','session','mutation']){
+   const old=deferred(),fresh=deferred();let count=0,session='one';
+   const app=await boot({session:()=>session,respond:url=>url==='/api/notebook/timeline'?(++count===1?old.promise:fresh.promise):undefined});
+   vm.runInContext('Date.now = () => 1000',app.sandbox);
+   app.q('timeline-view').dispatchEvent({type:'pointerenter'});
+   if(invalidate==='age')vm.runInContext('Date.now = () => 11000',app.sandbox);
+   if(invalidate==='session'){session='two';app.setAccount(user);}
+   if(invalidate==='mutation')app.controller.invalidateReads();
+   const pending=app.controller.show(new URLSearchParams('view=timeline'));assert.equal(count,2);
+   old.resolve(timeline({total:987,points:[{date:'2026-10-18',created:987,total:987}]}));await flush();assert.doesNotMatch(app.q('timeline').textContent,/987/);
+   fresh.resolve(timeline());await pending;assert.equal(app.q('timeline').querySelector('.nb-timeline-total').textContent,'3 notes');
+  }
+ });
+ await test('Timeline intent obeys save-data, hidden-page, inactive and review-only boundaries',async()=>{
+  for(const blocked of ['save-data','hidden','inactive','review']){
+   const app=await boot({reviewOnly:blocked==='review',respond:url=>url==='/api/notebook/timeline'?timeline():undefined});
+   if(blocked==='save-data')app.sandbox.navigator.connection={saveData:true};
+   if(blocked==='hidden')app.document.visibilityState='hidden';
+   if(blocked==='inactive')app.controller.hide();
+   const before=app.requests.length;
+   if(blocked==='review')assert.equal(app.q('timeline-view'),null);
+   else {app.q('timeline-view').dispatchEvent({type:'pointerenter'});app.q('timeline-view').dispatchEvent({type:'focus'});}
+   await flush();assert.equal(app.requests.length,before);
+  }
+ });
+ await test('forbidden consumed Timeline intent clears its frame and can be retried truthfully',async()=>{
+  const late=deferred();let count=0;const app=await boot({respond:url=>url==='/api/notebook/timeline'?(++count===1?late.promise:timeline()):undefined});
+  app.q('timeline-view').dispatchEvent({type:'pointerenter'});const pending=app.controller.show(new URLSearchParams('view=timeline'));
+  late.reject(Object.assign(Error('Denied'),{status:403}));await pending;
+  assert.equal(app.q('timeline').getAttribute('aria-busy'),null);assert.equal(app.q('timeline').querySelector('.nb-timeline-total').textContent,'');assert.equal(app.q('timeline').querySelector('svg'),null);
+  byText(app.q('timeline'),'Try again').click();await flush();assert.equal(count,2);assert.equal(app.q('timeline').querySelector('.nb-timeline-total').textContent,'3 notes');
+ });
  await test('Timeline is lazy, stays inside the notebook and requests only aggregate counts',async()=>{
   const app=await boot({respond:url=>url==='/api/notebook/timeline'?timeline():undefined});
   assert.equal(app.requests.some(row=>row.url==='/api/notebook/timeline'),false);assert.equal(app.q('timeline').hidden,true);

@@ -1,3 +1,30 @@
+Record page continuity, 25 October 2026
+
+The participant leaderboard now reserves its real table columns with decorative
+rows on a first read; cached visits keep their existing content. My submissions
+uses a bounded scrolling list inside a stable dialog, so the title and close
+button do not move when empty, short, or long results arrive. Neither preview
+contains invented results or focusable controls. Changed results preserve focus
+by identity, including the return target from a nested submission detail dialog.
+Account/read invalidation and server revalidation retain their existing bounds.
+The scheme record's interim heading stays empty until Broken by or Unsolved is
+known, while the header/Refresh space stays reserved.
+
+Pending access now chooses public route geometry instead of displaying a KEM
+table on every page. The early script uses bounded URL text for profile headings
+and keeps public navigation labels in place. A sessionStorage presentation hint
+contains only gate/workspace, never identity, content, credentials or permissions;
+it cannot skip the fresh session check or authorize protected requests. Unknown
+root visits remain neutral and unavailable storage falls back safely.
+
+Timeline shares its cold aggregate read with notebook script loading and starts
+one bounded, account/session-bound read on hover or keyboard focus. Its heading
+and fixed chart frame remain in place through pending, real, empty and error
+states. Switching notebook views retains the viewport space needed for the current
+scroll position rather than letting a shorter chart clamp the document upward.
+Decorative notebook, timeline and submission intros are removed, with operational
+errors, form requirements and protocol/security details retained.
+
 Read responsiveness checkpoint, 24 October 2026
 
 Main CSS now travels with the HTML and its exact CSP, removing a separate
