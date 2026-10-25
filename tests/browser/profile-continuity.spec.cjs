@@ -52,6 +52,9 @@ const profiles=[...[1440,390].flatMap(width=>['alice','bob'].map(actor=>({width,
 for(const {width,actor,label,handle:requestedHandle,reviewer=false} of profiles) {
   test(`cold ${label} profile keeps its ${width}px public frame through access, catalogue and profile reads`,async({page},testInfo)=>{
     await page.setViewportSize({width,height:1000});await start(page);
+    // Retain only the real authenticated cookie/presentation hint. Stop the
+    // setup document before its idle reads can consume the new one-shot holds.
+    await page.goto('about:blank');
     const handle=requestedHandle||'browser_'+actor;
     // Rendering-only capability variation after real authenticated session
     // validation. No privileged API is requested and server rights stay intact.

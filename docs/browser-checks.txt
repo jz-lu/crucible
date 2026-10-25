@@ -47,6 +47,15 @@ the original requests remain stalled. Controlled response
 holds establish ordering; no sub-100ms timing threshold depends on runner load.
 The stalled-script case intentionally waits for the real 15-second deadline.
 
+Cold and prepared journeys have explicit, separate preconditions. Register
+interceptors and response observers before sign-in can start idle preparation.
+Some cold-layout and paginated-fallback cases explicitly use the browser's
+Save-Data preference to suppress optional reads; they still use real foreground
+requests and session checks. This is not the default fixture. Dedicated normal-
+preference cases verify actual background summaries, local filters, first People
+and submission visits, Timeline reuse and account invalidation. Do not assume
+an admitted page stays cold, or disable preparation globally to hide a race.
+
 Additional journeys exercise Notes filters with out-of-order responses, retained
 rows, cached Timeline validation, revocation, interrupted API bodies, repeated
 reloads, image decoding and late bootstrap, fully styled pages with the old

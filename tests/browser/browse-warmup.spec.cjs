@@ -23,9 +23,10 @@ test('admitted background summaries warm without hidden rendering and give exact
   });
   await page.goto('/#about');await expect(page.locator('#access-sign-in')).toBeVisible();
   expect(requests.some(row=>row.path.startsWith('/api/notebook/')||row.path.startsWith('/notebook/')||row.path.startsWith('/map/'))).toBe(false);
+  const navigationPrepared=page.waitForResponse(response=>new URL(response.url()).searchParams.get('projection')==='navigation');
   await signIn(page,'alice',{navigate:false});
   // Navigation starts after timeline/index have completed in the serial queue.
-  await page.waitForResponse(response=>new URL(response.url()).searchParams.get('projection')==='navigation');
+  await navigationPrepared;
   expect(indexReads).toHaveLength(1);
   await expect(page.locator('#about-workspace')).toBeVisible();
   await expect(page.locator('#notebook-workspace')).toBeHidden();
@@ -52,8 +53,9 @@ test('admitted background summaries warm without hidden rendering and give exact
 test('first Timeline entry paints its warmed aggregate while fresh validation is held and sign-out clears it',async({page})=>{
   const timeline=page.locator('#notebook-workspace [data-nb=timeline]');
   const reads=[];page.on('request',request=>reads.push(new URL(request.url()).pathname));
+  const navigationPrepared=page.waitForResponse(response=>new URL(response.url()).searchParams.get('projection')==='navigation');
   await page.goto('/#about');await signIn(page,'alice',{navigate:false});
-  await page.waitForResponse(response=>new URL(response.url()).searchParams.get('projection')==='navigation');
+  await navigationPrepared;
   // Advance only the browser Date past the recent-intent window. Network and
   // timers remain real; this first entry must validate the earlier aggregate.
   await page.clock.setFixedTime(Date.now()+11000);
@@ -75,4 +77,34 @@ test('first Timeline entry paints its warmed aggregate while fresh validation is
   await page.locator('#nav-notebook').click();
   await expect(list(page)).toContainText('Bob browser-only private note');
   await expect(page.locator('#notebook-workspace')).not.toContainText('Alice browser-only private note');
+});
+
+test('ordinary background preparation makes the first People and submissions visits local and sign-out clears them',async({page})=>{
+  const reads=[];
+  page.on('request',request=>reads.push(new URL(request.url()).pathname));
+  await page.goto('/#about');await signIn(page,'alice',{navigate:false});
+  // These views are intentionally not mounted during preparation. Wait for
+  // actual in-memory completion, not a delay or a response-header event that
+  // may run before the response body has been parsed. No cache is injected.
+  await page.waitForFunction(()=>warmedReads.has('people')&&warmedReads.has('history:'+(state.catalogueRevision||'')));
+  await expect(page.locator('#about-workspace')).toBeVisible();
+  await expect(page.locator('#people-workspace')).toBeHidden();
+  await expect(page.locator('#people-content .person-link')).toHaveCount(0);
+  await expect(page.locator('#history-dialog')).toBeHidden();
+  const peopleBefore=reads.filter(path=>path==='/api/people').length;
+  const historyBefore=reads.filter(path=>path==='/api/me/submissions').length;
+  expect(peopleBefore).toBe(1);expect(historyBefore).toBe(1);
+  await page.locator('#nav-people').click();
+  await expect(page.locator('#people-content')).toContainText('browser_alice');
+  await expect(page.locator('#people-content .people-preview')).toHaveCount(0);
+  expect(reads.filter(path=>path==='/api/people')).toHaveLength(peopleBefore);
+  await page.locator('#history-button').click();
+  await expect(page.locator('#history-content')).toContainText('No submissions yet.');
+  await expect(page.locator('#history-content .history-preview')).toHaveCount(0);
+  expect(reads.filter(path=>path==='/api/me/submissions')).toHaveLength(historyBefore);
+  await page.getByRole('button',{name:'Close submissions dialog',exact:true}).click();
+  await page.locator('#logout-button').click();
+  await expect(page.locator('#access-workspace')).toBeVisible();
+  await expect(page.locator('#people-content')).toBeEmpty();
+  await expect(page.locator('#history-content')).toBeEmpty();
 });
