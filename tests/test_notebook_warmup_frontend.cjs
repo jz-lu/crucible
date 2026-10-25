@@ -15,6 +15,7 @@ const content = (title='Private claim') => ({title,claim:'A precise claim',condi
 const revision = (number=1,title='Private claim',status='private') => ({revision:number,content_sha256:'hash-'+number,created_at:100,content:content(title),publication_status:status});
 const note = (overrides={}) => {const rev={...revision(),...Object.fromEntries(Object.entries(overrides).filter(([key])=>['revision','content_sha256','content','publication_status'].includes(key)))};const{content:ignored,...metadata}=overrides;return{id:'note-one',owner:user,can_edit:true,created_at:100,revision:rev.revision,content_sha256:rev.content_sha256,publication_status:rev.publication_status,revision_count:1,revisions:[rev],...metadata};};
 const deferred = () => {let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
+async function within(promise,label){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Timed out waiting for '+label)),3000);})]);}finally{clearTimeout(timer);}}
 const proposalRecord = (id='proposal-one',kind='visualization_nomination') => ({id,kind,status:'submitted',effective:false,test_only_self_review:false});
 const proposalNote = (title='A submitted proposal',overrides={}) => {
  const current={...revision(1,title),content_sha256:'a'.repeat(64)};
@@ -155,28 +156,34 @@ const lists=app=>app.requests.filter(row=>row.url.startsWith('/api/notebook/note
   assert.equal(app.requests.some(row=>row.url==='/map/notes.json'||row.url.startsWith('/api/notebook/notes/item-')),false);
  });
  await test('curated body intent starts only on expansion and paint does not wait for secondary status',async()=>{
-  const source=curatedFixture('source','Readable curated body'),status=deferred();
-  const app=await boot({researchWorkspace:{...emptyResearch,notes:[source]},respond:url=>url.startsWith('/api/notebook/research-requests?source_note_id=')?status.promise:undefined});
+  const source=curatedFixture('source','Readable curated body'),status=deferred(),statusEntered=deferred();
+  const app=await boot({researchWorkspace:{...emptyResearch,notes:[source]},respond:url=>{if(url.startsWith('/api/notebook/research-requests?source_note_id=')){statusEntered.resolve();return status.promise;}}});
   assert.equal(app.requests.some(row=>row.url==='/map/notes.json'),false);
   app.q('list').querySelector('.nb-title').click();await flush();assert.equal(app.requests.filter(row=>row.url==='/map/notes.json').length,1);
-  const showing=app.show('curated:source');await flush();const body=app.q('full').querySelector('.nb-body');assert.match(body.textContent,/Argument as text/);
+  const showing=app.show('curated:source');await within(statusEntered.promise,'curated status request');const body=app.q('full').querySelector('.nb-body');assert.match(body.textContent,/Argument as text/);
   assert.equal(byText(app.q('full'),'Propose a change').disabled,true);const cite=byText(app.q('full'),'Cite this note');cite.focus();
   status.resolve({requests:[],next_after:null});await showing;assert.equal(app.q('full').querySelector('.nb-body'),body);assert.equal(app.document.activeElement,cite);assert.equal(byText(app.q('full'),'Propose a change').disabled,false);
   assert.equal(app.requests.filter(row=>row.url==='/map/notes.json').length,1);
  });
  await test('curated secondary failures preserve body and disabled actions but revoked reads clear it',async()=>{
   for(const code of [503,403]){
-   const source=curatedFixture('source','Curated text'),status=deferred();let reads=0;
-   const app=await boot({researchWorkspace:{...emptyResearch,notes:[source]},respond:url=>url.startsWith('/api/notebook/research-requests?source_note_id=')?(++reads===1?status.promise:{requests:[],next_after:null}):undefined});
-   const showing=app.show('curated:source');await flush();const body=app.q('full').querySelector('.nb-body');assert.ok(body);
+   const source=curatedFixture('source','Curated text'),status=deferred(),statusEntered=deferred(),digestEntered=deferred(),digestRelease=deferred();let reads=0;
+   const app=await boot({researchWorkspace:{...emptyResearch,notes:[source]},
+    digest:async(...args)=>{digestEntered.resolve();await digestRelease.promise;return require('node:crypto').webcrypto.subtle.digest(...args);},
+    respond:url=>{if(url.startsWith('/api/notebook/research-requests?source_note_id=')){statusEntered.resolve();return ++reads===1?status.promise:{requests:[],next_after:null};}}});
+   const showing=app.show('curated:source');await within(digestEntered.promise,'curated digest');await flush();
+   assert.equal(app.q('full').querySelector('.nb-body'),null,'Body preparation still awaits its content hash');assert.equal(reads,0);
+   digestRelease.resolve();await within(statusEntered.promise,'curated status request');
+   const body=app.q('full').querySelector('.nb-body');assert.ok(body,'Prepared body must paint before secondary status completes');
    status.reject(Object.assign(Error('Denied or unavailable'),{status:code}));await showing;
    if(code===403){assert.equal(app.q('full').querySelector('.nb-body'),null);assert.equal(byText(app.q('full'),'Propose a change'),undefined);}
    else {assert.equal(app.q('full').querySelector('.nb-body'),body);assert.equal(byText(app.q('full'),'Propose a change'),undefined);byText(app.q('full'),'Retry request status').click();await flush();assert.equal(app.q('full').querySelector('.nb-body'),body);assert.equal(byText(app.q('full'),'Propose a change').disabled,false);}
   }
  });
  await test('late curated status cannot change another reader or signed-out content',async()=>{
-  const source=curatedFixture('source','Curated text'),status=deferred();const app=await boot({researchWorkspace:{...emptyResearch,notes:[source]},respond:url=>url.startsWith('/api/notebook/research-requests?source_note_id=')?status.promise:undefined});
-  const showing=app.show('curated:source');await flush();app.setAccount(null);status.resolve({requests:[curatedRequest(source)],next_after:null});await showing;assert.equal(app.q('full').textContent,'');
+  const source=curatedFixture('source','Curated text'),status=deferred(),statusEntered=deferred();const app=await boot({researchWorkspace:{...emptyResearch,notes:[source]},respond:url=>{if(url.startsWith('/api/notebook/research-requests?source_note_id=')){statusEntered.resolve();return status.promise;}}});
+  const showing=app.show('curated:source');await within(statusEntered.promise,'curated status request');assert.ok(app.q('full').querySelector('.nb-body'));
+  app.setAccount(null);status.resolve({requests:[curatedRequest(source)],next_after:null});await showing;assert.equal(app.q('full').textContent,'');
  });
  await test('large body cache pressure evicts bodies before bounded summary and timeline entries',async()=>{
   const rows=[indexRow('one')];const large=id=>note({id,content:{...content('Large '+id),body:'x'.repeat(800000)}});
