@@ -64,6 +64,9 @@ Browser changes should be checked at desktop and mobile widths, including errors
 empty states, keyboard use, and the affected interaction. Measure both first visits
 and repeat navigation with network latency; a fast local server alone can hide
 unnecessary request waterfalls.
+Follow the [interaction model](docs/interaction-model.txt) for navigation, drafts,
+freshness, async ownership and focus. Describe which shared rule a UI change
+implements, the other journeys it affects, and any intentional exception.
 
 ## Repository map
 

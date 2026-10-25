@@ -80,6 +80,29 @@ const lists=app=>app.requests.filter(row=>row.url.startsWith('/api/notebook/note
   assert.ok(app.q('timeline').querySelector('svg'));await showing;assert.equal(app.requests.length,before);
   await app.show();assert.equal(lists(app).length,2);assert.match(app.q('list').textContent,/Private claim/);
  });
+ await test('warm notebook survives validate-cancel-return but a confirmed note save clears its metadata',async()=>{
+  const spec={name:'Candidate KEM',format:'crucible-kem-spec-v1',references:[]};
+  const app=await boot({respond:(url,body)=>{
+   if(url===indexPath)return summaryIndex([indexRow('one')]);
+   if(url==='/api/notebook/timeline')return timeline();
+   if(url==='/api/protocol/proposals/validate')return{specification:spec,note_content:content('Candidate KEM')};
+   if(url==='/api/notebook/notes'&&body)return{note:note()};
+  }});
+  await app.controller.warm('list');await app.controller.warm('timeline');
+  const listBefore=lists(app).length,timelineBefore=app.requests.filter(row=>row.url==='/api/notebook/timeline').length;
+  app.q('new').click();const file=app.root.querySelector('[name="kem-specification"]');
+  file.files=[{size:30,text:async()=>JSON.stringify(spec)}];file.dispatchEvent({type:'change'});await flush();
+  assert.equal(app.root.querySelector('[name="title"]').value,'Candidate KEM');
+  app.q('close').click();assert.equal(app.q('dialog').open,false);
+  await app.show();assert.equal(lists(app).length,listBefore);assert.match(app.q('list').textContent,/Private claim/);
+  await app.controller.show(new URLSearchParams('view=timeline'));assert.ok(app.q('timeline').querySelector('svg'));
+  assert.equal(app.requests.filter(row=>row.url==='/api/notebook/timeline').length,timelineBefore);
+  app.q('new').click();fill(app,'Actual saved change');app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();await app.whenNavigated();
+  assert.equal(app.requests.filter(row=>row.url==='/api/notebook/notes'&&row.body).length,1);
+  await app.show();assert.equal(lists(app).length,listBefore+1);
+  await app.controller.show(new URLSearchParams('view=timeline'));
+  assert.equal(app.requests.filter(row=>row.url==='/api/notebook/timeline').length,timelineBefore+1);
+ });
  await test('complete index filters tags/scopes/proposals and pages without further list requests',async()=>{
   const rows=Array.from({length:55},(_,i)=>indexRow('row-'+i,{owner:i%2?{id:2,handle:'other'}:user,content:{...content('Title '+i),tags:i%2?['literature']:['human-written']},proposal_revision:i===3?{revision:1,content_sha256:'pin',requests:[proposalRecord()]}:null}));
   const app=await boot({respond:url=>url===indexPath?summaryIndex(rows):undefined});await app.controller.warm('list');await app.show();const before=lists(app).length;
