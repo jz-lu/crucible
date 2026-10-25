@@ -1,3 +1,18 @@
+Profile and first-frame follow-up, 25 October 2026
+
+Profiles now reserve their public structure through access, catalogue and score
+reads, with blank statistics until real results arrive. Long usernames wrap in
+every phase. The reviewer link sits beside the back link without squeezing the
+username; own account controls use the resolved session. An open result dialog
+keeps its return target when the profile refreshes behind it.
+
+The bootstrap script now travels inside the initial HTML under its exact CSP
+hash, removing the separate download that could briefly expose a generic frame.
+The existing session read, private admission, and external fallback stay intact.
+People reads recover from session changes; failed pagination retains earlier
+rows. Late consumed Timeline/note prefetches cannot replace newer cached data.
+These are source changes; release and hosted verification are recorded separately.
+
 Record page continuity, 25 October 2026
 
 The participant leaderboard now reserves its real table columns with decorative

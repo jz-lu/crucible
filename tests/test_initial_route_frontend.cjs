@@ -95,7 +95,7 @@ test('profile labels decode a bounded public handle and never interpret markup o
   for (const [encoded, title] of [['alice', 'alice'], ['Zo%C3%AB', 'Zoë'], ['a'.repeat(100), 'a'.repeat(100)],
     ['a'.repeat(101), 'Profile'], ['', 'Profile'], ['%E0%A4%A', 'Profile'], ['alice%2Fbob', 'Profile'],
     ['alice%00bob', 'Profile'], ['alice%0Abob', 'Profile'], ['alice%7Fbob', 'Profile']]) {
-    assert.deepEqual({...describe('#person/' + encoded)}, {page: 'neutral', title});
+    assert.deepEqual({...describe('#person/' + encoded)}, {page: 'profile', title});
   }
   assert.equal(describe('#person/alice?token=do-not-display').title, 'alice');
 });
@@ -121,7 +121,7 @@ test('pending hash changes update only public geometry and navigation without ad
   const f = fixture({hash: '#notebook'});
   for (const [hash, page, title, selected] of [
     ['#about', 'neutral', 'About us', 'about'], ['#scheme/test/v1', 'chart', 'Scheme', 'challenge'],
-    ['#people', 'people', 'Leaderboard', null], ['#person/alice', 'neutral', 'alice', null]
+    ['#people', 'people', 'Leaderboard', null], ['#person/alice', 'profile', 'alice', null]
   ]) {
     f.window.location.hash = hash; f.window.dispatch('hashchange');
     assert.equal(f.root.getAttribute('data-pending-page'), page);
@@ -214,8 +214,8 @@ test('unexecuted HTML starts neutral with inert decorative variants and no fabri
   assert.doesNotMatch(html.slice(0, html.indexOf('<body')), /data-pending-page=/);
   const preview = html.slice(html.indexOf('<div id="access-loading-preview"'), html.indexOf('<div id="access-auth-actions"'));
   assert.deepEqual([...preview.matchAll(/data-pending-layout="([^"]+)"/g)].map(match => match[1]),
-    ['neutral', 'gate', 'catalogue', 'people', 'list', 'chart', 'timeline']);
-  assert.equal((preview.match(/class="pending-page-preview[^>]*aria-hidden="true"/g) || []).length, 7);
+    ['neutral', 'gate', 'catalogue', 'people', 'profile', 'list', 'chart', 'timeline']);
+  assert.equal((preview.match(/class="pending-page-preview[^>]*aria-hidden="true"/g) || []).length, 8);
   assert.doesNotMatch(preview, /<(?:a|button|input|script)\b|data-note|data-user|href=/i);
   assert.equal((preview.match(/<table class="kem-table">/g) || []).length, 1);
   assert.doesNotMatch(preview.slice(0, preview.indexOf('data-pending-layout="catalogue"')), />KEM</);

@@ -28,6 +28,12 @@ def test_shell_versions_public_assets_and_reuses_identical_bytes(private_app):
     main_hash = base64.b64encode(hashlib.sha256(main_css.encode()).digest()).decode()
     assert "'sha256-" + main_hash + "'" in shell.headers['content-security-policy']
     assert len(shell.headers.get_list('content-security-policy')) == 1
+    bootstrap, = re.findall(r'<script data-bootstrap>(.*?)</script>', shell.text, re.S)
+    assert bootstrap.encode() == client.get('/bootstrap.js').content
+    script_hash = base64.b64encode(hashlib.sha256(bootstrap.encode()).digest()).decode()
+    assert "script-src 'self' 'sha256-" + script_hash + "';" in shell.headers['content-security-policy']
+    assert 'src="/bootstrap.js' not in shell.text
+    assert shell.text.index('<script data-bootstrap>') < shell.text.index('<body')
     assert 'href="/styles.css' not in shell.text
     urls = re.findall(r'(?:src|href|data-katex-script|data-katex-style)="(/[^"?]+\?v=[a-f0-9]{24})"', shell.text)
     assert '/app.js' in {url.split('?')[0] for url in urls}
@@ -87,7 +93,7 @@ def test_content_change_changes_url_and_development_sees_edits(tmp_path):
         path = tmp_path / url.lstrip('/')
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b'old')
-    (tmp_path / 'index.html').write_text('<script src="/app.js"></script><link rel="stylesheet" href="/styles.css">')
+    (tmp_path / 'index.html').write_text('<script src="/bootstrap.js" async></script><script src="/app.js"></script><link rel="stylesheet" href="/styles.css">')
     assets = PublicAssets(tmp_path)
     request = Request({'type': 'http', 'path': '/', 'method': 'GET', 'query_string': b'', 'headers': []})
     first = assets.response(request)
@@ -146,6 +152,11 @@ def embedded_style(asset):
     return style.encode()
 
 
+def embedded_bootstrap(asset):
+    script, = re.findall(r'<script data-bootstrap>(.*?)</script>', asset.body.decode(), re.S)
+    return script.encode()
+
+
 @pytest.mark.parametrize('encoding', ['identity', 'gzip'])
 @pytest.mark.parametrize('method', ['GET', 'HEAD'])
 @pytest.mark.parametrize('conditional', [False, True])
@@ -161,6 +172,8 @@ def test_html_policy_is_bound_to_exact_selected_asset_on_every_representation(
     style = embedded_style(selected)
     digest = base64.b64encode(hashlib.sha256(style).digest())
     assert b"'sha256-" + digest + b"'" in selected.content_security_policy
+    script_digest = base64.b64encode(hashlib.sha256(embedded_bootstrap(selected)).digest())
+    assert b"script-src 'self' 'sha256-" + script_digest + b"';" in selected.content_security_policy
     assert response.status_code == (304 if conditional else 200)
     if conditional or method == 'HEAD':
         assert response.body == b''
@@ -183,16 +196,74 @@ def test_selected_policy_does_not_spill_into_other_assets_or_unknown_paths(froze
     assert refused.scope['_crucible_public_asset'] is frozen_public_assets._snapshot['/']
 
 
-def test_main_css_is_not_url_rewritten_and_policy_changes_only_style_hash(tmp_path):
+def test_embedded_sources_are_not_url_rewritten_and_policy_adds_only_exact_hashes(tmp_path):
     from crucible.public_assets import CONTENT_SECURITY_POLICY
     css = '/* café */\nbody::before{content:"/app.js"}\n'.encode()
-    assets = PublicAssets(small_public_root(tmp_path, css), frozen=True)._snapshot
+    small_public_root(tmp_path, css)
+    bootstrap = b'window.fixture = "/app.js";\n'
+    (tmp_path / 'bootstrap.js').write_bytes(bootstrap)
+    assets = PublicAssets(tmp_path, frozen=True)._snapshot
     assert embedded_style(assets['/']) == css == assets['/styles.css'].body
     digest = base64.b64encode(hashlib.sha256(css).digest())
-    assert assets['/'].content_security_policy.replace(b" 'sha256-" + digest + b"'", b'', 1) == CONTENT_SECURITY_POLICY
+    script_digest = base64.b64encode(hashlib.sha256(bootstrap).digest())
+    assert embedded_bootstrap(assets['/']) == bootstrap == assets['/bootstrap.js'].body
+    assert (assets['/'].content_security_policy
+            .replace(b" 'sha256-" + digest + b"'", b'', 1)
+            .replace(b" 'sha256-" + script_digest + b"'", b'', 1)) == CONTENT_SECURITY_POLICY
     assert b'unsafe-inline' not in assets['/'].content_security_policy
     assert assets['/'].body.count(b'<style data-main-style>') == 1
     assert b'href="/styles.css' not in assets['/'].body
+    assert b'src="/bootstrap.js' not in assets['/'].body
+    assert assets['/bootstrap.js'].content_security_policy == CONTENT_SECURITY_POLICY
+
+
+def test_inline_bootstrap_normalizes_html_line_endings_before_hashing(tmp_path):
+    small_public_root(tmp_path)
+    original = b'window.fixture = 1;\r\n// comment\rwindow.fixture++;\n'
+    normalized = original.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
+    (tmp_path / 'bootstrap.js').write_bytes(original)
+    assets = PublicAssets(tmp_path, frozen=True)._snapshot
+    assert embedded_bootstrap(assets['/']) == normalized
+    assert assets['/bootstrap.js'].body == original
+    digest = base64.b64encode(hashlib.sha256(normalized).digest())
+    assert b"script-src 'self' 'sha256-" + digest + b"';" in assets['/'].content_security_policy
+
+
+@pytest.mark.parametrize('script', [b'</script>', b'// </ScRiPt >', b'<!-- escaped',
+                                   b'// <script>', b'window.fixture="\0";', b'\xff'])
+def test_unsafe_or_non_utf8_bootstrap_cannot_create_a_public_shell(tmp_path, script):
+    small_public_root(tmp_path)
+    (tmp_path / 'bootstrap.js').write_bytes(script)
+    with pytest.raises((RuntimeError, UnicodeDecodeError)):
+        PublicAssets(tmp_path, frozen=True)
+
+
+@pytest.mark.parametrize('count', [0, 2])
+def test_shell_requires_exactly_one_bootstrap_tag(tmp_path, count):
+    small_public_root(tmp_path)
+    (tmp_path / 'index.html').write_text('<script src="/bootstrap.js" async></script>' * count
+                                       + '<link rel="stylesheet" href="/styles.css">')
+    with pytest.raises(RuntimeError, match='one bootstrap script'):
+        PublicAssets(tmp_path, frozen=True)
+
+
+def test_bootstrap_edit_updates_html_policy_and_etag_but_not_frozen_snapshot(tmp_path):
+    small_public_root(tmp_path)
+    dev, frozen = PublicAssets(tmp_path), PublicAssets(tmp_path, frozen=True)
+    before_request = asset_request('/')
+    before = dev.response(before_request)
+    old_asset = before_request.scope['_crucible_public_asset']
+    (tmp_path / 'bootstrap.js').write_text('window.fixture = "new bootstrap";\n')
+    after_request = asset_request('/', headers=[(b'if-none-match', before.headers['etag'].encode())])
+    after = dev.response(after_request)
+    new_asset = after_request.scope['_crucible_public_asset']
+    assert after.status_code == 200 and after.headers['etag'] != before.headers['etag']
+    assert old_asset.content_security_policy != new_asset.content_security_policy
+    assert embedded_style(old_asset) == embedded_style(new_asset)
+    assert embedded_bootstrap(new_asset) == b'window.fixture = "new bootstrap";\n'
+    assert frozen.response(asset_request('/')).body == before.body
+    assert frozen._snapshot['/'].content_security_policy == old_asset.content_security_policy
+    assert set(frozen._snapshot) == set(PUBLIC_FILES) | {'/'}
 
 
 def test_inline_css_normalizes_html_line_endings_before_hashing(tmp_path):

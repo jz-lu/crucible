@@ -64,6 +64,17 @@ stay visible. This is presentation continuity, not a reduction in network time.
 Held-response browser checks compare typography and geometry at desktop and
 mobile widths; ownership tests cover navigation, access loss and late responses.
 
+Profile previews share the username, back line, statistic cells and folded record
+sections with the completed page. Counts remain blank until the authorized
+response arrives; previews contain no interactive records. Account controls use
+the already resolved session rather than waiting for public score data. Changed
+profile data rebinds an open receipt dialog's return target by submission identity.
+
+A session change restarts interrupted People reads; unchanged polling does not.
+A failed next-page read preserves the earlier rows and retries the same offset.
+Permission failures still remove the stale view. These paths retain account,
+request and cache-generation checks.
+
 Notebook continuity
 -------------------
 
@@ -81,6 +92,11 @@ requests fresh data; an unchanged result preserves the existing SVG. Revocation,
 account/CSRF changes and writes retain their existing invalidation rules. No
 private note bodies, account permissions or server-side sessions are cached by
 this change, and no browser persistence was introduced.
+
+Once a Timeline or note-body prefetch is consumed, only its selected-view request
+may save that result. An older intent cannot overwrite a newer same-key cached
+read after leaving and returning to the page. Reverse-completion tests cover both
+cases; the existing cache limits and account/permission invalidation still apply.
 
 Controlled Chrome comparison at 200 ms simulated RTT / 10 Mbps, using isolated
 synthetic accounts: warm Timeline became visible at a median 15 ms rather than
@@ -107,8 +123,10 @@ an incomplete image becomes visible only after decoding, with no reveal animatio
 Already complete images are not re-hidden if bootstrap arrives late. Main CSS
 now arrives inside the HTML document, with its exact hash allowed by that same
 immutable asset's CSP. This removes a render-blocking request and the separate
-stylesheet-failure window. Bootstrap and all deferred scripts remain ahead of
-the embedded style so its bytes do not delay their discovery. The small initial
+stylesheet-failure window. Bootstrap now also arrives inline under its exact
+script hash, selecting the public frame before body parsing and overlapping the
+fresh session read with remaining downloads. It and all deferred scripts remain
+ahead of the embedded style so its bytes do not delay their discovery. The small initial
 canvas style remains. See first-paint-packaging.txt for representation/cache
 rules and logo-delivery.txt for artwork provenance. A white canvas before the
 document arrives is not under the page's control; a hosted cause for the earlier

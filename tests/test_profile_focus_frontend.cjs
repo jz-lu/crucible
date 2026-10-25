@@ -1,4 +1,7 @@
 const assert = require('node:assert/strict');
+// Scope dynamic profile classes away from the inert initial-access preview.
+const profileElement = (app, selector) => selector.startsWith('.')
+  ? app.$('#person-content').querySelector(selector) : app.$(selector);
 const {createApp} = require('./frontend-dom.cjs');
 
 const user = {id: 'owner', handle: 'alpha'};
@@ -28,10 +31,10 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
   await test('changed points preserve focus and disclosure state for each profile summary', async () => {
     for (const selector of ['.person-score-breakdown', '#first-records', '#personal-records', '#recent-solves']) {
       const {app, change, refresh} = await boot();
-      const section = app.$(selector); section.open = true;
+      const section = profileElement(app, selector); section.open = true;
       const old = section.querySelector('summary'); old.focus();
       change({points: 25}); await refresh();
-      const next = app.$(selector);
+      const next = profileElement(app, selector);
       assert.ok(next !== section, 'Changed data really replaced the section');
       assert.equal(next.open, true);
       assert.ok(app.document.activeElement === next.querySelector('summary'), 'Focus follows the same summary');
@@ -40,10 +43,10 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
   await test('receipt focus follows identity when records reorder in all three lists', async () => {
     for (const [selector, field] of [['#first-records', 'first_records'], ['#personal-records', 'records'], ['#recent-solves', 'recent_recoveries']]) {
       const {app, change, refresh} = await boot();
-      const section = app.$(selector); section.open = true;
+      const section = profileElement(app, selector); section.open = true;
       section.querySelectorAll('[data-submission-id]')[1].focus();
       change({[field]: [record('two', 'other'), record('one')]}); await refresh();
-      const buttons = app.$(selector).querySelectorAll('[data-submission-id]');
+      const buttons = profileElement(app, selector).querySelectorAll('[data-submission-id]');
       assert.ok(app.document.activeElement === buttons[0], 'Focus follows the receipt, not its old row');
       assert.equal(app.document.activeElement.dataset.submissionId, 'two');
     }
@@ -66,9 +69,9 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
   });
   await test('a removed disclosure falls back to the profile workspace', async () => {
     const {app, change, refresh} = await boot();
-    app.$('.person-score-breakdown').querySelector('summary').focus();
+    profileElement(app, '.person-score-breakdown').querySelector('summary').focus();
     change({score_breakdown: null}); await refresh();
-    assert.equal(app.document.querySelector('.person-score-breakdown'), null);
+    assert.equal(app.$('#person-content').querySelector('.person-score-breakdown'), null);
     assert.ok(app.document.activeElement === app.$('#person-workspace'));
   });
   await test('moving focus outside the profile during a read prevents focus restoration', async () => {

@@ -642,6 +642,8 @@ function showRouteLoading() {
     if (decoded && decoded.length <= 100 && !/[\u0000-\u001f\u007f]/.test(decoded)) profileName = decoded;
   } catch { /* Malformed profile URLs never become display markup. */ }
   const title = known?.name || (release ? 'Scheme' : path.startsWith('#person/') ? profileName : path === '#notebook' ? 'Research notebook' : path === '#reviews' ? 'Review center' : path === '#propose' ? 'Propose a scheme' : 'KEM Schemes');
+  const profileRoute = path.startsWith('#person/');
+  routeLoadingPanel.classList.toggle('profile-route-preview', profileRoute);
   state.screen = 'loading';
   state.challengeRequest++; state.leaderboardRequest++; state.peopleRequest++; state.personRequest++;
   const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
@@ -665,6 +667,16 @@ function showRouteLoading() {
     showWorkspace('loading'); return;
   }
   routeLoadingPanel.dataset.route = window.location.hash;
+  if (profileRoute) {
+    const back = node('span', '← Leaderboard', 'text-button scheme-back'); back.setAttribute('aria-hidden', 'true');
+    const backline = node('div', undefined, 'profile-backline'); backline.append(back);
+    const heading = node('div', undefined, 'catalogue-heading'); heading.append(node('h1', title));
+    quietReadStatus(routeLoadingPanel, 'Loading profile…');
+    routeLoadingPanel.append(backline, heading, personPreview());
+    routeLoadingPanel.setAttribute('aria-busy', 'true');
+    showWorkspace('loading'); document.title = title + ' — Crucible';
+    return;
+  }
   routeLoadingPanel.replaceChildren(node('h1', title));
   routeLoadingPanel.setAttribute('aria-busy', 'true');
   const status = node('p', 'Loading…', 'sr-only'); status.setAttribute('role', 'status');
@@ -1246,6 +1258,10 @@ function setSession(data) {
     if (state.screen === 'notebook') showNotebook();
   }
   if (previousId === state.user?.id && previousCsrf !== state.csrf && state.ready && state.screen === 'notebook') showNotebook();
+  // Session changes invalidate the old reader's epoch. An independent People
+  // page must start its replacement itself; catalogue routing will not do it.
+  if (state.ready && state.screen === 'people' && (previousId !== state.user?.id || previousCsrf !== state.csrf ||
+      previousReview !== state.canReviewProposals || previousSelfReview !== state.canSelfReviewProposals)) loadPeople();
   if (state.ready && navigationProjection && !state.catalogueLoaded && routeNeedsCatalogue()) applyRoute();
 }
 function globalError(message) {
@@ -1844,6 +1860,12 @@ async function loadPeople(more = false) {
   const request = ++state.peopleRequest, epoch = readViewEpoch;
   const current = () => hasAccess() && epoch === readViewEpoch && state.screen === 'people' && request === state.peopleRequest;
   const target = $('#people-content');
+  const appendError = target.querySelector('.people-page-error');
+  if (appendError) {
+    const hadFocus = document.activeElement?.closest('.people-page-error') === appendError;
+    appendError.remove();
+    if (hadFocus) $('#people-workspace').focus({preventScroll: true});
+  }
   const offset = more && state.peoplePagination ? state.peoplePagination.offset + state.peoplePagination.limit : 0;
   $('#refresh-people').disabled = true;
   $('#more-people').disabled = true;
@@ -1876,7 +1898,15 @@ async function loadPeople(more = false) {
     if (!more) rememberRead(key, {people: data.people, pagination: data.pagination, scoring: data.scoring});
     paint({people: more ? [...state.people, ...data.people.filter(person => !state.people.some(existing => existing.handle === person.handle))] : data.people, pagination: data.pagination, scoring: data.scoring});
   } catch (error) {
-    if (current()) readRefreshError(key, target, error, () => loadPeople(), cached);
+    if (current()) {
+      if (more && state.people.length && !forbiddenRead(error)) {
+        // A failed next page does not invalidate the rows already received.
+        // Preserve their pagination position so retry requests this same page.
+        const message = node('div', undefined, 'people-page-error');
+        showInlineError(message, error.message, () => loadPeople(true));
+        target.append(message);
+      } else readRefreshError(key, target, error, () => loadPeople(), cached);
+    }
   } finally {
     if (current()) { target.setAttribute('aria-busy', 'false'); $('#refresh-people').disabled = false; $('#more-people').disabled = false; }
   }
@@ -1946,14 +1976,33 @@ function renderFirstRecords(person) {
   content.append(table);
   return section;
 }
+function personStats(person) {
+  const stats = node('dl', undefined, 'person-stats');
+  for (const [label, key] of [['Points', 'points'], ['Accepted proposals', 'accepted_proposal_count']]) {
+    const value = node('dd', person ? peopleNumber(person[key], key === 'points' ? 'Pending' : '—') : undefined);
+    if (!person) value.append(node('span', undefined, 'catalogue-placeholder'));
+    const stat = node('div'); stat.append(node('dt', label), value); stats.append(stat);
+  }
+  return stats;
+}
+function personPreview() {
+  // Public structure, without invented statistics or interactive records.
+  // Match the initial profile frame in index.html, before access is resolved.
+  const preview = node('div', undefined, 'person-preview'); preview.setAttribute('aria-hidden', 'true');
+  preview.append(personStats());
+  const scoreSpace = node('div', undefined, 'person-score-breakdown'); scoreSpace.append(node('span', 'Points breakdown'));
+  preview.append(scoreSpace);
+  for (const title of ['First to reach', 'Personal records', 'Recent solves']) {
+    const section = node('div', undefined, 'person-section person-disclosure');
+    const heading = node('div', undefined, 'person-section-summary');
+    heading.append(node('h2', title), node('span', undefined, 'person-section-count')); section.append(heading); preview.append(section);
+  }
+  return preview;
+}
 function renderPerson(person) {
   const target = $('#person-content');
   setText('#person-title', person.handle);
-  const stats = node('dl', undefined, 'person-stats');
-  for (const [label, value] of [['Points', peopleNumber(person.points, 'Pending')], ['Accepted proposals', peopleNumber(person.accepted_proposal_count)]]) {
-    const stat = node('div'); stat.append(node('dt', label), node('dd', value)); stats.append(stat);
-  }
-  target.replaceChildren(stats);
+  target.replaceChildren(personStats(person));
   if (!Number.isFinite(person.points)) target.append(node('p', 'Scoring is being finalized. Verified results are recorded below.', 'people-score-note'));
   if (person.score_breakdown) {
     const breakdown = node('details', undefined, 'person-score-breakdown');
@@ -2007,14 +2056,18 @@ async function loadPerson(handle, {preserve = false} = {}) {
   const current = () => hasAccess() && epoch === readViewEpoch && state.screen === 'person' && state.personHandle === handle && request === state.personRequest &&
     (!preserve || revision === state.sessionRevision);
   const target = $('#person-content'), key = 'person:' + handle.toLowerCase();
+  // Ownership is established by the session and route, independently of the
+  // public score response. Do not make account controls wait for that read.
+  renderAgentSettings();
   const cached = cachedRead(key);
   const paint = person => paintRead(key, target, person, renderPerson);
   if (cached) { paint(cached); preserve = true; }
   if (!preserve) {
     state.personDataKey = null;
     setText('#person-title', handle);
-    setLoading(target, 'Loading profile…');
+    quietReadStatus(target, 'Loading profile…'); target.append(personPreview());
   }
+  target.setAttribute('aria-busy', 'true');
   try {
     const data = await readAgain(key, '/api/people/' + encodeURIComponent(handle) + '?include_milestones=false');
     if (!current()) return;
@@ -2031,8 +2084,18 @@ async function loadPerson(handle, {preserve = false} = {}) {
       ![...document.querySelectorAll('dialog')].some(dialog => dialog.open) ? document.activeElement : null;
     const focusedSection = focused?.closest('details');
     const focusKey = focusedSection ? disclosureKey(focusedSection) : null;
+    const detailsTrigger = dialogTriggers.get(recoveryDialog);
+    const detailsId = detailsTrigger?.closest('#person-content') === target ? detailsTrigger.dataset.submissionId : null;
+    const detailsSection = detailsId && detailsTrigger.closest('details');
+    const detailsKey = detailsSection ? disclosureKey(detailsSection) : null;
     paint(data.person);
     if (preserve) for (const element of target.querySelectorAll('details')) element.open = expanded.has(disclosureKey(element));
+    if (detailsId && !detailsTrigger.isConnected) {
+      const section = [...target.querySelectorAll('details')].find(element => disclosureKey(element) === detailsKey);
+      const replacement = section?.open && [...section.querySelectorAll('[data-submission-id]')]
+        .find(element => element.dataset.submissionId === detailsId && !element.disabled);
+      dialogTriggers.set(recoveryDialog, replacement || section?.querySelector('summary') || $('#person-workspace'));
+    }
     if (focusKey) {
       const section = [...target.querySelectorAll('details')].find(element => disclosureKey(element) === focusKey);
       const receipt = focused.dataset.submissionId;
@@ -2046,6 +2109,8 @@ async function loadPerson(handle, {preserve = false} = {}) {
     if (current()) {
       readRefreshError(key, target, error, () => loadPerson(handle), cached || preserve);
     }
+  } finally {
+    if (current()) target.setAttribute('aria-busy', 'false');
   }
 }
 async function refreshRecoveryViews() {

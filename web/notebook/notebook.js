@@ -379,7 +379,9 @@
         readEpoch === reads && currentSession === credential && session() === credential && Date.now() - entry.at < 10000;
       const forget = () => { if (timelinePreparation === entry) timelinePreparation = null; };
       entry.task.then(data => {
-        if (!current()) { forget(); return; }
+        // Once consumed, only the selected view owns this result. Its request
+        // token prevents an older intent from replacing a newer cached read.
+        if (timelinePreparation !== entry || !current()) { forget(); return; }
         try { timelineData(data); rememberRead('timeline', data); }
         catch { forget(); }
       }, error => {
@@ -659,6 +661,8 @@
       const forget = () => { if (preparingNotes.get(key) === entry) preparingNotes.delete(key); };
       task.then(result => {
         entry.done = true;
+        // A consumed intent belongs to loadNote's guarded reader request.
+        if (preparingNotes.get(key) !== entry) return;
         if (!current() || generation !== readEpoch || !result.note || result.note.id !== note.id || !Array.isArray(result.note.revisions) || JSON.stringify(result.note).length > 1000000) { forget(); return; }
         rememberRead(key, result.note);
       }, forget);

@@ -56,7 +56,7 @@ def test_math_mount_rejects_symlinks_outside_the_distribution(tmp_path, monkeypa
         asset = tmp_path / 'web' / url.lstrip('/')
         asset.parent.mkdir(parents=True, exist_ok=True)
         asset.write_text('synthetic public asset')
-    (tmp_path / 'web/index.html').write_text('<link rel="stylesheet" href="/styles.css">')
+    (tmp_path / 'web/index.html').write_text('<script src="/bootstrap.js" async></script><link rel="stylesheet" href="/styles.css">')
     vendor = tmp_path / "web" / "vendor" / "katex"
     vendor.mkdir(parents=True)
     private = tmp_path / "private.txt"
