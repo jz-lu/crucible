@@ -33,6 +33,15 @@ async function notebookReady(page, actor = 'alice') {
   await expect(page.locator('#nb-note-list')).toContainText(actor[0].toUpperCase() + actor.slice(1) + ' browser-only private note');
 }
 
+// Explicit browser preference for cold/paginated fallback tests only. Call
+// before navigation; ordinary tests retain the real enabled warmup behavior.
+async function useDataSaver(page) {
+  await page.addInitScript(() => {
+    if (!navigator.connection) throw new Error('Chromium connection preference unavailable.');
+    Object.defineProperty(navigator.connection, 'saveData', {configurable: true, value: true});
+  });
+}
+
 function gate() {
   let resolve;
   const promise = new Promise(done => {resolve = done;});
@@ -59,4 +68,4 @@ async function holdResponse(page, predicate) {
     remove: () => page.unroute(matcher)};
 }
 
-module.exports = {test, expect, signIn, notebookReady, gate, holdResponse};
+module.exports = {test, expect, signIn, notebookReady, useDataSaver, gate, holdResponse};

@@ -1,4 +1,4 @@
-const {test, expect, signIn, notebookReady, gate, holdResponse} = require('./helpers.cjs');
+const {test, expect, signIn, notebookReady, useDataSaver, gate, holdResponse} = require('./helpers.cjs');
 
 test('an unlinked GitHub callback offers password sign-in and clears its error on a real password attempt', async ({page}) => {
   // Simulate only the callback presentation; password authentication still uses
@@ -101,6 +101,9 @@ test('the landing page works before unused math assets and equations hydrate whe
 });
 
 test('cached navigation paints while its fresh read is held; the brand never reloads the document', async ({page}, testInfo) => {
+  // Foreground-cache continuity and cold catalogue layout, without optional
+  // speculative reads populating that catalogue before the brand is clicked.
+  await useDataSaver(page);
   await signIn(page); await notebookReady(page);
   const reads = [];
   page.on('request', request => reads.push({method: request.method(), type: request.resourceType()}));
@@ -287,6 +290,9 @@ test('the scheme map paints while its small release-link index is held, without 
 
 test('challenge status starts beside its held description and uses a small response', async ({page}) => {
   await signIn(page); await notebookReady(page);
+  // Start a fresh document with cold release data while keeping normal
+  // selected-route status/description overlap enabled.
+  await page.goto('about:blank');
   const description = await holdResponse(page, url => url.pathname === '/api/schemes' && url.searchParams.get('projection') === 'release');
   let reads = 0;
   page.on('request', request => {if (new URL(request.url()).pathname === '/api/challenges' && request.method() === 'GET') reads++;});
@@ -339,8 +345,6 @@ test('mobile note navigation fits the viewport and moves keyboard focus into the
 });
 
 for (const workspace of ['notebook', 'map']) test(`a stalled ${workspace} script times out visibly and a fresh retry loads it`, async ({page}) => {
-  await page.goto('/#about');
-  await signIn(page, 'alice', {navigate: false});
   const seen = gate(), release = gate(); let calls = 0;
   await page.route(url => url.origin === 'http://127.0.0.1:8029' && url.pathname === (workspace === 'map' ? '/map/app.js' : '/notebook/notebook.js'), async route => {
     calls++;
@@ -348,6 +352,8 @@ for (const workspace of ['notebook', 'map']) test(`a stalled ${workspace} script
     else await route.continue();
   });
   try {
+    await page.goto('/#about');
+    await signIn(page, 'alice', {navigate: false});
     if (workspace === 'map') {
       await page.locator('#nav-notebook').click(); await notebookReady(page);
       await page.getByRole('button', {name: 'Scheme map', exact: true}).click();

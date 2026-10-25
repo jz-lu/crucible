@@ -13,6 +13,9 @@ for (const [name, width] of [['desktop', 1440], ['mobile', 390]]) {
     await page.setViewportSize({width, height: 1000});
     await page.emulateMedia({reducedMotion: 'reduce'});
     await signIn(page);
+    // The setup document must not consume a catalogue hold intended for the
+    // next cold document through its own post-login preparation.
+    await page.goto('about:blank');
     const session = await holdResponse(page, url => url.pathname === '/api/session');
     const catalogue = await holdResponse(page, url => url.pathname === '/api/schemes' && url.searchParams.get('projection') === 'navigation');
     const reads = [];

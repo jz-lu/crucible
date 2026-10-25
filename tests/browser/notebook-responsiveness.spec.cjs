@@ -1,4 +1,8 @@
-const {test, expect, signIn, notebookReady, holdResponse} = require('./helpers.cjs');
+const {test, expect, signIn, notebookReady, useDataSaver, holdResponse} = require('./helpers.cjs');
+
+// Exercise the paginated server fallback explicitly. Enabled complete-index
+// filtering and background Timeline preparation have dedicated warmup tests.
+test.beforeEach(async ({page}) => { await useDataSaver(page); });
 
 const list = page => page.locator('#nb-note-list');
 const filter = page => page.locator('#notebook-workspace [name="visibility"]');

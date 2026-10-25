@@ -1,10 +1,13 @@
-const {test, expect, signIn, gate, holdResponse} = require('./helpers.cjs');
+const {test, expect, signIn, useDataSaver, gate, holdResponse} = require('./helpers.cjs');
 
 const history = page => page.locator('#history-dialog');
 const historyContent = page => page.locator('#history-content');
 const historyClose = page => history(page).getByRole('button', {name: 'Close submissions dialog'});
 
 async function startAtAbout(page) {
+  // These cases establish cold geometry then exercise foreground-cache reuse.
+  // Fully warmed People/history behavior has separate normal-preference cases.
+  await useDataSaver(page);
   await page.goto('/#about');
   await signIn(page, 'alice', {navigate: false});
   await expect(page.locator('#about-workspace')).toBeVisible();
