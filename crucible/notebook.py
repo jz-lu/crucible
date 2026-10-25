@@ -29,6 +29,8 @@ MAX_IMPORT_ARCHIVE_BYTES = 20 * 1024 * 1024
 MAX_CONTENT_BYTES = 384 * 1024
 MAX_NOTES = 200
 MAX_REVISIONS = 100
+SUMMARY_INDEX_MAX_NOTES = 500
+SUMMARY_INDEX_MAX_BYTES = 512 * 1024
 CONTENT_FIELDS = {"title", "claim", "conditions", "body", "tags", "kind", "references", "artifacts", "extensions"}
 FORBIDDEN_KEYS = {"__proto__", "prototype", "constructor"}
 CURATED_NOTES_PATH = Path(__file__).resolve().parents[1] / "web/map/notes.json"
@@ -753,7 +755,17 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                    limit: int = Query(default=50, ge=1, le=100), proposals_only: bool = False,
                    include_curated: bool = False, q: str = Query(default="", max_length=200),
                    scope: Literal["all", "mine", "shared", "literature", "human", "trash"] = "all",
-                   tag: str | None = Query(default=None, min_length=1, max_length=100)):
+                   tag: str | None = Query(default=None, min_length=1, max_length=100),
+                   projection: Literal["index"] | None = None):
+        indexed = projection == "index"
+        if indexed:
+            # An index is complete for one ordinary visibility domain, never a
+            # partial search/page presented as the full notebook. Text search
+            # remains server-side so SQL case/escaping semantics do not change.
+            if (scope not in {"all", "mine"} or any(name in request.query_params
+                    for name in ("after", "limit", "q", "tag", "proposals_only"))):
+                raise HTTPException(422, "A notebook summary index does not accept search, filters, or pagination.")
+            limit = SUMMARY_INDEX_MAX_NOTES
         try:
             for value in (q, tag):
                 _inspect(value)
@@ -774,6 +786,16 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                     scope = "mine"
             if scope == "shared":
                 raise HTTPException(410, notebook_sharing.RETIRED)
+            capabilities = {"review_publication": not agent and protocol_proposals.is_reviewer(settings, user),
+                            "self_review_publication": not agent and protocol_proposals.can_self_review(settings, user)}
+
+            def index_result(records, *, overflow_reason=None):
+                return {"format": "crucible-notebook-summary-index-v1", "projection": "index",
+                    "complete": overflow_reason is None, "viewer_id": user.id,
+                    "scope": scope, "include_curated": include_curated,
+                    "notes": records, "next_after": None, "overflow_reason": overflow_reason,
+                    "capabilities": capabilities, "server_time": clock()}
+
             # First identify the latest VISIBLE revision; search never selects
             # an old matching draft or discloses an unpublished later revision.
             newest_proposal = func.max(case((proposal_request_clause(settings, user, own_only=agent), NotebookRevision.revision), else_=None))
@@ -851,6 +873,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             candidates = sorted([((-row[4], row[0].id), "account", row) for row in rows] +
                                 [((-note["revisions"][-1]["created_at"], note["id"]), "curated", note) for note in curated],
                                 key=lambda item: item[0])
+            if indexed and len(candidates) > limit:
+                return index_result([], overflow_reason="count_limit")
             page = candidates[:limit]
             selected_rows = [value for _, kind, value in page if kind == "account"]
             shared = shared_summaries(session, [row[0].id for row in selected_rows])
@@ -894,10 +918,14 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                     "revisions": [{"revision": number, "content_sha256": digest, "created_at": created,
                                    "content": content, "publication_status": status, "summary": True,
                                    "requests": requests.get((note.id, number, digest), [])}]})
+            if indexed:
+                result = index_result(records)
+                if len(_bytes(result)) > SUMMARY_INDEX_MAX_BYTES:
+                    return index_result([], overflow_reason="byte_limit")
+                return result
             return {"notes": records, "next_after": _browse_cursor(-page[-1][0][0], page[-1][0][1])
                     if len(candidates) > limit else None,
-                    "capabilities": {"review_publication": not agent and protocol_proposals.is_reviewer(settings, user),
-                                     "self_review_publication": not agent and protocol_proposals.can_self_review(settings, user)}, "server_time": clock()}
+                    "capabilities": capabilities, "server_time": clock()}
 
     notebook_sharing.register_routes(app, db, settings, clock, account, throttle)
     notebook_moderation.register_routes(app, db, settings, clock, account, throttle)

@@ -499,12 +499,16 @@
     ],
     "catalogue": [
       "test_catalogue_progress.py",
+      "test_recovery_summary.py",
       "test_read_performance.py",
       "test_busy_http.py"
     ],
     "projections-math": [
       "test_scheme_projections.py",
       "test_math_assets.py"
+    ],
+    "generation-lifecycle": [
+      "test_generation_concurrency.py"
     ],
     "records": [
       "test_milestones.py"

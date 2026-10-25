@@ -11,7 +11,7 @@ from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 import pytest
-from sqlalchemy import event, inspect, select, text
+from sqlalchemy import create_engine, event, inspect, MetaData, select, text
 from sqlalchemy.dialects import postgresql
 
 from crucible import beta_access, machine_auth, notebook, note_ratings, scoring
@@ -337,27 +337,50 @@ def test_model_guidance_explains_high_bar_reviews_and_real_point_effects():
         assert text in guide
 
 
-def test_additive_migration_preserves_prior_records(system, monkeypatch, tmp_path):
-    app, owner, *_ = system
-    create(owner)
+def test_additive_migration_preserves_prior_records(monkeypatch, tmp_path):
     root = Path(__file__).resolve().parents[1]
     for name in tuple(os.environ):
         if name == 'DATABASE_URL' or name.startswith('CRUCIBLE_'):
             monkeypatch.delenv(name)
-    monkeypatch.setenv('DATABASE_URL', app.state.settings.database_url)
+    database_url = 'sqlite:///' + str(tmp_path / 'historical.db')
+    monkeypatch.setenv('DATABASE_URL', database_url)
     monkeypatch.setenv('CRUCIBLE_DATA_DIR', str(tmp_path))
     monkeypatch.setenv('CRUCIBLE_SECRET', base64.b64encode(b'r' * 32).decode())
     monkeypatch.setenv('CRUCIBLE_ENV', 'development')
     monkeypatch.setenv('CRUCIBLE_ACCESS_MODE', 'open')
     config = Config(str(root / 'alembic.ini'))
     config.set_main_option('script_location', str(root / 'migrations'))
-    with app.state.db.engine.begin() as connection:
-        tables = [name for name in inspect(connection).get_table_names() if name != 'note_ratings']
-        before = {name: connection.execute(text('SELECT * FROM "' + name + '"')).all() for name in tables}
-        note_ratings.NoteRating.__table__.drop(connection)
-    command.stamp(config, '0018')
-    command.upgrade(config, 'head')
-    with app.state.db.engine.connect() as connection:
-        assert {name: connection.execute(text('SELECT * FROM "' + name + '"')).all() for name in tables} == before
-    command.upgrade(config, 'head')
-    command.check(config)
+    # Build an actual historical schema. Stamping today's metadata as 0018
+    # leaves later tables behind and cannot exercise a genuine upgrade.
+    command.upgrade(config, '0018')
+    engine = create_engine(database_url)
+    try:
+        metadata = MetaData()
+        metadata.reflect(engine)
+        assert 'note_ratings' not in metadata.tables
+        assert 'implementation_builds' not in metadata.tables
+        owner_id, note_id, revision_id = (str(uuid4()) for _ in range(3))
+        value = content(title='Preserved historical note')
+        digest = notebook._hash(value)
+        with engine.begin() as connection:
+            connection.execute(metadata.tables['users'].insert(), dict(id=owner_id,
+                handle='historical_author', password_hash='synthetic', created_at=1.0))
+            connection.execute(metadata.tables['notebook_notes'].insert(), dict(id=note_id,
+                author_id=owner_id, created_at=2.0, latest_revision=1,
+                idempotency_key=str(uuid4()), request_sha256='a' * 64))
+            connection.execute(metadata.tables['notebook_revisions'].insert(), dict(id=revision_id,
+                note_id=note_id, revision=1, created_at=2.0, content=value,
+                content_sha256=digest, idempotency_key=str(uuid4()), request_sha256='b' * 64))
+            tables = [table for name, table in metadata.tables.items() if name != 'alembic_version']
+            before = {table.name: connection.execute(select(table).order_by(*table.primary_key)).all()
+                      for table in tables}
+        command.upgrade(config, 'head')
+        with engine.connect() as connection:
+            assert {table.name: connection.execute(select(table).order_by(*table.primary_key)).all()
+                    for table in tables} == before
+            assert 'note_ratings' in inspect(connection).get_table_names()
+            assert connection.execute(text('SELECT count(*) FROM note_ratings')).scalar_one() == 0
+        command.upgrade(config, 'head')
+        command.check(config)
+    finally:
+        engine.dispose()

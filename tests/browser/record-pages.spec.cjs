@@ -259,7 +259,17 @@ test('revoked access removes cached submissions and a formerly authorized pendin
   } finally {pending.release(); await pending.delivered;}
 });
 
-test('a cold scheme record reserves its heading without an interim label before the real result', async ({page}) => {
+test('a legacy-server record reserves its heading without an interim label before the real result', async ({page}) => {
+  // Rolling upgrades/old servers omit the snapshot. Exercise the retained
+  // individual-read fallback, rather than expecting that read on new servers.
+  await page.route('**/api/schemes?*', async route => {
+    const response = await route.fetch();
+    if (response.status() !== 200) return route.fulfill({response});
+    const data = await response.json();
+    const strip = release => {delete release.recovery_summary; (release.previous_releases || []).forEach(strip);};
+    (data.schemes || []).forEach(strip); if (data.scheme) strip(data.scheme);
+    await route.fulfill({response,json:data});
+  });
   await startAtAbout(page);
   const pending = await holdResponse(page, url => url.pathname === '/api/leaderboard');
   const writes = [];

@@ -1,3 +1,31 @@
+Prepared browsing data and engineering audit follow-up, 25 October 2026
+
+Complete compact stage-record summaries remove per-stage winner reads while
+preserving exact legacy compatibility and inheritance rules. An optional admitted
+background queue prepares Timeline, note summaries, current scheme graph data,
+profile/People/submission overviews and map assets. It never generates challenges,
+loads every private note body or draws hidden graphs. Queue, cache and validation
+limits are documented in read-performance.txt.
+
+A complete bounded note index supports local category/tag filtering and pages.
+Text search, Trash, review queues and overflow retain server query behavior. Full
+note preparation starts on summary expansion; curated bodies no longer wait for
+secondary request-status reads. Private reads retain account/session ownership,
+fresh server authorization and invalidation; no private browser persistence was
+introduced.
+
+The separate engineering handoff is tracked in engineering-handoff-status.txt.
+Critical research/account suites now have an explicit CI gate, the stale ratings
+migration fixture uses a genuine historical schema, and native generation
+concurrency is in the release test selection. Current entry documents distinguish
+the live private beta from local setup and historical measurements. Main still
+needs administrator-enforced required checks. Reproduction sharing, scientific
+activation/review modeling and historical timing presentation remain explicit
+follow-up decisions; their existing policies were not silently changed.
+
+These are source-level changes; exact release and hosted verification receipts
+must agree before calling this checkpoint deployed.
+
 Profile and first-frame follow-up, 25 October 2026
 
 Profiles now reserve their public structure through access, catalogue and score

@@ -1,11 +1,16 @@
 Expanded catalogue: local native setup
 ======================================
 
-The checked implementation artifacts currently target macOS arm64, Python3.11+
+The original local implementation artifacts target macOS arm64, Python3.11+
 and Apple clang14.0.3. X25519 uses cryptography50.0.2's pinned native extension.
 NTRU's worker and static dependency digests are exact local build pins; another
 platform/compiler requires its own reviewed artifact pin, not merely the same
-version label. This is a local research beta, not a portable production release.
+version label. The hosted private beta now uses a separately reviewed Linux
+AMD64/Python3.13.17 runtime with explicit additional-platform evidence; it does
+not reuse macOS measurements or silently accept a different worker. Ordinary
+releases preserve that image's pinned workers and dependency closure. See
+docs/releasing-beta.txt and deploy/release-runtime.json. The commands below
+describe the original local build; they are not the hosted release procedure.
 
 Create the environment and install pinned dependencies:
 
@@ -86,9 +91,12 @@ test compilation only and do not replace the registered artifact identities.
 The CLI integration tests also bind localhost test servers. Run them in an
 environment that permits loopback sockets, with isolated test databases.
 
-The portable-source-checks workflow checks Python compilation, migrations, its
+The portable-source-checks job checks Python compilation, migrations, its
 explicitly listed source-only Python tests and all standalone frontend regression
-scripts. It does not validate native workers. A full pytest run and registry
-validation on the reviewed native runtime remain required local checkpoint/release
-checks. Fresh Ubuntu runners cannot satisfy the current macOS artifact pins; do
-not bypass those pins or describe the portable job as complete backend coverage.
+scripts. The critical-workflows job adds an explicit portable research/account
+suite. Neither validates native workers. The separate release workflow validates
+all registered manifests and its selected native application suites inside the
+reviewed Linux image; it does not run every backend or native conformance test.
+A full local pytest run may additionally require Sage or the verified native
+source/build trees described above. Fresh Ubuntu source-test runners do not
+satisfy macOS artifact pins; never bypass pins to make a source-only job pass.

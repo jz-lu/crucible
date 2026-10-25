@@ -4,9 +4,11 @@ Releasing the private beta
 Normal development uses a branch and pull request. The stable branch-protection
 check is "CI passed" in the CI workflow. A repository administrator must require
 it and protect main; write access alone cannot establish that rule. This check
-means portable Python tests, migrations, frontend regressions, disposable Chromium
+means portable Python tests, migrations, the explicit critical research/account
+workflow gate, frontend regressions, disposable Chromium
 browser checks, actual SQLite/PostgreSQL 17 metadata-query parity, and the reviewed
-runtime source contract passed. See
+runtime source contract passed. The exact portable workflow selection lives in
+tests/run_critical_workflows.py and fails on skipped checks. See
 docs/browser-checks.txt for the browser fixture and its scope. It does not mean native workers were rebuilt or
 every backend/platform test ran. Optional PostgreSQL fixtures are explicitly
 skipped without their dedicated synthetic database configuration.
@@ -64,7 +66,8 @@ the workflow and its contract.
 
 The resulting image must validate the whole registry and match the exact raw
 manifest hashes for all 32 releases and 1,466 profiles, including archived ones.
-It runs the named access/UI, catalogue, projection, math-asset, milestone and scoring regression
+It runs the named access/UI, catalogue, projection, math-asset, milestone, scoring
+and generation-concurrency regression
 batches from the selected commit. These are bounded tests with synthetic local
 state, not a claim of exhaustive cryptographic correctness, production capacity
 or a full backend suite. The portable source checks run first. Published images

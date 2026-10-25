@@ -12,8 +12,11 @@ should require that check on `main` and disable force pushes and branch deletion
 
 Merging does not deploy the website. The intentional **Release beta** GitHub
 Actions workflow builds and tests an image from a commit on `main`, then publishes
-that exact image and its tag. Select the resulting tag on the existing
-DigitalOcean web service; its database and environment settings stay in place.
+that exact image and its immutable tag, then promotes the verified image to the
+`beta` channel. The existing DigitalOcean service watches that channel through
+Autodeploy. Ordinary releases need no environment-variable edits or manual tag
+selection; the hosted database and configuration stay in place. Verify the live
+source revision after deployment. Merging a PR alone never promotes the channel.
 See [the release instructions](docs/releasing-beta.txt) for setup, verification,
 and rollback. The release checks preserve reviewed native artifacts; changing a
 KEM implementation, runtime dependency, or database schema requires the separate
@@ -50,8 +53,13 @@ standalone JavaScript regressions, and a real Chromium browser suite. See
 [browser checks](docs/browser-checks.txt) for the disposable local setup and its
 verification boundaries. Pull requests run these checks; feature branches do
 not duplicate them with a second push-triggered run. The release workflow also tests the image with
-its reviewed Linux native runtime. Source-only CI does not establish native
-correctness or PostgreSQL behavior. Add a reviewed migration for schema changes.
+its reviewed Linux native runtime. The critical-workflow gate separately covers
+research, publication, permissions, ratings and scoped agents with disposable
+SQLite and a portable test catalogue. Its exact suite list is in
+`tests/run_critical_workflows.py`; skipped checks fail that gate. A dedicated
+PostgreSQL 17 job checks metadata/scoring query parity. These checks do not imply
+complete native coverage or PostgreSQL lifecycle-race verification.
+Add a reviewed migration for schema changes.
 Browser changes should be checked at desktop and mobile widths, including errors,
 empty states, keyboard use, and the affected interaction. Measure both first visits
 and repeat navigation with network latency; a fast local server alone can hide

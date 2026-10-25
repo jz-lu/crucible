@@ -1,5 +1,26 @@
 Read-path preparation and metadata SQL
 
+Complete stage recovery summaries
+---------------------------------
+Catalogue, navigation and progress responses include a release-bound compact
+winner summary for every registered stage. Selecting a stage can immediately
+show its winner or Unsolved without another leaderboard request. Only the method
+name is included; full method/compute evidence still loads when opened.
+
+The summary reuses the existing first-valid-receipt query and retains exact
+release compatibility, inherited/exact-profile rules and timestamp/receipt-ID
+ties. The catalogue still uses two SELECTs. Frontend validation requires complete
+profile coverage and matching release identities; older or malformed responses
+fall back to the existing leaderboard endpoint. Explicit Refresh performs a
+fresh progress read. Session changes and writes retain cache invalidation.
+
+Local synthetic metadata measurements across 32 releases/1,466 profiles took
+5.1 ms for empty summaries and 12.6 ms with a winner per profile. Summary-only gzip
+sizes were 5.7 KB and 26.4 KB respectively. These are local preparation measurements,
+not a hosted latency or capacity guarantee. Browser checks cover immediate
+winner/Unsolved rendering, no redundant per-stage requests, detail-on-demand,
+legacy fallback and focus preservation at desktop and mobile widths.
+
 Browser loading and small projections
 ------------------------------------
 The notebook's scheme map renders from its bundled graph without waiting for
@@ -78,6 +99,41 @@ request and cache-generation checks.
 Notebook continuity
 -------------------
 
+Admitted browsing now starts a bounded optional queue after the selected page
+can paint. It prepares Timeline, the complete note-summary index, current scheme
+details/graph data, the viewer's profile, map assets, the first People page and
+latest submissions. Foreground reads, open dialogs, issuance/submission, hidden
+tabs and Save-Data pause that queue. Its JSON jobs run serially; one next-page
+preparation or explicit user intent can overlap, and fixed script groups can
+load concurrently. It stops scheduling after 24 jobs or 4 MiB of decoded
+response accounting per account/read epoch; the final response can cross the
+byte threshold. Failures leave the normal foreground fallback available.
+No challenge is generated and no hidden graph/list is rendered by warmup.
+Only the eight current releases are prepared automatically; archived details
+require navigation or intent. Those current details total about 2.32 MB decoded
+and 132 KB gzip in the measured catalogue, including explanatory material.
+
+The browser-only index projection is all-or-nothing: at most 500 visible notes
+and 512 KiB encoded. It preserves the same latest-visible revision, ownership,
+publication, proposal and scope rules as the paginated endpoint. Overflow returns
+no partial list and the UI uses ordinary server pagination. It excludes bodies
+and imported private metadata. Complete indexes let categories, exact tags and
+pages change locally; text searches keep the existing server Unicode/search
+semantics. Trash and reviewer views always use their authoritative endpoints.
+
+The index lives in bounded account/session memory. A Notes entry after ten seconds
+can refresh it quietly without disabling local filtering/pagination. Full expiry,
+writes, session changes and permission loss retain their invalidation rules.
+Core index/Timeline entries take eviction priority over individual bodies while
+still sharing the existing serialized-size/five-minute cache bounds. Server-paginated lists
+can prepare one next page; expanding a summary can prepare its full note.
+Curated bodies and citation pins appear before secondary request-status reads;
+pending status actions remain disabled and only that pane updates afterward.
+
+The paragraphs below describe retained server-query fallback behavior and the
+earlier continuity measurements; they do not claim local filtering for text search
+or an incomplete index.
+
 Changing a notes filter retains the previous nonempty, admitted list while the
 new server query runs. Those rows are a previous view, not a locally computed
 answer: pagination and mutation controls wait for the fresh result. Empty states
@@ -87,7 +143,7 @@ rows receive focus only when the departing rows still owned it. Notes search
 remains server-side across the full visible collection, not just the loaded page.
 
 Timeline uses the existing bounded account/session read cache (12 entries,
-2 MB total, five-minute TTL). A warm visit paints its cached aggregate and still
+two million serialized JSON characters total, five-minute TTL). A warm visit paints its cached aggregate and still
 requests fresh data; an unchanged result preserves the existing SVG. Revocation,
 account/CSRF changes and writes retain their existing invalidation rules. No
 private note bodies, account permissions or server-side sessions are cached by
