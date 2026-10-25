@@ -26,7 +26,7 @@ for (const [name, width] of [['desktop', 1440], ['mobile', 390]]) {
       expect(reads.filter(path => path === '/api/schemes' || path.startsWith('/notebook/') || path.startsWith('/map/'))).toEqual([]);
       await expect(page.locator('body')).not.toContainText('ALICE_PRIVATE_BROWSER_BODY');
       accessHeading = await geometry(page.locator('#access-title'));
-      accessTable = await geometry(page.locator('#access-loading-preview'));
+      accessTable = await geometry(page.locator('#access-loading-preview [data-pending-layout="catalogue"]'));
       expect(await page.locator('#access-description').evaluate(element => getComputedStyle(element).clipPath)).toBe('inset(50%)');
       await page.screenshot({path: testInfo.outputPath('pending-access.png')});
       session.release(); await session.delivered; await catalogue.arrived;
@@ -71,28 +71,130 @@ for (const [name, width] of [['desktop', 1440], ['mobile', 390]]) {
   });
 }
 
-for (const route of ['#notebook', '#notebook?view=map']) {
-  test(`cold ${route} has no catalogue title flash before the app starts`, async ({page}, testInfo) => {
+const pendingRoutes = [
+  ['#challenge', 'neutral', 'Crucible'],
+  ['#people', 'people', 'Leaderboard'],
+  ['#notebook', 'list', 'Research notebook'],
+  ['#notebook?view=map', 'chart', 'Research notebook'],
+  ['#notebook?view=timeline', 'timeline', 'Research notebook'],
+  ['#person/browser_alice', 'neutral', 'browser_alice'],
+  ['#about', 'neutral', 'About us'],
+  ['#scheme/teaching-dh-kem/4', 'chart', 'Scheme'],
+];
+
+for (const [route, layout, title] of pendingRoutes) {
+  test(`cold ${route} keeps public navigation and only its own pending layout before access resolves`, async ({page}, testInfo) => {
+    const bootstrap = await holdResponse(page, url => url.pathname === '/bootstrap.js');
     const appScript = await holdResponse(page, url => url.pathname === '/app.js');
     const session = await holdResponse(page, url => url.pathname === '/api/session');
+    const reads = [];
+    page.on('request', request => reads.push(new URL(request.url()).pathname));
+    const primary = page.locator('.primary-nav');
+    const privateReads = () => reads.filter(path => (path.startsWith('/api/') && path !== '/api/session') ||
+      path.startsWith('/notebook/') || path.startsWith('/map/'));
     try {
-      await page.goto('/' + route, {waitUntil: 'commit'}); await appScript.arrived; await session.arrived;
+      await page.goto('/' + route, {waitUntil: 'commit'}); await bootstrap.arrived; await appScript.arrived;
       await expect(page.locator('#access-title')).toBeEmpty();
       await expect(page.locator('#access-title')).toHaveAttribute('aria-hidden', 'true');
       expect((await page.locator('#access-title').boundingBox()).height).toBeGreaterThan(30);
-      expect(await page.locator('#access-loading-preview thead').evaluate(element => getComputedStyle(element).visibility)).toBe('hidden');
-      await expect(page.locator('.primary-nav')).toBeHidden();
-      await page.screenshot({path: testInfo.outputPath('held-app-shell.png')});
+      const neutral = page.locator('#access-loading-preview [data-pending-layout="neutral"]');
+      await expect(neutral).toBeVisible();
+      expect((await neutral.boundingBox()).height).toBeGreaterThan(30);
+      await expect(page.locator('#access-loading-preview [data-pending-layout="catalogue"]')).toBeHidden();
+      await expect(primary).toBeVisible(); await expect(primary).toHaveAttribute('inert', '');
+      await expect(primary).toContainText('Schemes'); await expect(primary).toContainText('Research notebook');
+      await expect(page.locator('#account-handle')).toBeHidden();
+      await expect(page.locator('#account-handle')).toBeEmpty();
+      await page.locator('#nav-about').evaluate(element => element.focus());
+      await expect(page.locator('#nav-about')).not.toBeFocused();
+      expect(privateReads()).toEqual([]);
+      await page.screenshot({path:testInfo.outputPath('neutral-shell.png')});
+
+      bootstrap.release(); await bootstrap.delivered; await session.arrived;
+      await expect(page.locator('#access-title')).toHaveText(title);
+      const selected = page.locator('#access-loading-preview [data-pending-layout="' + layout + '"]');
+      await expect(selected).toBeVisible();
+      expect(await page.locator('#access-loading-preview .pending-page-preview').evaluateAll(elements =>
+        elements.filter(element => element.getClientRects().length && getComputedStyle(element).display !== 'none')
+          .map(element => element.dataset.pendingLayout))).toEqual([layout]);
+      if (layout !== 'catalogue') await expect(page.locator('#access-loading-preview .kem-table')).toBeHidden();
+      const beforeApp = await geometry(page.locator('#access-title'));
+      await expect(primary).toBeVisible(); await expect(primary).toHaveAttribute('inert', '');
+      expect(privateReads()).toEqual([]);
+      await expect(page.locator('#catalogue-workspace')).toBeHidden();
+      await expect(page.locator('#notebook-workspace')).toBeHidden();
+      await expect(page.locator('body')).not.toContainText('ALICE_PRIVATE_BROWSER_BODY');
+      await page.screenshot({path:testInfo.outputPath('route-pending-shell.png')});
+
       appScript.release(); await appScript.delivered;
-      await expect(page.locator('#access-title')).toHaveText('Research notebook');
+      await expect(page.locator('#access-title')).toHaveText(title);
+      expect(await geometry(page.locator('#access-title'))).toEqual(beforeApp);
+      await expect(selected).toBeVisible();
+      await expect(primary).toBeVisible(); await expect(primary).toHaveAttribute('inert', '');
+      expect(reads.filter(path => path === '/api/session')).toHaveLength(1);
+      expect(privateReads()).toEqual([]);
     } finally {
-      appScript.release(); session.release();
-      await appScript.delivered; await session.delivered; await appScript.remove(); await session.remove();
+      bootstrap.release(); appScript.release(); session.release();
+      await bootstrap.delivered; await appScript.delivered; await session.delivered;
+      await bootstrap.remove(); await appScript.remove(); await session.remove();
     }
     await expect(page.locator('#access-title')).toHaveText('Private beta');
     await expect(page.locator('#access-auth-actions')).toBeVisible();
     await expect(page.locator('.access-heading-space')).toBeHidden();
-    await expect(page.locator('.primary-nav')).toBeHidden();
-    await page.screenshot({path: testInfo.outputPath('signed-out-gate.png')});
+    await expect(primary).toBeHidden();
+    expect(privateReads()).toEqual([]);
+    await page.screenshot({path:testInfo.outputPath('signed-out-gate.png')});
+  });
+}
+
+for (const width of [1440,390]) {
+  test(`a returning signed-out ${width}px gate reload never flashes the KEM layout`, async ({page},testInfo) => {
+    await page.setViewportSize({width,height:1000});
+    await page.goto('/#challenge');
+    await expect(page.locator('#access-title')).toHaveText('Private beta');
+    await expect(page.locator('#access-auth-actions')).toBeVisible();
+    expect(await page.evaluate(()=>sessionStorage.getItem('crucible.pending-presentation'))).toBe('gate');
+    const before=await geometry(page.locator('#access-workspace'));
+    const heading=await geometry(page.locator('#access-title'));
+    const gateParts=()=>page.evaluate(()=>Object.fromEntries([
+      '.site-header','.header-inner','.account-actions','#access-workspace','.access-heading',
+      '#access-title','#access-description','#access-auth-actions','.pending-gate-actions',
+    ].map(selector=>{
+      const element=document.querySelector(selector),rect=element.getBoundingClientRect(),style=getComputedStyle(element);
+      return [selector,{x:rect.x,y:rect.y,width:rect.width,height:rect.height,display:style.display,
+        padding:style.padding,margin:style.margin,gap:style.gap,font:style.font,flexDirection:style.flexDirection}];
+    })));
+    const settledParts=await gateParts();
+    await page.addInitScript(()=>{
+      window.gateReloadFrames=[];
+      function frame(){
+        const catalogue=document.querySelector('#access-loading-preview [data-pending-layout="catalogue"]');
+        window.gateReloadFrames.push(Boolean(catalogue?.getClientRects().length&&getComputedStyle(catalogue).display!=='none'));
+        if(!window.gateReloadComplete)requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    });
+    const reads=[];page.on('request',request=>reads.push(new URL(request.url()).pathname));
+    const pending=await holdResponse(page,url=>url.pathname==='/api/session');
+    try {
+      await page.reload({waitUntil:'domcontentloaded'});await pending.arrived;
+      await expect(page.locator('#access-title')).toHaveText('Private beta');
+      await expect(page.locator('#access-loading-preview [data-pending-layout="gate"]')).toBeVisible();
+      await expect(page.locator('#access-loading-preview .kem-table')).toBeHidden();
+      await testInfo.attach('gate-geometry',{body:JSON.stringify({settled:settledParts,pending:await gateParts()},null,2),contentType:'application/json'});
+      expect(await geometry(page.locator('#access-workspace'))).toEqual(before);
+      expect(await geometry(page.locator('#access-title'))).toEqual(heading);
+      await expect(page.locator('#account-handle')).toBeHidden();
+      await expect(page.locator('#catalogue-workspace')).toBeHidden();
+      await expect(page.locator('#notebook-workspace')).toBeHidden();
+      expect(reads.filter(path=>path.startsWith('/api/')&&path!=='/api/session')).toEqual([]);
+      expect(await page.evaluate(()=>window.gateReloadFrames.some(Boolean))).toBe(false);
+      await page.screenshot({path:testInfo.outputPath('returning-gate-pending-'+width+'.png')});
+    } finally {pending.release();await pending.delivered;await pending.remove();}
+    await expect(page.locator('#access-auth-actions')).toBeVisible();
+    await expect(page.locator('#access-title')).toHaveText('Private beta');
+    expect(await geometry(page.locator('#access-workspace'))).toEqual(before);
+    expect(await page.evaluate(()=>{window.gateReloadComplete=true;return window.gateReloadFrames.some(Boolean);})).toBe(false);
+    expect(reads.filter(path=>path.startsWith('/api/')&&path!=='/api/session')).toEqual([]);
   });
 }

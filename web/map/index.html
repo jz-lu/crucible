@@ -27,7 +27,7 @@
   <main id="main">
     <nav class="notebook-view-nav" aria-label="Notebook views"><a href="/#notebook">Notes</a><a href="index.html" aria-current="page">Map</a></nav>
     <div class="page-title"><div><p class="eyebrow">Research landscape</p><h1>KEM research map</h1></div><a class="quiet-link" href="PIPELINE.txt">How this grows ↗</a></div>
-    <p class="intro">Explore KEMs and their connections. Open an entry for its research note, sources and tags.</p>
+    <p class="intro" hidden>Explore KEMs and their connections. Open an entry for its research note, sources and tags.</p>
     <div class="toolbar">
       <div class="filters" role="group" aria-label="Map selection">
         <button type="button" data-filter="all" aria-pressed="true">All</button>
@@ -36,7 +36,7 @@
       </div>
       <label class="search"><span class="sr-only">Find a scheme, family, or assumption</span><input type="search" id="search" placeholder="Find a scheme or an idea…" autocomplete="off"></label>
     </div>
-    <p id="filter-description" class="filter-description">Documented KEMs, backed by research notes.</p>
+    <p id="filter-description" class="filter-description" hidden>Documented KEMs, backed by research notes.</p>
     <div class="map-meta"><p id="map-count" role="status" aria-live="polite"></p><span class="map-legend"><span class="scored-badge">Scored</span> Eligible for points <span class="focus-dot" aria-hidden="true"></span> Highlighted</span></div>
     <div class="workspace">
       <section id="landscape" class="landscape" aria-label="KEM research map"></section>
@@ -51,7 +51,7 @@
       <p><strong>All, Scored, Highlighted.</strong> All includes every mapped KEM. Scored includes schemes with an enrolled scoring release, using a snapshot of the current policy. Highlighted is our selected focus within Scored. Historical broken constructions are excluded from this map.</p>
       <p><strong>Published does not mean validated.</strong> Sources establish what a construction is. Current attack estimates, correctness, code, and natural stage progressions need separate, version-specific review. Local challenge releases may differ from the named published standard.</p>
     </div></details>
-    <section class="pipeline-preview" aria-label="Where entries come from"><span class="eyebrow">Built from notes</span><p>Descriptions <span aria-hidden="true">·</span> Comparisons <span aria-hidden="true">·</span> Improvements</p><a href="notes.html">Browse all research notes →</a></section>
+    <section class="pipeline-preview" aria-label="Where entries come from" hidden><span class="eyebrow">Built from notes</span><p>Descriptions <span aria-hidden="true">·</span> Comparisons <span aria-hidden="true">·</span> Improvements</p><a href="notes.html">Browse all research notes →</a></section>
   </main>
   <footer><span>Crucible · Research landscape</span><span>Curated, not exhaustive.</span><a href="catalogue.json" download>Download map data ↓</a></footer>
   <dialog id="mobile-details" aria-labelledby="mobile-detail-title"><div class="dialog-heading"><h2 id="mobile-detail-title">Scheme details</h2><button type="button" id="close-details">Close</button></div><div id="mobile-inspector"></div></dialog>

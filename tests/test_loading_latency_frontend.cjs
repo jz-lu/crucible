@@ -13,6 +13,30 @@ const challengeReads = app => app.requests.filter(r => r.url.pathname === '/api/
 let passed=0;
 async function test(name, run) {await run(); passed++; console.log('PASS '+name);}
 (async () => {
+  for (const [hash, path] of [['#notebook', '/api/notebook/notes'], ['#notebook?view=timeline', '/api/notebook/timeline']]) {
+    await test('cold ' + hash + ' starts its authorized summary alongside scripts and consumes it once', async () => {
+      const session = deferred(), summary = deferred(); let received;
+      const app = await createApp({schemes:[scheme], hash, responder:url => {
+        if (url.pathname === '/api/session') return session.promise;
+        if (url.pathname === path) return summary.promise;
+      }});
+      const assets = () => app.document.querySelectorAll('link,script').filter(element => (element.src || element.href || '').startsWith('/notebook/'));
+      assert.equal(app.requests.length, 1); assert.equal(assets().length, 0);
+      session.resolve(app.envelope({user, csrf_token:'first', access:{mode:'beta', allowed:true, status:'active'}})); await flush();
+      assert.equal(assets().length, 4);
+      assert.equal(app.requests.filter(item => item.url.pathname === path).length, 1);
+      assert.match(app.$('#notebook-workspace').textContent, /Research notebook/);
+      app.window.CrucibleNotebook = {mount(target, options) { return {show:async () => {
+        const request = app.requests.find(item => item.url.pathname === path);
+        received = await options.api(request.url.pathname + request.url.search);
+      }, hide(){}, setAccount(){}}; }};
+      assets().forEach(asset => asset.onload()); await flush();
+      assert.equal(app.requests.filter(item => item.url.pathname === path).length, 1);
+      summary.resolve(app.envelope({marker:'same authorized summary'})); await flush();
+      assert.equal(received.marker, 'same authorized summary');
+      assert.equal(app.requests.some(item => item.url.pathname === '/api/schemes' || item.options.method === 'POST'), false);
+    });
+  }
   await test('a cold challenge read overlaps both navigation and exact description, then is consumed once', async () => {
     const navigation=deferred(), description=deferred(), challenge=deferred();
     const app=await createApp({schemes:[scheme],user,hash:route,responder:(url,options,envelope) => {

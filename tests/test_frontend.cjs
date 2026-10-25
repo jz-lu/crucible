@@ -660,7 +660,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
         {entries: [], profile_id: 'alpha-4'}, {entries: [], scheme_id: 'other'}, {entries: [], scheme_version: '99'}]) {
       const app = await createApp({schemes, hash: route(schemes[0], 'alpha-3'), responder: (url, options, envelope) =>
         url.pathname === '/api/leaderboard' ? envelope(data) : undefined});
-      assertLeaderboardState(app, 'Recovery record');
+      assertLeaderboardState(app, '');
       assert.equal(app.$('#tier-record').getAttribute('data-state'), 'error');
       assert.match(app.$('#leaderboard-content').textContent, /could not be loaded/);
       assert.equal(app.$('#tier-record-notes').hidden, true);
@@ -712,7 +712,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
       if (url.pathname !== '/api/leaderboard') return undefined;
       return url.searchParams.get('profile_id') === 'alpha-3' ? empty : envelope({entries: [entry]});
     }});
-    assertLeaderboardState(app, 'Recovery record');
+    assertLeaderboardState(app, '');
     assert.match(app.$('#leaderboard-content').textContent, /Loading/);
     resolveEmpty(app.envelope({entries: []})); await flush();
     assertLeaderboardState(app, 'Unsolved');
@@ -748,7 +748,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.$('#refresh-leaderboard').disabled, false);
     await app.navigate('#challenge');
     await app.sandbox.loadLeaderboard();
-    assertLeaderboardState(app, 'Recovery record');
+    assertLeaderboardState(app, '');
     assert.match(app.$('#leaderboard-content').textContent, /Choose an available stage/);
   });
   await test('the adjacent-size rail centers the selected profile and clamps to the published endpoints', async () => {
@@ -1262,7 +1262,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
       if (url.pathname !== '/api/leaderboard') return undefined;
       return url.searchParams.get('profile_id') === 'alpha-3' ? alpha : envelope({entries: []});
     }});
-    assertLeaderboardState(app, 'Recovery record');
+    assertLeaderboardState(app, '');
     await app.navigate(route(schemes[1], 'beta-5', 'leaderboard'));
     assertLeaderboardState(app, 'Unsolved');
     assert.match(app.$('#leaderboard-content').textContent, /No accepted recoveries/);
@@ -1281,7 +1281,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
         if (url.pathname !== '/api/leaderboard') return undefined;
         return url.searchParams.get('profile_id') === 'alpha-3' ? old : envelope({entries: [entry]});
       }});
-      assertLeaderboardState(app, 'Recovery record');
+      assertLeaderboardState(app, '');
       await app.navigate(route(schemes[0], 'alpha-4'));
       assertLeaderboardState(app, 'Broken by', true);
       if (lateResult === 'empty') resolveOld(app.envelope({entries: []}));

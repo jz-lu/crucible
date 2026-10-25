@@ -56,6 +56,17 @@ logo streaming check holds actual image bytes; response classification checks
 use synthetic transport failures. Neither establishes a particular hosted cause.
 Main-style checks verify the exact embedded stylesheet hash, one effective CSP
 header, early deferred-script discovery, and public/admitted layouts after reload.
+Record-page checks hold leaderboard and submission-list responses to compare
+their initial and settled geometry on desktop and mobile. They also cover cached
+revisits, long/empty histories, nested-dialog focus, and late/denied responses.
+Synthetic submission rows used for layout checks replace only an already
+authorized fixture response; they do not create accepted cryptanalytic results.
+Cold route checks independently hold bootstrap, app and session responses: only
+public neutral geometry is available initially, then the destination's frame,
+with no protected requests before admission. Returning signed-out gate geometry
+is tested separately from admitted catalogue reloads. Timeline checks compare
+the held aggregate frame with the actual curve and preserve scroll when changing
+views. Keyboard focus, late response and revoked-session checks remain required.
 
 Failures retain synthetic screenshots and traces for seven days in CI. They
 contain disposable fixture credentials and notes, never participant information.

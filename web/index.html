@@ -31,7 +31,7 @@
             Crucible
           </span>
         </a>
-        <nav class="primary-nav" aria-label="Main navigation" hidden>
+        <nav class="primary-nav" aria-label="Main navigation" inert hidden>
           <button id="nav-challenge" class="nav-button selected" type="button" aria-current="page">
             Schemes
           </button>
@@ -78,7 +78,17 @@
           <div class="catalogue-actions access-heading-space" aria-hidden="true"><span class="text-button">Refresh ↻</span></div>
         </div>
         <p id="access-description" role="status">Checking access…</p>
-        <div id="access-loading-preview" class="kem-table-wrap catalogue-preview loading-preview" aria-hidden="true">
+        <div id="access-loading-preview" aria-hidden="true">
+          <div class="pending-page-preview loading-preview" data-pending-layout="neutral" aria-hidden="true">
+            <div class="loading-preview-row"><span></span><span></span></div>
+            <div class="loading-preview-row"><span></span><span></span></div>
+            <div class="loading-preview-row"><span></span><span></span></div>
+          </div>
+          <div class="pending-page-preview" data-pending-layout="gate" aria-hidden="true">
+            <p>Sign in to continue, or open your invitation link to join.</p>
+            <div class="pending-gate-actions"><span class="button button-primary">Continue with GitHub</span><span class="button button-quiet">Use a password</span></div>
+          </div>
+        <div class="pending-page-preview kem-table-wrap catalogue-preview loading-preview" data-pending-layout="catalogue" aria-hidden="true">
           <table class="kem-table">
             <thead><tr><th>KEM</th><th class="recovery-heading"><span class="recovery-heading-label"><span>Largest recovery</span><span class="catalogue-help-space"></span></span></th><th>Recovered by</th><th>Participants</th></tr></thead>
             <tbody>
@@ -90,6 +100,33 @@
               <tr><td><span class="catalogue-placeholder"></span></td><td data-label="Largest recovery"><span class="catalogue-placeholder"></span></td><td data-label="Recovered by"><span class="catalogue-placeholder"></span></td><td data-label="Participants"><span class="catalogue-placeholder"></span></td></tr>
             </tbody>
           </table>
+        </div>
+          <div class="pending-page-preview people-table-wrap people-ranking is-ranked people-preview" data-pending-layout="people" aria-hidden="true">
+            <table class="people-table"><thead><tr><th scope="col">Rank</th><th scope="col">Participant</th><th scope="col">Points</th><th scope="col">Accepted proposals</th></tr></thead><tbody>
+              <tr><td data-label="Rank"><span class="person-rank"><span class="catalogue-placeholder"></span></span></td><td data-label="Participant"><span class="person-link"><span class="catalogue-placeholder"></span></span></td><td data-label="Points"><span class="person-points"><span class="catalogue-placeholder"></span></span></td><td data-label="Accepted proposals"><span class=""><span class="catalogue-placeholder"></span></span></td></tr>
+              <tr><td data-label="Rank"><span class="person-rank"><span class="catalogue-placeholder"></span></span></td><td data-label="Participant"><span class="person-link"><span class="catalogue-placeholder"></span></span></td><td data-label="Points"><span class="person-points"><span class="catalogue-placeholder"></span></span></td><td data-label="Accepted proposals"><span class=""><span class="catalogue-placeholder"></span></span></td></tr>
+              <tr><td data-label="Rank"><span class="person-rank"><span class="catalogue-placeholder"></span></span></td><td data-label="Participant"><span class="person-link"><span class="catalogue-placeholder"></span></span></td><td data-label="Points"><span class="person-points"><span class="catalogue-placeholder"></span></span></td><td data-label="Accepted proposals"><span class=""><span class="catalogue-placeholder"></span></span></td></tr>
+              <tr><td data-label="Rank"><span class="person-rank"><span class="catalogue-placeholder"></span></span></td><td data-label="Participant"><span class="person-link"><span class="catalogue-placeholder"></span></span></td><td data-label="Points"><span class="person-points"><span class="catalogue-placeholder"></span></span></td><td data-label="Accepted proposals"><span class=""><span class="catalogue-placeholder"></span></span></td></tr>
+              <tr><td data-label="Rank"><span class="person-rank"><span class="catalogue-placeholder"></span></span></td><td data-label="Participant"><span class="person-link"><span class="catalogue-placeholder"></span></span></td><td data-label="Points"><span class="person-points"><span class="catalogue-placeholder"></span></span></td><td data-label="Accepted proposals"><span class=""><span class="catalogue-placeholder"></span></span></td></tr>
+              <tr><td data-label="Rank"><span class="person-rank"><span class="catalogue-placeholder"></span></span></td><td data-label="Participant"><span class="person-link"><span class="catalogue-placeholder"></span></span></td><td data-label="Points"><span class="person-points"><span class="catalogue-placeholder"></span></span></td><td data-label="Accepted proposals"><span class=""><span class="catalogue-placeholder"></span></span></td></tr>
+            </tbody></table>
+          </div>
+          <div class="pending-page-preview loading-preview" data-pending-layout="list" aria-hidden="true">
+            <div class="pending-list-row"><span class="catalogue-placeholder"></span><span class="catalogue-placeholder"></span></div>
+            <div class="pending-list-row"><span class="catalogue-placeholder"></span><span class="catalogue-placeholder"></span></div>
+            <div class="pending-list-row"><span class="catalogue-placeholder"></span><span class="catalogue-placeholder"></span></div>
+            <div class="pending-list-row"><span class="catalogue-placeholder"></span><span class="catalogue-placeholder"></span></div>
+            <div class="pending-list-row"><span class="catalogue-placeholder"></span><span class="catalogue-placeholder"></span></div>
+          </div>
+          <div class="pending-page-preview" data-pending-layout="chart" aria-hidden="true">
+            <div class="pending-chart-card"><span class="catalogue-placeholder"></span><div class="pending-chart-axis"></div></div>
+            <div class="pending-chart-card"><span class="catalogue-placeholder"></span><div class="pending-chart-axis"></div></div>
+            <div class="pending-chart-card"><span class="catalogue-placeholder"></span><div class="pending-chart-axis"></div></div>
+            <div class="pending-chart-card"><span class="catalogue-placeholder"></span><div class="pending-chart-axis"></div></div>
+          </div>
+          <div class="pending-page-preview" data-pending-layout="timeline" aria-hidden="true">
+            <div class="pending-chart-card"><span class="catalogue-placeholder"></span><div class="pending-chart-axis"></div></div>
+          </div>
         </div>
         <div id="access-auth-actions" class="access-actions" hidden>
           <button id="access-github" class="button button-primary" type="button" hidden>Continue with GitHub</button>
@@ -160,7 +197,7 @@
         </details>
         <details id="agent-connections" class="agent-connections" hidden>
           <summary>Connected agents</summary>
-          <div class="agent-connections-heading"><p>Manage agents connected to your account.</p><button id="refresh-agent-tokens" class="text-button" type="button">Refresh</button></div>
+          <div class="agent-connections-heading"><button id="refresh-agent-tokens" class="text-button" type="button">Refresh</button></div>
           <div id="agent-token-list" aria-live="polite"></div>
         </details>
       </section>
@@ -179,7 +216,7 @@
           <div>
             <p id="overview-release" class="eyebrow"></p>
             <h1 id="overview-title"></h1>
-            <p id="overview-summary"></p>
+            <p id="overview-summary" hidden></p>
             <p id="overview-beta" class="beta-note" hidden></p>
           </div>
           <div class="overview-entry">
@@ -215,7 +252,7 @@
               KEM challenge
             </p>
             <h1 id="scheme-title"></h1>
-            <p id="scheme-summary"></p>
+            <p id="scheme-summary" hidden></p>
             <p id="scheme-beta" class="beta-note" hidden></p>
             <div class="scheme-actions">
               <button id="advance-size" class="next-instance-button is-concealed" type="button" disabled aria-hidden="true">
@@ -281,7 +318,7 @@
           <div id="tier-record" class="tier-record" data-state="loading">
             <div class="panel-heading tier-record-heading">
               <div>
-                <h3 id="leaderboard-title">Recovery record</h3>
+                <h3 id="leaderboard-title"></h3>
               </div>
               <button id="refresh-leaderboard" class="text-button" type="button">
                 Refresh <span aria-hidden="true">↻</span>
@@ -895,9 +932,6 @@
       <h2 id="submission-title">
         Share the work.
       </h2>
-      <p class="dialog-description">
-        The recovered key, the method behind it, and the computational cost.
-      </p>
       <div class="notice submission-warning">
         <strong>
           One answer for this instance.
@@ -1060,9 +1094,6 @@
       <h2 id="history-title">
         My submissions
       </h2>
-      <p class="dialog-description">
-        Answers received across your profiles and rounds.
-      </p>
       <div id="history-content" class="history-content" aria-live="polite">
       </div>
     </dialog>

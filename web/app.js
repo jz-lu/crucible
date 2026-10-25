@@ -635,7 +635,13 @@ function routeLoadingTarget() {
 function showRouteLoading() {
   const path = window.location.hash.split('?')[0], release = routeRelease();
   const known = release && availableReleases().find(item => item.id === release.id && String(item.version) === release.version);
-  const title = known?.name || (release ? 'Scheme' : path.startsWith('#person/') ? 'Profile' : path === '#notebook' ? 'Research notebook' : path === '#reviews' ? 'Review center' : path === '#propose' ? 'Propose a scheme' : 'KEM Schemes');
+  let profileName = 'Profile';
+  try {
+    const handle = path.match(/^#person\/([^/]+)$/)?.[1];
+    const decoded = handle && decodeURIComponent(handle);
+    if (decoded && decoded.length <= 100 && !/[\u0000-\u001f\u007f]/.test(decoded)) profileName = decoded;
+  } catch { /* Malformed profile URLs never become display markup. */ }
+  const title = known?.name || (release ? 'Scheme' : path.startsWith('#person/') ? profileName : path === '#notebook' ? 'Research notebook' : path === '#reviews' ? 'Review center' : path === '#propose' ? 'Propose a scheme' : 'KEM Schemes');
   state.screen = 'loading';
   state.challengeRequest++; state.leaderboardRequest++; state.peopleRequest++; state.personRequest++;
   const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
@@ -801,22 +807,41 @@ async function showNotebook(query, reviewing = false) {
   // competing with the map's six assets after its controller becomes available.
   // The graph can still render if this independent, session-bound read fails.
   if (!reviewing && params.get('view') === 'map') void loadMapCatalogue().catch(() => {});
-  // Only the cold, ordinary first page has a query known before notebook code
-  // arrives. Share that authorized read with its eventual consumer; all other
-  // views and filters continue to decide their own requests inside the notebook.
-  const firstListPath = '/api/notebook/notes?limit=25&include_curated=true&scope=all';
+  // These two cold views have a read known before notebook code arrives.
+  // Fetch it alongside the scripts, then hand the same authorized response to
+  // the controller. Other filters/readers still choose their own queries.
+  const firstPath = !params.size ? '/api/notebook/notes?limit=25&include_curated=true&scope=all' :
+    params.size === 1 && params.get('view') === 'timeline' ? '/api/notebook/timeline' : null;
   const readEpoch = readViewEpoch, startedAt = Date.now();
-  let firstListRead = !reviewing && !notebookWorkspace && account != null && !params.size ?
-    readAgain('notebook:first-list', firstListPath) : null;
-  firstListRead?.catch(() => {}); // A failed request can finish before assets.
+  let firstRead = !reviewing && !notebookWorkspace && account != null && firstPath ?
+    readAgain('notebook:first:' + firstPath, firstPath) : null;
+  firstRead?.catch(() => {}); // A failed request can finish before assets.
   const notebookAPI = (path, body, options) => {
-    const first = firstListRead; firstListRead = null;
+    const first = firstRead; firstRead = null;
     if (first && current() && readEpoch === readViewEpoch && Date.now() - startedAt < 10000 &&
-        path === firstListPath && body === undefined && (!options?.method || options.method === 'GET')) return first;
+        path === firstPath && body === undefined && (!options?.method || options.method === 'GET')) return first;
     return api(path, body, options);
   };
   if (!window.CrucibleNotebook || (!notebookAssetsReady && notebookAssetLoads.size)) {
-    setLoading(target, reviewing ? 'Loading review workspace…' : 'Loading notebook…');
+    if (reviewing) setLoading(target, 'Loading review workspace…');
+    else {
+      // This title is public route structure, so it need not disappear while
+      // the admitted notebook code arrives. No note data or actions are here.
+      const shell = node('div', undefined, 'notebook-shell-preview');
+      shell.append(node('h1', 'Research notebook'));
+      const tabs = node('div', undefined, 'notebook-shell-tabs');
+      tabs.setAttribute('aria-hidden', 'true');
+      for (const label of ['Notes', 'Scheme map', 'Timeline']) tabs.append(node('span', label));
+      shell.append(tabs);
+      const frame = node('div', undefined, params.get('view') ? 'pending-chart-card' : 'loading-preview');
+      frame.setAttribute('aria-hidden', 'true');
+      if (params.get('view')) frame.append(node('div', undefined, 'pending-chart-axis'));
+      else for (let index = 0; index < 4; index++) {
+        const row = node('div', undefined, 'loading-preview-row'); row.append(node('span'), node('span')); frame.append(row);
+      }
+      shell.append(frame);
+      quietReadStatus(target, 'Loading notebook…'); target.append(shell);
+    }
     try { await ensureNotebookAssets(); }
     catch (error) { if (current()) showInlineError(target, error.message, () => showNotebook(query, reviewing)); return; }
   }
@@ -1016,7 +1041,7 @@ function applyRoute(focus = false) {
   if (screen === 'notebook') document.title = 'Research notebook — Crucible';
   if (screen === 'reviews') document.title = 'Review center — Crucible';
   renderReviewAccountLink();
-  if (focus && previousScreen !== screen) $(workspaceSelector(screen)).focus({preventScroll: screen === 'catalogue'});
+  if (focus && previousScreen !== screen) $(workspaceSelector(screen)).focus({preventScroll: ['catalogue', 'people'].includes(screen)});
 }
 function sharedKeyBytes(challenge) {
   const bytes = challenge?.projection === 'summary' ? challenge.shared_secret_bytes : challenge?.public?.encoding?.shared_secret_bytes;
@@ -1118,6 +1143,7 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
 }
 function setSession(data) {
   document.body.removeAttribute('data-access-pending');
+  $('.primary-nav').removeAttribute('inert');
   state.sessionRevision++;
   const previousId = state.user?.id;
   const previousCsrf = state.csrf;
@@ -1134,6 +1160,10 @@ function setSession(data) {
   state.access = data.access || (state.access?.mode === 'beta' ?
     {mode: 'beta', allowed: false, status: state.user ? 'pending' : 'anonymous'} :
     {mode: 'open', allowed: true, status: state.user ? 'active' : 'anonymous'});
+  // Presentation only: the next reload can keep the gate or route frame in
+  // place, but every reload still waits for its fresh session before any data.
+  document.body.setAttribute('data-access-view', hasAccess() ? 'workspace' : 'gate');
+  window.CruciblePendingPage?.remember(hasAccess());
   state.canManageBetaAccess = Boolean(state.user && data.capabilities?.manage_beta_access);
   state.canReviewProposals = Boolean(state.user && data.capabilities?.review_protocol_proposals);
   state.canSelfReviewProposals = Boolean(state.canReviewProposals && data.capabilities?.self_review_protocol_proposals);
@@ -1780,11 +1810,22 @@ function personLink(handle) {
   link.href = personRoute(handle);
   return link;
 }
+function peoplePreview() {
+  const rows = Array.from({length: 6}, () => ['person-rank', 'person-link', 'person-points', ''].map(className => {
+    const cell = node('span', undefined, className);
+    cell.append(node('span', undefined, 'catalogue-placeholder'));
+    return cell;
+  }));
+  const preview = peopleTable(['Rank', 'Participant', 'Points', 'Accepted proposals'], rows);
+  preview.classList.add('people-ranking', 'is-ranked', 'people-preview');
+  preview.setAttribute('aria-hidden', 'true');
+  return preview;
+}
 function renderPeople(scoring) {
   const target = $('#people-content');
   const scored = state.people.some(person => Number.isFinite(person.points));
   setText('#people-score-note', scored ? '' : 'Points are being finalized. Participants are listed alphabetically.');
-  $('#people-score-note').hidden = scored;
+  $('#people-score-note').hidden = scored || !state.people.length;
   if (!state.people.length) return showEmpty(target, 'No participants yet.');
   const ranked = scored && state.people.every(person => Number.isInteger(person.rank) && person.rank > 0);
   const headings = [...(ranked ? ['Rank'] : []), 'Participant', 'Points', 'Accepted proposals'];
@@ -1793,7 +1834,10 @@ function renderPeople(scoring) {
     personLink(person.handle), node('span', peopleNumber(person.points, 'Pending'), 'person-points'),
     node('span', peopleNumber(person.accepted_proposal_count))
   ]);
-  target.replaceChildren(peopleTable(headings, rows));
+  const table = peopleTable(headings, rows);
+  table.classList.add('people-ranking');
+  table.classList.toggle('is-ranked', ranked);
+  target.replaceChildren(table);
 }
 async function loadPeople(more = false) {
   if (state.screen !== 'people') return;
@@ -1805,8 +1849,14 @@ async function loadPeople(more = false) {
   $('#more-people').disabled = true;
   const key = 'people', cached = !more && cachedRead(key);
   const paint = data => {
+    const focused = document.activeElement?.closest('#people-content') === target ? document.activeElement : null;
+    const href = focused?.tagName === 'A' ? focused.getAttribute('href') : null;
     state.people = data.people; state.peoplePagination = data.pagination || null;
     paintRead(key, target, data, value => renderPeople(value.scoring));
+    if (focused && !focused.isConnected && ![...document.querySelectorAll('dialog')].some(dialog => dialog.open)) {
+      const replacement = href && [...target.querySelectorAll('a')].find(link => link.getAttribute('href') === href);
+      (replacement || $('#people-workspace')).focus({preventScroll: true});
+    }
     $('#more-people').hidden = !data.pagination?.has_more;
   };
   if (cached) paint(cached);
@@ -1815,8 +1865,10 @@ async function loadPeople(more = false) {
     state.peoplePagination = null;
     $('#more-people').hidden = true;
     $('#people-score-note').hidden = true;
-    setLoading(target, 'Loading participants…');
+    quietReadStatus(target, 'Loading participants…');
+    target.append(peoplePreview());
   }
+  target.setAttribute('aria-busy', 'true');
   try {
     const data = await readAgain(offset ? key + ':' + offset : key, '/api/people?' + new URLSearchParams({limit: '50', offset: String(offset), include_records: 'false'}));
     if (!current()) return;
@@ -1826,7 +1878,7 @@ async function loadPeople(more = false) {
   } catch (error) {
     if (current()) readRefreshError(key, target, error, () => loadPeople(), cached);
   } finally {
-    if (current()) { $('#refresh-people').disabled = false; $('#more-people').disabled = false; }
+    if (current()) { target.setAttribute('aria-busy', 'false'); $('#refresh-people').disabled = false; $('#more-people').disabled = false; }
   }
 }
 function recoveryRecordLabel(record) {
@@ -3023,7 +3075,7 @@ async function loadLeaderboard({preserve = false} = {}) {
   const current = () => hasAccess() && epoch === readViewEpoch && request === state.leaderboardRequest && state.screen === 'scheme' &&
     state.view === 'leaderboard' && selection === selectionKey();
   if (state.screen !== 'scheme' || !selected) {
-    setText('#leaderboard-title', 'Recovery record'); card.setAttribute('data-state', 'empty');
+    setText('#leaderboard-title', ''); card.setAttribute('data-state', 'empty');
     $('#tier-record-notes').hidden = true; $('#leaderboard-scope').hidden = true; $('#leaderboard-footnote').hidden = true;
     return showEmpty(target, named ? 'Choose an available parameter set to see its record.' : 'Choose an available stage to see its record.');
   }
@@ -3084,7 +3136,7 @@ async function loadLeaderboard({preserve = false} = {}) {
 
   if (!preserve) {
     state.leaderboardDataKey = null;
-    setText('#leaderboard-title', 'Recovery record');
+    setText('#leaderboard-title', '');
     card.setAttribute('data-state', 'loading');
     $('#tier-record-notes').hidden = true;
     $('#tier-record-notes').open = false;
@@ -3120,7 +3172,7 @@ async function loadLeaderboard({preserve = false} = {}) {
     readViews.delete(key);
     if (current() && preserve && !forbiddenRead(error)) toast('Recovery record refresh failed. ' + error.message);
     else if (current()) {
-      setText('#leaderboard-title', 'Recovery record');
+      setText('#leaderboard-title', '');
       card.setAttribute('data-state', 'error');
       $('#tier-record-notes').hidden = true;
       $('#leaderboard-scope').hidden = true;
@@ -3242,6 +3294,8 @@ for (const dialog of document.querySelectorAll('dialog')) {
     if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
   });
   dialog.addEventListener('close', () => {
+    // A queued close from the previous opening must not clear a reopened list.
+    if (dialog === historyDialog && dialog.open) return;
     document.body.style.overflow = [...document.querySelectorAll('dialog')].some(item => item.open) ? 'hidden' : '';
     const trigger = dialogTriggers.get(dialog);
     const parentDialog = trigger?.closest('dialog');
@@ -3250,6 +3304,7 @@ for (const dialog of document.querySelectorAll('dialog')) {
     if (dialog === historyDialog) {
       state.historyRequest++;
       $('#history-content').replaceChildren();
+      $('#history-content').setAttribute('aria-busy', 'false');
     }
     if (dialog === recoveryDialog) {
       state.recoveryRequest++;
@@ -3813,42 +3868,78 @@ $('#submission-form').addEventListener('submit', async event => {
   }
 });
 
+function historyPreview() {
+  const preview = node('div', undefined, 'history-preview');
+  preview.setAttribute('aria-hidden', 'true');
+  for (let index = 0; index < 4; index++) {
+    const item = node('div', undefined, 'history-item');
+    const copy = node('span', undefined, 'history-item-copy');
+    for (const className of ['history-item-title', 'history-item-meta', 'history-item-meta']) {
+      const line = node('span', undefined, className);
+      line.append(node('span', undefined, 'catalogue-placeholder'));
+      copy.append(line);
+    }
+    item.append(copy); preview.append(item);
+  }
+  return preview;
+}
 async function showHistory() {
+  if (!hasAccess() || !state.user) return;
   const request = ++state.historyRequest;
   const accountId = state.user?.id, epoch = readViewEpoch;
   const current = () => hasAccess() && epoch === readViewEpoch && request === state.historyRequest && historyDialog.open && state.user?.id === accountId;
-  openDialog(historyDialog, $('#history-button'));
   const target = $('#history-content');
   const key = 'history:' + (state.catalogueRevision || ''), cached = cachedRead(key);
-  const paint = data => paintRead(key, target, data, data => {
-    if (!data.submissions?.length) return showEmpty(target, 'No submissions yet. Your received answers will appear here.');
-    const items = [];
-    for (const submission of data.submissions) {
-      const item = node('button', undefined, 'history-item');
-      item.type = 'button';
-      item.setAttribute('aria-haspopup', 'dialog');
-      const copy = node('span', undefined, 'history-item-copy');
-      const scheme = availableReleases().find(release => release.id === submission.scheme_id &&
-        String(release.version) === String(submission.scheme_version));
-      const profile = scheme?.profiles?.find(profile => profileId(profile) === submission.profile_id);
-      const name = scheme?.name || state.schemes.find(release => release.id === submission.scheme_id)?.name || submission.scheme_id;
-      const title = `${name || 'Scheme'} (${profile ? profileLabel(profile, scheme) : recordProfileLabel(submission)})`;
-      copy.append(node('span', title, 'history-item-title'), node('span', submission.method_name || 'Submitted method', 'history-item-meta'), node('span', utcDate(submission.received_at), 'history-item-meta'));
-      item.setAttribute('aria-label', 'View submission for ' + title + ' received ' + utcDate(submission.received_at));
-      item.addEventListener('click', () => openSubmissionDetails(submission.id, item));
-      item.append(copy, node('span', submission.status === 'correct' ? 'Recovered' : 'Incorrect', 'status-tag' + (submission.status === 'correct' ? '' : ' error-tag')));
-      items.push(item);
-    }
-    target.replaceChildren(...items);
-  });
-  if (cached) paint(cached); else setLoading(target, 'Loading your submissions…');
+  const paint = data => {
+    const focused = document.activeElement?.closest('#history-content') === target ? document.activeElement : null;
+    const detailsTrigger = dialogTriggers.get(recoveryDialog);
+    const detailsId = detailsTrigger?.closest('#history-content') === target ? detailsTrigger.dataset.submissionId : null;
+    paintRead(key, target, data, data => {
+      if (!data.submissions?.length) return showEmpty(target, 'No submissions yet. Your received answers will appear here.');
+      const items = [];
+      for (const submission of data.submissions) {
+        const item = node('button', undefined, 'history-item');
+        item.type = 'button';
+        item.dataset.submissionId = submission.id;
+        item.setAttribute('aria-haspopup', 'dialog');
+        const copy = node('span', undefined, 'history-item-copy');
+        const scheme = availableReleases().find(release => release.id === submission.scheme_id &&
+          String(release.version) === String(submission.scheme_version));
+        const profile = scheme?.profiles?.find(profile => profileId(profile) === submission.profile_id);
+        const name = scheme?.name || state.schemes.find(release => release.id === submission.scheme_id)?.name || submission.scheme_id;
+        const title = `${name || 'Scheme'} (${profile ? profileLabel(profile, scheme) : recordProfileLabel(submission)})`;
+        copy.append(node('span', title, 'history-item-title'), node('span', submission.method_name || 'Submitted method', 'history-item-meta'), node('span', utcDate(submission.received_at), 'history-item-meta'));
+        item.setAttribute('aria-label', 'View submission for ' + title + ' received ' + utcDate(submission.received_at));
+        item.addEventListener('click', () => openSubmissionDetails(submission.id, item));
+        item.append(copy, node('span', submission.status === 'correct' ? 'Recovered' : 'Incorrect', 'status-tag' + (submission.status === 'correct' ? '' : ' error-tag')));
+        items.push(item);
+      }
+      target.replaceChildren(...items);
+    });
+    const replacement = id => [...target.querySelectorAll('[data-submission-id]')].find(item => item.dataset.submissionId === id) || historyDialog.querySelector('[data-close]');
+    if (focused && !focused.isConnected && !recoveryDialog.open) replacement(focused.dataset.submissionId).focus({preventScroll: true});
+    if (detailsId && !detailsTrigger.isConnected) dialogTriggers.set(recoveryDialog, replacement(detailsId));
+  };
+  // Populate the first frame before opening the dialog. Its scroll viewport is
+  // fixed independently of the number of results, including empty/error states.
+  if (cached) paint(cached);
+  else {
+    const focused = document.activeElement?.closest('#history-content') === target ? document.activeElement : null;
+    quietReadStatus(target, 'Loading your submissions…'); target.append(historyPreview());
+    if (focused && historyDialog.open && !recoveryDialog.open) historyDialog.querySelector('[data-close]').focus({preventScroll: true});
+  }
+  target.setAttribute('aria-busy', 'true');
+  if (!historyDialog.open) openDialog(historyDialog, $('#history-button'));
   try {
     const data = await readAgain(key, '/api/me/submissions');
     if (!current()) return;
+    if (!Array.isArray(data.submissions) || data.submissions.some(item => !item || typeof item.id !== 'string' || !item.id)) throw new Error('Your submissions could not be loaded. Please try again.');
     rememberRead(key, {submissions: data.submissions});
     paint({submissions: data.submissions});
   } catch (error) {
-    if (current()) readRefreshError(key, target, error, async () => { historyDialog.close(); await showHistory(); }, cached);
+    if (current()) readRefreshError(key, target, error, () => showHistory(), cached);
+  } finally {
+    if (current()) target.setAttribute('aria-busy', 'false');
   }
 }
 async function copyInstance() {
@@ -5097,12 +5188,11 @@ async function initialize() {
   if (!state.sessionResolved) {
     $('#access-loading-preview').hidden = false;
     $('#access-workspace').setAttribute('aria-busy', 'true');
-    const catalogue = ['', '#challenge'].includes(window.location.hash.split('?')[0]);
-    if (catalogue) $('#access-workspace').setAttribute('data-catalogue-pending', 'true');
-    else $('#access-workspace').removeAttribute('data-catalogue-pending');
+    $('#access-workspace').removeAttribute('data-catalogue-pending');
     const path = window.location.hash.split('?')[0];
-    setText('#access-title', catalogue ? 'KEM Schemes' : path === '#notebook' ? 'Research notebook' : path === '#about' ? 'About us' : 'Crucible');
+    setText('#access-title', path === '#notebook' ? 'Research notebook' : path === '#about' ? 'About us' : path === '#people' ? 'Leaderboard' : 'Crucible');
     $('#access-title').removeAttribute('aria-hidden');
+    window.CruciblePendingPage?.apply();
     setText('#access-description', 'Checking access…');
   }
   $('#retry-button').disabled = true;

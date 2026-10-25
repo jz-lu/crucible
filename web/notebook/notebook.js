@@ -150,12 +150,12 @@
     let active = false, epoch = 0, request = 0, dialogEpoch = 0, notes = [], nextAfter = null;
     let params = new URLSearchParams(), search = '', tag = '', visibility = 'all', previewId = null;
     let mapController = null, mapPreparation = null, mapIdle = null, mapRequest = 0, timelineRequest = 0, listLoaded = false, cardAction = 0;
-    let curatedNotes = [], curatedLoaded = false, curatedPromise = null;
+    let curatedNotes = [], curatedLoaded = false, curatedPromise = null, timelinePreparation = null;
     let pageCursors = [null], pageIndex = 0, searchTimer = null;
     let currentSession = session(), readEpoch = 0, listStamp = null, timelineStamp = null, listRefreshing = false;
     const readCache = new Map();
     const preparingNotes = new Map();
-    function invalidateReads() { readCache.clear(); preparingNotes.clear(); listStamp = null; timelineStamp = null; readEpoch++; }
+    function invalidateReads() { readCache.clear(); preparingNotes.clear(); timelinePreparation = null; listStamp = null; timelineStamp = null; readEpoch++; }
     function cachedRead(key) {
       if (reviewOnly) return null; // Review forms always require a fresh server read.
       const entry = readCache.get(key);
@@ -195,13 +195,14 @@
     const headingActions = el('div', 'nb-heading-actions');
     headingActions.append(mark('files', button('Agent files', agentFiles)), mark('new', button('New note', () => editNote(), 'nb-button nb-primary'))); heading.append(headingActions);
     const views = el('nav', 'nb-views'); views.setAttribute('aria-label', 'Notebook views');
-    const notesView = mark('notes-view', button('Notes', () => navigate('#notebook'), 'nb-view nb-notes-view'));
+    const notesView = mark('notes-view', button('Notes', () => navigateView('#notebook'), 'nb-view nb-notes-view'));
     notesView.setAttribute('aria-current', 'page');
     const visualizations = el('div', 'nb-visualizations');
     visualizations.append(el('span', 'nb-view-label', 'Visualizations'));
-    const mapView = mark('map-view', button('Scheme map', () => navigate('#notebook?view=map'), 'nb-view nb-visualization-view'));
+    const mapView = mark('map-view', button('Scheme map', () => navigateView('#notebook?view=map'), 'nb-view nb-visualization-view'));
     for (const event of ['pointerenter', 'focus']) mapView.addEventListener(event, () => { void prepareMap().catch(() => {}); });
-    const timelineView = mark('timeline-view', button('Timeline', () => navigate('#notebook?view=timeline'), 'nb-view nb-visualization-view'));
+    const timelineView = mark('timeline-view', button('Timeline', () => navigateView('#notebook?view=timeline'), 'nb-view nb-visualization-view'));
+    for (const event of ['pointerenter', 'focus']) timelineView.addEventListener(event, prepareTimeline);
     function viewIcon(parts) {
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       for (const [name, value] of Object.entries({viewBox:'0 0 24 24', fill:'none', stroke:'currentColor', 'stroke-width':'1.6', 'stroke-linecap':'round', 'stroke-linejoin':'round', 'aria-hidden':'true', focusable:'false'})) svg.setAttribute(name, value);
@@ -241,21 +242,33 @@
     const dialog = mark('dialog', el('dialog', 'nb-dialog')); dialog.setAttribute('aria-label', 'Notebook editor');
     const dialogHeading = el('div', 'nb-dialog-heading'); dialogHeading.append(mark('dialog-title', el('h2')), mark('close', button('×', () => closeDialog(), 'nb-close'))); q('close').setAttribute('aria-label', 'Close notebook editor');
     dialog.append(dialogHeading, mark('dialog-body', el('div')));
-    const scope = mark('scope', el('p', 'nb-local', 'Your notes and the research behind the map. New notes start private; request publication when they are ready.'));
     if (reviewOnly) { root.classList.add('nb-review-workspace'); root.replaceChildren(noticeNode, library, full, dialog); }
-    else root.replaceChildren(heading, views, scope, noticeNode, library, full, mapPanel, timelinePanel, dialog);
+    else root.replaceChildren(heading, views, noticeNode, library, full, mapPanel, timelinePanel, dialog);
     q('pagination').hidden = true;
 
     function notice(text, error = false) { q('notice').textContent = text; q('notice').hidden = !text; q('notice').classList.toggle('nb-error', error); }
     function identity() { const value = typeof account === 'function' ? account() : currentAccount; return value?.id == null ? null : String(value.id); }
     function guard() { const generation = epoch, owner = accountId; return () => active && epoch === generation && owner !== null && identity() === owner; }
     function dialogGuard() { const generation = epoch, owner = accountId, opened = dialogEpoch; return () => epoch === generation && owner !== null && identity() === owner && dialogEpoch === opened && (q('dialog').open || suspendedDialog); }
+    function clearViewSpace() { root.style.minHeight = ''; root.classList.remove('nb-view-scroll-held'); }
+    function navigateView(route) {
+      // Removing a long Notes list can shrink the document below the current
+      // viewport and make the browser clamp its scroll offset. Reserve only
+      // enough empty space for this viewport, never the previous private page.
+      const box = root.getBoundingClientRect?.(), viewport = window.innerHeight;
+      if (active && accountId && identity() === accountId && !root.hidden && window.scrollY > 0 &&
+          box && Number.isFinite(box.top) && Number.isFinite(viewport) && viewport > 0) {
+        root.style.minHeight = Math.ceil(Math.max(0, viewport - box.top)) + 'px';
+        root.classList.add('nb-view-scroll-held');
+      } else clearViewSpace();
+      navigate(route);
+    }
     function setAccount(value) {
       currentAccount = value;
       const next = value?.id == null ? null : String(value.id);
       const nextSession = session();
       if (next === accountId && nextSession === currentSession) return;
-      currentSession = nextSession; invalidateReads(); cancelMapPreparation();
+      clearViewSpace(); currentSession = nextSession; invalidateReads(); cancelMapPreparation();
       accountId = next; epoch++; request++; mapRequest++; timelineRequest++; listLoaded = false;
       q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy');
       q('timeline').replaceChildren();
@@ -264,7 +277,7 @@
       q('search').value = ''; q('filter').replaceChildren(); q('page').textContent = ''; humanHint.hidden = true;
       closeDialog(true); q('dialog-body').replaceChildren(); q('list').replaceChildren(); q('full').replaceChildren(); q('count').textContent = ''; q('pagination').hidden = true; notice('');
     }
-    function hide() { cancelMapPreparation(); clearTimeout(searchTimer); searchTimer = null; active = false; request++; mapRequest++; timelineRequest++; q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy'); q('timeline').replaceChildren(); mapController?.hide(); if (q('dialog').open) { suspendedDialog = true; q('dialog').close(); } }
+    function hide() { clearViewSpace(); timelinePreparation = null; cancelMapPreparation(); clearTimeout(searchTimer); searchTimer = null; active = false; request++; mapRequest++; timelineRequest++; q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy'); q('timeline').replaceChildren(); mapController?.hide(); if (q('dialog').open) { suspendedDialog = true; q('dialog').close(); } }
     const reviewUrl = (section, extra = {}) => '#reviews?' + new URLSearchParams({section, ...extra});
     function pageGuard() { const current = guard(), token = request; return () => current() && token === request; }
     function backToNotes() { return button(reviewOnly ? '← Publish requests' : '← Research notebook', () => navigate(reviewOnly ? reviewUrl('publication') : '#notebook'), 'nb-link nb-back'); }
@@ -283,7 +296,7 @@
       for (const [control, selected] of [[notesView, !inVisualization], [mapView, inMap], [timelineView, inTimeline]]) {
         if (selected) control.setAttribute('aria-current', 'page'); else control.removeAttribute('aria-current');
       }
-      q('map').hidden = !inMap; q('timeline').hidden = !inTimeline; q('scope').hidden = inVisualization;
+      q('map').hidden = !inMap; q('timeline').hidden = !inTimeline;
       if (!inTimeline) q('timeline').replaceChildren();
       if (!inMap) mapController?.hide();
       const nextReviewMode = reviewOnly && params.get('review') === '1';
@@ -355,6 +368,53 @@
         if (current()) q('map').replaceChildren(el('p', 'nb-error', 'The map could not be loaded.'), button('Try again', showMap, 'nb-button'));
       }
     }
+    function prepareTimeline() {
+      if (reviewOnly || !active || !accountId || identity() !== accountId || session() !== currentSession ||
+          params.get('view') === 'timeline' || document.visibilityState === 'hidden' || navigator.connection?.saveData || cachedRead('timeline')) return;
+      if (timelinePreparation && Date.now() - timelinePreparation.at < 10000) return;
+      const owner = accountId, generation = epoch, reads = readEpoch, credential = currentSession;
+      const entry = {task: api('/api/notebook/timeline'), at: Date.now()};
+      timelinePreparation = entry;
+      const current = () => active && accountId === owner && identity() === owner && epoch === generation &&
+        readEpoch === reads && currentSession === credential && session() === credential && Date.now() - entry.at < 10000;
+      const forget = () => { if (timelinePreparation === entry) timelinePreparation = null; };
+      entry.task.then(data => {
+        if (!current()) { forget(); return; }
+        try { timelineData(data); rememberRead('timeline', data); }
+        catch { forget(); }
+      }, error => {
+        const unconsumed = timelinePreparation === entry; forget();
+        if (unconsumed && current() && forbiddenRead(error)) invalidateReads();
+      });
+    }
+    function timelineCard() {
+      let card = q('timeline').querySelector('.nb-timeline-card');
+      if (!card) {
+        card = el('div', 'nb-timeline-card');
+        const header = el('div', 'nb-timeline-heading');
+        header.append(el('h2', '', 'Notes over time'), el('span', 'nb-timeline-total'));
+        card.append(header, el('div', 'nb-timeline-plot'), el('p', 'nb-timeline-footnote nb-timeline-undated'));
+        q('timeline').replaceChildren(card);
+      }
+      return {card, total: card.querySelector('.nb-timeline-total'), plot: card.querySelector('.nb-timeline-plot'),
+        undated: card.querySelector('.nb-timeline-undated')};
+    }
+    function timelinePending() {
+      timelineStamp = null; // The plot is no longer the previously painted aggregate.
+      const {card, total, plot, undated} = timelineCard();
+      total.textContent = ''; undated.textContent = '';
+      card.classList.add('nb-reading'); card.setAttribute('aria-busy', 'true');
+      const status = el('span', 'nb-sr-only', 'Loading notes over time…'); status.setAttribute('role', 'status');
+      const frame = el('div', 'nb-timeline-frame'); frame.setAttribute('aria-hidden', 'true');
+      plot.replaceChildren(frame, status);
+    }
+    function timelineError() {
+      const {card, total, plot, undated} = timelineCard();
+      total.textContent = ''; undated.textContent = ''; card.classList.remove('nb-reading'); card.removeAttribute('aria-busy');
+      const message = el('div', 'nb-timeline-message');
+      message.append(el('p', 'nb-error', 'The timeline could not be loaded.'), button('Try again', showTimeline, 'nb-button'));
+      plot.replaceChildren(message);
+    }
     async function showTimeline() {
       const owner = accountId, generation = epoch, reads = readEpoch, token = ++timelineRequest;
       const current = () => active && identity() === owner && accountId === owner && epoch === generation && reads === readEpoch && token === timelineRequest && params.get('view') === 'timeline';
@@ -369,9 +429,10 @@
         }
       };
       notice(''); target.setAttribute('aria-busy', 'true');
-      if (cached) paint(cached); else target.replaceChildren(reading('Loading notes over time…'));
+      if (cached) paint(cached); else timelinePending();
       try {
-        const data = await api('/api/notebook/timeline');
+        const prepared = timelinePreparation; timelinePreparation = null;
+        const data = await (prepared && Date.now() - prepared.at < 10000 ? prepared.task : api('/api/notebook/timeline'));
         if (!current()) return;
         paint(data); rememberRead(key, data);
       } catch (error) {
@@ -381,14 +442,14 @@
         else {
           if (forbiddenRead(error)) invalidateReads();
           timelineStamp = null;
-          target.replaceChildren(el('p', 'nb-error', 'The timeline could not be loaded.'), button('Try again', showTimeline, 'nb-button'));
+          timelineError();
         }
         target.removeAttribute('aria-busy');
       } finally {
         if (current()) target.removeAttribute('aria-busy');
       }
     }
-    function renderTimeline(data) {
+    function timelineData(data) {
       const day = 86400000;
       const dateValue = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? Date.parse(value + 'T00:00:00Z') : NaN;
       const asOf = dateValue(data?.as_of);
@@ -400,14 +461,19 @@
         previous = time; total = point.total; return {...point, time};
       });
       if (total + data.undated_count !== data.total) throw new Error('Incomplete timeline.');
-      const card = el('div', 'nb-timeline-card'), header = el('div', 'nb-timeline-heading');
-      header.append(el('h2', '', 'Notes over time'), el('span', 'nb-timeline-total', `${data.total.toLocaleString()} ${data.total === 1 ? 'note' : 'notes'}`));
-      card.append(header, el('p', 'nb-hint', 'Cumulative notes currently visible to you, by recorded creation date.'));
+      return {day, asOf, total, points};
+    }
+    function renderTimeline(data) {
+      const {day, asOf, total, points} = timelineData(data);
+      const {card, total: count, plot, undated} = timelineCard();
+      card.classList.remove('nb-reading'); card.removeAttribute('aria-busy');
+      count.textContent = `${data.total.toLocaleString()} ${data.total === 1 ? 'note' : 'notes'}`;
+      undated.textContent = data.undated_count ? `${data.undated_count} ${data.undated_count === 1 ? 'note has' : 'notes have'} no usable creation date and ${data.undated_count === 1 ? 'is' : 'are'} included in the total only.` : '';
       if (!points.length) {
-        card.append(el('p', 'nb-empty', data.total ? 'No dated notes to plot yet.' : 'No notes yet. The timeline will grow as notes are added.'));
+        plot.replaceChildren(el('p', 'nb-empty nb-timeline-message', data.total ? 'No dated notes to plot yet.' : 'No notes yet. The timeline will grow as notes are added.'));
       } else {
-        const width = Math.max(300, Math.min(960, (q('timeline').clientWidth || 1016) - 56));
-        const height = width < 600 ? 280 : 340, left = 50, right = 16, top = 24, bottom = 50;
+        const width = Math.max(300, Math.min(960, plot.clientWidth || (q('timeline').clientWidth || 1016) - 56));
+        const height = plot.clientHeight || (width < 600 ? 280 : 340), left = 50, right = 16, top = 24, bottom = 50;
         const start = points[0].time - day, finish = asOf, plotRight = width - right, plotBottom = height - bottom;
         const magnitude = 10 ** Math.floor(Math.log10(Math.max(1, total / 4)));
         const step = Math.max(1, [1, 2, 5, 10].find(n => n * magnitude >= total / 4) * magnitude), maxY = Math.ceil(total / step) * step;
@@ -437,10 +503,9 @@
           const dot = svgEl('circle', {cx:x(point.time), cy:y(point.total), r:3.5, class:'nb-timeline-point'});
           dot.append(svgEl('title', {}, `${point.date}: ${point.total} notes (${point.created} added)`)); chart.append(dot);
         }
-        card.append(chart, el('p', 'nb-timeline-footnote', 'Each note counts once; revisions do not add notes. Dates are UTC.'));
+        plot.replaceChildren(chart);
       }
-      if (data.undated_count) card.append(el('p', 'nb-timeline-footnote', `${data.undated_count} ${data.undated_count === 1 ? 'note has' : 'notes have'} no usable creation date and ${data.undated_count === 1 ? 'is' : 'are'} included in the total only.`));
-      q('timeline').replaceChildren(card);
+
     }
     async function loadCuratedNotes() {
       if (curatedLoaded) return curatedNotes;
