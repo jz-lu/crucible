@@ -177,14 +177,26 @@ class PublicAssets:
         # stay byte-exact; reject NUL and any enclosing-element terminator.
         if '\0' in main_css or re.search(r'</style', main_css, re.IGNORECASE):
             raise RuntimeError('Main stylesheet cannot be embedded byte-exactly.')
+        bootstrap_tag = '<script src="/bootstrap.js" async></script>'
+        if html.count(bootstrap_tag) != 1:
+            raise RuntimeError('Public HTML must contain one bootstrap script tag.')
+        bootstrap = assets['/bootstrap.js'].body.decode('utf-8').replace('\r\n', '\n').replace('\r', '\n')
+        # Script data has additional HTML escape modes. Reject their sentinels
+        # rather than rewriting JavaScript or hashing bytes the parser changes.
+        if '\0' in bootstrap or re.search(r'</?script|<!--', bootstrap, re.IGNORECASE):
+            raise RuntimeError('Bootstrap script cannot be embedded byte-exactly.')
         for url, asset in assets.items():
             html = html.replace('"' + url + '"', '"' + url + '?v=' + asset.version + '"')
         # Insert after URL rewriting: quoted asset paths inside CSS are never
         # changed, and the hash covers exactly the embedded representation.
         versioned_link = main_link.replace('/styles.css', '/styles.css?v=' + assets['/styles.css'].version)
         html = html.replace(versioned_link, '<style data-main-style>' + main_css + '</style>')
+        versioned_bootstrap = bootstrap_tag.replace('/bootstrap.js', '/bootstrap.js?v=' + assets['/bootstrap.js'].version)
+        html = html.replace(versioned_bootstrap, '<script data-bootstrap>' + bootstrap + '</script>')
         main_hash = base64.b64encode(hashlib.sha256(main_css.encode()).digest())
         policy = CONTENT_SECURITY_POLICY.replace(b'; img-src', b" 'sha256-" + main_hash + b"'; img-src", 1)
+        bootstrap_hash = base64.b64encode(hashlib.sha256(bootstrap.encode()).digest())
+        policy = policy.replace(b"script-src 'self';", b"script-src 'self' 'sha256-" + bootstrap_hash + b"';", 1)
         assets['/'] = Asset(html.encode(), 'text/html', content_security_policy=policy)
         for asset in assets.values():
             # Compress after CSS/font URLs and the HTML shell are finalized.

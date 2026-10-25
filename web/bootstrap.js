@@ -26,7 +26,7 @@
         const value = decodeURIComponent(path.slice('#person/'.length));
         if (value && value.length <= 100 && !/[\/\u0000-\u001f\u007f]/.test(value)) title = value;
       } catch { /* Malformed addresses never become markup or private reads. */ }
-      return {page: 'neutral', title};
+      return {page: 'profile', title};
     }
     if (/^#scheme\/[^/]+\/[^/]+\/assumptions$/.test(path)) return {page: 'list', title: 'Assumptions'};
     if (/^#scheme\/[^/]+\/[^/]+$/.test(path)) return {page: 'chart', title: 'Scheme'};

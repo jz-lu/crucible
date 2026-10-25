@@ -77,14 +77,13 @@ const pendingRoutes = [
   ['#notebook', 'list', 'Research notebook'],
   ['#notebook?view=map', 'chart', 'Research notebook'],
   ['#notebook?view=timeline', 'timeline', 'Research notebook'],
-  ['#person/browser_alice', 'neutral', 'browser_alice'],
+  ['#person/browser_alice', 'profile', 'browser_alice'],
   ['#about', 'neutral', 'About us'],
   ['#scheme/teaching-dh-kem/4', 'chart', 'Scheme'],
 ];
 
 for (const [route, layout, title] of pendingRoutes) {
   test(`cold ${route} keeps public navigation and only its own pending layout before access resolves`, async ({page}, testInfo) => {
-    const bootstrap = await holdResponse(page, url => url.pathname === '/bootstrap.js');
     const appScript = await holdResponse(page, url => url.pathname === '/app.js');
     const session = await holdResponse(page, url => url.pathname === '/api/session');
     const reads = [];
@@ -93,14 +92,9 @@ for (const [route, layout, title] of pendingRoutes) {
     const privateReads = () => reads.filter(path => (path.startsWith('/api/') && path !== '/api/session') ||
       path.startsWith('/notebook/') || path.startsWith('/map/'));
     try {
-      await page.goto('/' + route, {waitUntil: 'commit'}); await bootstrap.arrived; await appScript.arrived;
-      await expect(page.locator('#access-title')).toBeEmpty();
-      await expect(page.locator('#access-title')).toHaveAttribute('aria-hidden', 'true');
-      expect((await page.locator('#access-title').boundingBox()).height).toBeGreaterThan(30);
-      const neutral = page.locator('#access-loading-preview [data-pending-layout="neutral"]');
-      await expect(neutral).toBeVisible();
-      expect((await neutral.boundingBox()).height).toBeGreaterThan(30);
-      await expect(page.locator('#access-loading-preview [data-pending-layout="catalogue"]')).toBeHidden();
+      await page.goto('/' + route, {waitUntil: 'commit'}); await appScript.arrived;await session.arrived;
+      await expect(page.locator('#access-title')).toHaveText(title);
+      await expect(page.locator('#access-title')).not.toHaveAttribute('aria-hidden','true');
       await expect(primary).toBeVisible(); await expect(primary).toHaveAttribute('inert', '');
       await expect(primary).toContainText('Schemes'); await expect(primary).toContainText('Research notebook');
       await expect(page.locator('#account-handle')).toBeHidden();
@@ -108,9 +102,8 @@ for (const [route, layout, title] of pendingRoutes) {
       await page.locator('#nav-about').evaluate(element => element.focus());
       await expect(page.locator('#nav-about')).not.toBeFocused();
       expect(privateReads()).toEqual([]);
-      await page.screenshot({path:testInfo.outputPath('neutral-shell.png')});
-
-      bootstrap.release(); await bootstrap.delivered; await session.arrived;
+      expect(reads.filter(path=>path==='/bootstrap.js')).toEqual([]);
+      await expect(page.locator('head > script[data-bootstrap]')).toHaveCount(1);
       await expect(page.locator('#access-title')).toHaveText(title);
       const selected = page.locator('#access-loading-preview [data-pending-layout="' + layout + '"]');
       await expect(selected).toBeVisible();
@@ -134,9 +127,9 @@ for (const [route, layout, title] of pendingRoutes) {
       expect(reads.filter(path => path === '/api/session')).toHaveLength(1);
       expect(privateReads()).toEqual([]);
     } finally {
-      bootstrap.release(); appScript.release(); session.release();
-      await bootstrap.delivered; await appScript.delivered; await session.delivered;
-      await bootstrap.remove(); await appScript.remove(); await session.remove();
+      appScript.release(); session.release();
+      await appScript.delivered; await session.delivered;
+      await appScript.remove(); await session.remove();
     }
     await expect(page.locator('#access-title')).toHaveText('Private beta');
     await expect(page.locator('#access-auth-actions')).toBeVisible();

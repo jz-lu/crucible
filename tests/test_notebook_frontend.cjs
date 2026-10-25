@@ -93,6 +93,21 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   app.q('list').querySelector('.nb-title').click();await flush();app.setAccount(null);
   late.resolve({note:note()});await flush();assert.equal(app.q('list').textContent,'');assert.equal(app.q('full').textContent,'');
  });
+ await test('an older consumed note intent cannot replace a newer cached body',async()=>{
+  const old=deferred(),refresh=deferred();let reads=0;
+  const newer=note({content:content('Newer saved note')});
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()]}:url==='/api/notebook/notes/note-one'?(++reads===1?old.promise:reads===2?{note:newer}:refresh.promise):undefined});
+  app.q('list').querySelector('.nb-title').click();const first=app.show('note-one');
+  await app.show();await app.show('note-one');assert.match(app.q('full').textContent,/Newer saved note/);
+  old.resolve({note:note({content:content('Older saved note')})});await first;await flush();
+  assert.match(app.q('full').textContent,/Newer saved note/,'Late intent cannot change the selected reader');
+  await app.show();const returning=app.show('note-one');
+  assert.match(app.q('full').textContent,/Newer saved note/,'Return must retain the newer cached body');
+  assert.doesNotMatch(app.q('full').textContent,/Older saved note/);
+  assert.equal(byText(app.q('full'),'Edit').disabled,true,'Cached permissions still require fresh validation');
+  refresh.resolve({note:newer});await returning;assert.equal(reads,3);
+  assert.equal(byText(app.q('full'),'Edit').disabled,false);
+ });
 
  await test('returning to the same notebook list paints immediately and keeps unchanged expanded content',async()=>{
   const late=deferred();let delay=false;
@@ -1187,6 +1202,23 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.equal(app.q('timeline').querySelector('svg'),null,'Intent cannot paint a hidden chart');
   const pending=app.controller.show(new URLSearchParams('view=timeline'));assert.ok(app.q('timeline').querySelector('.nb-timeline-line'));await pending;
   assert.equal(app.requests.filter(row=>row.url==='/api/notebook/timeline').length,1);
+ });
+ await test('an older consumed or abandoned Timeline intent cannot replace a newer cached aggregate',async()=>{
+  for(const mode of ['consumed','hidden']){
+   const old=deferred(),refresh=deferred();let reads=0;
+   const newer=timeline({total:9,points:[{date:'2026-10-18',created:9,total:9}]});
+   const app=await boot({respond:url=>url==='/api/notebook/timeline'?(++reads===1?old.promise:reads===2?newer:refresh.promise):undefined});
+   app.q('timeline-view').dispatchEvent({type:'pointerenter'});
+   const first=mode==='consumed'?app.controller.show(new URLSearchParams('view=timeline')):Promise.resolve();
+   if(mode==='hidden')app.controller.hide();
+   await app.show();await app.controller.show(new URLSearchParams('view=timeline'));
+   assert.equal(app.q('timeline').querySelector('.nb-timeline-total').textContent,'9 notes');
+   old.resolve(timeline());await first;await flush();
+   assert.equal(app.q('timeline').querySelector('.nb-timeline-total').textContent,'9 notes','Late intent cannot change the selected view');
+   await app.show();const returning=app.controller.show(new URLSearchParams('view=timeline'));
+   assert.equal(app.q('timeline').querySelector('.nb-timeline-total').textContent,'9 notes','Return must retain the newer cached aggregate');
+   refresh.resolve(newer);await returning;assert.equal(reads,3);
+  }
  });
  await test('Timeline intent expires after ten seconds and cannot be reused after session rotation or mutation',async()=>{
   for(const invalidate of ['age','session','mutation']){

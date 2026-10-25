@@ -100,5 +100,63 @@ let passed=0;async function test(name,run){await run();passed++;console.log('PAS
   const before=app.requests.length;app.$('#nav-people').dispatchEvent({type:'pointerenter'});app.$('#account-handle').dispatchEvent({type:'focus'});app.$('#nav-notebook').dispatchEvent({type:'pointerenter'});await flush();
   assert.equal(app.requests.length,before);assert.equal(app.document.querySelector('script[src="/notebook/notebook.js"]'),null);
  });
+ await test('a session rotation restarts a pending People read and only the new response clears its busy controls',async()=>{
+  const old=deferred(),fresh=deferred();let count=0;
+  const app=await createApp({schemes:[scheme],user,hash:'#people',responder:url=>url.pathname==='/api/people'?(++count===1?old.promise:fresh.promise):undefined});
+  const rotated=app.envelope({user,csrf_token:'rotated',access:{mode:'beta',allowed:true,status:'active'}});
+  app.sandbox.setSession(rotated);assert.equal(count,2);
+  old.resolve(app.envelope({...people,people:[person('old-response')]}));await flush();
+  assert.equal(app.$('#people-content').getAttribute('aria-busy'),'true');assert.equal(app.$('#refresh-people').disabled,true);
+  assert.doesNotMatch(app.$('#people-content').textContent,/old-response/);
+  fresh.resolve(app.envelope(people));await flush();
+  assert.equal(app.$('#people-content').getAttribute('aria-busy'),'false');assert.equal(app.$('#refresh-people').disabled,false);
+  assert.deepEqual(app.$('#people-content').querySelectorAll('a.person-link').map(link=>link.textContent),['alpha','beta']);
+  app.sandbox.setSession(rotated);assert.equal(count,2,'Unchanged session polling must not restart the reader');
+ });
+ await test('account and reviewer-scope changes also replace the People reader, while denial never restarts it',async()=>{
+  for(const change of ['account','reviewer']){
+   const old=deferred(),fresh=deferred();let count=0;
+   const app=await createApp({schemes:[scheme],user,hash:'#people',responder:url=>url.pathname==='/api/people'?(++count===1?old.promise:fresh.promise):undefined});
+   const nextUser=change==='account'?{id:'another-owner',handle:'beta'}:user;
+   app.sandbox.setSession(app.envelope({user:nextUser,csrf_token:'test-csrf',access:{mode:'beta',allowed:true,status:'active'},
+    capabilities:change==='reviewer'?{review_protocol_proposals:true}:undefined}));
+   assert.equal(count,2);
+   app.sandbox.setSession(app.envelope({user:nextUser,csrf_token:'revoked',access:{mode:'beta',allowed:false,status:'revoked'}}));
+   assert.equal(count,2);
+   old.resolve(app.envelope(people));fresh.resolve(app.envelope(people));await flush();
+   assert.equal(app.$('#people-content').textContent,'');assert.equal(app.$('#access-workspace').hidden,false);
+  }
+ });
+ await test('failed pagination preserves prior rows and retries the same offset without losing keyboard focus',async()=>{
+  const later=deferred();let nextReads=0;
+  const app=await createApp({schemes:[scheme],user,hash:'#people',responder:(url,options,envelope)=>{
+   if(url.pathname!=='/api/people')return;
+   if(url.searchParams.get('offset')==='0')return envelope({...people,pagination:{limit:2,offset:0,has_more:true}});
+   if(++nextReads===1)throw new Error('Synthetic next-page interruption');
+   return later.promise;
+  }});
+  const table=app.$('#people-content').firstChild;
+  await app.sandbox.loadPeople(true);
+  assert.equal(app.$('#people-content').firstChild,table);
+  assert.deepEqual(table.querySelectorAll('a.person-link').map(link=>link.textContent),['alpha','beta']);
+  assert.equal(app.$('#more-people').hidden,false);assert.equal(app.$('#more-people').disabled,false);
+  const retry=app.$('#people-content').querySelector('.people-page-error').querySelector('button');retry.focus();retry.click();await flush();
+  assert.ok(app.document.activeElement===app.$('#people-workspace'));
+  assert.equal(app.$('#people-content').firstChild,table);assert.equal(app.$('#people-content').getAttribute('aria-busy'),'true');
+  assert.deepEqual(app.requests.filter(row=>row.url.pathname==='/api/people').map(row=>row.url.searchParams.get('offset')),['0','2','2']);
+  later.resolve(app.envelope({people:[person('beta'),person('gamma')],pagination:{limit:2,offset:2,has_more:false}}));await flush();
+  assert.deepEqual(app.$('#people-content').querySelectorAll('a.person-link').map(link=>link.textContent),['alpha','beta','gamma']);
+  assert.equal(app.$('#people-content').querySelector('.people-page-error'),null);assert.equal(app.$('#more-people').hidden,true);
+ });
+ await test('a forbidden next page clears existing rows instead of retaining their cached view',async()=>{
+  const app=await createApp({schemes:[scheme],user,hash:'#people',responder:(url,options,envelope)=>url.pathname==='/api/people'?
+   envelope({...people,pagination:{limit:2,offset:0,has_more:true}}):undefined});
+  const fetch=app.sandbox.fetch;
+  app.sandbox.fetch=(path,options)=>String(path).startsWith('/api/people?')?
+   Promise.resolve({ok:false,status:403,json:async()=>({detail:'Access denied'})}):fetch(path,options);
+  await app.sandbox.loadPeople(true);
+  assert.equal(app.$('#people-content').querySelectorAll('a.person-link').length,0);
+  assert.equal(app.$('#people-content').querySelector('.people-page-error'),null);
+ });
  console.log(`${passed} render-first navigation checks passed.`);
 })().catch(error=>{console.error(error);process.exitCode=1;});

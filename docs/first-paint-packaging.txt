@@ -1,5 +1,5 @@
-Main stylesheet delivery
-========================
+Initial document delivery
+=========================
 
 The public HTML embeds the main stylesheet from the same immutable PublicAssets
 snapshot that supplies its other versioned assets. It needs no separate main-CSS
@@ -13,17 +13,28 @@ CSS contents are not rewritten. CRLF/CR normalize to LF before embedding and
 hashing, matching the HTML parser; UTF-8, NUL and closing-style checks prevent a
 document/hash mismatch. The current LF source is otherwise byte-exact.
 
-Bootstrap and the existing deferred script sequence precede this block. Moving
-their discovery behind a large embedded stylesheet would cost time on slow links.
-Deferred execution still follows document parsing, and script order is unchanged.
-The small initial canvas style remains at the beginning of the document.
+The small bootstrap script is also embedded from this same snapshot, at its
+original position before the deferred script sequence and main stylesheet.
+It selects public route geometry during head parsing and starts the one fresh
+session read without waiting for a separate script download. Its gate/workspace
+hint remains presentation-only; it cannot grant access or supply private data.
+The source HTML and retained /bootstrap.js endpoint still support the external
+fallback. The bootstrap's existing one-shot guards prevent a later replay from
+starting a second session read or replacing resolved access state.
+
+Bootstrap UTF-8 and newline handling match the stylesheet. NUL, opening or closing
+script sentinels, and HTML-comment escape sentinels are rejected before embedding;
+JavaScript is not rewritten. Deferred scripts are still discovered before the
+large stylesheet, and their execution order is unchanged. The small initial
+canvas style remains at the beginning of the document.
 
 Policy and representation identity
 ----------------------------------
 Each immutable Asset carries its CSP. Only the HTML adds the exact full-style
-SHA256 alongside the existing critical-style hash. All other directives stay
-unchanged: no unsafe-inline, inline script, user-supplied CSS or new origin is
-allowed. The response binds its selected Asset in an internal ASGI scope field.
+SHA256 alongside the existing critical-style hash, and the exact bootstrap SHA256
+to script-src. All other directives stay unchanged: no unsafe-inline, arbitrary
+inline scripts, user-supplied CSS or new origin is allowed. The response binds its
+selected Asset in an internal ASGI scope field.
 RequestBoundary uses that typed asset only for successful public GET/HEAD/304
 responses and replaces arbitrary response CSP headers with one effective policy.
 Request headers, untyped scope values and prior bindings cannot select a policy;
@@ -44,6 +55,11 @@ by an unrelated asset change resends roughly 17 KB of unchanged CSS that could
 previously have remained separately cached. This is a deliberate cold-paint
 trade-off, not a claim that every navigation or access check becomes faster.
 
+Embedding bootstrap adds about 2.8 KB to gzip HTML while eliminating its separate
+2.9 KB gzip response and request dependency. This removes the interval where the
+body could render a neutral frame before the route-presentation script arrived.
+It does not replace the fresh access check or establish a hosted latency bound.
+
 Isolated preliminary experiments at 200 ms RTT measured first paint at 488 to
 256 ms on 10 Mbps and 940 to 400 ms on 1 Mbps. They used three cold anonymous
 contexts per variant and identical settled screenshots. The original experiment
@@ -51,7 +67,7 @@ delayed app.js discovery on the slower link, which is why this implementation
 preserves all script discovery ahead of the style. Those figures are experiment
 results, not measurements or promises for this deployed implementation.
 
-Regression checks cover exact parsed style/hash, one effective CSP, script order,
+Regression checks cover exact parsed style/script hashes, one effective CSP, script order,
 normalization/rejected sources, frozen/development identity, identity/gzip
 GET/HEAD/304, private inventory, policy forgery/leakage, and full public/admitted
 layouts while the external CSS endpoint is blocked. Existing logo, authentication,

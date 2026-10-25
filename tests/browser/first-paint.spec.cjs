@@ -38,12 +38,11 @@ test('an interrupted image leaves a usable wordmark and a reload recovers normal
   expect(await logo.boundingBox()).toEqual(before);
 });
 
-test('an already completed image remains visible if the early script arrives late', async ({page}) => {
+test('replaying the retained early-script endpoint cannot hide a completed logo or duplicate access', async ({page}) => {
+  const sessions=[];page.on('request',request=>{if(new URL(request.url()).pathname==='/api/session')sessions.push(request.url());});
   await page.goto('/');
   await expect(page.locator('.site-header .brand-mark')).toHaveAttribute('data-logo-ready', 'true');
-  const script = await holdResponse(page, url => url.pathname === '/bootstrap.js');
   try {
-    await page.reload({waitUntil: 'domcontentloaded'}); await script.arrived;
     const logo = page.locator('.site-header .brand-mark');
     await expect(logo).toBeVisible();
     expect(await logo.evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
@@ -52,14 +51,13 @@ test('an already completed image remains visible if the early script arrives lat
       window.lateLogoObserver = new MutationObserver(() => window.lateLogoVisibility.push(getComputedStyle(img).visibility));
       window.lateLogoObserver.observe(document.documentElement, {attributes: true, subtree: true});
     });
-    script.release(); await script.delivered;
+    await page.addScriptTag({url:'/bootstrap.js'});
     await expect(logo).toHaveAttribute('data-logo-ready', 'true');
     await expect(logo).toBeVisible();
     const observed = await page.evaluate(() => {window.lateLogoObserver.disconnect(); return window.lateLogoVisibility;});
-    expect(observed.length).toBeGreaterThan(0);
-    expect(observed.every(value => value === 'visible'), 'late bootstrap never re-hides the completed image').toBe(true);
+    expect(observed.every(value => value === 'visible'), 'replayed bootstrap never re-hides the completed image').toBe(true);
+    expect(sessions).toHaveLength(1);
   } finally {
-    script.release(); await script.delivered; await script.remove();
     await page.evaluate(() => window.lateLogoObserver?.disconnect());
   }
 });
@@ -73,7 +71,13 @@ async function assertInlineMainStyle(page, response) {
   expect(await page.locator('head > style[data-main-style]').textContent()).toBe(css);
   const styles = await page.locator('head > style').allTextContents();
   expect(styles).toHaveLength(2); // Existing critical canvas plus exact main CSS.
-  expect(policies[0].value.match(/'sha256-[^']+'/g)).toHaveLength(2);
+  expect(policies[0].value.match(/'sha256-[^']+'/g)).toHaveLength(3);
+  const bootstrap=readFileSync(resolve(__dirname,'../../web/bootstrap.js'),'utf8').replace(/\r\n?/g,'\n');
+  await expect(page.locator('head > script[data-bootstrap]')).toHaveCount(1);
+  expect(await page.locator('head > script[data-bootstrap]').textContent()).toBe(bootstrap);
+  const scriptPolicy=policies[0].value.split(';').map(value=>value.trim()).find(value=>value.startsWith('script-src '));
+  expect(scriptPolicy).toContain("'sha256-"+createHash('sha256').update(bootstrap).digest('base64')+"'");
+  await expect(page.locator('head > script[src*="/bootstrap.js"]')).toHaveCount(0);
   for (const style of styles) {
     const hash = createHash('sha256').update(style).digest('base64');
     expect(policies[0].value).toContain("'sha256-" + hash + "'");

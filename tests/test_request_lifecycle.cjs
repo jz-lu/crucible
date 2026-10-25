@@ -1,5 +1,8 @@
 // Run with node. Requests remain inside the HTML-backed DOM fixture.
 const assert = require('node:assert/strict');
+// Scope dynamic profile classes away from the inert initial-access preview.
+const profileElement = (app, selector) => selector.startsWith('.')
+  ? app.$('#person-content').querySelector(selector) : app.$(selector);
 const {createApp, flush} = require('./frontend-dom.cjs');
 const user = {id: 'account-a', handle: 'alice'};
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -280,7 +283,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
       if (url.pathname === '/api/people/alice') return envelope({person: participant()});
       if (url.pathname === '/api/agent/tokens') return envelope({tokens: []});
     }});
-    const disclosures = ['#first-records', '#personal-records', '#recent-solves', '.person-score-breakdown', '#agent-connections'].map(selector => app.$(selector));
+    const disclosures = ['#first-records', '#personal-records', '#recent-solves', '.person-score-breakdown', '#agent-connections'].map(selector => profileElement(app, selector));
     for (const disclosure of disclosures) disclosure.open = true;
     app.$('#agent-connections').dispatchEvent({type: 'toggle'}); await flush();
     const profile = app.$('#person-content').firstChild;
@@ -298,7 +301,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
       if (url.pathname === '/api/people/alice') return envelope({person: clone(current)});
       if (url.pathname === '/api/agent/tokens') return envelope({tokens: []});
     }});
-    for (const selector of ['#first-records', '#personal-records', '#recent-solves', '.person-score-breakdown', '#agent-connections']) app.$(selector).open = true;
+    for (const selector of ['#first-records', '#personal-records', '#recent-solves', '.person-score-breakdown', '#agent-connections']) profileElement(app, selector).open = true;
     app.$('#agent-connections').dispatchEvent({type: 'toggle'}); await flush();
     const settings = app.$('#agent-connections'), settingsContent = app.$('#agent-token-list').firstChild;
     const record = {scheme_id: 'fixture', scheme_version: '1', scheme_name: 'Fixture', profile_id: 'tier-1', tier: 1,
@@ -307,16 +310,16 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     current = {...participant(50), score_breakdown: {progress: 10, early_recovery: 40, scheme_contributions: 0},
       records: [record], first_records: [{...record, place: 1}], recent_recoveries: [record]};
     await app.sandbox.synchronizeSession();
-    assert.match(app.$('.person-stats').textContent, /Points50/);
+    assert.match(profileElement(app, '.person-stats').textContent, /Points50/);
     assert.equal(app.$('#first-records').querySelectorAll('.milestone-result').length, 1);
     assert.equal(app.$('#personal-records').querySelectorAll('.person-record-result').length, 1);
     assert.equal(app.$('#recent-solves').querySelectorAll('.history-item').length, 1);
-    for (const selector of ['#first-records', '#personal-records', '#recent-solves', '.person-score-breakdown']) assert.ok(app.$(selector).open);
+    for (const selector of ['#first-records', '#personal-records', '#recent-solves', '.person-score-breakdown']) assert.ok(profileElement(app, selector).open);
     assert.equal(app.$('#agent-connections'), settings); assert.ok(settings.open);
     assert.equal(app.$('#agent-token-list').firstChild, settingsContent);
-    const stableStats = app.$('.person-stats'), stableRecords = app.$('#personal-records');
+    const stableStats = profileElement(app, '.person-stats'), stableRecords = app.$('#personal-records');
     await app.sandbox.synchronizeSession();
-    assert.equal(app.$('.person-stats'), stableStats, 'Identical public data does not replace existing DOM');
+    assert.equal(profileElement(app, '.person-stats'), stableStats, 'Identical public data does not replace existing DOM');
     assert.equal(app.$('#personal-records'), stableRecords);
   });
 
@@ -329,7 +332,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     app.sandbox.setSession(app.envelope({user: null, csrf_token: 'new-epoch'}));
     gate.resolve(response(app.envelope({person: participant(999)})));
     await synchronization;
-    assert.match(app.$('.person-stats').textContent, /Points0/);
+    assert.match(profileElement(app, '.person-stats').textContent, /Points0/);
     assert.equal(app.$('#agent-connections').hidden, true);
     assert.equal(app.$('#auth-button').hidden, false);
   });
@@ -436,7 +439,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     app.$('#personal-records').open = true; app.$('#first-records').open = true;
     points = 50;
     await app.sandbox.refreshRecoveryViews();
-    assert.match(app.$('.person-stats').textContent, /Points50/);
+    assert.match(profileElement(app, '.person-stats').textContent, /Points50/);
     assert.ok(app.$('#personal-records').open && app.$('#first-records').open);
     assert.equal(app.requests.filter(request => request.url.pathname === '/api/people/alice').length, 2);
   });

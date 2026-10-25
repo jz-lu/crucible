@@ -92,10 +92,18 @@ html:not([data-pending-page]) .pending-page-preview[data-pending-layout=neutral]
 html[data-pending-page=neutral] .pending-page-preview[data-pending-layout=neutral],
 html[data-pending-page=catalogue] .pending-page-preview[data-pending-layout=catalogue],
 html[data-pending-page=people] .pending-page-preview[data-pending-layout=people],
+html[data-pending-page=profile] .pending-page-preview[data-pending-layout=profile],
 html[data-pending-page=list] .pending-page-preview[data-pending-layout=list],
 html[data-pending-page=chart] .pending-page-preview[data-pending-layout=chart],
 html[data-pending-page=timeline] .pending-page-preview[data-pending-layout=timeline] { display: block; }
 html[data-pending-page=gate] .pending-page-preview[data-pending-layout=gate] { display: block; }
+.access-workspace .pending-profile-back { display: none; }
+html[data-pending-page=profile] .access-workspace[aria-busy=true] .pending-profile-back { display: flex; }
+html[data-pending-page=profile] .access-workspace[aria-busy=true] .access-heading-space { display: none; }
+#person-workspace .catalogue-heading,.profile-route-preview .catalogue-heading,
+html[data-pending-page=profile] .access-workspace[aria-busy=true] .access-heading { min-height: 45px; }
+#person-workspace .catalogue-heading h1,.profile-route-preview h1,
+html[data-pending-page=profile] .access-workspace[aria-busy=true] h1 { min-width: 0; overflow-wrap: anywhere; }
 html[data-pending-page=gate] .access-workspace[aria-busy=true] {
   width: min(100%, 520px); max-width: 520px; margin: clamp(44px, 12vh, 120px) auto;
   padding: 32px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
@@ -823,6 +831,8 @@ button {
   color: var(--primary);
 }
 .person-rank { color: var(--muted); }
+.profile-backline { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 30px; margin-bottom: 15px; }
+.profile-backline > .scheme-back { margin-bottom: 0; }
 .people-more { margin-top: 20px; }
 .person-stats {
   display: grid;
@@ -838,6 +848,13 @@ button {
 .person-stats dt { color: var(--muted); font-size: 13px; }
 .person-stats dd { margin: 9px 0 0; font: 600 30px/1.2 var(--display); }
 .person-stats > div:first-child dd { color: var(--primary); }
+.person-preview .person-stats dd { display: flex; align-items: center; min-height: 1.2em; }
+.person-preview .person-stats .catalogue-placeholder { width: 60px; }
+.person-preview .person-score-breakdown { visibility: hidden; }
+.person-preview .person-section-summary { cursor: default; }
+.person-preview .person-section-summary:hover { background: transparent; }
+.person-preview .person-section-count { min-height: 1.6em; }
+.person-preview .person-section-count::before { content: ''; display: inline-block; width: 65px; height: 8px; border-radius: 3px; background: var(--line); }
 .person-section { margin-top: 34px; }
 .person-section h2 { margin: 0 0 16px; font: 650 24px/1.2 var(--display); }
 .person-disclosure { margin-top: 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
@@ -938,6 +955,8 @@ button {
   .milestone-table td:has(.person-record-scheme) { padding-bottom: 3px; }
   .milestone-table .person-record-date { max-width: none; }
   .people-workspace,.person-workspace { padding-top: 24px; }
+  .profile-backline { margin-bottom: 12px; }
+  html[data-pending-page=profile] .access-workspace[aria-busy=true],#route-loading.profile-route-preview { padding-top: 24px; }
   #person-title { overflow-wrap: anywhere; }
 }
 

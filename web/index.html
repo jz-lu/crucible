@@ -73,6 +73,7 @@
         </button>
       </div>
       <section id="access-workspace" class="access-workspace" aria-labelledby="access-title" aria-busy="true" tabindex="-1">
+        <div class="profile-backline pending-profile-back" aria-hidden="true"><span class="text-button scheme-back">← Leaderboard</span></div>
         <div class="catalogue-heading access-heading">
           <h1 id="access-title" aria-hidden="true"></h1>
           <div class="catalogue-actions access-heading-space" aria-hidden="true"><span class="text-button">Refresh ↻</span></div>
@@ -110,6 +111,16 @@
               <tr><td data-label="Rank"><span class="person-rank"><span class="catalogue-placeholder"></span></span></td><td data-label="Participant"><span class="person-link"><span class="catalogue-placeholder"></span></span></td><td data-label="Points"><span class="person-points"><span class="catalogue-placeholder"></span></span></td><td data-label="Accepted proposals"><span class=""><span class="catalogue-placeholder"></span></span></td></tr>
               <tr><td data-label="Rank"><span class="person-rank"><span class="catalogue-placeholder"></span></span></td><td data-label="Participant"><span class="person-link"><span class="catalogue-placeholder"></span></span></td><td data-label="Points"><span class="person-points"><span class="catalogue-placeholder"></span></span></td><td data-label="Accepted proposals"><span class=""><span class="catalogue-placeholder"></span></span></td></tr>
             </tbody></table>
+          </div>
+          <div class="pending-page-preview person-preview" data-pending-layout="profile" aria-hidden="true">
+            <dl class="person-stats">
+              <div><dt>Points</dt><dd><span class="catalogue-placeholder"></span></dd></div>
+              <div><dt>Accepted proposals</dt><dd><span class="catalogue-placeholder"></span></dd></div>
+            </dl>
+            <div class="person-score-breakdown"><span>Points breakdown</span></div>
+            <div class="person-section person-disclosure"><div class="person-section-summary"><h2>First to reach</h2><span class="person-section-count"></span></div></div>
+            <div class="person-section person-disclosure"><div class="person-section-summary"><h2>Personal records</h2><span class="person-section-count"></span></div></div>
+            <div class="person-section person-disclosure"><div class="person-section-summary"><h2>Recent solves</h2><span class="person-section-count"></span></div></div>
           </div>
           <div class="pending-page-preview loading-preview" data-pending-layout="list" aria-hidden="true">
             <div class="pending-list-row"><span class="catalogue-placeholder"></span><span class="catalogue-placeholder"></span></div>
@@ -184,8 +195,8 @@
         <button id="more-people" class="button button-quiet people-more" type="button" hidden>Load more</button>
       </section>
       <section id="person-workspace" class="person-workspace" aria-labelledby="person-title" tabindex="-1" hidden>
-        <a class="text-button scheme-back" href="#people">← Leaderboard</a>
-        <div class="catalogue-heading"><h1 id="person-title">Profile</h1><a id="profile-review-link" class="button button-quiet" href="#reviews?section=publication" hidden>Review center →</a></div>
+        <div class="profile-backline"><a class="text-button scheme-back" href="#people">← Leaderboard</a><a id="profile-review-link" class="text-button" href="#reviews?section=publication" hidden>Review center →</a></div>
+        <div class="catalogue-heading"><h1 id="person-title">Profile</h1></div>
         <div id="person-content" aria-live="polite"></div>
         <details id="account-sign-in" class="account-sign-in" hidden>
           <summary>Sign-in settings</summary>
