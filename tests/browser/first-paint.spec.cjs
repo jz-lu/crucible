@@ -62,7 +62,7 @@ test('replaying the retained early-script endpoint cannot hide a completed logo 
   }
 });
 
-async function assertInlineMainStyle(page, response) {
+async function assertInlineMainStyle(page, response, {notebookPrepared = false} = {}) {
   const policies = (await response.headersArray()).filter(header => header.name.toLowerCase() === 'content-security-policy');
   expect(policies).toHaveLength(1);
   expect(policies[0].value).not.toContain('unsafe-inline');
@@ -88,7 +88,13 @@ async function assertInlineMainStyle(page, response) {
       beforeStyle: Boolean(script.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING)}));
   })).toEqual(['/math.js', '/assumptions.js', '/proposal-retractions.js', '/app.js']
     .map(path => ({path, beforeStyle: true})));
-  await expect(page.locator('head > link[rel="stylesheet"]')).toHaveCount(0);
+  // Main/critical CSS is inline before admission. Once admitted, optional
+  // notebook preparation may add its own stylesheet without affecting first
+  // paint. Check exact paths so neither external main CSS nor an unexpected
+  // dependency can hide behind that exception.
+  expect(await page.locator('head > link[rel="stylesheet"]').evaluateAll(links =>
+    links.map(link => new URL(link.href).pathname)))
+    .toEqual(notebookPrepared ? ['/notebook/notebook.css'] : []);
 }
 
 async function blockExternalMainStyle(page) {
@@ -157,7 +163,10 @@ test('an admitted catalogue and ordinary reload retain full typography and layou
   expect(before.headerCells).toHaveLength(4);
   expect(before.headerCells.every(width => width > 0)).toBe(true);
   const reloaded = await page.reload();
-  await assertInlineMainStyle(page, reloaded);
+  // Deliberately wait for preparation to exercise the post-admission state,
+  // instead of racing the idle queue with a blanket no-stylesheets assertion.
+  await expect(page.locator('head > link[rel="stylesheet"][href="/notebook/notebook.css"]')).toHaveCount(1);
+  await assertInlineMainStyle(page, reloaded, {notebookPrepared: true});
   await expect(page.locator('#kem-catalogue')).toContainText('Diffie');
   await expect(page.locator('#refresh-catalogue')).toBeEnabled();
   expect(await catalogueStyle()).toEqual(before);

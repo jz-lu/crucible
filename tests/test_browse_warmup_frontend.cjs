@@ -126,6 +126,35 @@ let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS 
     vm.runInContext('browseWarmState.done = new Set(Array.from({length:24},(_,i)=>"fixture:"+i))',second.app.sandbox);
     await step(second.app);assert.deepEqual(second.calls,['mount']);
   });
+  await test('format validation retains warmed reads and CSRF while a confirmed save still invalidates them',async()=>{
+    const {app}=await appFixture({extra:(url,options,envelope)=>{
+      if(url.pathname==='/api/protocol/proposals/validate')return envelope({specification:{name:'Format-only fixture'}});
+      if(url.pathname==='/api/notebook/notes'&&options.method==='POST')return envelope({note:{id:'saved-fixture'}});
+    }});
+    await drain(app);const before=reads(app,'/api/people/alice').length;
+    const epoch=vm.runInContext('readViewEpoch',app.sandbox);
+    await app.sandbox.api('/api/protocol/proposals/validate',{specification:{name:'Format-only fixture'}});
+    const check=reads(app,'/api/protocol/proposals/validate').at(-1);
+    assert.equal(check.options.headers['X-CSRF-Token'],'test-csrf');assert.equal(check.options.credentials,'same-origin');assert.equal(check.options.cache,'no-store');
+    assert.equal(vm.runInContext('readViewEpoch',app.sandbox),epoch);
+    await app.navigate('#person/alice');assert.equal(reads(app,'/api/people/alice').length,before,'The completed warm read survives format checking');
+    await app.sandbox.api('/api/notebook/notes',{content:{title:'Saved fixture'}});
+    assert.ok(vm.runInContext('readViewEpoch',app.sandbox)>epoch);assert.equal(vm.runInContext("cachedRead('person:alice')",app.sandbox),null);
+    await app.navigate('#about');await app.navigate('#person/alice');assert.equal(reads(app,'/api/people/alice').length,before+1);
+  });
+  await test('validation exemption is exact-path POST only and cannot bypass access or session invalidation',async()=>{
+    const {app}=await appFixture({extra:(url,options,envelope)=>url.pathname.startsWith('/api/protocol/proposals/validate')?envelope({specification:{}}):undefined});
+    for(const [path,method] of [['/api/protocol/proposals/validate?extra=1','POST'],['/api/protocol/proposals/validate/','POST'],['/api/protocol/proposals/validate','PATCH']]){
+      const epoch=vm.runInContext('readViewEpoch',app.sandbox);await app.sandbox.api(path,{specification:{}},{method});
+      assert.ok(vm.runInContext('readViewEpoch',app.sandbox)>epoch);
+    }
+    await drain(app);app.sandbox.setSession(app.envelope({user,csrf_token:'rotated'}));
+    assert.equal(vm.runInContext("cachedRead('person:alice')",app.sandbox),null);
+    app.sandbox.setSession(app.envelope({user,csrf_token:'denied',access:{mode:'beta',allowed:false,status:'revoked'}}));
+    const before=app.requests.length;
+    await assert.rejects(app.sandbox.api('/api/protocol/proposals/validate',{specification:{}}),error=>error.status===403);
+    assert.equal(app.requests.length,before);
+  });
   await test('a rotated timing report cannot refill the old reference cache',async()=>{
     const held=deferred(),{app}=await appFixture({extra:url=>url.pathname==='/api/protocol/benchmarks'?held.promise:undefined});
     await drain(app,5);const warming=step(app);await flush();

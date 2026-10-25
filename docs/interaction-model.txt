@@ -1,0 +1,125 @@
+Crucible interaction model
+25 October 2026
+
+Use these rules when changing an existing journey or adding a new one. Different
+workflows can need different freshness; explain the exception and test it. This
+guide is the target contract. The follow-ups below identify known gaps rather
+than claiming every existing page already satisfies every rule.
+
+Shared rules
+
+1. A URL identifies the destination and meaningful selection: scheme release,
+   registered stage, view, note and pinned revision. Browser Back/Forward follow
+   history; a labelled parent link (such as Leaderboard) goes to that destination.
+   Within the same signed-in session, returning should preserve useful reading
+   context. Keep scroll, disclosures and working drafts in view state, not URLs.
+   Each workflow must explicitly define what refresh and deep links restore.
+
+2. Previously authorized content can paint immediately within its bounded
+   lifetime. Revalidate quietly without replacing an unchanged DOM, stealing
+   focus or shifting surrounding controls. Pending is not empty; retained data
+   for one query must never appear to answer another. Reserve neutral geometry
+   when no content is available. Show errors with a usable retry, not an endless
+   loading message. A failed refresh may retain a still-valid snapshot; expired
+   or permission-rejected content must not masquerade as current authorized data.
+
+3. Every asynchronous completion belongs to its account/session, resource and
+   selection, request generation and relevant read epoch. Check those owners
+   before caching or painting. Account change/revocation clears private views
+   and invalidates pending reads. A cache, prefetch or presentation hint never
+   grants permission; the server remains authoritative.
+
+4. Classify an operation by its effect, not just its HTTP method. Read-only
+   specification validation must not cool unrelated browsing views. Known writes
+   invalidate their dependent reads after a confirmed response. Keep conservative
+   invalidation for unclassified writes until narrower dependencies are tested.
+   Exceptions must name the exact operation and preserve transport/access guards.
+
+5. A save/submission is complete only after its exact receipt is confirmed. An
+   uncertain result retains its original idempotent payload for explicit retry;
+   never automatically replay a write. Navigation must preserve a working draft
+   or warn before discarding it. A draft or pending retry belongs to its account
+   and exact source revision, not merely a similar-looking form.
+
+6. Focus follows the user's action. Quiet updates preserve the focused control
+   or a stable nearby fallback only when that view owns focus. They must not
+   steal focus from a dialog or another workspace. Dialogs need explicit owners,
+   return targets and navigation behavior. Keep status, empty, error and pending
+   states distinct; neither a placeholder nor a stale snapshot enables an action.
+
+Intentional differences
+
+- Challenge issuance, round deadlines, beta admission and reviewer permissions
+  require live server checks. Warm record summaries are for browsing only.
+- Exact historical content can remain readable while mutable permissions or
+  request status revalidate separately. A pinned note and a live review are not
+  the same cache object. Preserve original release/revision and evidence identity.
+- A complete notebook summary index permits local category/tag filtering and
+  pagination. Typed search retains server matching; incomplete indexes, Trash
+  and review queues use server reads. Do not approximate SQL Unicode semantics.
+- Optional warming is finite, account-bound and subordinate to foreground work,
+  visibility and Save-Data. Prepare metadata and selected detail intent, not all
+  private bodies or generated challenges. Caches remain bounded and in memory.
+- A labelled parent destination is not a promise to return to the previous page.
+  Keep that distinction visible instead of replacing every parent link with Back.
+
+Responsibility map
+
+Navigation: web/app.js applyRoute/showWorkspace own the route and visible shell.
+Notebook show/navigateView own notebook selections and its visualization scroll
+reservation. Scheme URLs already preserve exact release, stage and view.
+
+Session: web/bootstrap.js starts the initial session handoff. app.js api,
+setSession/synchronizeSession own transport, access changes and revocation.
+Notebook setAccount clears its private state. Periodic/visibility refresh does
+not replace authorization checks on the server.
+
+Reads: app.js owns shell/catalogue/detail/timing caches and the finite warming
+queue. web/notebook/notebook.js owns summary/body/timeline caches, complete-index
+queries and fallback pagination. These are separate domain owners following the
+same identity/freshness rules, not a universal cache to consolidate by default.
+
+Changes: app.js api owns CSRF, deadlines, errors and conservative invalidation.
+The notebook API wrapper also invalidates its own reads; keep the two effect
+classifications aligned. Submission, proposal and notebook save handlers own
+their exact pending payloads and receipts. Shared transport must not take over
+their workflow-specific uncertainty or permission decisions.
+
+View state: notebook owns filters/pages/reader/editor; app.js owns People,
+profiles, receipt dialogs and proposal review state. proposal-retractions.js owns
+the retraction flow. Scope retained state to its account and exact resource.
+
+First implementation and follow-ups
+
+Implemented: format-only POST /api/protocol/proposals/validate preserves warm
+Notes/Timeline and shell snapshots. Both wrappers keep conservative invalidation
+for actual saves and other writes. Regressions cover warm -> validate -> cancel
+-> return, actual-save invalidation, transport guards and account invalidation.
+
+Next, in priority order:
+
+1. Review -> evidence -> return: protect unsent review findings/checks. Key any
+   retained draft by account, proposal revision and content hash; changed evidence
+   must not silently inherit approval checks. Recheck permission before enabling
+   actions. Existing uncertain-write retries are a separate state to preserve.
+2. Notebook reader -> return -> refresh: make filter/tag/search restoration an
+   explicit URL contract. Current bare #notebook retains more state in an active
+   controller than a fresh load can recover. Keep opaque pagination cursors
+   transient; don't fetch an arbitrary number of pages to reconstruct a URL.
+3. Reproduce People Load more -> profile -> Back, and receipt dialog -> browser
+   Back. Decide how loaded ranges and read-dialog ownership survive navigation
+   before changing them; don't discard editors to solve a read-dialog problem.
+
+Review evidence
+
+Each UI change should name the rule, affected journeys and remaining exceptions.
+Use the existing standalone JavaScript and disposable Chromium suites to cover
+slow/out-of-order reads, warm return, save/uncertain retry, focus and account
+changes as appropriate. Check desktop/mobile geometry where layout changes.
+First paint must be styled before access resolves; post-admission lazy styles
+may be prepared without becoming a dependency of that first paint. Tests should
+verify this distinction rather than race legitimate background work.
+
+Local request counts establish removed waits, not universal hosted latency.
+Verify the exact released source before attributing a hosted result to a change.
+No framework migration or broad rewrite is implied by this interaction model.

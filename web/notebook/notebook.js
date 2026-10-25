@@ -179,7 +179,11 @@
     }
     const api = async (path, body, options) => {
       const result = await requestAPI(path, body, options);
-      if (body !== undefined || (options?.method && !['GET', 'HEAD'].includes(options.method))) invalidateReads();
+      // Keep this known format-only read warm; saves and unknown writes still
+      // invalidate local snapshots even with a standalone notebook transport.
+      const method = options?.method === undefined ? (body === undefined ? 'GET' : 'POST') : options.method;
+      const readOnlyValidation = method === 'POST' && path === '/api/protocol/proposals/validate';
+      if (!readOnlyValidation && (body !== undefined || (options?.method && !['GET', 'HEAD'].includes(options.method)))) invalidateReads();
       return result;
     };
     const forbiddenRead = error => [401, 403, 404, 410].includes(error.status);

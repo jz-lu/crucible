@@ -1256,7 +1256,10 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
     if (protectedRequest && !hasAccess()) {
       const error = new Error('Beta access is no longer active.'); error.status = 403; throw error;
     }
-    if (protectedRequest && !['GET', 'HEAD'].includes(method)) {
+    // This exact format check creates no proposal or note; other writes retain
+    // conservative invalidation, including unknown paths and methods.
+    const readOnlyValidation = method === 'POST' && path === '/api/protocol/proposals/validate';
+    if (protectedRequest && !['GET', 'HEAD'].includes(method) && !readOnlyValidation) {
       invalidateReadViews(); notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
     }
     if (!raw) absorbClock(data);
