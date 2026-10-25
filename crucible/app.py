@@ -83,6 +83,56 @@ def release_generation_admission(settings, scheme_id, version):
     return {"admitted": None, "reason": "profile_specific"}
 
 
+def release_recovery_summary(scheme_id, version, recovered):
+    """Rank-one evidence for every registered target, without receipt bodies.
+
+    The first valid receipt per exact source profile is sufficient for the
+    earliest qualifying receipt overall. Eligibility deliberately follows the
+    leaderboard's source-profile compatibility and actual-size rules, including
+    exact named sets and releases that do not inherit larger-profile records.
+    Only immutable scalar registry metadata is reused; winners are fresh for
+    this request and are never cached across participants or requests.
+    """
+    profiles = registry.presentation_record_profiles(registry.adapter_for(scheme_id, version))
+    source_sizes = {}
+    sources = []
+    for profile_id, size, *_ in profiles:
+        versions = []
+        for source_version in registry.comparison_versions(scheme_id, version, profile_id):
+            if source_version not in source_sizes:
+                source_sizes[source_version] = {row[0]: row[1] for row in
+                    registry.presentation_record_profiles(registry.adapter_for(scheme_id, source_version))}
+            versions.append((source_version, source_sizes[source_version][profile_id]))
+        sources.append((profile_id, size, versions))
+    summaries = {}
+    for target_id, target_size, kind, _, inherits in profiles:
+        exact = kind == "standard-parameter-set" or not inherits
+        compatible = {}
+        winner, winner_size = None, None
+        for source_id, declared_size, versions in sources:
+            if (exact and source_id != target_id) or declared_size < target_size:
+                continue
+            for source_version, size in versions:
+                if size < target_size:
+                    continue
+                if source_version != version:
+                    compatible[source_version] = None
+                row = recovered.get((scheme_id, source_version, source_id))
+                if row is not None and (winner is None or
+                        (row.received_at, row.receipt_id) < (winner.received_at, winner.receipt_id)):
+                    winner, winner_size = row, size
+        summaries[target_id] = {
+            "winner": {"rank": 1, "submission_id": winner.receipt_id, "handle": winner.handle,
+                "profile_id": winner.profile_id, "scheme_id": scheme_id,
+                "scheme_version": winner.scheme_version, "instance_size": winner_size,
+                "is_inherited": winner.profile_id != target_id, "received_at": winner.received_at,
+                "method": {"name": winner.method_name}} if winner is not None else None,
+            "includes_compatible_versions": list(compatible),
+        }
+    return {"format": "crucible-recovery-summary-v1", "complete": True,
+            "scheme_id": scheme_id, "scheme_version": version, "profiles": summaries}
+
+
 class RequestBoundary:
     """Bound complete request bytes before parsing and record their arrival time.
 
@@ -583,6 +633,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             Challenge.scheme_id.label("scheme_id"), Challenge.scheme_version.label("scheme_version"),
             Submission.profile_id.label("profile_id"), Submission.user_id.label("user_id"),
             Submission.received_at.label("received_at"), Submission.id.label("receipt_id"),
+            Method.name.label("method_name"),
             func.row_number().over(
                 partition_by=(Challenge.scheme_id, Challenge.scheme_version, Submission.profile_id),
                 order_by=(Submission.received_at, Submission.id)).label("position"),
@@ -636,6 +687,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             scheme["first_recovery"] = {"handle": first.handle, "received_at": first.received_at,
                 "profile_id": first.profile_id, "scheme_version": first.scheme_version,
                 "submission_id": first.receipt_id} if first else None
+            scheme["recovery_summary"] = release_recovery_summary(scheme["id"], scheme["version"], recovered)
         document = {"catalogue_revision": registry.catalogue_revision()}
         if projection == "release":
             document.update(projection="release", scheme=releases[0], current_version=registry.CURRENT[scheme_id])

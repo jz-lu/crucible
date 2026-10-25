@@ -8,7 +8,7 @@ reading plan, evidence rules and supported workflows. CLI workspaces include a
 copy; notebook handoffs link to it. In private beta, guidance requires membership
 or an existing scoped connection and does not grant notebook or review authority.
 
-A working local foundation for shared-secret recovery challenges. The app has
+A private research beta for shared-secret recovery challenges. The app has
 accounts, durable records, a server-owned hourly deadline, and exact answer
 verification. The numerical challenge interface is joined by an account-backed
 Research notebook with private revisions and reviewed sharing. The older research
@@ -20,7 +20,9 @@ costs, fixed correctness, endpoint evidence and useful intermediate steps. They
 also require an explicit parameter-selection objective, candidate domain, attack
 model and alternatives, with a separate manual assessment. See
 [the admission requirements](docs/protocol-admission.txt).
-The hosted service has not been deployed and is not ready for public operation.
+The invitation-only beta is hosted at https://crucible.fail. Local development
+and hosted beta data are separate. It is not open for public registration. See
+[the release workflow](docs/releasing-beta.txt) for tested updates and rollback.
 
 The expanded local catalogue has eight family pages. Research stages for
 elliptic-curve DH, plain LWE/Frodo, module lattices, NTRU Prime, HQC and Classic
@@ -59,7 +61,12 @@ unchanged; old recoveries do not automatically qualify for the new ladder.
 The KEM Schemes catalogue orders schemes by participant count, not security.
 Each scheme opens four graphs. Public-key and ciphertext sizes are fixed; the
 lower cards switch among computation costs and classical/quantum estimates.
-Operation timings now cover all 379 current configurations. Three RSA profiles
+Retained local benchmark reports cover the 379 current configurations, but a
+graph publishes a report only when its exact implementation binding validates
+against the serving runtime. A different runtime can therefore show no timings
+even when historical measurements exist; those measurements must not be relabeled
+as measurements of the hosted build. See [the engineering follow-up](docs/engineering-handoff-status.txt).
+Three RSA profiles in the retained reports
 show hollow points for medians conditional on successful key generation, with
 generation aborts disclosed and no line through those points. Quantum estimates remain empty
 where unsupported; timings identify their implementation, hardware and scope.
@@ -155,8 +162,9 @@ starts the server on loopback. Stop it with Ctrl+C. No Node build is needed.
 In default open local mode, create an account with a public handle and a password
 of 12–128 characters. Optional private beta mode requires explicit membership or
 an invitation with mailbox verification. See [private beta setup](docs/private-beta-setup.txt)
-for operator controls and local mail testing. Password recovery and ORCID linking
-remain pending; use a password manager. Sessions last 24 hours and can be ended
+for operator controls and local mail testing. GitHub sign-in and verified-mailbox
+password recovery are implemented; their provider/mail settings must be configured
+for the deployment. ORCID linking remains pending. Sessions last 24 hours and can be ended
 with Sign out.
 
 The default SQLite database and persistent server key live in ignored `.local/`.

@@ -87,6 +87,30 @@ jobs:
           docs/releasing-beta.txt for the precise scope. This portable job does not
           bypass native pins or claim full native/backend verification.
           EOF
+  critical-workflows:
+    name: Critical research and account workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Install pinned test dependencies
+        run: |
+          python -m pip install -r requirements.lock
+          python -m pip install --no-deps -e .
+      - name: Check exact revisions, access, moderation, ratings and agent lifecycle
+        run: python tests/run_critical_workflows.py
+      - name: State verification boundary
+        if: always()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          Research/account checks use a disposable SQLite database and an explicit
+          portable DH/RSA/Frodo catalogue. Application artifact checks stay enabled.
+          Skipped checks fail the gate. Native generation is checked separately in
+          the reviewed release image; this job does not establish PostgreSQL races.
+          EOF
   release-contract:
     name: Reviewed runtime source contract
     runs-on: ubuntu-latest
@@ -181,7 +205,7 @@ jobs:
   ci:
     name: CI passed
     if: always()
-    needs: [portable-source-checks, release-contract, browser-checks, metadata-postgresql]
+    needs: [portable-source-checks, critical-workflows, release-contract, browser-checks, metadata-postgresql]
     runs-on: ubuntu-latest
     steps:
       - name: Require every source check
@@ -190,4 +214,5 @@ jobs:
           CONTRACT_RESULT: ${{ needs.release-contract.result }}
           BROWSER_RESULT: ${{ needs.browser-checks.result }}
           METADATA_RESULT: ${{ needs.metadata-postgresql.result }}
-        run: test "$SOURCE_RESULT" = success && test "$CONTRACT_RESULT" = success && test "$BROWSER_RESULT" = success && test "$METADATA_RESULT" = success
+          WORKFLOW_RESULT: ${{ needs.critical-workflows.result }}
+        run: test "$SOURCE_RESULT" = success && test "$WORKFLOW_RESULT" = success && test "$CONTRACT_RESULT" = success && test "$BROWSER_RESULT" = success && test "$METADATA_RESULT" = success

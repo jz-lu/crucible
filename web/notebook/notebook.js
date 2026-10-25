@@ -41,7 +41,7 @@
 
   const latestRevision = note => note.revisions?.reduce((last, revision) => !last || revision.revision > last.revision ? revision : last, null);
 
-  let researchMapAssets = null;
+  let researchMapAssets = null, researchMapTemplate = null;
   const researchMapAssetAttempts = new Map(); // Fixed script/style paths only.
   const researchMapScripts = new Map();
   function researchMapAssetURL(name) {
@@ -71,6 +71,28 @@
     researchMapScripts.set(name, task); document.querySelector('head').append(script);
     return task;
   }
+  function mapAssets() {
+    researchMapAssets ||= (async () => {
+      const scripts = [['catalogue.js', 'CRUCIBLE_LANDSCAPE'], ['note-ui.js', 'NoteUI'], ['map-views.js', 'LandscapeViews'], ['app.js', 'CrucibleResearchMap']];
+      const results = await Promise.allSettled(scripts.map(([name, global]) => loadResearchMapScript(name, global)));
+      const failed = results.find(result => result.status === 'rejected');
+      if (failed) throw failed.reason;
+    })().catch(error => { researchMapAssets = null; throw error; });
+    return researchMapAssets;
+  }
+  function mapTemplate() {
+    researchMapTemplate ||= (async () => {
+      const abort = new AbortController(), timeout = setTimeout(() => abort.abort(), 15000);
+      try {
+        const response = await fetch('/map/index.html', {credentials:'same-origin', cache:'no-store', signal:abort.signal});
+        if (!response.ok) throw new Error('Map template unavailable.');
+        const text = await response.text();
+        if (text.length > 200000) throw new Error('Map template unavailable.');
+        return text;
+      } finally { clearTimeout(timeout); }
+    })().catch(error => { researchMapTemplate = null; throw error; });
+    return researchMapTemplate;
+  }
   async function mountResearchMap(host, current, {currentReleases, loadReleases, canRead = current} = {}) {
     if (!current()) return null;
     // Start the stylesheet, template and independent scripts together. The surface
@@ -89,28 +111,8 @@
       stylesheet.onerror = () => finish(new Error('Map styles unavailable.'));
     });
     shadow.append(stylesheet); host.append(surface);
-    const templateRead = (async () => {
-      const abort = new AbortController();
-      const timeout = setTimeout(() => abort.abort(), 15000);
-      try {
-        const response = await fetch('/map/index.html', {credentials:'same-origin', cache:'no-store', signal:abort.signal});
-        if (!response.ok) throw new Error('Map template unavailable.');
-        return await response.text();
-      } finally { clearTimeout(timeout); }
-    })();
-    researchMapAssets ||= (async () => {
-      // Full research-note bodies are unnecessary for graph layout. Their
-      // separate download starts only when an inline note is requested.
-      const scripts = [['catalogue.js', 'CRUCIBLE_LANDSCAPE'], ['note-ui.js', 'NoteUI'], ['map-views.js', 'LandscapeViews'], ['app.js', 'CrucibleResearchMap']];
-      const results = await Promise.allSettled(scripts.map(([name, global]) => loadResearchMapScript(name, global)));
-      // Global factories are independent; mount below waits for all of them.
-      // Wait for every attempt to settle before retrying failed dependencies.
-      // Successfully loaded globals are reused on a subsequent try.
-      const failed = results.find(result => result.status === 'rejected');
-      if (failed) throw failed.reason;
-    })().catch(error => { researchMapAssets = null; throw error; });
     try {
-      const results = await Promise.allSettled([researchMapAssets, templateRead, styled]);
+      const results = await Promise.allSettled([mapAssets(), mapTemplate(), styled]);
       if (!current()) { surface.remove(); return null; }
       const failed = results.find(result => result.status === 'rejected');
       if (failed) throw failed.reason;
@@ -118,7 +120,7 @@
       // Import only the trusted static template's main and dialog, never scripts
       // or a second site header. Styles are confined to this shadow root.
       const main = template.querySelector('main'), dialog = template.querySelector('dialog');
-      if (!main || !dialog) throw new Error('Invalid map template.');
+      if (!main || !dialog) { researchMapTemplate = null; throw new Error('Invalid map template.'); }
       for (const node of main.querySelectorAll('.notebook-view-nav, .page-title, .intro, .pipeline-preview')) node.remove();
       for (const link of main.querySelectorAll('a[href]')) {
         const href = link.getAttribute('href');
@@ -150,27 +152,29 @@
     let active = false, epoch = 0, request = 0, dialogEpoch = 0, notes = [], nextAfter = null;
     let params = new URLSearchParams(), search = '', tag = '', visibility = 'all', previewId = null;
     let mapController = null, mapPreparation = null, mapIdle = null, mapRequest = 0, timelineRequest = 0, listLoaded = false, cardAction = 0;
-    let curatedNotes = [], curatedLoaded = false, curatedPromise = null, timelinePreparation = null;
+    let curatedNotes = [], curatedLoaded = false, curatedPromise = null, timelinePreparation = null, indexPreparation = null;
     let pageCursors = [null], pageIndex = 0, searchTimer = null;
-    let currentSession = session(), readEpoch = 0, listStamp = null, timelineStamp = null, listRefreshing = false;
+    let currentSession = session(), readEpoch = 0, listStamp = null, timelineStamp = null, listRefreshing = false, warmEnabled = false;
     const readCache = new Map();
     const preparingNotes = new Map();
-    function invalidateReads() { readCache.clear(); preparingNotes.clear(); timelinePreparation = null; listStamp = null; timelineStamp = null; readEpoch++; }
+    const preparingLists = new Map();
+    function invalidateReads() { readCache.clear(); preparingNotes.clear(); preparingLists.clear(); timelinePreparation = null; indexPreparation = null; warmEnabled = false; listStamp = null; timelineStamp = null; readEpoch++; }
     function cachedRead(key) {
       if (reviewOnly) return null; // Review forms always require a fresh server read.
       const entry = readCache.get(key);
       if (!entry || Date.now() - entry.at > 300000) { readCache.delete(key); return null; }
       readCache.delete(key); readCache.set(key, entry); return entry.value;
     }
-    function rememberRead(key, value) {
+    function rememberRead(key, value, at = Date.now()) {
       if (reviewOnly) return;
       const size = JSON.stringify(value).length;
       readCache.delete(key);
       if (size > 1000000) return;
-      readCache.set(key, {value, size, at: Date.now()});
+      readCache.set(key, {value, size, at});
       let total = [...readCache.values()].reduce((sum, entry) => sum + entry.size, 0);
       while (readCache.size > 12 || total > 2000000) {
-        const first = readCache.keys().next().value; total -= readCache.get(first).size; readCache.delete(first);
+        const first = [...readCache.keys()].find(name => !['summary-index', 'timeline'].includes(name)) || readCache.keys().next().value;
+        total -= readCache.get(first).size; readCache.delete(first);
       }
     }
     const api = async (path, body, options) => {
@@ -179,6 +183,59 @@
       return result;
     };
     const forbiddenRead = error => [401, 403, 404, 410].includes(error.status);
+    const jsonBytes = value => new TextEncoder().encode(JSON.stringify(value)).length;
+    function readGuard() {
+      const owner = accountId, generation = epoch, reads = readEpoch, credential = currentSession;
+      return () => owner !== null && accountId === owner && identity() === owner && epoch === generation &&
+        reads === readEpoch && currentSession === credential && session() === credential;
+    }
+    function validateIndex(data) {
+      if (data?.format !== 'crucible-notebook-summary-index-v1' || data.projection !== 'index' ||
+          String(data.viewer_id) !== accountId || data.scope !== 'all' || data.include_curated !== true ||
+          typeof data.complete !== 'boolean' || data.next_after !== null || !Array.isArray(data.notes) ||
+          data.notes.length > 500 || jsonBytes(data) > 512 * 1024 ||
+          (data.complete ? data.overflow_reason !== null : !['count_limit', 'byte_limit'].includes(data.overflow_reason) || data.notes.length)) throw Error('Invalid notebook index.');
+      const ids = new Set();
+      for (const note of data.notes) {
+        const revision = selectedRevision(note), content = revision?.content;
+        if (typeof note.id !== 'string' || !note.id || ids.has(note.id) || !Number.isSafeInteger(note.revision) ||
+            revision?.revision !== note.revision || !Number.isFinite(revision.created_at) ||
+            typeof content?.title !== 'string' || typeof content.claim !== 'string' || !Array.isArray(content.tags) ||
+            content.tags.some(tag => typeof tag !== 'string') || revision.summary !== true) throw Error('Invalid notebook index.');
+        ids.add(note.id);
+      }
+      return data;
+    }
+    async function prepareIndex(refresh = false) {
+      if (cachedRead('summary-index') && (!refresh || Date.now() - readCache.get('summary-index').at < 10000)) return {bytes:0};
+      if (indexPreparation) return indexPreparation;
+      const current = readGuard();
+      const task = (async () => {
+        const data = await api('/api/notebook/notes?projection=index&include_curated=true');
+        if (current() && indexPreparation === task) rememberRead('summary-index', validateIndex(data));
+        return {bytes:jsonBytes(data)};
+      })();
+      indexPreparation = task;
+      try { return await task; }
+      catch (error) { if (current() && forbiddenRead(error)) invalidateReads(); throw error; }
+      finally { if (indexPreparation === task) indexPreparation = null; }
+    }
+    async function warm(kind) {
+      if (typeof account === 'function') setAccount(account());
+      if (reviewOnly || !accountId || identity() !== accountId || session() !== currentSession ||
+          document.visibilityState === 'hidden' || navigator.connection?.saveData) return {bytes:0};
+      warmEnabled = true;
+      if (kind === 'list') return prepareIndex();
+      if (kind === 'timeline') {
+        const result = await prepareTimeline(true);
+        return {bytes:result ? jsonBytes(result) : 0};
+      }
+      if (kind === 'map') {
+        // Only static dependencies; no hidden graph mount or note-body fetch.
+        await Promise.all([mapAssets(), mapTemplate()]);
+      }
+      return {bytes:0};
+    }
     function lockReader() {
       const controls = [...q('full').querySelectorAll('button, input, select, textarea')]
         .filter(control => !control.classList.contains('nb-back'));
@@ -318,6 +375,12 @@
       // visible control before any background list refresh can complete.
       if (!id && readerHadFocus && !q('dialog').open) (reviewOnly ? list : notesView).focus({preventScroll:true});
       if (id) await loadNote(id); else await loadList();
+      if (!id && !reviewOnly && warmEnabled && cachedRead('summary-index')) {
+        const current = pageGuard(), before = readCache.get('summary-index');
+        void prepareIndex(true).then(() => {
+          if (current() && !params.has('note') && !params.has('view') && visibility !== 'trash' && !search.trim() && readCache.get('summary-index') !== before) return loadList();
+        }).catch(() => {});
+      }
       if (!reviewOnly && active && params.get('compose') === 'proposal' && !q('dialog').open) editNote(null, true);
     }
     function cancelMapPreparation() {
@@ -368,14 +431,14 @@
         if (current()) q('map').replaceChildren(el('p', 'nb-error', 'The map could not be loaded.'), button('Try again', showMap, 'nb-button'));
       }
     }
-    function prepareTimeline() {
-      if (reviewOnly || !active || !accountId || identity() !== accountId || session() !== currentSession ||
+    function prepareTimeline(background = false) {
+      if (reviewOnly || (!active && background !== true) || !accountId || identity() !== accountId || session() !== currentSession ||
           params.get('view') === 'timeline' || document.visibilityState === 'hidden' || navigator.connection?.saveData || cachedRead('timeline')) return;
-      if (timelinePreparation && Date.now() - timelinePreparation.at < 10000) return;
+      if (timelinePreparation && Date.now() - timelinePreparation.at < 10000) return timelinePreparation.task;
       const owner = accountId, generation = epoch, reads = readEpoch, credential = currentSession;
       const entry = {task: api('/api/notebook/timeline'), at: Date.now()};
       timelinePreparation = entry;
-      const current = () => active && accountId === owner && identity() === owner && epoch === generation &&
+      const current = () => (active || background === true) && accountId === owner && identity() === owner && epoch === generation &&
         readEpoch === reads && currentSession === credential && session() === credential && Date.now() - entry.at < 10000;
       const forget = () => { if (timelinePreparation === entry) timelinePreparation = null; };
       entry.task.then(data => {
@@ -388,6 +451,7 @@
         const unconsumed = timelinePreparation === entry; forget();
         if (unconsumed && current() && forbiddenRead(error)) invalidateReads();
       });
+      return entry.task;
     }
     function timelineCard() {
       let card = q('timeline').querySelector('.nb-timeline-card');
@@ -562,9 +626,43 @@
       update();
       if (focused) q('list').focus({preventScroll:true});
     }
+    function indexedListPage() {
+      if (reviewOnly || reviewMode || visibility === 'trash' || search.trim()) return null;
+      const index = cachedRead('summary-index');
+      if (!index?.complete) return null;
+      const rows = index.notes.filter(note => {
+        const tags = selectedRevision(note).content.tags;
+        return (visibility !== 'mine' || String(note.owner?.id) === accountId) &&
+          (visibility !== 'human' || tags.includes('human-written')) &&
+          (visibility !== 'research' || tags.includes('literature')) &&
+          (visibility !== 'proposals' || Boolean(note.proposal_revision)) && (!tag || tags.includes(tag));
+      });
+      pageIndex = Math.min(pageIndex, Math.max(0, Math.ceil(rows.length / 25) - 1));
+      return {notes:rows.slice(pageIndex * 25, (pageIndex + 1) * 25),
+        next_after:(pageIndex + 1) * 25 < rows.length ? 'index:' + (pageIndex + 1) : null};
+    }
+    function prepareNextPage(query, after) {
+      if (!warmEnabled || !active || reviewOnly || reviewMode || visibility === 'trash' || !after ||
+          navigator.connection?.saveData || document.visibilityState === 'hidden') return;
+      const next = new URLSearchParams(query); next.set('after', after);
+      const key = 'list:' + next;
+      for (const [name, entry] of preparingLists) if (Date.now() - entry.at >= 10000) preparingLists.delete(name);
+      if (cachedRead(key) || preparingLists.has(key) || preparingLists.size >= 1) return;
+      const current = readGuard(), entry = {at:Date.now(), task:api('/api/notebook/notes?' + next)};
+      preparingLists.set(key, entry);
+      const forget = () => { if (preparingLists.get(key) === entry) preparingLists.delete(key); };
+      entry.task.then(result => {
+        if (preparingLists.get(key) !== entry || !current() || !active || Date.now() - entry.at >= 10000) { forget(); return; }
+        if (!Array.isArray(result.notes) || result.next_after === after) { forget(); return; }
+        rememberRead(key, {notes:result.notes, next_after:result.next_after || null});
+      }, error => { if (preparingLists.get(key) === entry && current() && forbiddenRead(error)) invalidateReads(); forget(); });
+    }
     async function loadList() {
       clearTimeout(searchTimer); searchTimer = null;
       humanHint.hidden = reviewMode || visibility !== 'human';
+      const indexed = indexedListPage();
+      if (indexed) pageCursors = Array.from({length:pageIndex + 1}, (_, index) => index ? 'index:' + index : null);
+      if (!indexed && String(pageCursors[pageIndex] || '').startsWith('index:')) resetPages();
       const current = guard(), token = ++request, cursor = pageCursors[pageIndex], generation = readEpoch;
       const query = new URLSearchParams({limit:'25'});
       if (!reviewMode) {
@@ -575,8 +673,8 @@
         if (tag) query.set('tag', tag);
       }
       if (cursor) query.set('after', cursor);
-      const key = 'list:' + (reviewMode ? 'review:' : '') + query;
-      const cached = visibility === 'trash' ? null : cachedRead(key);
+      const key = (indexed ? 'indexed:' : 'list:') + (reviewMode ? 'review:' : '') + query;
+      const cached = indexed || (visibility === 'trash' ? null : cachedRead(key));
       // Keep the last admitted page while a different query is pending, but
       // never treat its rows as matches for that query or derive local pages.
       const retained = !cached && !reviewOnly && visibility !== 'trash' && listStamp?.generation === readEpoch &&
@@ -599,14 +697,17 @@
       setListActionsDisabled(true);
       q('more').disabled = true; q('prev').disabled = true;
       try {
-        const result = await api((reviewMode ? '/api/notebook/review-queue?' : '/api/notebook/notes?') + query);
+        const prepared = preparingLists.get(key); preparingLists.delete(key);
+        const result = indexed || await (prepared && Date.now() - prepared.at < 10000 ? prepared.task :
+          api((reviewMode ? '/api/notebook/review-queue?' : '/api/notebook/notes?') + query));
         if (!current() || request !== token || generation !== readEpoch || params.has('note')) return;
         if (!Array.isArray(result.notes) || (result.next_after && result.next_after === cursor)) throw Error('The notebook could not be loaded.');
         const page = {notes: result.notes, next_after: result.next_after || null};
-        if (visibility !== 'trash') rememberRead(key, page);
+        if (visibility !== 'trash') rememberRead(key, page, indexed ? readCache.get('summary-index').at : undefined);
         listRefreshing = false; paint(page);
         if (!reviewOnly && visibility !== 'trash') scheduleMap();
         setListActionsDisabled(false);
+        if (!indexed) prepareNextPage(query, nextAfter);
       } catch (error) {
         if (!current() || request !== token || generation !== readEpoch) return;
         readCache.delete(key);
@@ -651,12 +752,13 @@
       return group;
     }
     function prepareNote(note, requested = null) {
-      if (reviewOnly || !active || !accountId || note.deletion || note.id.startsWith('curated:') || navigator.connection?.saveData) return;
+      if (reviewOnly || !active || !accountId || note.deletion || navigator.connection?.saveData) return;
       for (const [oldKey, entry] of preparingNotes) if (entry.done && Date.now() - entry.at >= 10000) preparingNotes.delete(oldKey);
       const key = 'note:' + JSON.stringify([note.id, requested == null ? null : String(requested), null]);
       if (cachedRead(key) || preparingNotes.has(key) || preparingNotes.size >= 2) return;
       const current = guard(), generation = readEpoch;
-      const task = api('/api/notebook/notes/' + encodeURIComponent(note.id) + (requested == null ? '' : '?revision=' + encodeURIComponent(requested)));
+      const task = note.id.startsWith('curated:') ? loadCuratedNotes().then(records => ({note:records.find(value => value.id === note.id)})) :
+        api('/api/notebook/notes/' + encodeURIComponent(note.id) + (requested == null ? '' : '?revision=' + encodeURIComponent(requested)));
       const entry = {task, at: Date.now(), done: false}; preparingNotes.set(key, entry);
       const forget = () => { if (preparingNotes.get(key) === entry) preparingNotes.delete(key); };
       task.then(result => {
@@ -750,43 +852,34 @@
       const prepared = preparingNotes.get(key); preparingNotes.delete(key);
       let unlock = () => {};
       if (cached) {
-        renderFull(cached, requested); unlock = lockReader();
+        renderFull(cached, requested, id.startsWith('curated:'));
+        if (!id.startsWith('curated:')) unlock = lockReader();
         // Cached navigation needs the same focus handoff as a first visit.
         // Quiet revalidation below must not steal focus back from the reader.
         q('full').querySelector('h2')?.focus({preventScroll:true});
       }
       else q('full').replaceChildren(backToNotes(), reading('Loading note…'));
       try {
-        const result = id.startsWith('curated:')
-          ? {note:(await loadCuratedNotes()).find(note => note.id === id)}
-          : await (prepared && Date.now() - prepared.at < 10000 ? prepared.task : api('/api/notebook/notes/' + encodeURIComponent(id) + (requested ? '?revision=' + encodeURIComponent(requested) : '')));
+        const result = await (prepared && Date.now() - prepared.at < 10000 ? prepared.task : id.startsWith('curated:')
+          ? loadCuratedNotes().then(records => ({note:records.find(note => note.id === id)}))
+          : api('/api/notebook/notes/' + encodeURIComponent(id) + (requested ? '?revision=' + encodeURIComponent(requested) : '')));
         if (!current() || request !== token || generation !== readEpoch) return;
         let note = result.note;
         if (!note || note.id !== id || !Array.isArray(note.revisions)) throw new Error('The note could not be loaded.');
         if (expectedHash && (!/^[0-9a-f]{64}$/.test(expectedHash) || !requested || note.revisions.find(r => String(r.revision) === requested)?.content_sha256 !== expectedHash)) throw new Error('This citation does not match the saved revision. Check the source link before relying on it.');
-        let requestError = false;
         if (id.startsWith('curated:') && accountId) {
-          // Private request status belongs to the account, never the static collection.
-          const indexed = notes.find(value => value.id === id);
-          note = {...note, revisions:note.revisions.map(value => ({...value,requests:indexed?.revisions.find(row => row.revision === value.revision && row.content_sha256 === value.content_sha256)?.requests || (indexed?.proposal_revision?.revision === value.revision && indexed.proposal_revision.content_sha256 === value.content_sha256 ? indexed.proposal_revision.requests : [])}))};
+          // Static body/citation pins do not depend on private request status.
+          // Never mutate the shared collection with account-specific metadata.
+          note = {...note, revisions:note.revisions.map(value => ({...value, requests:[]}))};
           const chosen = requested ? note.revisions.find(value => String(value.revision) === requested) : latestRevision(note);
-          if (chosen) {
-            try {
-              const query = new URLSearchParams({source_note_id:id,source_revision:String(chosen.revision),source_sha256:chosen.content_sha256,limit:'50'});
-              const records = [], cursors = new Set(); let after = '';
-              do {
-                if (after) query.set('after', after);
-                const page = await api('/api/notebook/research-requests?' + query);
-                if (!current() || request !== token || generation !== readEpoch) return;
-                if (!Array.isArray(page.requests)) throw Error('Invalid request list.');
-                records.push(...page.requests); after = page.next_after || '';
-                if (after && (cursors.has(after) || cursors.size >= 4)) throw Error('Incomplete request list.');
-                cursors.add(after);
-              } while (after);
-              const refreshed = records.filter(record => record.primary_source?.note_id === id && record.primary_source.revision === chosen.revision && record.primary_source.content_sha256 === chosen.content_sha256).map(record => ({id:record.id,kind:record.purpose,status:record.assessment?.outcome || 'submitted',test_only_self_review:record.assessment?.test_only_self_review,effective:record.assessment?.effective,retracted:record.retracted === true}));
-              chosen.requests = [...chosen.requests.filter(row => !refreshed.some(value => value.id === row.id)), ...refreshed];
-            } catch (_) { requestError = true; }
+          if (!cached) {
+            renderFull(note, requested, true);
+            q('full').querySelector('h2')?.focus({preventScroll:true});
           }
+          rememberRead(key, note);
+          if (chosen) await refreshCuratedStatus(note, chosen, key,
+            () => current() && request === token && generation === readEpoch);
+          return;
         }
         if (!current() || request !== token || generation !== readEpoch) return;
         rememberRead(key, note);
@@ -795,12 +888,11 @@
           renderFull(note, requested);
           if (!cached) q('full').querySelector('h2')?.focus({preventScroll:true});
         }
-        if (requestError) q('full').querySelector('.nb-request-content')?.prepend(el('p', 'nb-error', 'Your request status could not be loaded.'), button('Retry request status', () => loadNote(id)));
       } catch (error) {
         if (current() && request === token && generation === readEpoch) {
           readCache.delete(key);
           if (forbiddenRead(error)) {
-            readCache.clear(); notes = []; nextAfter = null; listLoaded = false; listStamp = null;
+            invalidateReads(); notes = []; nextAfter = null; listLoaded = false; listStamp = null;
             q('list').replaceChildren(); q('count').textContent = '';
             q('full').replaceChildren(backToNotes());
           }
@@ -809,7 +901,47 @@
         }
       }
     }
-    function renderFull(note, requested) {
+    async function refreshCuratedStatus(note, chosen, key, present) {
+      const content = q('full').querySelector('.nb-request-content');
+      if (!present() || !content) return;
+      const pending = requestPanel(note, chosen, true).querySelector('.nb-request-content');
+      content.replaceChildren(...pending.childNodes); content.setAttribute('aria-busy', 'true');
+      try {
+        const query = new URLSearchParams({source_note_id:note.id, source_revision:String(chosen.revision), source_sha256:chosen.content_sha256, limit:'50'});
+        const records = [], cursors = new Set(); let after = '';
+        do {
+          if (after) query.set('after', after);
+          const page = await api('/api/notebook/research-requests?' + query);
+          if (!present()) return;
+          if (!Array.isArray(page.requests)) throw Error('Invalid request list.');
+          records.push(...page.requests); after = page.next_after || '';
+          if (after && (cursors.has(after) || cursors.size >= 4)) throw Error('Incomplete request list.');
+          cursors.add(after);
+        } while (after);
+        chosen.requests = records.filter(record => record.primary_source?.note_id === note.id &&
+          record.primary_source.revision === chosen.revision && record.primary_source.content_sha256 === chosen.content_sha256)
+          .map(record => ({id:record.id, kind:record.purpose, status:record.assessment?.outcome || 'submitted',
+            test_only_self_review:record.assessment?.test_only_self_review, effective:record.assessment?.effective, retracted:record.retracted === true}));
+        rememberRead(key, note);
+        const freshPanel = requestPanel(note, chosen), fresh = freshPanel.querySelector('.nb-request-content');
+        content.replaceChildren(...fresh.childNodes); content.removeAttribute('aria-busy');
+        content.parentElement.querySelector('summary').textContent = freshPanel.querySelector('summary').textContent;
+        const oldStatus = q('full').querySelector('.nb-reader-status');
+        if (oldStatus) { const next = status(note, chosen); oldStatus.replaceChildren(...next.childNodes); }
+      } catch (error) {
+        if (!present()) return;
+        if (forbiddenRead(error)) {
+          invalidateReads(); notes = []; nextAfter = null; listLoaded = false;
+          q('list').replaceChildren(); q('count').textContent = '';
+          q('full').replaceChildren(backToNotes(), el('p', 'nb-error', 'This note could not be authorized. Open it again to retry.'));
+          return;
+        }
+        content.replaceChildren(el('p', 'nb-error', 'Your request status could not be loaded.'),
+          button('Retry request status', () => refreshCuratedStatus(note, chosen, key, present)));
+        content.removeAttribute('aria-busy');
+      }
+    }
+    function renderFull(note, requested, requestsPending = false) {
       const full = q('full'); full.replaceChildren(backToNotes());
       const revision = requested ? note.revisions.find(r => String(r.revision) === requested) : note.revisions.find(r => r.revision === note.revision) || note.revisions[note.revisions.length - 1];
       if (!revision) { full.append(el('h2', 'nb-full-title', 'Revision not available')); return; }
@@ -820,12 +952,13 @@
         noteActions.append(button('Edit', () => editNote(note), 'nb-button'));
         if (canPublish(note, revision)) noteActions.append(button('Publish', () => publicationDialog(note, revision), 'nb-button'));
       }
-      headingRow.append(heading, noteActions); full.append(headingRow, status(note, revision));
+      const noteStatus = status(note, revision); noteStatus.classList.add('nb-reader-status');
+      headingRow.append(heading, noteActions); full.append(headingRow, noteStatus);
       if (!reviewOnly && note.can_review) full.append(button('Review note', () => navigate(reviewUrl('publication', {note:note.id, revision:String(revision.revision)}))));
       if (note.shared_revision && note.shared_revision.revision !== revision.revision) full.append(button('Read community revision ' + note.shared_revision.revision + ' →', () => openNote(note.id, note.shared_revision.revision), 'nb-link nb-read'));
       full.append(renderTags(r));
       full.append(section('Summary', r.claim), section('Conditions', r.conditions));
-      if (!reviewOnly) full.append(requestPanel(note, revision));
+      if (!reviewOnly) full.append(requestPanel(note, revision, requestsPending));
       const researchTools = el('details', 'nb-details'); researchTools.append(el('summary', '', 'Continue this research'), button('Download agent research task', () => downloadResearchTask(note, revision))); full.append(researchTools, bodyContent(r.body));
       const sources = el('section', 'nb-section nb-citations'); sources.append(el('h3', '', 'Citations'));
       const references = Array.isArray(r.references) ? r.references : r.references == null ? [] : [r.references];
@@ -890,10 +1023,17 @@
         : record.status === 'submitted' ? 'Awaiting assessment' : outcomeNames[record.status];
       return (state || 'Review recorded') + (record.test_only_self_review ? ' · test review' + (record.effective === false ? ' (inactive)' : '') : '');
     }
-    function requestPanel(note, revision) {
+    function requestPanel(note, revision, pending = false) {
       const records = requestRecords(revision), panel = el('details', 'nb-details nb-requests');
-      panel.append(el('summary', '', 'Proposals & reviews' + (records.length ? ' · ' + records.length : '')));
+      panel.append(el('summary', '', 'Proposals & reviews' + (!pending && records.length ? ' · ' + records.length : '')));
       const content = el('div', 'nb-request-content');
+      if (pending) {
+        content.setAttribute('aria-busy', 'true'); content.append(reading('Checking request status…', true));
+        for (const label of ['Propose a change', 'Request source check']) {
+          const action = button(label, () => {}); action.disabled = true; content.append(action);
+        }
+        panel.append(content); return panel;
+      }
       for (const record of records) {
         const row = el('div', 'nb-request-row');
         row.append(el('strong', '', requestName(record.kind)), el('span', 'nb-hint', requestState(record)));
@@ -1437,7 +1577,7 @@
     q('dialog').addEventListener('cancel', event => { event.preventDefault(); closeDialog(); });
     q('dialog').addEventListener('close', () => { if (returnFocus?.isConnected) returnFocus.focus({preventScroll:true}); });
     window.addEventListener('beforeunload', event => { if (hasUnsavedDraft()) { event.preventDefault(); event.returnValue = ''; } });
-    const controller = {show, hide, setAccount, invalidateReads}; root.notebookController = controller; return controller;
+    const controller = {show, hide, setAccount, invalidateReads, warm}; root.notebookController = controller; return controller;
   }
   window.CrucibleNotebook = Object.freeze({mount});
 })();

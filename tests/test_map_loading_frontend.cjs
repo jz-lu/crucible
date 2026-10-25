@@ -126,6 +126,14 @@ async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
     const retry=app.show();assert.equal(app.reads.length,2);app.respond();app.stylesheet().onload();await retry;
     assert.equal(app.calls.mount,1);
   });
+  await test('a malformed successful template is discarded so retry performs a fresh read',async()=>{
+    const app=await boot(),loading=app.show();
+    app.reads[0].resolve({ok:true,text:async()=>'<html><body>Unexpected response</body></html>'});
+    app.finishScripts();app.stylesheet().onload();await loading;
+    assert.equal(app.calls.mount,0);assert.equal(app.surface(),undefined);
+    const retry=app.show();assert.equal(app.reads.length,2);
+    app.respond();app.stylesheet().onload();await retry;assert.equal(app.calls.mount,1);
+  });
   await test('pending preparation survives switching notebook views without showing a hidden map',async()=>{
     const app=await boot(),old=app.show(),oldSurface=app.surface(),style=app.stylesheet();
     await app.controller.show();
@@ -143,7 +151,7 @@ async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
   });
   await test('asset deadlines fail closed and settled timers are released',async()=>{
     const app=await boot(),loading=app.show();
-    const scriptDeadline=[...app.timers.values()][2];scriptDeadline();
+    const scriptDeadline=[...app.timers.values()].find(callback=>String(callback).includes('Map asset unavailable.'));assert.ok(scriptDeadline);scriptDeadline();
     app.respond();app.stylesheet().onload();scripts.slice(1).forEach(app.finishScript);await loading;
     assert.equal(app.calls.mount,0);assert.match(app.q('map').textContent,/could not be loaded/);assert.equal(app.timers.size,0);
   });

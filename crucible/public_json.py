@@ -10,7 +10,8 @@ from starlette.responses import JSONResponse, Response
 
 
 PROGRESS_FIELDS = ("participant_count", "recovered_profile_ids", "largest_recovered_profile_id",
-                   "next_profile_id", "profile_recoveries", "first_recovery", "generation_admission")
+                   "next_profile_id", "profile_recoveries", "first_recovery", "generation_admission",
+                   "recovery_summary")
 
 
 def catalogue_progress(catalogue):

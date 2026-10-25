@@ -1,0 +1,72 @@
+Engineering audit follow-up — 25 October 2026
+
+Source of findings: separate crucible-pipeline-audit/engineering-handoff.txt,
+which inspected 636433692c17d9f56c336864150dec7f1f1806d6. Its scoped regression
+run had 180 passes and one stale migration-fixture failure. That did not establish
+a production migration defect or full native/backend coverage.
+
+Implemented in this follow-up
+----------------------------
+An explicit critical-workflows CI job now runs the selected research, proposal,
+publication, access, moderation, ratings and scoped-agent suites on disposable
+SQLite. tests/run_critical_workflows.py owns the exact list and fails on skips.
+It uses a portable DH/RSA/Frodo test catalogue without disabling application
+artifact verification. CI passed depends on it, so Release beta also requires it.
+Native generation-concurrency tests are included separately in the reviewed-image
+test selection. These are not PostgreSQL workflow-race tests.
+
+The note-rating migration fixture now creates a genuine 0018 schema through
+Alembic, seeds a synthetic account and immutable note revision, upgrades it to
+head and checks preservation, repeated upgrade and metadata agreement. Production
+migrations were not changed to accommodate the stale fixture.
+
+README, CONTRIBUTING and the local native-setup entry document now distinguish
+the hosted beta, deliberate beta-channel promotion, actual test boundaries and
+historical timing coverage. Dated evidence reports and provenance-bound files
+are retained unchanged.
+
+Repository administration still required
+---------------------------------------
+A fresh read on 25 October confirmed main is unprotected and has no required
+checks. The connected repository identity has push access but not maintain/admin
+access, so this session cannot enforce branch rules. An administrator should
+require the stable CI passed aggregate, require the branch to be current, and
+disallow force pushes/deletion. Re-read the actual settings after configuration.
+Until then, checking green CI before merge is a manual practice, not enforcement.
+
+Evidence and product decisions still open
+----------------------------------------
+1. Historical timing reports: current exact runtime checks correctly reject
+   incompatible evidence. The confirmed module-lattice report's Python3.14.6
+   identity differs from the hosted3.13.17 identity. A future view should distinguish
+   historical measured implementations from measurements of the serving build,
+   or publish independently reviewed new measurements. Do not relax hash checks,
+   rewrite archived reports or assert the same issue for every family without
+   checking their bindings. Missing/incompatible/unavailable evidence needs a
+   deliberate presentation and API contract.
+
+2. Independent reproduction: another participant can read a successful receipt
+   and attached method, but the original challenge download remains owner-only.
+   An audience-authorized immutable reproduction bundle needs a sharing decision
+   about opt-in and timing, plus exact public inputs/manifest/hashes. Preserve
+   unsuccessful-attempt privacy; exclude submitted secrets, target MACs,
+   credentials and generator state. Existing ownership checks stay in force.
+
+3. Scientific activation: proposal review, registry selection, beta admission
+   and runtime-build approval are distinct controls. A durable curation record
+   should eventually bind official activation to exact scientific evidence and
+   identify experimental built-ins explicitly. Existing beta releases must not
+   be silently disabled because they predate that ledger. Retraction and score
+   invalidation also need an explicit product policy.
+
+4. Cumulative evaluation: multiple scientific perspectives and an official final
+   decision need separate modeling. Preserve immutable assessments and exact
+   revision pins; do not resurrect the retired generic technical-review gate.
+
+5. PostgreSQL lifecycle/concurrency: the current PG gate checks metadata/scoring
+   parity. Expand to publication, idempotency, rating and issuance races using
+   disposable PostgreSQL before claiming production concurrency coverage for
+   those paths. SQLite workflow checks alone cannot establish it.
+
+6. About us remains the intentionally empty collaborator template. Populate its
+   mission/team/contact copy through a separate content decision.
