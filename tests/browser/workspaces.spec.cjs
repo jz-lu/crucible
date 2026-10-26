@@ -271,6 +271,9 @@ test('the map downloads concurrently, keeps one stylesheet, and supports a nativ
 });
 
 test('the scheme map paints while its small release-link index is held, without profile or note downloads', async ({page}) => {
+  // Measure the foreground map's minimal reads separately from optional
+  // preparation of the rest of the site (covered by normal-preference tests).
+  await useDataSaver(page);
   const metadata = await holdResponse(page, url => url.pathname === '/api/schemes' && url.searchParams.get('projection') === 'map');
   const unwanted = [];
   page.on('request', request => {

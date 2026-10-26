@@ -98,6 +98,9 @@ for(const {width,actor,label,handle:requestedHandle,reviewer=false} of profiles)
       if(reviewer)await expect(page.locator('#profile-review-link')).toBeVisible();
       await page.locator('#nav-about').focus();
       await page.screenshot({path:testInfo.outputPath('profile-pending-'+width+'-'+label+'.png')});
+      // While the foreground profile is pending, only its required reads run.
+      // After it paints, the normal idle queue may prepare other workspaces.
+      expect(reads.filter(value=>value.startsWith('/api/')&&!['/api/session','/api/schemes','/api/people/'+handle].includes(value))).toEqual([]);
       profile.release();await profile.delivered;
       await expect(target.locator('.person-preview')).toHaveCount(0);
       await expect(target.locator('.person-stats dd')).toHaveText(['0','0']);
@@ -111,7 +114,7 @@ for(const {width,actor,label,handle:requestedHandle,reviewer=false} of profiles)
       if(actor==='bob')await expect(page.locator('#account-sign-in')).toBeHidden();
       expect(reads.filter(value=>value==='/api/people/'+handle)).toHaveLength(1);
       expect(reads.filter(value=>value==='/api/session')).toHaveLength(1);
-      expect(reads.filter(value=>value.startsWith('/api/')&&!['/api/session','/api/schemes','/api/people/'+handle].includes(value))).toEqual([]);
+      expect(reads.filter(value=>value.startsWith('/api/notebook/notes/')||value.startsWith('/api/submissions/'))).toEqual([]);
       await page.screenshot({path:testInfo.outputPath('profile-ready-'+width+'-'+label+'.png')});
     } finally {
       for(const hold of [session,catalogue,profile])hold.release();
@@ -142,7 +145,6 @@ test('a cached profile revisit keeps admitted content and focused disclosure thr
 });
 
 test('profile result dialog returns focus to its replacement receipt after a profile repaint',async({page})=>{
-  await start(page);
   const record={submission_id:'browser-profile-layout',scheme_id:'teaching-dh-kem',scheme_version:'4',scheme_name:'Diffie–Hellman KEM',
     profile_id:'dh-20',tier:1,stage_number:1,instance_size:20,is_current:true,received_at:1700000000,scoring_eligible:true,score:{total:1}};
   let reads=0;
@@ -157,6 +159,8 @@ test('profile result dialog returns focus to its replacement receipt after a pro
     const response=await route.fetch();expect(response.status()).toBe(404);
     await route.fulfill({response,status:200,json:{submission:{...record,id:record.submission_id,status:'correct',handle:'browser_alice',elapsed_seconds:1,method:{name:'Synthetic profile details',pseudocode:'Display fixture only.'},compute:{}}}});
   });
+  // Install rendering fixtures before admission can warm the same profile.
+  await start(page);
   await page.locator('#account-handle').click();await page.locator('#personal-records > summary').click();
   const button=page.locator('#personal-records [data-submission-id="browser-profile-layout"]');
   const original=await button.elementHandle();await button.click();

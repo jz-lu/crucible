@@ -24,7 +24,11 @@ for (const width of [1440,390]) test('complete recovery snapshot browses stages 
     expect(frame.title).toBe('Unsolved');expect(frame.state).toBe('unsolved');
     expect(frame.focus).toBe('next-size');expect(frame.hash).toContain('profile=dh-'+stage);
   }
-  expect(reads.slice(initial)).toEqual([]);
+  // Stage browsing must not fetch another scheme, record or challenge. The
+  // normal idle queue may independently prepare notebook/profile metadata;
+  // those reads do not belong to this interaction's request-count contract.
+  expect(reads.slice(initial).filter(row=>row.path==='/api/schemes'||row.path==='/api/leaderboard'||
+    row.path.startsWith('/api/challenges')||row.path.startsWith('/api/submissions'))).toEqual([]);
   const pending=await holdResponse(page,url=>url.pathname==='/api/schemes'&&url.searchParams.has('progress_only'));
   try {
     await page.locator('#refresh-leaderboard').click();await pending.arrived;

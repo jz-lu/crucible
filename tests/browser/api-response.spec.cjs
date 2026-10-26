@@ -34,6 +34,9 @@ test('an unexpected successful service page needs an explicit fresh access retry
 test('an interrupted response body stays private until a user retries fresh access', async ({page}) => {
   await signIn(page);
   await notebookReady(page);
+  // Stop setup-document preparation before observing the next access attempt.
+  // The real authenticated cookie remains; normal preparation stays enabled.
+  await page.goto('about:blank');
   await page.addInitScript(() => {
     const originalFetch = window.fetch.bind(window);
     let interrupted = false;
@@ -52,7 +55,7 @@ test('an interrupted response body stays private until a user retries fresh acce
     };
   });
   const protectedPaths = privateReads(page);
-  await page.reload();
+  await page.goto('/#notebook');
   await expect(page.locator('#global-message-text')).toHaveText('The connection was interrupted before the response finished. Please try again.');
   await expect(page.locator('#notebook-workspace')).not.toBeVisible();
   expect(protectedPaths).toEqual([]);
@@ -65,6 +68,9 @@ test('an interrupted response body stays private until a user retries fresh acce
 test('rapid reloads discard pending access responses without stale private content', async ({page}) => {
   await signIn(page);
   await notebookReady(page);
+  // Exclude valid idle reads from the admitted setup document, not private
+  // reads from any of the pending-access documents tested below.
+  await page.goto('about:blank');
   const arrivals = [gate(), gate(), gate()], release = gate();
   const held = [];
   let reads = 0;
@@ -83,8 +89,9 @@ test('rapid reloads discard pending access responses without stale private conte
   });
   const protectedPaths = privateReads(page);
   try {
-    for (const arrival of arrivals) {
-      await page.reload({waitUntil: 'domcontentloaded'});
+    for (const [index, arrival] of arrivals.entries()) {
+      if (index === 0) await page.goto('/#notebook', {waitUntil: 'domcontentloaded'});
+      else await page.reload({waitUntil: 'domcontentloaded'});
       await arrival.promise;
       await expect(page.locator('#notebook-workspace')).not.toBeVisible();
       expect(protectedPaths).toEqual([]);
