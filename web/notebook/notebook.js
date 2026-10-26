@@ -1049,6 +1049,9 @@
       }
       const noteStatus = status(note, revision); noteStatus.classList.add('nb-reader-status');
       headingRow.append(heading, noteActions); full.append(headingRow, noteStatus);
+      if (reviewOnly && revision.publication_status === 'submitted' && note.can_review === false && accountId !== null && String(note.owner?.id) === accountId) {
+        full.append(el('p', 'nb-hint', 'Another reviewer must approve this request.'));
+      }
       if (!reviewOnly && note.can_review) full.append(button('Review note', () => navigate(reviewUrl('publication', {note:note.id, revision:String(revision.revision)}))));
       if (note.shared_revision && note.shared_revision.revision !== revision.revision) full.append(button('Read community revision ' + note.shared_revision.revision + ' →', () => openNote(note.id, note.shared_revision.revision), 'nb-link nb-read'));
       full.append(renderTags(r));

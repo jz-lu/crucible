@@ -1165,8 +1165,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             query = select(NotebookPublication, NotebookRevision, NotebookNote).join(
                 NotebookRevision, NotebookRevision.id == NotebookPublication.revision_id).join(
                 NotebookNote, NotebookNote.id == NotebookRevision.note_id).where(NotebookPublication.decision.is_(None))
-            if not protocol_proposals.can_self_review(settings, user):
-                query = query.where(NotebookNote.author_id != user.id)
+            # Queue visibility includes the reviewer's own pending requests.
+            # note_data and the decision endpoint independently enforce self-review policy.
             if after:
                 anchor = session.get(NotebookPublication, after)
                 if anchor is None:
