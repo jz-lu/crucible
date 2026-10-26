@@ -129,6 +129,44 @@ def test_publication_queue_serves_oldest_requests_before_random_identifiers(syst
     assert cursor is None
 
 
+def test_publication_queue_includes_own_pending_requests_without_self_review_permission(system):
+    app, owner, reviewer, reader, now = system
+    own = create(reviewer, content(title="Reviewer's submitted note"))
+    request_publication(reviewer, own)
+    now[0] += 1
+    other = create(owner, content(title="Another author's submitted note"))
+    request_publication(owner, other)
+    create(reviewer, content(title="Reviewer's unsubmitted private note"))
+    create(owner, content(title="Another author's unsubmitted private note"))
+
+    first_response = reviewer.client.get('/api/notebook/review-queue', params={'limit': 1})
+    assert first_response.status_code == 200
+    assert first_response.headers['cache-control'] == 'no-store'
+    first = first_response.json()
+    assert [note['id'] for note in first['notes']] == [own['id']]
+    assert first['notes'][0]['publication_status'] == 'submitted'
+    assert first['notes'][0]['can_review'] is False
+    assert first['notes'][0]['can_self_review'] is False
+    second = reviewer.client.get('/api/notebook/review-queue', params={
+        'limit': 1, 'after': first['next_after']}).json()
+    assert [note['id'] for note in second['notes']] == [other['id']]
+    assert second['notes'][0]['can_review'] is True
+    assert second['next_after'] is None
+
+    decision = reviewer.post(f'/api/notebook/notes/{own["id"]}/publication-reviews',
+        publication_body(own, decision='approved', reason='Own request remains visible only.'))
+    assert decision.status_code == 403
+    with app.state.db.transaction() as session:
+        own_publication = session.scalar(select(notebook.NotebookPublication)
+            .where(notebook.NotebookPublication.author_id == reviewer.identifier))
+        assert own_publication.decision is None
+        assert own_publication.reviewer_id is None
+    assert reader.client.get(f'/api/notebook/notes/{own["id"]}').status_code == 404
+    for actor in (owner, reader):
+        assert actor.client.get('/api/notebook/review-queue').status_code == 403
+    assert TestClient(app).get('/api/notebook/review-queue').status_code == 401
+
+
 def test_private_notes_survive_restart_with_exact_immutable_revision_hashes(system):
     app, owner, reviewer, reader, now = system
     first = create(owner, content(references=[{"url": "https://example.org/paper"}], extensions={"label": "unproved"}))
@@ -347,7 +385,9 @@ def test_self_review_requires_development_flag_and_never_becomes_independent_app
     path = f'/api/notebook/notes/{note["id"]}/publication-reviews'
     body = publication_body(note, decision="approved", reason="Development publication workflow test.")
     assert reviewer.post(path, body).status_code == 403
-    assert reviewer.client.get("/api/notebook/review-queue").json()["notes"] == []
+    queued = reviewer.client.get("/api/notebook/review-queue").json()["notes"]
+    assert [row["id"] for row in queued] == [note["id"]]
+    assert queued[0]["can_review"] is False
     dev = create_app(replace(app.state.settings, allow_self_review=True), clock=lambda: now[0])
     try:
         dev_reviewer = Actor(dev, reviewer.identifier)
