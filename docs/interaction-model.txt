@@ -128,6 +128,22 @@ pauses future sends. Session/navigation/dialog changes stop further writes,
 without claiming that an in-flight request has been rolled back. No real notes
 are published merely by deploying this feature.
 
+Implemented: an initial access read may recover once from a pre-response browser
+transport failure, within its original deadline. HTTP failures, body failures,
+ordinary refreshes and writes are not replayed. Persistent failure leaves a
+usable inline access retry. Retired startup responses cannot paint or rewind the
+clock; a persisted back/forward restore resumes only an interrupted startup.
+
+Implemented: recovery colors can refresh while the stage control owns focus,
+without replacing controls or moving the selection/draft. Independent recovered
+runs end at the actual stage positions; isolated recovered stages use small
+centered marks. Unsolved gaps remain gray and record inheritance is unchanged.
+
+Implemented: publication confirmation shows the exact saved note revision in a
+compact selection card. Individual and bulk requests keep their confirmation and
+retry semantics. An asynchronous card action remembers its originating button
+before disabling it, so cancellation restores focus without scrolling.
+
 Next, in priority order:
 
 1. Review -> evidence -> return: protect unsent review findings/checks. Key any

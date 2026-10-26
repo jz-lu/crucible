@@ -84,8 +84,9 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
         return session(envelope);
       }
     }});
-    assert.match(app.$('#global-message-text').textContent, /server could not be reached/);
+    assert.equal(app.$('#global-message-text').textContent, '');
     assert.match(app.$('#access-description').textContent, /Access could not be checked/);
+    assert.equal(app.$('#access-retry').textContent, 'Try again');
     await app.sandbox.initialize();
     assert.equal(reads, 2);
     assert.equal(app.$('#about-workspace').hidden, false);

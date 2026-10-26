@@ -896,6 +896,7 @@
       const currentPage = pageGuard(), token = ++cardAction, opened = dialogEpoch;
       const current = () => currentPage() && token === cardAction && opened === dialogEpoch && !q('dialog').open;
       const buttons = Array.from(actions.querySelectorAll('button'));
+      const trigger = buttons.includes(document.activeElement) ? document.activeElement : null;
       const row = actions.closest('.nb-entry-heading') || actions;
       const message = row.querySelector('.nb-card-message') || el('p', 'nb-card-message'); message.setAttribute('role', 'status');
       message.textContent = 'Loading saved note…'; message.hidden = false; message.classList.add('nb-sr-only'); row.append(message);
@@ -910,6 +911,9 @@
           notice(statusLabel(latestRevision(note).publication_status)); return;
         }
         if (action === 'edit') editNote(note); else publicationDialog(note, latestRevision(note));
+        // Disabling the triggering button during the read can move browser
+        // focus to the body. Cancel should still return to the original action.
+        if (trigger && q('dialog').open) returnFocus = trigger;
       } catch (error) {
         if (current() && token === cardAction) { message.classList.remove('nb-sr-only'); message.textContent = error.message + ' Try again.'; }
       } finally {
@@ -1422,10 +1426,11 @@
     }
     async function publishAllDialog() {
       if (reviewOnly || !active || !accountId || identity() !== accountId || session() !== currentSession) return;
-      const container = openDialog('Confirm publish requests'), alive = dialogGuard(), credential = currentSession;
+      const container = openDialog('Request publication', 'publication'), alive = dialogGuard(), credential = currentSession;
       const owned = () => alive() && currentSession === credential && session() === credential;
       const preparation = request, preparing = () => owned() && active && request === preparation;
-      container.append(el('p', 'nb-hint', 'Submit the latest private revision of each of your eligible notes for reviewer approval. Notes already submitted or published, and notes in Trash, are excluded. Your current filters do not limit this selection.'));
+      container.append(el('p', 'nb-publication-intro', 'These notes will be shared with approved participants only after a reviewer approves them. Later edits stay private.'),
+        el('p', 'nb-hint', 'All eligible private notes are included, regardless of your current filters.'));
       const status = el('p', 'nb-batch-status'); status.setAttribute('role', 'status');
       const rows = el('ol', 'nb-publication-batch'), error = el('p', 'nb-error'); error.setAttribute('role', 'alert');
       const actions = el('div', 'nb-form-actions'), cancel = button('Cancel', () => closeDialog(), 'nb-button');
@@ -1473,10 +1478,10 @@
           }
         }
         for (const item of items) {
-          const row = el('li'); item.label = el('span', 'nb-batch-result', 'Private');
-          row.append(el('span', '', item.title + ' · Revision ' + item.payload.revision), item.label); rows.append(row);
+          const row = el('li'); item.label = el('span', 'nb-batch-result');
+          row.append(publicationSelection(item.title, item.payload.revision), item.label); rows.append(row);
         }
-        status.textContent = items.length ? items.length + ' notes ready for review requests.' + (items.length > 60 ? ' The hourly limit may require continuing later.' : '') : 'No eligible private notes to publish.';
+        status.textContent = items.length ? items.length + (items.length === 1 ? ' note selected' : ' notes selected') + (items.length > 60 ? ' · The hourly limit may require continuing later.' : '') : 'No eligible private notes to publish.';
         send.textContent = 'Send ' + items.length + ' publish requests'; send.disabled = !items.length; send.hidden = !items.length;
         discardMessage = 'Close this batch with an unconfirmed request? It may already have reached the server. Staying here lets you retry the same request safely.';
         hasUnsavedDraft = () => items.some(item => item.state === 'uncertain');
@@ -1527,20 +1532,26 @@
         }
       }
     }
+    function publicationSelection(title, revision) {
+      const selection = el('article', 'nb-publication-note');
+      selection.append(el('h3', '', title), el('span', 'nb-publication-revision', 'Revision ' + revision));
+      return selection;
+    }
     function publicationDialog(note, revision) {
       if (!ownsNote(note)) return;
-      const container = openDialog('Confirm publish request'), present = dialogGuard();
-      container.append(el('p', 'nb-hint', `${revision.content.title} · Revision ${revision.revision}`));
+      const container = openDialog('Request publication', 'publication'), present = dialogGuard();
+      container.append(publicationSelection(revision.content.title, revision.revision));
       if (revision.revision !== latestRevision(note).revision) {
         container.append(el('p', 'nb-hint', 'Publish the latest saved revision. Earlier revisions and their decisions remain in the history.'), button('Open latest revision', () => { closeDialog(true); openNote(note.id); }, 'nb-button'));
         return;
       }
       if (revision.publication_status !== 'private') { container.append(el('p', 'nb-hint', statusLabel(revision.publication_status))); return; }
-      container.append(el('p', 'nb-hint', 'Submit this exact saved revision for publication review. A configured reviewer can read it and approve publication to all approved participants. Later revisions stay private until separately approved. Approval does not certify the mathematics or activate a scheme.'));
+      container.append(el('p', 'nb-publication-intro', 'This revision will be shared with approved participants only after a reviewer approves it. Later edits stay private.'),
+        el('p', 'nb-hint', 'Publication approval does not verify the mathematics or activate a scheme.'));
       publicationForm(note, revision, container, present, false);
     }
     function publicationForm(note, revision, container, present, reviewing = true) {
-      const panel = el('section', 'nb-publication-review');
+      const panel = el('section', reviewing ? 'nb-publication-review' : 'nb-publication-request');
       if (reviewing) {
         panel.append(el('h3', '', 'Publication decision'), el('p', 'nb-hint', 'Review privacy, attribution, spam and suitability for research discussion. Unproved ideas, negative results and criticism can be published with their uncertainty stated. Approval lets all approved participants read this exact revision; it does not certify its mathematics or activate a scheme.'));
         if (note.can_edit) panel.append(el('p', 'nb-hint', 'This is a development-only self-review, and the saved decision will be labeled as such.'));
@@ -1571,7 +1582,7 @@
         } finally { if (present()) { busy = false; save.disabled = false; decision.input.disabled = Boolean(pending); reason.input.disabled = Boolean(pending); save.textContent = pending ? 'Retry the same request' : reviewing ? 'Record publication decision' : 'Send publish request'; } }
       });
     }
-    function openDialog(title) { returnFocus = document.activeElement; hasUnsavedDraft = () => false; discardMessage = 'Discard the unsaved changes to this note?'; suspendedDialog = false; dialogEpoch++; q('dialog-title').textContent = title; q('dialog-body').replaceChildren(); q('dialog').showModal(); return q('dialog-body'); }
+    function openDialog(title, variant = '') { returnFocus = document.activeElement; hasUnsavedDraft = () => false; discardMessage = 'Discard the unsaved changes to this note?'; suspendedDialog = false; dialogEpoch++; q('dialog-title').textContent = title; q('dialog').setAttribute('aria-label', title); q('dialog').classList.toggle('nb-publish-dialog', variant === 'publication'); q('close').setAttribute('aria-label', 'Close dialog'); q('dialog-body').replaceChildren(); q('dialog').showModal(); return q('dialog-body'); }
     function closeDialog(saved = false) { if (saved !== true && hasUnsavedDraft() && !window.confirm(discardMessage)) return; hasUnsavedDraft = () => false; suspendedDialog = false; dialogEpoch++; q('dialog').close(); }
     function field(label, name, value = '', options = {}) {
       const wrap = el('label', 'nb-field'), caption = el('span', '', label); caption.id = (reviewOnly ? 'nb-review-field-' : 'nb-field-') + name; wrap.append(caption); let input;

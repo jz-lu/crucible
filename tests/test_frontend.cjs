@@ -67,11 +67,11 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.$('#nav-challenge').textContent.trim(), 'Schemes');
     assert.match(app.$('#kem-catalogue').textContent, /Alpha <KEM>/);
     assert.match(app.$('#kem-catalogue').textContent, /Beta KEM/);
-    assert.deepEqual(app.$('#kem-catalogue').querySelectorAll('th').map(heading => heading.textContent),
+    assert.deepEqual(app.$('#kem-catalogue').querySelector('thead').querySelectorAll('th').map(heading => heading.textContent),
       ['KEM', 'Largest recovery', 'Recovered by', 'Participants']);
     assert.match(app.$('#kem-catalogue').textContent, /first-alpha/);
     assert.deepEqual(app.$('#kem-catalogue').querySelectorAll('.kem-participants').map(item => item.textContent), ['2', '0']);
-    const participantHeading = app.$('#kem-catalogue').querySelectorAll('th').at(-1);
+    const participantHeading = app.$('#kem-catalogue').querySelector('thead').querySelectorAll('th').at(-1);
     assert.match(participantHeading.title, /Distinct accounts.*at least one submitted recovery attempt.*successful or unsuccessful.*compatible releases/);
     assert.deepEqual(app.$('#kem-catalogue').querySelectorAll('.kem-first-handle').map(button => button.closest('td').dataset.label), ['Recovered by']);
     assert.equal(app.requests.some(request => request.url.pathname === '/api/challenges'), false);
@@ -135,7 +135,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.document.querySelector('.kem-metric-tier'), null);
     assert.equal(app.$('#kem-catalogue').querySelectorAll('th').find(heading => heading.textContent === 'Largest recovery').getAttribute('aria-sort'), null);
     assert.equal(app.$('#kem-catalogue').querySelector('th').getAttribute('aria-sort'), null);
-    assert.equal(app.$('#kem-catalogue').querySelectorAll('th').at(-1).getAttribute('aria-sort'), 'descending');
+    assert.equal(app.$('#kem-catalogue').querySelector('thead').querySelectorAll('th').at(-1).getAttribute('aria-sort'), 'descending');
     app.$('#kem-catalogue').querySelectorAll('.kem-name').find(link => link.textContent === 'Nine').click(); await flush();
     assert.equal(app.$('#overview-title').textContent, 'Nine');
     app.$('#overview-challenges').click(); await flush();
@@ -209,16 +209,17 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     }
     assert.equal(app.requests.some(request => request.options.method === 'POST'), false);
   });
-  await test('mixed catalogues leave standalone schemes ungrouped and preserve exact named recovery links', async () => {
+  await test('mixed catalogues label every group and preserve exact named recovery links', async () => {
     const named = (id, group) => ({...namedScheme, id, name: id, display_group: group});
     const input = [named('codes-b', 'codes'), schemes[1], named('lattice-b', 'lattices'),
-      named('curve', null), named('lattice-a', 'lattices'), schemes[0], named('codes-a', 'codes'), named('lattice-c', 'lattices')];
+      named('curve', null), named('lattice-a', 'lattices'), schemes[0], named('codes-a', 'codes'), named('lattice-c', 'lattices'),
+      named('teaching-dh-kem', null), named('rsa-kem', null), named('dhkem-x25519', null)];
     const app = await createApp({schemes: input});
     const table = app.$('#kem-catalogue');
-    assert.equal(table.querySelectorAll('.kem-name').length, 8);
-    assert.deepEqual(table.querySelectorAll('.kem-group-row').map(row => row.textContent), ['Lattice-based3', 'Code-based2']);
+    assert.equal(table.querySelectorAll('.kem-name').length, 11);
+    assert.deepEqual(table.querySelectorAll('.kem-group-row').map(row => row.textContent), ['Number-theoretic3', 'Miscellaneous3', 'Lattice-based3', 'Code-based2']);
     assert.deepEqual(table.querySelectorAll('.kem-name').map(link => link.href.split('/')[1]),
-      ['fixture-alpha', 'fixture-beta', 'curve', 'lattice-a', 'lattice-b', 'lattice-c', 'codes-a', 'codes-b']);
+      ['dhkem-x25519', 'rsa-kem', 'teaching-dh-kem', 'fixture-alpha', 'fixture-beta', 'curve', 'lattice-a', 'lattice-b', 'lattice-c', 'codes-a', 'codes-b']);
     const link = table.querySelectorAll('.kem-name').find(link => link.textContent === 'curve');
     const progress = link.closest('tr').querySelector('.kem-progress');
     assert.equal(progress.textContent, 'ML-KEM-768');
@@ -1090,7 +1091,9 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     }});
     assert.equal(app.$('#catalogue-workspace').hidden, true);
     assert.equal(app.requests.some(request => request.url.pathname === '/api/schemes'), false);
-    assert.equal(app.$('#global-message').hidden, false);
+    assert.equal(app.$('#global-message').hidden, true);
+    assert.match(app.$('#access-description').textContent, /Access could not be checked/);
+    assert.equal(app.$('#access-retry').textContent, 'Try again');
     assert.equal(app.requests.some(request => request.options.method === 'POST'), false);
   });
   await test('deep links select an exact KEM, version, profile and protocol view', async () => {

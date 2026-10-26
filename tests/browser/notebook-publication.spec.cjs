@@ -4,6 +4,17 @@ for (const [width, actor] of [[1440, 'bulkdesktop'], [390, 'bulkmobile']]) {
   test(`Publish all confirms exact revisions and renders compact receipts at ${width}px`, async ({page}, testInfo) => {
     await page.setViewportSize({width, height:1000});
     await signIn(page, actor);
+    const dialog = page.locator('#notebook-workspace dialog[data-nb="dialog"]');
+    const individual = page.locator('.nb-card-actions').getByRole('button', {name:'Publish', exact:true}).first();
+    await individual.click();
+    await expect(dialog).toHaveAttribute('aria-label', 'Request publication');
+    await expect(dialog.locator('.nb-publication-note h3')).toContainText('browser-only private note');
+    await expect(dialog.getByRole('button', {name:'Send publish request', exact:true})).toBeEnabled();
+    expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await page.screenshot({path:testInfo.outputPath('publish-one-confirmation.png'), fullPage:true});
+    await dialog.getByRole('button', {name:'Cancel', exact:true}).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(individual).toBeFocused();
     const title = 'A'.repeat(180);
     await page.evaluate(async title => {
       await api('/api/notebook/notes', {idempotency_key:crypto.randomUUID(), content:{title,
@@ -25,7 +36,6 @@ for (const [width, actor] of [[1440, 'bulkdesktop'], [390, 'bulkmobile']]) {
     await expect(mapDialog).toBeAttached();
     await expect(mapDialog).not.toBeVisible();
     await expect(page.locator('#notebook-workspace dialog')).toHaveCount(2);
-    const dialog = page.locator('#notebook-workspace dialog[data-nb="dialog"]');
     const publish = page.locator('[data-nb="publish-all"]');
     await publish.click();
     await expect(dialog.getByRole('button', {name:'Send 2 publish requests', exact:true})).toBeEnabled();

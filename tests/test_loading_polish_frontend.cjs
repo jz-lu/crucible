@@ -21,7 +21,8 @@ async function test(name, run) {await run(); console.log('PASS ' + name); passed
     assert.equal(app.$('#catalogue-workspace').hidden, false);
     assert.equal(app.$('#route-loading').hidden, true);
     assert.equal(target.getAttribute('aria-busy'), 'true');
-    assert.equal(target.querySelector('tbody').children.length, 6);
+    assert.equal(target.querySelector('tbody').children.length, 7);
+    assert.equal(target.querySelectorAll('.kem-group-row').length, 1);
     assert.equal(target.querySelectorAll('a, button').length, 0);
     assert.equal(target.querySelector('.loader'), null);
     assert.equal(target.querySelector('[role="status"]').className, 'sr-only');

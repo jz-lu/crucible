@@ -28,6 +28,18 @@ const state = {
 let toastTimer;
 let roundRetryAt = 0;
 let sessionSynchronization = null;
+let documentEpoch = 0, documentRetired = false, initializationRequest = 0;
+let initializationPending = false, resumeInitialization = false;
+window.addEventListener('pagehide', () => {
+  resumeInitialization = initializationPending || !state.sessionResolved;
+  documentRetired = true; documentEpoch++;
+});
+window.addEventListener('pageshow', event => {
+  documentRetired = false;
+  const resume = event.persisted && resumeInitialization;
+  resumeInitialization = false;
+  if (resume) void initialize();
+});
 let notebookWorkspace = null;
 let reviewNotebookWorkspace = null;
 let notebookAssets = null;
@@ -716,6 +728,10 @@ function cataloguePreview() {
     headings.append(heading);
   }
   head.append(headings);
+  const groupRow = node('tr', undefined, 'kem-group-row'), groupHeading = node('th');
+  groupHeading.colSpan = 4;
+  groupHeading.append(node('span', undefined, 'catalogue-placeholder catalogue-group-placeholder'));
+  groupRow.append(groupHeading); body.append(groupRow);
   for (let index = 0; index < 6; index++) {
     const row = node('tr');
     for (const [column, label] of labels.entries()) {
@@ -1194,6 +1210,7 @@ function absorbClock(data) {
   updateClock();
 }
 async function api(path, body, {raw = false, method = body === undefined ? 'GET' : 'POST', initialSession = false} = {}) {
+  const lifecycle = documentEpoch, sessionOwner = state.sessionRevision;
   const protectedRequest = !/^\/api\/(?:session(?:\?|$)|auth\/|access\/)/.test(path);
   if (protectedRequest && !hasAccess()) {
     const error = new Error('Sign in with an active beta membership to continue.');
@@ -1212,13 +1229,25 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
   const timeout = bootstrap ? null : setTimeout(() => controller.abort(), body !== undefined && path.split('?')[0] === '/api/challenges' ? 30000 : 20000);
   try {
     let response;
-    try { response = await (bootstrap?.response || fetch(path, {
+    const fetchResponse = () => fetch(path, {
       method, credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
       headers: body === undefined ? {Accept: 'application/json'} : {
         Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': state.csrf
       },
       ...(body === undefined ? {} : {body: JSON.stringify(body)})
-    })); } catch {
+    });
+    try {
+      try { response = await (bootstrap?.response || fetchResponse()); }
+      catch (failure) {
+        // Stop-loading and transient network loss have the same browser error.
+        // Only this initial read can recover once, under its original deadline;
+        // neither a server response nor a write is ever retried here.
+        if (!initialSession || path !== '/api/session' || body !== undefined || method !== 'GET' ||
+            failure?.name !== 'TypeError' || controller.signal.aborted ||
+            documentRetired || lifecycle !== documentEpoch || sessionOwner !== state.sessionRevision) throw failure;
+        response = await fetchResponse();
+      }
+    } catch {
       const error = new Error(controller.signal.aborted ? 'The server took too long to respond. Please try again.' : 'The server could not be reached. Check your connection and try again.');
       error.status = 0;
       error.code = controller.signal.aborted ? 'response_timeout' : 'network_unreachable';
@@ -1269,7 +1298,7 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
     if (protectedRequest && !['GET', 'HEAD'].includes(method) && !readOnlyValidation) {
       invalidateReadViews(); notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
     }
-    if (!raw) absorbClock(data);
+    if (!raw && (!initialSession || (!documentRetired && lifecycle === documentEpoch && sessionOwner === state.sessionRevision))) absorbClock(data);
     return data;
   } finally {
     if (bootstrap) bootstrap.finish(); else clearTimeout(timeout);
@@ -1598,7 +1627,10 @@ async function refreshProfiles({background = false} = {}) {
     // in-flight connections, and a slider/jump input currently being edited.
     const editing = [$('#size-slider'), $('#profile-select')].includes(document.activeElement);
     if (!background || metadataChanged || selectionChanged || state.profileMetadataPending === selectionKey()) {
-      if (editing) state.profileMetadataPending = selectionKey();
+      if (editing) {
+        state.profileMetadataPending = selectionKey();
+        refreshProfileRecoveryStyles(scheme);
+      }
       else renderProfiles(null, {details: (!background || metadataChanged || state.profileMetadataPending === selectionKey()) && (state.view === 'protocol' || $('#scheme-specifics').open)});
     }
   }
@@ -1612,6 +1644,12 @@ function profileBytes(scheme, profile, metric) {
 function participantCount(scheme) {
   const value = scheme?.participant_count;
   return Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+function catalogueGroup(scheme) {
+  if (['number-theory', 'lattices', 'codes'].includes(scheme.display_group)) return scheme.display_group;
+  // These established entries predate catalogue groups. Keep this display-only
+  // classification separate from their immutable protocol manifests.
+  return ['teaching-dh-kem', 'rsa-kem', 'dhkem-x25519'].includes(scheme.id) ? 'number-theory' : null;
 }
 function prepareSchemeLink(link, scheme) {
   const prepare = () => {
@@ -1650,29 +1688,28 @@ function renderCatalogue() {
       heading.append(node('span', label), help);
       th.replaceChildren(heading);
     }
-    if (label === 'Participants' && !state.schemes.some(scheme => ['lattices', 'codes'].includes(scheme.display_group))) th.setAttribute('aria-sort', 'descending');
+    if (label === 'Participants' && new Set(state.schemes.map(catalogueGroup)).size === 1) th.setAttribute('aria-sort', 'descending');
     if (label === 'Participants') th.title = 'Distinct accounts with at least one submitted recovery attempt, successful or unsuccessful, including compatible releases.';
     headings.append(th);
   }
   head.append(headings);
-  const groups = [null, 'lattices', 'codes'];
+  const groups = ['number-theory', null, 'lattices', 'codes'];
+  const groupLabels = {'number-theory': 'Number-theoretic', lattices: 'Lattice-based', codes: 'Code-based'};
   const catalogue = [...state.schemes].sort((a, b) =>
-    groups.indexOf(groups.includes(a.display_group) ? a.display_group : null) - groups.indexOf(groups.includes(b.display_group) ? b.display_group : null) ||
+    groups.indexOf(catalogueGroup(a)) - groups.indexOf(catalogueGroup(b)) ||
     (participantCount(b) ?? -1) - (participantCount(a) ?? -1) ||
     a.name.localeCompare(b.name, 'en', {sensitivity: 'base'}) || a.id.localeCompare(b.id));
   table.append(head);
   let body, currentGroup;
   for (const scheme of catalogue) {
-    const group = groups.includes(scheme.display_group) ? scheme.display_group : null;
+    const group = catalogueGroup(scheme);
     if (!body || group !== currentGroup) {
       body = node('tbody'); currentGroup = group;
-      if (group) {
-        const row = node('tr', undefined, 'kem-group-row');
-        const title = node('th', group === 'lattices' ? 'Lattice-based' : 'Code-based');
-        title.scope = 'rowgroup'; title.colSpan = 4;
-        title.append(node('span', String(catalogue.filter(item => item.display_group === group).length), 'kem-group-count'));
-        row.append(title); body.append(row);
-      }
+      const row = node('tr', undefined, 'kem-group-row');
+      const title = node('th', groupLabels[group] || 'Miscellaneous');
+      title.scope = 'rowgroup'; title.colSpan = 4;
+      title.append(node('span', String(catalogue.filter(item => catalogueGroup(item) === group).length), 'kem-group-count'));
+      row.append(title); body.append(row);
       table.append(body);
     }
     const profiles = scheme.profiles || [];
@@ -2741,25 +2778,54 @@ function renderIntermediateConfigurations(scheme, current) {
   if (restoreFocus) buttons.find(button => button.getAttribute('aria-pressed') === 'true')?.focus();
 }
 function exactRecoveryTrack(profiles, recovered) {
-  // Exact-profile records color only their own slider cells. A higher recovered
-  // stage does not turn the intervening independent stages green. Bound the
-  // generated CSS by registered positions, never by receipt IDs or their text.
-  if (!profiles.length || profiles.length > 1024) return null;
+  // Runs stop at recovered thumb centers, never halfway into an unsolved stage.
+  // Isolated records get small centered ticks, capped to half the stage gap.
+  // A single disabled position is represented by its thumb alone. Bound CSS by
+  // registered positions, never by receipt IDs or their text.
+  if (profiles.length < 2 || profiles.length > 1024) return null;
   const stops = ['var(--line) 0%'];
   const boundary = position => `calc(7px + (100% - 14px) * ${position / (profiles.length - 1)})`;
+  const halfTick = `min(2px, calc((100% - 14px) * ${1 / (4 * (profiles.length - 1))}))`;
   let found = false;
   for (let index = 0; index < profiles.length; index++) {
     if (!recovered.has(profileId(profiles[index]))) continue;
     const first = index;
     while (index + 1 < profiles.length && recovered.has(profileId(profiles[index + 1]))) index++;
-    const start = first === 0 ? '0%' : boundary(first - 0.5);
-    const end = index === profiles.length - 1 ? '100%' : boundary(index + 0.5);
+    const isolated = first === index;
+    const start = isolated ? `calc(${boundary(first)} - ${halfTick})` : boundary(first);
+    const end = isolated ? `calc(${boundary(index)} + ${halfTick})` : boundary(index);
     stops.push(`var(--line) ${start}`, `#278451 ${start}`, `#278451 ${end}`, `var(--line) ${end}`);
     found = true;
   }
   if (!found) return null;
   stops.push('var(--line) 100%');
   return `linear-gradient(to right, ${stops.join(', ')})`;
+}
+// This describes only the current control geometry/preview, never recoveries
+// or access. It prevents a progress repaint from moving an active slider or
+// treating the display position of an intermediate configuration as a record.
+let profileRailView = null;
+function paintProfileRecoveryStyles(scheme, profiles, current) {
+  const exact = exactProfileRecords(scheme, current);
+  const recovered = new Set(recoveredProfileIds(scheme));
+  const largest = profiles.find(profile => profileId(profile) === scheme?.largest_recovered_profile_id);
+  const recoveredIndex = !exact && largest ? profiles.indexOf(largest) : -1;
+  const recoveredThrough = recoveredIndex < 0 ? '0%' : profiles.length < 2 || recoveredIndex === profiles.length - 1
+    ? '100%' : `calc(7px + (100% - 14px) * ${recoveredIndex / (profiles.length - 1)})`;
+  const exactTrack = exact ? exactRecoveryTrack(profiles, recovered) : null;
+  const registered = profiles.some(profile => profileId(profile) === profileId(current));
+  const selectedRecovered = registered && (recovered.has(profileId(current)) ||
+    (!exact && largest && instanceSize(current) <= instanceSize(largest)));
+  $('#size-slider').style.cssText = `--recovered-through: ${recoveredThrough}` +
+    (exactTrack ? `; --recovery-track: ${exactTrack}` : '') + (selectedRecovered ? '; --recovery-thumb: #278451' : '');
+}
+function refreshProfileRecoveryStyles(scheme) {
+  if (!hasAccess() || scheme !== selectedScheme() || profileRailView?.selection !== selectionKey()) return;
+  const profiles = orderedProfiles(scheme);
+  if (profiles.length !== profileRailView.order.length ||
+      profiles.some((profile, index) => profileId(profile) !== profileRailView.order[index])) return;
+  const current = scheme.profiles.find(profile => profileId(profile) === profileRailView.profile);
+  if (current) paintProfileRecoveryStyles(scheme, profiles, current);
 }
 function renderProfiles(previewProfile = null, {details = true} = {}) {
   if (!previewProfile) renderSchemeHeading();
@@ -2774,6 +2840,7 @@ function renderProfiles(previewProfile = null, {details = true} = {}) {
   for (const id of ['#tier-size-rail', '#tier-size-slider', '#tier-size-jump']) $(id).hidden = named;
   $('#parameter-set-options').hidden = !named;
   if (named) {
+    profileRailView = null;
     const target = $('#parameter-set-options');
     const restoreFocus = [...target.querySelectorAll('button')].includes(document.activeElement);
     const recovered = new Set(recoveredProfileIds(scheme));
@@ -2826,14 +2893,8 @@ function renderProfiles(previewProfile = null, {details = true} = {}) {
   slider.max = String(Math.max(0, profiles.length - 1));
   slider.value = String(Math.max(0, index));
   slider.disabled = profiles.length < 2;
-  const recoveredIndex = !exact && largest ? profiles.indexOf(largest) : -1;
-  const recoveredThrough = recoveredIndex < 0 ? '0%' : profiles.length < 2 || recoveredIndex === profiles.length - 1
-    ? '100%' : `calc(7px + (100% - 14px) * ${recoveredIndex / (profiles.length - 1)})`;
-  const exactTrack = exact ? exactRecoveryTrack(profiles, recovered) : null;
-  const selectedRecovered = selectedIndex >= 0 && (recovered.has(profileId(current)) ||
-    (!exact && largest && instanceSize(current) <= instanceSize(largest)));
-  slider.style.cssText = `--recovered-through: ${recoveredThrough}` +
-    (exactTrack ? `; --recovery-track: ${exactTrack}` : '') + (selectedRecovered ? '; --recovery-thumb: #278451' : '');
+  profileRailView = {selection: selectionKey(), profile: profileId(current), order: profiles.map(profileId)};
+  paintProfileRecoveryStyles(scheme, profiles, current);
   slider.setAttribute('aria-valuetext', current ? intermediate ? profileLabel(current, scheme) : `Challenge stage ${instanceSize(current)}` : 'No stages available');
   setText('#size-slider-value', current && !intermediate ? String(instanceSize(current)) : '—');
   $('#jump-size').disabled = !profiles.length;
@@ -5465,6 +5526,11 @@ for (const event of ['pointerenter', 'focus']) {
   });
 }
 async function initialize() {
+  if (documentRetired) return;
+  const token = ++initializationRequest, lifecycle = documentEpoch;
+  initializationPending = true;
+  let revision = state.sessionRevision;
+  const current = () => !documentRetired && lifecycle === documentEpoch && token === initializationRequest && revision === state.sessionRevision;
   globalError('');
   if (!state.sessionResolved) {
     $('#access-loading-preview').hidden = false;
@@ -5481,21 +5547,35 @@ async function initialize() {
   capturePasswordResetLink();
   captureInvitation();
   try {
-    setSession(await api('/api/session', undefined, {initialSession: true}));
+    const session = await api('/api/session', undefined, {initialSession: true});
+    if (!current()) return;
+    setSession(session);
+    revision = state.sessionRevision;
     if (await handleAuthenticationRoute()) return;
+    if (!current()) return;
     if (!hasAccess()) return;
     await loadAuthorizedWorkspace();
   } catch (error) {
+    if (!current()) return;
     if (hasAccess()) { showRouteLoading(); showInlineError(routeLoadingTarget(), error.message, initialize); }
     else {
       document.body.removeAttribute('data-access-pending');
-      globalError(error.message);
       $('#access-loading-preview').hidden = true;
       $('#access-workspace').setAttribute('aria-busy', 'false');
-      if (!state.sessionResolved) setText('#access-description', 'Access could not be checked. Try again.');
+      if (!state.sessionResolved && error.code === 'network_unreachable') {
+        const retry = node('button', 'Try again', 'text-button'); retry.type = 'button';
+        retry.id = 'access-retry'; retry.addEventListener('click', initialize);
+        $('#access-description').replaceChildren(node('span', 'Access could not be checked. Check your connection, then '), retry);
+      } else {
+        globalError(error.message);
+        if (!state.sessionResolved) setText('#access-description', 'Access could not be checked. Try again.');
+      }
     }
     $('#challenge-loading').hidden = true;
-  } finally { $('#retry-button').disabled = false; }
+  } finally {
+    if (token === initializationRequest) initializationPending = false;
+    if (current()) $('#retry-button').disabled = false;
+  }
 }
 setInterval(updateClock, 1000);
 setInterval(() => { if (!document.hidden) synchronizeSession(); }, 60000);
