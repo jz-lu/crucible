@@ -124,21 +124,30 @@ const lists=app=>app.requests.filter(row=>row.url.startsWith('/api/notebook/note
    const before=lists(app).length;await filterNotes(app,'mine');assert.equal(lists(app).length,before+1);assert.ok(lists(app).at(-1).url.includes('scope=mine'));
   }
  });
- await test('complete indexed pages jump directly without requests and retain paging focus and space',async()=>{
+ await test('complete indexed pages jump directly and a short final page releases reserved space without losing focus',async()=>{
   const rows=Array.from({length:55},(_,i)=>indexRow('jump-'+i,{content:content('Jump title '+i)}));
-  const app=await boot({respond:url=>url===indexPath?summaryIndex(rows):undefined});
+  const app=await boot({respond:url=>url===indexPath?summaryIndex(rows):url==='/api/notebook/timeline'?timeline():undefined});
   await app.controller.warm('list');await app.show();const before=app.requests.length;
   assert.equal(app.q('page-jump').hidden,false);assert.equal(app.q('page-select').querySelectorAll('option').length,3);
-  app.q('list').getBoundingClientRect=()=>({height:870});app.sandbox.window.scrollY=400;
+  app.root.hidden=false;app.sandbox.window.scrollY=180;app.sandbox.window.innerHeight=900;
+  app.root.getBoundingClientRect=()=>({top:-40,height:9000});
+  app.q('timeline-view').click();await flush();assert.equal(app.root.style.minHeight,'940px');
+  app.q('notes-view').click();await flush();assert.equal(app.root.style.minHeight,'940px','The view switch keeps its own viewport reservation');
+  const beforePaging=app.requests.length;
+  app.q('list').getBoundingClientRect=()=>({height:Math.max(app.q('list').querySelectorAll('.nb-entry').length*35,parseFloat(app.q('list').style.minHeight)||0)});app.sandbox.window.scrollY=400;
+  let scrolls=0;app.sandbox.window.scrollTo=()=>{scrolls++;};
   app.q('page-select').focus();app.q('page-select').value='2';app.q('page-select').dispatchEvent({type:'change'});await flush();
   assert.equal(app.q('list').querySelectorAll('.nb-entry').length,5);assert.match(app.q('list').textContent,/Jump title 50/);
   assert.equal(app.q('page-select').value,'2');assert.equal(app.document.activeElement,app.q('page-select'));
   assert.equal(app.q('more').disabled,true);assert.equal(app.q('prev').disabled,false);
-  assert.equal(app.q('list').style.minHeight,'870px');assert.equal(app.sandbox.window.scrollY,400);
+  assert.equal(app.q('list').style.minHeight,'');assert.equal(app.q('list').classList.contains('nb-page-position-held'),false);
+  assert.equal(app.root.style.minHeight,'');assert.equal(app.root.classList.contains('nb-view-scroll-held'),false);
+  assert.equal(app.q('list').getBoundingClientRect().height,175);assert.equal(app.sandbox.window.scrollY,400);assert.equal(scrolls,0);
   app.q('page-select').value='99';app.q('page-select').dispatchEvent({type:'change'});await flush();
   assert.equal(app.q('page-select').value,'2');assert.match(app.q('list').textContent,/Jump title 50/);
   app.q('prev').focus();app.q('prev').click();await flush();assert.match(app.q('list').textContent,/Jump title 25/);
-  assert.equal(app.document.activeElement,app.q('prev'));assert.equal(app.requests.length,before);
+  assert.equal(app.document.activeElement,app.q('prev'));assert.equal(app.requests.length,beforePaging);assert.equal(beforePaging,before+1,'Only Timeline reads its aggregate');
+  assert.equal(app.q('list').getBoundingClientRect().height,875);assert.equal(scrolls,0);
   app.controller.hide();assert.equal(app.q('list').style.minHeight,'');
  });
  await test('filtered complete page counts reset and a refreshed smaller index clamps the selected page',async()=>{
@@ -161,8 +170,10 @@ const lists=app=>app.requests.filter(row=>row.url.startsWith('/api/notebook/note
   app.q('list').getBoundingClientRect=()=>({height:650});app.q('more').focus();app.q('more').click();app.q('more').click();await flush();
   assert.equal(lists(app).length,2);assert.equal(listQuery(lists(app)[1].url).get('after'),'server-cursor');
   assert.equal(app.q('prev').disabled,true);assert.equal(app.q('more').disabled,true);assert.equal(app.q('page-select').disabled,true);
+  assert.equal(app.q('list').style.minHeight,'650px','Pending page retains its previous geometry');
+  assert.equal(app.q('list').classList.contains('nb-page-position-held'),true);
   app.q('search').focus();late.resolve({notes:[indexRow('last',{content:content('Last cursor page')})],next_after:null});await flush();
-  assert.equal(app.document.activeElement,app.q('search'));assert.equal(app.q('list').style.minHeight,'650px');
+  assert.equal(app.document.activeElement,app.q('search'));assert.equal(app.q('list').style.minHeight,'');
   assert.equal(app.q('page').textContent,'Page 2');assert.equal(app.q('page-jump').hidden,true);assert.equal(app.q('prev').disabled,false);
   assert.ok(lists(app).every(row=>listQuery(row.url).get('limit')==='25'));
   assert.equal(app.requests.some(row=>row.url.startsWith('/api/notebook/notes/')),false);
@@ -178,7 +189,42 @@ const lists=app=>app.requests.filter(row=>row.url.startsWith('/api/notebook/note
    if(changed==='session'){credential='two';app.setAccount(user);}
    late.resolve({notes:[indexRow('last',{content:content('OLD account page')})],next_after:null});await flush();
    if(changed){assert.equal(app.document.activeElement,app.document.body);assert.equal(app.q('list').style.minHeight,'');assert.doesNotMatch(app.root.textContent,/OLD account page/);}
-   else{assert.equal(app.document.activeElement,app.q('prev'));assert.equal(app.q('list').style.minHeight,'650px');}
+   else{assert.equal(app.document.activeElement,app.q('prev'));assert.equal(app.q('list').style.minHeight,'');}
+  }
+ });
+ await test('an obsolete page response cannot clear a newer page reservation',async()=>{
+  const old=deferred(),latest=deferred();
+  const app=await boot({respond:url=>{
+   if(!url.startsWith('/api/notebook/notes?'))return;
+   const query=listQuery(url);
+   if(query.get('after')==='old-cursor')return old.promise;
+   if(query.get('after')==='new-cursor')return latest.promise;
+   return{notes:[indexRow(query.get('scope')==='mine'?'new-first':'old-first')],next_after:query.get('scope')==='mine'?'new-cursor':'old-cursor'};
+  }});
+  app.q('list').getBoundingClientRect=()=>({height:650});
+  app.q('more').click();await flush();assert.equal(app.q('list').style.minHeight,'650px');
+  await filterNotes(app,'mine');assert.equal(app.q('list').style.minHeight,'');
+  app.q('list').getBoundingClientRect=()=>({height:420});
+  app.q('more').focus();app.q('more').click();await flush();
+  old.resolve({notes:[indexRow('obsolete',{content:content('Obsolete page')})],next_after:null});await flush();
+  assert.equal(app.q('list').style.minHeight,'420px');assert.equal(app.q('list').getAttribute('aria-busy'),'true');
+  assert.doesNotMatch(app.q('list').textContent,/Obsolete page/);
+  latest.resolve({notes:[indexRow('latest',{content:content('Current page')})],next_after:null});await flush();
+  assert.match(app.q('list').textContent,/Current page/);assert.equal(app.q('list').style.minHeight,'');
+  assert.equal(app.document.activeElement,app.q('prev'));
+ });
+ await test('failed and invalidated page reads release their own pending height without replaying requests',async()=>{
+  for(const mode of ['error','denied','invalidated']){
+   const late=deferred();
+   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?
+    (listQuery(url).has('after')?late.promise:{notes:[indexRow('first')],next_after:'cursor'}):undefined});
+   app.q('list').getBoundingClientRect=()=>({height:650});app.q('more').focus();app.q('more').click();await flush();
+   assert.equal(app.q('list').style.minHeight,'650px');
+   if(mode==='invalidated'){app.controller.invalidateReads();late.resolve({notes:[indexRow('discarded',{content:content('Discarded page')})],next_after:null});}
+   else late.reject(Object.assign(Error('Page unavailable'),{status:mode==='denied'?403:503}));
+   await flush();assert.equal(app.q('list').style.minHeight,'');assert.equal(app.q('list').classList.contains('nb-page-position-held'),false);
+   assert.equal(lists(app).length,2);assert.doesNotMatch(app.q('list').textContent,/Discarded page/);
+   if(mode!=='invalidated')assert.match(app.q('list').textContent,/Page unavailable/);
   }
  });
  await test('an expired complete index removes page jumping and returns to bounded server cursors',async()=>{

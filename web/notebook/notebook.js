@@ -642,15 +642,15 @@
     function changePage(index) {
       const focused = document.activeElement;
       const ownsFocus = focused?.closest('.nb-pagination') === q('pagination'), current = readGuard();
-      // Keep the paging row in place when the last page has fewer records.
-      // This is empty layout space, cleared on filter/account/view departure.
+      // Keep the paging row in place while a page is pending. Once it settles,
+      // use the actual list height; a short last page must not retain blank rows.
       const height = q('list').getBoundingClientRect?.().height;
       if (Number.isFinite(height) && height > 0) {
         q('list').style.minHeight = Math.ceil(height) + 'px';
         q('list').classList.add('nb-page-position-held');
       }
       pageIndex = index; previewId = null;
-      const loading = loadList(), token = request;
+      const loading = loadList({paging:true}), token = request;
       void loading.then(() => {
         if (!ownsFocus || !current() || !active || token !== request || q('library').hidden || q('pagination').hidden) return;
         if (document.activeElement !== focused && document.activeElement !== document.body) return;
@@ -741,7 +741,7 @@
         rememberRead(key, {notes:result.notes, next_after:result.next_after || null});
       }, error => { if (preparingLists.get(key) === entry && current() && forbiddenRead(error)) invalidateReads(); forget(); });
     }
-    async function loadList() {
+    async function loadList({paging = false} = {}) {
       clearTimeout(searchTimer); searchTimer = null;
       humanHint.hidden = reviewMode || visibility !== 'human';
       knownPageCount = null;
@@ -808,7 +808,13 @@
           q('count').textContent = '';
         }
       } finally {
-        if (current() && request === token && generation === readEpoch) { q('list').removeAttribute('aria-busy'); renderPagination(); }
+        if (current() && request === token) {
+          // Release only this request's reservation, including a discarded or
+          // failed read. Never clear a newer page's pending geometry.
+          clearPageSpace();
+          if (paging) clearViewSpace();
+          if (generation === readEpoch) { q('list').removeAttribute('aria-busy'); renderPagination(); }
+        }
       }
     }
 
