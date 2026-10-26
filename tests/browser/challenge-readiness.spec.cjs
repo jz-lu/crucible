@@ -71,6 +71,16 @@ for (const [width, profile] of [[1440, 'dh-30'], [390, 'dh-32']]) {
       expect(await page.locator('#panel-challenge').innerText()).not.toMatch(/Loading|Your instance is ready|Preparing/);
       expect(reads).toHaveLength(1); expect(posts).toHaveLength(0);
       const ready = await readyGeometry(page);
+      await expect(page.locator('#challenge-instance-rule')).toHaveText('One answer per instance.');
+      await expect(page.locator('#challenge-empty .section-number, #panel-challenge .workflow')).toHaveCount(0);
+      await expect(page.locator('#scheme-clock')).toBeVisible();
+      await expect(page.locator('#manual-tools summary')).toBeVisible();
+      expect(ready.height, 'compact entry card without the former 190px desktop minimum').toBeLessThanOrEqual(width === 1440 ? 160 : 220);
+      const actionFrame = await page.locator('#issue-button').boundingBox();
+      expect(actionFrame.x + actionFrame.width).toBeLessThanOrEqual(ready.x + ready.width);
+      if (width === 390) {
+        expect(Math.abs(actionFrame.x - ready.titleX), 'mobile action aligns with the Ready text').toBeLessThan(1);
+      }
       const copy = await page.locator('#empty-description').textContent();
       await page.screenshot({path: testInfo.outputPath('ready-status-pending.png'), fullPage: true});
 

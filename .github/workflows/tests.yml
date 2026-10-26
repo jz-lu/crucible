@@ -122,7 +122,8 @@ jobs:
       - run: python -B deploy/release.py contract
   browser-checks:
     name: Real Chromium UI and private-access checks
-    runs-on: ubuntu-latest
+    # Keep the tested distro stable across ubuntu-latest migrations.
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v7

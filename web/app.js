@@ -2740,6 +2740,27 @@ function renderIntermediateConfigurations(scheme, current) {
   target.replaceChildren(...buttons);
   if (restoreFocus) buttons.find(button => button.getAttribute('aria-pressed') === 'true')?.focus();
 }
+function exactRecoveryTrack(profiles, recovered) {
+  // Exact-profile records color only their own slider cells. A higher recovered
+  // stage does not turn the intervening independent stages green. Bound the
+  // generated CSS by registered positions, never by receipt IDs or their text.
+  if (!profiles.length || profiles.length > 1024) return null;
+  const stops = ['var(--line) 0%'];
+  const boundary = position => `calc(7px + (100% - 14px) * ${position / (profiles.length - 1)})`;
+  let found = false;
+  for (let index = 0; index < profiles.length; index++) {
+    if (!recovered.has(profileId(profiles[index]))) continue;
+    const first = index;
+    while (index + 1 < profiles.length && recovered.has(profileId(profiles[index + 1]))) index++;
+    const start = first === 0 ? '0%' : boundary(first - 0.5);
+    const end = index === profiles.length - 1 ? '100%' : boundary(index + 0.5);
+    stops.push(`var(--line) ${start}`, `#278451 ${start}`, `#278451 ${end}`, `var(--line) ${end}`);
+    found = true;
+  }
+  if (!found) return null;
+  stops.push('var(--line) 100%');
+  return `linear-gradient(to right, ${stops.join(', ')})`;
+}
 function renderProfiles(previewProfile = null, {details = true} = {}) {
   if (!previewProfile) renderSchemeHeading();
   if (!previewProfile) state.profileMetadataPending = null;
@@ -2808,7 +2829,11 @@ function renderProfiles(previewProfile = null, {details = true} = {}) {
   const recoveredIndex = !exact && largest ? profiles.indexOf(largest) : -1;
   const recoveredThrough = recoveredIndex < 0 ? '0%' : profiles.length < 2 || recoveredIndex === profiles.length - 1
     ? '100%' : `calc(7px + (100% - 14px) * ${recoveredIndex / (profiles.length - 1)})`;
-  slider.style.cssText = `--recovered-through: ${recoveredThrough}`;
+  const exactTrack = exact ? exactRecoveryTrack(profiles, recovered) : null;
+  const selectedRecovered = selectedIndex >= 0 && (recovered.has(profileId(current)) ||
+    (!exact && largest && instanceSize(current) <= instanceSize(largest)));
+  slider.style.cssText = `--recovered-through: ${recoveredThrough}` +
+    (exactTrack ? `; --recovery-track: ${exactTrack}` : '') + (selectedRecovered ? '; --recovery-thumb: #278451' : '');
   slider.setAttribute('aria-valuetext', current ? intermediate ? profileLabel(current, scheme) : `Challenge stage ${instanceSize(current)}` : 'No stages available');
   setText('#size-slider-value', current && !intermediate ? String(instanceSize(current)) : '—');
   $('#jump-size').disabled = !profiles.length;
@@ -3063,10 +3088,10 @@ function renderChallenge() {
       setText('#issue-button', 'Not enabled in this beta');
       return;
     }
-    setText('#empty-title', state.user ? 'Ready?' : 'A fresh instance, just for you.');
-    setText('#empty-description', state.user ? 'Receive a public key and encapsulation unique to your account and selected profile. Your answer is due at the shared deadline.' :
-      'Sign in to receive a public key and encapsulation unique to your account for this profile and round.');
-    setText('#issue-button', requesting ? 'Preparing your instance…' : state.user ? 'Get this round’s instance →' : 'Sign in to begin →');
+    setText('#empty-title', state.user ? 'Ready?' : 'Start this challenge');
+    setText('#empty-description', state.user ? 'Recover the shared secret from your instance.' :
+      'Sign in to get your instance.');
+    setText('#issue-button', requesting ? 'Preparing your instance…' : state.user ? 'Get instance →' : 'Sign in to begin →');
     return;
   }
   const challenge = state.challenge;

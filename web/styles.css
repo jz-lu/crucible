@@ -1331,13 +1331,13 @@ button {
 #size-slider::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 999px;
-  background: linear-gradient(to right, #278451 0 var(--recovered-through, 0%), var(--line) var(--recovered-through, 0%) 100%);
+  background: var(--recovery-track, linear-gradient(to right, #278451 0 var(--recovered-through, 0%), var(--line) var(--recovered-through, 0%) 100%));
 }
 
 #size-slider::-moz-range-track {
   height: 4px;
   border-radius: 999px;
-  background: linear-gradient(to right, #278451 0 var(--recovered-through, 0%), var(--line) var(--recovered-through, 0%) 100%);
+  background: var(--recovery-track, linear-gradient(to right, #278451 0 var(--recovered-through, 0%), var(--line) var(--recovered-through, 0%) 100%));
 }
 
 #size-slider::-moz-range-progress {
@@ -1351,8 +1351,8 @@ button {
   margin-top: -5px;
   border: 2px solid var(--surface);
   border-radius: 50%;
-  background: var(--primary);
-  box-shadow: 0 0 0 1px var(--primary);
+  background: var(--recovery-thumb, var(--primary));
+  box-shadow: 0 0 0 1px var(--recovery-thumb, var(--primary));
 }
 
 #size-slider::-moz-range-thumb {
@@ -1360,8 +1360,8 @@ button {
   height: 10px;
   border: 2px solid var(--surface);
   border-radius: 50%;
-  background: var(--primary);
-  box-shadow: 0 0 0 1px var(--primary);
+  background: var(--recovery-thumb, var(--primary));
+  box-shadow: 0 0 0 1px var(--recovery-thumb, var(--primary));
 }
 
 #size-slider:disabled {
@@ -1570,7 +1570,7 @@ input::placeholder,textarea::placeholder {
 }
 
 .challenge-empty {
-  padding: 35px 30px;
+  padding: 24px;
   display: flex;
   align-items: center;
   gap: 24px;
@@ -1578,25 +1578,12 @@ input::placeholder,textarea::placeholder {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 6px;
-  min-height: 190px;
+  min-height: 120px;
 }
 
 .empty-copy {
-  display: flex;
-  gap: 24px;
+  min-width: 0;
   max-width: 640px;
-}
-
-.section-number {
-  width: 42px;
-  height: 42px;
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  background: var(--light);
-  color: var(--primary);
-  font: 700 28px var(--display);
-  border-radius: 7px;
 }
 
 .empty-copy h3,.challenge-top h3,.panel-heading h3 {
@@ -1614,40 +1601,6 @@ input::placeholder,textarea::placeholder {
 
 .challenge-empty>.button {
   flex-shrink: 0;
-}
-
-.workflow {
-  list-style: none;
-  display: grid;
-  grid-template-columns: repeat(3,1fr);
-  gap: 35px;
-  margin: 25px 0 0;
-  padding: 21px 0 0;
-  border-top: 1px solid var(--line);
-}
-
-.workflow li {
-  display: flex;
-  gap: 13px;
-  align-items: flex-start;
-}
-
-.workflow li>span {
-  font: 10px var(--mono);
-  color: var(--muted);
-  margin-top: 4px;
-}
-
-.workflow strong {
-  font-size: 11px;
-  font-weight: 550;
-  color: var(--text);
-}
-
-.workflow p {
-  font-size: 10px;
-  color: var(--muted);
-  margin-top: 3px;
 }
 
 .challenge-top {
@@ -2447,21 +2400,11 @@ dialog h2 {
     display: none;
   }
 
-  .challenge-empty {
-    padding: 28px 24px;
-    gap: 22px;
-  }
-  .empty-copy {
-    gap: 17px;
-  }
   .challenge-empty>.button {
     max-width: 175px;
   }
   .scheme-heading>div>p:not(.eyebrow) {
     max-width: 460px;
-  }
-  .workflow {
-    gap: 24px;
   }
   .account-actions {
     gap: 14px;
@@ -2541,18 +2484,10 @@ dialog h2 {
     min-height: 240px;
   }
   .challenge-empty {
-    padding: 24px 20px;
+    padding: 20px;
     flex-direction: column;
     align-items: stretch;
-    gap: 20px;
-  }
-  .empty-copy {
-    gap: 13px;
-  }
-  .section-number {
-    width: 31px;
-    height: 31px;
-    font-size: 24px;
+    gap: 16px;
   }
   .empty-copy h3,.challenge-top h3,.panel-heading h3 {
     font-size: 23px;
@@ -2563,29 +2498,12 @@ dialog h2 {
   .challenge-empty>.button {
     max-width: none;
     align-self: stretch;
-    margin-left: 44px;
+    margin-left: 0;
   }
   .button {
     padding: 12px 16px;
     font-size: 11px;
     gap: 11px;
-  }
-  .workflow {
-    grid-template-columns: 1fr;
-    gap: 16px;
-    padding-top: 19px;
-    margin-top: 21px;
-  }
-  .workflow li {
-    gap: 13px;
-  }
-  .workflow p {
-    display: inline;
-    margin-left: 7px;
-    font-size: 10px;
-  }
-  .workflow strong {
-    font-size: 11px;
   }
   .challenge-top>div>p:not(.eyebrow) {
     font-size: 11px;

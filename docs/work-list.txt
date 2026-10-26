@@ -1,3 +1,19 @@
+Challenge entry refinement, 26 October 2026
+
+The Ready card is compact, without the decorative arrow or repeated three-step
+workflow. It keeps one start action, the deadline and the one-answer rule.
+Stage selection and agent/manual capabilities remain available.
+
+Exact-record progressions such as FrodoKEM show green slider cells only at
+registered recovered positions; unsolved gaps stay distinct. The selected
+recovered handle is green so it is visible on narrow screens. Schemes that
+declare record inheritance retain their cumulative green prefix. No recovered
+status, scoring, profile or inheritance policy is changed by this display fix.
+
+Browser CI uses Ubuntu24.04 rather than following an implicit ubuntu-latest
+distro migration; the locked browser, tests, timeout and required gates are
+unchanged. See browser-checks.txt. Release/hosted verification remains separate.
+
 Notebook continuity and explicit challenge requests, 26 October 2026
 
 - Ready remains visible during the selected instance check. Get and Take on
