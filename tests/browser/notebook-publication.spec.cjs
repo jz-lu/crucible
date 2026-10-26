@@ -19,7 +19,13 @@ for (const [width, actor] of [[1440, 'bulkdesktop'], [390, 'bulkmobile']]) {
     page.on('response', response => {
       if (new URL(response.url()).pathname.endsWith('/publication-requests')) receipts.push(response.json());
     });
-    const dialog = page.locator('#notebook-workspace dialog');
+    // Normal preparation also installs a hidden dialog inside the map's shadow
+    // root. Exercise that state while targeting only this flow's notebook dialog.
+    const mapDialog = page.locator('#notebook-workspace #mobile-details');
+    await expect(mapDialog).toBeAttached();
+    await expect(mapDialog).not.toBeVisible();
+    await expect(page.locator('#notebook-workspace dialog')).toHaveCount(2);
+    const dialog = page.locator('#notebook-workspace dialog[data-nb="dialog"]');
     const publish = page.locator('[data-nb="publish-all"]');
     await publish.click();
     await expect(dialog.getByRole('button', {name:'Send 2 publish requests', exact:true})).toBeEnabled();
