@@ -462,6 +462,19 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  await test('review-only notebook has no ordinary author tools and records a publication decision inline',async()=>{
   const queued=note({can_edit:false,can_review:true,owner:{id:2,handle:'bob'},...revision(2,'Candidate','submitted')});const app=await boot({reviewOnly:true,initialParams:new URLSearchParams('section=publication&note=note-one&revision=2'),respond:(url,body)=>body?{note:queued}:url.startsWith('/api/notebook/notes/note-one')?{note:queued}:undefined});assert.equal(app.q('new'),null);assert.equal(app.q('files'),null);assert.equal(app.q('notes-view'),null);assert.equal(app.q('dialog').open,false);assert.equal(byText(app.q('full'),'Edit'),undefined);assert.match(app.q('full').textContent,/Publication decision.*certify its mathematics/);app.root.querySelector('[name="reason"]').value='Unproved claim clearly marked.';app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();const write=app.requests.find(r=>r.body);assert.equal(write.url,'/api/notebook/notes/note-one/publication-reviews');assert.equal(write.body.decision,'approved');assert.equal(write.body.revision,2);
  });
+ await test('own pending publish requests explain missing review permission without exposing decision controls',async()=>{
+  for(const [reviewOnly,owner,canReview,status,shown] of [
+   [true,user,false,'submitted',true], [true,user,true,'submitted',false],
+   [true,{id:2,handle:'bob'},false,'submitted',false], [true,user,false,'private',false],
+   [false,user,false,'submitted',false]
+  ]) {
+   const queued=note({owner,can_edit:false,can_review:canReview,...revision(2,'Pending request',status)});
+   const app=await boot({reviewOnly,initialParams:new URLSearchParams('section=publication&note=note-one&revision=2'),respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:queued}:undefined});
+   assert.equal(app.q('full').textContent.includes('Another reviewer must approve this request.'),shown);
+   if(!canReview)assert.equal(app.root.querySelector('.nb-form'),null);
+   assert.equal(app.requests.some(row=>row.body),false);
+  }
+ });
  await test('detached inline review forms cannot submit after leaving the page',async()=>{
   const queued=note({can_edit:false,can_review:true,owner:{id:2,handle:'bob'},...revision(2,'Candidate','submitted')});const app=await boot({reviewOnly:true,initialParams:new URLSearchParams('section=publication&note=note-one&revision=2'),respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:queued}:undefined});const form=app.root.querySelector('.nb-form');app.root.querySelector('[name="reason"]').value='Reason';app.controller.hide();form.dispatchEvent({type:'submit'});await flush();assert.equal(app.requests.some(row=>row.body),false);
  });
