@@ -1,4 +1,4 @@
-const {test, expect, signIn, holdResponse} = require('./helpers.cjs');
+const {test, expect, signIn, holdResponse, useDataSaver} = require('./helpers.cjs');
 
 const views = {
   notes: {route: '#notebook', body: '[data-nb="library"]',
@@ -172,7 +172,7 @@ for (const width of [1440, 390]) for (const [view, config] of Object.entries(vie
 }
 
 for (const width of [1440, 390]) {
-  test(`complete notebook pages preserve ${width}px scroll and keyboard focus without new page reads`, async ({page}) => {
+  test(`complete notebook pages use natural final height and preserve ${width}px paging focus without new reads`, async ({page}) => {
     await page.setViewportSize({width, height: 1000});
     const indexRead = page.waitForResponse(response => {
       const url = new URL(response.url());
@@ -195,6 +195,14 @@ for (const width of [1440, 390]) {
     await expect(select).toBeVisible(); await expect(select).toBeEnabled();
     await expect(select.locator('option')).toHaveCount(pages);
     await expect(list.locator('.nb-entry')).toHaveCount(25);
+    // A prior visualization can hold a separate viewport reservation on the
+    // root. Explicit paging must retire that old space as well as the list's.
+    await page.evaluate(() => {scrollTo(0,150);return new Promise(requestAnimationFrame);});
+    await workspace.locator('[data-nb="timeline-view"]').click();
+    await expect(workspace.locator('[data-nb="timeline"] svg')).toBeVisible();
+    await workspace.locator('[data-nb="notes-view"]').click();
+    await expect(list.locator('.nb-entry')).toHaveCount(25);
+    expect(await workspace.evaluate(element=>element.style.minHeight)).not.toBe('');
     const requests = [];
     page.on('request', request => {
       const url = new URL(request.url());
@@ -206,18 +214,61 @@ for (const width of [1440, 390]) {
     expect(before).toBeGreaterThan(0);
     const oldHeight = await list.evaluate(element => element.getBoundingClientRect().height);
     await select.selectOption(String(pages - 1));
-    await expect(list.locator('.nb-entry')).toHaveCount(index.notes.length - 25 * (pages - 1));
+    const finalCount=index.notes.length - 25 * (pages - 1);
+    expect(finalCount).toBeGreaterThan(0);expect(finalCount).toBeLessThan(25);
+    await expect(list.locator('.nb-entry')).toHaveCount(finalCount);
     await expect(select).toBeFocused();
-    expect(Math.abs(await page.evaluate(() => scrollY) - before)).toBeLessThanOrEqual(1);
-    expect(await list.evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(oldHeight);
+    expect(await list.evaluate(element=>element.style.minHeight)).toBe('');
+    expect(await workspace.evaluate(element=>element.style.minHeight)).toBe('');
+    expect(await list.evaluate(element=>element.getBoundingClientRect().height)).toBeLessThan(oldHeight);
+    expect(await list.evaluate(element=>Math.abs(element.getBoundingClientRect().bottom-element.lastElementChild.getBoundingClientRect().bottom))).toBeLessThanOrEqual(1);
+    // A shorter document may naturally clamp scroll. No old-page-sized blank
+    // area is retained simply to force the previous offset to remain valid.
+    expect(await page.evaluate(()=>scrollY)).toBeLessThanOrEqual(before+1);
     const previous = workspace.locator('[data-nb="prev"]');
-    await previous.focus(); await previous.click();
+    await previous.focus();const beforePrevious=await page.evaluate(()=>scrollY);await previous.click();
     await expect(select).toHaveValue(String(pages - 2));
     await expect(list.locator('.nb-entry')).toHaveCount(25);
     if (pages === 2) await expect(select).toBeFocused();
     else await expect(previous).toBeFocused();
-    expect(Math.abs(await page.evaluate(() => scrollY) - before)).toBeLessThanOrEqual(1);
+    expect(Math.abs(await page.evaluate(() => scrollY) - beforePrevious)).toBeLessThanOrEqual(1);
+    expect(await list.evaluate(element=>element.style.minHeight)).toBe('');
     expect(requests).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+
+  test(`a pending server page keeps ${width}px geometry then releases its short result`, async ({page}) => {
+    await page.setViewportSize({width,height:1000});
+    // Explicitly exercise real cursor fallback, not the independently tested
+    // complete index. The preference suppresses optional background warming.
+    await useDataSaver(page);
+    const pending=await trackedHold(page,url=>url.pathname==='/api/notebook/notes'&&url.searchParams.get('limit')==='25'&&url.searchParams.has('after'));
+    const writes=[],bodyReads=[];
+    page.on('request',request=>{const url=new URL(request.url());if(request.method()!=='GET')writes.push(url.pathname);if(url.pathname.startsWith('/api/notebook/notes/'))bodyReads.push(url.pathname);});
+    try{
+      await signIn(page,'bob');
+      const workspace=page.locator('#notebook-workspace'),list=workspace.locator('#nb-note-list');
+      const next=workspace.locator('[data-nb="more"]'),previous=workspace.locator('[data-nb="prev"]');
+      await expect(list.locator('.nb-entry')).toHaveCount(25);await expect(next).toBeEnabled();
+      await next.scrollIntoViewIfNeeded();await next.focus();
+      const before=await list.boundingBox(),scroll=await page.evaluate(()=>scrollY);
+      const first=await list.locator('.nb-entry').first().elementHandle();
+      await next.click();const response=await pending.arrived;
+      const payload=await response.json();
+      expect(payload.notes.length).toBeGreaterThan(0);expect(payload.notes.length).toBeLessThan(25);expect(payload.next_after).toBeNull();
+      await expect(list).toHaveAttribute('aria-busy','true');await expect(next).toBeDisabled();
+      expect(await first.evaluate(element=>element.isConnected)).toBe(true);
+      expect(Math.abs((await list.boundingBox()).height-before.height)).toBeLessThanOrEqual(1);
+      expect(Math.abs(await page.evaluate(()=>scrollY)-scroll)).toBeLessThanOrEqual(1);
+      expect(await list.evaluate(element=>parseFloat(element.style.minHeight))).toBeGreaterThanOrEqual(before.height);
+      pending.release();await pending.delivered;
+      await expect(list).not.toHaveAttribute('aria-busy','true');
+      await expect(list.locator('.nb-entry')).toHaveCount(payload.notes.length);await expect(previous).toBeFocused();
+      expect(await list.evaluate(element=>element.style.minHeight)).toBe('');
+      expect((await list.boundingBox()).height).toBeLessThan(before.height);
+      expect(await list.evaluate(element=>Math.abs(element.getBoundingClientRect().bottom-element.lastElementChild.getBoundingClientRect().bottom))).toBeLessThanOrEqual(1);
+      expect(bodyReads).toEqual([]);expect(writes).toEqual(['/api/auth/login']);
+      expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    }finally{pending.release();if(pending.started)await pending.delivered;await pending.remove();}
   });
 }

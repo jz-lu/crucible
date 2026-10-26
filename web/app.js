@@ -30,9 +30,17 @@ let roundRetryAt = 0;
 let sessionSynchronization = null;
 let documentEpoch = 0, documentRetired = false, initializationRequest = 0;
 let initializationPending = false, resumeInitialization = false;
+function ownsDocument(epoch) { return !documentRetired && documentEpoch === epoch; }
 window.addEventListener('pagehide', () => {
-  resumeInitialization = initializationPending || !state.sessionResolved;
+  resumeInitialization = initializationPending || !state.sessionResolved || browsingRequests.size > 0;
   documentRetired = true; documentEpoch++;
+  // A restored document must not attach to requests owned by its retired visit.
+  // Keep completed snapshots; detach only in-flight handoffs and read owners.
+  catalogueLoad = null; mapCatalogueLoad = null; releaseLoads.clear();
+  pendingReads.clear(); intendedReads.clear(); warmedReads.clear(); notebookEarlyReads.clear(); readViewEpoch++;
+  sessionSynchronization = null; state.roundRefreshing = false;
+  state.challengeStartIntent = null;
+  notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
 });
 window.addEventListener('pageshow', event => {
   documentRetired = false;
@@ -79,8 +87,8 @@ function invalidateReadViews() {
 function primeRead(key, path) {
   for (const [oldKey, entry] of intendedReads) if (entry.done && Date.now() - entry.at >= 10000) intendedReads.delete(oldKey);
   if (!hasAccess() || navigator.connection?.saveData || cachedRead(key) || pendingReads.has(key) || intendedReads.has(key) || intendedReads.size + pendingReads.size >= 2) return;
-  const task = api(path), entry = {task, at: Date.now(), done: false};
-  task.then(() => { entry.done = true; }, () => { entry.done = true; });
+  const task = api(path, undefined, {readRecovery: true}), entry = {task, at: Date.now(), done: false};
+  task.then(() => { entry.done = true; }, () => { if (intendedReads.get(key) === entry) intendedReads.delete(key); });
   intendedReads.set(key, entry);
 }
 function readAgain(key, path) {
@@ -88,7 +96,7 @@ function readAgain(key, path) {
   const warmed = warmedReads.get(key); warmedReads.delete(key);
   if (pendingReads.has(key)) return pendingReads.get(key);
   const response = intended && Date.now() - intended.at < 10000 ? intended.task :
-    warmed && Date.now() - warmed.at < 10000 ? Promise.resolve(warmed.data) : api(path);
+    warmed && Date.now() - warmed.at < 10000 ? Promise.resolve(warmed.data) : api(path, undefined, {readRecovery: true});
   const task = response.finally(() => { if (pendingReads.get(key) === task) pendingReads.delete(key); });
   pendingReads.set(key, task); return task;
 }
@@ -122,7 +130,7 @@ function readRefreshError(key, target, error, retry, cached) {
   else showInlineError(target, error.message, retry);
 }
 function browseWarmAllowed() {
-  return hasAccess() && state.user && state.ready && !document.hidden && !navigator.connection?.saveData;
+  return !documentRetired && hasAccess() && state.user && state.ready && !document.hidden && !navigator.connection?.saveData;
 }
 function scheduleBrowseWarmup() {
   if (!browseWarmAllowed() || browseWarmScheduled || browseWarmRunning) return;
@@ -217,6 +225,7 @@ let assumptionsWorkspace = null;
 const referenceTimings = new Map();
 const REFERENCE_TIMING_MAX_AGE_MS = 60000;
 const protectedRequests = new Set();
+const browsingRequests = new Set();
 const dialogTriggers = new WeakMap();
 const authDialog = $('#auth-dialog');
 const submissionDialog = $('#submission-dialog');
@@ -589,11 +598,11 @@ function clearProtectedState() {
 async function loadAuthorizedCatalogue() {
   if (!hasAccess()) return false;
   if (catalogueLoad) return catalogueLoad;
-  const account = state.user?.id, csrf = state.csrf, request = ++state.catalogueRequest;
-  const current = () => hasAccess() && account === state.user?.id && csrf === state.csrf && request === state.catalogueRequest;
+  const account = state.user?.id, csrf = state.csrf, request = ++state.catalogueRequest, lifecycle = documentEpoch;
+  const current = () => ownsDocument(lifecycle) && hasAccess() && account === state.user?.id && csrf === state.csrf && request === state.catalogueRequest;
   const task = (async () => {
     let data;
-    try { data = await api('/api/schemes?projection=navigation'); }
+    try { data = await api('/api/schemes?projection=navigation', undefined, {readRecovery: true}); }
     catch (error) {
       if (!current() || !routeNeedsCatalogue()) return false;
       throw error;
@@ -675,10 +684,10 @@ async function loadMapCatalogue() {
   if (!hasAccess()) return;
   if (state.catalogueLoaded || mapReleases) return;
   if (mapCatalogueLoad) return mapCatalogueLoad;
-  const account = state.user?.id, csrf = state.csrf;
+  const account = state.user?.id, csrf = state.csrf, lifecycle = documentEpoch;
   const task = (async () => {
-    const data = await api('/api/schemes?projection=map');
-    if (!hasAccess() || account !== state.user?.id || csrf !== state.csrf) return;
+    const data = await api('/api/schemes?projection=map', undefined, {readRecovery: true});
+    if (!ownsDocument(lifecycle) || !hasAccess() || account !== state.user?.id || csrf !== state.csrf) return;
     if (data.projection !== 'map' || !Array.isArray(data.schemes) || data.schemes.some(item =>
       !item || typeof item.id !== 'string' || !item.id || typeof item.version !== 'string' || !item.version)) {
       throw new Error('Scheme links could not be loaded. Please try again.');
@@ -694,10 +703,10 @@ async function loadRelease(id, version) {
   const key = releaseKey(id, version);
   if (state.catalogueLoaded && completeRelease(id, version)) return true;
   if (releaseLoads.has(key)) return releaseLoads.get(key);
-  const account = state.user?.id, csrf = state.csrf, generation = releaseGeneration;
-  const current = () => hasAccess() && account === state.user?.id && csrf === state.csrf && generation === releaseGeneration;
+  const account = state.user?.id, csrf = state.csrf, generation = releaseGeneration, lifecycle = documentEpoch;
+  const current = () => ownsDocument(lifecycle) && hasAccess() && account === state.user?.id && csrf === state.csrf && generation === releaseGeneration;
   const task = (async () => {
-    const data = await api('/api/schemes?' + new URLSearchParams({projection: 'release', scheme_id: id, version}));
+    const data = await api('/api/schemes?' + new URLSearchParams({projection: 'release', scheme_id: id, version}), undefined, {readRecovery: true});
     if (!current()) return false;
     let scheme = data.scheme;
     if (!data.projection && Array.isArray(data.schemes)) scheme = data.schemes.flatMap(item => [item, ...(item.previous_releases || [])]).find(item => item.id === id && String(item.version) === String(version));
@@ -929,7 +938,7 @@ function notebookAPI(path, body, options) {
     notebookEarlyReads.delete(path);
     if (hasAccess() && early.epoch === readViewEpoch && Date.now() - early.at < 10000) return early.task;
   }
-  return api(path, body, options);
+  return api(path, body, {...options, readRecovery: true});
 }
 function getNotebookWorkspace(reviewing = false) {
   const target = $(reviewing ? '#review-notebook-workspace' : '#notebook-workspace');
@@ -956,10 +965,10 @@ function notebookPendingFrame(params) {
   return frame;
 }
 async function showNotebook(query, reviewing = false) {
-  const account = state.user?.id, csrf = state.csrf, section = state.reviewSection, request = ++notebookShowRequest;
+  const account = state.user?.id, csrf = state.csrf, section = state.reviewSection, request = ++notebookShowRequest, lifecycle = documentEpoch;
   const params = new URLSearchParams(query || window.location.hash.split('?')[1] || '');
   const target = $(reviewing ? '#review-notebook-workspace' : '#notebook-workspace');
-  const current = () => request === notebookShowRequest && hasAccess() && account === state.user?.id && csrf === state.csrf &&
+  const current = () => ownsDocument(lifecycle) && request === notebookShowRequest && hasAccess() && account === state.user?.id && csrf === state.csrf &&
     (reviewing ? state.screen === 'reviews' && state.canReviewProposals && state.reviewSection === section && section !== 'schemes' : state.screen === 'notebook');
   if (!current()) return;
   // Resolve the tiny action-link index alongside notebook assets, rather than
@@ -974,7 +983,8 @@ async function showNotebook(query, reviewing = false) {
   if (!reviewing && !notebookWorkspace && account != null && firstPath && !notebookEarlyReads.has(firstPath)) {
     const entry = {epoch: readViewEpoch, at: Date.now(), task: readAgain('notebook:first:' + firstPath, firstPath)};
     notebookEarlyReads.set(firstPath, entry);
-    entry.task.catch(() => {}); // A failed request can finish before assets.
+    // Do not hand a completed failure to a later visible reader.
+    entry.task.catch(() => { if (notebookEarlyReads.get(firstPath) === entry) notebookEarlyReads.delete(firstPath); });
   }
   if (!window.CrucibleNotebook || (!notebookAssetsReady && notebookAssetLoads.size)) {
     if (reviewing) setLoading(target, 'Loading review workspace…');
@@ -1046,7 +1056,8 @@ function workspaceSelector(screen) {
   return {loading: '#route-loading', access: '#access-workspace', scheme: '#workspace', overview: '#overview-workspace', assumptions: '#assumptions-workspace', notebook: '#notebook-workspace', reviews: '#review-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
 }
 function applyRoute(focus = false) {
-  const routeRequest = ++workspaceLoadRequest;
+  if (documentRetired) return;
+  const routeRequest = ++workspaceLoadRequest, lifecycle = documentEpoch;
   if (authenticationRoute() && state.sessionResolved) { void handleAuthenticationRoute().catch(error => globalError(error.message)); return; }
   captureInvitation();
   if (state.sessionResolved && (!hasAccess() || window.location.hash.split('?')[0] === '#join')) {
@@ -1057,7 +1068,7 @@ function applyRoute(focus = false) {
   if (!state.ready) return;
   if (routeNeedsCatalogue() && !state.catalogueLoaded) {
     void loadAuthorizedWorkspace().catch(error => {
-      if (hasAccess() && routeRequest === workspaceLoadRequest) showInlineError(routeLoadingTarget(), error.message, initialize);
+      if (ownsDocument(lifecycle) && hasAccess() && routeRequest === workspaceLoadRequest) showInlineError(routeLoadingTarget(), error.message, initialize);
     });
     return;
   }
@@ -1065,7 +1076,7 @@ function applyRoute(focus = false) {
   const knownRelease = targetRelease && availableReleases().some(scheme => scheme.id === targetRelease.id && String(scheme.version) === targetRelease.version);
   if (knownRelease && !completeRelease(targetRelease.id, targetRelease.version)) {
     const route = window.location.hash, account = state.user?.id, csrf = state.csrf;
-    const current = () => hasAccess() && routeRequest === workspaceLoadRequest && window.location.hash === route && account === state.user?.id && csrf === state.csrf;
+    const current = () => ownsDocument(lifecycle) && hasAccess() && routeRequest === workspaceLoadRequest && window.location.hash === route && account === state.user?.id && csrf === state.csrf;
     showRouteLoading();
     primeRouteChallenge(targetRelease);
     void loadRelease(targetRelease.id, targetRelease.version).then(loaded => {
@@ -1209,9 +1220,13 @@ function absorbClock(data) {
   }
   updateClock();
 }
-async function api(path, body, {raw = false, method = body === undefined ? 'GET' : 'POST', initialSession = false} = {}) {
-  const lifecycle = documentEpoch, sessionOwner = state.sessionRevision;
+async function api(path, body, {raw = false, method = body === undefined ? 'GET' : 'POST', initialSession = false, readRecovery = false} = {}) {
+  const lifecycle = documentEpoch, sessionOwner = state.sessionRevision, accountOwner = state.user?.id, csrfOwner = state.csrf;
   const protectedRequest = !/^\/api\/(?:session(?:\?|$)|auth\/|access\/)/.test(path);
+  const recoverRead = !raw && body === undefined && method === 'GET' &&
+    (initialSession && path === '/api/session' || readRecovery && protectedRequest && !path.startsWith('/api/agent/'));
+  const ownsRead = () => ownsDocument(lifecycle) && (!protectedRequest || hasAccess()) && (initialSession ? sessionOwner === state.sessionRevision :
+    accountOwner === state.user?.id && csrfOwner === state.csrf);
   if (protectedRequest && !hasAccess()) {
     const error = new Error('Sign in with an active beta membership to continue.');
     error.status = 403;
@@ -1226,6 +1241,7 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
   }
   const controller = bootstrap?.controller || new AbortController();
   if (protectedRequest) protectedRequests.add(controller);
+  if (recoverRead) browsingRequests.add(controller);
   const timeout = bootstrap ? null : setTimeout(() => controller.abort(), body !== undefined && path.split('?')[0] === '/api/challenges' ? 30000 : 20000);
   try {
     let response;
@@ -1240,11 +1256,9 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
       try { response = await (bootstrap?.response || fetchResponse()); }
       catch (failure) {
         // Stop-loading and transient network loss have the same browser error.
-        // Only this initial read can recover once, under its original deadline;
+        // Only explicitly selected browsing reads recover once, under their original deadline;
         // neither a server response nor a write is ever retried here.
-        if (!initialSession || path !== '/api/session' || body !== undefined || method !== 'GET' ||
-            failure?.name !== 'TypeError' || controller.signal.aborted ||
-            documentRetired || lifecycle !== documentEpoch || sessionOwner !== state.sessionRevision) throw failure;
+        if (!recoverRead || failure?.name !== 'TypeError' || controller.signal.aborted || !ownsRead()) throw failure;
         response = await fetchResponse();
       }
     } catch {
@@ -1298,11 +1312,12 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
     if (protectedRequest && !['GET', 'HEAD'].includes(method) && !readOnlyValidation) {
       invalidateReadViews(); notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
     }
-    if (!raw && (!initialSession || (!documentRetired && lifecycle === documentEpoch && sessionOwner === state.sessionRevision))) absorbClock(data);
+    if (!raw && ownsDocument(lifecycle) && (!initialSession || sessionOwner === state.sessionRevision) && (!recoverRead || ownsRead())) absorbClock(data);
     return data;
   } finally {
     if (bootstrap) bootstrap.finish(); else clearTimeout(timeout);
     protectedRequests.delete(controller);
+    browsingRequests.delete(controller);
   }
 }
 function setSession(data) {
@@ -1489,39 +1504,46 @@ function canSubmitChallenge(challenge) {
     Number.isFinite(challenge.ends_at) && now() < challenge.ends_at && sharedKeyBytes(challenge) !== null);
 }
 async function refreshRound() {
-  if (state.roundRefreshing || !hasAccess()) return;
+  if (documentRetired || state.roundRefreshing || !hasAccess()) return;
   state.roundRefreshing = true;
   const oldRound = state.round?.id;
-  const sessionRevision = state.sessionRevision;
+  let sessionRevision = state.sessionRevision;
+  const lifecycle = documentEpoch;
+  const current = () => ownsDocument(lifecycle) && state.sessionRevision === sessionRevision;
   try {
     const data = await api('/api/session');
-    if (state.sessionRevision !== sessionRevision) return;
+    if (!current()) return;
     setSession(data);
+    sessionRevision = state.sessionRevision;
     if (!hasAccess()) return;
     if (state.round?.id !== oldRound || (state.challenge && state.challenge.round_id !== state.round.id)) {
       await loadChallenge();
       if (state.view === 'leaderboard') await loadLeaderboard();
-      toast('A new round has begun. Request a fresh instance when you are ready.');
+      if (current()) toast('A new round has begun. Request a fresh instance when you are ready.');
     }
   } catch (error) {
-    globalError(error.message + ' The countdown will synchronize when the connection returns.');
+    if (current()) globalError(error.message + ' The countdown will synchronize when the connection returns.');
   } finally {
-    roundRetryAt = Date.now() + 5000;
-    state.roundRefreshing = false;
+    if (ownsDocument(lifecycle)) {
+      roundRetryAt = Date.now() + 5000;
+      state.roundRefreshing = false;
+    }
   }
 }
 async function synchronizeSession() {
-  if (!state.sessionResolved || state.roundRefreshing) return;
+  if (documentRetired || !state.sessionResolved || state.roundRefreshing) return;
   if (sessionSynchronization) return sessionSynchronization;
-  sessionSynchronization = (async () => {
+  const lifecycle = documentEpoch;
+  const task = (async () => {
     const oldRound = state.round?.id;
     const oldUser = state.user?.id;
     let revision = state.sessionRevision;
+    const current = () => ownsDocument(lifecycle) && revision === state.sessionRevision;
     try {
       const data = await api('/api/session');
       // A login/logout completed after this read began. Its response owns the
       // account state; the older read must not restore the previous account.
-      if (revision !== state.sessionRevision) return;
+      if (!current()) return;
       setSession(data);
       revision = state.sessionRevision;
       if (!hasAccess()) return;
@@ -1529,7 +1551,7 @@ async function synchronizeSession() {
       const changed = oldRound !== state.round?.id || oldUser !== state.user?.id;
       if (['catalogue', 'overview', 'scheme'].includes(state.screen) && await refreshProfiles({background: true}) === false) return;
       if (state.screen === 'person') await loadPerson(state.personHandle, {preserve: true});
-      if (revision !== state.sessionRevision) return;
+      if (!current()) return;
       globalError('');
       if (state.screen === 'overview' && !document.hidden) {
         const scheme = selectedScheme();
@@ -1543,10 +1565,11 @@ async function synchronizeSession() {
           if (changed || (key !== state.leaderboardDataKey && key !== state.leaderboardPendingKey)) loadLeaderboard({preserve: true});
         }
       }
-    } catch (error) { if (revision === state.sessionRevision) globalError(error.message); }
+    } catch (error) { if (current()) globalError(error.message); }
   })();
-  try { await sessionSynchronization; }
-  finally { sessionSynchronization = null; }
+  sessionSynchronization = task;
+  try { await task; }
+  finally { if (sessionSynchronization === task) sessionSynchronization = null; }
 }
 
 function catalogueDisplayKey(scheme) {
@@ -1573,7 +1596,8 @@ function mergeCatalogueProgress(data) {
   return state.schemes.map(scheme => ({...update(scheme), previous_releases: (scheme.previous_releases || []).map(update)}));
 }
 async function refreshProfiles({background = false} = {}) {
-  if (!hasAccess()) return false;
+  if (documentRetired || !hasAccess()) return false;
+  const lifecycle = documentEpoch;
   const request = ++state.catalogueRequest;
   const oldRevision = state.catalogueRevision;
   const oldCatalogue = JSON.stringify(state.schemes.map(catalogueDisplayKey));
@@ -1584,17 +1608,17 @@ async function refreshProfiles({background = false} = {}) {
   let merged;
   try {
     data = await api('/api/schemes' + (background && state.catalogueRevision ? '?progress_only=true' : '?projection=navigation'));
-    if (request !== state.catalogueRequest) return false;
+    if (!ownsDocument(lifecycle) || request !== state.catalogueRequest) return false;
     if (data.projection === 'progress') {
       merged = mergeCatalogueProgress(data);
       if (!merged) data = await api('/api/schemes?projection=navigation');
     }
   }
   catch (error) {
-    if (request !== state.catalogueRequest) return false;
+    if (!ownsDocument(lifecycle) || request !== state.catalogueRequest) return false;
     throw error;
   }
-  if (request !== state.catalogueRequest) return false;
+  if (!ownsDocument(lifecycle) || request !== state.catalogueRequest) return false;
   installNavigation(merged ? {schemes: merged, catalogue_revision: data.catalogue_revision, ...(navigationProjection ? {projection: 'navigation'} : {})} : data);
   state.catalogueLoaded = true;
   const metadataChanged = oldRevision !== state.catalogueRevision;
@@ -1603,7 +1627,7 @@ async function refreshProfiles({background = false} = {}) {
     const target = routeRelease();
     if (target && availableReleases().some(item => item.id === target.id && String(item.version) === target.version)) {
       await loadRelease(target.id, target.version);
-      if (request !== state.catalogueRequest || route !== window.location.hash) return false;
+      if (!ownsDocument(lifecycle) || request !== state.catalogueRequest || route !== window.location.hash) return false;
       scheme = selectedScheme();
     }
   }
@@ -3213,9 +3237,9 @@ async function loadChallenge({retry = false} = {}) {
   const selected = profileId();
   const selection = selectionKey();
   const accountId = state.user?.id;
-  const csrf = state.csrf;
+  const csrf = state.csrf, lifecycle = documentEpoch;
   const key = challengeReadKey(state.schemeId, state.schemeVersion, selected);
-  const stillSelected = () => request === state.challengeRequest &&
+  const stillSelected = () => ownsDocument(lifecycle) && request === state.challengeRequest &&
     hasAccess() && state.user?.id === accountId && state.csrf === csrf && selectionKey() === selection;
   $('#challenge-error').hidden = true;
   state.challenge = retry ? null : cachedRead(key)?.challenge || null; state.generationAdmission = null;
@@ -3251,7 +3275,7 @@ async function loadChallenge({retry = false} = {}) {
     if (stillSelected()) {
       state.challengeLoading = false;
       renderChallenge();
-    } else if (request === state.challengeRequest && hasAccess() && state.user?.id === accountId &&
+    } else if (ownsDocument(lifecycle) && request === state.challengeRequest && hasAccess() && state.user?.id === accountId &&
         state.csrf !== csrf && selectionKey() === selection && state.screen === 'scheme' && state.view === 'challenge') {
       // Rotation invalidates both cached and pending reads. A fresh read may
       // recover the current display, but cannot carry an old request to start.

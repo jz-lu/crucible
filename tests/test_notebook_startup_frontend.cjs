@@ -74,12 +74,40 @@ async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
     assert.equal(app.$('#access-workspace').hidden,false);assert.equal(app.$('#notebook-workspace').hidden,true);
     assert.equal(app.document.querySelector('#nb-note-list'),null);
   });
-  await test('early errors are handled, shown by the notebook, and retry performs a fresh read',async()=>{
-    const gate=deferred();let calls=0;
-    const app=await boot({respond:url=>url.pathname==='/api/notebook/notes'?++calls===1?gate.promise:{notes:[]}:undefined});
-    gate.reject(new Error('Synthetic connection failure'));await flush();await finishAssets(app);
+  await test('a completed failed early handoff is discarded before the visible notebook makes a fresh read',async()=>{
+    const gate=deferred();let calls=0,online=false;
+    const app=await boot({respond:url=>{
+      if(url.pathname!=='/api/notebook/notes')return;
+      if(++calls===1)return gate.promise;
+      if(!online)throw new TypeError('Synthetic connection failure');
+      return{notes:[],next_after:null};
+    }});
+    gate.reject(new TypeError('Synthetic interrupted early read'));await flush();
+    assert.equal(calls,2,'The early read has exhausted its single transport recovery');
+    assert.equal(vm.runInContext('notebookEarlyReads.size',app.sandbox),0);
+    assert.equal(app.document.querySelector('#nb-note-list'),null,'Controller assets remain held');
+    online=true;await finishAssets(app);
+    assert.equal(calls,3,'Visible reader must start fresh, not consume the completed rejection');
+    assert.match(app.$('#nb-note-list').textContent,/No notes/);
+    assert.doesNotMatch(app.$('#nb-note-list').textContent,/could not be reached/);
+    assert.equal(app.requests.some(row=>row.options.method==='POST'),false);
+  });
+  await test('persistent failure remains visible after bounded early and foreground reads, then explicit retry recovers',async()=>{
+    let calls=0,online=false;
+    const app=await boot({respond:url=>{
+      if(url.pathname!=='/api/notebook/notes')return;
+      calls++;
+      if(!online)throw new TypeError('Synthetic offline');
+      return{notes:[],next_after:null};
+    }});
+    assert.equal(calls,2);await finishAssets(app);
+    assert.equal(calls,4,'Fresh visible read gets its own single bounded recovery');
     assert.match(app.$('#nb-note-list').textContent,/could not be reached/);
-    app.$('#nb-note-list').querySelector('button').click();await flush();assert.equal(calls,2);assert.match(app.$('#nb-note-list').textContent,/No notes/);
+    assert.equal(app.$('#nb-note-list').querySelector('button').textContent,'Try again');
+    await flush();assert.equal(calls,4,'No background retry loop');
+    online=true;app.$('#nb-note-list').querySelector('button').click();await flush();
+    assert.equal(calls,5);assert.match(app.$('#nb-note-list').textContent,/No notes/);
+    assert.equal(app.requests.some(row=>row.options.method==='POST'),false);
   });
   await test('a response held beyond the short handoff window is revalidated after mount',async()=>{
     let calls=0;const app=await boot({respond:url=>url.pathname==='/api/notebook/notes'?{notes:[summary(++calls===1?'Old response':'Fresh response')]}:undefined});

@@ -115,9 +115,13 @@ geometry from access through asset/data reads. No placeholder invents private
 titles, counts, graph points or permissions. The two challenge clocks share the
 server-synchronized round state; a hidden or unknown round is not guessed.
 
-Implemented: notebook pagination preserves list space and focus. A complete
-fresh summary index enables a bounded page selector; incomplete indexes, search,
-Trash and review queues keep honest Previous/Next controls without fake totals.
+Implemented: notebook pagination reserves list space while a page is pending
+and preserves paging focus. The completed page uses its natural height, so a
+short final page leaves no permanent blank area. Equal-height pages keep their
+scroll position; a genuinely shorter document may naturally clamp it, without
+an explicit scroll-to-top. A complete fresh summary index enables a bounded page
+selector; incomplete indexes, search, Trash and review queues keep honest
+Previous/Next controls without fake totals.
 
 Implemented: Publish all confirms a fresh, complete bounded list of the author's
 eligible exact revisions, independent of the current filters. Sequential requests
@@ -128,11 +132,15 @@ pauses future sends. Session/navigation/dialog changes stop further writes,
 without claiming that an in-flight request has been rolled back. No real notes
 are published merely by deploying this feature.
 
-Implemented: an initial access read may recover once from a pre-response browser
-transport failure, within its original deadline. HTTP failures, body failures,
-ordinary refreshes and writes are not replayed. Persistent failure leaves a
-usable inline access retry. Retired startup responses cannot paint or rewind the
-clock; a persisted back/forward restore resumes only an interrupted startup.
+Implemented: initial access and explicitly selected browsing reads may recover
+once from a pre-response browser transport failure, within the original deadline.
+Catalogue/release metadata, shared browsing reads and notebook reads opt in;
+HTTP failures, body failures, raw downloads, session polling and writes are not
+replayed. A failed speculative read is discarded rather than handed to a later
+visible reader. Persistent failures retain a usable retry. Retired responses
+cannot update their former view or rewind its clock; back/forward restoration
+detaches interrupted reads before starting replacement work. Completed app
+snapshots remain subject to their existing freshness and authorization bounds.
 
 Implemented: recovery colors can refresh while the stage control owns focus,
 without replacing controls or moving the selection/draft. Independent recovered
