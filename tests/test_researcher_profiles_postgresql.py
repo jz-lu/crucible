@@ -7,7 +7,7 @@ flag is enabled; CI enables it and a missing/wrong service fails before mutation
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 import os
-from threading import Barrier
+from threading import Barrier, Lock
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -162,10 +162,18 @@ def test_pg17_runtime_profile_writes_lock_account_and_preserve_original_data(pos
     second = dict(first) if same_request else {**first, 'affiliation': 'Second draft', 'idempotency_key': str(uuid4())}
     barrier = Barrier(2, timeout=5)
     locks = []
+    observed_lock = Lock()
     def before_lock(connection, cursor, statement, parameters, context, executemany):
         if 'FROM users' in statement and 'FOR UPDATE' in statement:
-            locks.append(connection)
-            barrier.wait()  # Both real requests reach the account lock together.
+            with observed_lock:
+                first_lock = all(connection is not previous for previous in locks)
+                if first_lock:
+                    locks.append(connection)
+            # The real auth path rechecks the account under the same lock.
+            # Synchronize first acquisition only: waiting again would hold the
+            # winning row lock while its peer is correctly blocked in PostgreSQL.
+            if first_lock:
+                barrier.wait()
     try:
         with ExitStack() as stack:
             clients = [stack.enter_context(TestClient(app)) for _ in range(2)]
