@@ -71,7 +71,8 @@ def postgres(tmp_path, monkeypatch):
         config = migration_config(url(owner), tmp_path, monkeypatch)
         command.upgrade(config, '0023')
         old_names = set(inspect(owner_engine).get_table_names()) - {'alembic_version'}
-        assert len(old_names) == 45 and 'researcher_profiles' not in old_names
+        # 0023 has 45 tables including Alembic's own version marker.
+        assert len(old_names) == 44 and 'researcher_profiles' not in old_names
         metadata = MetaData()
         metadata.reflect(bind=owner_engine, only=sorted(old_names))
         with owner_engine.begin() as connection:

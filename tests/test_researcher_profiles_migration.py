@@ -75,6 +75,7 @@ def test_0023_upgrade_preserves_accounts_credentials_notes_receipts_and_release_
     command.upgrade(config, "0023")
     db = Database(database_url)
     old_names = set(inspect(db.engine).get_table_names()) - {"alembic_version"}
+    assert len(old_names) == 44  # 45 total at 0023, including Alembic's version marker.
     assert "researcher_profiles" not in old_names
     metadata = MetaData()
     metadata.reflect(bind=db.engine, only=sorted(old_names))
