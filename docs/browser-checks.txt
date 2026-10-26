@@ -6,6 +6,14 @@ suite. The required Chromium job adds actual script loading, CSS/shadow DOM,
 layout, focus, native dialogs and HTTP behavior. It runs once, not once for each
 Python version. Failed tests are not retried or skipped.
 
+The browser job uses ubuntu-24.04, matching the native release job's runner.
+GitHub began moving ubuntu-latest to Ubuntu 26.04 in October 2026; slow dependency
+downloads on that image consumed most of the browser job's 12-minute budget.
+Pinning the tested distro avoids an implicit OS change, but does not guarantee
+fast package mirrors. Playwright, Chromium, the 12-minute limit, retries and
+required CI gate remain unchanged. GitHub's migration guidance explicitly offers
+this pin: https://github.com/actions/runner-images/issues/14748
+
 Run from the repository with the existing Python dependencies installed:
 
   npm ci --prefix tests/browser --ignore-scripts --no-audit --no-fund

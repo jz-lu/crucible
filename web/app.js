@@ -24,7 +24,6 @@ const state = {
   screen: 'catalogue', reviewSection: 'publication', schemeId: null, schemeVersion: null,
   overviewMetrics: {computation: 'keygen', security: 'classical'},
   importBusy: false, recoveryImportRequest: 0, submissionFormRevision: 0,
-  autoIssueAttempts: new Set(), autoIssuePaused: new Map()
 };
 let toastTimer;
 let roundRetryAt = 0;
@@ -565,7 +564,6 @@ function clearProtectedState() {
   state.schemeId = null; state.schemeVersion = null; state.personHandle = null; state.personDataKey = null;
   state.pendingAttempt = null; state.submissionChallenge = null; state.connection = null; state.round = null;
   state.challengeStartIntent = null; state.challengeLoading = false;
-  state.autoIssueAttempts.clear(); state.autoIssuePaused.clear();
   state.canReviewProposals = false; state.canSelfReviewProposals = false; state.canManageBetaAccess = false;
   resetAgentSettings(); resetAgentInstructions(); resetProposalAccount(state.user?.id);
   research.request++; research.recoveriesRequest++; research.targets = []; research.target = null; research.findings = []; research.recoveries = [];
@@ -929,6 +927,18 @@ function getNotebookWorkspace(reviewing = false) {
   if (reviewing) return reviewNotebookWorkspace ||= window.CrucibleNotebook.mount(target, options);
   return notebookWorkspace ||= window.CrucibleNotebook.mount(target, options);
 }
+function notebookPendingFrame(params) {
+  const frame = $('#notebook-frame-template').cloneNode(true);
+  frame.removeAttribute('id'); frame.removeAttribute('data-pending-layout');
+  frame.classList.remove('pending-page-preview'); frame.classList.add('notebook-shell-preview');
+  const view = ['map', 'timeline'].includes(params.get('view')) ? params.get('view') : 'notes';
+  frame.setAttribute('data-notebook-view', view);
+  for (const tab of frame.querySelectorAll('[data-notebook-tab]')) {
+    if (tab.getAttribute('data-notebook-tab') === view) tab.setAttribute('aria-current', 'page');
+    else tab.removeAttribute('aria-current');
+  }
+  return frame;
+}
 async function showNotebook(query, reviewing = false) {
   const account = state.user?.id, csrf = state.csrf, section = state.reviewSection, request = ++notebookShowRequest;
   const params = new URLSearchParams(query || window.location.hash.split('?')[1] || '');
@@ -952,23 +962,21 @@ async function showNotebook(query, reviewing = false) {
   }
   if (!window.CrucibleNotebook || (!notebookAssetsReady && notebookAssetLoads.size)) {
     if (reviewing) setLoading(target, 'Loading review workspace…');
-    else {
-      // This title is public route structure, so it need not disappear while
-      // the admitted notebook code arrives. No note data or actions are here.
+    else if (params.has('note') || params.has('research_request') || params.has('research')) {
+      // A reader's private title and body remain unknown until its own read.
       const shell = node('div', undefined, 'notebook-shell-preview');
       shell.append(node('h1', 'Research notebook'));
-      const tabs = node('div', undefined, 'notebook-shell-tabs');
-      tabs.setAttribute('aria-hidden', 'true');
-      for (const label of ['Notes', 'Scheme map', 'Timeline']) tabs.append(node('span', label));
-      shell.append(tabs);
-      const frame = node('div', undefined, params.get('view') ? 'pending-chart-card' : 'loading-preview');
+      const frame = node('div', undefined, 'loading-preview');
       frame.setAttribute('aria-hidden', 'true');
-      if (params.get('view')) frame.append(node('div', undefined, 'pending-chart-axis'));
-      else for (let index = 0; index < 4; index++) {
+      for (let index = 0; index < 4; index++) {
         const row = node('div', undefined, 'loading-preview-row'); row.append(node('span'), node('span')); frame.append(row);
       }
       shell.append(frame);
       quietReadStatus(target, 'Loading notebook…'); target.append(shell);
+    } else {
+      // The same public frame is used before access resolves and while the
+      // admitted controller arrives. It contains no results or enabled actions.
+      quietReadStatus(target, 'Loading notebook…'); target.append(notebookPendingFrame(params));
     }
     try { await ensureNotebookAssets(); }
     catch (error) { if (current()) showInlineError(target, error.message, () => showNotebook(query, reviewing)); return; }
@@ -1179,8 +1187,7 @@ function absorbClock(data) {
   if (Number.isFinite(Number(data?.server_time))) state.timeOffset = Number(data.server_time) * 1000 - Date.now();
   if (data?.round) {
     if (state.round?.id !== data.round.id) {
-      state.autoIssueAttempts.clear();
-      state.autoIssuePaused.clear();
+      state.challengeStartIntent = null;
     }
     state.round = data.round;
   }
@@ -1298,6 +1305,7 @@ function setSession(data) {
   notebookWorkspace?.setAccount(hasAccess() ? state.user : null);
   reviewNotebookWorkspace?.setAccount(hasAccess() && state.canReviewProposals ? state.user : null);
   if (previousId !== state.user?.id || previousCsrf !== state.csrf) {
+    state.challengeStartIntent = null;
     invalidateReadViews();
     notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
     // An in-flight catalogue belongs to this browser session. A changed account
@@ -1322,8 +1330,6 @@ function setSession(data) {
     resetProposalAccount(previousId);
     state.historyRequest++;
     state.recoveryRequest++;
-    state.autoIssueAttempts.clear();
-    state.autoIssuePaused.clear();
     state.challenge = null; state.generationAdmission = null;
     state.challengeRequest++;
     state.leaderboardRequest++;
@@ -1411,15 +1417,30 @@ function showInlineError(target, message, retry) {
 }
 function showEmpty(target, message) { target.replaceChildren(node('div', message, 'empty-state')); }
 
+function renderRoundCountdowns(remaining) {
+  const known = Number.isFinite(remaining) && remaining >= 0;
+  const clock = known ? String(Math.floor(remaining / 60)).padStart(2, '0') + ':' + String(remaining % 60).padStart(2, '0') : '—:—';
+  for (const [selector, deadline] of [['#countdown', 'this challenge closes'], ['#overview-countdown', 'the shared round ends']]) {
+    const target = $(selector);
+    target.textContent = clock;
+    target.setAttribute('aria-label', known ? `${Math.floor(remaining / 60)} minutes and ${remaining % 60} seconds until ${deadline}` : 'Round time unavailable');
+    target.classList.toggle('urgent', known && remaining < 60);
+  }
+  return clock;
+}
+function renderOverviewClock(scheme = selectedScheme(), remaining = roundRemaining()) {
+  const current = state.schemes.find(item => item.id === scheme?.id);
+  $('#overview-clock').hidden = !hasAccess() || !Number.isFinite(remaining) || state.screen !== 'overview' ||
+    !current || String(current.version) !== String(scheme.version) ||
+    $('#overview-challenges').hidden || generationUnavailable(scheme);
+}
 function updateClock() {
+  const remaining = hasAccess() ? roundRemaining() : null;
+  const clock = renderRoundCountdowns(remaining);
+  renderOverviewClock(undefined, remaining);
   if (!hasAccess()) return;
   updateConnectionExpiry();
-  const remaining = roundRemaining();
   if (remaining === null) return;
-  const clock = String(Math.floor(remaining / 60)).padStart(2, '0') + ':' + String(remaining % 60).padStart(2, '0');
-  setText('#countdown', clock);
-  $('#countdown').setAttribute('aria-label', `${Math.floor(remaining / 60)} minutes and ${remaining % 60} seconds until this challenge closes`);
-  $('#countdown').classList.toggle('urgent', remaining < 60);
   setText('#submission-time', remaining ? clock + ' until the round ends' : 'This round has ended.');
   const formExpired = state.submissionChallenge && now() >= state.submissionChallenge.ends_at;
   $('#submit-answer').disabled = state.submitBusy || state.importBusy || Boolean(formExpired && !state.pendingAttempt) || sharedKeyBytes(state.submissionChallenge) === null;
@@ -2643,6 +2664,7 @@ function renderOverview(scheme, contextProfile = null) {
   const challengeLink = $('#overview-challenges');
   challengeLink.hidden = !entry;
   challengeLink.href = entry ? schemeRoute(scheme, entry) : '#challenge';
+  renderOverviewClock(scheme);
   $('#overview-generation-status').hidden = archived || !generationUnavailable(scheme);
   setText('#overview-generation-status', generationUnavailable(scheme) ? generationMessage(scheme) : '');
   const record = profiles.find(profile => profileId(profile) === scheme.largest_recovered_profile_id);
@@ -2718,6 +2740,27 @@ function renderIntermediateConfigurations(scheme, current) {
   target.replaceChildren(...buttons);
   if (restoreFocus) buttons.find(button => button.getAttribute('aria-pressed') === 'true')?.focus();
 }
+function exactRecoveryTrack(profiles, recovered) {
+  // Exact-profile records color only their own slider cells. A higher recovered
+  // stage does not turn the intervening independent stages green. Bound the
+  // generated CSS by registered positions, never by receipt IDs or their text.
+  if (!profiles.length || profiles.length > 1024) return null;
+  const stops = ['var(--line) 0%'];
+  const boundary = position => `calc(7px + (100% - 14px) * ${position / (profiles.length - 1)})`;
+  let found = false;
+  for (let index = 0; index < profiles.length; index++) {
+    if (!recovered.has(profileId(profiles[index]))) continue;
+    const first = index;
+    while (index + 1 < profiles.length && recovered.has(profileId(profiles[index + 1]))) index++;
+    const start = first === 0 ? '0%' : boundary(first - 0.5);
+    const end = index === profiles.length - 1 ? '100%' : boundary(index + 0.5);
+    stops.push(`var(--line) ${start}`, `#278451 ${start}`, `#278451 ${end}`, `var(--line) ${end}`);
+    found = true;
+  }
+  if (!found) return null;
+  stops.push('var(--line) 100%');
+  return `linear-gradient(to right, ${stops.join(', ')})`;
+}
 function renderProfiles(previewProfile = null, {details = true} = {}) {
   if (!previewProfile) renderSchemeHeading();
   if (!previewProfile) state.profileMetadataPending = null;
@@ -2786,7 +2829,11 @@ function renderProfiles(previewProfile = null, {details = true} = {}) {
   const recoveredIndex = !exact && largest ? profiles.indexOf(largest) : -1;
   const recoveredThrough = recoveredIndex < 0 ? '0%' : profiles.length < 2 || recoveredIndex === profiles.length - 1
     ? '100%' : `calc(7px + (100% - 14px) * ${recoveredIndex / (profiles.length - 1)})`;
-  slider.style.cssText = `--recovered-through: ${recoveredThrough}`;
+  const exactTrack = exact ? exactRecoveryTrack(profiles, recovered) : null;
+  const selectedRecovered = selectedIndex >= 0 && (recovered.has(profileId(current)) ||
+    (!exact && largest && instanceSize(current) <= instanceSize(largest)));
+  slider.style.cssText = `--recovered-through: ${recoveredThrough}` +
+    (exactTrack ? `; --recovery-track: ${exactTrack}` : '') + (selectedRecovered ? '; --recovery-thumb: #278451' : '');
   slider.setAttribute('aria-valuetext', current ? intermediate ? profileLabel(current, scheme) : `Challenge stage ${instanceSize(current)}` : 'No stages available');
   setText('#size-slider-value', current && !intermediate ? String(instanceSize(current)) : '—');
   $('#jump-size').disabled = !profiles.length;
@@ -3014,14 +3061,18 @@ function renderChallenge() {
   $('#open-submission').hidden = false;
   $('#open-submission').disabled = !state.ready || state.submitBusy || state.importBusy || state.challengeLoading;
   $('#challenge-loading').hidden = !state.challengeLoading || Boolean(state.challenge);
-  $('#challenge-empty').hidden = state.challengeLoading || Boolean(state.challenge);
+  // This card offers an action; it does not assert that no instance exists.
+  // Its frame is available while the account's exact instance is checked.
+  $('#challenge-empty').hidden = Boolean(state.challenge);
   $('#challenge-active').hidden = !state.challenge;
   $('#challenge-active').setAttribute('aria-busy', String(state.challengeLoading));
   $('#challenge-details').hidden = !state.challenge;
   const unavailable = generationUnavailable();
   $('#scheme-clock').hidden = unavailable && !state.challenge;
   $('#challenge-instance-rule').hidden = unavailable && !state.challenge;
-  $('#issue-button').disabled = !state.ready || !state.profile || state.issueBusy || state.challengeLoading || roundRemaining() === 0 ||
+  const requesting = state.issueBusy || challengeStartPending();
+  $('#issue-button').setAttribute('aria-busy', String(requesting));
+  $('#issue-button').disabled = !state.ready || !state.profile || requesting || roundRemaining() === 0 ||
     (unavailable && generationAdmission()?.reason !== 'archived_release');
   if (!state.challenge) {
     const current = state.schemes.find(scheme => scheme.id === state.schemeId);
@@ -3037,10 +3088,10 @@ function renderChallenge() {
       setText('#issue-button', 'Not enabled in this beta');
       return;
     }
-    setText('#empty-title', state.user ? 'Ready?' : 'A fresh instance, just for you.');
-    setText('#empty-description', state.user ? 'Receive a public key and encapsulation unique to your account and selected profile. Your answer is due at the shared deadline.' :
-      'Sign in to receive a public key and encapsulation unique to your account for this profile and round.');
-    setText('#issue-button', state.issueBusy ? 'Preparing your instance…' : state.user ? 'Get this round’s instance →' : 'Sign in to begin →');
+    setText('#empty-title', state.user ? 'Ready?' : 'Start this challenge');
+    setText('#empty-description', state.user ? 'Recover the shared secret from your instance.' :
+      'Sign in to get your instance.');
+    setText('#issue-button', requesting ? 'Preparing your instance…' : state.user ? 'Get instance →' : 'Sign in to begin →');
     return;
   }
   const challenge = state.challenge;
@@ -3073,6 +3124,18 @@ function challengeStartSelectionMatches(intent, view = state.view) {
     intent.schemeId === state.schemeId && intent.schemeVersion === state.schemeVersion &&
     intent.profileId === profileId() && currentChallengeRelease();
 }
+function selectedChallengeStartIntent() {
+  if (!state.profile || !currentChallengeRelease() || generationUnavailable()) return null;
+  return {schemeId: state.schemeId, schemeVersion: state.schemeVersion, profileId: profileId(),
+    accountId: state.user?.id || null, csrf: state.csrf, roundId: state.round?.id,
+    awaitingSignIn: !state.user};
+}
+function challengeStartPending() {
+  const intent = state.challengeStartIntent;
+  return Boolean(challengeStartSelectionMatches(intent) && !intent.awaitingSignIn && hasAccess() &&
+    intent.accountId === state.user?.id && intent.csrf === state.csrf &&
+    intent.roundId === state.round?.id && roundRemaining() > 0);
+}
 function takeOnChallenge(scheme, profile, event) {
   if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey ||
       (event.button != null && event.button !== 0)) return;
@@ -3081,28 +3144,10 @@ function takeOnChallenge(scheme, profile, event) {
       profileId() !== profileId(profile)) return;
   const route = schemeRoute(scheme, profile, 'challenge');
   // Only this deliberate action grants one request; a copied URL carries no authority.
-  state.challengeStartIntent = currentChallengeRelease() && !generationUnavailable(scheme) ? {
-    schemeId: scheme.id, schemeVersion: String(scheme.version), profileId: profileId(profile),
-    accountId: state.user?.id || null, awaitingSignIn: !state.user
-  } : null;
+  state.challengeStartIntent = selectedChallengeStartIntent();
   navigate(route);
 }
-function challengeAccessScope() {
-  return JSON.stringify([state.user?.id, state.schemeId, state.schemeVersion, state.round?.id]);
-}
-function challengeAccessAttempt() { return JSON.stringify([challengeAccessScope(), profileId()]); }
-function confirmedRoundAccess(data) {
-  return data?.round_started === true && Number.isSafeInteger(data.round_started_round_id) &&
-    data.round_started_round_id === data.round?.id && data.round_started_round_id === state.round?.id &&
-    roundRemaining() > 0;
-}
-function showAutomaticPause() {
-  const message = state.autoIssuePaused.get(challengeAccessScope());
-  if (!message) return;
-  setText('#challenge-error-text', message);
-  $('#challenge-error').hidden = false;
-}
-async function loadChallenge({retry = false, allowAutomatic = true} = {}) {
+async function loadChallenge({retry = false} = {}) {
   const request = ++state.challengeRequest;
   const selected = profileId();
   const selection = selectionKey();
@@ -3111,10 +3156,6 @@ async function loadChallenge({retry = false, allowAutomatic = true} = {}) {
   const key = challengeReadKey(state.schemeId, state.schemeVersion, selected);
   const stillSelected = () => request === state.challengeRequest &&
     hasAccess() && state.user?.id === accountId && state.csrf === csrf && selectionKey() === selection;
-  if (retry) {
-    state.autoIssueAttempts.delete(challengeAccessAttempt());
-    state.autoIssuePaused.delete(challengeAccessScope());
-  }
   $('#challenge-error').hidden = true;
   state.challenge = retry ? null : cachedRead(key)?.challenge || null; state.generationAdmission = null;
   if (state.screen !== 'scheme' || !state.user || !selected) {
@@ -3154,13 +3195,11 @@ async function loadChallenge({retry = false, allowAutomatic = true} = {}) {
       // Rotation invalidates both cached and pending reads. A fresh read may
       // recover the current display, but cannot carry an old request to start.
       state.challenge = null; state.challengeLoading = false; state.challengeStartIntent = null;
-      void loadChallenge({allowAutomatic: false});
+      void loadChallenge();
     }
   }
   if (stillSelected() && generationUnavailable()) { state.challengeStartIntent = null; return; }
-  const intent = state.challengeStartIntent;
-  if (stillSelected() && access && challengeStartSelectionMatches(intent) &&
-      !intent.awaitingSignIn && intent.accountId === state.user?.id) {
+  if (stillSelected() && access && challengeStartPending()) {
     if (state.challenge || roundRemaining() <= 0) state.challengeStartIntent = null;
     else if (!state.issueBusy) {
       state.challengeStartIntent = null;
@@ -3168,54 +3207,43 @@ async function loadChallenge({retry = false, allowAutomatic = true} = {}) {
     }
     return;
   }
-  if (allowAutomatic && stillSelected() && !state.challenge && currentChallengeRelease() &&
-      state.view === 'challenge' && confirmedRoundAccess(access)) {
-    if (state.autoIssuePaused.has(challengeAccessScope())) showAutomaticPause();
-    else if (!state.issueBusy) await issueChallenge({activeRoundId: access.round_started_round_id});
-  }
 }
-async function issueChallenge({activeRoundId} = {}) {
-  const automatic = activeRoundId !== undefined;
+async function issueChallenge() {
   const current = state.schemes.find(scheme => scheme.id === state.schemeId);
   if (current && String(current.version) !== state.schemeVersion) {
-    if (automatic) return;
     const profile = current.profiles.find(item => profileId(item) === current.next_profile_id) || current.profiles[0];
     return navigate(schemeRoute(current, profile, 'challenge'));
   }
   if (generationUnavailable()) { state.challengeStartIntent = null; renderChallenge(); return; }
-  if (!state.user) return automatic ? undefined : openAuth($('#issue-button'));
-  if (state.issueBusy || state.challengeLoading || !state.profile || state.screen !== 'scheme') return;
-  const scope = challengeAccessScope();
-  const attempt = challengeAccessAttempt();
-  if (automatic && (state.view !== 'challenge' || !currentChallengeRelease() ||
-      activeRoundId !== state.round?.id || roundRemaining() <= 0 || state.challenge ||
-      state.autoIssueAttempts.has(attempt) || state.autoIssuePaused.has(scope))) return;
-  if (!automatic) state.autoIssuePaused.delete(scope);
-  // Retain attempted stages even after an uncertain response; only an explicit
-  // retry can issue that stage again. The server also reuses existing instances.
-  state.autoIssueAttempts.add(attempt);
+  if (!state.user) return openAuth($('#issue-button'));
+  if (state.issueBusy || !state.profile || state.screen !== 'scheme' || roundRemaining() === 0) return;
+  if (state.challengeLoading) {
+    // Both entry points share one explicit intent. A pending read decides
+    // whether to open an existing instance or issue once after exact admission.
+    if (!challengeStartPending()) {
+      state.challengeStartIntent = selectedChallengeStartIntent();
+      renderChallenge();
+    }
+    return;
+  }
   state.issueBusy = true;
   const selected = profileId();
   const selection = selectionKey();
   const accountId = state.user.id;
-  const roundId = state.round?.id;
+  const csrf = state.csrf;
   const request = ++state.challengeRequest;
   const stillSelected = () => request === state.challengeRequest &&
-    state.user?.id === accountId && selectionKey() === selection;
-  state.challengeLoading = automatic;
+    hasAccess() && state.user?.id === accountId && state.csrf === csrf && selectionKey() === selection;
+  state.challengeLoading = false;
   $('#challenge-error').hidden = true;
   renderChallenge();
-  let completed = false;
   try {
-    const data = await api('/api/challenges?summary=true', {profile_id: selected, scheme_id: state.schemeId, scheme_version: state.schemeVersion,
-      ...(automatic ? {active_round_id: activeRoundId} : {})});
-    completed = confirmedRoundAccess(data);
+    const data = await api('/api/challenges?summary=true', {profile_id: selected, scheme_id: state.schemeId, scheme_version: state.schemeVersion});
     if (!stillSelected()) return;
     state.challenge = data.challenge?.round_id === state.round?.id ? data.challenge : null;
     if (state.challenge) rememberRead(challengeReadKey(state.schemeId, state.schemeVersion, selected), {challenge: state.challenge});
-    if (state.challenge && !automatic) toast('Your instance is ready. The shared round deadline applies.');
+    if (state.challenge) toast('Your instance is ready. The shared round deadline applies.');
   } catch (error) {
-    if (state.user?.id === accountId) state.autoIssuePaused.set(scope, error.message);
     if (!stillSelected()) return;
     setText('#challenge-error-text', error.message);
     $('#challenge-error').hidden = false;
@@ -3224,13 +3252,9 @@ async function issueChallenge({activeRoundId} = {}) {
     state.issueBusy = false;
     if (stillSelected()) state.challengeLoading = false;
     renderChallenge();
-    // Navigation can finish a GET while the previous POST is still pending.
-    // Re-read only the final selection, with its own account/scheme authority.
-    if (state.user && state.round?.id === roundId &&
-        state.view === 'challenge' && currentChallengeRelease() && !state.challenge) {
-      if ((completed || state.user.id !== accountId) && request !== state.challengeRequest) await loadChallenge();
-      else showAutomaticPause();
-    }
+    // A deliberate Take on action can arrive while another request finishes.
+    // Ordinary stage browsing never grants permission to generate an instance.
+    if (challengeStartPending() && !state.challenge && request !== state.challengeRequest) await loadChallenge();
   }
 }
 
@@ -3852,14 +3876,15 @@ $('#auth-form').addEventListener('submit', async event => {
       ...(state.authMode === 'register' && state.invitationToken ? {invitation_token: state.invitationToken} : {})});
     const dialogStillOpen = authDialog.open;
     const resumeStart = startIntent?.awaitingSignIn && state.challengeStartIntent === startIntent &&
-      !state.user && dialogStillOpen && challengeStartSelectionMatches(startIntent);
+      !state.user && dialogStillOpen && challengeStartSelectionMatches(startIntent) && startIntent.roundId === data.round?.id;
     setSession(data);
-    if (resumeStart && state.user) state.challengeStartIntent = {...startIntent, accountId: state.user.id, awaitingSignIn: false};
+    if (resumeStart && state.user) state.challengeStartIntent = {...startIntent, accountId: state.user.id,
+      csrf: state.csrf, awaitingSignIn: false};
     $('#auth-form').reset();
     authDialog.close();
     if (!hasAccess()) { renderAccessGate(); return; }
     if (!state.ready) { await loadAuthorizedWorkspace(); return; }
-    await loadChallenge({allowAutomatic: dialogStillOpen && (!startIntent || resumeStart)});
+    await loadChallenge();
     if (state.screen === 'scheme' && state.view === 'leaderboard') await loadLeaderboard();
     toast('Signed in as ' + state.user.handle + '.');
   } catch (error) {

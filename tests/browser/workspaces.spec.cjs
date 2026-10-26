@@ -139,7 +139,7 @@ test('cached navigation paints while its fresh read is held; the brand never rel
   expect(reads.filter(read => read.method !== 'GET')).toEqual([]);
 });
 
-test('initial access has a neutral loading preview without revealing private content', async ({page}, testInfo) => {
+test('initial notebook access has its inert public frame without revealing private content', async ({page}, testInfo) => {
   const pending = await holdResponse(page, url => url.pathname === '/api/session');
   const privateReads = [];
   page.on('request', request => {
@@ -153,7 +153,9 @@ test('initial access has a neutral loading preview without revealing private con
     await expect(page.locator('#access-description')).toHaveText('Checking access…');
     const bounds = await preview.boundingBox();
     expect(bounds.width).toBeGreaterThan(50); expect(bounds.height).toBeGreaterThan(20);
-    await expect(page.locator('#access-title')).toHaveText('Research notebook');
+    await expect(page.locator('#notebook-frame-template .nb-heading h1')).toHaveText('Research notebook');
+    await expect(page.locator('#notebook-frame-template')).toHaveAttribute('inert', '');
+    await expect(page.locator('#notebook-frame-template [data-notebook-panel="notes"]')).toBeVisible();
     await expect(page.locator('body')).not.toContainText('ALICE_PRIVATE_BROWSER_BODY');
     expect(privateReads).toEqual([]);
     await page.screenshot({path: testInfo.outputPath('held-access-preview.png')});

@@ -77,9 +77,9 @@ for (const [name, width] of [['desktop', 1440], ['mobile', 390]]) {
 const pendingRoutes = [
   ['#challenge', 'neutral', 'Crucible'],
   ['#people', 'people', 'Leaderboard'],
-  ['#notebook', 'list', 'Research notebook'],
-  ['#notebook?view=map', 'chart', 'Research notebook'],
-  ['#notebook?view=timeline', 'timeline', 'Research notebook'],
+  ['#notebook', 'notebook-notes', 'Research notebook'],
+  ['#notebook?view=map', 'notebook-map', 'Research notebook'],
+  ['#notebook?view=timeline', 'notebook-timeline', 'Research notebook'],
   ['#person/browser_alice', 'profile', 'browser_alice'],
   ['#about', 'neutral', 'About us'],
   ['#scheme/teaching-dh-kem/4', 'chart', 'Scheme'],
@@ -92,12 +92,17 @@ for (const [route, layout, title] of pendingRoutes) {
     const reads = [];
     page.on('request', request => reads.push(new URL(request.url()).pathname));
     const primary = page.locator('.primary-nav');
+    const notebook = layout.startsWith('notebook-');
+    const heading = page.locator(notebook ? '#notebook-frame-template .nb-heading h1' : '#access-title');
+    const frameLayout = notebook ? 'notebook' : layout;
     const privateReads = () => reads.filter(path => (path.startsWith('/api/') && path !== '/api/session') ||
       path.startsWith('/notebook/') || path.startsWith('/map/'));
     try {
       await page.goto('/' + route, {waitUntil: 'commit'}); await appScript.arrived;await session.arrived;
-      await expect(page.locator('#access-title')).toHaveText(title);
-      await expect(page.locator('#access-title')).not.toHaveAttribute('aria-hidden','true');
+      await expect(heading).toHaveText(title);
+      await expect(heading).toBeVisible();
+      if (!notebook) await expect(heading).not.toHaveAttribute('aria-hidden','true');
+      await expect(page.locator('html')).toHaveAttribute('data-pending-page', layout);
       await expect(primary).toBeVisible(); await expect(primary).toHaveAttribute('inert', '');
       await expect(primary).toContainText('Schemes'); await expect(primary).toContainText('Research notebook');
       await expect(page.locator('#account-handle')).toBeHidden();
@@ -107,14 +112,17 @@ for (const [route, layout, title] of pendingRoutes) {
       expect(privateReads()).toEqual([]);
       expect(reads.filter(path=>path==='/bootstrap.js')).toEqual([]);
       await expect(page.locator('head > script[data-bootstrap]')).toHaveCount(1);
-      await expect(page.locator('#access-title')).toHaveText(title);
-      const selected = page.locator('#access-loading-preview [data-pending-layout="' + layout + '"]');
+      await expect(heading).toHaveText(title);
+      const selected = page.locator('#access-loading-preview [data-pending-layout="' + frameLayout + '"]');
       await expect(selected).toBeVisible();
       expect(await page.locator('#access-loading-preview .pending-page-preview').evaluateAll(elements =>
         elements.filter(element => element.getClientRects().length && getComputedStyle(element).display !== 'none')
-          .map(element => element.dataset.pendingLayout))).toEqual([layout]);
+          .map(element => element.dataset.pendingLayout))).toEqual([frameLayout]);
+      if (notebook) expect(await selected.locator('[data-notebook-panel]').evaluateAll(elements => elements
+        .filter(element => element.getClientRects().length && getComputedStyle(element).display !== 'none')
+        .map(element => element.dataset.notebookPanel))).toEqual([layout.slice('notebook-'.length)]);
       if (layout !== 'catalogue') await expect(page.locator('#access-loading-preview .kem-table')).toBeHidden();
-      const beforeApp = await geometry(page.locator('#access-title'));
+      const beforeApp = await geometry(heading);
       await expect(primary).toBeVisible(); await expect(primary).toHaveAttribute('inert', '');
       expect(privateReads()).toEqual([]);
       await expect(page.locator('#catalogue-workspace')).toBeHidden();
@@ -123,8 +131,8 @@ for (const [route, layout, title] of pendingRoutes) {
       await page.screenshot({path:testInfo.outputPath('route-pending-shell.png')});
 
       appScript.release(); await appScript.delivered;
-      await expect(page.locator('#access-title')).toHaveText(title);
-      expect(await geometry(page.locator('#access-title'))).toEqual(beforeApp);
+      await expect(heading).toHaveText(title);
+      expect(await geometry(heading)).toEqual(beforeApp);
       await expect(selected).toBeVisible();
       await expect(primary).toBeVisible(); await expect(primary).toHaveAttribute('inert', '');
       expect(reads.filter(path => path === '/api/session')).toHaveLength(1);

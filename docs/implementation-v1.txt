@@ -55,6 +55,8 @@ Implementation
   The catalogue shows recovered tier, attribution and participant count; scheme
   overviews show exact size curves, initial reference curves and red recovery
   markers. Timing and quantum-estimate cards remain empty templates.
+- Historical automatic-access UI below was superseded on 2026-10-26 by explicit
+  requests for each stage; architecture.txt describes the current policy.
 - POST /api/challenges accepts either scheme_id plus instance_size or profile_id.
   A first explicit request starts access for this account/scheme/release/hour.
   Later opened Challenge tiers load on demand with an active_round_id guard.

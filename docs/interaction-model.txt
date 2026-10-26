@@ -22,6 +22,10 @@ Shared rules
    when no content is available. Show errors with a usable retry, not an endless
    loading message. A failed refresh may retain a still-valid snapshot; expired
    or permission-rejected content must not masquerade as current authorized data.
+   Show known layout and action invitations without waiting for unrelated data.
+   An invitation is not confirmation of an empty result or permission to write.
+   If a deliberate action needs a pending check, retain one scoped intent and
+   show progress on that action; do not make the whole view disappear.
 
 3. Every asynchronous completion belongs to its account/session, resource and
    selection, request generation and relevant read epoch. Check those owners
@@ -95,6 +99,34 @@ Implemented: format-only POST /api/protocol/proposals/validate preserves warm
 Notes/Timeline and shell snapshots. Both wrappers keep conservative invalidation
 for actual saves and other writes. Regressions cover warm -> validate -> cancel
 -> return, actual-save invalidation, transport guards and account invalidation.
+
+Implemented: the selected challenge's Ready card appears while its instance
+status is checked. Get and Take on share one explicit start intent, scoped to
+account, session, exact selection and round. The check opens an existing
+instance or permits one issuance; denial, failure or an ownership change cancels
+the intent. Cached instance tools still wait for fresh status. No instance is
+created merely by painting the invitation or preparing metadata. Every stage
+requires its own explicit request, even if another stage has been requested in
+that hour. The server's optional active_round_id API guard remains compatible.
+
+Implemented: Notes, Scheme map and Timeline share an inert public frame with
+their admitted controller. Known headings, tabs and controls keep the same
+geometry from access through asset/data reads. No placeholder invents private
+titles, counts, graph points or permissions. The two challenge clocks share the
+server-synchronized round state; a hidden or unknown round is not guessed.
+
+Implemented: notebook pagination preserves list space and focus. A complete
+fresh summary index enables a bounded page selector; incomplete indexes, search,
+Trash and review queues keep honest Previous/Next controls without fake totals.
+
+Implemented: Publish all confirms a fresh, complete bounded list of the author's
+eligible exact revisions, independent of the current filters. Sequential requests
+use the existing rate limit and review policy. Compact receipts avoid loading
+note histories; default API responses stay compatible. Each retry retains its
+exact idempotency key. Partial success is visible; uncertainty or throttling
+pauses future sends. Session/navigation/dialog changes stop further writes,
+without claiming that an in-flight request has been rolled back. No real notes
+are published merely by deploying this feature.
 
 Next, in priority order:
 

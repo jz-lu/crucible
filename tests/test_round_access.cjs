@@ -123,7 +123,7 @@ async function test(name, run) {await run(); console.log('PASS ' + name); passed
     const {app}=await boot({hash:route(21,'leaderboard',previous)});app.$('.tier-record-challenge').click();await flush();
     assert.equal(posts(app).length,0);assert.equal(app.$('#empty-title').textContent,'Archived release');
   });
-  await test('one manual request starts a round, later Challenge stages load automatically, and revisits reuse instances', async () => {
+  await test('each new stage needs its own explicit request and revisits reuse existing instances', async () => {
     const {app,server} = await boot();
     assert.equal(app.$('#empty-title').textContent,'Ready?');
     assert.equal(posts(app).length,0);
@@ -132,8 +132,11 @@ async function test(name, run) {await run(); console.log('PASS ' + name); passed
     assert.equal('active_round_id' in posts(app)[0],false);
     assert.equal(app.$('#challenge-active').hidden,false);
     await app.navigate(route(21));
+    assert.equal(posts(app).length,1,'Starting a scheme round does not authorize a different stage');
+    assert.equal(app.$('#empty-title').textContent,'Ready?');
+    app.$('#issue-button').click(); await flush();
     assert.equal(posts(app).length,2);
-    assert.equal(posts(app)[1].active_round_id,server.roundId);
+    assert.equal('active_round_id' in posts(app)[1],false);
     assert.match(app.$('#challenge-round').textContent,/tier-21/);
     await app.navigate(route(20)); await app.navigate(route(21));
     assert.equal(posts(app).length,2);
@@ -147,9 +150,13 @@ async function test(name, run) {await run(); console.log('PASS ' + name); passed
     assert.equal(posts(app).length,0);
     assert.match(app.location.hash,/tier-20/);
     app.$('#size-slider').dispatchEvent({type:'change'}); await flush();
+    assert.equal(posts(app).length,0,'Choosing a stage is still browsing');
+    app.$('#issue-button').click(); await flush();
     assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-23']);
     await app.navigate(route(21,'protocol'));
     app.$('#tab-challenge').click(); await flush();
+    assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-23'],'Opening Challenge does not issue');
+    app.$('#issue-button').click(); await flush();
     assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-23','tier-21']);
   });
   await test('another scheme, archived release, another account, and the next hour all require their own start', async () => {
@@ -172,16 +179,18 @@ async function test(name, run) {await run(); console.log('PASS ' + name); passed
     assert.equal(posts(app).length,0);
     assert.equal(app.$('#empty-title').textContent,'Ready?');
   });
-  await test('activation requires a matching response round and cannot be borrowed from stale or archived metadata', async () => {
+  await test('neither matching nor stale started-round metadata grants generation authority', async () => {
     const {app,server} = await boot({seed:true});
     server.after = async (req,result) => ({...result,round_started:true,round_started_round_id:req.roundId-1});
     await app.navigate(route(21));
     assert.equal(posts(app).length,0);
     server.after = async (req,result) => ({...result,round_started:true,round_started_round_id:req.roundId});
+    await app.navigate(route(22));
+    assert.equal(posts(app).length,0,'Even a confirmed active round requires an explicit stage action');
     await app.navigate(route(21,'challenge',previous));
     assert.equal(posts(app).length,0);
   });
-  await test('rapid tier navigation discards late GETs and issues only the final selected tier', async () => {
+  await test('rapid stage navigation discards late GETs and issues only an explicitly requested final stage', async () => {
     const {app,server} = await boot({seed:true});
     const gates = new Map([['tier-21',deferred()],['tier-22',deferred()]]);
     server.after = async (req,result) => {
@@ -189,12 +198,14 @@ async function test(name, run) {await run(); console.log('PASS ' + name); passed
       return result;
     };
     await app.navigate(route(21)); await app.navigate(route(22)); await app.navigate(route(23));
+    assert.equal(posts(app).length,0);
+    app.$('#issue-button').click(); await flush();
     assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-23']);
     gates.get('tier-22').resolve(); gates.get('tier-21').resolve(); await flush();
     assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-23']);
     assert.match(app.$('#challenge-round').textContent,/tier-23/);
   });
-  await test('navigation during the first manual POST waits, then obtains only the final tier', async () => {
+  await test('navigation during a manual POST never grants a request for the final browsed stage', async () => {
     const {app,server} = await boot();
     const gate = deferred();
     server.before = async req => {if(req.method==='POST' && req.profile_id==='tier-20') await gate.promise;};
@@ -202,23 +213,56 @@ async function test(name, run) {await run(); console.log('PASS ' + name); passed
     await app.navigate(route(21)); await app.navigate(route(22));
     assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-20']);
     gate.resolve(); await flush();
+    assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-20']);
+    assert.equal(app.$('#challenge-active').hidden,true,'The first stage response cannot replace the selected empty stage');
+    app.$('#issue-button').click(); await flush();
     assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-20','tier-22']);
-    assert.equal(posts(app)[1].active_round_id,server.roundId);
+    assert.equal('active_round_id' in posts(app)[1],false);
     assert.match(app.$('#challenge-round').textContent,/tier-22/);
   });
-  await test('an in-flight automatic POST cannot overwrite or duplicate later selections', async () => {
+  await test('an in-flight explicit POST cannot overwrite or automatically issue later selections', async () => {
     const {app,server} = await boot({seed:true});
     const gate = deferred();
     server.before = async req => {if(req.method==='POST' && req.profile_id==='tier-21') await gate.promise;};
-    await app.navigate(route(21)); await app.navigate(route(22)); await app.navigate(route(23));
+    await app.navigate(route(21)); app.$('#issue-button').click(); await flush();
+    await app.navigate(route(22)); await app.navigate(route(23));
     assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-21']);
     gate.resolve(); await flush();
+    assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-21']);
+    assert.equal(app.$('#challenge-active').hidden,true);
+    app.$('#issue-button').click(); await flush();
     assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-21','tier-23']);
     assert.match(app.$('#challenge-round').textContent,/tier-23/);
     await app.sandbox.loadChallenge();
     assert.equal(posts(app).length,2);
   });
-  await test('leaving Challenge or changing accounts during a POST cannot auto-issue or reveal its result', async () => {
+  await test('a separate deliberate Take on action can wait for an earlier POST without being lost or duplicated', async () => {
+    const {app,server} = await boot();
+    const gate = deferred();
+    server.before = async req => {if(req.method==='POST' && req.profile_id==='tier-20') await gate.promise;};
+    app.$('#issue-button').click(); await flush();
+    await app.navigate(route(22,'leaderboard'));
+    app.$('.tier-record-challenge').click(); await flush();
+    assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-20']);
+    gate.resolve(); await flush();
+    assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-20','tier-22']);
+    assert.equal(posts(app).some(p=>'active_round_id' in p),false);
+    assert.match(app.$('#challenge-round').textContent,/tier-22/);
+  });
+  await test('a late POST after session rotation cannot repaint or replay in the new session', async () => {
+    const {app,server} = await boot();
+    const gate = deferred();
+    server.before = async req => {if(req.method==='POST') await gate.promise;};
+    app.$('#issue-button').click(); await flush();
+    app.sandbox.setSession(server.envelope({user,csrf_token:'rotated-session'}));
+    gate.resolve(); await flush();
+    assert.equal(posts(app).length,1);
+    assert.equal(app.$('#challenge-active').hidden,true);
+    await app.sandbox.loadChallenge();
+    assert.equal(posts(app).length,1);
+    assert.equal(app.$('#challenge-active').hidden,false,'A new authorized read may retrieve the durable instance');
+  });
+  await test('leaving Challenge or changing accounts during a POST cannot issue another stage or reveal its result', async () => {
     for (const changeAccount of [false,true]) {
       const {app,server} = await boot();
       const gate = deferred();
@@ -234,11 +278,13 @@ async function test(name, run) {await run(); console.log('PASS ' + name); passed
       assert.equal(app.$('#challenge-active').hidden,true);
     }
   });
-  await test('rate-limit and service errors pause automation until an explicit retry, without duplicate POSTs', async () => {
+  await test('rate-limit and service errors never replay writes through read retries or navigation', async () => {
     for (const status of [429,503]) {
       const {app,server} = await boot({seed:true});
       server.fail=status;
       await app.navigate(route(21));
+      assert.equal(posts(app).length,0);
+      app.$('#issue-button').click(); await flush();
       assert.equal(posts(app).length,1);
       assert.equal(app.$('#challenge-error').hidden,false);
       await app.sandbox.loadChallenge();
@@ -246,11 +292,13 @@ async function test(name, run) {await run(); console.log('PASS ' + name); passed
       assert.equal(posts(app).length,1);
       server.fail=null;
       app.$('#retry-challenge').click(); await flush();
+      assert.equal(posts(app).length,1,'Retrying the lookup must not replay a failed write');
+      app.$('#issue-button').click(); await flush();
       assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-21','tier-22']);
       assert.match(app.$('#challenge-round').textContent,/tier-22/);
     }
   });
-  await test('after an account switch, a fresh GET may use only the new account’s independently active round', async () => {
+  await test('after an account switch, even an active round waits for the new account’s explicit action', async () => {
     const {app,server} = await boot();
     server.seed(20,alpha,2);
     const gate=deferred();
@@ -261,8 +309,11 @@ async function test(name, run) {await run(); console.log('PASS ' + name); passed
     await app.navigate(route(21));
     assert.equal(posts(app).length,1);
     gate.resolve(); await flush();
+    assert.equal(posts(app).length,1,'The old account response cannot start a new account request');
+    assert.equal(app.$('#challenge-active').hidden,true);
+    app.$('#issue-button').click(); await flush();
     assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-20','tier-21']);
-    assert.equal(posts(app)[1].active_round_id,server.roundId);
+    assert.equal('active_round_id' in posts(app)[1],false);
     assert.match(app.$('#challenge-round').textContent,/tier-21/);
   });
   await test('a delayed prior-hour response cannot move the clock back or start the new hour', async () => {

@@ -48,6 +48,18 @@ class Element extends Events {
   append(...items) { for (const item of items) { if (item instanceof Element) item.parentElement = this; this.childNodes.push(item instanceof Element ? item : String(item)); } }
   prepend(...items) { const previous = this.childNodes; this.childNodes = []; this.append(...items, ...previous); }
   replaceChildren(...items) { for (const child of this.children) child.parentElement = null; this.childNodes = []; this.append(...items); }
+  cloneNode(deep = false) {
+    const clone = new Element(this.tagName, this.ownerDocument);
+    if (this.namespaceURI !== undefined) clone.namespaceURI = this.namespaceURI;
+    for (const [name, value] of this.attributes) clone.setAttribute(name, value);
+    if (deep) for (const child of this.childNodes) clone.append(child instanceof Element ? child.cloneNode(true) : child);
+    // Native form cloning preserves current control state, but ordinary node
+    // listeners and expando properties never belong to the copied markup.
+    if (this.tagName === 'INPUT') { clone.value = this.value; clone.checked = this.checked; }
+    if (this.tagName === 'TEXTAREA') clone.value = this.value;
+    if (this.tagName === 'OPTION') clone.selected = this.selected;
+    return clone;
+  }
   remove() { if (this.parentElement) { this.parentElement.childNodes = this.parentElement.childNodes.filter(child => child !== this); this.parentElement = null; } }
   querySelectorAll(selector) {
     const selectors = selector.split(',').map(item => item.trim()); const result = [];
@@ -111,4 +123,4 @@ async function createApp({schemes, user = null, hash = '#challenge', responder, 
   vm.createContext(sandbox); for (const file of [...(bootstrap ? ['bootstrap.js'] : []), 'assumptions.js', 'proposal-retractions.js', 'app.js']) vm.runInContext(fs.readFileSync(path.join(web, file), 'utf8'), sandbox, {filename:file}); await flush();
   return {document, window, location, history, requests, sandbox, envelope, $: selector => { const element = document.querySelector(selector); if (!element) throw new Error('Missing element: ' + selector); return element; }, navigate: async next => { location.hash = next; await flush(); }};
 }
-module.exports = {createApp, flush};
+module.exports = {createApp, flush, parseHTML};

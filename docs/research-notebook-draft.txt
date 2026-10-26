@@ -4,7 +4,16 @@ Entry: /#notebook. Native to the main Crucible header and navigation.
 New note and Agent files are visible header actions. Each owned note exposes Edit
 and Publish in the note list and full reader. Publish opens a confirmation for an
 exact saved revision. A submitted request is labelled Publish request pending;
-approved revisions are labelled Published. Reviewer queues and decisions live on
+approved revisions are labelled Published. Publish all in the notebook heading
+confirms a fresh list of the author's eligible exact private revisions, independent
+of visible filters. It does not bypass review, publish to the internet or activate
+a scheme. The selection uses compact summaries (up to 500 in one index, with a
+bounded cursor fallback up to 1,000 notes / 2 MiB); an incomplete enumeration sends
+nothing. The existing 60-per-hour publication request limit applies. Partial
+results remain visible, uncertain requests retain exact retry keys, and changes
+to navigation/session/dialog ownership stop further sends. Existing notes in
+Trash or with requests/decisions are skipped; a newer private revision is eligible.
+Reviewer queues and decisions live on
 the dedicated Review center, reached from the reviewer’s own account profile.
 Its queues are /#reviews?section=publication, section=schemes and section=research;
 review decisions are inline pages. Earlier reviewer links redirect there.

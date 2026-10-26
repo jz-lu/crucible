@@ -9,7 +9,7 @@ async function frame(root) {
     const rect=node=>{const b=node.getBoundingClientRect(),s=getComputedStyle(node);return{x:b.x,y:b.y,width:b.width,height:b.height,font:s.font};};
     return {back:rect(element.querySelector('.profile-backline')),
       backLabel:rect(element.querySelector('.scheme-back')),
-      heading:rect(element.querySelector('h1')),stats:rect(element.querySelector('.person-stats')),
+      heading:rect(element.querySelector(element.id==='access-workspace'?'#access-title':element.id==='person-workspace'?'#person-title':'h1')),stats:rect(element.querySelector('.person-stats')),
       breakdown:rect(element.querySelector('.person-score-breakdown')),
       sections:[...element.querySelectorAll('.person-disclosure')].map(rect),
       overflow:document.documentElement.scrollWidth>innerWidth};
@@ -71,7 +71,7 @@ for(const {width,actor,label,handle:requestedHandle,reviewer=false} of profiles)
     let initial,accountFrames;
     try {
       await page.goto('/?profile-layout='+width+'-'+label+'#person/'+handle,{waitUntil:'domcontentloaded'});await session.arrived;
-      const access=page.locator('#access-workspace');await expect(access.locator('h1')).toHaveText(handle);
+      const access=page.locator('#access-workspace');await expect(access.locator('#access-title')).toHaveText(handle);
       await expect(access.locator('[data-pending-layout="profile"]')).toBeVisible();await inertPreview(access);
       expect(reads.filter(value=>value.startsWith('/api/')&&value!=='/api/session')).toEqual([]);
       await expect(page.locator('#person-workspace')).toBeHidden();

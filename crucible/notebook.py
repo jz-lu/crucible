@@ -703,9 +703,13 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 "publication_status": current["publication_status"], "revision_count": len(revisions), "revisions": serial,
                 "shared_revision": shared, "proposal_revision": proposal_revision, "imported": note.source_id is not None}
 
-    def owned(session, user, note_id):
-        note = session.scalar(select(NotebookNote).where(NotebookNote.id == note_id,
-            NotebookNote.author_id == user.id).with_for_update())
+    def owned(session, user, note_id, *, metadata_only=False):
+        query = select(NotebookNote).where(NotebookNote.id == note_id,
+            NotebookNote.author_id == user.id).with_for_update()
+        if metadata_only:
+            query = query.options(load_only(NotebookNote.id, NotebookNote.author_id,
+                                           NotebookNote.latest_revision, raiseload=True))
+        note = session.scalar(query)
         if note is None:
             raise HTTPException(404, "Note not found.")
         notebook_trash.require_active(session, note.id)
@@ -1106,30 +1110,50 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             return {"import_id": record.id, "created_at": record.created_at, "workspace": record.workspace, "id_map": record.id_map}
 
     @app.post("/api/notebook/notes/{note_id}/publication-requests")
-    def request_publication(note_id: UUID, body: PublicationInput, request: Request):
+    def request_publication(note_id: UUID, body: PublicationInput, request: Request, summary: bool = False):
         throttle(request, "notebook-publication", 60, 3600)
         commitment = _hash({"note_id": str(note_id), "revision": body.revision, "content_sha256": body.content_sha256})
         with db.transaction(write=True) as session:
             user = account(request, session, True)
-            note = owned(session, user, str(note_id))
-            history = all_revisions(session, note)
-            replay = session.scalar(select(NotebookPublication).where(NotebookPublication.author_id == user.id,
-                NotebookPublication.idempotency_key == str(body.idempotency_key)))
+            note = owned(session, user, str(note_id), metadata_only=summary)
+            history = None if summary else all_revisions(session, note)
+
+            def result(publication):
+                if not summary:
+                    return {"note": note_data(session, note, user, history, selected=body.revision,
+                                              agent="authorization" in request.headers)}
+                withdrawn = session.scalar(select(notebook_moderation.PublicationWithdrawal.revision_id)
+                    .where(notebook_moderation.PublicationWithdrawal.revision_id == publication.revision_id))
+                return {"format": "crucible-publication-request-v1", "publication_request": {
+                    "id": publication.id, "note_id": note.id, "revision": body.revision,
+                    "content_sha256": body.content_sha256, "requested_at": publication.requested_at,
+                    "status": "withdrawn" if withdrawn is not None else publication.decision or "submitted"}}
+
+            replay_query = select(NotebookPublication).where(NotebookPublication.author_id == user.id,
+                NotebookPublication.idempotency_key == str(body.idempotency_key))
+            if summary:
+                replay_query = replay_query.options(load_only(NotebookPublication.id, NotebookPublication.revision_id,
+                    NotebookPublication.request_sha256, NotebookPublication.requested_at,
+                    NotebookPublication.decision, raiseload=True))
+            replay = session.scalar(replay_query)
             if replay:
                 if replay.request_sha256 != commitment:
                     raise HTTPException(409, "This publication identifier was already used for another request.")
-                return {"note": note_data(session, note, user, history, selected=body.revision, agent="authorization" in request.headers)}
-            target = history[-1]
+                return result(replay)
+            target = (session.execute(select(NotebookRevision.id, NotebookRevision.revision,
+                NotebookRevision.content_sha256).where(NotebookRevision.note_id == note.id)
+                .order_by(NotebookRevision.revision.desc()).limit(1)).one() if summary else history[-1])
             if target.revision != body.revision or target.content_sha256 != body.content_sha256:
                 raise HTTPException(409, "Request publication of the exact latest revision. Refresh before trying again.")
-            existing = session.scalar(select(NotebookPublication).where(NotebookPublication.revision_id == target.id))
+            existing = session.scalar(select(NotebookPublication.id).where(NotebookPublication.revision_id == target.id))
             if existing:
                 raise HTTPException(409, "This revision already has a publication request. Revise the note before making a new request.")
-            session.add(NotebookPublication(id=str(uuid4()), revision_id=target.id, author_id=user.id,
+            publication = NotebookPublication(id=str(uuid4()), revision_id=target.id, author_id=user.id,
                 requested_at=clock(), idempotency_key=str(body.idempotency_key), request_sha256=commitment,
-                test_only_self_review=False))
+                test_only_self_review=False)
+            session.add(publication)
             session.flush()
-            return {"note": note_data(session, note, user, history, selected=body.revision, agent="authorization" in request.headers)}
+            return result(publication)
 
     @app.get("/api/notebook/review-queue")
     def publication_queue(request: Request, after: str | None = Query(default=None, max_length=36),

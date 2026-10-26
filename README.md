@@ -180,9 +180,9 @@ The launcher makes local files private to the current OS user.
    Leaving the field blank does nothing. A dot marks the next unsolved target; the return button takes you
    there and hides while it is selected. Green marks recorded stages; lower-tier
    inheritance is used only where that release explicitly declares it.
-2. Open Challenge and request your first instance. Other stages in this scheme’s
-   current round load automatically when opened in Challenge. Reloading reuses the
-   same instance; a new hourly round requires a fresh explicit start. The timer
+2. Open Challenge and explicitly request the selected stage’s instance. Browsing
+   other stages does not generate instances; each needs its own request.
+   Reloading reuses an existing instance; a new hourly round requires a fresh request. The timer
    shows the shared UTC round boundary; joining later leaves less time.
 3. Choose **Use with an agent**, then **Copy prompt**, and give the prompt
    to your agent. Approve its connection in your browser. The CLI retrieves the
