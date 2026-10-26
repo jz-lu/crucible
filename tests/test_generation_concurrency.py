@@ -1,5 +1,7 @@
 """Generation performs no database work until a short revalidated commit phase."""
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
+from pathlib import Path
 from threading import Barrier, Event, Lock
 from types import SimpleNamespace
 from uuid import uuid4
@@ -7,13 +9,53 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import delete, func, select
 
-from crucible import dh_v7, generation as generation_work, registry
+from crucible import dh_v7, generation as generation_work, implementation_builds, registry
 from crucible.app import create_app, current_round
 from crucible.config import Settings
 from crucible.db import AdapterVersion, Challenge, Method, ProfileIncident
 from test_api import Actor
 
 ISSUE = {"scheme_id": "teaching-dh-kem", "scheme_version": "7", "profile_id": "dh-v7-tier-1"}
+NATIVE_REVIEW = Path(__file__).parent / "fixtures" / "sntrup-3-linux-build-review.json"
+NATIVE_REVIEW_SHA256 = "d29569793f0a45cba2681e0ccc04e21c567de8d0191182464583b99d685d94b2"
+
+
+def reviewed_native_document():
+    raw = NATIVE_REVIEW.read_bytes()
+    return raw, implementation_builds.parse_manifest(raw, NATIVE_REVIEW_SHA256)
+
+
+def admit_reviewed_native_fixture(system, manifest):
+    """Seed only this isolated database from the retained, explicit build review.
+
+    Native adapters still verify their actual files. This does not authorize a
+    changed candidate, create a review through HTTP, or alter production pins.
+    The ordinary Mac path retains the application's normal baseline behavior.
+    """
+    platform = implementation_builds.additional_platform_admission(manifest)
+    if platform is None:
+        return None
+    raw, reviewed = reviewed_native_document()
+    identity = manifest["scheme_id"], manifest["version"]
+    assert identity == (reviewed["scheme_id"], reviewed["scheme_version"])
+    pair = {key: manifest["implementation"].get(key)
+            for key in ("source_sha256", "artifact_sha256")}
+    assert pair == reviewed["implementation"], "Candidate differs from the reviewed test build"
+    assert platform == reviewed["platform"], "Platform differs from the reviewed test build"
+    with system.app.state.db.transaction(write=True) as session:
+        baseline = session.get(AdapterVersion, identity)
+        if baseline is None:
+            baseline = AdapterVersion(scheme_id=identity[0], version=identity[1],
+                **reviewed["baseline"], created_at=system.now[0])
+            session.add(baseline)
+            session.flush()
+        assert {key: getattr(baseline, key) for key in pair} == reviewed["baseline"]
+        review = implementation_builds.register_build(session, raw,
+            expected_sha256=NATIVE_REVIEW_SHA256, reviewed_by="Synthetic lifecycle fixture operator",
+            review_basis="Isolated test database using the exact retained reviewed SNTRUP 3 Linux declaration; no new build approval.",
+            now=system.now[0])
+        assert implementation_builds.implementation_is_compatible(session, manifest, baseline)
+        return review.id
 
 
 @pytest.fixture
@@ -99,7 +141,9 @@ def test_separate_apps_still_converge_on_one_durable_instance(generation, monkey
 
 def test_duplicate_does_not_consume_native_capacity_and_retry_reuses_instance(generation, monkeypatch):
     adapter = registry.adapter_for("sntrup")
-    profile_id = adapter.manifests()[0]["id"]
+    manifest = adapter.manifests()[0]
+    admit_reviewed_native_fixture(generation, manifest)
+    profile_id = manifest["id"]
     body = {"scheme_id": adapter.SCHEME_ID, "scheme_version": adapter.SCHEME_VERSION, "profile_id": profile_id}
     other = Actor(generation.app)
     other.register("independent_solver")
@@ -141,7 +185,9 @@ def test_duplicate_does_not_consume_native_capacity_and_retry_reuses_instance(ge
 
 def test_generation_resource_abort_releases_reservation_for_retry(generation, monkeypatch):
     adapter = registry.adapter_for("sntrup")
-    profile_id = adapter.manifests()[0]["id"]
+    manifest = adapter.manifests()[0]
+    admit_reviewed_native_fixture(generation, manifest)
+    profile_id = manifest["id"]
     body = {"scheme_id": adapter.SCHEME_ID, "scheme_version": adapter.SCHEME_VERSION, "profile_id": profile_id}
     actual = adapter.generate
     def abort(profile_id):
@@ -155,6 +201,36 @@ def test_generation_resource_abort_releases_reservation_for_retry(generation, mo
     with generation.app.state.db.transaction() as session:
         rows = session.scalars(select(generation_work.GenerationAttempt)).all()
         assert {(row.outcome, row.disposition) for row in rows} == {("generation_abort", "unissued"), ("agreement", "issued")}
+
+
+def test_native_fixture_rejects_unreviewed_candidate_before_creating_baseline(generation):
+    _, reviewed = reviewed_native_document()
+    manifest = {"scheme_id": reviewed["scheme_id"], "version": reviewed["scheme_version"],
+        "implementation": {**reviewed["implementation"], "admission": {
+            "format": implementation_builds.ADMISSION_FORMAT, "kind": "reviewed-additional-platform",
+            "platform": reviewed["platform"]}}}
+    changed = deepcopy(manifest)
+    changed["implementation"]["artifact_sha256"] = "0" * 64
+    with pytest.raises(AssertionError, match="Candidate differs"):
+        admit_reviewed_native_fixture(generation, changed)
+    assert count(generation, AdapterVersion) == 0
+    assert count(generation, implementation_builds.ImplementationBuild) == 0
+
+
+def test_native_fixture_never_reactivates_revoked_review(generation):
+    _, reviewed = reviewed_native_document()
+    manifest = {"scheme_id": reviewed["scheme_id"], "version": reviewed["scheme_version"],
+        "implementation": {**reviewed["implementation"], "admission": {
+            "format": implementation_builds.ADMISSION_FORMAT, "kind": "reviewed-additional-platform",
+            "platform": reviewed["platform"]}}}
+    review_id = admit_reviewed_native_fixture(generation, manifest)
+    with generation.app.state.db.transaction(write=True) as session:
+        implementation_builds.revoke_build(session, review_id, reason="Synthetic test revocation", now=generation.now[0])
+        assert not implementation_builds.implementation_is_compatible(session, manifest)
+    with pytest.raises(ValueError, match="revoked"):
+        admit_reviewed_native_fixture(generation, manifest)
+    assert count(generation, AdapterVersion) == 1
+    assert count(generation, implementation_builds.ImplementationBuild) == 1
 
 
 def test_generation_finishing_at_the_deadline_cannot_issue_in_either_round(generation, monkeypatch):
