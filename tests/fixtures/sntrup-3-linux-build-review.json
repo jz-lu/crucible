@@ -1,0 +1,123 @@
+{
+  "baseline": {
+    "artifact_sha256": "41946529a91d1428319f253ede8fff96f8e88988f46fc5d0f377b31a610073c2",
+    "source_sha256": "7f2acddc26fe0f2e60edefc0749b74d290d0ac045529ff58829fdd9055252e4e"
+  },
+  "build": {
+    "recipe_sha256": "483169071381fc59969805510cc7ee2d73706dcfa07bafba7e5e17298ca4ed8f",
+    "toolchain": "Runtime assembly recipe (prebuilt native/wheel inputs separately evidenced); isolated source2d3a10eca83ac63cea8488073284807d91bf5a34; Python3.13.17 Linux AMD64; exact loaded image manifest/config and input inventory are evidence below. Not a hermetic compiler-chain or new cryptographic security claim."
+  },
+  "evidence": [
+    {
+      "name": "original-runtime",
+      "sha256": "ec62c37f0854ca8b770538fcb601b69753df49d512b64e4c59b65006fce3df81"
+    },
+    {
+      "name": "candidate-runtime",
+      "sha256": "085377ac2ec5243bc86cd131beefab46c0a29311b579cdc91dde55217334ae2b"
+    },
+    {
+      "name": "all-release-comparison",
+      "sha256": "2a62a0c8e1f4d3980397e17a9f57f2cf5d756d7f9af402afb473f06babcc086e"
+    },
+    {
+      "name": "independent-comparison",
+      "sha256": "334ddd7a8c9bd0b274637f6bab9b27ad227d499b7a0ca611a4bb1db41d08895f"
+    },
+    {
+      "name": "runtime-assembly-recipe",
+      "sha256": "483169071381fc59969805510cc7ee2d73706dcfa07bafba7e5e17298ca4ed8f"
+    },
+    {
+      "name": "runtime-input-inventory",
+      "sha256": "6f26ec90be4ce7a85d112a78b22be3587472f11752e48195e30769b6e92724c3"
+    },
+    {
+      "name": "native-loaded-image-manifest",
+      "sha256": "dbf0b1be3a734a86603ebfc9ff058db22513be430b23df812bba9f75ac1b0320"
+    },
+    {
+      "name": "native-loaded-image-config",
+      "sha256": "eb2bba5212e4220891531763c076842b3ea849cadfdf767e880ccc1102dac1fa"
+    },
+    {
+      "name": "native-smoke-evidence-inventory",
+      "sha256": "84ad4590dffcd9d64e961e4e2ff259d6436537528d1ec19e697b6506e6ad5b81"
+    },
+    {
+      "name": "native-v2-smoke-summary",
+      "sha256": "ebd8668f708c27679e8f4aee38b1d42797d320b5474f40778bb12a5d6c87efd3"
+    },
+    {
+      "name": "native-v2-smoke-result",
+      "sha256": "9a8b44a290caf436e1af73d477c14fc9ac8fa0e99d0e67c869de33ad62b4ca83"
+    },
+    {
+      "name": "semantic-source-review",
+      "sha256": "7baeb9126fdb709b7ee88ff5edf4ada3f47268ea61959a6cbb3704e608104de7"
+    },
+    {
+      "name": "previous-candidate-index",
+      "sha256": "f92a1bd83742478512584679fd759bc366ef2db5371f9139462bf5ed0dd6807a"
+    },
+    {
+      "name": "frozen-source-inventory",
+      "sha256": "8d90f17a627408c559276fb849a5c23dc28e2219c5d384349bbd6bda8f80cbab"
+    },
+    {
+      "name": "runtime-release-record",
+      "sha256": "26dc848d408038a0d42b9cdea0eeedcba4d3edf3b5343819ffdb6d5dd8e6287c"
+    },
+    {
+      "name": "runtime-build-log",
+      "sha256": "37205583ca97925af0c90cd875adfb0f5a6cd7f2066ae695b790254596ff6b4e"
+    },
+    {
+      "name": "direct-tests-command",
+      "sha256": "2f0ffa41b022831dfac19884b971861dc9930c394019063b555c4365e5822b42"
+    },
+    {
+      "name": "direct-tests-original-log",
+      "sha256": "de7c4d06a3af9566715fae57d002b81da202cc9ce3f7210a26aa6e4d2c977ea5"
+    },
+    {
+      "name": "native-image-proof",
+      "sha256": "63fe558af4c0e4ae3546774bc1953da16ca7b841614daa08816948f10002c482"
+    },
+    {
+      "name": "native-boundary-tests",
+      "sha256": "d298e6ce220c695091de428068e63fb58513d7bd9b46d7bfe52d65c47ed3aa87"
+    },
+    {
+      "name": "native-test-summary",
+      "sha256": "3de14ebae6cee32ac171a45f4803262ddda40f68ff8522e471058f2ce464f465"
+    },
+    {
+      "name": "archived-mceliece-limit",
+      "sha256": "523521e0a6f987c08f4636ba54084fbe98eef83000bf4fb7170bcadf3a15f83c"
+    },
+    {
+      "name": "sntrup-3-adapter",
+      "sha256": "794bec7ecad5478eafe944ba8db955acc872df06821d87308712e59e9054be00"
+    },
+    {
+      "name": "ntru-frontier-platform-metadata",
+      "sha256": "8f9dfb1b0573d1bf9f632f5ea62af10dbb8cb333bcb168a610f6707668c2a1ef"
+    },
+    {
+      "name": "ntru-frontier-raw-conformance",
+      "sha256": "822c272f4b6c18cf71a3211c3e8cab908f6d2447451068901dc7ddde8f470ba7"
+    }
+  ],
+  "format": "crucible-implementation-build-v1",
+  "implementation": {
+    "artifact_sha256": "633e12d7a92216aa3637b69edb860495fe83f0b2eaca9521c488db9a6ab26e7c",
+    "source_sha256": "794bec7ecad5478eafe944ba8db955acc872df06821d87308712e59e9054be00"
+  },
+  "platform": {
+    "machine": "x86_64",
+    "system": "Linux"
+  },
+  "scheme_id": "sntrup",
+  "scheme_version": "3"
+}
