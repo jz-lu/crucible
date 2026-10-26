@@ -235,8 +235,26 @@
         <button id="more-people" class="button button-quiet people-more" type="button" hidden>Load more</button>
       </section>
       <section id="person-workspace" class="person-workspace" aria-labelledby="person-title" tabindex="-1" hidden>
-        <div class="profile-backline"><a class="text-button scheme-back" href="#people">← Leaderboard</a><a id="profile-review-link" class="text-button" href="#reviews?section=publication" hidden>Review center →</a></div>
+        <div class="profile-backline"><a class="text-button scheme-back" href="#people">← Leaderboard</a><a id="profile-review-link" class="text-button" href="#reviews?section=publication" hidden>Review center →</a><button id="edit-researcher-profile" class="text-button" type="button" aria-expanded="false" aria-controls="researcher-profile-editor" hidden>Edit profile</button></div>
         <div class="catalogue-heading"><h1 id="person-title">Profile</h1></div>
+        <div id="researcher-profile-summary" class="researcher-profile-summary" hidden></div>
+        <section id="researcher-profile-editor" class="researcher-profile-editor" aria-labelledby="researcher-profile-title" hidden>
+          <div class="researcher-profile-editor-heading"><h2 id="researcher-profile-title">Edit profile</h2><button id="close-researcher-profile" class="text-button" type="button">Close</button></div>
+          <form id="researcher-profile-form">
+            <label for="researcher-affiliation">Institution or affiliation <span class="field-hint">(optional)</span></label>
+            <input id="researcher-affiliation" name="affiliation" type="text" maxlength="200" autocomplete="organization">
+            <div class="researcher-profile-fields">
+              <div><label for="researcher-position">Position <span class="field-hint">(optional)</span></label><input id="researcher-position" name="position" type="text" maxlength="150" autocomplete="organization-title"></div>
+              <div><label for="researcher-display-name">Display name <span class="field-hint">(optional)</span></label><input id="researcher-display-name" name="display_name" type="text" maxlength="100" autocomplete="name"></div>
+            </div>
+            <label for="researcher-website">Website <span class="field-hint">(optional)</span></label>
+            <input id="researcher-website" name="website" type="url" maxlength="2048" autocomplete="url" placeholder="https://">
+            <div id="researcher-profile-conflict" class="researcher-profile-conflict" hidden></div>
+            <p id="researcher-profile-error" class="form-error" role="alert" hidden></p>
+            <p class="field-hint">Visible to other Crucible members. These details are self-reported; your username and scores stay the same.</p>
+            <div class="researcher-profile-actions"><button id="save-researcher-profile" class="button button-primary" type="submit">Save profile</button><button id="reload-researcher-profile" class="text-button" type="button" hidden>Reload saved details</button><span id="researcher-profile-status" class="field-hint" role="status"></span></div>
+          </form>
+        </section>
         <div id="person-content" aria-live="polite"></div>
         <details id="account-sign-in" class="account-sign-in" hidden>
           <summary>Sign-in settings</summary>

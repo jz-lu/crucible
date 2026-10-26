@@ -20,6 +20,7 @@ from crucible import notebook  # Register durable notes, immutable revisions and
 from crucible import implementation_builds  # Register explicit reviewed builds without changing release pins.
 from crucible import github_auth  # Register explicit provider identities and bound browser flows.
 from crucible import password_recovery  # Register one-use verified-mailbox recovery.
+from crucible import researcher_profiles  # Register optional member-declared profile metadata.
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

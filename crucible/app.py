@@ -27,7 +27,7 @@ from .public_assets import Asset, CONTENT_SECURITY_POLICY, ProtectedAssets, Publ
 from .access_policy import AccessPolicy
 from . import benchmark_reports, assumption_sheets, agent_guidance
 from .reference_policy import METHOD as REFERENCE_METHOD
-from . import github_auth, password_recovery
+from . import github_auth, password_recovery, researcher_profiles
 
 
 SOURCE_REVISION_FILE = ROOT / "SOURCE_REVISION"
@@ -1216,6 +1216,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     machine_auth.register_routes(app, db, settings, clock, user_for, throttle)
     method_sources.register_routes(app, db, user_for, clock, throttle)
     people.register_routes(app, db, envelope)
+    researcher_profiles.register_routes(app, db, clock, user_for, envelope, throttle)
     research.register_routes(app, db, settings, clock, user_for, throttle)
     protocol_proposals.register_routes(app, db, settings, clock, user_for, throttle)
     notebook.register_routes(app, db, settings, clock, user_for, throttle)

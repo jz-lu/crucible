@@ -30,6 +30,7 @@ let roundRetryAt = 0;
 let sessionSynchronization = null;
 let documentEpoch = 0, documentRetired = false, initializationRequest = 0;
 let initializationPending = false, resumeInitialization = false;
+const researcherEditor = {account: null, request: 0, base: null, pending: null, open: false, busy: false, loading: false, conflict: false, contextRequired: false, guarded: false};
 function ownsDocument(epoch) { return !documentRetired && documentEpoch === epoch; }
 window.addEventListener('pagehide', () => {
   resumeInitialization = initializationPending || !state.sessionResolved || browsingRequests.size > 0;
@@ -41,6 +42,7 @@ window.addEventListener('pagehide', () => {
   sessionSynchronization = null; state.roundRefreshing = false;
   state.challengeStartIntent = null;
   notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
+  suspendResearcherEditor();
 });
 window.addEventListener('pageshow', event => {
   documentRetired = false;
@@ -566,6 +568,7 @@ function renderAccessGate() {
   document.title = 'Private beta — Crucible';
 }
 function clearProtectedState() {
+  resetResearcherEditor();
   invalidateReadViews();
   referenceTimings.clear();
   assumptionsWorkspace?.clear();
@@ -1296,6 +1299,7 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
         'The request could not be completed. Please try again.';
       const error = new Error(detail || fallback);
       error.status = response.status;
+      if (path === '/api/me/profile' && ['profile_revision_conflict', 'profile_idempotency_conflict'].includes(data?.code)) error.code = data.code;
       if ((protectedRequest || path.startsWith('/api/access/')) && state.access?.mode === 'beta' && [401, 403].includes(response.status)) {
         // Recheck membership without making a rejected child request await its parent refresh.
         void synchronizeSession();
@@ -1346,6 +1350,8 @@ function setSession(data) {
   state.canManageBetaAccess = Boolean(state.user && data.capabilities?.manage_beta_access);
   state.canReviewProposals = Boolean(state.user && data.capabilities?.review_protocol_proposals);
   state.canSelfReviewProposals = Boolean(state.canReviewProposals && data.capabilities?.self_review_protocol_proposals);
+  if (previousId !== state.user?.id || !hasAccess()) resetResearcherEditor();
+  else if (previousCsrf !== state.csrf) suspendResearcherEditor();
   notebookWorkspace?.setAccount(hasAccess() ? state.user : null);
   reviewNotebookWorkspace?.setAccount(hasAccess() && state.canReviewProposals ? state.user : null);
   if (previousId !== state.user?.id || previousCsrf !== state.csrf) {
@@ -2199,9 +2205,179 @@ function personPreview() {
   }
   return preview;
 }
+const researcherFields = {affiliation: ['#researcher-affiliation', 200], position: ['#researcher-position', 150], display_name: ['#researcher-display-name', 100], website: ['#researcher-website', 2048]};
+function researcherWebsite(value) {
+  if (!value || /[\s\\]/u.test(value)) return null;
+  try {
+    const url = new URL(value);
+    return ['https:', 'http:'].includes(url.protocol) && url.hostname && !url.username && !url.password ? url : null;
+  } catch { return null; }
+}
+function validResearcherProfile(value) {
+  return value && Number.isSafeInteger(value.revision) && value.revision >= 0 &&
+    Object.entries(researcherFields).every(([key, [, max]]) => typeof value[key] === 'string' && [...value[key]].length <= max && !/[\u0000-\u001f\u007f-\u009f]/u.test(value[key])) &&
+    (!value.website || researcherWebsite(value.website)) ? value : null;
+}
+function ownResearcherProfile() {
+  return hasAccess() && state.user && state.screen === 'person' && state.personHandle?.toLowerCase() === state.user.handle.toLowerCase();
+}
+function researcherValues() {
+  return Object.fromEntries(Object.entries(researcherFields).map(([key, [selector]]) => [key, $(selector).value.trim()]));
+}
+function researcherDirty() {
+  return Boolean(researcherEditor.pending || researcherEditor.base && Object.entries(researcherValues()).some(([key, value]) => value !== researcherEditor.base[key]));
+}
+function warnResearcherDraft(event) { event.preventDefault(); event.returnValue = ''; }
+function researcherDraftGuard() {
+  const dirty = researcherDirty();
+  if (dirty === researcherEditor.guarded) return;
+  researcherEditor.guarded = dirty;
+  window[dirty ? 'addEventListener' : 'removeEventListener']('beforeunload', warnResearcherDraft);
+}
+function researcherEditorControls() {
+  const locked = researcherEditor.loading || researcherEditor.busy || Boolean(researcherEditor.pending);
+  for (const [selector] of Object.values(researcherFields)) $(selector).disabled = locked;
+  $('#researcher-profile-form').setAttribute('aria-busy', String(researcherEditor.loading || researcherEditor.busy));
+  $('#save-researcher-profile').disabled = !ownResearcherProfile() || !researcherEditor.base || researcherEditor.contextRequired || researcherEditor.loading || researcherEditor.busy;
+  setText('#save-researcher-profile', researcherEditor.busy ? 'Saving…' : researcherEditor.pending ? 'Retry save' : researcherEditor.conflict ? 'Save my changes' : 'Save profile');
+  $('#reload-researcher-profile').hidden = !researcherEditor.base && !$('#researcher-profile-error').textContent;
+  $('#reload-researcher-profile').disabled = researcherEditor.loading || researcherEditor.busy;
+  setText('#reload-researcher-profile', researcherEditor.contextRequired ? 'Retry refresh' : 'Reload saved details');
+  $('#edit-researcher-profile').hidden = !ownResearcherProfile();
+  $('#edit-researcher-profile').setAttribute('aria-expanded', String(researcherEditor.open));
+  setText('#edit-researcher-profile', researcherDirty() ? 'Continue editing' : 'Edit profile');
+  researcherDraftGuard();
+}
+function suspendResearcherEditor() {
+  researcherEditor.request++; researcherEditor.open = false; researcherEditor.busy = false; researcherEditor.loading = false;
+  $('#researcher-profile-editor').hidden = true;
+  researcherEditorControls();
+}
+function resetResearcherEditor() {
+  Object.assign(researcherEditor, {account: null, base: null, pending: null, conflict: false, contextRequired: false});
+  for (const [selector] of Object.values(researcherFields)) $(selector).value = '';
+  $('#researcher-profile-summary').replaceChildren(); $('#researcher-profile-summary').hidden = true;
+  $('#researcher-profile-conflict').replaceChildren(); $('#researcher-profile-conflict').hidden = true;
+  setError('#researcher-profile-error', ''); setText('#researcher-profile-status', '');
+  suspendResearcherEditor();
+}
+function renderResearcherProfile(value) {
+  const target = $('#researcher-profile-summary'), profile = validResearcherProfile(value);
+  target.replaceChildren();
+  target.hidden = !profile || !Object.keys(researcherFields).some(key => profile[key]);
+  if (target.hidden) return;
+  if (profile.display_name) target.append(node('p', profile.display_name, 'researcher-profile-name'));
+  const affiliation = [profile.affiliation, profile.position].filter(Boolean).join(' · ');
+  if (affiliation) target.append(node('p', affiliation));
+  const url = researcherWebsite(profile.website);
+  if (url) {
+    const link = node('a', url.hostname.replace(/^www\./, ''));
+    link.href = url.href; link.target = '_blank'; link.rel = 'noopener noreferrer nofollow';
+    target.append(link);
+  }
+  target.append(node('p', 'Self-reported', 'researcher-profile-provenance'));
+}
+function researcherConflict(profile) {
+  const target = $('#researcher-profile-conflict'); target.replaceChildren(); target.hidden = false;
+  target.append(node('p', 'Saved details changed. Your draft is kept. Review the current details before saving your changes.'));
+  const values = node('dl');
+  for (const [label, key] of [['Institution or affiliation', 'affiliation'], ['Position', 'position'], ['Display name', 'display_name'], ['Website', 'website']]) {
+    values.append(node('dt', label), node('dd', profile[key] || 'Not provided'));
+  }
+  target.append(values);
+}
+async function readResearcherProfile({replace = false, conflict = false} = {}) {
+  const editor = researcherEditor, request = ++editor.request, account = state.user?.id, csrf = state.csrf, lifecycle = documentEpoch;
+  const current = () => ownsDocument(lifecycle) && ownResearcherProfile() && editor.open && editor.request === request && account === state.user?.id && csrf === state.csrf;
+  editor.loading = true; setError('#researcher-profile-error', ''); researcherEditorControls();
+  try {
+    const data = await api('/api/me/profile', undefined, {readRecovery: true});
+    if (!current()) return;
+    const profile = validResearcherProfile(data.profile);
+    if (!profile) throw new Error('Your profile could not be read. Try again.');
+    editor.contextRequired = false;
+    renderResearcherProfile(profile);
+    if (replace || !editor.base) {
+      for (const [key, [selector]] of Object.entries(researcherFields)) $(selector).value = profile[key];
+      editor.base = profile; editor.pending = null; editor.conflict = false;
+      $('#researcher-profile-conflict').hidden = true;
+    } else if (conflict || profile.revision !== editor.base.revision) {
+      // Rebase only after showing current saved values. The next write still
+      // requires the member's explicit Save, and never overwrites their draft.
+      editor.base = profile; editor.pending = null; editor.conflict = true;
+      researcherConflict(profile);
+    }
+  } catch (error) {
+    if (current()) setError('#researcher-profile-error', error.message);
+  } finally { if (current()) { editor.loading = false; researcherEditorControls(); } }
+}
+async function openResearcherEditor() {
+  if (!ownResearcherProfile() || researcherEditor.open) return;
+  if (researcherEditor.account !== state.user.id) resetResearcherEditor();
+  researcherEditor.account = state.user.id; researcherEditor.open = true;
+  $('#researcher-profile-editor').hidden = false;
+  setText('#researcher-profile-status', '');
+  // Uncertain writes must keep their original revision/key/payload until an
+  // explicit retry or reload; a normal reopen must not silently rebase them.
+  if (researcherEditor.pending) researcherEditorControls();
+  else await readResearcherProfile({conflict: researcherEditor.contextRequired});
+}
+async function saveResearcherProfile(event) {
+  event.preventDefault();
+  const editor = researcherEditor;
+  if (!ownResearcherProfile() || !editor.open || !editor.base || editor.contextRequired || editor.busy || editor.loading) return;
+  const values = researcherValues();
+  if (!validResearcherProfile({...values, revision: editor.base.revision})) {
+    setError('#researcher-profile-error', 'Check the field lengths and use a complete http:// or https:// website without a username or password.'); return;
+  }
+  if (!editor.pending) editor.pending = {...values, expected_revision: editor.base.revision, idempotency_key: crypto.randomUUID()};
+  const payload = editor.pending, request = ++editor.request, account = state.user.id, csrf = state.csrf, lifecycle = documentEpoch;
+  const current = () => ownsDocument(lifecycle) && ownResearcherProfile() && editor.open && editor.request === request && account === state.user?.id && csrf === state.csrf;
+  editor.busy = true; setError('#researcher-profile-error', ''); setText('#researcher-profile-status', ''); researcherEditorControls();
+  try {
+    const data = await api('/api/me/profile', payload, {method: 'PUT'});
+    if (!current()) return;
+    const profile = validResearcherProfile(data.profile);
+    if (!profile || profile.revision !== payload.expected_revision + 1 || Object.keys(researcherFields).some(key => profile[key] !== payload[key])) {
+      throw new Error('The saved profile could not be confirmed. Retry the same save or reload saved details.');
+    }
+    editor.base = profile; editor.pending = null; editor.conflict = false;
+    for (const [key, [selector]] of Object.entries(researcherFields)) $(selector).value = profile[key];
+    $('#researcher-profile-conflict').hidden = true;
+    renderResearcherProfile(profile); setText('#researcher-profile-status', 'Profile saved.');
+  } catch (error) {
+    if (!current()) return;
+    if (error.status === 409) {
+      editor.pending = null; editor.busy = false; editor.contextRequired = true;
+      // Disable Save until a fresh revision is available; keep the typed draft.
+      await readResearcherProfile({conflict: true});
+    } else {
+      // A received rejection (except server errors) is definitive. Transport
+      // uncertainty and unreadable success retain the exact idempotent write.
+      if (error.status >= 400 && error.status < 500) editor.pending = null;
+      setError('#researcher-profile-error', error.message + (editor.pending ? ' Retry save sends the same changes once.' : ''));
+    }
+  } finally {
+    if (current()) {
+      editor.busy = false; researcherEditorControls();
+    }
+  }
+}
+$('#edit-researcher-profile').addEventListener('click', openResearcherEditor);
+$('#close-researcher-profile').addEventListener('click', () => { suspendResearcherEditor(); $('#edit-researcher-profile').focus({preventScroll: true}); });
+$('#researcher-profile-form').addEventListener('submit', saveResearcherProfile);
+$('#researcher-profile-form').addEventListener('input', researcherEditorControls);
+$('#reload-researcher-profile').addEventListener('click', () => {
+  if (!ownResearcherProfile() || researcherEditor.busy || researcherEditor.loading) return;
+  if (researcherEditor.contextRequired) { void readResearcherProfile({conflict: true}); return; }
+  if (researcherDirty() && !window.confirm('Discard this draft and load your saved profile? A previous save may already have succeeded.')) return;
+  void readResearcherProfile({replace: true});
+});
+
 function renderPerson(person) {
   const target = $('#person-content');
   setText('#person-title', person.handle);
+  renderResearcherProfile(person.researcher_profile);
   target.replaceChildren(personStats(person));
   if (!Number.isFinite(person.points)) target.append(node('p', 'Scoring is being finalized. Verified results are recorded below.', 'people-score-note'));
   if (person.score_breakdown) {
@@ -2259,10 +2435,12 @@ async function loadPerson(handle, {preserve = false} = {}) {
   // Ownership is established by the session and route, independently of the
   // public score response. Do not make account controls wait for that read.
   renderAgentSettings();
+  researcherEditorControls();
   const cached = cachedRead(key);
   const paint = person => paintRead(key, target, person, renderPerson);
   if (cached) { paint(cached); preserve = true; }
   if (!preserve) {
+    renderResearcherProfile(null);
     state.personDataKey = null;
     setText('#person-title', handle);
     quietReadStatus(target, 'Loading profile…'); target.append(personPreview());
@@ -5065,6 +5243,9 @@ $('#download-proposal').addEventListener('click', () => {
 // Research records keep claims and their conditions separate from hourly ranking.
 function showWorkspace(name) {
   if (!hasAccess()) name = 'access';
+  if (!ownResearcherProfile() && researcherEditor.open) suspendResearcherEditor();
+  if (name !== 'person') renderResearcherProfile(null);
+  researcherEditorControls();
   const transferLoadingFocus = name !== 'loading' && document.activeElement?.closest?.('#route-loading') === routeLoadingPanel;
   if (!RESEARCH_ENABLED && name === 'research') name = 'catalogue';
   const [pendingPath, pendingQuery = ''] = window.location.hash.split('?');

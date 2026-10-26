@@ -847,6 +847,28 @@ button {
 .person-preview .person-section-count { min-height: 1.6em; }
 .person-preview .person-section-count::before { content: ''; display: inline-block; width: 65px; height: 8px; border-radius: 3px; background: var(--line); }
 .person-section { margin-top: 34px; }
+.researcher-profile-summary { margin: -10px 0 24px; overflow-wrap: anywhere; }
+.researcher-profile-summary p { margin: 4px 0; }
+.researcher-profile-name { font-weight: 600; }
+.researcher-profile-provenance { color: var(--muted); font-size: 12px; }
+.researcher-profile-summary a { color: var(--primary); }
+.researcher-profile-editor { margin: 0 0 24px; padding: 22px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.researcher-profile-editor-heading,.researcher-profile-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.researcher-profile-editor-heading { justify-content: space-between; margin-bottom: 16px; }
+.researcher-profile-editor h2 { margin: 0; font: 650 22px/1.2 var(--display); }
+.researcher-profile-editor label { display: block; margin: 12px 0 6px; }
+.researcher-profile-editor input { width: 100%; min-width: 0; }
+.researcher-profile-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.researcher-profile-fields > div { min-width: 0; }
+.researcher-profile-conflict { margin-top: 16px; padding: 12px; background: var(--light); overflow-wrap: anywhere; }
+.researcher-profile-conflict p { margin: 0 0 8px; }
+.researcher-profile-conflict dl { margin: 0; }
+.researcher-profile-conflict dt { color: var(--muted); font-size: 12px; }
+.researcher-profile-conflict dd { margin: 0 0 6px; }
+@media (max-width: 700px) {
+  .researcher-profile-fields { grid-template-columns: 1fr; gap: 0; }
+  .researcher-profile-editor { padding: 16px; }
+}
 .person-section h2 { margin: 0 0 16px; font: 650 24px/1.2 var(--display); }
 .person-disclosure { margin-top: 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
 .person-section-summary { display: flex; align-items: center; gap: 14px; padding: 18px 22px; list-style: none; cursor: pointer; border-radius: 6px; }

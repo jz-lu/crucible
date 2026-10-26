@@ -49,7 +49,7 @@ MEMBER_PATHS = {
     "/api/protocol/reference-method", "/api/protocol/benchmarks", "/api/protocol/assumptions", "/api/protocol/evidence-note",
     "/api/agent/connect/{code}", "/api/agent/connect/{code}/approve", "/api/agent/connect/{code}/deny",
     "/api/agent/tokens", "/api/agent/tokens/{token_id}/revoke",
-    "/api/people", "/api/people/{handle}", "/api/people/{handle}/milestones",
+    "/api/people", "/api/people/{handle}", "/api/people/{handle}/milestones", "/api/me/profile",
     "/api/targets", "/api/contributions", "/api/contributions/{contribution_id}",
     "/api/contributions/{contribution_id}/revisions", "/api/protocol/spec-schema",
     "/api/protocol/spec-template", "/api/protocol/proposal-guide", "/api/protocol/spec", "/api/protocol/proposals/validate",

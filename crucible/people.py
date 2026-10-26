@@ -10,7 +10,7 @@ from functools import lru_cache
 from fastapi import HTTPException, Query
 from sqlalchemy import case, func, select
 
-from . import milestones, registry, research_schemes, scoring
+from . import milestones, registry, research_schemes, researcher_profiles, scoring
 from .db import User
 from .scoring_awards import SchemeAdmissionCredit
 
@@ -189,6 +189,7 @@ def register_routes(app, db, envelope):
                                    .order_by(recent.c.received_at.desc(), recent.c.submission_id.desc())
                                    .limit(RECENT_LIMIT + 1)).all()
             summary.update(joined_at=user.created_at,
+                           researcher_profile=researcher_profiles.profile_for(session, user.id),
                            recent_recoveries=[_record(row) for row in rows[:RECENT_LIMIT]],
                            recent_recoveries_has_more=len(rows) > RECENT_LIMIT)
             summary["first_records"] = _first_records(session, user.id, family_scores)
