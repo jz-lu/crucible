@@ -1,5 +1,5 @@
 const {randomUUID} = require('node:crypto');
-const {test, expect, signIn} = require('./helpers.cjs');
+const {test, expect, signIn, holdResponse} = require('./helpers.cjs');
 const fields = ['display_name', 'affiliation', 'position', 'website'];
 
 async function owner(page) {
@@ -56,6 +56,16 @@ for (const width of [1440, 390]) {
       await page.locator('#close-researcher-profile').click();
       await expect(page.locator('#edit-researcher-profile')).toBeFocused();
       await page.screenshot({path: testInfo.outputPath('researcher-profile-saved.png'), fullPage: true});
+      await page.evaluate(() => loadPerson(state.personHandle, {preserve: true}));
+      await page.locator('#nav-about').click();
+      const fresh = await holdResponse(page, url => url.pathname === '/api/people/browser_alice');
+      try {
+        await page.locator('#account-handle').click(); await fresh.arrived;
+        await expect(summary).toBeVisible(); await expect(summary).toContainText('Example Institute for Cryptographic Research');
+        fresh.release(); await fresh.delivered;
+        await expect(page.locator('#person-content')).toHaveAttribute('aria-busy', 'false');
+        await expect(summary).toBeVisible();
+      } finally {fresh.release(); await fresh.remove();}
       // Another member's page uses its existing detail payload, no owner GET.
       const extra = []; page.on('request', req => {if (new URL(req.url()).pathname === '/api/me/profile') extra.push(req.url());});
       await page.goto('/#person/browser_bob');

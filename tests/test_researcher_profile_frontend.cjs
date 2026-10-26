@@ -58,6 +58,40 @@ async function test(name, run) {await run(); console.log('PASS ' + name); passed
     assert.equal(app.$('#researcher-profile-editor').hidden, false);
     assert.equal(app.$('#researcher-affiliation').disabled, false);
   });
+  await test('public and authorized cold profile bodies reserve only quiet space, without premature score controls', async () => {
+    const pending = deferred();
+    const app = await createApp({schemes: [], user, hash: '#person/alice', responder: (url, options, envelope) =>
+      url.pathname === '/api/session' ? envelope({user, csrf_token:'fixture-csrf', auth:{github_enabled:true}}) : url.pathname === '/api/people/alice' ? pending.promise : undefined});
+    const preview = app.$('#person-content').querySelector('.person-preview');
+    assert.ok(preview); assert.equal(preview.textContent, ''); assert.equal(preview.children.length, 0);
+    assert.equal(preview.getAttribute('aria-hidden'), 'true'); assert.equal(app.$('#person-title').textContent, 'alice');
+    const initial = app.$('[data-pending-layout="profile"]'); assert.equal(initial.textContent, ''); assert.equal(initial.children.length, 0);
+    assert.equal(app.$('#account-sign-in').hidden, false); assert.equal(app.$('#agent-connections').hidden, false);
+    pending.resolve(app.envelope({person: {handle:'alice',points:0,accepted_proposal_count:0,records:[],recent_recoveries:[],researcher_profile:{...blank(),affiliation:'Example Institute'}}})); await flush();
+    assert.equal(app.$('#person-content').querySelector('.person-preview'), null);
+    assert.match(app.$('#researcher-profile-summary').textContent, /Example Institute/);
+  });
+  await test('unchanged cached profile restores metadata after navigation and preserves focused metadata on refresh', async () => {
+    const {app} = await boot({initial: {...blank(), affiliation: 'Example Institute', website: 'https://example.org', revision: 1}});
+    const stats = app.$('#person-content').firstChild;
+    await app.navigate('#about'); assert.equal(app.$('#researcher-profile-summary').hidden, true);
+    await app.navigate('#person/alice');
+    assert.equal(app.$('#person-content').firstChild, stats, 'The unchanged scores still reuse their original DOM');
+    assert.equal(app.$('#researcher-profile-summary').hidden, false);
+    assert.match(app.$('#researcher-profile-summary').textContent, /Example Institute/);
+    const link = app.$('#researcher-profile-summary').querySelector('a'); link.focus();
+    await app.sandbox.loadPerson('alice', {preserve: true});
+    assert.equal(app.$('#researcher-profile-summary').querySelector('a'), link);
+    assert.equal(app.document.activeElement, link);
+  });
+  await test('a forbidden profile refresh removes cached researcher metadata with its score reader', async () => {
+    const {app} = await boot({initial: {...blank(), affiliation: 'Example Institute', revision: 1}});
+    const original = app.sandbox.fetch;
+    app.sandbox.fetch = (path, options) => path.startsWith('/api/people/') ? Promise.resolve({ok:false,status:404,json:async()=>({detail:'Profile unavailable.'})}) : original(path, options);
+    await app.sandbox.loadPerson('alice', {preserve: true});
+    assert.equal(app.$('#researcher-profile-summary').hidden, true);
+    assert.equal(app.$('#researcher-profile-summary').textContent, '');
+  });
   await test('typed draft and input focus survive quiet score refresh and ordinary navigation', async () => {
     const {app, saved} = await boot(); await open(app);
     const inputNode = app.$('#researcher-affiliation'); input(app, '#researcher-affiliation', 'Draft institution'); inputNode.focus();

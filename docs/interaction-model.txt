@@ -156,6 +156,10 @@ Researcher profile edits follow the same ownership rules: the optional editor
 is separate from score refreshes, retains a draft across in-app navigation, and
 clears it on account/access changes. An uncertain save keeps its exact payload
 and key; a conflict requires refreshed saved context and another explicit Save.
+Cold profile frames show the known heading with quiet reserved space; optional
+metadata and scores arrive together without displacing provisional score cards.
+Metadata restores independently of score-DOM deduplication on a warm return.
+Sign-in and agent controls remain session-owned during slow or failed reads.
 See researcher-profiles.txt for the API and separate schema rollout boundary.
 
 Next, in priority order:

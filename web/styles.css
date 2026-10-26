@@ -839,13 +839,7 @@ button {
 .person-stats dt { color: var(--muted); font-size: 13px; }
 .person-stats dd { margin: 9px 0 0; font: 600 30px/1.2 var(--display); }
 .person-stats > div:first-child dd { color: var(--primary); }
-.person-preview .person-stats dd { display: flex; align-items: center; min-height: 1.2em; }
-.person-preview .person-stats .catalogue-placeholder { width: 60px; }
-.person-preview .person-score-breakdown { visibility: hidden; }
-.person-preview .person-section-summary { cursor: default; }
-.person-preview .person-section-summary:hover { background: transparent; }
-.person-preview .person-section-count { min-height: 1.6em; }
-.person-preview .person-section-count::before { content: ''; display: inline-block; width: 65px; height: 8px; border-radius: 3px; background: var(--line); }
+.person-preview { min-height: clamp(240px, 40vh, 440px); }
 .person-section { margin-top: 34px; }
 .researcher-profile-summary { margin: -10px 0 24px; overflow-wrap: anywhere; }
 .researcher-profile-summary p { margin: 4px 0; }

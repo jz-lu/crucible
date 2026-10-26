@@ -9,27 +9,25 @@ async function frame(root) {
     const rect=node=>{const b=node.getBoundingClientRect(),s=getComputedStyle(node);return{x:b.x,y:b.y,width:b.width,height:b.height,font:s.font};};
     return {back:rect(element.querySelector('.profile-backline')),
       backLabel:rect(element.querySelector('.scheme-back')),
-      heading:rect(element.querySelector(element.id==='access-workspace'?'#access-title':element.id==='person-workspace'?'#person-title':'h1')),stats:rect(element.querySelector('.person-stats')),
-      breakdown:rect(element.querySelector('.person-score-breakdown')),
-      sections:[...element.querySelectorAll('.person-disclosure')].map(rect),
+      heading:rect(element.querySelector(element.id==='access-workspace'?'#access-title':element.id==='person-workspace'?'#person-title':'h1')),
+      space:element.querySelector('.person-preview')?rect(element.querySelector('.person-preview')):null,
       overflow:document.documentElement.scrollWidth>innerWidth};
   });
 }
 function sameFrame(actual,expected,phase) {
-  for(const key of ['back','backLabel','heading','stats','breakdown']) {
+  for(const key of ['back','backLabel','heading']) {
     for(const coordinate of ['x','y','width','height'])expect(Math.abs(actual[key][coordinate]-expected[key][coordinate]),phase+' '+key+' '+coordinate).toBeLessThanOrEqual(1);
     expect(actual[key].font,phase+' '+key+' font').toBe(expected[key].font);
   }
-  expect(actual.sections).toHaveLength(3);expect(expected.sections).toHaveLength(3);
-  actual.sections.forEach((section,index)=>{for(const coordinate of ['x','y','width','height'])expect(Math.abs(section[coordinate]-expected.sections[index][coordinate]),phase+' section'+index+' '+coordinate).toBeLessThanOrEqual(1);});
+  if(actual.space&&expected.space)for(const coordinate of ['x','y','width','height'])expect(Math.abs(actual.space[coordinate]-expected.space[coordinate]),phase+' quiet space '+coordinate).toBeLessThanOrEqual(1);
   expect(actual.overflow).toBe(false);
 }
 async function inertPreview(root) {
   const preview=root.locator('.person-preview');await expect(preview).toBeVisible();
   await expect(preview).toHaveAttribute('aria-hidden','true');
   await expect(preview.locator('a,button,summary,details,input')).toHaveCount(0);
-  expect(await preview.innerText()).not.toMatch(/\b\d+\b/);
-  await expect(preview.locator('.person-stats dd')).toHaveText(['','']);
+  await expect(preview).toHaveText('');
+  await expect(root.locator('.person-stats,.person-disclosure,.person-score-breakdown')).toHaveCount(0);
 }
 
 async function heldRenderingResponse(page,predicate,change,fetchOptions) {
@@ -50,7 +48,8 @@ const profiles=[...[1440,390].flatMap(width=>['alice','bob'].map(actor=>({width,
   {width:390,actor:'bob',label:'long-handle',handle:'u'.repeat(32)},
   {width:390,actor:'alice',label:'reviewer-own',reviewer:true}];
 for(const {width,actor,label,handle:requestedHandle,reviewer=false} of profiles) {
-  test(`cold ${label} profile keeps its ${width}px public frame through access, catalogue and profile reads`,async({page},testInfo)=>{
+  const metadata=actor==='bob'&&!requestedHandle?{display_name:'Bob Example',affiliation:'Example Institute for Cryptographic Research',position:'Research fellow',website:'https://example.org',revision:1,updated_at:1700000000}:null;
+  test(`cold ${label} ${metadata?'populated':'empty'} profile keeps its ${width}px header through access, catalogue and profile reads`,async({page},testInfo)=>{
     await page.setViewportSize({width,height:1000});await start(page);
     // Retain only the real authenticated cookie/presentation hint. Stop the
     // setup document before its idle reads can consume the new one-shot holds.
@@ -66,9 +65,10 @@ for(const {width,actor,label,handle:requestedHandle,reviewer=false} of profiles)
     const profile=requestedHandle ? await heldRenderingResponse(page,url=>url.pathname==='/api/people/'+handle,
       data=>{expect(data.person.handle).toBe('browser_bob');data.person.handle=handle;},
       {url:'http://127.0.0.1:8029/api/people/browser_bob?include_milestones=false'}) :
+      metadata?await heldRenderingResponse(page,url=>url.pathname==='/api/people/'+handle,data=>{data.person.researcher_profile=metadata;}):
       await holdResponse(page,url=>url.pathname==='/api/people/'+handle);
     const reads=[];page.on('request',request=>reads.push(new URL(request.url()).pathname));
-    let initial,accountFrames;
+    let initial;
     try {
       await page.goto('/?profile-layout='+width+'-'+label+'#person/'+handle,{waitUntil:'domcontentloaded'});await session.arrived;
       const access=page.locator('#access-workspace');await expect(access.locator('#access-title')).toHaveText(handle);
@@ -84,6 +84,7 @@ for(const {width,actor,label,handle:requestedHandle,reviewer=false} of profiles)
       await profile.arrived;expect(reads.filter(value=>value==='/api/people/'+handle)).toHaveLength(1);
       catalogue.release();await catalogue.delivered;await profile.arrived;
       const target=page.locator('#person-workspace');await expect(target).toBeVisible();await inertPreview(target);
+      await expect(page.locator('#researcher-profile-summary')).toBeHidden();
       sameFrame(await frame(target),initial,'profile pending');
       if(actor==='bob') {
         await expect(page.locator('#account-sign-in')).toBeHidden();
@@ -93,7 +94,6 @@ for(const {width,actor,label,handle:requestedHandle,reviewer=false} of profiles)
         // by the independent public profile-statistics response.
         await expect(page.locator('#account-sign-in')).toBeVisible();
         await expect(page.locator('#agent-connections')).toBeVisible();
-        accountFrames=await Promise.all(['#account-sign-in','#agent-connections'].map(selector=>page.locator(selector).boundingBox()));
       }
       if(reviewer)await expect(page.locator('#profile-review-link')).toBeVisible();
       await page.locator('#nav-about').focus();
@@ -104,12 +104,12 @@ for(const {width,actor,label,handle:requestedHandle,reviewer=false} of profiles)
       profile.release();await profile.delivered;
       await expect(target.locator('.person-preview')).toHaveCount(0);
       await expect(target.locator('.person-stats dd')).toHaveText(['0','0']);
+      await expect(target.locator('.person-disclosure')).toHaveCount(3);
       await expect(target.locator('.person-disclosure[open]')).toHaveCount(0);
       sameFrame(await frame(target),initial,'profile ready');
-      if(accountFrames) {
-        const ready=await Promise.all(['#account-sign-in','#agent-connections'].map(selector=>page.locator(selector).boundingBox()));
-        ready.forEach((box,index)=>{for(const coordinate of ['x','y','width','height'])expect(Math.abs(box[coordinate]-accountFrames[index][coordinate]),'account settings '+coordinate).toBeLessThanOrEqual(1);});
-      }
+      if(actor==='alice') {await expect(page.locator('#account-sign-in')).toBeVisible();await expect(page.locator('#agent-connections')).toBeVisible();}
+      if(metadata)await expect(page.locator('#researcher-profile-summary')).toContainText(metadata.affiliation);
+      else await expect(page.locator('#researcher-profile-summary')).toBeHidden();
       await expect(page.locator('#nav-about')).toBeFocused();
       if(actor==='bob')await expect(page.locator('#account-sign-in')).toBeHidden();
       expect(reads.filter(value=>value==='/api/people/'+handle)).toHaveLength(1);

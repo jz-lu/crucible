@@ -2192,17 +2192,10 @@ function personStats(person) {
   return stats;
 }
 function personPreview() {
-  // Public structure, without invented statistics or interactive records.
-  // Match the initial profile frame in index.html, before access is resolved.
+  // Only reserve quiet space: optional member metadata has unknown height.
+  // Show metadata and scores together rather than moving provisional cards.
+  // Match the initial profile frame before access is resolved.
   const preview = node('div', undefined, 'person-preview'); preview.setAttribute('aria-hidden', 'true');
-  preview.append(personStats());
-  const scoreSpace = node('div', undefined, 'person-score-breakdown'); scoreSpace.append(node('span', 'Points breakdown'));
-  preview.append(scoreSpace);
-  for (const title of ['First to reach', 'Personal records', 'Recent solves']) {
-    const section = node('div', undefined, 'person-section person-disclosure');
-    const heading = node('div', undefined, 'person-section-summary');
-    heading.append(node('h2', title), node('span', undefined, 'person-section-count')); section.append(heading); preview.append(section);
-  }
   return preview;
 }
 const researcherFields = {affiliation: ['#researcher-affiliation', 200], position: ['#researcher-position', 150], display_name: ['#researcher-display-name', 100], website: ['#researcher-website', 2048]};
@@ -2263,9 +2256,11 @@ function resetResearcherEditor() {
 }
 function renderResearcherProfile(value) {
   const target = $('#researcher-profile-summary'), profile = validResearcherProfile(value);
+  const signature = JSON.stringify(profile), previous = renderedReads.get(target);
+  if (previous?.key === 'researcher-profile' && previous.signature === signature && previous.child === target.firstChild) return;
   target.replaceChildren();
   target.hidden = !profile || !Object.keys(researcherFields).some(key => profile[key]);
-  if (target.hidden) return;
+  if (target.hidden) { renderedReads.set(target, {key: 'researcher-profile', signature, child: target.firstChild}); return; }
   if (profile.display_name) target.append(node('p', profile.display_name, 'researcher-profile-name'));
   const affiliation = [profile.affiliation, profile.position].filter(Boolean).join(' · ');
   if (affiliation) target.append(node('p', affiliation));
@@ -2276,6 +2271,7 @@ function renderResearcherProfile(value) {
     target.append(link);
   }
   target.append(node('p', 'Self-reported', 'researcher-profile-provenance'));
+  renderedReads.set(target, {key: 'researcher-profile', signature, child: target.firstChild});
 }
 function researcherConflict(profile) {
   const target = $('#researcher-profile-conflict'); target.replaceChildren(); target.hidden = false;
@@ -2437,7 +2433,12 @@ async function loadPerson(handle, {preserve = false} = {}) {
   renderAgentSettings();
   researcherEditorControls();
   const cached = cachedRead(key);
-  const paint = person => paintRead(key, target, person, renderPerson);
+  const paint = person => {
+    // Metadata has its own stable DOM outside the score reader. Restore it on
+    // cached entry even when the unchanged score DOM does not need repainting.
+    renderResearcherProfile(person.researcher_profile);
+    paintRead(key, target, person, renderPerson);
+  };
   if (cached) { paint(cached); preserve = true; }
   if (!preserve) {
     renderResearcherProfile(null);
@@ -2485,6 +2486,7 @@ async function loadPerson(handle, {preserve = false} = {}) {
     }
   } catch (error) {
     if (current()) {
+      if (forbiddenRead(error)) renderResearcherProfile(null);
       readRefreshError(key, target, error, () => loadPerson(handle), cached || preserve);
     }
   } finally {
