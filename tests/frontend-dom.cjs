@@ -101,7 +101,6 @@ async function createApp({schemes, user = null, hash = '#challenge', responder, 
       else if (url.pathname === '/api/schemes') data = envelope({schemes});
       else if (url.pathname === '/api/challenges') data = envelope({challenge: null});
       else if (url.pathname === '/api/leaderboard') data = envelope({entries: []});
-      else if (url.pathname === '/api/targets') data = envelope({targets: []});
       else if (url.pathname === '/api/protocol/benchmarks') data = envelope({method: {id: 'reference-operations-v1', version: 1}, report: null});
       else throw new Error('Unexpected mocked request: ' + url.pathname);
     }

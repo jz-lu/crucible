@@ -11,8 +11,8 @@ or an existing scoped connection and does not grant notebook or review authority
 A private research beta for shared-secret recovery challenges. The app has
 accounts, durable records, a server-owned hourly deadline, and exact answer
 verification. The numerical challenge interface is joined by an account-backed
-Research notebook with private revisions and reviewed sharing. The older research
-records and API remain available for future work. Source is shared for collaboration.
+Research notebook with private revisions and reviewed sharing. Source is shared
+for collaboration.
 The app also includes versioned KEM specifications, private proposal intake,
 immutable revisions, and manual review before trusted integration. New approvals
 and admissions require a structured tier-design plan covering parameter growth,

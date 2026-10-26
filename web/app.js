@@ -1,8 +1,6 @@
 'use strict';
 
 const $ = selector => document.querySelector(selector);
-// Keep the research interface dormant while the first MVP focuses on numerical challenges.
-const RESEARCH_ENABLED = false;
 const state = {
   auth: {}, authPanel: 'signin', githubBusy: false, githubPending: false, githubCompleteBusy: false, authCallbackBusy: false, githubLinkContext: null,
   passwordResetToken: null, passwordResetBusy: false, passwordRecoveryBusy: false,
@@ -211,11 +209,6 @@ const authDialog = $('#auth-dialog');
 const submissionDialog = $('#submission-dialog');
 const historyDialog = $('#history-dialog');
 const recoveryDialog = $('#recovery-dialog');
-const findingDialog = $('#finding-dialog');
-const research = {
-  visible: false, targets: [], target: null, kind: 'scheme', findings: [],
-  nextBefore: null, request: 0, editing: null, followup: null, saving: false, recoveries: [], recoveriesRequest: 0
-};
 const RECOVERY_FILE_MAX_BYTES = 128 * 1024;
 const PROPOSAL_FILE_MAX_BYTES = 48 * 1024;
 const proposals = {
@@ -568,8 +561,7 @@ function clearProtectedState() {
   state.autoIssueAttempts.clear(); state.autoIssuePaused.clear();
   state.canReviewProposals = false; state.canSelfReviewProposals = false; state.canManageBetaAccess = false;
   resetAgentSettings(); resetAgentInstructions(); resetProposalAccount(state.user?.id);
-  research.request++; research.recoveriesRequest++; research.targets = []; research.target = null; research.findings = []; research.recoveries = [];
-  for (const selector of ['#kem-catalogue', '#people-content', '#person-content', '#leaderboard-content', '#history-content', '#recovery-content', '#connect-content', '#overview-graphs', '#target-catalogue']) $(selector).replaceChildren();
+  for (const selector of ['#kem-catalogue', '#people-content', '#person-content', '#leaderboard-content', '#history-content', '#recovery-content', '#connect-content', '#overview-graphs']) $(selector).replaceChildren();
   for (const dialog of document.querySelectorAll('dialog')) if (dialog.open && dialog !== authDialog) dialog.close();
   $('#submission-form').reset();
   // A fresh shell also releases notebook closures and private data held by the
@@ -1019,7 +1011,7 @@ $('#access-continue').addEventListener('click', async () => {
   catch (error) { globalError(error.message); }
 });
 function workspaceSelector(screen) {
-  return {loading: '#route-loading', access: '#access-workspace', scheme: '#workspace', overview: '#overview-workspace', assumptions: '#assumptions-workspace', notebook: '#notebook-workspace', reviews: '#review-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
+  return {loading: '#route-loading', access: '#access-workspace', scheme: '#workspace', overview: '#overview-workspace', assumptions: '#assumptions-workspace', notebook: '#notebook-workspace', reviews: '#review-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
 }
 function applyRoute(focus = false) {
   const routeRequest = ++workspaceLoadRequest;
@@ -1055,7 +1047,7 @@ function applyRoute(focus = false) {
   const previousScreen = state.screen;
   const previousView = state.view;
   let hash = window.location.hash || '#challenge';
-  if (!RESEARCH_ENABLED && hash.split('?')[0] === '#research') {
+  if (hash.split('?')[0] === '#research') {
     hash = '#challenge';
     window.history.replaceState(null, '', hash);
   }
@@ -1075,8 +1067,8 @@ function applyRoute(focus = false) {
     if (section !== state.reviewSection) { reviewParams.set('section', state.reviewSection); query = reviewParams.toString(); window.history.replaceState(null, '', '#reviews?' + query); }
   }
   let scheme, profile, handle, view = 'leaderboard';
-  let screen = path === '#connect' ? 'connect' : path === '#people' ? 'people' : path === '#propose' ? 'propose' : path === '#reviews' ? 'reviews' : path === '#about' ? 'about' : path === '#notebook' ? 'notebook' : path === '#research' ? 'research' : 'catalogue';
-  let invalid = !['#challenge', '#notebook', '#research', '#about', '#propose', '#reviews', '#people', '#connect'].includes(path);
+  let screen = path === '#connect' ? 'connect' : path === '#people' ? 'people' : path === '#propose' ? 'propose' : path === '#reviews' ? 'reviews' : path === '#about' ? 'about' : path === '#notebook' ? 'notebook' : 'catalogue';
+  let invalid = !['#challenge', '#notebook', '#about', '#propose', '#reviews', '#people', '#connect'].includes(path);
   const personMatch = path.match(/^#person\/([^/]+)$/);
   if (personMatch) {
     try {
@@ -1159,7 +1151,7 @@ function applyRoute(focus = false) {
   if (screen === 'notebook') {
     showNotebook(query);
   }
-  document.title = ['scheme', 'overview'].includes(screen) ? scheme.name + (screen === 'overview' ? ' overview' : '') + ' — Crucible' : screen === 'person' ? handle + ' — Crucible' : screen === 'people' ? 'Leaderboard — Crucible' : screen === 'research' ? 'Research — Crucible' : screen === 'about' ? 'About us — Crucible' : screen === 'propose' ? 'Propose a scheme — Crucible' : 'Schemes — Crucible';
+  document.title = ['scheme', 'overview'].includes(screen) ? scheme.name + (screen === 'overview' ? ' overview' : '') + ' — Crucible' : screen === 'person' ? handle + ' — Crucible' : screen === 'people' ? 'Leaderboard — Crucible' : screen === 'about' ? 'About us — Crucible' : screen === 'propose' ? 'Propose a scheme — Crucible' : 'Schemes — Crucible';
   if (screen === 'assumptions') document.title = `Assumptions · ${scheme.name} — Crucible`;
   if (screen === 'connect') document.title = 'Connect an agent — Crucible';
   if (screen === 'notebook') document.title = 'Research notebook — Crucible';
@@ -1344,8 +1336,6 @@ function setSession(data) {
     $('#recovery-content').replaceChildren();
     setText('#recovery-context', '');
     setText('#recovery-title', 'Submission details');
-    if (findingDialog.open) findingDialog.close();
-    if (research.visible) renderFindings();
   }
   if (previousId === state.user?.id && (previousReview !== state.canReviewProposals || previousSelfReview !== state.canSelfReviewProposals)) {
     invalidateReadViews(); notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
@@ -4952,11 +4942,9 @@ $('#download-proposal').addEventListener('click', () => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 
-// Research records keep claims and their conditions separate from hourly ranking.
 function showWorkspace(name) {
   if (!hasAccess()) name = 'access';
   const transferLoadingFocus = name !== 'loading' && document.activeElement?.closest?.('#route-loading') === routeLoadingPanel;
-  if (!RESEARCH_ENABLED && name === 'research') name = 'catalogue';
   const [pendingPath, pendingQuery = ''] = window.location.hash.split('?');
   const preparingMap = name === 'loading' && hasAccess() && pendingPath === '#notebook' && new URLSearchParams(pendingQuery).get('view') === 'map';
   // Catalogue arrival must not detach the connected map being prepared for
@@ -4964,8 +4952,6 @@ function showWorkspace(name) {
   if (name !== 'notebook' && !preparingMap) notebookWorkspace?.hide();
   if (name !== 'reviews' || state.reviewSection === 'schemes') reviewNotebookWorkspace?.hide();
   if (name !== 'assumptions') assumptionsWorkspace?.clear();
-  const enteringResearch = !research.visible && name === 'research';
-  research.visible = name === 'research';
   $('#access-workspace').hidden = name !== 'access';
   if (routeLoadingPanel) {
     routeLoadingPanel.hidden = name !== 'loading';
@@ -4980,13 +4966,12 @@ function showWorkspace(name) {
   $('#notebook-workspace').hidden = name !== 'notebook';
   $('#review-workspace').hidden = name !== 'reviews';
   $('#review-notebook-workspace').hidden = name !== 'reviews' || state.reviewSection === 'schemes' || !state.canReviewProposals;
-  $('#research-workspace').hidden = !research.visible;
   $('#about-workspace').hidden = name !== 'about';
   $('#proposal-workspace').hidden = name !== 'propose' && !(name === 'reviews' && state.reviewSection === 'schemes' && state.canReviewProposals);
   $('#people-workspace').hidden = name !== 'people';
   $('#person-workspace').hidden = name !== 'person';
   $('#connect-workspace').hidden = name !== 'connect';
-  for (const kind of ['challenge', 'people', 'notebook', 'research', 'about']) {
+  for (const kind of ['challenge', 'people', 'notebook', 'about']) {
     const button = $('#nav-' + kind);
     const selected = kind === 'challenge' ? ['catalogue', 'scheme', 'overview', 'assumptions', 'propose'].includes(name) : kind === 'people' ? ['people', 'person'].includes(name) : kind === name;
     button.classList.toggle('selected', selected);
@@ -4995,117 +4980,6 @@ function showWorkspace(name) {
   }
   $('.skip-link').href = workspaceSelector(name);
   if (transferLoadingFocus) $(workspaceSelector(name)).focus({preventScroll: true});
-  if (enteringResearch && !research.targets.length) loadResearch();
-  else if (enteringResearch && research.target) loadFindings();
-}
-function researchError(message) {
-  setText('#research-error-text', message);
-  $('#research-error').hidden = !message;
-}
-async function loadResearch() {
-  researchError('');
-  $('#retry-research').disabled = true;
-  setLoading($('#target-catalogue'), 'Loading research targets…');
-  try {
-    const data = await api('/api/targets');
-    research.targets = data.targets || [];
-    const previous = research.target?.id;
-    const target = research.targets.find(item => item.id === previous) ||
-      research.targets.find(item => item.kind === research.kind) || research.targets[0];
-    if (target) selectResearchTarget(target.id);
-    else showEmpty($('#target-catalogue'), 'No research targets have been published yet.');
-  } catch (error) {
-    researchError(error.message);
-    $('#target-catalogue').replaceChildren();
-  } finally { $('#retry-research').disabled = false; }
-}
-function updateTargetTabs(focus = false) {
-  for (const tab of document.querySelectorAll('[data-target-kind]')) {
-    const selected = tab.dataset.targetKind === research.kind;
-    tab.setAttribute('aria-selected', String(selected));
-    tab.tabIndex = selected ? 0 : -1;
-    if (focus && selected) tab.focus();
-  }
-  $('#target-catalogue').setAttribute('aria-labelledby', 'target-tab-' + research.kind);
-}
-function chooseTargetKind(kind, focus = false) {
-  research.kind = kind;
-  const target = research.targets.find(item => item.kind === kind);
-  updateTargetTabs(focus);
-  if (target) selectResearchTarget(target.id);
-  else {
-    research.target = null;
-    $('#research-target').hidden = true;
-    $('#findings-section').hidden = true;
-    showEmpty($('#target-catalogue'), 'No targets of this kind have been published yet.');
-  }
-}
-function selectResearchTarget(id) {
-  const target = research.targets.find(item => item.id === id);
-  if (!target) return;
-  research.target = target;
-  research.kind = target.kind;
-  research.findings = [];
-  research.nextBefore = null;
-  updateTargetTabs();
-  const catalogue = $('#target-catalogue');
-  const choices = research.targets.filter(item => item.kind === target.kind);
-  catalogue.replaceChildren();
-  if (choices.length > 1) {
-    for (const choice of choices) {
-      const button = node('button', choice.name, 'target-choice' + (choice.id === target.id ? ' selected' : ''));
-      button.type = 'button';
-      button.setAttribute('aria-pressed', String(choice.id === target.id));
-      button.addEventListener('click', () => selectResearchTarget(choice.id));
-      catalogue.append(button);
-    }
-  } else catalogue.append(node('p', target.kind === 'scheme' ? '01 / Curated scheme' : '01 / Precisely defined problem', 'eyebrow'));
-  $('#research-target').hidden = false;
-  $('#findings-section').hidden = false;
-  setText('#target-meta', `${target.kind === 'scheme' ? 'Scheme' : 'Assumption / problem'} · version ${target.version}`);
-  setText('#target-title', target.name);
-  setText('#target-summary', target.summary);
-  setText('#target-definition', target.definition);
-  const relationships = $('#target-related');
-  relationships.replaceChildren();
-  for (const relation of target.related_targets || []) {
-    const related = research.targets.find(item => item.id === relation.id);
-    const row = node('div', undefined, 'related-target');
-    const button = node('button', related?.name || relation.id, 'text-button');
-    button.type = 'button';
-    button.addEventListener('click', () => selectResearchTarget(relation.id));
-    row.append(button, node('span', relation.relationship, 'field-hint'));
-    relationships.append(row);
-  }
-  loadFindings();
-}
-async function loadFindings(append = false) {
-  if (!research.target) return;
-  const targetId = research.target.id;
-  const request = ++research.request;
-  const previous = append ? research.findings : [];
-  $('#more-findings').disabled = true;
-  if (!append) setLoading($('#findings-list'), 'Loading findings and investigations…');
-  let path = '/api/contributions?target_id=' + encodeURIComponent(targetId) + '&limit=20';
-  if (append && research.nextBefore) path += '&before=' + encodeURIComponent(research.nextBefore);
-  try {
-    const data = await api(path);
-    if (request !== research.request) return;
-    const seen = new Set(previous.map(item => item.id));
-    research.findings = previous.concat((data.contributions || []).filter(item => !seen.has(item.id)));
-    research.nextBefore = data.next_before || null;
-    renderFindings();
-  } catch (error) {
-    if (request !== research.request) return;
-    if (append) researchError(error.message);
-    else showInlineError($('#findings-list'), error.message, () => loadFindings());
-  } finally { if (request === research.request) $('#more-findings').disabled = false; }
-}
-function friendlyModel(value) {
-  return {'classical': 'Classical', 'quantum': 'Quantum', 'mixed': 'Mixed model', 'not-applicable': 'Model not applicable'}[value] || value;
-}
-function friendlyKind(value) {
-  return {'argument': 'Argument', 'heuristic': 'Heuristic', 'experiment': 'Empirical result', 'mixed': 'Mixed evidence'}[value] || value;
 }
 function safeArtifactLink(value) {
   if (!value) return null;
@@ -5119,315 +4993,12 @@ function safeArtifactLink(value) {
     return link;
   } catch { return null; }
 }
-function appendRevisionContent(container, revision, includeClaim = false) {
-  if (includeClaim) {
-    container.append(node('h4', revision.title), node('p', revision.claim, 'finding-claim preserve-lines'));
-    const target = research.targets.find(item => item.id === revision.target_id);
-    container.append(node('p', `${target?.name || revision.target_id} · target version ${revision.target_version}`, 'finding-meta'));
-  }
-  const conditions = node('div', undefined, 'finding-section');
-  conditions.append(node('h4', 'Conditions and scope'), node('p', revision.conditions, 'preserve-lines'));
-  const writeup = node('div', undefined, 'finding-section');
-  writeup.append(node('h4', 'Write-up'), node('p', revision.body, 'preserve-lines'));
-  container.append(conditions, writeup);
-  if (revision.time_cost || revision.memory_cost || revision.success_probability || revision.profile_ids?.length) {
-    const facts = node('dl', undefined, 'detail-list finding-quantities');
-    if (revision.profile_ids?.length) addFact(facts, 'Applicable profiles', revision.profile_ids.join(', '));
-    if (revision.time_cost) addFact(facts, 'Time cost', revision.time_cost);
-    if (revision.memory_cost) addFact(facts, 'Memory cost', revision.memory_cost);
-    if (revision.success_probability) addFact(facts, 'Success probability', revision.success_probability);
-    container.append(facts);
-  }
-  const artifact = safeArtifactLink(revision.artifact_url);
-  if (artifact) container.append(artifact);
-  if (revision.verification) {
-    const verification = node('div', undefined, 'verification-scope');
-    verification.append(node('strong', 'Supporting recovery · key verified for one instance'), node('p', revision.verification.scope || 'The server accepted the key for this one instance before its deadline.'));
-    if (revision.verification.received_at) verification.append(node('p', 'Received ' + utcDate(revision.verification.received_at), 'field-hint'));
-    container.append(verification);
-  }
-}
-async function loadRelatedFinding(id, container, button) {
-  button.disabled = true;
-  try {
-    const data = await api('/api/contributions/' + encodeURIComponent(id));
-    const record = data.contribution;
-    const panel = node('div', undefined, 'referenced-finding');
-    panel.append(node('p', `Referenced finding · ${record.author.handle} · revision ${record.latest.revision}`, 'eyebrow'));
-    appendRevisionContent(panel, record.latest, true);
-    container.replaceChildren(panel);
-  } catch (error) {
-    container.replaceChildren(node('p', error.message, 'form-error'));
-    button.disabled = false;
-  }
-}
-function createFindingCard(record) {
-  const revision = record.latest;
-  const card = node('article', undefined, 'finding-card');
-  const header = node('div', undefined, 'finding-header');
-  const identity = node('p', undefined, 'finding-author');
-  identity.append(node('strong', record.author.handle), node('span', `Revision ${revision.revision} · ${utcDate(revision.created_at || record.updated_at)}`));
-  header.append(identity, node('span', 'Unreviewed', 'status-tag muted-tag'));
-  const title = node('h3', revision.title);
-  const meta = node('p', `Target v${revision.target_version} · ${friendlyKind(revision.evidence_kind)} · ${friendlyModel(revision.model)}`, 'finding-meta');
-  card.append(header, title, meta, node('p', revision.claim, 'finding-claim preserve-lines'));
-  const details = node('details', undefined, 'finding-details');
-  details.append(node('summary', 'Read conditions and write-up'));
-  appendRevisionContent(details, revision);
-  if (revision.related_contribution_id) {
-    const relationship = node('div', undefined, 'finding-relationship');
-    const original = node('button', 'View the finding this follows up →', 'text-button');
-    const originalContent = node('div');
-    original.type = 'button';
-    original.addEventListener('click', () => loadRelatedFinding(revision.related_contribution_id, originalContent, original));
-    relationship.append(original, originalContent);
-    details.append(relationship);
-  }
-  const actions = node('div', undefined, 'finding-actions');
-  const followup = node('button', 'Add a follow-up', 'text-button');
-  followup.type = 'button';
-  followup.addEventListener('click', () => openFinding({followup: record, trigger: followup}));
-  actions.append(followup);
-  if (record.editable && record.author.id === state.user?.id) {
-    const revise = node('button', 'Revise finding', 'text-button');
-    revise.type = 'button';
-    revise.addEventListener('click', () => openFinding({editing: record, trigger: revise}));
-    actions.append(revise);
-  }
-  details.append(actions);
-  if (Number(revision.revision) > 1) {
-    const history = node('details', undefined, 'revision-history');
-    const historyContent = node('div');
-    const historyStatus = node('div');
-    const earlierButton = node('button', 'Load earlier revisions ↓', 'text-button');
-    earlierButton.type = 'button';
-    earlierButton.hidden = true;
-    historyContent.append(historyStatus, earlierButton);
-    history.append(node('summary', 'Earlier revisions (' + (Number(revision.revision) - 1) + ')'), historyContent);
-    let historyLoaded = false;
-    let historyLoading = false;
-    let nextBeforeRevision = null;
-    const seenRevisions = new Set();
-    async function loadHistoryPage() {
-      if (historyLoading) return;
-      historyLoading = true;
-      earlierButton.disabled = true;
-      setLoading(historyStatus, 'Loading revision history…');
-      try {
-        let path = '/api/contributions/' + encodeURIComponent(record.id) + '?limit=20';
-        if (nextBeforeRevision !== null) path += '&before_revision=' + encodeURIComponent(nextBeforeRevision);
-        const data = await api(path);
-        const versions = (data.contribution.revisions || []).filter(item =>
-          Number(item.revision) < Number(revision.revision) && !seenRevisions.has(String(item.id || item.revision)));
-        for (const version of versions) {
-          seenRevisions.add(String(version.id || version.revision));
-          const item = node('details', undefined, 'previous-revision');
-          item.append(node('summary', `Revision ${version.revision} · ${utcDate(version.created_at)}`));
-          appendRevisionContent(item, version, true);
-          historyContent.insertBefore(item, historyStatus);
-        }
-        historyLoaded = true;
-        nextBeforeRevision = data.contribution.next_before_revision ?? null;
-        historyStatus.replaceChildren();
-        if (!seenRevisions.size && nextBeforeRevision === null) showEmpty(historyStatus, 'No earlier revisions were returned.');
-        earlierButton.hidden = nextBeforeRevision === null;
-        earlierButton.textContent = 'Load earlier revisions ↓';
-      } catch (error) {
-        const message = node('p', error.message, 'form-error');
-        message.setAttribute('role', 'alert');
-        historyStatus.replaceChildren(message);
-        earlierButton.hidden = false;
-        earlierButton.textContent = 'Retry loading revisions';
-      } finally {
-        historyLoading = false;
-        earlierButton.disabled = false;
-      }
-    }
-    earlierButton.addEventListener('click', loadHistoryPage);
-    history.addEventListener('toggle', () => {
-      if (history.open && !historyLoaded) loadHistoryPage();
-    });
-    details.append(history);
-  }
-  card.append(details);
-  return card;
-}
-function renderFindings() {
-  const list = $('#findings-list');
-  $('#more-findings').hidden = !research.nextBefore;
-  if (!research.findings.length) return showEmpty(list, 'No findings have been recorded for this target yet. A useful first contribution can be a clear argument, a reproducible experiment, or a carefully documented question.');
-  list.replaceChildren(...research.findings.map(createFindingCard));
-}
-function findingVersion(target) {
-  return research.editing?.latest.target_version || research.followup?.latest.target_version || target?.version;
-}
-function renderFindingProfiles(selected = []) {
-  const target = research.targets.find(item => item.id === $('#finding-target').value);
-  const options = $('#finding-profiles');
-  options.replaceChildren();
-  const version = target?.versions?.find(item => item.version === findingVersion(target));
-  for (const profile of version?.profiles || target?.profiles || []) {
-    const label = node('label');
-    const input = node('input');
-    input.type = 'checkbox';
-    input.value = profile.id;
-    input.checked = selected.includes(profile.id);
-    label.append(input, node('span', profileLabel(profile, target)));
-    options.append(label);
-  }
-  if (!options.childElementCount) options.append(node('p', 'No registered profiles for this target. Describe the parameter regime in Conditions and scope.', 'field-hint'));
-}
-async function loadSupportingRecoveries(selectedId = '') {
-  const select = $('#finding-recovery');
-  const enabled = $('#finding-target').value === 'teaching-dh-kem';
-  $('#finding-recovery-field').hidden = !enabled;
-  select.replaceChildren();
-  const none = node('option', 'No recovery attached'); none.value = ''; select.append(none);
-  research.recoveries = [];
-  const request = ++research.recoveriesRequest;
-  if (!enabled) return;
-  select.disabled = true;
-  quietReadStatus($('#finding-recovery-hint'), 'Loading your correct submissions');
-  try {
-    const data = await api('/api/me/submissions');
-    if (request !== research.recoveriesRequest) return;
-    const target = research.targets.find(item => item.id === $('#finding-target').value);
-    research.recoveries = (data.submissions || []).filter(item => item.status === 'correct' && item.scheme_version === findingVersion(target));
-    for (const recovery of research.recoveries) {
-      const option = node('option', `${recovery.profile_id} · ${utcDate(recovery.received_at)} · ${recovery.method_name}`);
-      option.value = recovery.id;
-      select.append(option);
-    }
-    if (selectedId && !research.recoveries.some(item => item.id === selectedId)) {
-      const previous = node('option', 'Previously attached recovery'); previous.value = selectedId; select.append(previous);
-    }
-    select.value = selectedId;
-    setText('#finding-recovery-hint', research.recoveries.length || selectedId ?
-      'The recovery verifies one instance only. Its exact profile must be selected below; the finding remains unreviewed.' :
-      'No correct submissions are available to attach. You can publish a finding without one.');
-  } catch (error) {
-    if (request !== research.recoveriesRequest) return;
-    if (selectedId) {
-      const previous = node('option', 'Previously attached recovery'); previous.value = selectedId; select.append(previous); select.value = selectedId;
-    }
-    setText('#finding-recovery-hint', 'Recovery history could not be loaded. ' + error.message);
-  } finally { if (request === research.recoveriesRequest) select.disabled = false; }
-}
-function openFinding({editing = null, followup = null, trigger = $('#add-finding')} = {}) {
-  if (!state.user) return openAuth(trigger);
-  if (research.saving) return toast('A contribution is being saved. Please wait for its result.');
-  research.editing = editing;
-  research.followup = followup;
-  const form = $('#finding-form');
-  form.reset();
-  setError('#finding-error', '');
-  $('#finding-target').replaceChildren();
-  for (const target of research.targets) {
-    const option = node('option', target.name + ' · v' + (target.id === (editing?.latest.target_id || followup?.latest.target_id) ? findingVersion(target) : target.version));
-    option.value = target.id;
-    $('#finding-target').append(option);
-  }
-  const content = editing?.latest;
-  const currentTarget = content?.target_id || followup?.latest.target_id || research.target?.id;
-  $('#finding-target').value = currentTarget;
-  $('#finding-target').disabled = Boolean(editing || followup);
-  const labels = {
-    '#finding-name': content?.title, '#finding-claim': content?.claim,
-    '#finding-conditions': content?.conditions, '#finding-body': content?.body,
-    '#finding-artifact': content?.artifact_url, '#finding-time-cost': content?.time_cost,
-    '#finding-memory-cost': content?.memory_cost, '#finding-success': content?.success_probability
-  };
-  for (const [selector, value] of Object.entries(labels)) $(selector).value = value || '';
-  $('#finding-model').value = content?.model || 'not-applicable';
-  $('#finding-kind').value = content?.evidence_kind || 'argument';
-  renderFindingProfiles(content?.profile_ids || []);
-  loadSupportingRecoveries(content?.submission_id || '');
-  $('.finding-advanced').open = Boolean(content?.profile_ids?.length || content?.time_cost || content?.memory_cost || content?.success_probability || content?.submission_id);
-  setText('#finding-title', editing ? 'Revise the finding.' : followup ? 'Follow the work.' : 'Record a finding.');
-  setText('#finding-description', editing ? 'Publish an updated account of the claim. The previous version remains available.' : 'State the claim, where it applies, and enough of the work to inspect it.');
-  setText('#finding-context', editing ? `Revision ${Number(content.revision) + 1}` : 'Research contribution');
-  setText('#save-finding', editing ? 'Publish revision →' : 'Publish finding →');
-  $('#finding-relationship').hidden = !followup;
-  setText('#finding-relationship', followup ? 'Follow-up to: ' + followup.latest.title : '');
-  openDialog(findingDialog, trigger);
-}
-$('#finding-form').addEventListener('submit', async event => {
-  event.preventDefault();
-  if (research.saving) return;
-  const target = research.targets.find(item => item.id === $('#finding-target').value);
-  if (!target) return setError('#finding-error', 'Choose a research target.');
-  const payload = {
-    target_id: target.id, target_version: findingVersion(target),
-    profile_ids: [...$('#finding-profiles').querySelectorAll('input:checked')].map(item => item.value),
-    title: $('#finding-name').value.trim(), claim: $('#finding-claim').value.trim(),
-    conditions: $('#finding-conditions').value.trim(), body: $('#finding-body').value.trim(),
-    model: $('#finding-model').value, evidence_kind: $('#finding-kind').value,
-    submission_id: $('#finding-recovery-field').hidden ? null : ($('#finding-recovery').value || null)
-  };
-  if (!payload.title || !payload.claim || !payload.conditions || !payload.body) return setError('#finding-error', 'Complete the title, claim, conditions, and write-up.');
-  const supporting = research.recoveries.find(item => item.id === payload.submission_id);
-  if (supporting && !payload.profile_ids.includes(supporting.profile_id)) {
-    return setError('#finding-error', `Select profile ${supporting.profile_id} to attach this recovery, or choose No recovery attached.`);
-  }
-  for (const [key, selector] of Object.entries({artifact_url: '#finding-artifact', time_cost: '#finding-time-cost', memory_cost: '#finding-memory-cost', success_probability: '#finding-success'})) {
-    const value = $(selector).value.trim();
-    if (value) payload[key] = value;
-  }
-  const editing = research.editing;
-  const relation = research.followup?.id || editing?.latest.related_contribution_id;
-  if (relation) payload.related_contribution_id = relation;
-  if (editing) payload.expected_revision = Number(editing.latest.revision);
-  research.saving = true;
-  $('#save-finding').disabled = true;
-  setText('#save-finding', 'Publishing…');
-  setError('#finding-error', '');
-  try {
-    const path = editing ? '/api/contributions/' + encodeURIComponent(editing.id) + '/revisions' : '/api/contributions';
-    await api(path, payload);
-    findingDialog.close();
-    selectResearchTarget(target.id);
-    toast(editing ? 'Revision published. Earlier versions remain in the record.' : 'Finding published as unreviewed.');
-  } catch (error) {
-    setError('#finding-error', (error.status === 0 || error.status >= 500) ? 'The save could not be confirmed. Check the research list before publishing again. ' + error.message : error.message);
-    if (error.status === 403) synchronizeSession();
-  } finally {
-    research.saving = false;
-    $('#save-finding').disabled = false;
-    setText('#save-finding', editing ? 'Publish revision →' : 'Publish finding →');
-  }
-});
 $('#nav-challenge').addEventListener('click', () => navigate('#challenge'));
 $('#nav-people').addEventListener('click', () => navigate('#people'));
 $('#nav-notebook').addEventListener('click', () => navigate('#notebook'));
 $('#refresh-people').addEventListener('click', () => loadPeople());
 $('#more-people').addEventListener('click', () => loadPeople(true));
 $('#nav-about').addEventListener('click', () => navigate('#about'));
-$('#nav-research').hidden = !RESEARCH_ENABLED;
-$('#nav-research').addEventListener('click', () => { if (RESEARCH_ENABLED) navigate('#research'); });
-$('#retry-research').addEventListener('click', loadResearch);
-$('#add-finding').addEventListener('click', () => openFinding());
-$('#more-findings').addEventListener('click', () => loadFindings(true));
-$('#finding-target').addEventListener('change', () => { renderFindingProfiles(); loadSupportingRecoveries(); });
-$('#finding-recovery').addEventListener('change', () => {
-  const selected = research.recoveries.find(item => item.id === $('#finding-recovery').value);
-  if (selected) {
-    for (const checkbox of $('#finding-profiles').querySelectorAll('input')) {
-      if (checkbox.value === selected.profile_id) checkbox.checked = true;
-    }
-  }
-});
-const targetTabs = [...document.querySelectorAll('[data-target-kind]')];
-for (const [index, tab] of targetTabs.entries()) {
-  tab.addEventListener('click', () => chooseTargetKind(tab.dataset.targetKind));
-  tab.addEventListener('keydown', event => {
-    const indices = {ArrowRight: (index + 1) % targetTabs.length, ArrowLeft: (index - 1 + targetTabs.length) % targetTabs.length, Home: 0, End: targetTabs.length - 1};
-    if (event.key in indices) {
-      event.preventDefault();
-      chooseTargetKind(targetTabs[indices[event.key]].dataset.targetKind, true);
-    }
-  });
-}
-
 for (const event of ['pointerenter', 'focus']) {
   $('#nav-people').addEventListener(event, () => primeRead('people', '/api/people?limit=50&offset=0&include_records=false'));
   $('#account-handle').addEventListener(event, () => {

@@ -168,21 +168,17 @@ this is independent of instance size. Generate one UUID idempotency_key per logi
 submission and preserve it on retry. Methods are immutable; a change creates a new
 method ID.
 
-Research endpoints:
-  GET  /api/targets
-  GET  /api/contributions?target_id=...&limit=20&before=...
-  POST /api/contributions
-  GET  /api/contributions/{id}?limit=20&before_revision=...
-  POST /api/contributions/{id}/revisions   author only; expected_revision required
+Research records use the account-backed notebook and its existing publication
+and substantive review workflows. The earlier Findings and investigations UI,
+GET /api/targets, and GET/POST /api/contributions (including detail/revision
+routes) are retired. Old #research links retain their catalogue fallback.
 
-Findings identify target/version, profiles, title, claim, conditions, body,
-computational model and evidence kind. Optional fields hold an HTTPS artifact,
-time/memory/success expressions, related record and supporting recovery. Append-only
-revisions preserve the original. A supporting recovery is server-checked; review
-of the finding is a separate fact. Numerical answers do not automatically create
-research findings. An unanswered challenge is not a documented investigation.
-History defaults to 20 revisions (maximum 50), with next_before_revision for older
-pages. The latest field always identifies the current revision, even on older pages.
+crucible/research.py retains only the historical contributions and
+contribution_revisions table declarations. Original migrations and stored rows
+remain intact; this retirement does not drop data or introduce a schema change.
+View assumptions uses /api/protocol/assumptions and pinned notebook evidence;
+it is independent of the retired findings feature and remains available.
+
 Source fingerprints are pinned per scheme version. When upgrading older databases,
 the first pin must agree with existing challenge manifests; changed or missing
 provenance stops issuance until the release is reviewed and versioned correctly.

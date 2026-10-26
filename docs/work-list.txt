@@ -1,3 +1,17 @@
+Retired unused findings workflow, 26 October 2026
+
+Removed the dormant Findings and investigations UI, its client state/styles,
+and the /api/targets and /api/contributions routes. A read-only inventory found
+zero findings and zero revisions in both the hosted beta and local development
+database before retirement. Current UI/CLI workflows have no dependency on these
+routes. Old #research links keep their catalogue fallback.
+
+The historical table declarations and migrations remain so existing databases
+and backups preserve their records. View assumptions, notebook, scheme map,
+proposal intake and scoped reviews remain separate active workflows. Regression
+coverage checks retired routes, exact historical data preservation, and desktop/
+mobile navigation through assumptions and the notebook.
+
 Prepared browsing data and engineering audit follow-up, 25 October 2026
 
 Complete compact stage-record summaries remove per-stage winner reads while
