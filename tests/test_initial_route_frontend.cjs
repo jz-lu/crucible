@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const {parseHTML} = require('./frontend-dom.cjs');
 const source = fs.readFileSync(path.join(__dirname, '../web/bootstrap.js'), 'utf8');
 
 function element(attributes = {}) {
@@ -67,13 +68,68 @@ function fixture({hash = '', parsed = true, appFirst = false, hint, storageBlock
 let passed = 0;
 function test(name, run) { run(); console.log('PASS ' + name); passed++; }
 
+test('DOM clones copy independent markup and children but never listeners or private controller state', () => {
+  const document = parseHTML('<body><div id="source" class="frame" hidden data-pending-layout="notebook">Before <span class="label">Notes</span> after</div></body>');
+  const original = document.querySelector('#source'), child = original.querySelector('.label');
+  let calls = 0;
+  original.addEventListener('click', () => calls++);
+  child.addEventListener('click', () => calls++);
+  original.privateController = {accountId: 'must-not-clone'};
+  const shallow = original.cloneNode();
+  assert.equal(shallow.childNodes.length, 0);
+  assert.equal(shallow.id, 'source');
+  assert.equal(shallow.hidden, true);
+  assert.equal(shallow.parentElement, null);
+  const clone = original.cloneNode(true), copyChild = clone.querySelector('.label');
+  assert.equal(clone.ownerDocument, document);
+  assert.equal(copyChild.ownerDocument, document);
+  assert.equal(clone.parentElement, null);
+  assert.equal(copyChild.parentElement, clone);
+  assert.notEqual(copyChild, child);
+  assert.equal(clone.textContent, 'Before Notes after');
+  assert.equal(clone.getAttribute('data-pending-layout'), 'notebook');
+  assert.equal(clone.privateController, undefined);
+  clone.removeAttribute('id'); clone.removeAttribute('data-pending-layout'); clone.hidden = false;
+  copyChild.textContent = 'Timeline';
+  assert.equal(original.id, 'source');
+  assert.equal(original.hidden, true);
+  assert.equal(original.textContent, 'Before Notes after');
+  clone.click(); copyChild.click();
+  assert.equal(calls, 0);
+  child.click();
+  assert.equal(calls, 2, 'The original child still bubbles to its original parent');
+});
+
+test('DOM clones retain namespace and current form values without copying live object references', () => {
+  const document = parseHTML('<body><input value="initial"><textarea>initial</textarea><option>Option</option></body>');
+  const input = document.querySelector('input'), textarea = document.querySelector('textarea'), option = document.querySelector('option');
+  input.value = 'edited'; input.checked = true;
+  textarea.value = 'edited body'; option.selected = true;
+  const clonedInput = input.cloneNode(true);
+  assert.equal(clonedInput.value, 'edited');
+  assert.equal(clonedInput.getAttribute('value'), 'initial');
+  assert.equal(clonedInput.checked, true);
+  assert.equal(textarea.cloneNode(true).value, 'edited body');
+  assert.equal(option.cloneNode(true).selected, true);
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 10 10');
+  const clone = svg.cloneNode(true);
+  assert.equal(clone.namespaceURI, svg.namespaceURI);
+  assert.equal(clone.getAttribute('viewBox'), '0 0 10 10');
+});
+
 test('public route descriptions select bounded known layouts without querying account or catalogue data', () => {
   const f = fixture(), describe = f.window.CruciblePendingPage.describe;
   const examples = [
     ['', 'catalogue', 'KEM Schemes'], ['#', 'catalogue', 'KEM Schemes'],
     ['#challenge', 'catalogue', 'KEM Schemes'], ['#people', 'people', 'Leaderboard'],
-    ['#notebook', 'list', 'Research notebook'], ['#notebook?view=timeline', 'timeline', 'Research notebook'],
-    ['#notebook?view=map', 'chart', 'Research notebook'], ['#notebook?view=unknown', 'list', 'Research notebook'],
+    ['#notebook', 'notebook-notes', 'Research notebook'], ['#notebook?view=timeline', 'notebook-timeline', 'Research notebook'],
+    ['#notebook?view=map', 'notebook-map', 'Research notebook'], ['#notebook?view=unknown', 'notebook-notes', 'Research notebook'],
+    ['#notebook?filter=mine&tag=private-looking-label', 'notebook-notes', 'Research notebook'],
+    ['#notebook?note=private-id', 'list', 'Research notebook'],
+    ['#notebook?note=private-id&view=timeline', 'list', 'Research notebook'],
+    ['#notebook?research=1', 'list', 'Research notebook'],
+    ['#notebook?research_request=private-request&view=map', 'list', 'Research notebook'],
     ['#notebook?review=1', 'list', 'Review center'], ['#notebook?research_review=1', 'list', 'Review center'],
     ['#scheme/test/v1', 'chart', 'Scheme'], ['#scheme/test/v1/assumptions', 'list', 'Assumptions'],
     ['#challenge/test/v1', 'list', 'Challenge'], ['#reviews', 'list', 'Review center'],
@@ -89,6 +145,22 @@ test('public route descriptions select bounded known layouts without querying ac
   assert.equal(Object.isFrozen(f.window.CruciblePendingPage), true);
 });
 
+test('private note, request and review selections never become pre-access content or data requests', () => {
+  for (const hash of [
+    '#notebook?note=private-note-id&revision=17&sha256=private-hash',
+    '#notebook?research_request=private-request-id&view=timeline',
+    '#notebook?review=1&note=private-note-id',
+    '#reviews?proposal=private-proposal-id',
+    '#notebook?tag=private-tag&filter=mine'
+  ]) {
+    const f = fixture({hash, hint: 'workspace'});
+    assert.doesNotMatch(f.nodes.get('#access-title').textContent, /private-|17/);
+    assert.deepEqual(f.requests.map(item => item.url), ['/api/session']);
+    assert.equal(f.document.body.getAttribute('data-access-pending'), 'true');
+    assert.equal(f.nodes.get('#access-workspace').getAttribute('aria-busy'), 'true');
+  }
+});
+
 test('profile labels decode a bounded public handle and never interpret markup or malformed paths', () => {
   const f = fixture({hash: '#person/%3Cimg%20src=x%3E'}), describe = f.window.CruciblePendingPage.describe;
   assert.equal(f.nodes.get('#access-title').textContent, '<img src=x>');
@@ -102,7 +174,7 @@ test('profile labels decode a bounded public handle and never interpret markup o
 
 test('head execution applies the route before body parsing and fills its heading before a held deferred app', () => {
   const f = fixture({hash: '#notebook?view=timeline', parsed: false});
-  assert.equal(f.root.getAttribute('data-pending-page'), 'timeline');
+  assert.equal(f.root.getAttribute('data-pending-page'), 'notebook-timeline');
   assert.equal(f.nodes.has('#access-title'), false);
   f.installBody();
   // A deferred app can hold DOMContentLoaded indefinitely; interactive is
@@ -120,6 +192,9 @@ test('head execution applies the route before body parsing and fills its heading
 test('pending hash changes update only public geometry and navigation without additional requests', () => {
   const f = fixture({hash: '#notebook'});
   for (const [hash, page, title, selected] of [
+    ['#notebook?view=timeline', 'notebook-timeline', 'Research notebook', 'notebook'],
+    ['#notebook?view=map', 'notebook-map', 'Research notebook', 'notebook'],
+    ['#notebook?view=unknown', 'notebook-notes', 'Research notebook', 'notebook'],
     ['#about', 'neutral', 'About us', 'about'], ['#scheme/test/v1', 'chart', 'Scheme', 'challenge'],
     ['#people', 'people', 'Leaderboard', null], ['#person/alice', 'profile', 'alice', null]
   ]) {
@@ -145,7 +220,7 @@ test('late parser callbacks and hash changes never replace a resolved or failed 
     f.document.dispatch('readystatechange'); f.window.dispatch('hashchange');
     f.window.CruciblePendingPage.apply();
     assert.equal(f.nodes.get('#access-title').textContent, gate === 'resolved' ? 'Private beta' : 'Could not check access');
-    assert.equal(f.root.getAttribute('data-pending-page'), 'list');
+    assert.equal(f.root.getAttribute('data-pending-page'), 'notebook-notes');
     assert.equal(f.nodes.get('#nav-challenge').getAttribute('aria-current'), null);
     assert.equal(f.requests.length, 1);
   }
@@ -214,9 +289,28 @@ test('unexecuted HTML starts neutral with inert decorative variants and no fabri
   assert.doesNotMatch(html.slice(0, html.indexOf('<body')), /data-pending-page=/);
   const preview = html.slice(html.indexOf('<div id="access-loading-preview"'), html.indexOf('<div id="access-auth-actions"'));
   assert.deepEqual([...preview.matchAll(/data-pending-layout="([^"]+)"/g)].map(match => match[1]),
-    ['neutral', 'gate', 'catalogue', 'people', 'profile', 'list', 'chart', 'timeline']);
-  assert.equal((preview.match(/class="pending-page-preview[^>]*aria-hidden="true"/g) || []).length, 8);
-  assert.doesNotMatch(preview, /<(?:a|button|input|script)\b|data-note|data-user|href=/i);
+    ['neutral', 'gate', 'catalogue', 'people', 'profile', 'notebook', 'list', 'chart', 'timeline']);
+  assert.equal((preview.match(/class="pending-page-preview[^>]*aria-hidden="true"/g) || []).length, 9);
+  const document = parseHTML(html), frame = document.querySelector('#notebook-frame-template');
+  assert.equal(frame.getAttribute('aria-hidden'), 'true');
+  assert.notEqual(frame.getAttribute('inert'), null);
+  assert.equal(frame.querySelectorAll('[id]').length, 0, 'Cloning the frame must not duplicate control IDs');
+  for (const variant of document.querySelectorAll('[data-pending-layout]')) {
+    assert.equal(variant.querySelectorAll('a,script,form,[href],[action],[name],[data-nb],[data-note],[data-user]').length, 0);
+    const controls = variant.querySelectorAll('button,input,select,textarea');
+    if (variant === frame) {
+      assert.ok(controls.length > 0, 'The notebook frame mirrors the normal static controls');
+      assert.ok(controls.every(control => control.disabled), 'Every pre-access control is disabled');
+    } else assert.equal(controls.length, 0, 'Other decorative layouts remain noninteractive');
+  }
+  assert.deepEqual(frame.querySelectorAll('[data-notebook-tab]').map(node => node.getAttribute('data-notebook-tab')), ['notes', 'map', 'timeline']);
+  assert.deepEqual(frame.querySelectorAll('[data-notebook-panel]').map(node => node.getAttribute('data-notebook-panel')), ['notes', 'map', 'timeline']);
+  assert.equal(frame.querySelector('.nb-count').textContent, '');
+  assert.equal(frame.querySelector('.nb-timeline-total').textContent, '');
+  assert.equal(frame.querySelector('.nb-timeline-plot').querySelectorAll('svg').length, 0);
+  assert.equal(frame.querySelector('.nb-list-placeholder').childNodes.length, 0);
+  assert.equal(frame.querySelector('.nb-map-placeholder').childNodes.length, 0);
+  assert.doesNotMatch(preview, /data-(?:note|user|token|account)(?:[\s=-])|\b(?:href|action|name)=/i);
   assert.equal((preview.match(/<table class="kem-table">/g) || []).length, 1);
   assert.doesNotMatch(preview.slice(0, preview.indexOf('data-pending-layout="catalogue"')), />KEM</);
 });

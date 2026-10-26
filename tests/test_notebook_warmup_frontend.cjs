@@ -124,6 +124,74 @@ const lists=app=>app.requests.filter(row=>row.url.startsWith('/api/notebook/note
    const before=lists(app).length;await filterNotes(app,'mine');assert.equal(lists(app).length,before+1);assert.ok(lists(app).at(-1).url.includes('scope=mine'));
   }
  });
+ await test('complete indexed pages jump directly without requests and retain paging focus and space',async()=>{
+  const rows=Array.from({length:55},(_,i)=>indexRow('jump-'+i,{content:content('Jump title '+i)}));
+  const app=await boot({respond:url=>url===indexPath?summaryIndex(rows):undefined});
+  await app.controller.warm('list');await app.show();const before=app.requests.length;
+  assert.equal(app.q('page-jump').hidden,false);assert.equal(app.q('page-select').querySelectorAll('option').length,3);
+  app.q('list').getBoundingClientRect=()=>({height:870});app.sandbox.window.scrollY=400;
+  app.q('page-select').focus();app.q('page-select').value='2';app.q('page-select').dispatchEvent({type:'change'});await flush();
+  assert.equal(app.q('list').querySelectorAll('.nb-entry').length,5);assert.match(app.q('list').textContent,/Jump title 50/);
+  assert.equal(app.q('page-select').value,'2');assert.equal(app.document.activeElement,app.q('page-select'));
+  assert.equal(app.q('more').disabled,true);assert.equal(app.q('prev').disabled,false);
+  assert.equal(app.q('list').style.minHeight,'870px');assert.equal(app.sandbox.window.scrollY,400);
+  app.q('page-select').value='99';app.q('page-select').dispatchEvent({type:'change'});await flush();
+  assert.equal(app.q('page-select').value,'2');assert.match(app.q('list').textContent,/Jump title 50/);
+  app.q('prev').focus();app.q('prev').click();await flush();assert.match(app.q('list').textContent,/Jump title 25/);
+  assert.equal(app.document.activeElement,app.q('prev'));assert.equal(app.requests.length,before);
+  app.controller.hide();assert.equal(app.q('list').style.minHeight,'');
+ });
+ await test('filtered complete page counts reset and a refreshed smaller index clamps the selected page',async()=>{
+  let rows=Array.from({length:55},(_,i)=>indexRow('filter-jump-'+i,{content:{...content('Filter title '+i),tags:i<5?['human-written']:['algebra']}}));
+  const app=await boot({respond:url=>url===indexPath?summaryIndex(rows):undefined});
+  await app.controller.warm('list');await app.show();app.q('list').getBoundingClientRect=()=>({height:800});
+  app.q('page-select').value='2';app.q('page-select').dispatchEvent({type:'change'});await flush();
+  await filterNotes(app,'human');assert.equal(app.q('list').querySelectorAll('.nb-entry').length,5);
+  assert.equal(app.q('page-jump').hidden,true);assert.equal(app.q('page').textContent,'Page 1');assert.equal(app.q('list').style.minHeight,'');
+  await filterNotes(app,'all');app.q('page-select').value='2';app.q('page-select').dispatchEvent({type:'change'});await flush();
+  rows=rows.slice(0,3);app.controller.invalidateReads();await app.controller.warm('list');await app.show();
+  assert.equal(app.q('list').querySelectorAll('.nb-entry').length,3);assert.equal(app.q('page').textContent,'Page 1');
+  assert.equal(app.q('page-jump').hidden,true);assert.equal(app.q('pagination').hidden,true);
+ });
+ await test('server cursor paging keeps unknown totals and cannot duplicate a pending next page or steal new focus',async()=>{
+  const late=deferred();
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?
+   (listQuery(url).has('after')?late.promise:{notes:[indexRow('first')],next_after:'server-cursor'}):undefined});
+  assert.equal(app.q('page-jump').hidden,true);
+  app.q('list').getBoundingClientRect=()=>({height:650});app.q('more').focus();app.q('more').click();app.q('more').click();await flush();
+  assert.equal(lists(app).length,2);assert.equal(listQuery(lists(app)[1].url).get('after'),'server-cursor');
+  assert.equal(app.q('prev').disabled,true);assert.equal(app.q('more').disabled,true);assert.equal(app.q('page-select').disabled,true);
+  app.q('search').focus();late.resolve({notes:[indexRow('last',{content:content('Last cursor page')})],next_after:null});await flush();
+  assert.equal(app.document.activeElement,app.q('search'));assert.equal(app.q('list').style.minHeight,'650px');
+  assert.equal(app.q('page').textContent,'Page 2');assert.equal(app.q('page-jump').hidden,true);assert.equal(app.q('prev').disabled,false);
+  assert.ok(lists(app).every(row=>listQuery(row.url).get('limit')==='25'));
+  assert.equal(app.requests.some(row=>row.url.startsWith('/api/notebook/notes/')),false);
+ });
+ await test('paging restores a usable control after a short last page but not after account or session changes',async()=>{
+  for(const changed of [null,'account','session']){
+   let credential='one';const late=deferred();const app=await boot({session:()=>credential,respond:url=>url.startsWith('/api/notebook/notes?')?
+    (listQuery(url).has('after')?late.promise:{notes:[indexRow('first')],next_after:'server-cursor'}):undefined});
+   app.q('list').getBoundingClientRect=()=>({height:650});app.q('more').focus();app.q('more').click();await flush();
+   // Native browsers may clear focus when its control becomes disabled.
+   app.document.activeElement=app.document.body;
+   if(changed==='account')app.setAccount({id:2,handle:'bob'});
+   if(changed==='session'){credential='two';app.setAccount(user);}
+   late.resolve({notes:[indexRow('last',{content:content('OLD account page')})],next_after:null});await flush();
+   if(changed){assert.equal(app.document.activeElement,app.document.body);assert.equal(app.q('list').style.minHeight,'');assert.doesNotMatch(app.root.textContent,/OLD account page/);}
+   else{assert.equal(app.document.activeElement,app.q('prev'));assert.equal(app.q('list').style.minHeight,'650px');}
+  }
+ });
+ await test('an expired complete index removes page jumping and returns to bounded server cursors',async()=>{
+  const rows=Array.from({length:55},(_,i)=>indexRow('expiry-'+i));
+  const app=await boot({respond:url=>url===indexPath?summaryIndex(rows):undefined});
+  vm.runInContext('Date.now=()=>1000',app.sandbox);await app.controller.warm('list');await app.show();
+  app.q('page-select').value='1';app.q('page-select').dispatchEvent({type:'change'});await flush();
+  const before=lists(app).length;
+  vm.runInContext('Date.now=()=>301001',app.sandbox);app.q('page-select').value='0';app.q('page-select').dispatchEvent({type:'change'});await flush();
+  assert.equal(app.q('page-jump').hidden,true);assert.equal(lists(app).length,before);
+  app.q('prev').click();await flush();assert.equal(lists(app).length,before+1);
+  assert.equal(listQuery(lists(app).at(-1).url).get('after'),null);assert.equal(listQuery(lists(app).at(-1).url).get('limit'),'25');
+ });
  await test('late background index cannot survive mutation or account/session rotation',async()=>{
   for(const change of ['mutation','account','session']){
    let session='one';const late=deferred();const app=await boot({session:()=>session,respond:url=>url===indexPath?late.promise:undefined});

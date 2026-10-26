@@ -6,13 +6,14 @@ from dataclasses import replace
 import json
 import os
 from pathlib import Path
+import re
 from uuid import uuid4
 
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 import pytest
-from sqlalchemy import func, inspect, select
+from sqlalchemy import event, func, inspect, select
 
 from crucible import beta_access, notebook
 from crucible.app import create_app
@@ -237,6 +238,105 @@ def test_publication_actions_require_owner_exact_hash_reviewer_and_one_decision(
     assert reviewer.post(review_path, {**decision, "decision": "approved"}).status_code == 409
     assert reviewer.post(review_path, {**decision, "idempotency_key": str(uuid4())}).status_code == 409
     assert reader.client.get(f'/api/notebook/notes/{note["id"]}').status_code == 404
+    assert count(app, notebook.NotebookPublication) == 1
+
+
+def test_compact_publication_receipt_and_retry_never_load_revision_bodies(system):
+    app, owner, _, _, now = system
+    first = create(owner, content(body="FIRST_PRIVATE_BODY_NOT_LOADED"))
+    latest = revise(owner, first, content(body="LATEST_PRIVATE_BODY_NOT_LOADED"))
+    with app.state.db.transaction(write=True) as session:
+        session.get(notebook.NotebookNote, latest["id"]).source_metadata = {"private": "IMPORTED_METADATA_NOT_LOADED"}
+    statements = []
+
+    def inspect_read(connection, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+            assert not re.search(r"\bnotebook_revisions\.(?:content|source_revision)\b", statement)
+            assert "notebook_notes.source_metadata" not in statement
+            assert "notebook_publications.reason" not in statement
+
+    path = f'/api/notebook/notes/{latest["id"]}/publication-requests?summary=true'
+    body = publication_body(latest)
+    event.listen(app.state.db.engine, "before_cursor_execute", inspect_read)
+    try:
+        response = owner.post(path, body)
+        retry = owner.post(path, body)
+    finally:
+        event.remove(app.state.db.engine, "before_cursor_execute", inspect_read)
+    assert response.status_code == retry.status_code == 200
+    assert response.json() == retry.json()
+    receipt = response.json()
+    assert set(receipt) == {"format", "publication_request"}
+    assert receipt["format"] == "crucible-publication-request-v1"
+    record = receipt["publication_request"]
+    assert record == {"id": record["id"], "note_id": latest["id"], "revision": latest["revision"],
+        "content_sha256": latest["content_sha256"], "requested_at": now[0], "status": "submitted"}
+    assert re.fullmatch(r"[0-9a-f-]{36}", record["id"])
+    assert len(response.content) < 500
+    assert response.headers["cache-control"] == "no-store"
+    assert any("FROM notebook_revisions" in sql for sql in statements)
+    assert count(app, notebook.NotebookPublication) == 1
+
+
+@pytest.mark.parametrize("compact_first", [False, True])
+def test_publication_response_projection_does_not_change_idempotency_or_full_history(system, compact_first):
+    app, owner, _, _, _ = system
+    first = create(owner, content(body="Original exact history"))
+    latest = revise(owner, first, content(body="Latest exact history"))
+    path = f'/api/notebook/notes/{latest["id"]}/publication-requests'
+    body = publication_body(latest)
+    initial = owner.post(path + ("?summary=true" if compact_first else ""), body)
+    full = owner.post(path, body)
+    compact = owner.post(path + "?summary=true", body)
+    assert initial.status_code == full.status_code == compact.status_code == 200
+    assert set(full.json()) == {"note"}
+    assert [row["content"]["body"] for row in full.json()["note"]["revisions"]] == [
+        "Original exact history", "Latest exact history"]
+    assert full.json()["note"]["publication_status"] == "submitted"
+    assert compact.json()["publication_request"]["revision"] == latest["revision"]
+    assert count(app, notebook.NotebookPublication) == 1
+
+
+def test_compact_publication_preserves_owner_csrf_latest_revision_and_existing_request_checks(system):
+    app, owner, _, reader, _ = system
+    first = create(owner)
+    latest = revise(owner, first, content(title="Latest revision"))
+    path = f'/api/notebook/notes/{latest["id"]}/publication-requests?summary=true'
+    body = publication_body(latest)
+    assert TestClient(app).post(path, json=body, headers={"Origin": ORIGIN}).status_code in (401, 403)
+    assert owner.client.post(path, json=body).status_code == 403
+    assert reader.post(path, body).status_code == 404
+    assert owner.post(path, publication_body(first)).status_code == 409
+    assert owner.post(path, {**body, "content_sha256": "0" * 64}).status_code == 409
+    trashed = create(owner, content(title="Deleted private draft"))
+    assert owner.post(f'/api/notebook/notes/{trashed["id"]}/delete', publication_body(trashed)).status_code == 200
+    assert owner.post(f'/api/notebook/notes/{trashed["id"]}/publication-requests?summary=true',
+        publication_body(trashed)).status_code == 410
+    assert count(app, notebook.NotebookPublication) == 0
+    assert owner.post(path, body).status_code == 200
+    assert owner.post(path, {**body, "idempotency_key": str(uuid4())}).status_code == 409
+    assert owner.post(path, {**body, "revision": first["revision"],
+        "content_sha256": first["content_sha256"]}).status_code == 409
+    assert count(app, notebook.NotebookPublication) == 1
+
+
+def test_compact_publication_retry_is_bound_to_requested_revision_and_current_decision(system):
+    app, owner, reviewer, _, _ = system
+    note = create(owner)
+    path = f'/api/notebook/notes/{note["id"]}/publication-requests?summary=true'
+    body = publication_body(note)
+    original = owner.post(path, body).json()["publication_request"]
+    approve(reviewer, note)
+    assert owner.post(path, body).json()["publication_request"] == {**original, "status": "approved"}
+    withdrawn = reviewer.post(f'/api/notebook/notes/{note["id"]}/publication-withdrawals',
+        publication_body(note, reason="Synthetic private material must be withdrawn."))
+    assert withdrawn.status_code == 200
+    latest = revise(owner, note, content(title="Newer private revision"))
+    replay = owner.post(path, body)
+    assert replay.status_code == 200
+    assert replay.json()["publication_request"] == {**original, "status": "withdrawn"}
+    assert latest["revision"] != replay.json()["publication_request"]["revision"]
     assert count(app, notebook.NotebookPublication) == 1
 
 

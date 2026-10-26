@@ -20,7 +20,8 @@ for (const width of [1440,390]) {
       await page.goto('/#about'); await signIn(page,'alice',{navigate:false});
       await page.evaluate(()=>{location.hash='#notebook?view=timeline';});
       await asset.arrived;await aggregate.arrived;
-      await expect(page.locator('#notebook-workspace .notebook-shell-tabs')).toBeVisible();
+      await expect(page.locator('#notebook-workspace .notebook-frame .nb-views')).toBeVisible();
+      await expect(page.locator('#notebook-workspace .notebook-frame [data-notebook-panel="timeline"]')).toBeVisible();
       await expect(page.locator('#notebook-workspace')).toContainText('Research notebook');
       expect(reads.filter(read=>read.path==='/api/notebook/timeline')).toHaveLength(1);
       expect(reads.filter(read=>read.path==='/api/notebook/notes')).toEqual([]);

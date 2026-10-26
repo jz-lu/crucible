@@ -122,6 +122,45 @@
             <div class="person-section person-disclosure"><div class="person-section-summary"><h2>Personal records</h2><span class="person-section-count"></span></div></div>
             <div class="person-section person-disclosure"><div class="person-section-summary"><h2>Recent solves</h2><span class="person-section-count"></span></div></div>
           </div>
+          <div id="notebook-frame-template" class="pending-page-preview nb-root notebook-frame" data-pending-layout="notebook" aria-hidden="true" inert>
+            <div class="nb-heading">
+              <h1>Research notebook</h1>
+              <div class="nb-heading-actions"><button class="nb-link" type="button" disabled>Agent files</button><button class="nb-button" type="button" disabled>Publish all</button><button class="nb-button nb-primary" type="button" disabled>New note</button></div>
+            </div>
+            <nav class="nb-views" aria-label="Notebook views">
+              <button class="nb-view nb-notes-view" data-notebook-tab="notes" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="5" y="3" width="14" height="18" rx="2"></rect><path d="M9 8h6M9 12h6M9 16h4"></path></svg>Notes</button>
+              <div class="nb-visualizations">
+                <span class="nb-view-label">Visualizations</span>
+                <div class="nb-visualization-tabs">
+                  <button class="nb-view nb-visualization-view" data-notebook-tab="map" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m7.7 6.2 8.6 4.6m0 2.4-8.6 4.6M6 8v8"></path><circle cx="6" cy="6" r="2"></circle><circle cx="18" cy="12" r="2"></circle><circle cx="6" cy="18" r="2"></circle></svg>Scheme map</button>
+                  <button class="nb-view nb-visualization-view" data-notebook-tab="timeline" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 4v16h16M5 16h5v-5h5V6h5"></path></svg>Timeline</button>
+                </div>
+              </div>
+            </nav>
+            <section data-notebook-panel="notes">
+              <div class="nb-toolbar">
+                <label class="nb-search"><span class="sr-only">Search notes</span><input type="search" placeholder="Search titles, summaries or tags…" disabled></label>
+                <label class="nb-field nb-visibility-filter"><span>Show</span><select disabled><option>All notes</option></select></label>
+                <span class="nb-count"></span>
+              </div>
+              <div class="nb-list nb-list-placeholder"></div>
+            </section>
+            <section data-notebook-panel="map" class="nb-map-panel">
+              <div class="nb-map-toolbar">
+                <div class="nb-map-filters"><button type="button" disabled>All</button><button type="button" disabled>Scored</button><button type="button" disabled>Highlighted</button></div>
+                <label class="nb-map-search"><span class="sr-only">Find a scheme, family, or assumption</span><input type="search" placeholder="Find a scheme or an idea…" disabled></label>
+              </div>
+              <div class="nb-map-meta"></div>
+              <div class="nb-map-placeholder"></div>
+            </section>
+            <section data-notebook-panel="timeline" class="nb-timeline-panel">
+              <div class="nb-timeline-card">
+                <div class="nb-timeline-heading"><h2>Notes over time</h2><span class="nb-timeline-total"></span></div>
+                <div class="nb-timeline-plot"><div class="nb-timeline-frame"></div></div>
+                <p class="nb-timeline-footnote nb-timeline-undated"></p>
+              </div>
+            </section>
+          </div>
           <div class="pending-page-preview loading-preview" data-pending-layout="list" aria-hidden="true">
             <div class="pending-list-row"><span class="catalogue-placeholder"></span><span class="catalogue-placeholder"></span></div>
             <div class="pending-list-row"><span class="catalogue-placeholder"></span><span class="catalogue-placeholder"></span></div>
@@ -231,7 +270,13 @@
             <p id="overview-beta" class="beta-note" hidden></p>
           </div>
           <div class="overview-entry">
-            <a id="overview-challenges" class="button button-primary" href="#challenge">View challenges <span aria-hidden="true">→</span></a>
+            <div class="overview-entry-actions">
+              <aside id="overview-clock" class="round-clock overview-clock" aria-label="Shared challenge round deadline" hidden>
+                <span class="round-time">Round ends in</span>
+                <p id="overview-countdown" class="countdown" aria-label="Round time unavailable">—:—</p>
+              </aside>
+              <a id="overview-challenges" class="button button-primary" href="#challenge">View challenges <span aria-hidden="true">→</span></a>
+            </div>
             <p id="overview-progress"></p>
             <p id="overview-generation-status" class="field-hint" hidden></p>
             <a id="overview-assumptions" class="overview-assumptions-link" href="#challenge">View assumptions <span aria-hidden="true">↗</span></a>
@@ -352,8 +397,8 @@
             <span class="round-time">Challenge closes in</span>
             <p id="countdown" class="countdown" aria-label="Loading round time">—:—</p>
           </aside>
-          <div id="challenge-loading" class="loading-state" role="status">
-            <span class="sr-only">Loading your workspace…</span>
+          <div id="challenge-loading" class="sr-only" role="status" hidden>
+            Checking challenge status…
           </div>
           <div id="challenge-error" class="notice notice-error" role="alert" hidden>
             <span id="challenge-error-text">

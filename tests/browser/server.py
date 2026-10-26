@@ -43,7 +43,7 @@ def main():
         now = time.time()
         encoded = passwords.hash(PASSWORD)
         with app.state.db.transaction(write=True) as session:
-            for actor in ("alice", "bob", "revoked"):
+            for actor in ("alice", "bob", "revoked", "bulkdesktop", "bulkmobile"):
                 user = User(id=str(uuid4()), handle="browser_" + actor,
                             password_hash=encoded, created_at=now)
                 session.add(user)

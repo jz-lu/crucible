@@ -119,7 +119,13 @@ GET /api/notebook/notes/{note_id}, GET /api/notebook/export,
 GET /api/notebook/imports/{import_id}; POST /api/notebook/notes,
 POST /api/notebook/import, POST /api/notebook/notes/{note_id}/revisions,
 POST /api/notebook/notes/{note_id}/delete, POST /api/notebook/notes/{note_id}/restore,
-POST /api/notebook/notes/{note_id}/publication-requests. Reads require notebook:read;
+POST /api/notebook/notes/{note_id}/publication-requests. The optional ?summary=true
+returns a crucible-publication-request-v1 receipt containing publication_request
+{id,note_id,revision,content_sha256,requested_at,status}, without note bodies or
+history. The default full-note response is unchanged. Both projections retain
+the same authorization, latest-revision checks, idempotency and rate limit; a
+replay acknowledges the original exact request with its current decision status.
+Reads require notebook:read;
 create/import/revise/delete/restore require notebook:write; requesting publication
 requires notebook:publish. Revisions bind expected_revision/content_sha256;
 publication requests and delete bind revision/content_sha256; restore binds

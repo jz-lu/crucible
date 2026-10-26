@@ -1,3 +1,23 @@
+Notebook continuity and explicit challenge requests, 26 October 2026
+
+- Ready remains visible during the selected instance check. Get and Take on
+  retain one explicit intent; browsing another stage never issues it. This
+  supersedes the earlier account/scheme/hour automatic-access UI policy below.
+- Scheme overview and challenge pages share a server-synchronized countdown,
+  with compact emphasis beside View challenges on the overview.
+- Notes, Scheme map and Timeline use the same public inert frame through access,
+  assets and data, with no invented records, graph data or permissions.
+- Note pagination reserves space and focus. A complete summary index supports
+  direct page selection; server search/overflow/Trash/reviews keep cursor paging.
+- Publish all confirms the author's eligible exact revisions across filters.
+  Sequential compact receipts avoid loading histories and preserve existing
+  review, ownership and rate limits. Uncertain responses retain exact retry keys;
+  navigation/session changes stop future sends. No participant notes are posted
+  as part of implementing or testing this feature.
+
+Source checks and exact deployment evidence are recorded separately. Do not
+infer hosted availability or latency from this work list.
+
 Prepared browsing data and engineering audit follow-up, 25 October 2026
 
 Complete compact stage-record summaries remove per-stage winner reads while

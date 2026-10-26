@@ -142,17 +142,19 @@ Round access
 
 GET /api/challenges is read-only. Its round_started flag and
 round_started_round_id report whether this account has any issued instance for
-this exact scheme/release/current UTC hour, using one clock snapshot. A manual
-POST starts the round by issuing the selected tier. Subsequent tiers are issued
-on demand when opened in Challenge; no bulk generation occurs. The browser does
-not issue challenges while viewing Leaderboard or Protocol, or previewing a slider.
+this exact scheme/release/current UTC hour, using one clock snapshot. An explicit
+POST issues the selected stage. Every stage needs its own Get or Take on action;
+opening a stage, Leaderboard or Protocol, and previewing a slider are read-only.
+The Ready invitation can paint while the selected instance status is checked;
+one scoped user intent may wait for that check before issuing. An existing
+instance is reopened rather than regenerated.
 
-Automatic POSTs include active_round_id. Before pinning or generation, the server
+API clients may include active_round_id. Before pinning or generation, the server
 requires it to match the current hour and an existing challenge for this account,
-scheme, and exact release. Stale or unstarted automatic requests return 409. Manual
-requests omit this guard. Successful responses identify their issued round;
+scheme, and exact release. Stale or unstarted guarded requests return 409. The
+browser's explicit requests omit this optional guard. Successful responses identify their issued round;
 repeat requests reuse the same instance. Account, scheme, release, and hour
-boundaries require a new explicit start. Generation failures never activate access.
+boundaries require a new explicit request. Generation failures never activate access.
 
 Scheme descriptors expose profile_metrics and profile_metrics_basis separately
 from frozen manifests. Public-key/ciphertext lengths count canonical binary bytes;

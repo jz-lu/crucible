@@ -8,6 +8,16 @@
     const status = el('p', 'nb-sr-only', text); status.setAttribute('role', 'status');
     region.append(status); return region;
   }
+  function notebookFramePart(selector) {
+    // Public, ID-free structure shared by first paint and controller loading.
+    // The clone carries no results, permissions or event listeners.
+    return document.querySelector('#notebook-frame-template').querySelector(selector).cloneNode(true);
+  }
+  function notebookPendingPart(selector, text) {
+    const region = reading(text), frame = notebookFramePart(selector);
+    frame.setAttribute('aria-hidden', 'true'); frame.setAttribute('inert', '');
+    region.append(frame); return region;
+  }
   const button = (text, fn, cls = 'nb-link') => { const n = el('button', cls, text); n.type = 'button'; n.addEventListener('click', fn); return n; };
   const math = (tag, cls, text) => { const n = el(tag, cls); if (window.CrucibleMath) window.CrucibleMath.render(n, text); else n.textContent = text; return n; };
   const canonical = value => Array.isArray(value) ? '[' + value.map(canonical).join(',') + ']' : value && typeof value === 'object' ? '{' + Object.keys(value).sort().map(k => JSON.stringify(k) + ':' + canonical(value[k])).join(',') + '}' : JSON.stringify(value);
@@ -97,7 +107,7 @@
     if (!current()) return null;
     // Start the stylesheet, template and independent scripts together. The surface
     // must be connected for its shadow stylesheet to load, but stays hidden
-    // until every dependency is ready; the existing loading message stays put.
+    // until every dependency is ready; the shared pending frame stays put.
     const surface = el('div'); surface.hidden = true;
     const shadow = surface.attachShadow({mode:'open'});
     const stylesheet = el('link'); stylesheet.rel = 'stylesheet'; stylesheet.href = researchMapAssetURL('styles.css');
@@ -153,7 +163,7 @@
     let params = new URLSearchParams(), search = '', tag = '', visibility = 'all', previewId = null;
     let mapController = null, mapPreparation = null, mapIdle = null, mapRequest = 0, timelineRequest = 0, listLoaded = false, cardAction = 0;
     let curatedNotes = [], curatedLoaded = false, curatedPromise = null, timelinePreparation = null, indexPreparation = null;
-    let pageCursors = [null], pageIndex = 0, searchTimer = null;
+    let pageCursors = [null], pageIndex = 0, knownPageCount = null, searchTimer = null;
     let currentSession = session(), readEpoch = 0, listStamp = null, timelineStamp = null, listRefreshing = false, warmEnabled = false;
     const readCache = new Map();
     const preparingNotes = new Map();
@@ -248,13 +258,14 @@
       return () => controls.forEach((control, index) => { control.disabled = previous[index]; });
     }
     let returnFocus = null, hasUnsavedDraft = () => false, suspendedDialog = false, reviewMode = false;
+    let discardMessage = 'Discard the unsaved changes to this note?';
     const nodes = {};
     const mark = (name, node) => { node.setAttribute('data-nb', name); nodes[name] = node; return node; };
     const q = name => nodes[name];
     root.classList.add('nb-root');
     const heading = el('div', 'nb-heading'); heading.append(el('h1', '', 'Research notebook'));
     const headingActions = el('div', 'nb-heading-actions');
-    headingActions.append(mark('files', button('Agent files', agentFiles)), mark('new', button('New note', () => editNote(), 'nb-button nb-primary'))); heading.append(headingActions);
+    headingActions.append(mark('files', button('Agent files', agentFiles)), mark('publish-all', button('Publish all', publishAllDialog, 'nb-button')), mark('new', button('New note', () => editNote(), 'nb-button nb-primary'))); heading.append(headingActions);
     const views = el('nav', 'nb-views'); views.setAttribute('aria-label', 'Notebook views');
     const notesView = mark('notes-view', button('Notes', () => navigateView('#notebook'), 'nb-view nb-notes-view'));
     notesView.setAttribute('aria-current', 'page');
@@ -293,8 +304,14 @@
     const list = mark('list', el('div', 'nb-list')); list.id = reviewOnly ? 'nb-review-note-list' : 'nb-note-list';
     list.tabIndex = -1; list.setAttribute('aria-label', reviewOnly ? 'Publish requests' : 'Research notes');
     const pagination = mark('pagination', el('nav', 'nb-pagination')); pagination.setAttribute('aria-label', 'Note pages');
+    pagination.tabIndex = -1;
+    const pageJump = mark('page-jump', el('label', 'nb-page-jump'));
+    pageJump.append(el('span', 'nb-sr-only', 'Go to notebook page'));
+    const pageSelect = mark('page-select', el('select'));
+    pageSelect.addEventListener('change', () => jumpPage(Number(pageSelect.value)));
+    pageJump.append(pageSelect); pageJump.hidden = true;
     pagination.append(mark('prev', button('Previous page', previousPage, 'nb-button')),
-      mark('page', el('span', 'nb-page')),
+      mark('page', el('span', 'nb-page')), pageJump,
       mark('more', button('Next page', nextPage, 'nb-button nb-more')));
     q('page').setAttribute('aria-live', 'polite');
     const humanHint = el('p', 'nb-hint', 'Human-written is an authorship label supplied by the author, not independently verified.'); humanHint.hidden = true;
@@ -338,7 +355,7 @@
       q('search').value = ''; q('filter').replaceChildren(); q('page').textContent = ''; humanHint.hidden = true;
       closeDialog(true); q('dialog-body').replaceChildren(); q('list').replaceChildren(); q('full').replaceChildren(); q('count').textContent = ''; q('pagination').hidden = true; notice('');
     }
-    function hide() { clearViewSpace(); timelinePreparation = null; cancelMapPreparation(); clearTimeout(searchTimer); searchTimer = null; active = false; request++; mapRequest++; timelineRequest++; q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy'); q('timeline').replaceChildren(); mapController?.hide(); if (q('dialog').open) { suspendedDialog = true; q('dialog').close(); } }
+    function hide() { clearPageSpace(); clearViewSpace(); timelinePreparation = null; cancelMapPreparation(); clearTimeout(searchTimer); searchTimer = null; active = false; request++; mapRequest++; timelineRequest++; q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy'); q('timeline').replaceChildren(); mapController?.hide(); if (q('dialog').open) { suspendedDialog = true; q('dialog').close(); } }
     const reviewUrl = (section, extra = {}) => '#reviews?' + new URLSearchParams({section, ...extra});
     function pageGuard() { const current = guard(), token = request; return () => current() && token === request; }
     function backToNotes() { return button(reviewOnly ? '← Publish requests' : '← Research notebook', () => navigate(reviewOnly ? reviewUrl('publication') : '#notebook'), 'nb-link nb-back'); }
@@ -370,7 +387,7 @@
       const id = params.get('note'), inResearch = params.has('research') || params.has('research_request'); q('library').hidden = inVisualization || Boolean(id) || inResearch; q('full').hidden = inVisualization || (!id && !inResearch);
       if (q('library').hidden) q('list').removeAttribute('aria-busy');
       if (!inTimeline) q('timeline').removeAttribute('aria-busy');
-      q('new').disabled = !accountId; q('files').disabled = !accountId;
+      q('new').disabled = !accountId; q('files').disabled = !accountId; q('publish-all').disabled = !accountId;
       if (!accountId) { q('list').replaceChildren(); q('full').replaceChildren(); notice('Sign in to read your notebook.'); return; }
       if (inMap) { await showMap(); return; }
       if (inTimeline) { await showTimeline(); return; }
@@ -427,7 +444,9 @@
     async function showMap() {
       const owner = accountId, generation = epoch;
       const current = () => active && accountId === owner && identity() === owner && epoch === generation && params.get('view') === 'map';
-      if (!mapController && !q('map').querySelector('.nb-reading')) q('map').prepend(reading('Loading scheme map…'));
+      if (!mapController && !q('map').querySelector('.nb-reading')) {
+        q('map').prepend(notebookPendingPart('[data-notebook-panel="map"]', 'Loading scheme map…'));
+      }
       try {
         const controller = await prepareMap();
         if (current()) controller?.show();
@@ -460,10 +479,7 @@
     function timelineCard() {
       let card = q('timeline').querySelector('.nb-timeline-card');
       if (!card) {
-        card = el('div', 'nb-timeline-card');
-        const header = el('div', 'nb-timeline-heading');
-        header.append(el('h2', '', 'Notes over time'), el('span', 'nb-timeline-total'));
-        card.append(header, el('div', 'nb-timeline-plot'), el('p', 'nb-timeline-footnote nb-timeline-undated'));
+        card = notebookFramePart('.nb-timeline-card');
         q('timeline').replaceChildren(card);
       }
       return {card, total: card.querySelector('.nb-timeline-total'), plot: card.querySelector('.nb-timeline-plot'),
@@ -604,7 +620,8 @@
       curatedPromise = task;
       try { return await task; } finally { if (curatedPromise === task) curatedPromise = null; }
     }
-    function resetPages() { pageCursors = [null]; pageIndex = 0; nextAfter = null; listLoaded = false; }
+    function clearPageSpace() { q('list').style.minHeight = ''; q('list').classList.remove('nb-page-position-held'); }
+    function resetPages() { pageCursors = [null]; pageIndex = 0; knownPageCount = null; nextAfter = null; listLoaded = false; clearPageSpace(); }
     function changeQuery() {
       clearTimeout(searchTimer); searchTimer = null; resetPages(); previewId = null;
       if (!reviewOnly && window.location.hash.split('?')[0] === '#notebook') {
@@ -618,8 +635,65 @@
       }
       loadList();
     }
-    function previousPage() { if (pageIndex > 0) { pageIndex--; previewId = null; loadList(); } }
-    function nextPage() { if (nextAfter) { pageCursors = pageCursors.slice(0, pageIndex + 1); pageCursors.push(nextAfter); pageIndex++; previewId = null; loadList(); } }
+    function canPage() {
+      return active && accountId !== null && identity() === accountId && session() === currentSession &&
+        !q('library').hidden && listLoaded && q('list').getAttribute('aria-busy') !== 'true';
+    }
+    function changePage(index) {
+      const focused = document.activeElement;
+      const ownsFocus = focused?.closest('.nb-pagination') === q('pagination'), current = readGuard();
+      // Keep the paging row in place when the last page has fewer records.
+      // This is empty layout space, cleared on filter/account/view departure.
+      const height = q('list').getBoundingClientRect?.().height;
+      if (Number.isFinite(height) && height > 0) {
+        q('list').style.minHeight = Math.ceil(height) + 'px';
+        q('list').classList.add('nb-page-position-held');
+      }
+      pageIndex = index; previewId = null;
+      const loading = loadList(), token = request;
+      void loading.then(() => {
+        if (!ownsFocus || !current() || !active || token !== request || q('library').hidden || q('pagination').hidden) return;
+        if (document.activeElement !== focused && document.activeElement !== document.body) return;
+        const target = !focused.disabled ? focused : !q('page-jump').hidden && !q('page-select').disabled ? q('page-select') :
+          !q('prev').disabled ? q('prev') : !q('more').disabled ? q('more') : q('pagination');
+        target.focus({preventScroll:true});
+      });
+    }
+    function previousPage() { if (canPage() && pageIndex > 0) changePage(pageIndex - 1); }
+    function nextPage() {
+      if (!canPage() || !nextAfter) return;
+      pageCursors = pageCursors.slice(0, pageIndex + 1); pageCursors.push(nextAfter);
+      changePage(pageIndex + 1);
+    }
+    function jumpPage(index) {
+      if (!canPage() || !Number.isSafeInteger(index)) return;
+      // Recheck the current complete index rather than trusting an old option
+      // after expiry, invalidation or a filter change.
+      const rows = indexedListRows();
+      if (!rows) { knownPageCount = null; renderPagination(); return; }
+      if (index < 0 || index >= Math.ceil(rows.length / 25) || index === pageIndex) { renderPagination(); return; }
+      changePage(index);
+    }
+    function renderPagination() {
+      const busy = q('list').getAttribute('aria-busy') === 'true';
+      const jump = Number.isSafeInteger(knownPageCount) && knownPageCount > 1;
+      q('page').textContent = 'Page ' + (pageIndex + 1); q('page').hidden = jump;
+      q('page-jump').hidden = !jump;
+      if (jump) {
+        if (q('page-select').dataset.pages !== String(knownPageCount)) {
+          q('page-select').replaceChildren();
+          for (let index = 0; index < knownPageCount; index++) {
+            const option = el('option', '', `Page ${index + 1} of ${knownPageCount}`); option.value = String(index);
+            q('page-select').append(option);
+          }
+          q('page-select').dataset.pages = String(knownPageCount);
+        }
+        q('page-select').value = String(pageIndex);
+      }
+      q('page-select').disabled = busy || !jump;
+      q('prev').disabled = busy || pageIndex === 0; q('more').disabled = busy || !nextAfter;
+      q('pagination').hidden = pageIndex === 0 && !nextAfter;
+    }
     function setListActionsDisabled(disabled) {
       for (const actions of q('list').querySelectorAll('.nb-card-actions')) {
         for (const control of actions.querySelectorAll('button')) control.disabled = disabled;
@@ -630,18 +704,24 @@
       update();
       if (focused) q('list').focus({preventScroll:true});
     }
-    function indexedListPage() {
+    function indexedListRows() {
       if (reviewOnly || reviewMode || visibility === 'trash' || search.trim()) return null;
       const index = cachedRead('summary-index');
       if (!index?.complete) return null;
-      const rows = index.notes.filter(note => {
+      return index.notes.filter(note => {
         const tags = selectedRevision(note).content.tags;
         return (visibility !== 'mine' || String(note.owner?.id) === accountId) &&
           (visibility !== 'human' || tags.includes('human-written')) &&
           (visibility !== 'research' || tags.includes('literature')) &&
           (visibility !== 'proposals' || Boolean(note.proposal_revision)) && (!tag || tags.includes(tag));
       });
-      pageIndex = Math.min(pageIndex, Math.max(0, Math.ceil(rows.length / 25) - 1));
+    }
+    function indexedListPage() {
+      const rows = indexedListRows();
+      if (!rows) return null;
+      const pageCount = Math.ceil(rows.length / 25);
+      knownPageCount = pageCount;
+      pageIndex = Math.min(pageIndex, Math.max(0, pageCount - 1));
       return {notes:rows.slice(pageIndex * 25, (pageIndex + 1) * 25),
         next_after:(pageIndex + 1) * 25 < rows.length ? 'index:' + (pageIndex + 1) : null};
     }
@@ -664,6 +744,7 @@
     async function loadList() {
       clearTimeout(searchTimer); searchTimer = null;
       humanHint.hidden = reviewMode || visibility !== 'human';
+      knownPageCount = null;
       const indexed = indexedListPage();
       if (indexed) pageCursors = Array.from({length:pageIndex + 1}, (_, index) => index ? 'index:' + index : null);
       if (!indexed && String(pageCursors[pageIndex] || '').startsWith('index:')) resetPages();
@@ -695,11 +776,13 @@
       if (cached) paint(cached);
       else if (!retained) {
         listLoaded = false; notes = []; nextAfter = null;
-        updateList(() => q('list').replaceChildren(reading('Loading notes…'))); q('count').textContent = '';
+        const pending = notebookPendingPart('.nb-list-placeholder', 'Loading notes…');
+        pending.querySelector('.nb-list-placeholder').classList.remove('nb-list');
+        updateList(() => q('list').replaceChildren(pending)); q('count').textContent = '';
         q('page').textContent = 'Page ' + (pageIndex + 1);
       }
       setListActionsDisabled(true);
-      q('more').disabled = true; q('prev').disabled = true;
+      q('more').disabled = true; q('prev').disabled = true; q('page-select').disabled = true;
       try {
         const prepared = preparingLists.get(key); preparingLists.delete(key);
         const result = indexed || await (prepared && Date.now() - prepared.at < 10000 ? prepared.task :
@@ -725,7 +808,7 @@
           q('count').textContent = '';
         }
       } finally {
-        if (current() && request === token && generation === readEpoch) { q('list').removeAttribute('aria-busy'); q('prev').disabled = pageIndex === 0; q('more').disabled = !nextAfter; q('pagination').hidden = pageIndex === 0 && !nextAfter; }
+        if (current() && request === token && generation === readEpoch) { q('list').removeAttribute('aria-busy'); renderPagination(); }
       }
     }
 
@@ -780,9 +863,7 @@
       // server selected this page. Never filter only the downloaded subset.
       const filtered = notes;
       q('count').textContent = `${filtered.length} ${filtered.length === 1 ? 'note' : 'notes'}`; q('list').replaceChildren();
-      q('page').textContent = 'Page ' + (pageIndex + 1);
-      q('prev').disabled = listRefreshing || pageIndex === 0; q('more').disabled = listRefreshing || !nextAfter;
-      q('pagination').hidden = pageIndex === 0 && !nextAfter;
+      renderPagination();
       if (reviewMode) q('list').append(el('p', 'nb-hint', 'Publish requests · approve an exact revision for all approved participants to read. This does not publish it to the internet or certify its mathematics.'));
       if (!filtered.length) q('list').append(el('p', 'nb-empty', reviewMode ? 'No publish requests awaiting approval.' : search.trim() || tag || visibility !== 'all' ? 'No matching notes.' : 'No notes yet. Start with New note.'));
       filtered.forEach((note, index) => {
@@ -1339,6 +1420,113 @@
       actions.append(button('Cancel', () => closeDialog(true)), save);
       container.append(error, actions);
     }
+    async function publishAllDialog() {
+      if (reviewOnly || !active || !accountId || identity() !== accountId || session() !== currentSession) return;
+      const container = openDialog('Confirm publish requests'), alive = dialogGuard(), credential = currentSession;
+      const owned = () => alive() && currentSession === credential && session() === credential;
+      const preparation = request, preparing = () => owned() && active && request === preparation;
+      container.append(el('p', 'nb-hint', 'Submit the latest private revision of each of your eligible notes for reviewer approval. Notes already submitted or published, and notes in Trash, are excluded. Your current filters do not limit this selection.'));
+      const status = el('p', 'nb-batch-status'); status.setAttribute('role', 'status');
+      const rows = el('ol', 'nb-publication-batch'), error = el('p', 'nb-error'); error.setAttribute('role', 'alert');
+      const actions = el('div', 'nb-form-actions'), cancel = button('Cancel', () => closeDialog(), 'nb-button');
+      const send = button('Send publish requests', run, 'nb-button nb-primary'); send.disabled = true;
+      actions.append(cancel, send); container.append(status, rows, error, actions);
+      container.setAttribute('aria-busy', 'true');
+      let items = [], busy = false;
+      const seen = new Set(); let bytes = 0, count = 0;
+      function collect(data, limit) {
+        if (!Array.isArray(data?.notes) || data.notes.length > limit ||
+            !(data.next_after === null || typeof data.next_after === 'string' && data.next_after.length > 0 && data.next_after.length <= 768)) throw Error('The complete note selection could not be confirmed. No requests were sent.');
+        bytes += jsonBytes(data); count += data.notes.length;
+        if (bytes > 2 * 1024 * 1024 || count > 1000) throw Error('This notebook exceeds the bulk selection limit. Use individual Publish actions; no requests were sent.');
+        for (const note of data.notes) {
+          const revision = selectedRevision(note);
+          if (typeof note.id !== 'string' || !note.id || seen.has(note.id) || String(note.owner?.id) !== accountId ||
+              !Number.isSafeInteger(note.revision) || note.revision < 1 || revision?.revision !== note.revision || revision.summary !== true ||
+              !/^[0-9a-f]{64}$/.test(revision.content_sha256 || '') || note.content_sha256 !== revision.content_sha256 ||
+              typeof revision.content?.title !== 'string' || typeof revision.publication_status !== 'string' ||
+              note.publication_status !== revision.publication_status) throw Error('The complete note selection could not be confirmed. No requests were sent.');
+          seen.add(note.id);
+          if (note.deletion || !canPublish(note, revision)) continue;
+          items.push({id:note.id, title:revision.content.title, state:'waiting', payload:{revision:revision.revision,
+            content_sha256:revision.content_sha256, idempotency_key:crypto.randomUUID()}});
+        }
+      }
+      try {
+        const index = await api('/api/notebook/notes?projection=index&scope=mine');
+        if (!preparing()) return;
+        if (index?.format !== 'crucible-notebook-summary-index-v1' || index.projection !== 'index' ||
+            String(index.viewer_id) !== accountId || index.scope !== 'mine' || index.include_curated !== false ||
+            typeof index.complete !== 'boolean' || index.next_after !== null || !Array.isArray(index.notes) ||
+            jsonBytes(index) > 512 * 1024 || (index.complete ? index.overflow_reason !== null :
+              !['count_limit', 'byte_limit'].includes(index.overflow_reason) || index.notes.length)) throw Error('The complete note selection could not be confirmed. No requests were sent.');
+        if (index.complete) collect(index, 500);
+        else {
+          let cursor = null; const cursors = new Set();
+          for (let page = 0; page < 10; page++) {
+            const data = await api('/api/notebook/notes?scope=mine&limit=100' + (cursor ? '&after=' + encodeURIComponent(cursor) : ''));
+            if (!preparing()) return;
+            collect(data, 100); cursor = data.next_after;
+            if (cursor === null) break;
+            if (!data.notes.length || cursors.has(cursor) || page === 9) throw Error('The complete note selection could not be confirmed. No requests were sent.');
+            cursors.add(cursor);
+          }
+        }
+        for (const item of items) {
+          const row = el('li'); item.label = el('span', 'nb-batch-result', 'Private');
+          row.append(el('span', '', item.title + ' · Revision ' + item.payload.revision), item.label); rows.append(row);
+        }
+        status.textContent = items.length ? items.length + ' notes ready for review requests.' + (items.length > 60 ? ' The hourly limit may require continuing later.' : '') : 'No eligible private notes to publish.';
+        send.textContent = 'Send ' + items.length + ' publish requests'; send.disabled = !items.length; send.hidden = !items.length;
+        discardMessage = 'Close this batch with an unconfirmed request? It may already have reached the server. Staying here lets you retry the same request safely.';
+        hasUnsavedDraft = () => items.some(item => item.state === 'uncertain');
+      } catch (err) { if (owned()) { items = []; error.textContent = err.message; send.hidden = true; } }
+      finally { if (owned()) { container.removeAttribute('aria-busy'); if (!preparing()) { send.hidden = true; status.textContent = 'Selection paused. Close and reopen Publish all to refresh it.'; } } }
+
+      async function run() {
+        if (busy || !owned() || !active || !items.length) return;
+        const page = request, current = () => owned() && active && request === page;
+        busy = true; send.disabled = true; error.textContent = '';
+        try {
+          for (const item of items) {
+            if (['confirmed', 'skipped'].includes(item.state)) continue;
+            if (!current()) break;
+            // Retain this exact key before sending. A lost response must never
+            // turn an explicit retry into a different publication request.
+            item.state = 'uncertain'; item.label.textContent = 'Sending…';
+            try {
+              const result = await api('/api/notebook/notes/' + encodeURIComponent(item.id) + '/publication-requests?summary=true', item.payload);
+              const receipt = result?.publication_request;
+              if (result?.format !== 'crucible-publication-request-v1' || typeof receipt?.id !== 'string' || !receipt.id ||
+                  receipt.note_id !== item.id || receipt.revision !== item.payload.revision || receipt.content_sha256 !== item.payload.content_sha256 ||
+                  !Number.isFinite(receipt.requested_at) || !['submitted', 'approved', 'changes_requested', 'withdrawn'].includes(receipt.status)) throw Error('The publication receipt could not be confirmed.');
+              item.state = 'confirmed'; if (owned()) item.label.textContent = statusLabel(receipt.status);
+            } catch (err) {
+              if (!owned()) return;
+              if ([404, 409, 410, 422].includes(err.status)) {
+                item.state = 'skipped'; item.label.textContent = 'Skipped — changed or unavailable';
+              } else {
+                item.state = uncertain(err) ? 'uncertain' : 'waiting';
+                item.label.textContent = item.state === 'uncertain' ? 'Receipt unconfirmed' : 'Not sent';
+                error.textContent = err.message + (item.state === 'uncertain' ? ' Retry to confirm this same request before continuing.' : ' The batch has paused; completed requests are retained.');
+                break;
+              }
+            }
+          }
+        } finally {
+          busy = false;
+          if (owned()) {
+            const remaining = items.filter(item => !['confirmed', 'skipped'].includes(item.state)).length;
+            status.textContent = items.filter(item => item.state === 'confirmed').length + ' confirmed · ' +
+              items.filter(item => item.state === 'skipped').length + ' skipped' + (remaining ? ' · ' + remaining + ' remaining' : '');
+            send.hidden = !remaining; send.disabled = false;
+            send.textContent = items.some(item => item.state === 'uncertain') ? 'Retry remaining requests' : 'Continue requests';
+            cancel.textContent = 'Close';
+            if (!remaining && active && !params.has('note') && !params.has('view') && !params.has('research')) void loadList();
+          }
+        }
+      }
+    }
     function publicationDialog(note, revision) {
       if (!ownsNote(note)) return;
       const container = openDialog('Confirm publish request'), present = dialogGuard();
@@ -1383,8 +1571,8 @@
         } finally { if (present()) { busy = false; save.disabled = false; decision.input.disabled = Boolean(pending); reason.input.disabled = Boolean(pending); save.textContent = pending ? 'Retry the same request' : reviewing ? 'Record publication decision' : 'Send publish request'; } }
       });
     }
-    function openDialog(title) { returnFocus = document.activeElement; hasUnsavedDraft = () => false; suspendedDialog = false; dialogEpoch++; q('dialog-title').textContent = title; q('dialog-body').replaceChildren(); q('dialog').showModal(); return q('dialog-body'); }
-    function closeDialog(saved = false) { if (saved !== true && hasUnsavedDraft() && !window.confirm('Discard the unsaved changes to this note?')) return; hasUnsavedDraft = () => false; suspendedDialog = false; dialogEpoch++; q('dialog').close(); }
+    function openDialog(title) { returnFocus = document.activeElement; hasUnsavedDraft = () => false; discardMessage = 'Discard the unsaved changes to this note?'; suspendedDialog = false; dialogEpoch++; q('dialog-title').textContent = title; q('dialog-body').replaceChildren(); q('dialog').showModal(); return q('dialog-body'); }
+    function closeDialog(saved = false) { if (saved !== true && hasUnsavedDraft() && !window.confirm(discardMessage)) return; hasUnsavedDraft = () => false; suspendedDialog = false; dialogEpoch++; q('dialog').close(); }
     function field(label, name, value = '', options = {}) {
       const wrap = el('label', 'nb-field'), caption = el('span', '', label); caption.id = (reviewOnly ? 'nb-review-field-' : 'nb-field-') + name; wrap.append(caption); let input;
       if (options.options) { input = el('select'); options.options.forEach(o => { const n = el('option', '', o.label); n.value = o.value; input.append(n); }); }

@@ -679,6 +679,9 @@ ordering schemes by participant count descending, alphabetically on ties. This
 activity ordering supersedes the initial alphabetical choice; switching graph
 metrics does not reorder schemes or imply a comparative security ranking.
 
+Historical policy, superseded on 2026-10-26: the browser now requires an explicit
+request for every selected stage. Existing API round guards remain compatible.
+The following paragraph records the earlier automatic-access choice.
 Requesting the first instance starts only the selected account/scheme/release/hour.
 Opening another tier in Challenge automatically requests it, with a server-checked
 round guard. On-demand generation keeps large ladders responsive and avoids
