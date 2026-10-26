@@ -1559,6 +1559,7 @@ input::placeholder,textarea::placeholder {
 .catalogue-help-space { flex: 0 0 24px; width: 24px; height: 24px; visibility: hidden; }
 .catalogue-preview td { height: 76px; }
 .catalogue-placeholder { display: block; height: 13px; max-width: 100%; width: 56%; background: var(--line); opacity: .55; border-radius: 3px; }
+.catalogue-group-placeholder { display: inline-block; width: 120px; height: 10px; vertical-align: middle; }
 .catalogue-preview td:first-child .catalogue-placeholder { width: 64%; }
 .catalogue-preview tr:nth-child(2n) td:first-child .catalogue-placeholder { width: 48%; }
 .catalogue-preview td:last-child .catalogue-placeholder { width: 22px; }

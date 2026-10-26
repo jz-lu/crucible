@@ -388,7 +388,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  await test('a save failing while another page is open remains retryable when returning',async()=>{const late=deferred();const app=await boot({respond:(url,body)=>body?late.promise:undefined});app.q('new').click();fill(app);app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();app.controller.hide();late.reject(Object.assign(Error('Lost response'),{status:0}));await flush();assert.equal(app.q('dialog').open,false);await app.show();assert.equal(app.q('dialog').open,true);assert.match(app.q('dialog-body').textContent,/Retry the same save/);assert.equal(app.root.querySelector('[name="title"]').disabled,true);});
  await test('Publish requires an explicit saved-revision request and never exposes private-sharing controls',async()=>{
   const app=await boot({respond:(url,body)=>body?{note:note()}:undefined});await app.show('note-one');byText(app.q('full'),'Publish').click();
-  assert.equal(app.requests.some(r=>r.body),false);assert.match(app.q('dialog-body').textContent,/exact saved revision.*configured reviewer.*Later revisions stay private/);assert.equal(app.root.querySelector('[name="private-share-handles"]'),null);
+  assert.equal(app.requests.some(r=>r.body),false);assert.match(app.q('dialog-body').textContent,/This revision.*after a reviewer approves.*Later edits stay private/);assert.equal(app.root.querySelector('[name="private-share-handles"]'),null);
   app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();const write=app.requests.find(r=>r.body);assert.equal(write.url,'/api/notebook/notes/note-one/publication-requests');assert.equal(write.body.revision,1);assert.equal(write.body.content_sha256,'hash-1');assert.equal(app.requests.some(r=>r.url.includes('private-shares')),false);
  });
  await test('New note and author actions are visible without notebook review tools',async()=>{
@@ -445,7 +445,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
    if(url.startsWith('/api/notebook/notes?'))return{notes:[record]};
    if(url.startsWith('/api/notebook/notes/note-one'))return{note:record};
   }});
-  byText(app.q('list'),'Publish').click();await flush();assert.equal(app.q('dialog-title').textContent,'Confirm publish request');assert.ok(byText(app.q('dialog-body'),'Send publish request'));assert.equal(writes,0);
+  byText(app.q('list'),'Publish').click();await flush();assert.equal(app.q('dialog-title').textContent,'Request publication');assert.ok(byText(app.q('dialog-body'),'Send publish request'));assert.equal(writes,0);
   byText(app.q('dialog-body'),'Cancel').click();assert.equal(app.q('dialog').open,false);assert.equal(writes,0);assert.ok(byText(app.q('list'),'Publish'));
   byText(app.q('list'),'Publish').click();await flush();byText(app.q('dialog-body'),'Send publish request').closest('form').dispatchEvent({type:'submit'});await flush();assert.equal(writes,1);assert.equal(byText(app.q('full'),'Publish'),undefined);assert.match(app.q('full').textContent,/Publish request pending/);
   await app.show();assert.equal(byText(app.q('list'),'Publish'),undefined);assert.ok(byText(app.q('list'),'Edit'));

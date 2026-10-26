@@ -20,7 +20,7 @@ for (const [name, width] of [['desktop', 1440], ['mobile', 390]]) {
     const catalogue = await holdResponse(page, url => url.pathname === '/api/schemes' && url.searchParams.get('projection') === 'navigation');
     const reads = [];
     page.on('request', request => reads.push(new URL(request.url()).pathname));
-    let accessHeading, accessTable, pendingHeading, pendingTable, pendingHeader, pendingFirstRow;
+    let accessHeading, accessTable, pendingHeading, pendingTable, pendingHeader, pendingGroup, pendingFirstRow;
     try {
       // A changed document URL forces a cold bootstrap; changing only the
       // fragment is deliberately handled as a warm SPA navigation.
@@ -41,7 +41,8 @@ for (const [name, width] of [['desktop', 1440], ['mobile', 390]]) {
       pendingHeading = await geometry(page.locator('#catalogue-title'));
       pendingTable = await geometry(page.locator('#kem-catalogue .kem-table-wrap'));
       pendingHeader = await geometry(page.locator('#kem-catalogue thead'));
-      pendingFirstRow = await geometry(page.locator('#kem-catalogue tbody tr').first());
+      pendingGroup = await geometry(page.locator('#kem-catalogue .kem-group-row').first());
+      pendingFirstRow = await geometry(page.locator('#kem-catalogue tbody tr:not(.kem-group-row)').first());
       for (const field of ['x', 'y']) expect(pendingHeading[field], `heading ${field} after access`).toBeCloseTo(accessHeading[field], 0);
       for (const field of ['font', 'size', 'weight', 'lineHeight']) expect(pendingHeading[field]).toBe(accessHeading[field]);
       for (const field of ['x', 'y', 'width']) expect(pendingTable[field], `table ${field} after access`).toBeCloseTo(accessTable[field], 0);
@@ -63,7 +64,9 @@ for (const [name, width] of [['desktop', 1440], ['mobile', 390]]) {
     expect(readyHeading).toEqual(pendingHeading);
     for (const field of ['x', 'y', 'width']) expect(readyTable[field], `table ${field} after data`).toBeCloseTo(pendingTable[field], 0);
     const readyHeader = await geometry(page.locator('#kem-catalogue thead'));
-    const readyFirstRow = await geometry(page.locator('#kem-catalogue tbody tr').first());
+    const readyGroup = await geometry(page.locator('#kem-catalogue .kem-group-row').first());
+    const readyFirstRow = await geometry(page.locator('#kem-catalogue tbody tr:not(.kem-group-row)').first());
+    for (const field of ['y', 'height']) expect(readyGroup[field], `group heading ${field}`).toBeCloseTo(pendingGroup[field], 0);
     expect(readyHeader.height, 'help control does not resize table heading').toBeCloseTo(pendingHeader.height, 0);
     expect(readyFirstRow.y, 'first row keeps its position').toBeCloseTo(pendingFirstRow.y, 0);
     // Mobile records have variable wrapped names and optional recovery values;
