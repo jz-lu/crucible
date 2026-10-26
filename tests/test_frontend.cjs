@@ -1131,6 +1131,21 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.$('#catalogue-workspace').hidden, false);
     assert.equal(app.$('#workspace').hidden, true);
   });
+  await test('retired research links return to the catalogue without a findings UI or requests', async () => {
+    for (const hash of ['#research', '#research?target=finite-field-dlog']) {
+      const app = await createApp({schemes, hash});
+      assert.equal(app.location.hash, '#challenge');
+      assert.equal(app.$('#catalogue-workspace').hidden, false);
+      assert.equal(app.$('#nav-challenge').getAttribute('aria-current'), 'page');
+      assert.equal(app.document.querySelector('#nav-research'), null);
+      assert.equal(app.document.querySelector('#research-workspace'), null);
+      assert.equal(app.document.querySelector('#finding-dialog'), null);
+      assert.equal(app.requests.some(({url}) => url.pathname === '/api/targets' || url.pathname.startsWith('/api/contributions')), false);
+      await app.navigate(route(schemes[0], 'alpha-3'));
+      app.history.back(); await flush();
+      assert.equal(app.$('#catalogue-workspace').hidden, false);
+    }
+  });
   await test('About us is an empty deep-linked page with navigation state, history, and keyboard focus', async () => {
     const app = await createApp({schemes, hash: '#about'});
     const about = app.$('#about-workspace');
@@ -1139,7 +1154,6 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.document.title, 'About us — Crucible');
     assert.equal(app.$('#catalogue-workspace').hidden, true);
     assert.equal(app.$('#workspace').hidden, true);
-    assert.equal(app.$('#research-workspace').hidden, true);
     assert.equal(app.$('#nav-about').getAttribute('aria-current'), 'page');
     assert.equal(app.$('#nav-challenge').getAttribute('aria-current'), null);
     assert.equal(app.$('.skip-link').href, '#about-workspace');
