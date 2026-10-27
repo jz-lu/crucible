@@ -19,7 +19,7 @@
       if (params.get('review') === '1' || params.get('research_review') === '1') return {page: 'list', title: 'Review center'};
       if (params.has('note') || params.has('research_request') || params.has('research')) return {page: 'list', title: 'Research notebook'};
       const view = params.get('view');
-      return {page: view === 'timeline' ? 'notebook-timeline' : view === 'map' ? 'notebook-map' : 'notebook-notes', title: 'Research notebook'};
+      return {page: view === 'guide' ? 'notebook-guide' : view === 'timeline' ? 'notebook-timeline' : view === 'map' ? 'notebook-map' : 'notebook-notes', title: 'Research notebook'};
     }
     if (path.startsWith('#person/')) {
       let title = 'Profile';

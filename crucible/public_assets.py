@@ -54,6 +54,8 @@ PROTECTED_FILES = {
     '/notebook/' + name: media for name, media in {
         'seed.js': 'text/javascript', 'store.js': 'text/javascript',
         'notebook.js': 'text/javascript', 'notebook.css': 'text/css',
+        'research-guide.js': 'text/javascript', 'research-guide-data.js': 'text/javascript',
+        'research-guide.css': 'text/css',
         'request-types.json': 'application/json',
     }.items()
 }

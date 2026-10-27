@@ -948,6 +948,11 @@ function getNotebookWorkspace(reviewing = false) {
   const options = {navigate, api: reviewing ? api : notebookAPI,
     account: () => hasAccess() && (!reviewing || state.canReviewProposals) ? state.user : null,
     prepareMapCatalogue: loadMapCatalogue,
+    prepareGuide: () => Promise.all([
+      loadNotebookAsset('/notebook/research-guide.css', true),
+      loadNotebookAsset('/notebook/research-guide-data.js'),
+      loadNotebookAsset('/notebook/research-guide.js')
+    ]),
     currentReleases: () => hasAccess() ? (state.catalogueLoaded ? state.schemes : mapReleases || []) : [],
     session: () => state.csrf, reviewOnly: reviewing};
   // mount creates static controls only. Background jobs never call .show(),
@@ -959,7 +964,7 @@ function notebookPendingFrame(params) {
   const frame = $('#notebook-frame-template').cloneNode(true);
   frame.removeAttribute('id'); frame.removeAttribute('data-pending-layout');
   frame.classList.remove('pending-page-preview'); frame.classList.add('notebook-shell-preview');
-  const view = ['map', 'timeline'].includes(params.get('view')) ? params.get('view') : 'notes';
+  const view = ['map', 'timeline', 'guide'].includes(params.get('view')) ? params.get('view') : 'notes';
   frame.setAttribute('data-notebook-view', view);
   for (const tab of frame.querySelectorAll('[data-notebook-tab]')) {
     if (tab.getAttribute('data-notebook-tab') === view) tab.setAttribute('aria-current', 'page');

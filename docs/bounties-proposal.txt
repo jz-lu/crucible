@@ -1,0 +1,242 @@
+Bounties: a place to find useful research work
+Proposal for review — updated 27 October 2026
+
+The product
+
+Make Bounties a discovery surface for concrete research tasks whose briefs have
+been checked. A visitor should quickly recognize an interesting question, see
+whether they have the relevant background, and find a credible starting point.
+The main experience is exploring open work. Posting, reviewing and reward
+administration support that experience without occupying the main screen.
+
+A bounty is a task, not necessarily an entire open research problem. For example,
+"reproduce this recorded experiment at these parameters" is a meaningful task
+within "does this attack improve on the baseline?" Completing the former need
+not settle the latter. A negative result can fulfill the task when its stated
+criteria explicitly allow it.
+
+The proposed visual
+
+- Research bounties is the page title. Open describes the displayed tasks' status.
+- Open tasks fill a straightforward card board. Each card leads with the question,
+  a small Bounty badge using the Notes title-label style, a concrete contribution
+  and relevant background. Its footer holds only the numbered spectrum and point
+  reward. Placeholder subject labels and the repeated Explore link are removed;
+  the whole card opens the task, whose context and source notes remain available.
+- The spectrum runs from 1 = open-ended to 5 = concrete. All five numbers are
+  visible, with the task's position highlighted. The middle values stay unnamed.
+  It is a card annotation; browsing does not require selecting a position first.
+- Sort by More concrete first, More open-ended first, Highest points first or
+  Lowest points first. The entire collection is sorted before pagination. The
+  default is concrete first; ties retain a stable order and unset values go last.
+  Every sort retains all open tasks. Ratings and points are illustrative here.
+- The spectrum filter, named categories, A/B/C switch and experimental column
+  layout have been removed. Search, Find and the directions dropdown remain removed.
+  Difficulty, background, reward and the strength of verification are independent
+  of the task's position on the spectrum.
+- Notes and Bounties share surfaces, colors and tag styling. Notes keeps a denser
+  expandable reading list; Bounties keeps the grid. The selected Notes layout is
+  A / Simple list: quieter text-font titles and plain row dividers. The temporary
+  comparison switcher and the two unused layouts have been removed.
+- Selecting a card opens its brief, starting notes and contributions. Returning
+  preserves the selected sort and page. An arbitrary task is never opened
+  automatically and allowed to consume half the discovery screen.
+- Your bounties is a quieter secondary destination: proposed tasks, responses
+  awaiting your judgment, and items awaiting the pipeline. Past bounties retain
+  the outcomes without competing with open work. A flag marks the visualization.
+
+Keep explanations out of the main browsing path. The card should answer "could
+I engage with this?" The selected task should answer "what exactly would help?"
+Only the relevant action should explain posting, review or reward rules.
+
+Relationship to Notes — agreed architecture, production implementation pending
+
+A bounty is a distinct task linked to research notes. Calling it a type of note
+was too broad: the ordinary note editor, reader and publication workflow do not
+supply bounty behavior. Keep a dedicated human-facing task view and posting form
+with expected output, completion criteria, verification plan, reward and status.
+
+The bounty record owns versioned task terms, offered points, brief checks,
+submissions, poster and pipeline decisions, closure and the reward receipt.
+Notes supply the source research and submitted evidence, linked by exact revision.
+Reuse notebook authorship, citations, access and revision infrastructure where
+appropriate; the choice of storage reuse must not dictate an inadequate task UI.
+A note's Bounty badge can link to a related task. An authored tag cannot create
+a bounty, confer eligibility or award points.
+
+Notes have permanent numeric references such as #0035 for human discussion and
+search. A bounty can display those references beside its source notes. Exact
+evidence still pins the note ID, revision and content hash; the short number
+alone identifies a note across its revision history. Bounties have their own
+identity and do not borrow a cited note's number as their task identifier.
+
+For example, a note reports an attack experiment. A separate bounty asks for an
+independent reproduction with specified inputs, outputs and an offered reward.
+A contributor submits a result note; the bounty tracks the verification result
+and both approvals, then records the award and outcome. Ordinary publication of
+the result note does not complete the bounty.
+
+Freeze the task terms when it opens. Editing source or evidence notes does not
+silently alter the criteria, reward or approved evidence. Changed terms require
+a new checked version with existing claims handled explicitly. Closing the task
+preserves its brief and linked research. Several focused bounties may reference
+one source note; one contribution note may inform several tasks, with each
+completion and reward assessed under its own terms.
+
+What “checked” should mean
+
+Check a task's setup before listing it as open:
+1. The starting material is accessible to the intended audience and pinned to
+   exact note revisions. Private material is not exposed by being referenced.
+2. The question and scope are intelligible. Its connection to a research
+   direction is explicit, and an existing answer or duplicate has been checked.
+3. The expected evidence, completion criteria and verification plan are stated.
+   Check that the proposed verifier can assess the scoped deliverable, including
+   tasks whose research direction or method is open-ended.
+4. A poster is responsible for maintaining the brief and assessing responses.
+
+This can be a pipeline-assisted process with escalation for uncertainty. It is
+not blanket scientific endorsement, a promise that a solution exists, or a
+requirement for experts to certify every underlying claim before discussion.
+The UI must state what was actually checked and against which source versions.
+
+Keep proposing lightweight: source note, task, completion criteria, verification
+plan, background and openness. Unchecked proposals stay with the poster with usable
+feedback. Anyone can continue contributing notes under the existing notebook
+rules; bounty status does not control ordinary note participation.
+
+Verification, including open-ended work
+
+Openness describes the choices left to the researcher. Every bounty still needs
+a way to assess completion. A broad search can yield a precisely checkable witness,
+experiment, proof, or scoped counterexample. Agree the deliverable and checks when
+the task opens, rather than judging an unbounded promise after someone contributes.
+
+Prefer a runnable check for reproducible claims: pin code and inputs, record the
+environment, and state the expected outcome or comparison. For mathematical claims,
+specify the statement, assumptions and evidence to be independently checked. A
+review-based verifier should use explicit criteria and record its reasoning and
+unresolved issues. An inconclusive assessment must remain inconclusive.
+
+The broadest example asks for a new research goal plus one substantiated initial
+claim. Its plan calls for an independent re-run or proof/counterexample review.
+Completion records that scoped evidence; it does not imply the whole proposed
+research direction has been established. This keeps verification useful even when
+the researcher chooses both the goal and the approach.
+
+Each prototype brief now shows How it’s checked, with proposed checks and a
+completion condition. New proposals require a verification plan and retain it in
+their preview and saved draft. These are plans, not executable or already-run
+verifiers. A production verifier should have a versioned specification, pinned
+evidence and a recorded result. Its evidence informs the pipeline decision below;
+it does not silently grant poster approval or award points.
+
+Completion and approval
+
+A contributor links a note revision and a short account of what it establishes.
+A partial contribution remains visible even when it does not fulfill the task.
+A claimed solution starts two distinct decisions:
+
+  Poster approval: does this meet the task that was actually requested?
+  Pipeline approval: does the evidence substantiate that scoped result under
+  the applicable evaluation policy?
+
+Neither decision implies the other. A submission cannot approve itself, remove
+another person's task from discovery, or immediately grant points. The record
+must show pending, approved, disputed and revision-needed states accurately.
+
+Bind both approvals to the same task brief, verifier specification and exact
+submitted revision/hash. If any changes materially, request a new assessment instead of carrying
+approval across silently. The reward becomes eligible only when both approvals
+hold. Record the award once, with an auditable receipt. If the poster contributed
+the solution, an eligible substitute must handle the poster-side decision.
+
+Disagreement should produce a concrete reason and a next action. An absent
+poster must not leave a valid submission permanently in limbo: define a response
+window and a steward/appeal route before launch. This fallback need not turn
+routine awards into a central manual approval queue.
+
+When a task closes, record what changed in its parent research question. A
+reproduction, corrected assumption, counterexample or remaining obstacle should
+be usable by the next researcher. Recommendations for a new scheme or challenge
+must retain an owner and pass through the existing implementation/admission
+process. Bounty completion does not itself deploy code or certify a scheme.
+
+Points: the two options under consideration
+
+A. A fixed number of points per credit.
+   Easy to understand and audit, and stable while the work is in progress.
+   However, equal awards can favor small tasks and repeated task splitting over
+   difficult, consequential work. A common credit unit does not establish equal
+   scientific value.
+
+B. The pipeline estimates the points a contribution deserves.
+   More sensitive to scope, evidence and value, including unexpected useful
+   results. It requires calibration and explanations. If the only estimate
+   arrives after submission, researchers do not know the reward they are working
+   toward and the evaluation can feel arbitrary.
+
+Recommendation for a pilot: test a few fixed reward tiers assigned during the
+brief check, publish the amount before the task opens, and freeze that offer for
+its stated criteria. Keep poster + pipeline approval as the completion gate in
+either model. If later merit bonuses are desirable, distinguish them from the
+advertised award so a promised reward cannot be reduced retrospectively.
+
+Do not treat the scope rating as a points multiplier. An uncertain question can be
+poorly chosen, and a simple reproduction can be consequential. Reward reasons
+should refer to the task's contribution to the research record.
+
+The draft uses clearly marked example point amounts to make reward labels and
+sorting reviewable. They are neither calibrated awards nor a chosen reward policy.
+New local proposals show Points not set; trying the prototype awards no points.
+The previous “one credit for seven days” visibility model remains removed.
+Credits may eventually fund or constrain bounties, but the exact funding, starter
+grants, refund and posting-eligibility rules still need a decision. Ordinary
+note participation should remain separate.
+
+Keeping discovery useful over time
+
+Keep a small, maintained brief separate from the growing evidence archive. Give
+questions durable identities and retain earlier versions and closed outcomes.
+Use bounded pages and stable ordering. Make room for varied tasks and research
+directions; do not make reward size or accumulated popularity the
+sole ranking rule. New work should have a route to attention.
+
+Ask owners to refresh stale briefs. An outdated task can leave the default view
+without erasing its evidence or treating a lack of response as a resolution.
+Pending submissions preserve their review and reward commitments. A proposed
+visibility cap or refresh interval is a separate policy from task completion.
+
+Community flags, duplicate checks and visible award histories will be needed.
+Two approvals are not proof of independence: conflicts, self-awards and repeated
+reciprocal patterns need explicit handling. Test those rules in the beta before
+making reputation control broad access to the product.
+
+Implementation boundary
+
+The local prototype demonstrates the proposed hierarchy and journeys using eight
+fictional tasks: six open, one awaiting the example user's review, and one past.
+It supports sorting, reading, local task proposals, linked contributions and
+an example poster decision. It uses Crucible's existing notebook routing,
+authentication ownership, asset loader, controls and styles.
+
+There is no live task-checking engine, rewards ledger or points change. Pipeline
+approvals and evidence in the fixture are explicitly examples. New local
+proposals remain unchecked; local claims begin with both approvals pending.
+Nothing is published by trying the prototype. Reload clears local changes.
+
+For production, use versioned bounty terms and exact notebook references for
+source and contribution evidence. Bounty records own checks, lifecycle, two
+approval decisions, outcomes and reward receipts. This is the agreed architecture;
+the fixture has not been migrated to production task or note records.
+Keep transport, permissions and idempotent writes within the existing application
+conventions. Independent state is necessary for these distinct decisions; a new
+application shell, authentication layer or universal cache is not.
+
+Next concrete milestone
+
+Use one real task from the archive to exercise the whole journey: checked brief,
+researcher discovers it, contribution note, both assessments, recorded outcome.
+Measure whether people find suitable work, time to a useful response, reviewer
+effort and what actually changes in the archive. Those observations should decide
+the reward policy and the next iteration, rather than additional interface text.

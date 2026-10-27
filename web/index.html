@@ -125,6 +125,7 @@
                 <span class="nb-view-label">Visualizations</span>
                 <div class="nb-visualization-tabs">
                   <button class="nb-view nb-visualization-view" data-notebook-tab="map" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m7.7 6.2 8.6 4.6m0 2.4-8.6 4.6M6 8v8"></path><circle cx="6" cy="6" r="2"></circle><circle cx="18" cy="12" r="2"></circle><circle cx="6" cy="18" r="2"></circle></svg>Scheme map</button>
+                  <button class="nb-view nb-visualization-view" data-notebook-tab="guide" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 21V3m0 1h13l-4 4 4 4H5"></path></svg>Bounties</button>
                   <button class="nb-view nb-visualization-view" data-notebook-tab="timeline" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 4v16h16M5 16h5v-5h5V6h5"></path></svg>Timeline</button>
                 </div>
               </div>
@@ -144,6 +145,14 @@
               </div>
               <div class="nb-map-meta"></div>
               <div class="nb-map-placeholder"></div>
+            </section>
+            <section data-notebook-panel="guide" class="nb-guide-panel">
+              <div class="nb-guide-placeholder" aria-busy="true">
+                <div class="nb-guide-pending-heading"><h2>Research bounties</h2><button class="nb-button" type="button" disabled>Suggest a bounty</button></div>
+                <div class="nb-guide-pending-toolbar" aria-hidden="true"><span></span><span></span></div>
+                <div class="nb-guide-pending-grid" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+                <p class="nb-sr-only" role="status">Loading bounties…</p>
+              </div>
             </section>
             <section data-notebook-panel="timeline" class="nb-timeline-panel">
               <div class="nb-timeline-card">

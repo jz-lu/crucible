@@ -1,0 +1,95 @@
+Bounties: isolated integration record
+27 October 2026
+
+Product proposal: docs/bounties-proposal.txt.
+Route: Research notebook > Visualizations > Bounties, #notebook?view=guide.
+The existing guide route and research-guide asset names preserve prototype links.
+This branch is a draft, not a production bounty service.
+
+Provenance and scope
+
+Ported from the frozen 27 October prototype-input snapshot of the separate
+7ba33a71b2fffc3ea87be79e32c0936b521f467f prototype checkout, onto the accepted
+Notes integration base f5ce41f (including permanent references and queue caching). The integration includes
+only Bounties assets, notebook/shell navigation and loading frames, the existing
+protected-asset allowlist, and focused tests. Its preview launcher, database,
+authentication middleware, screenshots and verification scripts were not copied.
+
+Numeric Notes, migration changes and publication-queue caching belong to the
+separate accepted Notes integration. This port neither implements nor replaces
+them. Bounties have their own identity; source-note references are illustrative
+here and do not claim to resolve to real notebook records.
+
+Current interaction
+
+The open board shows six cards per page, with no task automatically selected.
+Research bounties is the heading; Open is the task status. Cards show the task,
+expected contribution, background, an Open-ended (1) to Concrete (5) annotation
+and example points. The default sort is More concrete first; open-ended first,
+highest points and lowest points retain the complete collection, sort before
+pagination, preserve stable ties and put unset values last. No search, rating
+filter, visibility-credit fee, seven-day deadline or comparison controls remain.
+
+Every example brief includes a proposed verification plan, checks and completion
+condition. A new proposal requires verification text and retains it through
+preview and local save. New proposals are unchecked, appear in Your bounties,
+and have no assigned points. The reward policy remains undecided.
+
+A selected card opens its own reader with brief, starting notes and contributions.
+Your bounties and Past bounties are secondary destinations. Claimed solutions
+begin with both poster and pipeline approval pending. The example poster can
+assess another person's example contribution to their own task; that does not
+override the independent pipeline result. The preconfigured example with both
+approvals can move to Past bounties. No points, credits or real records change.
+
+All eight tasks, people, notes and checks are fictional fixtures. The visible
+Example data label and action explanations identify the limitation. Each mounted
+account gets an in-memory copy. Nothing is sent to a bounty API, saved to a database,
+published, checked by a real pipeline or persisted across reload. An unknown
+local task after reload shows unavailable, rather than selecting another task.
+A production implementation still needs the separate versioned task/terms,
+verification, evidence permissions, decisions, durable drafts and award receipts
+described in the proposal. Ordinary note publication is not bounty completion.
+
+Ownership and integration
+
+The application owns session, admission, transport and routing. The notebook owns
+visualization selection, the existing protected asset loader and account/session
+epoch. Bounties owns only its sort, reader selection and transient local drafts.
+There is no second auth system, network client, persistence layer or global cache.
+
+URL fields are view=guide, sort=concrete|open|points-high|points-low,
+status=open|mine|past, page, question, detail=brief|notes|progress|contribute and
+compose=bounty. Old status=review maps to mine; old sort=guided maps to concrete.
+Obsolete filter/layout parameters are ignored. Sort and page survive reader
+return and Notes/Bounties navigation; draft text never enters a URL. Repeated
+show of an unchanged route preserves DOM and focus. Hide suspends actions;
+account/session change destroys local state and its unload handler. The port
+also checks the captured account/session before late asset mounting and local
+actions, so a session rotation cannot revive a detached draft.
+
+Three fixed JS/data/CSS paths remain member-only and no-store under the existing
+/notebook asset route. A public neutral loading frame contains no task text,
+counts, identities, claims or permission guesses. The lazy loader has an explicit
+retry. Notes, Map, Timeline and Review center retain their existing controllers;
+review mode does not activate the Bounties fixture. Bounty card tokens are scoped
+to the guide panel so accepted Notes styling is not replaced.
+
+Verification
+
+The new portable Node suite executes the real Bounties renderer and notebook
+controller: all sorts/ties/pagination, ignored legacy filters, exact reader return,
+verification text, unchecked proposals, independent approvals, unchanged-route
+focus, hidden/revoked actions, account/session invalidation, late asset completion,
+retry and review-mode exclusion. Existing notebook and initial-route suites cover
+neighboring behavior and inert pre-access frames. Focused Python checks verify all
+three protected asset bytes, media types, no-store behavior, anonymous denial and
+revocation, alongside existing public-asset/CSP checks. These use disposable
+portable fixtures; they do not establish native performance or hosted behavior.
+
+The browser suite also exercises the real local application in Chrome at 1440,
+390 and 320 pixels: board layout, sorting, history return, retained composer text,
+verification preview and local save, no bounty API writes, and reset on reload.
+Screenshots were inspected for desktop and narrow-mobile layout. The production
+bounty backend remains separate work. No deployment, provider changes or database
+migration was performed as part of this port.

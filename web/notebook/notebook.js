@@ -155,7 +155,7 @@
     } catch (error) { surface.remove(); throw error; }
   }
 
-  function mount(root, {navigate, api: requestAPI, account, session = () => null, currentReleases = () => [], mapFactory = mountResearchMap, prepareMapCatalogue = () => {}, reviewOnly = false}) {
+  function mount(root, {navigate, api: requestAPI, account, session = () => null, currentReleases = () => [], mapFactory = mountResearchMap, prepareMapCatalogue = () => {}, prepareGuide = async () => {}, reviewOnly = false}) {
     if (root.notebookController) return root.notebookController;
     let currentAccount = typeof account === 'function' ? account() : account;
     let accountId = currentAccount?.id == null ? null : String(currentAccount.id);
@@ -163,6 +163,7 @@
     let params = new URLSearchParams(), search = '', tag = '', visibility = 'all', previewId = null;
     let mapController = null, mapPreparation = null, mapIdle = null, mapRequest = 0, timelineRequest = 0, listLoaded = false, cardAction = 0;
     let curatedNotes = [], curatedLoaded = false, curatedPromise = null, timelinePreparation = null, indexPreparation = null;
+    let guideController = null;
     let pageCursors = [null], pageIndex = 0, knownPageCount = null, searchTimer = null;
     let currentSession = session(), readEpoch = 0, listStamp = null, timelineStamp = null, listRefreshing = false, warmEnabled = false;
     const readCache = new Map();
@@ -277,6 +278,7 @@
     const mapView = mark('map-view', button('Scheme map', () => navigateView('#notebook?view=map'), 'nb-view nb-visualization-view'));
     for (const event of ['pointerenter', 'focus']) mapView.addEventListener(event, () => { void prepareMap().catch(() => {}); });
     const timelineView = mark('timeline-view', button('Timeline', () => navigateView('#notebook?view=timeline'), 'nb-view nb-visualization-view'));
+    const guideView = mark('guide-view', button('Bounties', () => navigateView(guideController?.route() || '#notebook?view=guide'), 'nb-view nb-visualization-view'));
     for (const event of ['pointerenter', 'focus']) timelineView.addEventListener(event, prepareTimeline);
     function viewIcon(parts) {
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -291,12 +293,15 @@
     notesView.prepend(viewIcon([['rect',{x:5,y:3,width:14,height:18,rx:2}],['path',{d:'M9 8h6M9 12h6M9 16h4'}]]));
     mapView.prepend(viewIcon([['path',{d:'m7.7 6.2 8.6 4.6m0 2.4-8.6 4.6M6 8v8'}],['circle',{cx:6,cy:6,r:2}],['circle',{cx:18,cy:12,r:2}],['circle',{cx:6,cy:18,r:2}]]));
     timelineView.prepend(viewIcon([['path',{d:'M4 4v16h16M5 16h5v-5h5V6h5'}]]));
-    const visualizationTabs = el('div', 'nb-visualization-tabs'); visualizationTabs.append(mapView, timelineView);
+    guideView.prepend(viewIcon([['path',{d:'M5 21V3m0 1h13l-4 4 4 4H5'}]]));
+    const visualizationTabs = el('div', 'nb-visualization-tabs'); visualizationTabs.append(mapView, guideView, timelineView);
     visualizations.append(visualizationTabs); views.append(notesView, visualizations);
     const mapPanel = mark('map', el('section', 'nb-map-panel')); mapPanel.hidden = true;
     mapPanel.setAttribute('aria-label', 'Scheme map');
     const timelinePanel = mark('timeline', el('section', 'nb-timeline-panel')); timelinePanel.hidden = true;
     timelinePanel.setAttribute('aria-label', 'Notes over time');
+    const guidePanel = mark('guide', el('section', 'nb-guide-panel')); guidePanel.hidden = true;
+    guidePanel.setAttribute('aria-label', 'Research bounties');
     const noticeNode = mark('notice', el('div', 'nb-notice')); noticeNode.setAttribute('role', 'status'); noticeNode.hidden = true;
     const library = mark('library', el('section')); const toolbar = el('div', 'nb-toolbar');
     const searchLabel = el('label', 'nb-search'); searchLabel.append(el('span', 'nb-sr-only', 'Search notes'));
@@ -324,7 +329,7 @@
     const dialogHeading = el('div', 'nb-dialog-heading'); dialogHeading.append(mark('dialog-title', el('h2')), mark('close', button('×', () => closeDialog(), 'nb-close'))); q('close').setAttribute('aria-label', 'Close notebook editor');
     dialog.append(dialogHeading, mark('dialog-body', el('div')));
     if (reviewOnly) { root.classList.add('nb-review-workspace'); root.replaceChildren(noticeNode, library, full, dialog); }
-    else root.replaceChildren(heading, views, noticeNode, library, full, mapPanel, timelinePanel, dialog);
+    else root.replaceChildren(heading, views, noticeNode, library, full, mapPanel, timelinePanel, guidePanel, dialog);
     q('pagination').hidden = true;
 
     function notice(text, error = false) { q('notice').textContent = text; q('notice').hidden = !text; q('notice').classList.toggle('nb-error', error); }
@@ -353,12 +358,13 @@
       accountId = next; epoch++; request++; mapRequest++; timelineRequest++; listLoaded = false;
       q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy');
       q('timeline').replaceChildren();
+      guideController?.destroy(); guideController = null; q('guide').replaceChildren();
       curatedNotes = []; curatedLoaded = false; curatedPromise = null; resetPages(); clearTimeout(searchTimer); searchTimer = null;
       mapController?.destroy(); mapController = null; q('map').replaceChildren(); notes = []; nextAfter = null; previewId = null; search = ''; tag = ''; visibility = 'all'; filter.input.value = 'all';
       q('search').value = ''; q('filter').replaceChildren(); q('page').textContent = ''; humanHint.hidden = true;
       closeDialog(true); q('dialog-body').replaceChildren(); q('list').replaceChildren(); q('full').replaceChildren(); q('count').textContent = ''; q('pagination').hidden = true; notice('');
     }
-    function hide() { clearPageSpace(); clearViewSpace(); timelinePreparation = null; cancelMapPreparation(); clearTimeout(searchTimer); searchTimer = null; active = false; request++; mapRequest++; timelineRequest++; q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy'); q('timeline').replaceChildren(); mapController?.hide(); if (q('dialog').open) { suspendedDialog = true; q('dialog').close(); } }
+    function hide() { guideController?.hide(); clearPageSpace(); clearViewSpace(); timelinePreparation = null; cancelMapPreparation(); clearTimeout(searchTimer); searchTimer = null; active = false; request++; mapRequest++; timelineRequest++; q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy'); q('timeline').replaceChildren(); mapController?.hide(); if (q('dialog').open) { suspendedDialog = true; q('dialog').close(); } }
     const reviewUrl = (section, extra = {}) => '#reviews?' + new URLSearchParams({section, ...extra});
     function pageGuard() { const current = guard(), token = request; return () => current() && token === request; }
     function backToNotes() { return button(reviewOnly ? '← Publish requests' : '← Research notebook', () => navigate(reviewOnly ? reviewUrl('publication') : '#notebook'), 'nb-link nb-back'); }
@@ -370,16 +376,17 @@
       active = true; params = new URLSearchParams(nextParams);
       if (reviewOnly) { params.delete('view'); if (params.get('section') === 'research' || params.has('research') || params.has('research_request')) { params.set('research', '1'); params.set('research_review', '1'); params.delete('review'); } else params.set('review', '1'); }
       const inMap = params.get('view') === 'map';
-      const inTimeline = params.get('view') === 'timeline', inVisualization = inMap || inTimeline;
+      const inTimeline = params.get('view') === 'timeline', inGuide = params.get('view') === 'guide', inVisualization = inMap || inTimeline || inGuide;
       const inShared = !inVisualization && params.get('shared') === '1' && !params.has('note');
       if (inShared || params.get('filter') === 'shared') { params.delete('shared'); params.delete('state'); params.delete('filter'); visibility = 'all'; filter.input.value = 'all'; }
       request++; timelineRequest++;
-      for (const [control, selected] of [[notesView, !inVisualization], [mapView, inMap], [timelineView, inTimeline]]) {
+      for (const [control, selected] of [[notesView, !inVisualization], [mapView, inMap], [timelineView, inTimeline], [guideView, inGuide]]) {
         if (selected) control.setAttribute('aria-current', 'page'); else control.removeAttribute('aria-current');
       }
-      q('map').hidden = !inMap; q('timeline').hidden = !inTimeline;
+      q('map').hidden = !inMap; q('timeline').hidden = !inTimeline; q('guide').hidden = !inGuide;
       if (!inTimeline) q('timeline').replaceChildren();
       if (!inMap) mapController?.hide();
+      if (!inGuide) guideController?.hide();
       const nextReviewMode = reviewOnly && params.get('review') === '1';
       if (nextReviewMode !== reviewMode) resetPages();
       if (nextReviewMode && !reviewMode) { visibility = 'all'; filter.input.value = 'all'; search = ''; tag = ''; }
@@ -392,6 +399,7 @@
       if (!inTimeline) q('timeline').removeAttribute('aria-busy');
       q('new').disabled = !accountId; q('files').disabled = !accountId; q('publish-all').disabled = !accountId;
       if (!accountId) { q('list').replaceChildren(); q('full').replaceChildren(); notice('Sign in to read your notebook.'); return; }
+      if (inGuide) { await showGuide(); return; }
       if (inMap) { await showMap(); return; }
       if (inTimeline) { await showTimeline(); return; }
       if (inResearch) { if (params.has('research_request')) await readResearchRequest(params.get('research_request')); else await listResearchRequests(); return; }
@@ -406,6 +414,23 @@
         }).catch(() => {});
       }
       if (!reviewOnly && active && params.get('compose') === 'proposal' && !q('dialog').open) editNote(null, true);
+    }
+    async function showGuide() {
+      const owner = guard(), token = request, credential = currentSession;
+      const current = () => owner() && token === request && session() === credential && params.get('view') === 'guide';
+      if (!guideController) q('guide').replaceChildren(notebookPendingPart('[data-notebook-panel="guide"]', 'Loading bounties…'));
+      try {
+        await prepareGuide();
+        if (!current()) return;
+        if (!guideController) {
+          const ownerId = accountId, generation = epoch;
+          guideController = window.CrucibleResearchGuide.mount(q('guide'), {navigate:navigateView, settleScroll:clearViewSpace,
+            current: () => identity() === ownerId && epoch === generation && session() === credential});
+        }
+        guideController.show(params);
+      } catch (error) {
+        if (current()) q('guide').replaceChildren(el('p', 'nb-error', 'Bounties could not be loaded.'), button('Try again', showGuide, 'nb-button'));
+      }
     }
     function cancelMapPreparation() {
       if (mapIdle !== null) clearTimeout(mapIdle);
