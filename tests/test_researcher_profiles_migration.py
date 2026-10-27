@@ -8,6 +8,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import MetaData, inspect, select, text
 
+import crucible
 from crucible.db import Database
 from crucible.security import passwords, token_hash, verify_password
 
@@ -31,10 +32,36 @@ def migration_config(database_url, tmp_path, monkeypatch):
     monkeypatch.setenv("CRUCIBLE_ENV", "development")
     monkeypatch.setenv("CRUCIBLE_ACCESS_MODE", "open")
     monkeypatch.setenv("CRUCIBLE_MAIL_BACKEND", "disabled")
-    root = Path(__file__).resolve().parents[1]
+    # Native validation mounts tests at /tests, separately from /opt/crucible.
+    # Migrate the same installed source that Database/models below are using.
+    root = Path(crucible.__file__).resolve().parents[1]
     config = Config(str(root / "alembic.ini"))
     config.set_main_option("script_location", str(root / "migrations"))
     return config
+
+
+def test_migrations_resolve_installed_package_when_tests_are_mounted_separately(tmp_path, monkeypatch):
+    separate_test = tmp_path / "tests" / "test_researcher_profiles_migration.py"
+    separate_test.parent.mkdir()
+    separate_test.write_text("# Synthetic separately mounted test path.\n")
+    monkeypatch.setitem(migration_config.__globals__, "__file__", str(separate_test))
+    assert not (tmp_path / "migrations").exists()
+    url = f"sqlite:///{tmp_path / 'native-layout.db'}"
+    config = migration_config(url, tmp_path, monkeypatch)
+    root = Path(crucible.__file__).resolve().parents[1]
+    assert config.config_file_name == str(root / "alembic.ini")
+    assert config.get_main_option("script_location") == str(root / "migrations")
+    # Execute the real chain and reverse only the deliberately empty alias table.
+    command.upgrade(config, "0025")
+    db = Database(url)
+    try:
+        assert len(inspect(db.engine).get_table_names()) == 47
+        with db.engine.connect() as connection:
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0025"
+        command.downgrade(config, "0024")
+        assert "notebook_numbers" not in inspect(db.engine).get_table_names()
+    finally:
+        db.engine.dispose()
 
 
 def seed_original(connection, metadata):
