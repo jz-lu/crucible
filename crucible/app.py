@@ -28,6 +28,7 @@ from .access_policy import AccessPolicy
 from . import benchmark_reports, assumption_sheets, agent_guidance
 from .reference_policy import METHOD as REFERENCE_METHOD
 from . import github_auth, password_recovery, researcher_profiles
+from . import resource_publications
 
 
 SOURCE_REVISION_FILE = ROOT / "SOURCE_REVISION"
@@ -280,6 +281,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     public_assets = PublicAssets(ROOT / "web", frozen=settings.production)
     protected_assets = ProtectedAssets(ROOT / "web")
     app.add_middleware(RequestBoundary, settings=settings, clock=clock, db=db, policy=policy)
+    app.add_middleware(resource_publications.ResourceIngestBoundary, db=db, settings=settings, clock=clock)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.hosts)
 
     @app.exception_handler(DatabasePoolTimeout)
@@ -1052,6 +1054,10 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     def javascript(request: Request):
         return public_assets.response(request)
 
+    @app.get("/resource-metrics.js")
+    def resource_metrics_javascript(request: Request):
+        return public_assets.response(request)
+
     @app.get("/bootstrap.js")
     def bootstrap_javascript(request: Request):
         return public_assets.response(request)
@@ -1225,5 +1231,6 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     github_auth.register_routes(app, db, settings, clock, identity, issue_session, session_payload, password_operation, throttle)
     password_recovery.register_routes(app, db, settings, clock, identity, issue_session,
                                       session_payload, password_operation, throttle)
+    resource_publications.register_routes(app, db)
     policy.register(app.routes)
     return app

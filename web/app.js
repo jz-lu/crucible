@@ -83,7 +83,7 @@ let readViewEpoch = 0;
 let renderedReads = new WeakMap();
 function invalidateReadViews() {
   readViews.clear(); pendingReads.clear(); intendedReads.clear(); renderedReads = new WeakMap(); readViewEpoch++;
-  warmedReads.clear(); notebookEarlyReads.clear(); referenceTimings.clear();
+  warmedReads.clear(); notebookEarlyReads.clear(); referenceTimings.clear(); window.CrucibleResources?.clear();
   browseWarmScheduled = null; browseWarmIntent = null;
 }
 function primeRead(key, path) {
@@ -570,7 +570,7 @@ function renderAccessGate() {
 function clearProtectedState() {
   resetResearcherEditor();
   invalidateReadViews();
-  referenceTimings.clear();
+  referenceTimings.clear(); window.CrucibleResources?.clear();
   assumptionsWorkspace?.clear();
   notebookWorkspace?.setAccount(null);
   reviewNotebookWorkspace?.setAccount(null);
@@ -1367,7 +1367,7 @@ function setSession(data) {
     if (navigationProjection) state.catalogueLoaded = false;
   }
   if (previousId !== state.user?.id) {
-    referenceTimings.clear();
+    referenceTimings.clear(); window.CrucibleResources?.clear();
     assumptionsWorkspace?.clear();
     state.invitationDelivery = null;
     $('#access-code').value = '';
@@ -2757,6 +2757,9 @@ function renderOverviewChart(scheme, cardId) {
   const metric = state.overviewMetrics[cardId] || OVERVIEW_CARDS[cardId][0];
   const descriptor = {...OVERVIEW_METRICS[metric]};
   const target = $('#overview-chart-' + cardId);
+  if (window.CrucibleResources?.render({scheme, cardId, target, profiles: overviewProfiles(scheme),
+      profileId, profileLabel, stagePosition, named: namedParameters(scheme), api,
+      redraw: () => { if (hasAccess() && state.screen === 'overview' && selectedScheme()?.id === scheme.id && String(selectedScheme()?.version) === String(scheme.version)) renderOverviewChart(scheme, cardId); }})) return;
   const detailsOpen = target.querySelector('details')?.open === true;
   const timing = descriptor.kind === 'timing' ? referenceTimingState(scheme) : null;
   const card = target.closest('.overview-card');
@@ -2906,6 +2909,8 @@ function renderOverviewChart(scheme, cardId) {
   }
   if (descriptor.kind === 'timing') renderTimingDetails(target, scheme, metric);
   if (detailsOpen && target.querySelector('details')) target.querySelector('details').open = true;
+  window.CrucibleResources?.fallback({scheme, cardId, target, api,
+    redraw: () => { if (hasAccess() && state.screen === 'overview' && selectedScheme()?.id === scheme.id && String(selectedScheme()?.version) === String(scheme.version)) renderOverviewChart(scheme, cardId); }});
 }
 function renderOverview(scheme, contextProfile = null) {
   setText('#overview-title', scheme.name);
@@ -2960,6 +2965,11 @@ function renderOverview(scheme, contextProfile = null) {
     }
   }
   loadReferenceTimings(scheme);
+  window.CrucibleResources?.load(scheme, api, () => {
+    if (hasAccess() && state.screen === 'overview' && selectedScheme()?.id === scheme.id && String(selectedScheme()?.version) === String(scheme.version)) {
+      for (const id of ['public', 'cipher', 'computation']) renderOverviewChart(scheme, id);
+    }
+  });
   for (const id of Object.keys(OVERVIEW_CARDS)) renderOverviewChart(scheme, id);
   const overview = scheme.overview || {};
   for (const field of ['strengths', 'limitations']) {

@@ -184,8 +184,8 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.$('#overview-challenges').href, route(current, 'alpha-3'), 'Returning through Overview preserves the selected tier');
     const requests = app.requests.length;
     await app.navigate('#scheme/fixture-alpha/6');
-    assert.equal(app.requests.length, requests + 1);
-    assert.equal(app.requests.at(-1).url.pathname, '/api/protocol/benchmarks');
+    assert.equal(app.requests.length, requests + 2);
+    assert.deepEqual(app.requests.slice(-2).map(r => r.url.pathname), ['/api/protocol/benchmarks', '/api/protocol/resources']);
     assert.equal(app.requests.at(-1).url.searchParams.get('version'), '6');
     assert.match(app.$('#overview-release').textContent, /Archived release 6/);
     assert.equal(app.$('#overview-summary').textContent, 'Archived construction.');

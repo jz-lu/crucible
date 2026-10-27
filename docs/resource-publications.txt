@@ -1,0 +1,111 @@
+AUTOMATIC MEASURED RESOURCE PUBLICATIONS — schema 0026
+
+The measurement repository is countableclouds/crucible-schemes. Its reviewed
+publication/registry.json selects one main implementation per scheme release
+and maps all exact parameter configurations to existing website profile IDs.
+All 14 mapped releases and 395 parameter configurations have a protocol identity
+covering parameters, distributions, algorithms, encodings and KDF. A new main
+implementation does not change the website's protocol or challenge implementation.
+
+A relevant main-branch merge automatically measures the complete route, including
+RSS, stack and Massif, then audits receipts on a separate clean runner and sends
+a data-only ZIP. The measurement job cannot request publication credentials. The
+clean publisher presents a short-lived GitHub OIDC token; no shared site API key
+or participant credential is needed. Full author/runner instructions:
+https://github.com/countableclouds/crucible-schemes/blob/main/docs/PUBLICATION.md
+GitHub issuer and identity reference:
+https://docs.github.com/en/actions/reference/security/oidc
+
+The site pins the repository ID, owner ID, main ref, exact publishing workflow,
+source commit, run/attempt and destination-specific audience. It checks signatures
+against GitHub's fixed issuer keys. It admits neither PR/fork tokens nor tokens
+from another workflow. Both old and immutable GitHub subject formats are
+explicitly supported. Uploads have a 64 MiB compressed / 128 MiB expanded limit,
+exact inventory checks, safe paths, complete measurement schedules and matching
+website protocol identities. The site does not execute uploaded source or render
+uploaded HTML. Authentication establishes workflow provenance; numeric receipt
+audit occurs in the clean producer job. Neither is independent reproduction.
+
+Schema and data lifetime
+
+0026 adds resource_publications, an append-only table with a unique workflow-run
+binding, indexed scheme ID, source/measurement JSON and deferred binary ZIP.
+It changes no account, note, challenge, recovery, scoring or cryptographic table.
+It adds no sequence. Runtime needs existing table SELECT/INSERT privileges;
+backup needs SELECT. Verify the actual migration owner's table/default grants.
+Normal reads do not select the ZIP column; downloads retrieve it explicitly.
+PostgreSQL stores it durably, independent of app restarts/deployments. Both
+projection and ZIP must be included in backups. Publications are not pruned yet;
+monitor storage and backup size. Evidence can later move to immutable object
+storage without changing profile identities or the API projection.
+
+Repeated identical uploads return the retained receipt. A conflicting payload
+for the same run/attempt/release is rejected. Current is the greatest GitHub
+run ID, then attempt, for that construction: late older jobs cannot roll back a
+newer report. Failed or partial runs leave the last completed report current.
+Publication date, commit, workflow and evidence remain visible. The UI does not
+yet show queued/running/failed workflow status. Removing a repository binding
+stops future updates without deleting historical evidence.
+
+Deployment sequence (not an ordinary schema-unchanged release)
+
+1. Complete source CI and the exact native image gate with Promote disabled.
+   Retain the tested candidate's immutable image and source receipts. The native
+   contract pins the two new modules, migration and Alembic model registration;
+   it preserves existing native/dependency/protocol pins. No migration runs in
+   the resource workflow or the release workflow.
+2. Follow the existing operator backup/restore process for the actual current
+   schema, including 0025's permanent note-number sequence. Take and restore-test
+   a current encrypted backup before changing the hosted database. Check existing
+   runtime/backup grants for the new table. Do not replace keys, reinitialize
+   accounts, reconstruct note numbers or use a developer SQLite database.
+3. Apply the normal reviewed Alembic upgrade to 0026 with the migration role.
+   Verify exact head, all retained rows and backup visibility. The application
+   startup policy requires its exact migration head: an older image cannot be
+   assumed restart-compatible. Coordinate this with the prepared new image;
+   use the established bridge/operator process if zero-downtime rollout requires
+   both schemas. Do not promote before this prerequisite is satisfied.
+4. Deploy the exact tested source/image. Set CRUCIBLE_RESOURCE_PUBLISHING=true
+   on the existing application; false (default) rejects all upload requests.
+   No other origin/database/mail/access/domain settings need changing. Set the
+   measurement repo variable CRUCIBLE_RESOURCE_ORIGIN to the site's canonical
+   HTTPS origin without a trailing slash. This is public configuration, not a
+   secret. The OIDC audience must match that origin plus /api/resource-publications.
+5. Dispatch one approved binding with publish=true. Verify /api/protocol/resources
+   through a member session, its plotted values and evidence download. Check that
+   anonymous resource/evidence reads are denied and other API writes reject the
+   publishing token. Then initialize the remaining approved bindings. Relevant
+   merges subsequently update measurements and graphs without another site build.
+
+Rollback: preserve published evidence. A data-only rollback selects an earlier
+implementation in a new reviewed measurement-repo commit and measures it again.
+A website rollback must use an image compatible with schema 0026 or a separately
+reviewed preservation plan. The migration refuses downgrade when publications
+exist. Never discard evidence merely to make an old startup check pass.
+
+Interface and interaction model
+
+GET /api/protocol/resources?scheme_id=...&version=... selects one retained main
+publication. Its data cannot overwrite the website's security/correctness claims.
+GET /api/resource-publications/{sha256}/download returns the ZIP as an attachment.
+Both follow the existing member-read policy; agent scopes are not broadened.
+The one exact POST /api/resource-publications accepts only workflow identity,
+never cookies/origin/browser authorization, and is isolated from agent scopes.
+It authenticates before buffering and has its own bounded upload deadline.
+
+The four website cards remain. Public-key/ciphertext views include fresh/cached
+exchange costs; private-key storage is explicitly labelled local storage. The
+computation card selects operation time, first-call time, process RAM, stack,
+or simultaneously tracked heap+stack. It never adds independent maxima or calls
+an observed peak a device RAM-fit bound. One comparison profile is selected at
+a time; other methods remain gaps. Native time excludes instrumented execution.
+
+Resource data is scoped to the exact release and browser account/session. Warm
+returns paint retained measurements and revalidate after 60 seconds. Clear it
+with other protected caches; retired requests cannot update a new account or
+selection. Dropdown changes retain keyboard focus. Explicit refresh is available
+in Values, method & source. A failed refresh retains the previous publication;
+a failed first load reports the failure alongside legacy reference data. No
+publication means the existing graph path remains active. Security stays on its
+existing evidence model. No security, correctness or constant-time certification
+is inferred from measurements or from repository authentication.

@@ -37,7 +37,7 @@ CONTENT_SECURITY_POLICY = (
 
 PUBLIC_FILES = (
     '/styles.css', '/app.js', '/bootstrap.js', '/math.js', '/assumptions.js',
-    '/proposal-retractions.js', '/assets/crucible-logo.png',
+    '/proposal-retractions.js', '/resource-metrics.js', '/assets/crucible-logo.png',
 )
 
 PROTECTED_FILES = {

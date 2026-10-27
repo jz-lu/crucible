@@ -9,6 +9,7 @@ from sqlalchemy import pool
 from alembic import context
 from crucible.config import load_settings
 from crucible.db import Base
+from crucible import resource_publications  # Immutable measured resource releases.
 from crucible import research  # Register versioned research tables in metadata.
 from crucible import protocol_proposals  # Register private intake records in metadata.
 from crucible import scoring_awards  # Register explicit scheme admission credits.

@@ -8,7 +8,7 @@ from starlette.routing import Mount
 
 PUBLIC = {
     ("GET", "/"), ("GET", "/styles.css"), ("GET", "/app.js"), ("GET", "/bootstrap.js"),
-    ("GET", "/math.js"), ("GET", "/assumptions.js"), ("GET", "/proposal-retractions.js"), ("GET", "/assets/crucible-logo.png"),
+    ("GET", "/math.js"), ("GET", "/assumptions.js"), ("GET", "/proposal-retractions.js"), ("GET", "/resource-metrics.js"), ("GET", "/assets/crucible-logo.png"),
     ("GET", "/health"), ("GET", "/api/session"), ("GET", "/api/agent/client"),
     ("POST", "/api/auth/register"), ("POST", "/api/auth/login"),
     ("POST", "/api/auth/logout"), ("POST", "/api/agent/connect/start"),
@@ -24,6 +24,7 @@ PUBLIC = {
 # Explicit paths from the existing application. This is deliberately not a
 # prefix exemption: adding a route requires choosing its audience here.
 MEMBER_PATHS = {
+    "/api/protocol/resources", "/api/resource-publications/{publication_id}/download",
     "/api/agent/pipeline", "/api/agent/guidance/{resource_name}",
     "/api/agent/notes", "/api/agent/notes/{note_id}", "/api/agent/notes/{note_id}/rating",
     "/openapi.json", "/api/schemes", "/api/challenges",
