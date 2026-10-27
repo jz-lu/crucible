@@ -193,7 +193,7 @@ jobs:
           python -m pip install -r requirements.lock
           python -m pip install --no-deps -e .
       - name: Compare fresh synthetic metadata and scoring queries
-        run: python -m pytest -q tests/test_metadata_relations.py
+        run: python -m pytest -q tests/test_metadata_relations.py tests/test_researcher_profiles_postgresql.py::test_pg17_migration_preserves_0023_data_and_applies_owner_runtime_grants
       - name: State verification boundary
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'

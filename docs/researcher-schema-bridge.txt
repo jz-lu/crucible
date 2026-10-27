@@ -1,0 +1,29 @@
+Schema-0024 rollback bridge — candidate image, not automatic deployment
+======================================================================
+
+This branch retains the existing website and APIs from live source 0de679e while
+adding the reviewed researcher_profiles module, model registration in Alembic,
+and additive migration 0024. It does not register the new profile endpoints or
+expose the new profile editor. No existing tables or records are rewritten.
+
+Its purpose is a compatible rollback after the operator migrates beta to 0024.
+The old 0023 image cannot restart afterward because of exact-head checking. This
+bridge preserves that check and packages head 0024; it must not be deployed before
+the migration. Do not use a database downgrade to roll back saved profiles.
+
+Build this candidate using Publish=true, Promote=false. Retain its immutable
+digest, exact source and release evidence. Never promote this branch to beta
+automatically or merge it over the feature's UI. If needed after migration, the
+reviewed operator may select the verified immutable image in the existing app,
+preserving all environment values and the original database/server secret.
+
+Native schema checks cover upgrade preservation and old member-read behavior.
+The fixed PostgreSQL 17 CI service exercises the migration/grant test; feature
+API races are deliberately not selected because this bridge has no profile API.
+The actual hosted target/role/backup grants still require operator verification.
+
+This branch shares the feature's three exact reviewed schema/module hashes.
+The original runtime base, dependency closure, cryptographic manifests, existing
+four overlays, backup declaration and all 32 releases/1,466 profiles stay unchanged.
+No hosted migration, publication or verified rollback image is implied merely
+by committing this candidate source.

@@ -503,15 +503,19 @@
       "test_read_performance.py",
       "test_busy_http.py"
     ],
+    "generation-lifecycle": [
+      "test_generation_concurrency.py"
+    ],
     "projections-math": [
       "test_scheme_projections.py",
       "test_math_assets.py"
     ],
-    "generation-lifecycle": [
-      "test_generation_concurrency.py"
-    ],
     "records": [
       "test_milestones.py"
+    ],
+    "researcher-schema": [
+      "test_researcher_profiles_migration.py",
+      "test_researcher_schema_bridge.py"
     ],
     "scoring": [
       "test_scoring_weights.py"
@@ -721,7 +725,10 @@
   "reviewed_overlay_files": {
     "crucible/config.py": "52a7f6dc13967a47ebac54bb7c1919215ce746b63d73c5be10f3b6dde42d5ce9",
     "crucible/data/approved_beta_releases.json": "d866a822cb468ac8284a941ba797ac1c87a2d94175c305dca08af41ebd67fe0a",
-    "scripts/beta_preflight.py": "8511519397e79bbfc0e179b77a670507a19c4a558c46a75cd4de80880ed404d3",
-    "docs/beta-release-policy.txt": "549c69ce412bde8de427c755959450ce0cbaaf87c2c63297468eb864d2375c8a"
+    "crucible/researcher_profiles.py": "18e50b6ee29c0931346ba794f10e52530e461b2ba0f646d9832c28eb02d715cb",
+    "docs/beta-release-policy.txt": "549c69ce412bde8de427c755959450ce0cbaaf87c2c63297468eb864d2375c8a",
+    "migrations/env.py": "c3f962b029b905ff0e2e065c97867fdf3535392e918adfc2c491cef8a6e90b82",
+    "migrations/versions/0024_researcher_profiles.py": "669f3cf7e95618cf245dce4d10d0133a085330d920d189958f31be48b49cbf29",
+    "scripts/beta_preflight.py": "8511519397e79bbfc0e179b77a670507a19c4a558c46a75cd4de80880ed404d3"
   }
 }
