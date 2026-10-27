@@ -87,11 +87,13 @@ for(const {width,actor,label,handle:requestedHandle,reviewer=false} of profiles)
       await expect(page.locator('#researcher-profile-summary')).toBeHidden();
       sameFrame(await frame(target),initial,'profile pending');
       if(actor==='bob') {
+        await expect(page.locator('#profile-account')).toBeHidden();
         await expect(page.locator('#account-sign-in')).toBeHidden();
         await expect(page.locator('#agent-connections')).toBeHidden();
       } else {
         // These controls are authorized by the completed fresh session, not
         // by the independent public profile-statistics response.
+        await expect(page.locator('#profile-account')).toBeVisible();
         await expect(page.locator('#account-sign-in')).toBeVisible();
         await expect(page.locator('#agent-connections')).toBeVisible();
       }
@@ -103,7 +105,7 @@ for(const {width,actor,label,handle:requestedHandle,reviewer=false} of profiles)
       expect(reads.filter(value=>value.startsWith('/api/')&&!['/api/session','/api/schemes','/api/people/'+handle].includes(value))).toEqual([]);
       profile.release();await profile.delivered;
       await expect(target.locator('.person-preview')).toHaveCount(0);
-      await expect(target.locator('.person-stats dd')).toHaveText(['0','0']);
+      await expect(target.locator('.person-stats > div > dd')).toHaveText(['0','0']);
       await expect(target.locator('.person-disclosure')).toHaveCount(3);
       await expect(target.locator('.person-disclosure[open]')).toHaveCount(0);
       sameFrame(await frame(target),initial,'profile ready');

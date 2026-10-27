@@ -1886,6 +1886,7 @@ async function decideConnection(action) {
 function resetAgentSettings() {
   state.agentTokenRequest++;
   state.agentTokens = []; state.agentTokenPagination = null;
+  $('#profile-account').hidden = true;
   $('#agent-connections').hidden = true;
   $('#agent-connections').open = false;
   $('#agent-token-list').replaceChildren();
@@ -1894,7 +1895,8 @@ function ownsViewedProfile() {
   return state.screen === 'person' && state.user && state.personHandle?.toLowerCase() === state.user.handle.toLowerCase();
 }
 function renderAgentSettings() {
-  if (!ownsViewedProfile()) return resetAgentSettings();
+  if (!ownsViewedProfile() || !hasAccess()) return resetAgentSettings();
+  $('#profile-account').hidden = false;
   $('#agent-connections').hidden = false;
 }
 async function loadAgentTokens(more = false) {
@@ -2187,10 +2189,37 @@ function personStats(person) {
   for (const [label, key] of [['Points', 'points'], ['Accepted proposals', 'accepted_proposal_count']]) {
     const value = node('dd', person ? peopleNumber(person[key], key === 'points' ? 'Pending' : '—') : undefined);
     if (!person) value.append(node('span', undefined, 'catalogue-placeholder'));
-    const stat = node('div'); stat.append(node('dt', label), value); stats.append(stat);
+    const term = node('dt', label);
+    if (key === 'points' && person?.score_breakdown) term.append(personScoreBreakdown(person));
+    const stat = node('div'); stat.append(term, value); stats.append(stat);
   }
   return stats;
 }
+function personScoreBreakdown(person) {
+  const breakdown = node('details', undefined, 'person-score-breakdown');
+  const summary = node('summary', '?');
+  summary.setAttribute('aria-label', 'Points breakdown');
+  const panel = node('div', undefined, 'person-score-help-panel');
+  const values = node('dl', undefined, 'person-score-parts');
+  for (const [label, key] of [['Personal progress', 'progress'], ['First-record bonus', 'early_recovery'], ['Accepted proposals', 'scheme_contributions'], ['Research notes', 'note_contributions']]) {
+    const part = node('div'); part.append(node('dt', label), node('dd', peopleNumber(person.score_breakdown[key]))); values.append(part);
+  }
+  panel.append(values);
+  panel.append(node('p', 'Each eligible scheme offers up to 500 personal-progress points and 2,000 points for your best first record. Configuration weights are fixed by the points policy; equal points do not imply equal attack difficulty. Each explicitly admitted new scheme earns 1,000 points.'));
+  panel.append(node('p', 'Intermediate stages and repeated solves do not accumulate extra points. Archived releases keep their records and are labelled when they are not scored. This is the provisional points policy.'));
+  panel.append(node('p', 'Research-note contributions earn 1 or 2 points per supporting account through agent ratings. Changed or removed ratings update that credit. These points do not certify a claim or admit a scheme.'));
+  breakdown.append(summary, panel);
+  breakdown.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || !breakdown.open) return;
+    event.preventDefault(); event.stopPropagation();
+    breakdown.open = false; summary.focus({preventScroll: true});
+  });
+  return breakdown;
+}
+document.addEventListener('pointerdown', event => {
+  const help = $('#person-content').querySelector('.person-score-breakdown[open]');
+  if (help && !help.contains(event.target)) help.open = false;
+});
 function personPreview() {
   // Only reserve quiet space: optional member metadata has unknown height.
   // Show metadata and scores together rather than moving provisional cards.
@@ -2376,19 +2405,6 @@ function renderPerson(person) {
   renderResearcherProfile(person.researcher_profile);
   target.replaceChildren(personStats(person));
   if (!Number.isFinite(person.points)) target.append(node('p', 'Scoring is being finalized. Verified results are recorded below.', 'people-score-note'));
-  if (person.score_breakdown) {
-    const breakdown = node('details', undefined, 'person-score-breakdown');
-    breakdown.append(node('summary', 'Points breakdown'));
-    const values = node('dl', undefined, 'person-score-parts');
-    for (const [label, key] of [['Personal progress', 'progress'], ['First-record bonus', 'early_recovery'], ['Accepted proposals', 'scheme_contributions'], ['Research notes', 'note_contributions']]) {
-      const part = node('div'); part.append(node('dt', label), node('dd', peopleNumber(person.score_breakdown[key]))); values.append(part);
-    }
-    breakdown.append(values);
-    breakdown.append(node('p', 'Each eligible scheme offers up to 500 personal-progress points and 2,000 points for your best first record. Configuration weights are fixed by the points policy; equal points do not imply equal attack difficulty. Each explicitly admitted new scheme earns 1,000 points.'));
-    breakdown.append(node('p', 'Intermediate stages and repeated solves do not accumulate extra points. Archived releases keep their records and are labelled when they are not scored. This is the provisional points policy.'));
-    breakdown.append(node('p', 'Research-note contributions earn 1 or 2 points per supporting account through agent ratings. Changed or removed ratings update that credit. These points do not certify a claim or admit a scheme.'));
-    target.append(breakdown);
-  }
   target.append(renderFirstRecords(person));
   const {section: records, content: recordContent} = personDisclosure('Personal records',
     `${peopleNumber(person.records?.length || 0)} scheme${person.records?.length === 1 ? '' : 's'}`);

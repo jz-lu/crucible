@@ -226,8 +226,8 @@
         <button id="more-people" class="button button-quiet people-more" type="button" hidden>Load more</button>
       </section>
       <section id="person-workspace" class="person-workspace" aria-labelledby="person-title" tabindex="-1" hidden>
-        <div class="profile-backline"><a class="text-button scheme-back" href="#people">← Leaderboard</a><a id="profile-review-link" class="text-button" href="#reviews?section=publication" hidden>Review center →</a><button id="edit-researcher-profile" class="text-button" type="button" aria-expanded="false" aria-controls="researcher-profile-editor" hidden>Edit profile</button></div>
-        <div class="catalogue-heading"><h1 id="person-title">Profile</h1></div>
+        <div class="profile-backline"><a class="text-button scheme-back" href="#people">← Leaderboard</a><a id="profile-review-link" class="text-button" href="#reviews?section=publication" hidden>Review center →</a></div>
+        <div class="catalogue-heading profile-heading"><h1 id="person-title">Profile</h1><button id="edit-researcher-profile" class="button button-quiet profile-edit" type="button" aria-expanded="false" aria-controls="researcher-profile-editor" hidden>Edit profile</button></div>
         <div id="researcher-profile-summary" class="researcher-profile-summary" hidden></div>
         <section id="researcher-profile-editor" class="researcher-profile-editor" aria-labelledby="researcher-profile-title" hidden>
           <div class="researcher-profile-editor-heading"><h2 id="researcher-profile-title">Edit profile</h2><button id="close-researcher-profile" class="text-button" type="button">Close</button></div>
@@ -247,19 +247,28 @@
           </form>
         </section>
         <div id="person-content" aria-live="polite"></div>
-        <details id="account-sign-in" class="account-sign-in" hidden>
-          <summary>Sign-in settings</summary>
-          <div class="account-sign-in-row">
-            <div><strong>GitHub</strong><p id="account-github-status" class="field-hint"></p></div>
-            <button id="account-link-github" class="button button-quiet" type="button">Link GitHub</button>
+        <section id="profile-account" class="profile-account" aria-labelledby="profile-account-title" hidden>
+          <h2 id="profile-account-title">Account</h2>
+          <div class="profile-account-grid">
+            <details id="account-sign-in" class="account-sign-in profile-account-option" hidden>
+              <summary>Sign-in settings</summary>
+              <div class="profile-account-body">
+                <div class="account-sign-in-row">
+                  <div><strong>GitHub</strong><p id="account-github-status" class="field-hint"></p></div>
+                  <button id="account-link-github" class="button button-quiet" type="button">Link GitHub</button>
+                </div>
+                <p id="account-sign-in-error" class="form-error" role="alert" hidden></p>
+              </div>
+            </details>
+            <details id="agent-connections" class="agent-connections profile-account-option" hidden>
+              <summary>Connected agents</summary>
+              <div class="profile-account-body">
+                <div class="agent-connections-heading"><button id="refresh-agent-tokens" class="text-button" type="button">Refresh</button></div>
+                <div id="agent-token-list" aria-live="polite"></div>
+              </div>
+            </details>
           </div>
-          <p id="account-sign-in-error" class="form-error" role="alert" hidden></p>
-        </details>
-        <details id="agent-connections" class="agent-connections" hidden>
-          <summary>Connected agents</summary>
-          <div class="agent-connections-heading"><button id="refresh-agent-tokens" class="text-button" type="button">Refresh</button></div>
-          <div id="agent-token-list" aria-live="polite"></div>
-        </details>
+        </section>
       </section>
       <section id="connect-workspace" class="connect-workspace" aria-labelledby="connect-title" tabindex="-1" hidden>
         <div class="catalogue-heading"><h1 id="connect-title">Connect an agent</h1></div>

@@ -27,6 +27,21 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({width, height: 900});
     const original = await owner(page);
     try {
+      const help = page.locator('.person-score-breakdown > summary');
+      await expect(help).toHaveAccessibleName('Points breakdown');
+      await expect(help).toHaveText('?');
+      await help.focus(); await page.keyboard.press('Enter');
+      await expect(page.locator('.person-score-help-panel')).toBeVisible();
+      await page.evaluate(() => loadPerson(state.personHandle, {preserve: true}));
+      await expect(help).toBeFocused();
+      await expect(page.locator('.person-score-help-panel')).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+      await page.screenshot({path: testInfo.outputPath('profile-points-help.png'), fullPage: true});
+      await page.keyboard.press('Escape');
+      await expect(page.locator('.person-score-help-panel')).toBeHidden();
+      await expect(help).toBeFocused();
+      await help.click(); await page.locator('#person-title').click();
+      await expect(page.locator('.person-score-help-panel')).toBeHidden();
       await edit(page);
       await page.locator('#researcher-affiliation').fill('Example Institute for Cryptographic Research');
       await page.locator('#researcher-position').fill('Research fellow');
