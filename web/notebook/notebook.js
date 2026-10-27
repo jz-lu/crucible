@@ -297,7 +297,7 @@
     const noticeNode = mark('notice', el('div', 'nb-notice')); noticeNode.setAttribute('role', 'status'); noticeNode.hidden = true;
     const library = mark('library', el('section')); const toolbar = el('div', 'nb-toolbar');
     const searchLabel = el('label', 'nb-search'); searchLabel.append(el('span', 'nb-sr-only', 'Search notes'));
-    const searchInput = mark('search', el('input')); searchInput.type = 'search'; searchInput.maxLength = 200; searchInput.placeholder = 'Search titles, summaries or tags…'; searchLabel.append(searchInput);
+    const searchInput = mark('search', el('input')); searchInput.type = 'search'; searchInput.maxLength = 200; searchInput.placeholder = 'Search titles, tags or #number…'; searchLabel.append(searchInput);
     const filter = field('Show', 'visibility', 'all', {options: [{value:'all', label:'All notes'}, {value:'mine', label:'My notes'}, {value:'human', label:'Human-written'}, {value:'proposals', label:'Proposals'}, {value:'research', label:'Literature'}, {value:'trash', label:'Trash'}]}); filter.wrap.classList.add('nb-visibility-filter');
     filter.input.addEventListener('change', () => { visibility = filter.input.value; changeQuery(); });
     toolbar.append(searchLabel, filter.wrap, mark('filter', el('span')), mark('count', el('span', 'nb-count')));
@@ -598,7 +598,8 @@
       if (curatedPromise) return curatedPromise;
       const owner = accountId, generation = epoch;
       const task = (async () => {
-        const workspace = window.TheoryStore.validateSnapshot(await api('/map/notes.json'));
+        const [snapshot, references] = await Promise.all([api('/map/notes.json'), api('/api/notebook/curated-note-numbers')]);
+        const workspace = window.TheoryStore.validateSnapshot(snapshot);
         const records = await Promise.all(workspace.notes.map(async source => {
           const revisions = await Promise.all(source.revisions.map(async original => {
             const content = Object.fromEntries(['title','claim','conditions','body','tags','kind','references','artifacts','extensions'].filter(key => original[key] !== undefined).map(key => [key, original[key]]));
@@ -610,7 +611,7 @@
           const latest = revisions[revisions.length - 1];
           // Bundled research is a read-only source, never an attributed user
           // submission or a fabricated sharing approval.
-          return {id:'curated:' + source.id, source_id:source.id, source_kind:'curated-research',
+          return {id:'curated:' + source.id, number:references.numbers?.['curated:' + source.id], source_id:source.id, source_kind:'curated-research',
             owner:null, can_edit:false, can_review:false, created_at:revisions[0].created_at,
             ...latest, revisions, revision_count:revisions.length};
         }));
@@ -819,6 +820,7 @@
     }
 
     function statusLabel(status) { return ({curated:'Curated note', private:'Private', submitted:'Publish request pending', approved:'Published', withdrawn:'Withdrawn by moderator', changes_requested:'Private · changes requested before publication'})[status] || 'Private'; }
+    function noteNumber(note) { return Number.isSafeInteger(note.number) && note.number > 0 ? '#' + String(note.number).padStart(4, '0') : ''; }
     const ownsNote = note => accountId !== null && String(note.owner?.id) === accountId && note.can_edit === true;
     const canPublish = (note, revision) => ownsNote(note) && revision?.publication_status === 'private' && revision.revision === latestRevision(note)?.revision;
     const revisionStatusLabel = (note, revision) => note.deletion ? 'In Trash' : statusLabel(revision.publication_status);
@@ -877,7 +879,10 @@
         const title = button('', () => { previewId = expanded ? null : note.id + ':' + shown.revision; if (!expanded) prepareNote(note, visibility === 'proposals' && proposal ? proposal.revision : null); renderList(); root.querySelectorAll('.nb-title')[index]?.focus({preventScroll:true}); }, 'nb-title');
         title.setAttribute('aria-expanded', String(expanded)); title.setAttribute('aria-controls', (reviewOnly ? 'nb-review-preview-' : 'nb-preview-') + index);
         const marker = el('span', 'nb-marker', expanded ? '−' : '+'); marker.setAttribute('aria-hidden', 'true');
-        const copy = el('span', 'nb-title-copy'); copy.append(el('span', '', r.title), status(note, shown, proposal)); title.append(copy, marker); heading.append(title);
+        const trailing = el('span', 'nb-title-trailing'), number = noteNumber(note);
+        if (expanded && number) { const reference = el('span', 'nb-note-number', number); reference.title = 'Permanent note number. Search ' + number + ' to find this note.'; trailing.append(reference); }
+        trailing.append(marker);
+        const copy = el('span', 'nb-title-copy'); copy.append(el('span', '', r.title), status(note, shown, proposal)); title.append(copy, trailing); heading.append(title);
         const headingRow = el('div', 'nb-entry-heading'), actions = el('div', 'nb-card-actions');
         headingRow.append(heading, actions); item.append(headingRow);
         if (!reviewOnly && ownsNote(note)) {
@@ -1043,6 +1048,12 @@
       const r = revision.content, heading = el('h2', 'nb-full-title', r.title); heading.tabIndex = -1;
       const headingRow = el('div', 'nb-reader-heading');
       const noteActions = el('div', 'nb-note-actions');
+      const number = noteNumber(note);
+      if (number) {
+        const reference = button(number, () => citeNote(note, revision), 'nb-note-number nb-number-action');
+        reference.title = 'Cite ' + number + ' · revision ' + revision.revision;
+        reference.setAttribute('aria-label', 'Cite note ' + number + ', revision ' + revision.revision); noteActions.append(reference);
+      }
       if (!reviewOnly && ownsNote(note)) {
         noteActions.append(button('Edit', () => editNote(note), 'nb-button'));
         if (canPublish(note, revision)) noteActions.append(button('Publish', () => publicationDialog(note, revision), 'nb-button'));
@@ -1334,11 +1345,13 @@
     function citeNote(note, revision) {
       const container = openDialog('Cite this note'), present = dialogGuard();
       const link = url(note.id, revision.revision) + '&sha256=' + encodeURIComponent(revision.content_sha256);
-      const reference = {title:revision.content.title + ' · revision ' + revision.revision, url:'/' + link, scope:'', relation:'cites'};
+      const number = noteNumber(note);
+      const reference = {title:(number ? number + ' · ' : '') + revision.content.title + ' · revision ' + revision.revision, url:'/' + link, scope:'', relation:'cites'};
       const source = field('Exact revision link', 'citation-link', new URL(window.location.href).origin + '/' + link);
       source.input.readOnly = true;
       const summary = el('p', 'nb-hint'); summary.setAttribute('role', 'status');
       const copy = (text, message) => async () => { try { await navigator.clipboard.writeText(text); if (present()) summary.textContent = message; } catch (_) { if (present()) summary.textContent = 'Select and copy the text below.'; } };
+      if (number) container.append(el('p', 'nb-citation-number', number + ' · revision ' + revision.revision));
       container.append(el('p', 'nb-hint', 'Paste this link into another note’s Citations. It pins the revision and content hash; it does not change who can read the note.'), source.wrap, button('Copy citation link', copy(source.input.value, 'Citation link copied.')));
       const details = el('details', 'nb-details'); details.append(el('summary', '', 'For an agent'));
       const text = JSON.stringify(reference, null, 2);

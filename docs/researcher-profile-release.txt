@@ -1,3 +1,8 @@
+Combined release now targets schema 0025. This document describes the historic
+0024 researcher-profile component only. Follow docs/notebook-number-release.txt
+for the combined migration, sequence grants, recovery and exact-head startup
+requirements; a 0024 bridge/operator packet alone is insufficient.
+
 Researcher profiles: reviewed schema transition 0023 to 0024
 ==========================================================
 

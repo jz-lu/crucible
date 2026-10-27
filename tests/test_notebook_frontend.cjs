@@ -50,7 +50,7 @@ async function boot({account=user,respond,stored=null,mapFactory,currentReleases
   app.sandbox.window.confirm=()=>true;app.sandbox.crypto.randomUUID=(()=>{let i=0;return()=>`key-${++i}`;})();
   for(const file of ['store.js','seed.js','notebook.js'])vm.runInContext(fs.readFileSync(path.join(rootPath,'web/notebook',file),'utf8'),app.sandbox,{filename:file});
   const root=app.$('#notebook-workspace');
-  const api=async(url,body,options)=>{requests.push({url,body,options});if(respond){const result=await respond(url,body,options);if(result!==undefined)return url==='/map/notes.json'?vm.runInContext('('+JSON.stringify(result)+')',app.sandbox):result;}if(url==='/notebook/request-types.json')return requestTypes;if(url.startsWith('/api/notebook/research-requests?source_note_id='))return{requests:[],next_after:null};if(url==='/map/notes.json')return vm.runInContext('('+JSON.stringify(researchWorkspace)+')',app.sandbox);if(url.startsWith('/api/notebook/notes?'))return summaryPage(url,researchWorkspace.notes.map(curatedSummary));if(url.startsWith('/api/notebook/notes/note-one'))return{note:note()};throw Error('Unexpected '+url);};
+  const api=async(url,body,options)=>{requests.push({url,body,options});if(respond){const result=await respond(url,body,options);if(result!==undefined)return url==='/map/notes.json'?vm.runInContext('('+JSON.stringify(result)+')',app.sandbox):result;}if(url==='/notebook/request-types.json')return requestTypes;if(url==='/api/notebook/curated-note-numbers')return{numbers:Object.fromEntries(researchWorkspace.notes.map((source,index)=>['curated:'+source.id,index+1]))};if(url.startsWith('/api/notebook/research-requests?source_note_id='))return{requests:[],next_after:null};if(url==='/map/notes.json')return vm.runInContext('('+JSON.stringify(researchWorkspace)+')',app.sandbox);if(url.startsWith('/api/notebook/notes?'))return summaryPage(url,researchWorkspace.notes.map(curatedSummary));if(url.startsWith('/api/notebook/notes/note-one'))return{note:note()};throw Error('Unexpected '+url);};
   let controller,navigationTask=Promise.resolve();
   const navigate=route=>{app.history.pushState(null,'',route);navigationTask=controller.show(new URLSearchParams(route.split('?')[1]||''));return navigationTask;};
   controller=app.sandbox.window.CrucibleNotebook.mount(root,{api,account:()=>current,navigate,mapFactory,currentReleases,session,reviewOnly});
@@ -63,6 +63,21 @@ function fill(app,title='New mathematical claim'){for(const [key,value]of Object
 const byText=(root,label)=>root.querySelectorAll('button').find(n=>n.textContent===label);
 let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
 (async()=>{
+ await test('note numbers appear only after expansion and identify exact revision citations',async()=>{
+  const saved=note({number:1042,content_sha256:'a'.repeat(64)});
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[saved],next_after:null}:url.startsWith('/api/notebook/notes/note-one')?{note:saved}:undefined});
+  assert.equal(app.q('list').querySelector('.nb-note-number'),null);
+  app.q('list').querySelector('.nb-title').click();await flush();
+  assert.equal(app.q('list').querySelector('.nb-note-number').textContent,'#1042');
+  app.q('list').querySelector('.nb-title').click();await flush();
+  assert.equal(app.q('list').querySelector('.nb-note-number'),null);
+  await app.show('note-one',1);
+  app.q('full').querySelector('.nb-number-action').click();
+  assert.equal(app.q('dialog-body').querySelector('.nb-citation-number').textContent,'#1042 · revision 1');
+  assert.match(app.q('dialog-body').querySelector('.nb-prompt').textContent,/#1042/);
+  assert.match(app.q('dialog-body').querySelector('[name="citation-link"]').value,/revision=1&sha256=a{64}/);
+ });
+
 
  for(const [view,endpoint,result] of [
   ['list','/api/notebook/notes?',{notes:[]}],
@@ -175,7 +190,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  await test('search wording and focus stay stable from construction through a held filter and its result',async()=>{
   let initial;const late=deferred();let delay=false;
   const app=await boot({onMount:({q})=>{initial=q('search').placeholder;},respond:url=>url.startsWith('/api/notebook/notes?')?(delay?late.promise:{notes:[note()]}):undefined});
-  assert.equal(initial,'Search titles, summaries or tags…');assert.equal(app.q('search').placeholder,initial);
+  assert.equal(initial,'Search titles, tags or #number…');assert.equal(app.q('search').placeholder,initial);
   const search=app.q('search');search.focus();delay=true;await filterNotes(app,'human');
   assert.equal(app.q('search'),search);assert.equal(search.placeholder,initial);assert.equal(app.document.activeElement,search);
   late.resolve({notes:[]});await flush();assert.equal(search.placeholder,initial);assert.equal(app.document.activeElement,search);
@@ -1086,7 +1101,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.equal(app.requests.length,before);await app.advanceTimers(250);assert.equal(app.requests.length,before+1);
   const query=listQuery(app.requests.at(-1).url);assert.equal(query.get('q'),'Rare theorem');assert.equal(query.get('limit'),'25');assert.equal(query.has('after'),false);
   assert.equal(app.q('list').querySelectorAll('.nb-entry').length,1);assert.match(app.q('list').textContent,/Rare theorem/);assert.equal(app.q('page').textContent,'Page 1');
-  assert.equal(app.q('search').placeholder,'Search titles, summaries or tags…');
+  assert.equal(app.q('search').placeholder,'Search titles, tags or #number…');
   await searchNotes(app,'Secret full-body');assert.equal(app.q('list').querySelectorAll('.nb-entry').length,0);
   assert.equal(app.requests.some(r=>r.url==='/map/notes.json'),false);
  });

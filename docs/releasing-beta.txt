@@ -129,6 +129,13 @@ guard to reuse an older image. A reviewed operator may instead select its exact
 immutable image explicitly. Schema compatibility and a compatible rollback image
 must be assessed separately; an old image is not necessarily safe after migration.
 
+The combined researcher-profile/Notes-number release requires schema 0025 before
+the new app is promoted. Follow docs/notebook-number-release.txt for the normal
+Alembic migration, exact-head startup check, backup sequence SELECT grant and
+restore-state proof. The old 0024 bridge/operator packet is insufficient. Build
+with Promote disabled until these prerequisites pass; the release workflow does
+not migrate a database automatically or waive any existing image/source gate.
+
 Deploying a verified ordinary release
 ------------------------------------
 For the automatic channel, an operator first selects the existing app repository's

@@ -1,0 +1,121 @@
+Notes numbers: combined schema 0025 release
+=========================================
+
+The current migration head is 0025, following 0024_researcher_profiles. This
+document records the source admission and the remaining deployment gates. It
+does not establish that a hosted migration, promotion or recovery has occurred.
+The researcher-profile component is described in researcher-profile-release.txt.
+
+Stable references and source admission
+-------------------------------------
+The runtime contract adds exactly these reviewed files by SHA-256:
+
+crucible/notebook_numbers.py
+  46b25b5d455682be3f718de9897792909b24983a76972f9be162442c1920f151
+migrations/versions/0025_notebook_numbers.py
+  852f7b870b75123e21d8e4b063880c9887e59bbb3e2b5331098b5a2d7c06e317
+
+Existing baseline hashes, dependency/native pins and all 32 registered releases
+and 1,466 profiles remain unchanged. These two overlay pins do not admit future
+allocator or migration changes. The native notebook-numbers batch runs the
+portable test_notebook_numbers.py suite. The required PostgreSQL 17 job adds
+test_notebook_numbers_postgresql.py using its fixed disposable service.
+
+0025 adds notebook_numbers: one permanent number per logical saved or curated
+note. It backfills all existing saved notes in created_at/ID order, including
+notes in Trash. Saved notes allocate on creation; bundled catalogue discovery
+reserves missing curated identities. Revisions, sorting and catalogue reordering
+do not renumber notes. Removed curated notes and deleted saved notes retain
+their reservations. Aliases have no cascading foreign key to notebook_notes.
+No number is derived from a displayed row, array index or authored content.
+
+The UUID/curated identifier remains canonical. Citations retain the exact note
+identifier, revision and content hash; the readable number does not replace them.
+#number search applies the existing visible-revision/ownership query. A number
+does not grant access or expose an inaccessible note's contents or identity.
+Ordinary numeric text still uses text search. The curated-number endpoint is
+member-only and excludes agent authority; allocations contain no authored data.
+
+PostgreSQL allocation, grants and recovery
+----------------------------------------
+PostgreSQL uses GENERATED ALWAYS AS IDENTITY, with one owned integer sequence,
+notebook_numbers_number_seq, and a unique constraint on note_id. SQLite uses
+AUTOINCREMENT. Concurrent PostgreSQL writers resolve the same logical identity
+through the unique constraint and READ COMMITTED reread. Allocation may leave
+gaps after rollback or a conflicting insert. Gaps are expected; never compact,
+reassign or infer the allocator state from the number of rows or MAX(number).
+
+0024 has 46 total tables including alembic_version. 0025 has 47, plus exactly one
+PostgreSQL sequence owned by notebook_numbers.number. The migration contains no
+production role names or provider changes. Verify table ownership and the
+existing runtime table DML/default grants under the actual migration owner.
+Runtime identity inserts need no separate sequence USAGE/UPDATE grants, schema
+CREATE permission or elevated database role.
+
+The existing backup table SELECT grants do not cover this sequence. As the
+verified migration owner, resolve the exact owned sequence with
+pg_get_serial_sequence('public.notebook_numbers','number') and grant SELECT on
+that sequence to the existing verified backup role. Do not grant sequence
+UPDATE/USAGE or blanket schema privileges to the backup role. Confirm the
+read-only backup role can actually dump both the table and sequence. A fixture
+grant or a successful table-only read is not proof of hosted backup permissions.
+
+Every 0025 recovery set must preserve all 47 tables, their exact alias values,
+and the one owned sequence's definition and last_value/is_called state. A plain
+row export or resetting to MAX(number) can reuse a number consumed before a
+rollback. Restore into a fresh isolated target, verify the sequence ownership,
+generation mode and state, then allocate a synthetic note only in that restored
+test database and prove it follows the retained allocator state without altering
+existing aliases. Stable before/after equality requires a controlled write pause;
+sequence state does not share ordinary table snapshot semantics. Preserve the
+original server key, backup repository and configuration bindings.
+
+The PostgreSQL fixture exercises table-only runtime allocation, concurrent
+same-identity writers, denied sequence access for the backup role, its exact
+SELECT grant, and real pg_dump/pg_restore of the synthetic alias table/sequence.
+It deliberately consumes a number in a rolled-back transaction and checks that
+restoration preserves that gap and the next allocation. This is a targeted
+allocator proof, not a full hosted application or full-database recovery proof.
+The local PostgreSQL 17.11 source-build rehearsal passed all 14 combined metadata,
+profile and numeric-reference checks with no skips. It used the unchanged tests
+and an external adapter invoking local PG17 clients against an owned disposable
+server. This is separate from the required Linux Docker CI gate, which must also
+pass for the selected release.
+
+Deployment order
+----------------
+1. Verify the exact candidate source and all required source/native/PG/browser
+   gates. Build/publish the immutable candidate with promotion disabled. Prepare
+   a tested schema 0025-compatible rollback or forward-fix image before migration.
+2. Verify the actual current target/head and create a fresh encrypted recovery
+   set with an independently checked restore. Use a successor operator/recovery
+   packet reviewed for the exact transition and final 0025 sequence inventory.
+3. With the verified migration role and existing protected configuration, use
+   the ordinary Alembic chain from this exact source:
+
+     python -m alembic -c alembic.ini upgrade 0025
+
+   An existing 0023 database must execute 0024 and 0025 in order; an existing 0024
+   database executes 0025. Check original table preservation, the backfill,
+   exact single head 0025, real runtime/backup grants and the new sequence.
+   Reconcile an uncertain commit by reads before considering a retry.
+4. Run the exact candidate startup/database preflight. The database head must
+   equal the candidate's Alembic head; do not weaken this to accept 0023/0024.
+   There is no automatic migration in the web process. Promote the exact tested
+   image only after migration and preflight succeed, retaining the existing
+   main/source/image checks and unchanged application credentials/configuration.
+5. Verify the deployed source and access boundaries, then create a fresh 0025
+   recovery set bound to a compatible app image. Verify all tables, aliases,
+   sequence state and restored-app behavior on a separate target. Record actual
+   backup job/image/configuration identity and restore-role grants.
+
+The frozen 0024 operator/bridge/recovery packets do not execute 0025 or account for
+its sequence. Do not edit or reuse their successful receipts as 0025 evidence.
+The existing zero-sequence transfer/fingerprint guards correctly reject this
+schema until a narrowly reviewed successor handles exactly this owned sequence.
+
+Downgrade refuses to drop notebook_numbers if any alias has been allocated.
+Do not bypass that check, delete reservations or reset the identity sequence.
+An old 0023/0024 image also fails exact-head startup against 0025. A tag rollback
+alone is therefore insufficient: use a tested 0025-compatible image and preserve
+the populated tables and allocator state.
