@@ -124,7 +124,8 @@ jobs:
     name: Real Chromium UI and private-access checks
     # Keep the tested distro stable across ubuntu-latest migrations.
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    # Cold browser downloads can exceed eight minutes before the UI suite starts.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
