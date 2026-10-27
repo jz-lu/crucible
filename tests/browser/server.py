@@ -45,7 +45,7 @@ def main():
         now = time.time()
         encoded = passwords.hash(PASSWORD)
         with app.state.db.transaction(write=True) as session:
-            for actor in ("alice", "bob", "revoked", "bulkdesktop", "bulkmobile", "queueauthor", "queuereviewer"):
+            for actor in ("alice", "bob", "revoked", "bulkdesktop", "bulkmobile", "queueauthor", "queuereviewer", "numbers"):
                 user = User(id=queue_reviewer_id if actor == "queuereviewer" else str(uuid4()), handle="browser_" + actor,
                             password_hash=encoded, created_at=now)
                 session.add(user)

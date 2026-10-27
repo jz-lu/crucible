@@ -3,8 +3,10 @@ const {test, expect, signIn, notebookReady} = require('./helpers.cjs');
 for (const width of [1440, 390, 320]) {
   test(`permanent note references stay quiet, searchable and exact at ${width}px`, async ({page}, testInfo) => {
     await page.setViewportSize({width, height: 1000});
-    await signIn(page);
-    await notebookReady(page);
+    // Mutating fixtures own a separate actor so read-only neighboring suites
+    // continue to see their exact seeded account, regardless of file order.
+    await signIn(page, 'numbers');
+    await notebookReady(page, 'numbers');
     const title = `Numeric reference browser fixture ${width}`;
     const created = await page.evaluate(async title => api('/api/notebook/notes', {
       idempotency_key: crypto.randomUUID(),
