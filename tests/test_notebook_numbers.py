@@ -1,13 +1,9 @@
 """Stable note aliases across revisions, visibility, catalogue updates and writers."""
 from concurrent.futures import ThreadPoolExecutor
-import base64
 import json
-import os
-from pathlib import Path
 from uuid import uuid4
 
 from alembic import command
-from alembic.config import Config
 from alembic.script import ScriptDirectory
 from fastapi.testclient import TestClient
 import pytest
@@ -23,7 +19,7 @@ from test_notebook_browse import curated, page
 from test_notebook_trash import delete, restore
 from test_notebook_agents import agent
 from test_beta_boundary import private_app
-from test_researcher_profiles_migration import snapshot
+from test_researcher_profiles_migration import migration_config, snapshot
 
 
 def test_numbers_survive_edits_retries_search_and_deletion(system):
@@ -196,7 +192,6 @@ def test_postgres_schema_uses_identity_not_serial():
 
 
 def test_empty_alias_migration_can_be_reversed(tmp_path, monkeypatch):
-    from test_researcher_profiles_migration import migration_config
     url = f"sqlite:///{tmp_path / 'empty.db'}"
     config = migration_config(url, tmp_path, monkeypatch)
     command.upgrade(config, '0025')
@@ -209,18 +204,8 @@ def test_empty_alias_migration_can_be_reversed(tmp_path, monkeypatch):
 
 
 def test_migration_assigns_existing_notes_once_and_new_allocations_continue(tmp_path, monkeypatch):
-    for name in tuple(os.environ):
-        if name == 'DATABASE_URL' or name.startswith('CRUCIBLE_'):
-            monkeypatch.delenv(name)
     url = f"sqlite:///{tmp_path / 'numbers.db'}"
-    monkeypatch.setenv('DATABASE_URL', url)
-    monkeypatch.setenv('CRUCIBLE_DATA_DIR', str(tmp_path))
-    monkeypatch.setenv('CRUCIBLE_SECRET', base64.b64encode(b'n' * 32).decode())
-    monkeypatch.setenv('CRUCIBLE_ENV', 'development')
-    monkeypatch.setenv('CRUCIBLE_ACCESS_MODE', 'open')
-    root = Path(__file__).resolve().parents[1]
-    config = Config(str(root / 'alembic.ini'))
-    config.set_main_option('script_location', str(root / 'migrations'))
+    config = migration_config(url, tmp_path, monkeypatch)
     command.upgrade(config, '0024')
     db = Database(url)
     owner = str(uuid4())
