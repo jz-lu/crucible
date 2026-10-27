@@ -22,7 +22,7 @@ from test_researcher_profiles_postgresql import postgres, assert_original_unchan
 @pytest.fixture
 def numbers(postgres, preserve_service_identifier):
     postgres.service_container = preserve_service_identifier
-    command.upgrade(postgres.config, '0025')
+    command.upgrade(postgres.config, 'head')
     assert_original_unchanged(postgres)
     with postgres.owner_engine.connect() as connection:
         sequence = connection.scalar(text("SELECT pg_get_serial_sequence('notebook_numbers', 'number')"))
