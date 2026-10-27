@@ -20,7 +20,7 @@ The site pins the repository ID, owner ID, main ref, exact publishing workflow,
 source commit, run/attempt and destination-specific audience. It checks signatures
 against GitHub's fixed issuer keys. It admits neither PR/fork tokens nor tokens
 from another workflow. Both old and immutable GitHub subject formats are
-explicitly supported. Uploads have a 64 MiB compressed / 128 MiB expanded limit,
+explicitly supported. Uploads have a 128 MiB compressed / 192 MiB expanded limit,
 exact inventory checks, safe paths, complete measurement schedules and matching
 website protocol identities. The site does not execute uploaded source or render
 uploaded HTML. Authentication establishes workflow provenance; numeric receipt

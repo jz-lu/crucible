@@ -734,7 +734,7 @@
     "crucible/notebook_numbers.py": "46b25b5d455682be3f718de9897792909b24983a76972f9be162442c1920f151",
     "crucible/researcher_profiles.py": "18e50b6ee29c0931346ba794f10e52530e461b2ba0f646d9832c28eb02d715cb",
     "crucible/resource_identity.py": "221fc03d2884a7408d4bc3e3707d7ae1ef148f56c4dbb7c1a7ba2e779b3ec433",
-    "crucible/resource_publications.py": "289942bff4ef87b86638ba66df47ed13e2ff3d257f1056cb25903905d8930fb3",
+    "crucible/resource_publications.py": "0b2ed829cd5409a121f079402bdc274f36addb9de9d99f99402925d4c19ecabf",
     "docs/beta-release-policy.txt": "549c69ce412bde8de427c755959450ce0cbaaf87c2c63297468eb864d2375c8a",
     "migrations/env.py": "9bf10fe07b2a859502f58d8ce011e11ec40ffd001401d115e63170b8f43a3744",
     "migrations/versions/0024_researcher_profiles.py": "669f3cf7e95618cf245dce4d10d0133a085330d920d189958f31be48b49cbf29",

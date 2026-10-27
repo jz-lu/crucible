@@ -27,8 +27,8 @@ from . import registry, resource_identity
 from .db import Base
 from .public_json import catalogue_response
 
-MAX_UPLOAD = 64 * 1024 * 1024
-MAX_EXPANDED = 128 * 1024 * 1024
+MAX_UPLOAD = 128 * 1024 * 1024
+MAX_EXPANDED = 192 * 1024 * 1024
 PROFILE_FIELDS = ("parameters", "parameter_bits", "distribution", "algorithms", "encoding", "kdf")
 SHA = re.compile(r"[0-9a-f]{64}\Z")
 

@@ -158,3 +158,18 @@ def test_real_signed_upload_boundary_and_beta_read_privacy(system, signing_key, 
     object.__setattr__(app.state.settings, 'access_mode', 'beta')
     assert client.get('/api/protocol/resources?scheme_id=dhkem-x25519&version=1').status_code == 401
     assert client.get('/api/resource-publications/' + response.json()['publication_id'] + '/download').status_code == 401
+
+
+def test_authenticated_upload_bounds_body_and_expanded_archive(system, signing_key, monkeypatch):
+    app, client = system; private, keys = signing_key
+    monkeypatch.setattr(auth, 'signing_keys', lambda _: keys)
+    raw = archive(*fixture_files())
+    headers = {'Content-Type': 'application/zip', 'Authorization': token(private)}
+    with monkeypatch.context() as scoped:
+        scoped.setattr(rp, 'MAX_UPLOAD', len(raw) - 1)
+        assert client.post(auth.UPLOAD_PATH, content=raw, headers=headers).status_code == 413
+    with monkeypatch.context() as scoped:
+        scoped.setattr(rp, 'MAX_EXPANDED', 1)
+        assert client.post(auth.UPLOAD_PATH, content=raw, headers=headers).status_code == 422
+    with app.state.db.transaction() as session:
+        assert rp.latest(session, 'dhkem-x25519', '1') is None
