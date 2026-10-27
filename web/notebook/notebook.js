@@ -749,9 +749,21 @@
       if (reviewListReads.has(key)) return reviewListReads.get(key);
       const current = readGuard();
       const task = api('/api/notebook/review-queue?' + query).catch(error => {
-        // A denial can arrive after leaving the queue. Retire its cached
-        // summaries too, without letting an old account/read clear newer data.
-        if (current() && forbiddenRead(error)) { readCache.clear(); listStamp = null; }
+        // A denial can arrive after changing review sections. Retire every
+        // pending read in this owner/epoch, not just already cached summaries.
+        // The retired loadList/loadNote handlers will skip their normal UI
+        // cleanup, so settle the current publication surface here as well.
+        if (current() && forbiddenRead(error)) {
+          invalidateReads(); notes = []; nextAfter = null; listLoaded = false; listRefreshing = false;
+          q('list').replaceChildren(); q('list').removeAttribute('aria-busy');
+          q('count').textContent = ''; q('pagination').hidden = true;
+          if (active && reviewMode) {
+            const id = params.get('note'), region = id ? q('full') : q('list');
+            notice(''); clearPageSpace(); clearViewSpace();
+            region.replaceChildren(...(id ? [backToNotes()] : []), el('p', 'nb-error', error.message),
+              button('Try again', () => id ? loadNote(id) : loadList(), 'nb-button'));
+          }
+        }
         throw error;
       }).finally(() => { if (reviewListReads.get(key) === task) reviewListReads.delete(key); });
       reviewListReads.set(key, task);

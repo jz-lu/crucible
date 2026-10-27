@@ -163,6 +163,54 @@ async function test(name, run) {
       app.account(null);assert.equal(app.q('list').textContent,'');
     }
   });
+  await test('page-two denial retires page-one success after Research changes and allows an explicit fresh retry',async()=>{
+    const old=deferred(),fresh=deferred(),retry=deferred();let phase='initial';
+    const app=await boot(url=>{
+      if(url.startsWith('/api/notebook/research-requests'))return {requests:[],next_after:null};
+      if(!url.startsWith('/api/notebook/review-queue?'))return;
+      const second=new URLSearchParams(url.split('?')[1]).has('after');
+      if(phase==='old'&&second)return old.promise;
+      if(phase==='fresh'&&!second)return fresh.promise;
+      if(phase==='retry')return retry.promise;
+      return second?page('Second request'):page('First request','cursor-two');
+    });
+    app.q('more').click();await flush();assert.match(app.q('list').textContent,/Second request/);
+    phase='old';const pendingOld=app.show();
+    await app.show({section:'research'});
+    phase='fresh';const pendingFresh=app.show();assert.equal(queueReads(app).length,4);
+    old.reject(Object.assign(Error('Reviewer access revoked'),{status:403}));await pendingOld;
+    assert.match(app.q('list').textContent,/Reviewer access revoked/);
+    assert.equal(app.q('list').getAttribute('aria-busy'),null);
+    assert.equal(app.q('pagination').hidden,true);assert.equal(app.q('count').textContent,'');
+    fresh.resolve(page('Admitted before old denial'));await pendingFresh;
+    assert.doesNotMatch(app.q('list').textContent,/Admitted before old denial/);
+    phase='retry';byText(app.q('list'),'Try again').click();await flush();
+    assert.equal(queueReads(app).length,5,'Retry uses a new task, never a retired in-flight result');
+    assert.doesNotMatch(app.q('list').textContent,/First request|Second request|Admitted before old denial/);
+    retry.resolve(page('Freshly authorized'));await flush();assert.match(app.q('list').textContent,/Freshly authorized/);
+    app.controller.hide();const returning=app.show();assert.match(app.q('list').textContent,/Freshly authorized/);await returning;
+  });
+  await test('queue denial clears an active pending exact review reader instead of stranding its busy frame',async()=>{
+    const old=deferred(),reader=deferred();let held=false;
+    const app=await boot(url=>held&&url.startsWith('/api/notebook/review-queue?')?old.promise:
+      held&&url.startsWith('/api/notebook/notes/candidate')?reader.promise:undefined);
+    held=true;const pendingQueue=app.show();const pendingReader=app.show({note:'candidate',revision:'2'});
+    old.reject(Object.assign(Error('Reviewer access revoked'),{status:403}));await pendingQueue;
+    assert.match(app.q('full').textContent,/Reviewer access revoked/);assert.ok(byText(app.q('full'),'Try again'));
+    reader.resolve({note:record('Old authorized body',true)});await pendingReader;
+    assert.doesNotMatch(app.q('full').textContent,/Old authorized body|Full private review body/);
+    assert.equal(app.root.querySelector('.nb-publication-review'),null);
+    held=false;byText(app.q('full'),'Try again').click();await flush();assert.ok(app.root.querySelector('.nb-publication-review'));
+  });
+  for(const change of ['account','session']) await test('late denial from an old '+change+' cannot clear the replacement authorized queue',async()=>{
+    const old=deferred(),fresh=deferred();let phase=0;
+    const app=await boot(url=>url.startsWith('/api/notebook/review-queue?')?(phase===1?old.promise:phase===2?fresh.promise:page()):undefined);
+    phase=1;const previous=app.show();app.account(change==='account'?{id:'other',handle:'other'}:reviewer,'session-two');
+    phase=2;const next=app.show();old.reject(Object.assign(Error('Old forbidden read'),{status:403}));await previous;
+    const same=app.show();assert.equal(queueReads(app).length,3,'Old denial cannot detach the new owner task');
+    fresh.resolve(page('Replacement authorized'));await Promise.all([next,same]);
+    assert.match(app.q('list').textContent,/Replacement authorized/);assert.doesNotMatch(app.q('list').textContent,/Old forbidden read/);
+  });
   await test('write invalidation prevents an older queue response from overwriting newer results',async()=>{
     const old=deferred(),fresh=deferred();let phase=0;
     const app=await boot(url=>url.startsWith('/api/notebook/review-queue?')?(phase===1?old.promise:phase===2?fresh.promise:page('Old request')):undefined);
