@@ -14,9 +14,17 @@ every backend/platform test ran. Optional PostgreSQL fixtures are explicitly
 skipped without their dedicated synthetic database configuration.
 
 Release beta is a separate manual GitHub Actions workflow. Choose main, then Run
-workflow. With Publish enabled it builds, verifies and publishes one app image;
-then it promotes that exact immutable image to the stable beta tag. With Publish
-disabled it performs the same native checks without publishing or promotion.
+workflow. Publish and Promote both default to enabled: it builds, verifies and
+publishes one app image, then promotes that exact immutable image to the stable
+beta tag. Enable Publish and disable Promote to retain a tested immutable image
+without updating beta. With Publish disabled it performs the same native checks
+without publishing or promotion, regardless of the Promote input.
+For a reviewed candidate or schema-bridge branch, select that branch and disable
+Promote. Such runs may verify and publish immutable images, but cannot update beta.
+Non-main runs with Promote enabled, and all tag-ref runs, are blocked. Source CI
+and exact native image checks still run before any candidate publication. Only
+main can promote; no app/database credentials or provider-update permissions are
+added for candidate builds.
 Pushes and merges never trigger this workflow. Moving beta can trigger an existing
 App Platform Autodeploy subscription; the workflow itself never edits an app,
 its environment or its database.
@@ -84,7 +92,8 @@ reviewed runtime base are deleted by this workflow.
 
 The beta channel
 ----------------
-Successful Publish runs copy the single published manifest to
+Successful runs with both Publish and Promote enabled copy the single published
+manifest to
 registry.digitalocean.com/crucible-beta/app:beta using the already-installed Docker
 Buildx imagetools command with --prefer-index=false. There is no rebuild, dependency
 installation, annotation or platform transformation. The helper hashes the raw
@@ -101,13 +110,24 @@ promotion. GitHub and the registry do not share an atomic transaction: if main
 changes during that interval, the receipt records that beta was already written
 and the run requires inspection. Avoid concurrent manual writes to beta.
 
-Failed checks, failed publication, stale main and verification-only runs cannot
-reach the promotion write. A promotion timeout or failed readback is different:
+Failed checks, failed publication, stale main, verification-only runs and runs
+with Promote disabled cannot reach the promotion write. A promotion timeout or
+failed readback is different:
 the write may have happened. promotion.json records started/attempted state,
 expected and observed digest, verification outcome and possible side effects.
 The immutable publication receipt is retained even when promotion fails. Do not
 interpret a failed workflow as proof that beta was unchanged or automatically
 retry/roll back over a newer release. Inspect the receipt and provider status.
+
+Publish without promotion is useful when a separately reviewed schema migration
+must precede deployment. It does not perform or authorize that migration. Retain
+the original prepared, verified, published and build-metadata receipts from the
+run; a later promotion must use that exact tested source and its original run and
+attempt identifiers. The helper still refuses promotion if that source is no
+longer current main. Do not fabricate new receipts or remove the current-main
+guard to reuse an older image. A reviewed operator may instead select its exact
+immutable image explicitly. Schema compatibility and a compatible rollback image
+must be assessed separately; an old image is not necessarily safe after migration.
 
 Deploying a verified ordinary release
 ------------------------------------
@@ -115,8 +135,9 @@ For the automatic channel, an operator first selects the existing app repository
 beta tag in the existing App Platform web component and enables Autodeploy there.
 That one-time provider action is separate from this workflow. Preserve all existing
 environment values, database, domain, instance size, command and allowlist. After
-that, each deliberately started Publish run can update the website through beta
-without another app-update credential or repeated configuration entry.
+that, each deliberately started run with Publish and Promote enabled can update
+the website through beta without another app-update credential or repeated
+configuration entry.
 The reviewed beta-release catalogue has one explicit configuration transition:
 deploy its loader before removing the legacy CRUCIBLE_BETA_RELEASES override.
 Then approved additions can follow the packaged policy. See beta-release-policy.txt.
