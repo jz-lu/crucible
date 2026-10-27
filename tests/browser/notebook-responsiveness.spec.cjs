@@ -14,7 +14,7 @@ const listRequest = scope => url => url.pathname === '/api/notebook/notes' && ur
 test('rapid filters keep admitted rows stable until only the newest real response arrives', async ({page}) => {
   await signIn(page); await notebookReady(page);
   const search = page.locator('#notebook-workspace [data-nb="search"]');
-  await expect(search).toHaveAttribute('placeholder', 'Search titles, summaries or tags…');
+  await expect(search).toHaveAttribute('placeholder', 'Search titles, tags or #number…');
   const original = await list(page).locator('.nb-entry').first().elementHandle();
   const human = await holdResponse(page, listRequest('human'));
   const mine = await holdResponse(page, listRequest('mine'));
@@ -35,7 +35,7 @@ test('rapid filters keep admitted rows stable until only the newest real respons
     await expect(filter(page)).toHaveValue('mine');
     await expect(filter(page)).toBeFocused();
     await expect(list(page).getByRole('button', {name: 'Edit', exact: true})).toBeEnabled();
-    await expect(search).toHaveAttribute('placeholder', 'Search titles, summaries or tags…');
+    await expect(search).toHaveAttribute('placeholder', 'Search titles, tags or #number…');
   } finally {
     human.release(); mine.release();
     await human.delivered; await mine.delivered;

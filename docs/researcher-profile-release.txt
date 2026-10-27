@@ -1,0 +1,86 @@
+Combined release now targets schema 0025. This document describes the historic
+0024 researcher-profile component only. Follow docs/notebook-number-release.txt
+for the combined migration, sequence grants, recovery and exact-head startup
+requirements; a 0024 bridge/operator packet alone is insufficient.
+
+Researcher profiles: reviewed schema transition 0023 to 0024
+==========================================================
+
+This release adds optional, self-reported display name, affiliation, position
+and website. The selected profile presentation is Clean; Points has a small
+question-mark disclosure for the existing scoring explanation. ORCID ownership
+verification is not part of this release. No new claim of verified affiliation
+is made, and no membership, username, score or research attribution is changed.
+
+Source review and admission
+---------------------------
+The reviewed runtime overlay admits exactly these files, by SHA-256:
+
+crucible/researcher_profiles.py
+  18e50b6ee29c0931346ba794f10e52530e461b2ba0f646d9832c28eb02d715cb
+migrations/env.py
+  c3f962b029b905ff0e2e065c97867fdf3535392e918adfc2c491cef8a6e90b82
+migrations/versions/0024_researcher_profiles.py
+  669f3cf7e95618cf245dce4d10d0133a085330d920d189958f31be48b49cbf29
+
+The original baseline inventory, native base/configuration, dependency versions,
+all 32 cryptographic release identities and 1,466 profiles remain unchanged.
+The existing four runtime overlays remain unchanged. This is a deliberate schema
+review, not an exemption for arbitrary new files or future migration changes.
+
+0024 only creates researcher_profiles, with a primary-key/foreign-key user_id
+and a revision constraint. It does not rewrite or backfill existing tables.
+44 application tables plus Alembic at 0023 become 45 plus Alembic at 0024.
+The model import in migrations/env.py registers the new table for consistency
+checks. No startup migration, elevated web-role privilege or new dependency is
+introduced. The new table's ownership and runtime/backup grants must be checked
+on the actual migration; successful fixture grants do not establish hosted ACLs.
+
+The new API reuses current browser admission, CSRF/origin verification and the
+account-row write lock. It excludes agent credentials. Explicit revisions and
+idempotency keys prevent silent stale overwrites or duplicate retry updates.
+Details are member-only, optional and separate from the account identity. The
+server never fetches supplied website URLs. Profile metadata is included in an
+individual member read, not added to session or leaderboard responses.
+
+Validation boundary
+-------------------
+The critical workflow includes the profile API and migration suites. The
+PostgreSQL 17 workflow includes real upgrade preservation, separate role grants,
+concurrent writes and identical-request retries. The native image gate also
+includes the profile API and SQLite migration suites. Browser checks cover
+desktop/mobile editing, uncertain saves, stale revisions, account boundaries,
+draft/focus continuity, and the Points disclosure.
+
+Local validation and prior synthetic PostgreSQL evidence support this source
+admission. A successful current CI run, exact native-image verification,
+publication, hosted migration and recovery exercise are distinct later gates.
+Do not describe this document as evidence that any hosted step has occurred.
+
+Operator sequence
+-----------------
+1. Build and verify an immutable candidate with promotion disabled. Prepare a
+   separately verified schema-0024 rollback image before touching the database.
+   A schema-only bridge may retain the current website and routes while adding
+   the reviewed migration/model files. Its gate must match its own enabled APIs;
+   do not pretend disabled profile endpoints passed feature API tests.
+2. Complete and verify a fresh encrypted 0023 recovery set using unchanged
+   configuration and the original server secret/key. Use a fresh isolated
+   restore target. Old restore-target receipts are not fresh restoration proof.
+3. Run the reviewed, narrowly targeted 0023-to-0024 operator transaction. Check
+   exact target/schema, original table preservation, table ownership and real
+   runtime/backup permissions. If commit outcome is uncertain, reconcile using
+   reads before any retry. Do not downgrade a populated profile table.
+4. Promote the exact tested feature image only after migration verification.
+   The existing current-main and immutable-manifest checks still apply. Do not
+   replace the application's environment, database URL or original secret.
+5. Verify exact hosted source, private access, sign-in and profile edit/read.
+   Create a 0024 recovery set bound to a compatible app image and verify its
+   restoration, including profile rows. Record actual backup job/configuration
+   identity rather than inferring it from an earlier upload receipt.
+
+An old 0023 image cannot restart against 0024 because the exact-head preflight
+correctly refuses it. Keeping an old tag alone is not a rollback plan. The
+previous running app may continue during this additive transition, but its
+restart behavior must not be relied upon. Preserve a tested 0024 bridge or
+compatible forward-fix image and avoid concurrent beta-tag writes.

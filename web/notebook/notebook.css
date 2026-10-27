@@ -83,6 +83,14 @@
 .nb-entry-heading,.nb-reader-heading{display:grid;grid-template-columns:minmax(0,1fr) 136px;align-items:center;gap:12px}
 .nb-entry-heading>h2,.nb-reader-heading>.nb-full-title{min-width:0;overflow-wrap:anywhere}
 .nb-entry-heading .nb-title-copy{min-width:0;overflow-wrap:anywhere}
+.nb-title-trailing{display:flex;align-items:center;align-self:flex-start;gap:14px;flex-shrink:0;min-height:1.45em}
+.nb-note-number{font:400 11px/1.5 var(--mono);font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+.nb-number-action{padding:4px 0;background:transparent;border:0;cursor:pointer}
+.nb-number-action:hover{color:var(--primary);text-decoration:underline;text-underline-offset:3px}
+.nb-number-action:focus-visible{outline:2px solid var(--primary);outline-offset:3px}
+.nb-citation-number{font:500 15px/1.6 var(--mono);color:var(--ink);margin:0 0 14px}
+.nb-reader-heading .nb-note-actions{flex-wrap:wrap}
+.nb-reader-heading:has(.nb-note-actions>.nb-number-action:only-child){grid-template-columns:minmax(0,1fr) auto;gap:16px}
 .nb-entry-heading .nb-note-status{flex-wrap:wrap}
 .nb-reader-heading{align-items:start;margin-bottom:18px}
 .nb-reader-heading>.nb-full-title{margin:0}
@@ -131,3 +139,23 @@
 .nb-batch-result:empty{display:none}
 .nb-batch-status{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink)}
 @media(max-width:650px){.nb-publish-dialog{padding:22px}.nb-publish-dialog .nb-dialog-heading h2{font-size:27px}.nb-publication-note{padding:14px}.nb-publish-dialog .nb-form-actions .nb-button{min-height:42px}}
+
+/* Notes use the selected simple list, with the shared notebook tag treatment. */
+.nb-root:not(.nb-review-workspace){--nb-card-summary:13px/1.7 var(--sans);--nb-chip-radius:4px;--nb-list-title:500 17px/1.45 var(--sans);--nb-list-inset:3px;--nb-list-padding:17px}
+.nb-root:not(.nb-review-workspace) .nb-list{border:0;border-top:1px solid var(--line);border-radius:0;background:transparent}
+.nb-root:not(.nb-review-workspace) .nb-list .nb-entry{margin:0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}
+.nb-root:not(.nb-review-workspace) .nb-entry-heading{padding:0 var(--nb-list-inset);grid-template-columns:minmax(0,1fr) auto;gap:16px}
+.nb-root:not(.nb-review-workspace) .nb-entry-heading .nb-title{font:var(--nb-list-title);padding:var(--nb-list-padding) 0;gap:16px}
+.nb-root:not(.nb-review-workspace) .nb-entry-heading .nb-title-copy{gap:7px}
+.nb-root:not(.nb-review-workspace) .nb-entry-heading .nb-note-status{flex-wrap:wrap;gap:6px 8px}
+.nb-root:not(.nb-review-workspace) .nb-entry-heading .nb-note-status:empty,.nb-root:not(.nb-review-workspace) .nb-entry-heading .nb-card-actions:empty{display:none}
+.nb-root:not(.nb-review-workspace) .nb-entry-heading:has(.nb-card-actions:empty){grid-template-columns:minmax(0,1fr)}
+.nb-root:not(.nb-review-workspace) .nb-preview{padding:0 var(--nb-list-inset) 20px;max-width:none}
+.nb-root:not(.nb-review-workspace) .nb-preview .nb-claim{font:var(--nb-card-summary);max-width:780px}
+.nb-root:not(.nb-review-workspace) .nb-preview .nb-tag{border-radius:var(--nb-chip-radius);padding:3px 7px}
+.nb-root:not(.nb-review-workspace) .nb-preview .nb-tag:not([class*=nb-purpose-]){background:var(--paper)}
+.nb-root:not(.nb-review-workspace) .nb-preview .nb-read{font-size:12px}
+@media(max-width:650px){.nb-root:not(.nb-review-workspace){--nb-list-title:500 16px/1.45 var(--sans)}.nb-root:not(.nb-review-workspace) .nb-entry-heading{gap:10px}}
+@media(max-width:430px){.nb-root:not(.nb-review-workspace) .nb-entry-heading{grid-template-columns:minmax(0,1fr)}.nb-root:not(.nb-review-workspace) .nb-entry-heading .nb-card-actions:not(:empty){justify-content:flex-start;padding-bottom:13px}.nb-root:not(.nb-review-workspace) .nb-entry-heading:has(.nb-card-actions:not(:empty)){row-gap:0}}
+
+@media(max-width:650px){.nb-title-trailing{gap:8px}.nb-note-number{font-size:10px}}

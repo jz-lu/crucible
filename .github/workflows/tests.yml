@@ -192,8 +192,10 @@ jobs:
         run: |
           python -m pip install -r requirements.lock
           python -m pip install --no-deps -e .
-      - name: Compare fresh synthetic metadata and scoring queries
-        run: python -m pytest -q tests/test_metadata_relations.py
+      - name: Compare metadata queries, profile grants and stable note-number recovery
+        env:
+          CRUCIBLE_NOTEBOOK_PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: python -m pytest -q tests/test_metadata_relations.py tests/test_researcher_profiles_postgresql.py tests/test_notebook_numbers_postgresql.py
       - name: State verification boundary
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
@@ -202,6 +204,15 @@ jobs:
           score/milestone parity and malformed receipt tiers. The PostgreSQL
           connection is fixed to this disposable loopback service. This job
           neither reads deployed configuration nor exercises native KEM workers.
+          Profile checks migrate synthetic 0023 accounts and evidence to 0024,
+          verify separate owner/runtime/read-only backup grants, and exercise
+          real account-row locking, stale revisions and identical-request retries.
+          Unique fixture schemas and roles are removed after each case.
+          Note-number checks migrate to 0025 and exercise concurrent runtime
+          allocation without sequence privileges. The same pinned PG17 service
+          runs its own pg_dump/pg_restore clients against one synthetic alias
+          table and sequence, proving backup SELECT grants, retained sequence
+          state (including gaps), and the next allocation after restoration.
           EOF
   ci:
     name: CI passed

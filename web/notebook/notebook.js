@@ -168,15 +168,18 @@
     const readCache = new Map();
     const preparingNotes = new Map();
     const preparingLists = new Map();
-    function invalidateReads() { readCache.clear(); preparingNotes.clear(); preparingLists.clear(); timelinePreparation = null; indexPreparation = null; warmEnabled = false; listStamp = null; timelineStamp = null; readEpoch++; }
+    const reviewListReads = new Map();
+    function invalidateReads() { readCache.clear(); preparingNotes.clear(); preparingLists.clear(); reviewListReads.clear(); timelinePreparation = null; indexPreparation = null; warmEnabled = false; listStamp = null; timelineStamp = null; readEpoch++; }
     function cachedRead(key) {
-      if (reviewOnly) return null; // Review forms always require a fresh server read.
+      // Queue summaries can paint on return; decision forms and full revisions
+      // still require a fresh server read, even in the same reviewer session.
+      if (reviewOnly && !key.startsWith('list:review:')) return null;
       const entry = readCache.get(key);
       if (!entry || Date.now() - entry.at > 300000) { readCache.delete(key); return null; }
       readCache.delete(key); readCache.set(key, entry); return entry.value;
     }
     function rememberRead(key, value, at = Date.now()) {
-      if (reviewOnly) return;
+      if (reviewOnly && !key.startsWith('list:review:')) return;
       const size = JSON.stringify(value).length;
       readCache.delete(key);
       if (size > 1000000) return;
@@ -297,7 +300,7 @@
     const noticeNode = mark('notice', el('div', 'nb-notice')); noticeNode.setAttribute('role', 'status'); noticeNode.hidden = true;
     const library = mark('library', el('section')); const toolbar = el('div', 'nb-toolbar');
     const searchLabel = el('label', 'nb-search'); searchLabel.append(el('span', 'nb-sr-only', 'Search notes'));
-    const searchInput = mark('search', el('input')); searchInput.type = 'search'; searchInput.maxLength = 200; searchInput.placeholder = 'Search titles, summaries or tags…'; searchLabel.append(searchInput);
+    const searchInput = mark('search', el('input')); searchInput.type = 'search'; searchInput.maxLength = 200; searchInput.placeholder = 'Search titles, tags or #number…'; searchLabel.append(searchInput);
     const filter = field('Show', 'visibility', 'all', {options: [{value:'all', label:'All notes'}, {value:'mine', label:'My notes'}, {value:'human', label:'Human-written'}, {value:'proposals', label:'Proposals'}, {value:'research', label:'Literature'}, {value:'trash', label:'Trash'}]}); filter.wrap.classList.add('nb-visibility-filter');
     filter.input.addEventListener('change', () => { visibility = filter.input.value; changeQuery(); });
     toolbar.append(searchLabel, filter.wrap, mark('filter', el('span')), mark('count', el('span', 'nb-count')));
@@ -598,7 +601,8 @@
       if (curatedPromise) return curatedPromise;
       const owner = accountId, generation = epoch;
       const task = (async () => {
-        const workspace = window.TheoryStore.validateSnapshot(await api('/map/notes.json'));
+        const [snapshot, references] = await Promise.all([api('/map/notes.json'), api('/api/notebook/curated-note-numbers')]);
+        const workspace = window.TheoryStore.validateSnapshot(snapshot);
         const records = await Promise.all(workspace.notes.map(async source => {
           const revisions = await Promise.all(source.revisions.map(async original => {
             const content = Object.fromEntries(['title','claim','conditions','body','tags','kind','references','artifacts','extensions'].filter(key => original[key] !== undefined).map(key => [key, original[key]]));
@@ -610,7 +614,7 @@
           const latest = revisions[revisions.length - 1];
           // Bundled research is a read-only source, never an attributed user
           // submission or a fabricated sharing approval.
-          return {id:'curated:' + source.id, source_id:source.id, source_kind:'curated-research',
+          return {id:'curated:' + source.id, number:references.numbers?.['curated:' + source.id], source_id:source.id, source_kind:'curated-research',
             owner:null, can_edit:false, can_review:false, created_at:revisions[0].created_at,
             ...latest, revisions, revision_count:revisions.length};
         }));
@@ -741,6 +745,30 @@
         rememberRead(key, {notes:result.notes, next_after:result.next_after || null});
       }, error => { if (preparingLists.get(key) === entry && current() && forbiddenRead(error)) invalidateReads(); forget(); });
     }
+    function readReviewList(key, query) {
+      if (reviewListReads.has(key)) return reviewListReads.get(key);
+      const current = readGuard();
+      const task = api('/api/notebook/review-queue?' + query).catch(error => {
+        // A denial can arrive after changing review sections. Retire every
+        // pending read in this owner/epoch, not just already cached summaries.
+        // The retired loadList/loadNote handlers will skip their normal UI
+        // cleanup, so settle the current publication surface here as well.
+        if (current() && forbiddenRead(error)) {
+          invalidateReads(); notes = []; nextAfter = null; listLoaded = false; listRefreshing = false;
+          q('list').replaceChildren(); q('list').removeAttribute('aria-busy');
+          q('count').textContent = ''; q('pagination').hidden = true;
+          if (active && reviewMode) {
+            const id = params.get('note'), region = id ? q('full') : q('list');
+            notice(''); clearPageSpace(); clearViewSpace();
+            region.replaceChildren(...(id ? [backToNotes()] : []), el('p', 'nb-error', error.message),
+              button('Try again', () => id ? loadNote(id) : loadList(), 'nb-button'));
+          }
+        }
+        throw error;
+      }).finally(() => { if (reviewListReads.get(key) === task) reviewListReads.delete(key); });
+      reviewListReads.set(key, task);
+      return task;
+    }
     async function loadList({paging = false} = {}) {
       clearTimeout(searchTimer); searchTimer = null;
       humanHint.hidden = reviewMode || visibility !== 'human';
@@ -750,6 +778,7 @@
       if (!indexed && String(pageCursors[pageIndex] || '').startsWith('index:')) resetPages();
       const current = guard(), token = ++request, cursor = pageCursors[pageIndex], generation = readEpoch;
       const query = new URLSearchParams({limit:'25'});
+      if (reviewMode) query.set('summary', 'true');
       if (!reviewMode) {
         query.set('include_curated', 'true');
         query.set('scope', visibility === 'research' ? 'literature' : ['mine', 'human', 'trash'].includes(visibility) ? visibility : 'all');
@@ -786,7 +815,7 @@
       try {
         const prepared = preparingLists.get(key); preparingLists.delete(key);
         const result = indexed || await (prepared && Date.now() - prepared.at < 10000 ? prepared.task :
-          api((reviewMode ? '/api/notebook/review-queue?' : '/api/notebook/notes?') + query));
+          reviewMode ? readReviewList(key, query) : api('/api/notebook/notes?' + query));
         if (!current() || request !== token || generation !== readEpoch || params.has('note')) return;
         if (!Array.isArray(result.notes) || (result.next_after && result.next_after === cursor)) throw Error('The notebook could not be loaded.');
         const page = {notes: result.notes, next_after: result.next_after || null};
@@ -797,14 +826,21 @@
         if (!indexed) prepareNextPage(query, nextAfter);
       } catch (error) {
         if (!current() || request !== token || generation !== readEpoch) return;
-        readCache.delete(key);
+        const expiredCursor = cursor && error.status === 422 &&
+          (/page cursor/i.test(error.message) || reviewMode && /sharing review cursor/i.test(error.message));
+        const retainQueue = reviewMode && cached && !forbiddenRead(error) && !expiredCursor;
+        if (!retainQueue) readCache.delete(key);
         if (forbiddenRead(error)) { invalidateReads(); q('list').removeAttribute('aria-busy'); }
-        const expiredCursor = cursor && error.status === 422 && /page cursor/i.test(error.message);
         if (expiredCursor) resetPages();
-        if (cached && !forbiddenRead(error) && !expiredCursor) notice('Notes could not be refreshed. ' + error.message, true);
+        if (retainQueue) {
+          listRefreshing = false;
+          notice('Publish requests could not be refreshed. ' + error.message, true);
+          q('notice').append(' ', button('Try again', () => loadList(), 'nb-button'));
+        } else if (cached && !forbiddenRead(error) && !expiredCursor) notice('Notes could not be refreshed. ' + error.message, true);
         else {
           notes = []; nextAfter = null; listLoaded = false; listStamp = null;
-          updateList(() => q('list').replaceChildren(el('p', 'nb-error', error.message), button(expiredCursor ? 'Restart notebook list' : 'Try again', () => loadList(), 'nb-button')));
+          updateList(() => q('list').replaceChildren(el('p', 'nb-error', error.message), button(expiredCursor ?
+            reviewMode ? 'Restart publish requests' : 'Restart notebook list' : 'Try again', () => loadList(), 'nb-button')));
           q('count').textContent = '';
         }
       } finally {
@@ -819,6 +855,7 @@
     }
 
     function statusLabel(status) { return ({curated:'Curated note', private:'Private', submitted:'Publish request pending', approved:'Published', withdrawn:'Withdrawn by moderator', changes_requested:'Private · changes requested before publication'})[status] || 'Private'; }
+    function noteNumber(note) { return Number.isSafeInteger(note.number) && note.number > 0 ? '#' + String(note.number).padStart(4, '0') : ''; }
     const ownsNote = note => accountId !== null && String(note.owner?.id) === accountId && note.can_edit === true;
     const canPublish = (note, revision) => ownsNote(note) && revision?.publication_status === 'private' && revision.revision === latestRevision(note)?.revision;
     const revisionStatusLabel = (note, revision) => note.deletion ? 'In Trash' : statusLabel(revision.publication_status);
@@ -877,7 +914,10 @@
         const title = button('', () => { previewId = expanded ? null : note.id + ':' + shown.revision; if (!expanded) prepareNote(note, visibility === 'proposals' && proposal ? proposal.revision : null); renderList(); root.querySelectorAll('.nb-title')[index]?.focus({preventScroll:true}); }, 'nb-title');
         title.setAttribute('aria-expanded', String(expanded)); title.setAttribute('aria-controls', (reviewOnly ? 'nb-review-preview-' : 'nb-preview-') + index);
         const marker = el('span', 'nb-marker', expanded ? '−' : '+'); marker.setAttribute('aria-hidden', 'true');
-        const copy = el('span', 'nb-title-copy'); copy.append(el('span', '', r.title), status(note, shown, proposal)); title.append(copy, marker); heading.append(title);
+        const trailing = el('span', 'nb-title-trailing'), number = noteNumber(note);
+        if (expanded && number) { const reference = el('span', 'nb-note-number', number); reference.title = 'Permanent note number. Search ' + number + ' to find this note.'; trailing.append(reference); }
+        trailing.append(marker);
+        const copy = el('span', 'nb-title-copy'); copy.append(el('span', '', r.title), status(note, shown, proposal)); title.append(copy, trailing); heading.append(title);
         const headingRow = el('div', 'nb-entry-heading'), actions = el('div', 'nb-card-actions');
         headingRow.append(heading, actions); item.append(headingRow);
         if (!reviewOnly && ownsNote(note)) {
@@ -1043,6 +1083,12 @@
       const r = revision.content, heading = el('h2', 'nb-full-title', r.title); heading.tabIndex = -1;
       const headingRow = el('div', 'nb-reader-heading');
       const noteActions = el('div', 'nb-note-actions');
+      const number = noteNumber(note);
+      if (number) {
+        const reference = button(number, () => citeNote(note, revision), 'nb-note-number nb-number-action');
+        reference.title = 'Cite ' + number + ' · revision ' + revision.revision;
+        reference.setAttribute('aria-label', 'Cite note ' + number + ', revision ' + revision.revision); noteActions.append(reference);
+      }
       if (!reviewOnly && ownsNote(note)) {
         noteActions.append(button('Edit', () => editNote(note), 'nb-button'));
         if (canPublish(note, revision)) noteActions.append(button('Publish', () => publicationDialog(note, revision), 'nb-button'));
@@ -1334,11 +1380,13 @@
     function citeNote(note, revision) {
       const container = openDialog('Cite this note'), present = dialogGuard();
       const link = url(note.id, revision.revision) + '&sha256=' + encodeURIComponent(revision.content_sha256);
-      const reference = {title:revision.content.title + ' · revision ' + revision.revision, url:'/' + link, scope:'', relation:'cites'};
+      const number = noteNumber(note);
+      const reference = {title:(number ? number + ' · ' : '') + revision.content.title + ' · revision ' + revision.revision, url:'/' + link, scope:'', relation:'cites'};
       const source = field('Exact revision link', 'citation-link', new URL(window.location.href).origin + '/' + link);
       source.input.readOnly = true;
       const summary = el('p', 'nb-hint'); summary.setAttribute('role', 'status');
       const copy = (text, message) => async () => { try { await navigator.clipboard.writeText(text); if (present()) summary.textContent = message; } catch (_) { if (present()) summary.textContent = 'Select and copy the text below.'; } };
+      if (number) container.append(el('p', 'nb-citation-number', number + ' · revision ' + revision.revision));
       container.append(el('p', 'nb-hint', 'Paste this link into another note’s Citations. It pins the revision and content hash; it does not change who can read the note.'), source.wrap, button('Copy citation link', copy(source.input.value, 'Citation link copied.')));
       const details = el('details', 'nb-details'); details.append(el('summary', '', 'For an agent'));
       const text = JSON.stringify(reference, null, 2);

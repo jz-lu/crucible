@@ -1,0 +1,81 @@
+Researcher profiles
+===================
+
+Members may supply an institution or affiliation, position, display name and
+website. All four are optional and editable. The profile labels them
+Self-reported. An independent researcher can leave institution/position empty.
+These fields do not change the account UUID, username, research attribution,
+membership, reviewer permissions or scoring. Other admitted participants can
+read them on the member's profile; they are not an anonymous public directory.
+
+Read and write boundaries
+-------------------------
+The member-detail response includes researcher_profile. Leaderboard and session
+responses do not; browsing them incurs no new profile query. GET /api/me/profile
+is fetched only when the owner opens Edit profile. PUT on the same path accepts
+the four fields, expected_revision and a UUID idempotency_key. Both endpoints
+require a current browser membership; the write also requires the existing
+origin/CSRF checks. Agent credentials cannot edit these fields.
+
+The separate researcher_profiles table has one row per account and starts empty.
+Writes serialize on the existing account lock and increment a revision. A stale
+revision returns 409 instead of silently overwriting an intervening edit. An
+exact retry of the latest accepted request returns its saved result. The same
+key with different content is rejected. An older request cannot overwrite a
+newer saved revision. Website values must be HTTP(S), without user credentials;
+the server stores a link and never fetches it.
+
+The editor sits outside the score-rendering region. Quiet profile refreshes and
+navigation cannot destroy a draft. Account changes clear it. Only a dirty draft
+or uncertain save installs an unload warning. An uncertain save retains its
+original revision, key and values until an explicit retry or refresh. A conflict
+shows current saved details alongside the preserved draft and requires another
+explicit Save. A success response must confirm the exact revision and values
+before the draft is marked saved.
+
+ORCID is a separate next step
+----------------------------
+There is no manually typed ORCID field or inactive Connect button. A future
+integration should collect an authenticated iD using ORCID OAuth, bound to the
+already signed-in account. It should say ORCID connected, not institution
+verified: ownership of a record does not independently verify its employment
+claims. An institution assertion needs its own source and dates. Linking must
+not grant access, create a second account or affect points.
+
+Activation needs registered client credentials, an exact HTTPS callback and
+tested linking/unlinking, replay, account-switch and duplicate-iD behaviour. It
+does not block use of the four self-reported fields. Provider guidance:
+https://info.orcid.org/documentation/collecting-and-sharing-orcid-ids/
+https://info.orcid.org/interpreting-the-trustworthiness-of-an-orcid-record/
+
+Schema rollout plan — not an ordinary web-only release
+----------------------------------------------------
+Migration 0024 adds only researcher_profiles; it does not rewrite existing data.
+Do not change the frozen release contract merely to pass a build. Review this
+schema, its model registration, new executable module and test evidence before
+admitting a new runtime contract. Keep the existing native scheme identities.
+
+Before a hosted rollout:
+1. Verify the real 0023-to-0024 upgrade in an isolated PostgreSQL 17 database,
+   including unchanged accounts/credentials/research/submissions, concurrent
+   writes, migration ownership and the web/backup roles' new-table privileges.
+2. Preserve a completed encrypted pre-migration backup and its original runtime
+   configuration. Verify a restore with the exact paired application image.
+   Preserve the original server secret; do not replace any beta configuration.
+3. Build and test a schema-0024 application image without promoting the beta tag.
+   Arrange a migration-capable operator job using the exact reviewed artifact;
+   do not give CI the beta database credentials or make app startup migrate.
+4. Explicitly coordinate the additive migration and rollout. The previous
+   running app uses the old tables, but its startup preflight rejects a database
+   at 0024. A restart or bare old-image rollback after migration will therefore
+   fail. Prepare a reviewed schema-0024-compatible rollback image (or a forward
+   fix) before migration; do not disable the schema check or drop profile data.
+5. Verify the exact hosted source, private access and owner edit/read flows.
+   Verify the backup role can read the new table and bind the next recovery set
+   to a compatible schema-0024 application image. Restore that set separately,
+   including a synthetic profile. An image-only release receipt does not prove
+   migration, backup or restore success.
+
+The migration's downgrade drops the new table. It is suitable for an empty
+disposable fixture, not a production rollback after members save details.
+Implementation tests and source review do not by themselves certify rollout.

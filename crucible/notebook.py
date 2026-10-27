@@ -20,7 +20,7 @@ from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, JSON, String,
 from sqlalchemy.orm import Mapped, aliased, load_only, mapped_column
 
 from .db import Base, User
-from . import protocol_proposals, proposal_notes, proposal_retractions, notebook_sharing, notebook_moderation, notebook_graph, note_ratings, machine_auth, notebook_trash
+from . import protocol_proposals, proposal_notes, proposal_retractions, notebook_sharing, notebook_moderation, notebook_graph, note_ratings, machine_auth, notebook_trash, notebook_numbers
 
 
 FORMAT = "crucible-theory-local-v1"
@@ -70,6 +70,11 @@ class NotebookRevision(Base):
     request_sha256: Mapped[str] = mapped_column(String(64))
     # Imported timestamps/extra labels are retained verbatim as provenance only.
     source_revision: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+
+@event.listens_for(NotebookNote, "after_insert")
+def _assign_number(mapper, connection, note):
+    notebook_numbers.ensure(connection, [note.id])
 
 
 @event.listens_for(NotebookRevision, "after_insert")
@@ -692,7 +697,9 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             "requests": proposals} for item in reversed(revisions)
             if (proposals := proposal_records(requests.get((note.id, item.revision, item.content_sha256), [])))), None)
         deletion = notebook_trash.active(session, note.id)
-        return {"id": note.id, "owner": {"id": owner.id, "handle": owner.handle}, "can_edit": user.id == owner.id and deletion is None,
+        return {"id": note.id, "number": session.scalar(select(notebook_numbers.NotebookNumber.number)
+                    .where(notebook_numbers.NotebookNumber.note_id == note.id)),
+                "owner": {"id": owner.id, "handle": owner.handle}, "can_edit": user.id == owner.id and deletion is None,
                 "can_delete": user.id == owner.id and deletion is None and not notebook_trash.has_review_history(session, note.id),
                 "can_restore": user.id == owner.id and deletion is not None,
                 "deletion": notebook_trash.data(deletion) if deletion else None,
@@ -754,6 +761,15 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 "audience": "currently_visible_notes", "as_of": as_of, "total": total + undated,
                 "undated_count": undated, "points": points, "server_time": now}
 
+    @app.get("/api/notebook/curated-note-numbers")
+    def curated_note_numbers(request: Request):
+        with db.transaction(write=True) as session:
+            account(request, session)
+            if "authorization" in request.headers:
+                raise HTTPException(403, "Use the community research interface for curated notes.")
+            return {"numbers": notebook_numbers.ensure(session.connection(),
+                [note["id"] for note in curated_collection()])}
+
     @app.get("/api/notebook/notes")
     def list_notes(request: Request, after: str | None = Query(default=None, max_length=768),
                    limit: int = Query(default=50, ge=1, le=100), proposals_only: bool = False,
@@ -776,9 +792,12 @@ def register_routes(app, db, settings, clock, user_for, throttle):
         except (ValueError, UnicodeError):
             raise HTTPException(422, "Use valid text for notebook search and filters.") from None
         term = q.strip()
+        reference_number = notebook_numbers.search_number(term)
         scope_tag = {"literature": "literature", "human": "human-written"}.get(scope)
         cursor = _read_browse_cursor(after) if after is not None else None
-        with db.transaction() as session:
+        # Only bundled catalogue discovery can allocate aliases on a read.
+        # SQLite needs its write lock before reading to avoid upgrade races.
+        with db.transaction(write=include_curated and scope not in {"mine", "trash"}) as session:
             user = account(request, session)
             agent = "authorization" in request.headers
             if agent:
@@ -822,7 +841,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 NotebookRevision.content["tags"], NotebookRevision.content["kind"].as_string(),
                 latest_visible.c.revision_count, latest_visible.c.proposal_revision,
                 proposed.content_sha256, NotebookPublication.id, NotebookPublication.decision,
-                withdrawal.revision_id, deletion).join(latest_visible, latest_visible.c.note_id == NotebookNote.id)
+                withdrawal.revision_id, deletion, notebook_numbers.NotebookNumber.number).join(latest_visible, latest_visible.c.note_id == NotebookNote.id)
                 .join(NotebookRevision, and_(NotebookRevision.note_id == NotebookNote.id,
                     NotebookRevision.revision == latest_visible.c.latest))
                 .join(User, User.id == NotebookNote.author_id)
@@ -834,6 +853,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 .outerjoin(NotebookPublication, NotebookPublication.revision_id == NotebookRevision.id)
                 .outerjoin(withdrawal, withdrawal.revision_id == NotebookRevision.id)
                 .outerjoin(deletion, and_(deletion.note_id == NotebookNote.id, deletion.restored_at.is_(None)))
+                .outerjoin(notebook_numbers.NotebookNumber, notebook_numbers.NotebookNumber.note_id == NotebookNote.id)
                 .options(load_only(NotebookNote.id, NotebookNote.author_id, NotebookNote.created_at,
                                   NotebookNote.source_id, raiseload=True),
                          load_only(deletion.id, deletion.note_id, deletion.revision, deletion.content_sha256,
@@ -842,7 +862,9 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 created_at, identifier = cursor
                 query = query.where(or_(NotebookRevision.created_at < created_at,
                     and_(NotebookRevision.created_at == created_at, NotebookNote.id > identifier)))
-            if term:
+            if reference_number is not None:
+                query = query.where(notebook_numbers.NotebookNumber.number == reference_number)
+            elif term:
                 query = query.where(_search_clause(term))
             if tag is not None:
                 query = query.where(_tag_clause(tag))
@@ -852,7 +874,10 @@ def register_routes(app, db, settings, clock, user_for, throttle):
 
             curated, curated_requests = [], {}
             if include_curated and scope not in {"mine", "trash"}:
-                for note in curated_collection():
+                collection = curated_collection()
+                numbers = notebook_numbers.ensure(session.connection(), [note["id"] for note in collection])
+                for source in collection:
+                    note = {**source, "number": numbers[source["id"]]}
                     latest = note["revisions"][-1]
                     content = latest["content"]
                     tags = content.get("tags", [])
@@ -861,7 +886,9 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                     if ((scope_tag is not None and scope_tag not in tags)
                             or (tag is not None and tag not in tags)):
                         continue
-                    if term and not any(term.lower() in value.lower() for value in
+                    if reference_number is not None and note["number"] != reference_number:
+                        continue
+                    if reference_number is None and term and not any(term.lower() in value.lower() for value in
                         (content["title"], content["claim"], *tags)):
                         continue
                     curated.append(note)
@@ -902,12 +929,12 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                             "requests": curated_requests.get((row["id"], latest["revision"], latest["content_sha256"]), [])}]})
                     continue
                 (note, handle, revision_id, number, created, digest, title, claim, tags, kind, count,
-                 proposed_number, proposed_digest, publication_id, decision, withdrawn_id, deleted) = row
+                 proposed_number, proposed_digest, publication_id, decision, withdrawn_id, deleted, note_number) = row
                 status = "withdrawn" if withdrawn_id is not None else (decision or "submitted") if publication_id else "private"
                 content = {"title": title, "claim": claim, "tags": tags or []}
                 if kind is not None:
                     content["kind"] = kind
-                records.append({"id": note.id, "owner": {"id": note.author_id, "handle": handle},
+                records.append({"id": note.id, "number": note_number, "owner": {"id": note.author_id, "handle": handle},
                     "can_edit": user.id == note.author_id and deleted is None,
                     "can_restore": user.id == note.author_id and deleted is not None,
                     "deletion": notebook_trash.data(deleted) if deleted is not None else None,
@@ -1155,9 +1182,52 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             session.flush()
             return result(publication)
 
+    def publication_queue_summaries(session, user, rows):
+        # The queue is a list of exact submitted revisions, not full readers.
+        # Batch status lookups and leave bodies/specifications to the existing
+        # authorized note-detail endpoint when the reviewer opens a request.
+        withdrawals = notebook_moderation.records(session, [revision.id for _, revision, *_ in rows])
+        deleted = notebook_trash.records(session, [note.id for _, _, note, *_ in rows])
+        shared = shared_summaries(session, [note.id for _, _, note, *_ in rows])
+        refs = [(note.id, revision.revision, revision.content_sha256) for _, revision, note, *_ in rows]
+        refs.extend((identifier, item["revision"], item["content_sha256"]) for identifier, item in shared.items())
+        requests = request_summaries(session, settings, user, refs)
+        for identifier, item in shared.items():
+            item["requests"] = requests.get((identifier, item["revision"], item["content_sha256"]), [])
+        records = []
+        self_review = protocol_proposals.can_self_review(settings, user)
+        for publication, revision, note, handle, title, claim, tags, kind, imported, note_number in rows:
+            withdrawal, deletion = withdrawals.get(revision.id), deleted.get(note.id)
+            status = "withdrawn" if withdrawal else "submitted"
+            content = {"title": title, "claim": claim, "tags": tags or []}
+            if kind is not None:
+                content["kind"] = kind
+            linked = requests.get((note.id, revision.revision, revision.content_sha256), [])
+            current = {"revision": revision.revision, "created_at": revision.created_at,
+                "content_sha256": revision.content_sha256, "content": content,
+                "publication_status": status, "imported": imported, "summary": True,
+                "publication": {"requested_at": publication.requested_at,
+                    "test_only_self_review": publication.test_only_self_review}, "requests": linked}
+            if withdrawal:
+                current["moderation"] = notebook_moderation.audit_data(withdrawal)
+            proposals = proposal_records(linked)
+            records.append({"id": note.id, "number": note_number, "owner": {"id": note.author_id, "handle": handle},
+                "can_edit": user.id == note.author_id and deletion is None,
+                "can_delete": False,  # Every row already has publication review history.
+                "can_restore": user.id == note.author_id and deletion is not None,
+                "deletion": notebook_trash.data(deletion) if deletion else None,
+                "can_review": user.id != note.author_id or self_review,
+                "can_self_review": self_review, "can_moderate": True,
+                "created_at": note.created_at, "revision": revision.revision,
+                "content_sha256": revision.content_sha256, "publication_status": status,
+                "revision_count": 1, "revisions": [current], "shared_revision": shared.get(note.id),
+                "proposal_revision": {"revision": revision.revision, "content_sha256": revision.content_sha256,
+                    "requests": proposals} if proposals else None, "imported": note.source_id is not None})
+        return records
+
     @app.get("/api/notebook/review-queue")
     def publication_queue(request: Request, after: str | None = Query(default=None, max_length=36),
-                          limit: int = Query(default=50, ge=1, le=100)):
+                          limit: int = Query(default=50, ge=1, le=100), summary: bool = False):
         with db.transaction() as session:
             user = account(request, session)
             if not protocol_proposals.is_reviewer(settings, user):
@@ -1165,16 +1235,31 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             query = select(NotebookPublication, NotebookRevision, NotebookNote).join(
                 NotebookRevision, NotebookRevision.id == NotebookPublication.revision_id).join(
                 NotebookNote, NotebookNote.id == NotebookRevision.note_id).where(NotebookPublication.decision.is_(None))
+            if summary:
+                query = query.join(User, User.id == NotebookNote.author_id).outerjoin(
+                    notebook_numbers.NotebookNumber, notebook_numbers.NotebookNumber.note_id == NotebookNote.id
+                ).add_columns(User.handle,
+                    NotebookRevision.content["title"].as_string(), NotebookRevision.content["claim"].as_string(),
+                    NotebookRevision.content["tags"], NotebookRevision.content["kind"].as_string(),
+                    NotebookRevision.source_revision.is_not(None), notebook_numbers.NotebookNumber.number).options(
+                        load_only(NotebookPublication.id, NotebookPublication.requested_at,
+                                  NotebookPublication.test_only_self_review, raiseload=True),
+                        load_only(NotebookRevision.id, NotebookRevision.note_id, NotebookRevision.revision,
+                                  NotebookRevision.created_at, NotebookRevision.content_sha256, raiseload=True),
+                        load_only(NotebookNote.id, NotebookNote.author_id, NotebookNote.created_at,
+                                  NotebookNote.source_id, raiseload=True))
             # Queue visibility includes the reviewer's own pending requests.
             # note_data and the decision endpoint independently enforce self-review policy.
             if after:
-                anchor = session.get(NotebookPublication, after)
+                anchor = session.get(NotebookPublication, after, options=[
+                    load_only(NotebookPublication.id, NotebookPublication.requested_at, raiseload=True)] if summary else None)
                 if anchor is None:
                     raise HTTPException(422, "Invalid sharing review cursor.")
                 query = query.where(or_(NotebookPublication.requested_at > anchor.requested_at,
                     and_(NotebookPublication.requested_at == anchor.requested_at, NotebookPublication.id > anchor.id)))
             rows = session.execute(query.order_by(NotebookPublication.requested_at, NotebookPublication.id).limit(limit + 1)).all()
-            return {"notes": [note_data(session, note, user, [revision]) for _, revision, note in rows[:limit]],
+            return {"notes": (publication_queue_summaries(session, user, rows[:limit]) if summary else
+                              [note_data(session, note, user, [revision]) for _, revision, note in rows[:limit]]),
                     "next_after": rows[limit - 1][0].id if len(rows) > limit else None}
 
     @app.post("/api/notebook/notes/{note_id}/publication-reviews")

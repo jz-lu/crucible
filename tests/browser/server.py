@@ -32,8 +32,10 @@ def main():
                          for adapter in (kem, dh_v3, dh_v4)}
     registry.CURRENT = {dh_v4.SCHEME_ID: dh_v4.SCHEME_VERSION}
     with tempfile.TemporaryDirectory(prefix="crucible-browser-checks-") as tmp:
+        queue_reviewer_id = str(uuid4())
         settings = Settings("sqlite:///" + tmp + "/fixture.db", secrets.token_bytes(32),
                             origins=(ORIGIN,), access_mode="beta", rate_limits=False,
+                            reviewer_ids=(queue_reviewer_id,),
                             github_login_enabled=True, github_client_id="synthetic-browser-client",
                             github_client_secret="synthetic-browser-provider-secret")
         app = create_app(settings, initialize=True)
@@ -43,8 +45,8 @@ def main():
         now = time.time()
         encoded = passwords.hash(PASSWORD)
         with app.state.db.transaction(write=True) as session:
-            for actor in ("alice", "bob", "revoked", "bulkdesktop", "bulkmobile"):
-                user = User(id=str(uuid4()), handle="browser_" + actor,
+            for actor in ("alice", "bob", "revoked", "bulkdesktop", "bulkmobile", "queueauthor", "queuereviewer", "numbers"):
+                user = User(id=queue_reviewer_id if actor == "queuereviewer" else str(uuid4()), handle="browser_" + actor,
                             password_hash=encoded, created_at=now)
                 session.add(user)
                 session.flush()
@@ -65,9 +67,15 @@ def main():
                     latest_revision=1, idempotency_key=str(uuid4()), request_sha256="0" * 64)
                 session.add(note)
                 session.flush()
-                session.add(notebook.NotebookRevision(id=str(uuid4()), note_id=note.id, revision=1,
+                revision = notebook.NotebookRevision(id=str(uuid4()), note_id=note.id, revision=1,
                     created_at=now, content=content, content_sha256=notebook._hash(content),
-                    idempotency_key=str(uuid4()), request_sha256="1" * 64))
+                    idempotency_key=str(uuid4()), request_sha256="1" * 64)
+                session.add(revision)
+                if actor == "queueauthor":
+                    session.flush()
+                    session.add(notebook.NotebookPublication(id=str(uuid4()), revision_id=revision.id,
+                        author_id=user.id, requested_at=now, idempotency_key=str(uuid4()),
+                        request_sha256="2" * 64, test_only_self_review=False))
         print("Disposable browser fixture ready; portable DH catalogue only.", flush=True)
         try:
             uvicorn.run(app, host="127.0.0.1", port=8029, access_log=False, log_level="warning")

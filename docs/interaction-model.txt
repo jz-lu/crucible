@@ -152,6 +152,28 @@ compact selection card. Individual and bulk requests keep their confirmation and
 retry semantics. An asynchronous card action remembers its originating button
 before disabling it, so cancellation restores focus without scrolling.
 
+Researcher profile edits follow the same ownership rules: the optional editor
+is separate from score refreshes, retains a draft across in-app navigation, and
+clears it on account/access changes. An uncertain save keeps its exact payload
+and key; a conflict requires refreshed saved context and another explicit Save.
+Cold profile frames show the known heading with quiet reserved space; optional
+metadata and scores arrive together without displacing provisional score cards.
+Metadata restores independently of score-DOM deduplication on a warm return.
+Sign-in and agent controls remain session-owned during slow or failed reads.
+See researcher-profiles.txt for the API and separate schema rollout boundary.
+
+Implemented: publication-request lists use an opt-in compact server projection
+and the notebook's existing bounded, session-owned summary cache. Returning to
+an exact cursor paints its still-valid rows immediately and refreshes quietly;
+unchanged results retain row DOM, expansion and focus. Concurrent reads for that
+exact query share one request. This does not cache review forms or authorize a
+decision: opening an exact revision still fetches current detail, and every
+decision is checked by the server. Permission denial, session changes and
+confirmed writes invalidate retained summaries. Transient refresh failures keep
+a valid snapshot with an explicit retry without renewing its expiry. Summary
+queries batch metadata and omit full note bodies and proposal specifications;
+the existing full API response remains available to callers that request it.
+
 Next, in priority order:
 
 1. Review -> evidence -> return: protect unsent review findings/checks. Key any

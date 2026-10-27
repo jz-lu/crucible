@@ -310,7 +310,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     current = {...participant(50), score_breakdown: {progress: 10, early_recovery: 40, scheme_contributions: 0},
       records: [record], first_records: [{...record, place: 1}], recent_recoveries: [record]};
     await app.sandbox.synchronizeSession();
-    assert.match(profileElement(app, '.person-stats').textContent, /Points50/);
+    assert.equal(profileElement(app, '.person-stats').firstChild.children[1].textContent, '50');
     assert.equal(app.$('#first-records').querySelectorAll('.milestone-result').length, 1);
     assert.equal(app.$('#personal-records').querySelectorAll('.person-record-result').length, 1);
     assert.equal(app.$('#recent-solves').querySelectorAll('.history-item').length, 1);
@@ -332,7 +332,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     app.sandbox.setSession(app.envelope({user: null, csrf_token: 'new-epoch'}));
     gate.resolve(response(app.envelope({person: participant(999)})));
     await synchronization;
-    assert.match(profileElement(app, '.person-stats').textContent, /Points0/);
+    assert.equal(profileElement(app, '.person-stats').firstChild.children[1].textContent, '0');
     assert.equal(app.$('#agent-connections').hidden, true);
     assert.equal(app.$('#auth-button').hidden, false);
   });
@@ -439,7 +439,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     app.$('#personal-records').open = true; app.$('#first-records').open = true;
     points = 50;
     await app.sandbox.refreshRecoveryViews();
-    assert.match(profileElement(app, '.person-stats').textContent, /Points50/);
+    assert.equal(profileElement(app, '.person-stats').firstChild.children[1].textContent, '50');
     assert.ok(app.$('#personal-records').open && app.$('#first-records').open);
     assert.equal(app.requests.filter(request => request.url.pathname === '/api/people/alice').length, 2);
   });
