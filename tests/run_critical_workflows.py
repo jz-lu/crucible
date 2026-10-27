@@ -18,6 +18,7 @@ SUITES = (
     "test_notebook_browse.py", "test_notebook_summary_index.py", "test_notebook_timeline.py",
     "test_notebook_agents.py", "test_notebook_trash.py", "test_notebook_graph.py",
     "test_notebook_numbers.py",
+    "test_publication_queue_summary.py",
     "test_note_ratings.py", "test_machine_auth.py",
     "test_researcher_profiles.py", "test_researcher_profiles_migration.py",
 )

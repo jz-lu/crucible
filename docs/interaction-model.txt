@@ -162,6 +162,18 @@ Metadata restores independently of score-DOM deduplication on a warm return.
 Sign-in and agent controls remain session-owned during slow or failed reads.
 See researcher-profiles.txt for the API and separate schema rollout boundary.
 
+Implemented: publication-request lists use an opt-in compact server projection
+and the notebook's existing bounded, session-owned summary cache. Returning to
+an exact cursor paints its still-valid rows immediately and refreshes quietly;
+unchanged results retain row DOM, expansion and focus. Concurrent reads for that
+exact query share one request. This does not cache review forms or authorize a
+decision: opening an exact revision still fetches current detail, and every
+decision is checked by the server. Permission denial, session changes and
+confirmed writes invalidate retained summaries. Transient refresh failures keep
+a valid snapshot with an explicit retry without renewing its expiry. Summary
+queries batch metadata and omit full note bodies and proposal specifications;
+the existing full API response remains available to callers that request it.
+
 Next, in priority order:
 
 1. Review -> evidence -> return: protect unsent review findings/checks. Key any

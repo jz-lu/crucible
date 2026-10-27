@@ -1182,9 +1182,52 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             session.flush()
             return result(publication)
 
+    def publication_queue_summaries(session, user, rows):
+        # The queue is a list of exact submitted revisions, not full readers.
+        # Batch status lookups and leave bodies/specifications to the existing
+        # authorized note-detail endpoint when the reviewer opens a request.
+        withdrawals = notebook_moderation.records(session, [revision.id for _, revision, *_ in rows])
+        deleted = notebook_trash.records(session, [note.id for _, _, note, *_ in rows])
+        shared = shared_summaries(session, [note.id for _, _, note, *_ in rows])
+        refs = [(note.id, revision.revision, revision.content_sha256) for _, revision, note, *_ in rows]
+        refs.extend((identifier, item["revision"], item["content_sha256"]) for identifier, item in shared.items())
+        requests = request_summaries(session, settings, user, refs)
+        for identifier, item in shared.items():
+            item["requests"] = requests.get((identifier, item["revision"], item["content_sha256"]), [])
+        records = []
+        self_review = protocol_proposals.can_self_review(settings, user)
+        for publication, revision, note, handle, title, claim, tags, kind, imported in rows:
+            withdrawal, deletion = withdrawals.get(revision.id), deleted.get(note.id)
+            status = "withdrawn" if withdrawal else "submitted"
+            content = {"title": title, "claim": claim, "tags": tags or []}
+            if kind is not None:
+                content["kind"] = kind
+            linked = requests.get((note.id, revision.revision, revision.content_sha256), [])
+            current = {"revision": revision.revision, "created_at": revision.created_at,
+                "content_sha256": revision.content_sha256, "content": content,
+                "publication_status": status, "imported": imported, "summary": True,
+                "publication": {"requested_at": publication.requested_at,
+                    "test_only_self_review": publication.test_only_self_review}, "requests": linked}
+            if withdrawal:
+                current["moderation"] = notebook_moderation.audit_data(withdrawal)
+            proposals = proposal_records(linked)
+            records.append({"id": note.id, "owner": {"id": note.author_id, "handle": handle},
+                "can_edit": user.id == note.author_id and deletion is None,
+                "can_delete": False,  # Every row already has publication review history.
+                "can_restore": user.id == note.author_id and deletion is not None,
+                "deletion": notebook_trash.data(deletion) if deletion else None,
+                "can_review": user.id != note.author_id or self_review,
+                "can_self_review": self_review, "can_moderate": True,
+                "created_at": note.created_at, "revision": revision.revision,
+                "content_sha256": revision.content_sha256, "publication_status": status,
+                "revision_count": 1, "revisions": [current], "shared_revision": shared.get(note.id),
+                "proposal_revision": {"revision": revision.revision, "content_sha256": revision.content_sha256,
+                    "requests": proposals} if proposals else None, "imported": note.source_id is not None})
+        return records
+
     @app.get("/api/notebook/review-queue")
     def publication_queue(request: Request, after: str | None = Query(default=None, max_length=36),
-                          limit: int = Query(default=50, ge=1, le=100)):
+                          limit: int = Query(default=50, ge=1, le=100), summary: bool = False):
         with db.transaction() as session:
             user = account(request, session)
             if not protocol_proposals.is_reviewer(settings, user):
@@ -1192,16 +1235,29 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             query = select(NotebookPublication, NotebookRevision, NotebookNote).join(
                 NotebookRevision, NotebookRevision.id == NotebookPublication.revision_id).join(
                 NotebookNote, NotebookNote.id == NotebookRevision.note_id).where(NotebookPublication.decision.is_(None))
+            if summary:
+                query = query.join(User, User.id == NotebookNote.author_id).add_columns(User.handle,
+                    NotebookRevision.content["title"].as_string(), NotebookRevision.content["claim"].as_string(),
+                    NotebookRevision.content["tags"], NotebookRevision.content["kind"].as_string(),
+                    NotebookRevision.source_revision.is_not(None)).options(
+                        load_only(NotebookPublication.id, NotebookPublication.requested_at,
+                                  NotebookPublication.test_only_self_review, raiseload=True),
+                        load_only(NotebookRevision.id, NotebookRevision.note_id, NotebookRevision.revision,
+                                  NotebookRevision.created_at, NotebookRevision.content_sha256, raiseload=True),
+                        load_only(NotebookNote.id, NotebookNote.author_id, NotebookNote.created_at,
+                                  NotebookNote.source_id, raiseload=True))
             # Queue visibility includes the reviewer's own pending requests.
             # note_data and the decision endpoint independently enforce self-review policy.
             if after:
-                anchor = session.get(NotebookPublication, after)
+                anchor = session.get(NotebookPublication, after, options=[
+                    load_only(NotebookPublication.id, NotebookPublication.requested_at, raiseload=True)] if summary else None)
                 if anchor is None:
                     raise HTTPException(422, "Invalid sharing review cursor.")
                 query = query.where(or_(NotebookPublication.requested_at > anchor.requested_at,
                     and_(NotebookPublication.requested_at == anchor.requested_at, NotebookPublication.id > anchor.id)))
             rows = session.execute(query.order_by(NotebookPublication.requested_at, NotebookPublication.id).limit(limit + 1)).all()
-            return {"notes": [note_data(session, note, user, [revision]) for _, revision, note in rows[:limit]],
+            return {"notes": (publication_queue_summaries(session, user, rows[:limit]) if summary else
+                              [note_data(session, note, user, [revision]) for _, revision, note in rows[:limit]]),
                     "next_after": rows[limit - 1][0].id if len(rows) > limit else None}
 
     @app.post("/api/notebook/notes/{note_id}/publication-reviews")

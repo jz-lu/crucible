@@ -168,15 +168,18 @@
     const readCache = new Map();
     const preparingNotes = new Map();
     const preparingLists = new Map();
-    function invalidateReads() { readCache.clear(); preparingNotes.clear(); preparingLists.clear(); timelinePreparation = null; indexPreparation = null; warmEnabled = false; listStamp = null; timelineStamp = null; readEpoch++; }
+    const reviewListReads = new Map();
+    function invalidateReads() { readCache.clear(); preparingNotes.clear(); preparingLists.clear(); reviewListReads.clear(); timelinePreparation = null; indexPreparation = null; warmEnabled = false; listStamp = null; timelineStamp = null; readEpoch++; }
     function cachedRead(key) {
-      if (reviewOnly) return null; // Review forms always require a fresh server read.
+      // Queue summaries can paint on return; decision forms and full revisions
+      // still require a fresh server read, even in the same reviewer session.
+      if (reviewOnly && !key.startsWith('list:review:')) return null;
       const entry = readCache.get(key);
       if (!entry || Date.now() - entry.at > 300000) { readCache.delete(key); return null; }
       readCache.delete(key); readCache.set(key, entry); return entry.value;
     }
     function rememberRead(key, value, at = Date.now()) {
-      if (reviewOnly) return;
+      if (reviewOnly && !key.startsWith('list:review:')) return;
       const size = JSON.stringify(value).length;
       readCache.delete(key);
       if (size > 1000000) return;
@@ -742,6 +745,18 @@
         rememberRead(key, {notes:result.notes, next_after:result.next_after || null});
       }, error => { if (preparingLists.get(key) === entry && current() && forbiddenRead(error)) invalidateReads(); forget(); });
     }
+    function readReviewList(key, query) {
+      if (reviewListReads.has(key)) return reviewListReads.get(key);
+      const current = readGuard();
+      const task = api('/api/notebook/review-queue?' + query).catch(error => {
+        // A denial can arrive after leaving the queue. Retire its cached
+        // summaries too, without letting an old account/read clear newer data.
+        if (current() && forbiddenRead(error)) { readCache.clear(); listStamp = null; }
+        throw error;
+      }).finally(() => { if (reviewListReads.get(key) === task) reviewListReads.delete(key); });
+      reviewListReads.set(key, task);
+      return task;
+    }
     async function loadList({paging = false} = {}) {
       clearTimeout(searchTimer); searchTimer = null;
       humanHint.hidden = reviewMode || visibility !== 'human';
@@ -751,6 +766,7 @@
       if (!indexed && String(pageCursors[pageIndex] || '').startsWith('index:')) resetPages();
       const current = guard(), token = ++request, cursor = pageCursors[pageIndex], generation = readEpoch;
       const query = new URLSearchParams({limit:'25'});
+      if (reviewMode) query.set('summary', 'true');
       if (!reviewMode) {
         query.set('include_curated', 'true');
         query.set('scope', visibility === 'research' ? 'literature' : ['mine', 'human', 'trash'].includes(visibility) ? visibility : 'all');
@@ -787,7 +803,7 @@
       try {
         const prepared = preparingLists.get(key); preparingLists.delete(key);
         const result = indexed || await (prepared && Date.now() - prepared.at < 10000 ? prepared.task :
-          api((reviewMode ? '/api/notebook/review-queue?' : '/api/notebook/notes?') + query));
+          reviewMode ? readReviewList(key, query) : api('/api/notebook/notes?' + query));
         if (!current() || request !== token || generation !== readEpoch || params.has('note')) return;
         if (!Array.isArray(result.notes) || (result.next_after && result.next_after === cursor)) throw Error('The notebook could not be loaded.');
         const page = {notes: result.notes, next_after: result.next_after || null};
@@ -798,14 +814,21 @@
         if (!indexed) prepareNextPage(query, nextAfter);
       } catch (error) {
         if (!current() || request !== token || generation !== readEpoch) return;
-        readCache.delete(key);
+        const expiredCursor = cursor && error.status === 422 &&
+          (/page cursor/i.test(error.message) || reviewMode && /sharing review cursor/i.test(error.message));
+        const retainQueue = reviewMode && cached && !forbiddenRead(error) && !expiredCursor;
+        if (!retainQueue) readCache.delete(key);
         if (forbiddenRead(error)) { invalidateReads(); q('list').removeAttribute('aria-busy'); }
-        const expiredCursor = cursor && error.status === 422 && /page cursor/i.test(error.message);
         if (expiredCursor) resetPages();
-        if (cached && !forbiddenRead(error) && !expiredCursor) notice('Notes could not be refreshed. ' + error.message, true);
+        if (retainQueue) {
+          listRefreshing = false;
+          notice('Publish requests could not be refreshed. ' + error.message, true);
+          q('notice').append(' ', button('Try again', () => loadList(), 'nb-button'));
+        } else if (cached && !forbiddenRead(error) && !expiredCursor) notice('Notes could not be refreshed. ' + error.message, true);
         else {
           notes = []; nextAfter = null; listLoaded = false; listStamp = null;
-          updateList(() => q('list').replaceChildren(el('p', 'nb-error', error.message), button(expiredCursor ? 'Restart notebook list' : 'Try again', () => loadList(), 'nb-button')));
+          updateList(() => q('list').replaceChildren(el('p', 'nb-error', error.message), button(expiredCursor ?
+            reviewMode ? 'Restart publish requests' : 'Restart notebook list' : 'Try again', () => loadList(), 'nb-button')));
           q('count').textContent = '';
         }
       } finally {
