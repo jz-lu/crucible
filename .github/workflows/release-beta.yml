@@ -5,7 +5,12 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish the verified image and promote beta (may trigger configured Autodeploy)
+        description: Publish the verified image under an immutable release tag
+        type: boolean
+        required: true
+        default: true
+      promote:
+        description: Promote the published image to beta (requires Publish; may trigger Autodeploy)
         type: boolean
         required: true
         default: true
@@ -19,12 +24,12 @@ concurrency:
 
 jobs:
   source-checks:
-    if: github.ref == 'refs/heads/main'
+    if: startsWith(github.ref, 'refs/heads/') && (github.ref == 'refs/heads/main' || !inputs.promote)
     uses: ./.github/workflows/tests.yml
   native-release:
     name: Build and verify native beta image
     needs: source-checks
-    if: github.ref == 'refs/heads/main'
+    if: startsWith(github.ref, 'refs/heads/') && (github.ref == 'refs/heads/main' || !inputs.promote)
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
@@ -69,12 +74,15 @@ jobs:
           python3 -B deploy/release.py publish --output "$RELEASE_OUTPUT"
           --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT"
       - name: Promote the exact tested image to beta
-        if: success() && inputs.publish
+        if: success() && github.ref == 'refs/heads/main' && inputs.publish && inputs.promote
         run: >-
           python3 -B deploy/release.py promote --output "$RELEASE_OUTPUT"
           --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT"
       - name: Release summary
         if: always()
+        env:
+          PUBLISH_REQUESTED: ${{ inputs.publish }}
+          PROMOTE_REQUESTED: ${{ inputs.promote }}
         run: |
           python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json, os, pathlib
@@ -103,6 +111,11 @@ jobs:
                   print('\nObserved channel digest: `' + str(value['observed_digest']) + '`')
               else:
                   print('\nBeta promotion was blocked before any tag update was attempted.')
+          elif os.environ['PUBLISH_REQUESTED'] == 'false':
+              print('\nVerification-only run: publication and beta promotion were disabled.')
+          elif os.environ['PROMOTE_REQUESTED'] == 'false':
+              print('\nBeta promotion was deliberately disabled; any completed immutable publication is retained above.')
+              print('\nThis workflow did not update beta. A separate reviewed promotion or image selection is still required for deployment.')
           else:
               print('\nNo beta promotion was started.')
           print('\nNo provider configuration, database migration or backup configuration was changed.')

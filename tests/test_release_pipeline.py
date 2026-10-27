@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import stat
 import subprocess
+import textwrap
 
 import pytest
 
@@ -214,7 +215,7 @@ def test_workflow_is_manual_and_promotes_only_after_successful_publication():
     assert 'group: crucible-beta-release\n  cancel-in-progress: false' in workflow
     assert workflow.index('name: Verify exact native catalogue') < workflow.index('name: Publish the tested image')
     assert workflow.index('name: Publish the tested image') < workflow.index('name: Promote the exact tested image to beta')
-    assert 'name: Promote the exact tested image to beta\n        if: success() && inputs.publish' in workflow
+    assert "name: Promote the exact tested image to beta\n        if: success() && github.ref == 'refs/heads/main' && inputs.publish && inputs.promote\n" in workflow
     assert 'crucible-release/promotion.json' in workflow
     assert 'if: always()\n        run: rm -rf -- "$RUNNER_TEMP/crucible-registry-auth"' in workflow
     aggregate = (ROOT / '.github/workflows/tests.yml').read_text()
@@ -225,6 +226,102 @@ def test_workflow_is_manual_and_promotes_only_after_successful_publication():
     assert 'BROWSER_RESULT: ${{ needs.browser-checks.result }}' in aggregate
     assert 'test "$BROWSER_RESULT" = success' in aggregate
     assert 'test "$METADATA_RESULT" = success' in aggregate
+
+
+@pytest.mark.parametrize('succeeded,publish,promote,expected', [
+    (False, False, False, False), (False, False, True, False),
+    (False, True, False, False), (False, True, True, False),
+    (True, False, False, False), (True, False, True, False),
+    (True, True, False, False), (True, True, True, True),
+])
+@pytest.mark.parametrize('ref', ['refs/heads/main', 'refs/heads/schema-bridge', 'refs/tags/main'])
+def test_workflow_promotion_requires_main_success_and_both_boolean_inputs(succeeded, publish, promote, expected, ref):
+    workflow = (ROOT / '.github/workflows/release-beta.yml').read_text()
+    inputs = workflow.split('    inputs:\n', 1)[1].split('\npermissions:', 1)[0]
+    for name in ('publish', 'promote'):
+        block = inputs.split(f'      {name}:\n', 1)[1].splitlines()[:4]
+        assert block[1:] == ['        type: boolean', '        required: true', '        default: true']
+    step = workflow.split('      - name: Promote the exact tested image to beta\n', 1)[1].split('      - name:', 1)[0]
+    condition = step.split('        if: ', 1)[1].splitlines()[0]
+    # This exact conjunction has GitHub's boolean input semantics, with no
+    # success override or fallback that could promote verification-only runs.
+    operands = condition.split(' && ')
+    assert operands == ['success()', "github.ref == 'refs/heads/main'", 'inputs.publish', 'inputs.promote']
+    values = {'success()': succeeded, "github.ref == 'refs/heads/main'": ref == 'refs/heads/main',
+              'inputs.publish': publish, 'inputs.promote': promote}
+    assert all(values[item] for item in operands) is (expected and ref == 'refs/heads/main')
+    assert workflow.count('deploy/release.py promote ') == 1
+    assert 'name: Publish the tested image\n        if: inputs.publish\n' in workflow
+
+
+@pytest.mark.parametrize('ref,promote,allowed', [
+    ('refs/heads/main', True, True), ('refs/heads/main', False, True),
+    ('refs/heads/schema-bridge', True, False), ('refs/heads/schema-bridge', False, True),
+    ('refs/tags/reviewed', True, False), ('refs/tags/reviewed', False, False),
+    ('refs/pull/26/merge', True, False), ('refs/pull/26/merge', False, False),
+])
+def test_workflow_candidate_branches_require_promotion_disabled(ref, promote, allowed):
+    workflow = (ROOT / '.github/workflows/release-beta.yml').read_text()
+    expected = "startsWith(github.ref, 'refs/heads/') && (github.ref == 'refs/heads/main' || !inputs.promote)"
+    for job in ('source-checks', 'native-release'):
+        # Read only job-level lines; step conditions cannot satisfy this gate.
+        lines = workflow.split(f'  {job}:\n', 1)[1].splitlines()
+        condition = next(line.removeprefix('    if: ') for line in lines if line.startswith('    if: '))
+        assert condition == expected
+    assert (ref.startswith('refs/heads/') and (ref == 'refs/heads/main' or not promote)) is allowed
+    assert 'needs: source-checks' in workflow
+
+
+def run_release_summary(tmp_path, monkeypatch, *, publish, promote):
+    workflow = (ROOT / '.github/workflows/release-beta.yml').read_text()
+    summary = workflow.split('      - name: Release summary\n', 1)[1].split('      - name:', 1)[0]
+    assert 'PUBLISH_REQUESTED: ${{ inputs.publish }}' in summary
+    assert 'PROMOTE_REQUESTED: ${{ inputs.promote }}' in summary
+    script = summary.split('          import json, os, pathlib\n', 1)[1].split('\n          PY', 1)[0]
+    script = 'import json, os, pathlib\n' + textwrap.dedent(script)
+    monkeypatch.setenv('RELEASE_OUTPUT', str(tmp_path))
+    monkeypatch.setenv('GITHUB_REPOSITORY', 'jz-lu/crucible')
+    monkeypatch.setenv('PUBLISH_REQUESTED', str(publish).lower())
+    monkeypatch.setenv('PROMOTE_REQUESTED', str(promote).lower())
+    exec(compile(script, 'release-summary', 'exec'), {})
+
+
+@pytest.mark.parametrize('publish,promote', [(False, False), (False, True), (True, False), (True, True)])
+def test_release_summary_distinguishes_verified_published_and_promoted(tmp_path, monkeypatch, capsys, publish, promote):
+    release.write_json(tmp_path / 'verified.json', {'status': 'passed'})
+    reference = release.REPOSITORY + '@sha256:' + 'a' * 64
+    if publish:
+        release.write_json(tmp_path / 'published.json', {
+            'source_revision': 'b' * 40, 'registry_reference': reference,
+            'registry_tag': 'git-' + 'b' * 40 + '-123-1',
+        })
+    if publish and promote:
+        release.write_json(tmp_path / 'promotion.json', {
+            'status': 'passed', 'channel_reference': release.REPOSITORY + ':beta',
+            'observed_digest': 'sha256:' + 'a' * 64,
+        })
+    run_release_summary(tmp_path, monkeypatch, publish=publish, promote=promote)
+    output = capsys.readouterr().out
+    assert ('Published image: `' + reference + '`' in output) is publish
+    assert ('Verified beta channel:' in output) is (publish and promote)
+    if not publish:
+        assert 'Verification-only run: publication and beta promotion were disabled.' in output
+    elif not promote:
+        assert 'Beta promotion was deliberately disabled' in output
+        assert 'separate reviewed promotion or image selection' in output
+    else:
+        assert 'Live deployment has not been verified.' in output
+
+
+def test_release_summary_preserves_uncertain_promotion_warning_even_if_input_disabled(tmp_path, monkeypatch, capsys):
+    release.write_json(tmp_path / 'promotion.json', {
+        'status': 'failed', 'promotion_attempted': True, 'observed_digest': None,
+    })
+    run_release_summary(tmp_path, monkeypatch, publish=True, promote=False)
+    output = capsys.readouterr().out
+    assert 'a tag update may already have triggered deployment' in output
+    assert 'deliberately disabled' not in output
+    assert 'did not update beta' not in output
 
 
 @pytest.fixture
