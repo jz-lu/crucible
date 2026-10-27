@@ -56,8 +56,8 @@ The old zero-sequence fingerprints correctly refuse this schema.
 Verification scope
 
 The native release contract retains all existing batches and adds the three
-notes-schema-bridge tests. The existing two researcher-schema tests remain.
-Together they cover real 0023→0024→0025 preservation with a populated profile,
+notes-schema-bridge tests. The researcher-schema batch has three tests, including
+a real upgrade with tests mounted separately from the application. Together they cover real 0023→0024→0025 preservation with a populated profile,
 strict migration head, old reads and absent new routes, old create/import/retry/
 revise/Trash alias behavior, and shared-transaction rollback. The critical workflow
 gate also runs these tests against disposable SQLite and actual portable adapters.
