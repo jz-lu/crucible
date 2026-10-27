@@ -86,7 +86,7 @@ async function assertInlineMainStyle(page, response, {notebookPrepared = false} 
     const main = document.querySelector('head > style[data-main-style]');
     return scripts.map(script => ({path: new URL(script.src).pathname,
       beforeStyle: Boolean(script.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING)}));
-  })).toEqual(['/math.js', '/assumptions.js', '/proposal-retractions.js', '/app.js']
+  })).toEqual(['/math.js', '/assumptions.js', '/proposal-retractions.js', '/resource-metrics.js', '/app.js']
     .map(path => ({path, beforeStyle: true})));
   // Main/critical CSS is inline before admission. Once admitted, optional
   // notebook preparation may add its own stylesheet without affecting first
