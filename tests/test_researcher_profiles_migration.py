@@ -94,7 +94,7 @@ def test_0023_upgrade_preserves_accounts_credentials_notes_receipts_and_release_
             assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0024"
             assert not connection.execute(text("PRAGMA foreign_key_check")).all()
             assert verify_password(connection.scalar(text("SELECT password_hash FROM users")), password)
-        command.check(config)
+        # Full current-head metadata parity is checked by test_notes_schema_bridge.
         # This downgrade is deliberately exercised only on an empty new table.
         # A deployed profile table would need its own preservation decision.
         command.downgrade(config, "0023")

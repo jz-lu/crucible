@@ -1,0 +1,72 @@
+Schema-0025 rollback bridge — isolated candidate, never automatic promotion
+==========================================================================
+
+This successor derives from the preserved 0024 bridge d9c4667, whose runtime UI
+and APIs derive from last-live source 0de679e. All web files, app.py and people.py
+remain byte-for-byte live 0de679e. It does not expose the profile editor/API,
+numeric-note API/UI, compact publication-queue API or Bounties. This is a temporary
+operational rollback candidate, not a second application branch to maintain or
+merge over the accepted feature.
+
+Runtime changes beyond that preserved bridge are narrowly bounded:
+- The exact reviewed notebook_numbers.py allocator and migration 0025.
+- The accepted feature's NotebookNote after_insert hook and import, applied to
+  the old notebook.py. The whole bridge notebook.py is hash-pinned explicitly.
+
+The hook is necessary: a note created or imported while this bridge serves must
+reserve its permanent number before the accepted feature returns. Revisions,
+retries and Trash operations retain those reservations. Note and alias insertion
+share the same transaction. The legacy API deliberately omits the number field;
+its existing UUID/revision/hash remains canonical. Old curated catalogue reads
+do not allocate new aliases, because the old UI exposes none; existing curated
+reservations are retained and the accepted feature can reserve missing ones later.
+Existing populated researcher_profiles data is retained but not edited by the
+bridge. No accounts, scoring, cryptographic artifacts or admission pins change.
+
+This source packages migration head 0025 and preserves exact-head preflight. It
+must not be deployed against 0023/0024. An old 0023/0024 image cannot safely restart
+after the live migration, even though the schema is additive. Do not bypass the
+head check, drop populated tables, reset numbers or downgrade the database as a
+routine image rollback.
+
+Build the reviewed branch with Release beta: Publish=true, Promote=false.
+Candidate branches remain unable to promote. Require all source/native gates,
+immutable source/image/config receipts and independent image verification. Retain
+that immutable digest alongside the accepted feature's digest. This source commit
+alone does not establish a usable rollback image or a hosted startup pass.
+
+If rollback is necessary after migration, the authorized operator selects this
+verified immutable bridge image in the existing app while retaining its actual
+runtime environment, original server key and database. Do not move stable beta
+backward or replay a mutable tag. The eventual forward image must still pass the
+normal current-main, reviewed source, build and publication guards. Use the
+separate 0025 rollout/backup/recovery packet; the old 0024 packet is historical.
+
+Schema and recovery boundaries
+
+Migration 0025 adds one table and one owned PostgreSQL GENERATED ALWAYS AS IDENTITY
+sequence. Runtime needs the normal table DML grants, not sequence USAGE/UPDATE.
+The real backup role additionally needs SELECT on exactly the owned sequence.
+Every recovery set must preserve all 47 tables (including Alembic), aliases and
+sequence last_value/is_called, including gaps. Never derive allocator state from
+MAX(number) or row count. Verify the restored next allocation in an isolated
+recovery target; ordinary table snapshots alone cannot attest sequence state.
+The old zero-sequence fingerprints correctly refuse this schema.
+
+Verification scope
+
+The native release contract retains all existing batches and adds the three
+notes-schema-bridge tests. The existing two researcher-schema tests remain.
+Together they cover real 0023→0024→0025 preservation with a populated profile,
+strict migration head, old reads and absent new routes, old create/import/retry/
+revise/Trash alias behavior, and shared-transaction rollback. The critical workflow
+gate also runs these tests against disposable SQLite and actual portable adapters.
+No production credentials or providers are involved.
+
+The fixed disposable PG17 CI gate retains metadata parity, selects the profile
+migration/grants case only (no unexposed profile API tests), and adds the exact
+reviewed three allocator tests. These prove table-only runtime allocation,
+concurrent writers, backup sequence SELECT, real pg_dump/pg_restore and the next
+number after a retained rollback gap. They require the pinned CI service and are
+not silently replaced by local skips. Actual image checks, hosted grants/startup
+and recovery still belong to the separately reviewed deployment procedure.

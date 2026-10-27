@@ -20,7 +20,7 @@ from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, JSON, String,
 from sqlalchemy.orm import Mapped, aliased, load_only, mapped_column
 
 from .db import Base, User
-from . import protocol_proposals, proposal_notes, proposal_retractions, notebook_sharing, notebook_moderation, notebook_graph, note_ratings, machine_auth, notebook_trash
+from . import protocol_proposals, proposal_notes, proposal_retractions, notebook_sharing, notebook_moderation, notebook_graph, note_ratings, machine_auth, notebook_trash, notebook_numbers
 
 
 FORMAT = "crucible-theory-local-v1"
@@ -70,6 +70,11 @@ class NotebookRevision(Base):
     request_sha256: Mapped[str] = mapped_column(String(64))
     # Imported timestamps/extra labels are retained verbatim as provenance only.
     source_revision: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+
+@event.listens_for(NotebookNote, "after_insert")
+def _assign_number(mapper, connection, note):
+    notebook_numbers.ensure(connection, [note.id])
 
 
 @event.listens_for(NotebookRevision, "after_insert")

@@ -192,8 +192,10 @@ jobs:
         run: |
           python -m pip install -r requirements.lock
           python -m pip install --no-deps -e .
-      - name: Compare fresh synthetic metadata and scoring queries
-        run: python -m pytest -q tests/test_metadata_relations.py tests/test_researcher_profiles_postgresql.py::test_pg17_migration_preserves_0023_data_and_applies_owner_runtime_grants
+      - name: Verify metadata parity and bridge schema grants and allocator recovery
+        env:
+          CRUCIBLE_NOTEBOOK_PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: python -m pytest -q tests/test_metadata_relations.py tests/test_researcher_profiles_postgresql.py::test_pg17_migration_preserves_0023_data_and_applies_owner_runtime_grants tests/test_notebook_numbers_postgresql.py
       - name: State verification boundary
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
@@ -202,6 +204,9 @@ jobs:
           score/milestone parity and malformed receipt tiers. The PostgreSQL
           connection is fixed to this disposable loopback service. This job
           neither reads deployed configuration nor exercises native KEM workers.
+          Bridge checks also cover 0024 owner/runtime/backup grants and 0025 identity
+          allocation, concurrency and exact sequence-state dump/restore. Profile
+          API tests are excluded because the bridge retains the old API.
           EOF
   ci:
     name: CI passed

@@ -139,7 +139,7 @@ def test_pg17_migration_preserves_0023_data_and_applies_owner_runtime_grants(pos
         with postgres.backup_engine.begin() as connection:
             connection.exec_driver_sql('UPDATE researcher_profiles SET revision=revision WHERE false')
     assert readonly.value.orig.sqlstate in {'25006', '42501'}
-    command.check(postgres.config)
+    # Full current-head metadata parity is checked by test_notebook_numbers_postgresql.
     # Empty new table only: this does not approve dropping populated profiles.
     command.downgrade(postgres.config, '0023')
     assert_original_unchanged(postgres)

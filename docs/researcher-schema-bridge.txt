@@ -1,3 +1,6 @@
+Historical 0024 bridge design. This successor branch targets 0025; see
+notes-schema-bridge.txt. The original d9c4667 source and receipts stay unchanged.
+
 Schema-0024 rollback bridge — candidate image, not automatic deployment
 ======================================================================
 
