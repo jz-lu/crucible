@@ -40,7 +40,7 @@ def test_summary_preserves_exact_queued_revision_and_default_full_response(syste
     assert default == reviewer.client.get('/api/notebook/review-queue?summary=false').json()
     full, = default['notes']
     small, = queue(reviewer).json()['notes']
-    for field in ('id', 'owner', 'can_edit', 'can_delete', 'can_restore', 'deletion', 'can_review',
+    for field in ('id', 'number', 'owner', 'can_edit', 'can_delete', 'can_restore', 'deletion', 'can_review',
                   'can_self_review', 'can_moderate', 'created_at', 'revision', 'content_sha256',
                   'publication_status', 'revision_count', 'shared_revision', 'proposal_revision', 'imported'):
         assert small[field] == full[field], field
@@ -100,6 +100,7 @@ def test_two_pending_revisions_of_one_note_are_distinct_exact_queue_entries(syst
     assert [(page['notes'][0]['revision'], page['notes'][0]['content_sha256']) for page in (one, two)] == [
         (first['revision'], first['content_sha256']), (second['revision'], second['content_sha256'])]
     assert one['notes'][0]['id'] == two['notes'][0]['id'] == first['id']
+    assert one['notes'][0]['number'] == two['notes'][0]['number'] == first['number']
     assert two['next_after'] is None
 
 

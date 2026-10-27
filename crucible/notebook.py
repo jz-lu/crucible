@@ -1196,7 +1196,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             item["requests"] = requests.get((identifier, item["revision"], item["content_sha256"]), [])
         records = []
         self_review = protocol_proposals.can_self_review(settings, user)
-        for publication, revision, note, handle, title, claim, tags, kind, imported in rows:
+        for publication, revision, note, handle, title, claim, tags, kind, imported, note_number in rows:
             withdrawal, deletion = withdrawals.get(revision.id), deleted.get(note.id)
             status = "withdrawn" if withdrawal else "submitted"
             content = {"title": title, "claim": claim, "tags": tags or []}
@@ -1211,7 +1211,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             if withdrawal:
                 current["moderation"] = notebook_moderation.audit_data(withdrawal)
             proposals = proposal_records(linked)
-            records.append({"id": note.id, "owner": {"id": note.author_id, "handle": handle},
+            records.append({"id": note.id, "number": note_number, "owner": {"id": note.author_id, "handle": handle},
                 "can_edit": user.id == note.author_id and deletion is None,
                 "can_delete": False,  # Every row already has publication review history.
                 "can_restore": user.id == note.author_id and deletion is not None,
@@ -1236,10 +1236,12 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 NotebookRevision, NotebookRevision.id == NotebookPublication.revision_id).join(
                 NotebookNote, NotebookNote.id == NotebookRevision.note_id).where(NotebookPublication.decision.is_(None))
             if summary:
-                query = query.join(User, User.id == NotebookNote.author_id).add_columns(User.handle,
+                query = query.join(User, User.id == NotebookNote.author_id).outerjoin(
+                    notebook_numbers.NotebookNumber, notebook_numbers.NotebookNumber.note_id == NotebookNote.id
+                ).add_columns(User.handle,
                     NotebookRevision.content["title"].as_string(), NotebookRevision.content["claim"].as_string(),
                     NotebookRevision.content["tags"], NotebookRevision.content["kind"].as_string(),
-                    NotebookRevision.source_revision.is_not(None)).options(
+                    NotebookRevision.source_revision.is_not(None), notebook_numbers.NotebookNumber.number).options(
                         load_only(NotebookPublication.id, NotebookPublication.requested_at,
                                   NotebookPublication.test_only_self_review, raiseload=True),
                         load_only(NotebookRevision.id, NotebookRevision.note_id, NotebookRevision.revision,
