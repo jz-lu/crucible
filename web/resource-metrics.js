@@ -140,7 +140,7 @@
     const choice = selection(scheme, cardId);
     const historical = choice.report !== 'current', publicationId = historical ? choice.report : null;
     const entry = cache.get(requestKey(scheme, publicationId)), data = usable(entry);
-    if (historical && (!entry || !data)) load(scheme, api, redraw, {publicationId});
+    if (!data) load(scheme, api, redraw, {publicationId});
     const publication = data?.publication, binding = publication?.binding;
     const complete = publication?.completeness === 'complete';
     const eligible = complete && (historical || data?.state === 'current');
