@@ -6,7 +6,7 @@ import zipfile
 
 from fastapi import HTTPException
 import pytest
-from sqlalchemy import select
+from sqlalchemy import event as sql_event, select
 from crucible import resource_publications as rp, resource_state as rs
 from test_resource_publications import (system, signing_key, token, auth, archive, fixture_files,
     announce, desired_document, activation_for, IDENTITY, NOW)
@@ -215,3 +215,91 @@ def test_signed_json_control_shares_only_the_pinned_workflow_boundary(system, si
         assert client.post(auth.UPLOAD_PATH, content=rp.canonical(doc), headers=headers).status_code == 413
     duplicate = b'{"format":1,"format":2}'
     assert client.post(auth.UPLOAD_PATH, content=duplicate, headers=headers).status_code == 400
+
+
+def resource_read_queries(app, client, publication_id=None):
+    queries = []
+    def capture(_, __, statement, parameters, ___, ____):
+        sql = ' '.join(statement.lower().split())
+        if sql.startswith('select ') and ' from resource_publications ' in sql:
+            queries.append((sql, parameters))
+    sql_event.listen(app.state.db.engine, 'before_cursor_execute', capture)
+    try:
+        response = client.get(URL + ('&publication_id=' + publication_id if publication_id else ''))
+    finally:
+        sql_event.remove(app.state.db.engine, 'before_cursor_execute', capture)
+    assert response.status_code == 200, response.text
+    # ZIP bytes are never needed for metadata or graph reads.
+    assert all('resource_publications.bundle' not in sql.split(' from ', 1)[0] for sql, _ in queries)
+    projections = [(sql, parameters) for sql, parameters in queries
+                   if 'resource_publications.resources' in sql.split(' from ', 1)[0]]
+    return response.json(), queries, projections
+
+
+def resource_history(db, count):
+    identifiers = []
+    for index in range(count):
+        identity = source(100 + index)
+        files, publication = fixture_files(identity)
+        files['resources.json']['fixture_label'] = 'Synthetic resource report ' + str(index)
+        files['resources.json']['fixture_padding'] = 'Plumbing fixture, not measurements. ' * 100
+        receipt = rp.ingest(db, archive(files, publication), identity, NOW + index)
+        identifiers.append(receipt['publication_id'])
+    return identifiers
+
+
+@pytest.mark.parametrize('count', [2, 24])
+def test_resource_history_loads_only_the_selected_projection(system, count):
+    app, client = system
+    ids = resource_history(app.state.db, count)
+    result, queries, projections = resource_read_queries(app, client)
+    assert result['publication']['id'] == ids[-1] and result['state'] == 'current'
+    assert result['resources']['fixture_label'] == 'Synthetic resource report ' + str(count - 1)
+    assert [row['id'] for row in result['historical']] == list(reversed(ids[-20:-1]))
+    assert len(queries) == 2 and len(projections) == 1
+    assert all('resources' not in row for row in result['historical'])
+
+    # A recent history row is in the identity map; an older one is outside the
+    # twenty-row history window. Neither should fetch the unselected current
+    # projection, and neither may cause one load per history label.
+    for selected in (ids[-2], ids[0], ids[-1]):
+        result, queries, projections = resource_read_queries(app, client, selected)
+        assert result['publication']['id'] == selected
+        assert result['selected_historical'] is (selected != ids[-1])
+        assert result['resources']['fixture_label'] == 'Synthetic resource report ' + str(ids.index(selected))
+        assert len(queries) == 3 and len(projections) == 1
+        assert projections[0][1] == (selected,)
+        assert 'security' not in result['resources']['configurations'][0]
+        assert 'correctness' not in result['resources']['configurations'][0]
+
+
+@pytest.mark.parametrize('count', [2, 24])
+def test_resource_history_loads_only_one_active_failure_document(system, count):
+    app, client = system
+    ids = resource_history(app.state.db, count)
+    failures = []
+    for index in range(3):
+        identity = source(100 + count + index)
+        raw = failure_archive(identity=identity)
+        failures.append(rp.ingest(app.state.db, raw, identity, NOW + count + index)['publication_id'])
+
+    result, queries, projections = resource_read_queries(app, client)
+    assert result['publication']['id'] == ids[-1] and result['state'] == 'current'
+    assert result['lifecycle']['phase'] == 'failed'
+    assert result['lifecycle']['reason'] == 'measurement_incomplete'
+    assert len(queries) == 3 and len(projections) == 2
+    assert projections[-1][1] == (failures[-1],)
+
+    result, queries, projections = resource_read_queries(app, client, failures[-1])
+    assert result['publication']['id'] == failures[-1] and result['selected_historical']
+    assert result['publication']['completeness'] == 'incomplete'
+    assert result['resources']['configurations'] == []
+    assert result['resources']['failure']['reason'] == 'measurement_incomplete'
+    assert len(queries) == 3 and len(projections) == 1
+    assert projections[0][1] == (failures[-1],)
+
+    result, queries, projections = resource_read_queries(app, client, ids[-2])
+    assert result['publication']['id'] == ids[-2] and result['selected_historical']
+    assert result['resources']['configurations']
+    assert len(queries) == 4 and len(projections) == 2
+    assert {parameters[0] for _, parameters in projections} == {failures[-1], ids[-2]}

@@ -20,7 +20,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy import BigInteger, Float, Integer, JSON, LargeBinary, String, UniqueConstraint, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, defer, mapped_column
 from starlette.concurrency import run_in_threadpool
 
 from . import registry, resource_identity, resource_state
@@ -221,15 +221,18 @@ def latest(session, scheme, version):
                           .order_by(ResourcePublication.run_id.desc(), ResourcePublication.run_attempt.desc()).limit(1))
 
 
-def current_publication(session, scheme, version, activation=None):
+def current_publication(session, scheme, version, activation=None, *, defer_resources=False):
     activation = activation or resource_state.desired(session, scheme, version)
     if activation is None:
         return None
-    return session.scalar(select(ResourcePublication).where(ResourcePublication.scheme_id == scheme,
+    query = (select(ResourcePublication).where(ResourcePublication.scheme_id == scheme,
         ResourcePublication.version == version,
         ResourcePublication.publication["expected"]["activation_id"].as_string() == activation.id,
         ResourcePublication.publication["outcome"].as_string() == "complete")
         .order_by(ResourcePublication.run_id.desc(), ResourcePublication.run_attempt.desc()).limit(1))
+    if defer_resources:
+        query = query.options(defer(ResourcePublication.resources))
+    return session.scalar(query)
 
 
 def ingest(db, raw, identity, now):
@@ -348,8 +351,12 @@ def register_routes(app, db):
             raise HTTPException(404, "Unknown scheme release.") from None
         with db.transaction() as session:
             activation = resource_state.desired(session, scheme_id, version)
-            current = current_publication(session, scheme_id, version, activation)
-            history = session.scalars(select(ResourcePublication).where(ResourcePublication.scheme_id == scheme_id,
+            current = current_publication(session, scheme_id, version, activation,
+                                          defer_resources=publication_id is not None)
+            # History labels need metadata, not every previous graph projection.
+            # An explicitly selected report or active failure loads its data once.
+            history = session.scalars(select(ResourcePublication).options(defer(ResourcePublication.resources))
+                .where(ResourcePublication.scheme_id == scheme_id,
                 ResourcePublication.version == version).order_by(ResourcePublication.run_id.desc(),
                 ResourcePublication.run_attempt.desc()).limit(20)).all()
             lifecycle = resource_state.latest_lifecycle(session, activation)
