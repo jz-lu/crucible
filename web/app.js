@@ -5305,7 +5305,7 @@ function showWorkspace(name) {
   $('#people-workspace').hidden = name !== 'people';
   $('#person-workspace').hidden = name !== 'person';
   $('#connect-workspace').hidden = name !== 'connect';
-  const navigationSection = name === 'loading' ? window.CruciblePendingPage?.section() :
+  const navigationSection = name === 'loading' ? window.CruciblePendingPage?.section?.() :
     ['catalogue', 'scheme', 'overview', 'assumptions', 'propose'].includes(name) ? 'challenge' : name;
   for (const kind of ['challenge', 'people', 'notebook', 'research', 'about']) {
     const button = $('#nav-' + kind);
