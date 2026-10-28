@@ -48,7 +48,7 @@ function fixture({hash = '', parsed = true, appFirst = false, hint, storageBlock
     document.body = element({'data-access-pending': 'true'});
     nodes.set('#access-workspace', element({'aria-busy': 'true'}));
     nodes.set('#access-title', element({'aria-hidden': 'true'}));
-    for (const name of ['challenge', 'notebook', 'about']) nodes.set('#nav-' + name, element());
+    for (const name of ['challenge', 'people', 'notebook', 'research', 'about']) nodes.set('#nav-' + name, element());
   }
   if (parsed) installBody();
   if (resolvedView) {
@@ -196,12 +196,14 @@ test('pending hash changes update only public geometry and navigation without ad
     ['#notebook?view=map', 'notebook-map', 'Research notebook', 'notebook'],
     ['#notebook?view=unknown', 'notebook-notes', 'Research notebook', 'notebook'],
     ['#about', 'neutral', 'About us', 'about'], ['#scheme/test/v1', 'chart', 'Scheme', 'challenge'],
-    ['#people', 'people', 'Leaderboard', null], ['#person/alice', 'profile', 'alice', null]
+    ['#people', 'people', 'Leaderboard', 'people'], ['#person/alice', 'profile', 'alice', null],
+    ['#propose', 'neutral', 'Propose a scheme', 'challenge'], ['#reviews', 'list', 'Review center', null],
+    ['#notebook?review=1', 'list', 'Review center', null]
   ]) {
     f.window.location.hash = hash; f.window.dispatch('hashchange');
     assert.equal(f.root.getAttribute('data-pending-page'), page);
     assert.equal(f.nodes.get('#access-title').textContent, title);
-    for (const tab of ['challenge', 'notebook', 'about']) {
+    for (const tab of ['challenge', 'people', 'notebook', 'research', 'about']) {
       assert.equal(f.nodes.get('#nav-' + tab).getAttribute('aria-current'), selected === tab ? 'page' : null);
       assert.equal(f.nodes.get('#nav-' + tab).classList.contains('selected'), selected === tab);
     }

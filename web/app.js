@@ -5305,13 +5305,22 @@ function showWorkspace(name) {
   $('#people-workspace').hidden = name !== 'people';
   $('#person-workspace').hidden = name !== 'person';
   $('#connect-workspace').hidden = name !== 'connect';
+  const navigationSection = name === 'loading' ? window.CruciblePendingPage?.section() :
+    ['catalogue', 'scheme', 'overview', 'assumptions', 'propose'].includes(name) ? 'challenge' : name;
   for (const kind of ['challenge', 'people', 'notebook', 'research', 'about']) {
     const button = $('#nav-' + kind);
-    const selected = kind === 'challenge' ? ['catalogue', 'scheme', 'overview', 'assumptions', 'propose'].includes(name) : kind === 'people' ? ['people', 'person'].includes(name) : kind === name;
+    const selected = kind === navigationSection;
     button.classList.toggle('selected', selected);
     if (selected) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
   }
+  let ownProfileSelected = name === 'person' && ownResearcherProfile();
+  if (name === 'loading' && hasAccess() && state.user && pendingPath.startsWith('#person/')) {
+    try { ownProfileSelected = decodeURIComponent(pendingPath.slice(8)).toLowerCase() === state.user.handle.toLowerCase(); } catch {}
+  }
+  $('#account-handle').classList.toggle('selected', Boolean(ownProfileSelected));
+  if (ownProfileSelected) $('#account-handle').setAttribute('aria-current', 'page');
+  else $('#account-handle').removeAttribute('aria-current');
   $('.skip-link').href = workspaceSelector(name);
   if (transferLoadingFocus) $(workspaceSelector(name)).focus({preventScroll: true});
   if (enteringResearch && !research.targets.length) loadResearch();
