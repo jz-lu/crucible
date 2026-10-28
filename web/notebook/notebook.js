@@ -155,7 +155,7 @@
     } catch (error) { surface.remove(); throw error; }
   }
 
-  function mount(root, {navigate, api: requestAPI, account, session = () => null, currentReleases = () => [], mapFactory = mountResearchMap, prepareMapCatalogue = () => {}, reviewOnly = false}) {
+  function mount(root, {navigate, api: requestAPI, account, session = () => null, currentReleases = () => [], mapFactory = mountResearchMap, prepareMapCatalogue = () => {}, canWarm = () => true, reviewOnly = false}) {
     if (root.notebookController) return root.notebookController;
     let currentAccount = typeof account === 'function' ? account() : account;
     let accountId = currentAccount?.id == null ? null : String(currentAccount.id);
@@ -169,7 +169,9 @@
     const preparingNotes = new Map();
     const preparingLists = new Map();
     const reviewListReads = new Map();
-    function invalidateReads() { readCache.clear(); preparingNotes.clear(); preparingLists.clear(); reviewListReads.clear(); timelinePreparation = null; indexPreparation = null; warmEnabled = false; listStamp = null; timelineStamp = null; readEpoch++; }
+    let reviewPreparation = null, reviewPageTimer = null;
+    function cancelReviewPagePreparation() { clearTimeout(reviewPageTimer); reviewPageTimer = null; }
+    function invalidateReads() { cancelReviewPagePreparation(); readCache.clear(); preparingNotes.clear(); preparingLists.clear(); reviewListReads.clear(); reviewPreparation = null; timelinePreparation = null; indexPreparation = null; warmEnabled = false; listStamp = null; timelineStamp = null; readEpoch++; }
     function cachedRead(key) {
       // Queue summaries can paint on return; decision forms and full revisions
       // still require a fresh server read, even in the same reviewer session.
@@ -239,8 +241,19 @@
     }
     async function warm(kind) {
       if (typeof account === 'function') setAccount(account());
-      if (reviewOnly || !accountId || identity() !== accountId || session() !== currentSession ||
-          document.visibilityState === 'hidden' || navigator.connection?.saveData) return {bytes:0};
+      if (!accountId || identity() !== accountId || session() !== currentSession ||
+          document.hidden || document.visibilityState === 'hidden' || navigator.connection?.saveData || !canWarm()) return {bytes:0};
+      if (reviewOnly) {
+        // Two separately budgeted idle jobs prepare only the first two summary
+        // pages. Later pages are prepared one ahead of the page being read.
+        const query = new URLSearchParams({limit:'25', summary:'true'});
+        if (kind === 'next') {
+          const first = cachedRead('list:review:' + query);
+          if (!first?.next_after) return {bytes:0};
+          query.set('after', first.next_after);
+        } else if (kind !== 'list') return {bytes:0};
+        return prepareReviewPage(query);
+      }
       warmEnabled = true;
       if (kind === 'list') return prepareIndex();
       if (kind === 'timeline') {
@@ -358,13 +371,14 @@
       q('search').value = ''; q('filter').replaceChildren(); q('page').textContent = ''; humanHint.hidden = true;
       closeDialog(true); q('dialog-body').replaceChildren(); q('list').replaceChildren(); q('full').replaceChildren(); q('count').textContent = ''; q('pagination').hidden = true; notice('');
     }
-    function hide() { clearPageSpace(); clearViewSpace(); timelinePreparation = null; cancelMapPreparation(); clearTimeout(searchTimer); searchTimer = null; active = false; request++; mapRequest++; timelineRequest++; q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy'); q('timeline').replaceChildren(); mapController?.hide(); if (q('dialog').open) { suspendedDialog = true; q('dialog').close(); } }
+    function hide() { cancelReviewPagePreparation(); clearPageSpace(); clearViewSpace(); timelinePreparation = null; cancelMapPreparation(); clearTimeout(searchTimer); searchTimer = null; active = false; request++; mapRequest++; timelineRequest++; q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy'); q('timeline').replaceChildren(); mapController?.hide(); if (q('dialog').open) { suspendedDialog = true; q('dialog').close(); } }
     const reviewUrl = (section, extra = {}) => '#reviews?' + new URLSearchParams({section, ...extra});
     function pageGuard() { const current = guard(), token = request; return () => current() && token === request; }
     function backToNotes() { return button(reviewOnly ? '← Publish requests' : '← Research notebook', () => navigate(reviewOnly ? reviewUrl('publication') : '#notebook'), 'nb-link nb-back'); }
     function url(id, revision) { return '#notebook?' + new URLSearchParams({note:id, ...(revision ? {revision:String(revision)} : {})}); }
     function openNote(id, revision) { navigate(reviewOnly ? reviewUrl('publication', {note:id, ...(revision ? {revision:String(revision)} : {})}) : url(id, revision)); }
     async function show(nextParams = new URLSearchParams()) {
+      cancelReviewPagePreparation();
       const readerHadFocus = !q('full').hidden && document.activeElement?.closest('.nb-full') === q('full');
       if (typeof account === 'function') setAccount(account());
       active = true; params = new URLSearchParams(nextParams);
@@ -769,7 +783,50 @@
       reviewListReads.set(key, task);
       return task;
     }
+    function reviewPage(result, cursor) {
+      if (!Array.isArray(result?.notes) || result.notes.length > 25 ||
+          result.next_after != null && (typeof result.next_after !== 'string' || !result.next_after || result.next_after === cursor)) {
+        throw Error('The publish requests could not be loaded.');
+      }
+      return {notes:result.notes, next_after:result.next_after || null};
+    }
+    function prepareReviewPage(query) {
+      const key = 'list:review:' + query;
+      if (cachedRead(key)) return Promise.resolve({bytes:0});
+      if (reviewPreparation) return reviewPreparation.key === key ? reviewPreparation.task : Promise.resolve({bytes:0});
+      const current = readGuard(), entry = {key};
+      const task = (async () => {
+        const result = await readReviewList(key, query);
+        if (!current() || reviewPreparation !== entry) return {bytes:0};
+        const page = reviewPage(result, query.get('after'));
+        rememberRead(key, page);
+        const cached = readCache.get(key);
+        if (cached) cached.prepared = true;
+        return {bytes:jsonBytes(result)};
+      })().finally(() => { if (reviewPreparation === entry) reviewPreparation = null; });
+      entry.task = task; reviewPreparation = entry; return task;
+    }
+    function takePreparedReviewPage(key) {
+      const entry = readCache.get(key);
+      if (!entry?.prepared) return null;
+      entry.prepared = false;
+      return Date.now() - entry.at < 10000 ? entry : null;
+    }
+    function prepareNextReviewPage(query, after) {
+      cancelReviewPagePreparation();
+      if (!reviewOnly || !reviewMode || !after) return;
+      const current = pageGuard(), next = new URLSearchParams(query); next.set('after', after);
+      // Start only after the selected page has settled and foreground work has
+      // priority. A reader/navigation change cancels this optional preparation.
+      reviewPageTimer = setTimeout(() => {
+        reviewPageTimer = null;
+        if (!current() || !active || !reviewMode || q('library').hidden || q('dialog').open ||
+            document.hidden || document.visibilityState === 'hidden' || navigator.connection?.saveData || !canWarm()) return;
+        void prepareReviewPage(next).catch(() => {});
+      }, 250);
+    }
     async function loadList({paging = false} = {}) {
+      cancelReviewPagePreparation();
       clearTimeout(searchTimer); searchTimer = null;
       humanHint.hidden = reviewMode || visibility !== 'human';
       knownPageCount = null;
@@ -814,16 +871,18 @@
       q('more').disabled = true; q('prev').disabled = true; q('page-select').disabled = true;
       try {
         const prepared = preparingLists.get(key); preparingLists.delete(key);
-        const result = indexed || await (prepared && Date.now() - prepared.at < 10000 ? prepared.task :
+        const preparedReview = reviewMode ? takePreparedReviewPage(key) : null;
+        const result = indexed || preparedReview?.value || await (prepared && Date.now() - prepared.at < 10000 ? prepared.task :
           reviewMode ? readReviewList(key, query) : api('/api/notebook/notes?' + query));
         if (!current() || request !== token || generation !== readEpoch || params.has('note')) return;
         if (!Array.isArray(result.notes) || (result.next_after && result.next_after === cursor)) throw Error('The notebook could not be loaded.');
-        const page = {notes: result.notes, next_after: result.next_after || null};
-        if (visibility !== 'trash') rememberRead(key, page, indexed ? readCache.get('summary-index').at : undefined);
+        const page = reviewMode ? reviewPage(result, cursor) : {notes: result.notes, next_after: result.next_after || null};
+        if (visibility !== 'trash') rememberRead(key, page, indexed ? readCache.get('summary-index').at : preparedReview?.at);
         listRefreshing = false; paint(page);
         if (!reviewOnly && visibility !== 'trash') scheduleMap();
         setListActionsDisabled(false);
-        if (!indexed) prepareNextPage(query, nextAfter);
+        if (reviewMode) prepareNextReviewPage(query, nextAfter);
+        else if (!indexed) prepareNextPage(query, nextAfter);
       } catch (error) {
         if (!current() || request !== token || generation !== readEpoch) return;
         const expiredCursor = cursor && error.status === 422 &&

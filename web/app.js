@@ -167,6 +167,9 @@ function browseWarmJobs() {
   const jobs = [], add = (key, run) => jobs.push({key, run});
   add('notebook:setup', async () => { await ensureNotebookAssets(); if (browseWarmAllowed()) getNotebookWorkspace(); return 0; });
   for (const kind of ['timeline', 'list']) add('notebook:' + kind, () => notebookWorkspace?.warm?.(kind));
+  if (state.canReviewProposals) for (const kind of ['list', 'next']) {
+    add('publication:' + kind, () => window.CrucibleNotebook && getNotebookWorkspace(true).warm(kind));
+  }
   add('navigation', async () => {
     if (state.catalogueLoaded) return 0;
     await loadAuthorizedCatalogue(); return state.catalogueLoaded ? warmBytes(state.schemes) : 0;
@@ -950,6 +953,8 @@ function getNotebookWorkspace(reviewing = false) {
     account: () => hasAccess() && (!reviewing || state.canReviewProposals) ? state.user : null,
     prepareMapCatalogue: loadMapCatalogue,
     currentReleases: () => hasAccess() ? (state.catalogueLoaded ? state.schemes : mapReleases || []) : [],
+    canWarm: () => browseWarmAllowed() && !protectedRequests.size &&
+      ![...document.querySelectorAll('dialog')].some(dialog => dialog.open) && !state.issueBusy && !state.submitBusy,
     session: () => state.csrf, reviewOnly: reviewing};
   // mount creates static controls only. Background jobs never call .show(),
   // render private lists, draw a hidden graph or load individual note bodies.

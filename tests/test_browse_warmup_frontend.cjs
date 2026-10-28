@@ -33,6 +33,38 @@ async function drain(app,count=24){for(let i=0;i<count;i++){await step(app);awai
 const reads=(app,path)=>app.requests.filter(row=>row.url.pathname===path);
 let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
 (async()=>{
+  await test('only admitted reviewers prepare two queue pages in separately budgeted idle jobs without showing the workspace',async()=>{
+    const calls=[],held=deferred();
+    const nb={mount(target,options){const prefix=options.reviewOnly?'review:':'notes:';calls.push(prefix+'mount');return {
+      show:async()=>calls.push(prefix+'show'),hide(){},setAccount(){},invalidateReads(){},
+      warm:async kind=>{calls.push(prefix+kind);return prefix==='review:'&&kind==='list'?held.promise:{bytes:10};},
+    };}};
+    const {app}=await appFixture({nb,extra:(url,options,envelope)=>url.pathname==='/api/session'?
+      envelope({user,csrf_token:'review-session',capabilities:{review_protocol_proposals:true}}):undefined});
+    await drain(app,3);const first=step(app);await flush();
+    assert.deepEqual(calls,['notes:mount','notes:timeline','notes:list','review:mount','review:list']);
+    await step(app);assert.equal(calls.includes('review:next'),false);
+    assert.equal(app.$('#review-notebook-workspace').hidden,true);assert.equal(calls.some(value=>value.endsWith(':show')),false);
+    held.resolve({bytes:100});await first;
+    app.$('#auth-dialog').showModal();await step(app);assert.equal(calls.includes('review:next'),false);
+    app.$('#auth-dialog').close();await step(app);assert.equal(calls.filter(value=>value==='review:next').length,1);
+    await drain(app,30);assert.equal(calls.filter(value=>value==='review:list').length,1);assert.equal(calls.filter(value=>value==='review:next').length,1);
+    const normal=await appFixture();await drain(normal.app);assert.equal(vm.runInContext('reviewNotebookWorkspace',normal.app.sandbox),null);
+  });
+  await test('the global warm byte bound and revoked review capability stop the second queue job',async()=>{
+    for(const mode of ['budget','revoked']){
+      const calls=[];
+      const nb={mount(target,options){return {show:async()=>{},hide(){},setAccount(){},invalidateReads(){},warm:async kind=>{
+        if(options.reviewOnly)calls.push(kind);
+        return {bytes:options.reviewOnly&&kind==='list'&&mode==='budget'?4*1024*1024:0};
+      }};}};
+      const {app}=await appFixture({nb,extra:(url,options,envelope)=>url.pathname==='/api/session'?
+        envelope({user,csrf_token:'review-session',capabilities:{review_protocol_proposals:true}}):undefined});
+      await drain(app,4);assert.deepEqual(calls,['list']);
+      if(mode==='revoked')app.sandbox.setSession(app.envelope({user,csrf_token:'review-session',capabilities:{review_protocol_proposals:false}}));
+      await drain(app,30);assert.deepEqual(calls,['list']);
+    }
+  });
   await test('initial page paints before optional work, then one idle job runs at a time',async()=>{
     const held=deferred(),calls=[];
     const {app}=await appFixture({nb:notebook(calls,kind=>kind==='timeline'?held.promise:10)});
