@@ -82,6 +82,7 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   const other = await createApp({schemes: [scheme], hash: '#scheme/resource-fixture/1', responder: url => url.pathname === '/api/protocol/resources' ? wrong : undefined});
   assert.notEqual(other.$('#overview-badge-public').textContent, 'Current');
   assert.equal(other.$('#overview-chart-public').querySelectorAll('.chart-point').length, 0);
+  assert.equal(other.requests.filter(r => r.url.pathname === '/api/protocol/resources').length, 1, 'rendering an unavailable current report respects the retry guard');
 
   const choose = async (instance, card, label, value) => {
     const select = instance.$('#overview-chart-' + card).querySelector(`select[aria-label="${label}"]`);
@@ -165,6 +166,37 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   assert.equal(historyApp.requests.filter(r => r.url.searchParams.get('publication_id') === historicalId).length, 3, 'an expired selected report is refreshed rather than left empty');
   assert.deepEqual(historicalChart.querySelectorAll('.chart-point').map(p => p.dataset.value), ['96', '97']);
 
+  let currentReads = 0, finishCurrent;
+  const currentPending = new Promise(resolve => { finishCurrent = resolve; });
+  const availableCurrent = {...structuredClone(report), historical: [past.publication]};
+  const expiryApp = await createApp({schemes: [scheme], hash: '#scheme/resource-fixture/1', responder: url => {
+    if (url.pathname !== '/api/protocol/resources') return undefined;
+    if (url.searchParams.has('publication_id')) return structuredClone(past);
+    return ++currentReads === 1 ? structuredClone(availableCurrent) : currentPending;
+  }});
+  const initiallyLoaded = Date.now();
+  vm.runInContext('Date.now = () => ' + (initiallyLoaded + 60001), expiryApp.sandbox);
+  for (const card of ['public', 'cipher', 'computation']) await choose(expiryApp, card, 'Report', historicalId);
+  // The current report expires while a more recently fetched historical report
+  // remains usable. Selecting Current resources must request it without a reload.
+  vm.runInContext('Date.now = () => ' + (initiallyLoaded + 300002), expiryApp.sandbox);
+  for (const card of ['public', 'cipher', 'computation']) {
+    const select = expiryApp.$('#overview-chart-' + card).querySelector('select[aria-label="Report"]');
+    select.value = 'current'; select.dispatchEvent({type: 'change'}); await flush();
+  }
+  assert.equal(currentReads, 2, 'all three cards share exactly one expired-current refetch');
+  const refreshedCurrent = structuredClone(availableCurrent);
+  refreshedCurrent.resources.configurations[0].sizes_bytes.public_key = 42;
+  finishCurrent(refreshedCurrent); await flush();
+  for (const card of ['public', 'cipher', 'computation']) {
+    const target = expiryApp.$('#overview-chart-' + card);
+    assert.equal(expiryApp.$('#overview-badge-' + card).textContent, 'Current');
+    assert.equal(target.querySelectorAll('.chart-point').length, 2);
+    assert.equal(target.querySelector('select[aria-label="Report"]').value, 'current');
+  }
+  assert.deepEqual(expiryApp.$('#overview-chart-public').querySelectorAll('.chart-point').map(p => p.dataset.value), ['42', '33'], 'refreshed data replaces the expired current projection');
+  assert.equal(currentReads, 2, 'the completed shared read does not trigger another fetch');
+
   const zero = structuredClone(report);
   zero.resources.configurations[0].sizes_bytes.public_key = 0;
   zero.resources.configurations[0].native_evidence[0].computation.keygen = {complete: true, duration_ns: {median: 0, q1: 0, q3: 0, n: 100}};
@@ -242,5 +274,14 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   assert.equal(changed, 0, 'a retired account request cannot publish or redraw');
   await model.load(scheme, async () => report, () => changed++);
   assert.equal(changed, 1, 'the replacement account loads its own report');
+  for (const status of [401, 403, 404]) {
+    model.clear();
+    await model.load(scheme, async () => report, () => {});
+    const readsBefore = app.requests.length;
+    await model.load(scheme, async () => { throw Object.assign(new Error('Access unavailable'), {status}); },
+      () => app.sandbox.renderOverviewChart(scheme, 'public'), {refresh: true});
+    assert.equal(publicChart.querySelectorAll('.chart-point').length, 0, 'denied reads cannot retain previously visible data');
+    assert.equal(app.requests.length, readsBefore, 'render after denied access respects the retry guard');
+  }
   console.log('PASS resource states, explicit historical evidence, incomplete reports, zero values, profile isolation, focus, cache and retired-account requests');
 })().catch(error => { console.error(error); process.exitCode = 1; });
