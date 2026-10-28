@@ -523,7 +523,8 @@
     "resource-publications": [
       "test_resource_publications.py",
       "test_resource_state.py",
-      "test_resource_state_migration.py"
+      "test_resource_state_migration.py",
+      "test_resource_binding_catalogue.py"
     ],
     "scoring": [
       "test_scoring_weights.py"
