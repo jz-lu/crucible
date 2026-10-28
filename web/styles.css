@@ -4084,9 +4084,13 @@ html[data-pending-page=notebook-timeline] [data-pending-layout=notebook] [data-n
   .nb-map-placeholder { aspect-ratio:auto; }
 }
 
-.resource-controls { display: flex; flex-wrap: wrap; gap: .7rem; margin: .5rem 0; }
-.resource-control { display: flex; flex-direction: column; gap: .3rem; font-size: .75rem; color: var(--muted, #596a80); }
-.resource-control select { max-width: 100%; padding: .4rem .6rem; border: 1px solid #cbd5e1; border-radius: .4rem; background: white; color: #20334d; }
+.resource-controls { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .7rem; margin: .5rem 0; }
+.resource-control { display: flex; min-width: 0; flex-direction: column; gap: .3rem; font-size: .75rem; color: var(--muted); }
+.resource-control select { width: 100%; min-width: 0; max-width: 100%; padding: .4rem .6rem; border: 1px solid var(--line); border-radius: .4rem; background: var(--surface); color: var(--ink); text-overflow: ellipsis; }
+.resource-control select:disabled { opacity: 1; color: var(--muted); cursor: default; }
+.resource-summary { min-height: 3.2em; }
+.resource-chart > details { margin-top: .7rem; }
+.resource-chart > details > summary { cursor: pointer; }
 .resource-whisker { stroke: #788da9; stroke-width: 1.5; }
 .resource-method { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 18rem; overflow: auto; padding: .8rem; font-size: .7rem; background: #edf2f8; border-radius: .4rem; }
 .resource-evidence-links { display: flex; flex-direction: column; gap: .4rem; font-size: .8rem; }

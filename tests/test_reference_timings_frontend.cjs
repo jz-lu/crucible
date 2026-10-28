@@ -17,7 +17,18 @@ const fetches = app => app.requests.filter(r=>r.url.pathname==='/api/protocol/be
 const chart = app => app.$('#overview-chart-computation');
 const points = app => chart(app).querySelectorAll('.chart-point');
 const metric = (app,name) => app.$('#overview-graphs').querySelector('[data-overview-metric="'+name+'"]');
-const boot = (options={}) => createApp({schemes:[scheme()],hash:'#scheme/alpha/1',...options});
+async function selectEarlierTimings(app) {
+  if (app.$('#overview-workspace').hidden) return;
+  const select = chart(app).querySelector('select[aria-label="Report"]');
+  if (select) { select.value='legacy'; select.dispatchEvent({type:'change'}); await flush(); }
+}
+const boot = async (options={}) => {
+  const app=await createApp({schemes:[scheme()],hash:'#scheme/alpha/1',...options}), navigate=app.navigate;
+  // All checks below exercise the legacy reference timings by explicit choice.
+  await selectEarlierTimings(app);
+  app.navigate=async hash=>{await navigate(hash);await selectEarlierTimings(app);};
+  return app;
+};
 let passed=0;async function test(name,run){await run();console.log('PASS '+name);passed++;}
 (async()=>{
   await test('catalogue and denied beta sessions never fetch timing reports',async()=>{
@@ -31,7 +42,7 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
     assert.deepEqual(points(app).map(p=>[p.dataset.profileId,p.dataset.value]),[['p1','0.2'],['p3','0.8']]);
     assert.deepEqual(chart(app).querySelector('.chart-series').getAttribute('d').match(/[ML]/g),['M','M'],'Incomplete configurations break timing lines');
     assert.match(chart(app).querySelector('desc').textContent,/milliseconds/);
-    assert.equal(app.$('#overview-badge-computation').textContent,'Local pilot');
+    assert.equal(app.$('#overview-badge-computation').textContent,'Earlier site reference');
     assert.match(chart(app).textContent,/not independently reproduced/);assert.match(chart(app).textContent,/Fixture CPU/);
     assert.match(chart(app).textContent,/CPU affinitynot pinned/);assert.match(chart(app).textContent,/Warmups per configuration2/);
     assert.match(chart(app).textContent,/Requested measured trials9/);assert.match(chart(app).textContent,/Configuration time budget15 s/);
@@ -143,6 +154,7 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
     const previous=pending;pending=null;
     await app.sandbox.loadReferenceTimings(scheme());await flush();
     previous.resolve({method,report:{...report(),results:[measured('p4',4)]}});await oldRequest;await flush();
+    await selectEarlierTimings(app);
     assert.deepEqual(points(app).map(p=>p.dataset.profileId),['p1','p3']);
     assert.deepEqual(app.sandbox.referenceTimingState(scheme()).report.results.map(p=>p.profile_id),report().results.map(p=>p.profile_id));
   });
@@ -156,7 +168,7 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
     for(const mutate of [r=>r.scheme_id='other',r=>r.scheme_version='old',r=>r.method_id='other',r=>r.implementation.artifact_sha256='bad',r=>{r.implementation.artifact_sha256=null;r.implementation.source_sha256='missing';},r=>r.results[0].q1_seconds=9,r=>r.results.push(r.results[0])]){
       const value=report();mutate(value);
       const app=await boot({responder:url=>url.pathname==='/api/protocol/benchmarks'?{method,report:value}:undefined});
-      assert.equal(points(app).length,0);assert.match(chart(app).textContent,/Timings unavailable/);assert.equal(app.$('#overview-badge-computation').textContent,'Unavailable');
+      assert.equal(points(app).length,0);assert.match(chart(app).textContent,/Timings unavailable/);assert.equal(app.$('#overview-badge-computation').textContent,'Earlier site reference');
     }
     const sourceOnly=report();sourceOnly.implementation.artifact_sha256=null;
     const app=await boot({responder:url=>url.pathname==='/api/protocol/benchmarks'?{method,report:sourceOnly}:undefined});
@@ -167,8 +179,7 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
     const wait=deferred();let count=0;
     const app=await boot({responder:url=>url.pathname==='/api/protocol/benchmarks'?(++count===1?wait.promise:{method,report:report()}):undefined});
     assert.doesNotMatch(chart(app).querySelector('svg').textContent,/Loading|Fetching/);
-    const status=app.$('#overview-badge-computation').querySelector('[role="status"]');
-    assert.equal(status.className,'sr-only');assert.equal(status.textContent,'Loading timings');
+    assert.equal(app.$('#overview-badge-computation').textContent,'Earlier site reference');
     assert.equal(chart(app).querySelector('button').disabled,true);
     chart(app).querySelector('details').open=true;
     wait.resolve({method,report:{}});await flush();assert.match(chart(app).textContent,/Timings unavailable/);

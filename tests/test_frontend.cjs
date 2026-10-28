@@ -1,6 +1,21 @@
 // Run with `node tests/test_frontend.cjs`. These fixtures are not registered KEMs.
 const assert = require('node:assert/strict');
 const {createApp, flush} = require('./frontend-dom.cjs');
+async function earlierReferences(app) {
+  // These regressions exercise the preserved earlier reference renderer. It is
+  // now reachable only by an explicit selection, never by missing resource data.
+  for (const id of ['public', 'cipher', 'computation']) {
+    const select = app.$('#overview-chart-' + id)?.querySelector('select[aria-label="Report"]');
+    if (select) { select.value = 'legacy'; select.dispatchEvent({type:'change'}); await flush(); }
+  }
+  return app;
+}
+async function createReferenceApp(options) {
+  const app = await createApp(options), navigate = app.navigate;
+  app.navigate = async hash => { await navigate(hash); if (!app.$('#overview-workspace').hidden) await earlierReferences(app); };
+  if (!app.$('#overview-workspace').hidden) await earlierReferences(app);
+  return app;
+}
 const profile = (id, size) => ({id, profile_id: id, instance_size: size, name: id, shared_secret_bytes: 32, correctness: {kind: 'fixture', failure_bound: '0'}, parameters: {size}, encoding: {shared_secret_bytes: 32}});
 const schemes = [
   {id: 'fixture-alpha', version: '7', name: 'Alpha <KEM>', summary: 'Only a test fixture.', participant_count: 2, educational: true, profiles: [profile('alpha-3', 3), profile('alpha-4', 4)], largest_recovered_profile_id: 'alpha-3', first_recovery: {submission_id: 'receipt-alpha', scheme_version: '7', profile_id: 'alpha-3', handle: 'first-alpha', received_at: 100}, next_profile_id: 'alpha-4', size_parameter: {name: 'Instance size', symbol: 'n', meaning: 'Alpha dimension', mapping: 'The alpha mapping.'}, protocol: {construction: 'Alpha construction.', source_url: '/api/protocol/source?version=7', example_url: null}},
@@ -187,6 +202,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.requests.length, requests + 2);
     assert.deepEqual(app.requests.slice(-2).map(r => r.url.pathname), ['/api/protocol/benchmarks', '/api/protocol/resources']);
     assert.equal(app.requests.at(-1).url.searchParams.get('version'), '6');
+    await earlierReferences(app);
     assert.match(app.$('#overview-release').textContent, /Archived release 6/);
     assert.equal(app.$('#overview-summary').textContent, 'Archived construction.');
     assert.deepEqual(app.$('#overview-chart-public').querySelectorAll('.chart-point').map(point => point.dataset.value), ['7']);
@@ -256,7 +272,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.requests.some(request => request.options.method === 'POST'), false);
   });
   await test('named-set graphs use discrete points and exact recovery markers without interpolation or security invention', async () => {
-    const app = await createApp({schemes: [{...namedScheme, recovered_profile_ids: undefined,
+    const app = await createReferenceApp({schemes: [{...namedScheme, recovered_profile_ids: undefined,
       profile_recoveries: [{profile_id: 'named-768'}, {profile_id: 'named-512'}]}], hash: '#scheme/fixture-named/1'});
     for (const id of ['public', 'cipher', 'computation', 'security']) {
       const chart = app.$('#overview-chart-' + id);
@@ -272,7 +288,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.$('#overview-chart-security').querySelectorAll('.chart-point').length, 0);
     assert.equal(app.$('#overview-chart-computation').querySelectorAll('.chart-point').length, 0);
     const single = {...namedScheme, profiles: [namedProfiles[0]], largest_recovered_profile_id: null, recovered_profile_ids: []};
-    const one = await createApp({schemes: [single], hash: '#scheme/fixture-named/1'});
+    const one = await createReferenceApp({schemes: [single], hash: '#scheme/fixture-named/1'});
     const dot = one.$('#overview-chart-public').querySelector('.chart-point');
     assert.equal(Number.isFinite(Number(dot.getAttribute('cx'))), true);
     assert.equal(one.$('#overview-chart-public').querySelectorAll('.chart-point').length, 1);
@@ -303,7 +319,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.requests.some(request => request.options.method === 'POST'), false);
   });
   await test('all research graphs highlight the range to one highest-recovered tier line without inventing recoveries or security', async () => {
-    const app = await createApp({schemes: [researchScheme], hash: '#scheme/fixture-research/2'});
+    const app = await createReferenceApp({schemes: [researchScheme], hash: '#scheme/fixture-research/2'});
     assert.match(app.$('#overview-release').textContent, /50 challenge stages/);
     assert.match(app.$('#overview-beta').textContent, /Research stages/);
     for (const id of ['public', 'cipher', 'computation', 'security']) {
@@ -322,7 +338,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.$('#overview-chart-computation').querySelectorAll('.chart-point').length, 0);
     assert.doesNotMatch(app.$('#overview-chart-security').textContent, /500|549/);
     const unrecovered = {...researchScheme, largest_recovered_profile_id: null, recovered_profile_ids: [], profile_recoveries: []};
-    const empty = await createApp({schemes: [unrecovered], hash: '#scheme/fixture-research/2'});
+    const empty = await createReferenceApp({schemes: [unrecovered], hash: '#scheme/fixture-research/2'});
     assert.equal(empty.$('#overview-graphs').querySelectorAll('.chart-recovery-line').length, 0);
     assert.equal(empty.$('#overview-progress').textContent, '');
     assert.equal(empty.$('#overview-progress').hidden, true);
@@ -336,7 +352,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
   await test('research attack references are labeled honestly while explicit inherited-record policy is preserved', async () => {
     const reference = {...researchScheme, record_inheritance: true, initial_security_model: {id: 'fixture-rho', status: 'limited-reference'},
       profiles: researchProfiles.map(item => ({...item, initial_security_estimate: {model_id: 'fixture-rho', bits: item.instance_size + 7}}))};
-    const app = await createApp({schemes: [reference], hash: route(reference, 'research-4', 'protocol')});
+    const app = await createReferenceApp({schemes: [reference], hash: route(reference, 'research-4', 'protocol')});
     assert.match(app.$('#profile-note').textContent, /Initial classical attack reference: ≈11 bits/);
     assert.match(app.$('#parameter-facts').textContent, /Initial classical attack reference/);
     assert.match(app.$('#protocol-record-rules').textContent, /stage or higher/);
@@ -371,7 +387,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
         'alpha-50': {public_key_bytes: 6, ciphertext_bytes: 10}, 'alpha-90': {public_key_bytes: 8, ciphertext_bytes: 12}},
       overview: {strengths: ['<script>not HTML</script>'], limitations: ['Specific limits.'], correctness: 'Exact fixture.', security: 'No security certification.'}};
     fixture.profiles[2].shared_secret_bytes = 16;
-    const app = await createApp({schemes: [fixture], user: {id: 'active-account', handle: 'active'}, hash: '#scheme/fixture-alpha/7'});
+    const app = await createReferenceApp({schemes: [fixture], user: {id: 'active-account', handle: 'active'}, hash: '#scheme/fixture-alpha/7'});
     const chart = id => app.$('#overview-chart-' + id);
     const points = id => chart(id).querySelectorAll('.chart-point');
     assert.equal(app.$('#overview-graphs').querySelectorAll('.overview-card').length, 4);
@@ -419,7 +435,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
       profile_metrics: Object.fromEntries(invalid.map((value, index) => ['alpha-' + (20 + index), {public_key_bytes: value, ciphertext_bytes: value}]))};
     const single = {...schemes[1], profiles: [profile('beta-5', 5)], profile_metrics: {'beta-5': {public_key_bytes: 0, ciphertext_bytes: 0}}};
     const empty = {...schemes[1], id: 'empty', profiles: []};
-    const app = await createApp({schemes: [fixture, single, empty], hash: '#scheme/fixture-alpha/7'});
+    const app = await createReferenceApp({schemes: [fixture, single, empty], hash: '#scheme/fixture-alpha/7'});
     assert.equal(app.$('#overview-chart-public').querySelectorAll('.chart-point').length, 0);
     assert.match(app.$('#overview-chart-public').textContent, /No values published/);
     assert.equal(app.$('#overview-chart-public').querySelectorAll('.chart-point').length, 0);
@@ -453,7 +469,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
   await test('overview recovery markers use the displayed release and real tier coordinates on every card, including empty estimates', async () => {
     const old = {...schemes[0], version: '6', profiles: [20, 24, 90].map(tier => profile('alpha-' + tier, tier)), largest_recovered_profile_id: 'alpha-24'};
     const current = {...old, version: '7', largest_recovered_profile_id: 'alpha-90', previous_releases: [old]};
-    const app = await createApp({schemes: [current], hash: '#scheme/fixture-alpha/6'});
+    const app = await createReferenceApp({schemes: [current], hash: '#scheme/fixture-alpha/6'});
     const charts = () => app.$('#overview-graphs').querySelectorAll('.overview-card');
     for (const card of charts()) {
       const line = card.querySelector('.chart-recovery-line');
@@ -1353,6 +1369,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.match(app.location.hash, /profile=alpha-36/);
     extra.querySelectorAll('button')[0].click();await flush();assert.match(app.location.hash, /profile=alpha-24/);
     await app.navigate('#scheme/fixture-alpha/7');
+    await earlierReferences(app);
     assert.equal(app.$('#overview-release').textContent, '3 challenge stages');
     assert.match(app.$('#overview-progress').textContent, /Largest recovery.*Configuration dimension 60/);
     const chart = app.$('#overview-chart-public');

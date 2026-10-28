@@ -115,7 +115,7 @@ async function createApp({schemes, user = null, hash = '#challenge', responder, 
       else if (url.pathname === '/api/leaderboard') data = envelope({entries: []});
       else if (url.pathname === '/api/targets') data = envelope({targets: []});
       else if (url.pathname === '/api/protocol/benchmarks') data = envelope({method: {id: 'reference-operations-v1', version: 1}, report: null});
-      else if (url.pathname === '/api/protocol/resources') data = {publication: null, scheme_id: url.searchParams.get('scheme_id'), version: url.searchParams.get('version')};
+      else if (url.pathname === '/api/protocol/resources') data = {publication: null, resources: null, state: 'not_calculated', historical: [], scheme_id: url.searchParams.get('scheme_id'), version: url.searchParams.get('version')};
       else throw new Error('Unexpected mocked request: ' + url.pathname);
     }
     return {ok: true, status: 200, json: async () => data, text: async () => typeof data === 'string' ? data : JSON.stringify(data)};
