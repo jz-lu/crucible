@@ -179,6 +179,8 @@ pages as separate jobs in the existing idle warmup queue. Each page counts towar
 its normal job/byte budget; foreground work, open dialogs, hidden tabs and
 Save-Data defer optional reads. Visible publication paging prepares only its next
 page after the current page settles, never the rest of the queue recursively.
+Brief overlapping reads defer this one-page preparation for at most ten seconds;
+leaving the page cancels it, and failed network reads are not retried automatically.
 Preparation uses the same bounded, five-minute, account/session-owned summary
 cache and exact-cursor single-flight reads. A completed preparation can be
 consumed once within ten seconds without a redundant refresh; consuming it does

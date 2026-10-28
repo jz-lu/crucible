@@ -131,6 +131,24 @@ async function test(name, run) {
       if(['hidden','save-data','busy'].includes(mode)){await app.controller.warm('next');assert.equal(queueReads(app).length,1);}
     }
   });
+  await test('brief overlapping work defers one-ahead preparation; waiting is bounded and navigation still cancels it',async()=>{
+    for(const mode of ['idle','deadline','late-idle','hide','reader','failure']){
+      let allowed=false;
+      const app=await boot(url=>{
+        if(!url.startsWith('/api/notebook/review-queue?'))return;
+        if(mode==='failure'&&new URLSearchParams(url.split('?')[1]).has('after'))throw Error('Offline');
+        return page('First request','two');
+      },{canWarm:()=>allowed});
+      await app.advanceTimers();assert.equal(queueReads(app).length,1);
+      if(mode==='deadline'){app.advance(10000);await app.advanceTimers();}
+      if(mode==='late-idle')app.advance(10000);
+      if(mode==='hide')app.controller.hide();
+      if(mode==='reader')await app.show({note:'candidate',revision:'2'});
+      allowed=true;await app.advanceTimers();await app.advanceTimers();
+      assert.equal(queueReads(app).length,['idle','failure'].includes(mode)?2:1,mode);
+      await app.advanceTimers();assert.equal(queueReads(app).length,['idle','failure'].includes(mode)?2:1,'No recursive preparation or automatic network retry');
+    }
+  });
   for(const change of ['account','session','write','denial'])await test('late prepared page cannot repopulate summaries after '+change,async()=>{
     const late=deferred();let waiting=false;
     const app=await boot(url=>url.startsWith('/api/notebook/review-queue?')?

@@ -817,13 +817,20 @@
       if (!reviewOnly || !reviewMode || !after) return;
       const current = pageGuard(), next = new URLSearchParams(query); next.set('after', after);
       // Start only after the selected page has settled and foreground work has
-      // priority. A reader/navigation change cancels this optional preparation.
-      reviewPageTimer = setTimeout(() => {
+      // priority. Brief overlapping reads defer, rather than discard, the job.
+      // A reader/navigation change cancels it; no network failure is retried.
+      const deadline = Date.now() + 10000;
+      const prepare = () => {
         reviewPageTimer = null;
         if (!current() || !active || !reviewMode || q('library').hidden || q('dialog').open ||
-            document.hidden || document.visibilityState === 'hidden' || navigator.connection?.saveData || !canWarm()) return;
+            document.hidden || document.visibilityState === 'hidden' || navigator.connection?.saveData || Date.now() >= deadline) return;
+        if (!canWarm()) {
+          reviewPageTimer = setTimeout(prepare, 250);
+          return;
+        }
         void prepareReviewPage(next).catch(() => {});
-      }, 250);
+      };
+      reviewPageTimer = setTimeout(prepare, 250);
     }
     async function loadList({paging = false} = {}) {
       cancelReviewPagePreparation();

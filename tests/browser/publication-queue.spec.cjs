@@ -25,7 +25,9 @@ for (const width of [1440,390]) test(`publish requests prepare two pages, then o
     await expect(list).toContainText(secondData.notes[0].revisions[0].content.title);
     await expect(list.locator('.nb-entry')).toHaveCount(25);
     await expect(list).not.toHaveAttribute('aria-busy','true');
-    await third.arrived;
+    const thirdResponse=await third.arrived,thirdData=await thirdResponse.json();
+    expect(thirdData.notes.length).toBeGreaterThan(0);expect(thirdData.notes.length).toBeLessThan(25);
+    expect(thirdData.next_after).toBeNull();
     expect(requests.filter(request=>request.url.pathname===queuePath)).toHaveLength(3);
     expect(requests.filter(request=>request.url.pathname.startsWith('/api/notebook/notes/'))).toHaveLength(0);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -33,7 +35,11 @@ for (const width of [1440,390]) test(`publish requests prepare two pages, then o
     // A click while the speculative next read is pending joins the same GET.
     await root.getByRole('button',{name:'Next page',exact:true}).click();
     third.release();await third.delivered;
-    await expect(list.locator('.nb-entry')).toHaveCount(2);
+    // Other browser journeys may have added legitimate pending requests to the
+    // shared disposable server. Verify the exact authorized response, not a
+    // fixed corpus total that is true only when this file runs in isolation.
+    await expect(list.locator('.nb-entry')).toHaveCount(thirdData.notes.length);
+    for(const note of thirdData.notes)await expect(list).toContainText(note.revisions[0].content.title);
     await expect(list).not.toHaveAttribute('aria-busy','true');
     expect(requests.filter(request=>request.url.pathname===queuePath)).toHaveLength(3);
     expect(requests.filter(request=>request.method!=='GET').map(request=>request.url.pathname)).toEqual(['/api/auth/login']);
