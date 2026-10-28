@@ -1,4 +1,4 @@
-AUTOMATIC MEASURED RESOURCE PUBLICATIONS — schema 0027
+MANUALLY DISPATCHED RESOURCE PUBLICATIONS — schema 0027
 
 The measurement repository is countableclouds/crucible-schemes. Its reviewed
 publication/registry.json selects one main implementation per scheme release
@@ -7,10 +7,13 @@ covers parameters, distributions, algorithms, encodings and KDF. Selecting a new
 measurement implementation does not change the site's challenge implementation,
 security claim, correctness admission or side-channel assessment.
 
-Relevant main-branch changes announce the complete desired catalogue, measure
-selected changed bindings, and publish audited evidence. Results live in the
-site's database and immutable ZIPs, not generated Git result commits. The clean
-publisher has short-lived GitHub OIDC authority; measurement jobs do not. Producer
+Measurements start only through a deliberate workflow dispatch on main; pushes,
+merges and schedules do not run benchmarks. Select an approved binding, or enter
+all to measure every approved release, and explicitly enable publication to
+announce the complete desired catalogue and transfer audited evidence. A dispatch
+without publication enabled collects evidence without updating the site. Results
+live in the site's database and immutable ZIPs, not generated Git result commits.
+The clean publisher has short-lived GitHub OIDC authority; measurement jobs do not. Producer
 instructions and authentication reference:
 https://github.com/countableclouds/crucible-schemes/blob/main/docs/PUBLICATION.md
 https://docs.github.com/en/actions/reference/security/oidc
@@ -143,15 +146,30 @@ measurement method and immutable ZIP remain available; old data is never silentl
 presented as current. GET /api/resource-publications/{sha256}/download returns
 that exact ZIP. Both follow normal private member-read policy and agent scopes.
 
-Four cards remain. Public-key/ciphertext views distinguish fresh/cached exchange
-cost from private-key local storage. Computation selects timing, first-call time,
-process RAM, stack or simultaneously tracked heap+stack. Independent maxima are
-not summed, instrumented timing is not native timing, observed peaks are not RAM-
-fit guarantees, and a missing value is never zero. One compatible comparison
-profile is selected at a time; incompatible instruments/implementations stay gaps.
-Security remains on its separate existing evidence model.
+Four cards remain. The public-key card selects Public key or Fresh exchange
+(setup delivery plus one public key and one ciphertext). The ciphertext card
+shows the serialized ciphertext with no redundant Measure selector. Computation
+selects Operation time or Process RAM, with a separate operation selector for
+key generation, encapsulation or decapsulation. Security remains on its separate
+existing evidence model. The measured cards expose at most two Measure choices.
+
+Operation time shows the median warm-operation duration and, where available,
+capped whiskers for the middle 50% of samples. That spread describes within-run
+variation, not a confidence interval or a correction for different hardware.
+Process RAM shows maximum observed RSS with its declared platform/method scope;
+historical Linux v1/v2 records explicitly warn that they include pre-exec launcher
+memory. Baselines are retained rather than subtracted. Observed peaks are not
+RAM-fit guarantees, and a missing value is never zero.
+
+Values, method & source contains the numerical table, report history, compatible
+measurement-profile selection when needed, method/source details, refresh and
+the exact evidence download. One compatible comparison profile is selected at a
+time; incompatible instruments/implementations stay gaps. The simpler controls
+do not remove collected evidence: first-call timing, private-key storage, stack,
+Massif and the other recorded quantities remain in the downloadable report.
 
 Resource caching is scoped to exact release and account/session; protected cache
 clearing and stale-request retirement follow the application lifecycle. Explicit
 refresh is available. Missing current measurements show Resources not calculated;
-historical reports and Earlier site references require explicit selection.
+historical reports require explicit selection. There is no Earlier site references
+option or fallback to the removed legacy graph renderer.
