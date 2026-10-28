@@ -57,6 +57,22 @@ def digest(value):
     return hashlib.sha256(canonical(value)).hexdigest()
 
 
+def _portable_integers(value):
+    """The producer's exact browser projection, applied only to declared data.
+
+    Compare canonical encodings rather than decode uploaded tags or use Python
+    equality: integer, float and boolean representations are not interchangeable.
+    Configuration identity still hashes the original canonical parameter tuple.
+    """
+    if type(value) is int and abs(value) > 2**53 - 1:
+        return {"type": "integer", "decimal": str(value)}
+    if isinstance(value, list):
+        return [_portable_integers(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _portable_integers(item) for key, item in value.items()}
+    return value
+
+
 def require(condition, message):
     if not condition:
         raise ValueError(message)
@@ -180,9 +196,10 @@ def validate_bundle(raw, identity):
     require(outcomes["status"] == "complete" and all(x[k]["status"] == "measured" for x in outcomes["outcomes"] for k in ("native", "rss", "stack", "massif")), "Incomplete resource evaluation cannot replace the current report")
     for row, declared in zip(resources["configurations"], plan["configurations"]):
         require(row["scheme"] == binding["scheme"] and row["release"] == binding["release"]
-                and row["parameters"] == declared["parameters"] and row["sizes_bytes"] == declared["sizes"], "Configuration resource identity differs")
+                and canonical(row["parameters"]) == canonical(_portable_integers(declared["parameters"]))
+                and canonical(row["sizes_bytes"]) == canonical(_portable_integers(declared["sizes"])), "Configuration resource identity differs")
         require(row["configuration"] == digest({"format": "crucible-configuration-v1", "scheme": binding["scheme"],
-                "release": binding["release"], "specification": binding["specification_sha256"], "parameters": row["parameters"]}), "Parameter hash differs")
+                "release": binding["release"], "specification": binding["specification_sha256"], "parameters": declared["parameters"]}), "Parameter hash differs")
         for field in ("native_evidence", "stack_evidence", "memory_evidence"):
             require(len(row[field]) == 1, "Publication must identify one run per instrument and configuration")
             evidence = row[field][0]

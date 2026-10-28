@@ -1,5 +1,6 @@
 """Publication plumbing fixtures. Invented measurements are never live evidence."""
 import base64
+from copy import deepcopy
 import hashlib
 import io
 import zipfile
@@ -18,15 +19,15 @@ IDENTITY = {'repository': auth.REPOSITORY, 'repository_id': auth.REPOSITORY_ID,
 ORIGIN = 'http://testserver'
 
 
-def fixture_files(identity=None):
+def fixture_files(identity=None, *, parameters=None, sizes=None):
     identity = identity or IDENTITY
     scheme, release = 'dhkem-x25519', '1'
     profile = registry.presentation_manifests(registry.adapter_for(scheme, release))[0]
     implementation = {'id': 'test-only', 'fixture': 'Invented measurements; never publish'}
     impl = {'id': implementation['id'], 'sha256': rp.digest(implementation)}
-    parameters = {'fixture': 1}; spec = 'b' * 64
+    parameters = {'fixture': 1} if parameters is None else parameters; spec = 'b' * 64
     config = rp.digest({'format': 'crucible-configuration-v1', 'scheme': scheme, 'release': release, 'specification': spec, 'parameters': parameters})
-    sizes = {'public_key': 32, 'ciphertext': 32, 'private_key': 32, 'shared_secret': 32}
+    sizes = sizes or {'public_key': 32, 'ciphertext': 32, 'private_key': 32, 'shared_secret': 32}
     declared = {'id': config, 'parameters': parameters, 'sizes': sizes}
     definition = {'scheme': scheme, 'release': release, 'specification_sha256': spec, 'configurations': [declared]}
     binding = {'scheme_id': scheme, 'version': release, 'scheme': scheme, 'release': release,
@@ -49,6 +50,90 @@ def fixture_files(identity=None):
     publication = {'format': 'crucible-website-publication-v2', 'source': identity, 'binding': binding,
                    'outcome': 'complete', 'expected': activation_for(binding)}
     return files, publication
+
+
+def ec_stage9_fixture():
+    # Exact public Stage 9 parameters at the first observed projection failure.
+    # Use the existing one-profile plumbing fixture; this is not an EC report
+    # or a scientific parameter mapping. The retained real EC ZIP separately
+    # exercises the complete 50-profile mapping without executing adapters.
+    profile = registry.presentation_manifests(registry.adapter_for('dhkem-x25519', 'curve-compressed-v2'))[8]
+    assert profile['profile_id'] == 'ec-compressed-v2-tier-9'
+    parameters = {**profile['parameters'], 'transcript_profile': profile['profile_id']}
+    files, publication = fixture_files(parameters=parameters,
+        sizes={'public_key': 9, 'private_key': 9, 'ciphertext': 9, 'shared_secret': 32})
+    files['resources.json']['configurations'][0]['parameters'] = {
+        'a': {'type': 'integer', 'decimal': '98423059801381720'},
+        'b': {'type': 'integer', 'decimal': '34033973960659062'},
+        'p': {'type': 'integer', 'decimal': '98423059801381723'},
+        'q': {'type': 'integer', 'decimal': '98423059305967943'},
+        'g': [4, 2382486990629884], 'transcript_profile': 'ec-compressed-v2-tier-9'}
+    return files, publication
+
+
+def test_exact_ec_stage9_browser_projection_keeps_canonical_configuration_identity():
+    files, publication = ec_stage9_fixture()
+    row = files['resources.json']['configurations'][0]
+    assert row['parameters'] != files['plan.json']['configurations'][0]['parameters']
+    accepted, resources = rp.validate_bundle(archive(files, publication), IDENTITY)
+    assert resources['configurations'][0] == row
+    assert accepted['binding']['profiles'][0]['configuration'] == row['configuration']
+
+
+@pytest.mark.parametrize('bad', [
+    {'type': 'integer', 'decimal': '98423059801381724'},
+    {'type': 'integer', 'decimal': '098423059801381723'},
+    {'type': 'integer', 'decimal': '+98423059801381723'},
+    {'type': 'integer', 'decimal': '9.8423059801381723e16'},
+    {'type': 'integer', 'decimal': 98423059801381723},
+    {'type': 'integer', 'decimal': '98423059801381723', 'extra': True},
+    {'decimal': '98423059801381723'},
+    {'type': 'number', 'decimal': '98423059801381723'},
+    98423059801381723, float(98423059801381723), True,
+])
+def test_reject_noncanonical_or_changed_large_integer_projection(bad):
+    files, publication = ec_stage9_fixture()
+    files['resources.json']['configurations'][0]['parameters']['p'] = bad
+    with pytest.raises(ValueError, match='Configuration resource identity differs'):
+        rp.validate_bundle(archive(files, publication), IDENTITY)
+
+
+def test_nested_signed_boundary_projection_and_sizes_are_exact():
+    limit = 2**53 - 1
+    parameters = {'nested': [limit, -limit, limit + 1, -limit - 1, True, {'n': 1}]}
+    files, publication = fixture_files(parameters=parameters, sizes={'public_key': limit + 1})
+    row = files['resources.json']['configurations'][0]
+    row['parameters'] = {'nested': [limit, -limit,
+        {'type': 'integer', 'decimal': '9007199254740992'},
+        {'type': 'integer', 'decimal': '-9007199254740992'}, True, {'n': 1}]}
+    row['sizes_bytes'] = {'public_key': {'type': 'integer', 'decimal': '9007199254740992'}}
+    rp.validate_bundle(archive(files, publication), IDENTITY)
+    for bad in (1.0, True):
+        broken = deepcopy(files)
+        broken['resources.json']['configurations'][0]['parameters']['nested'][-1]['n'] = bad
+        with pytest.raises(ValueError, match='Configuration resource identity differs'):
+            rp.validate_bundle(archive(broken, publication), IDENTITY)
+    broken = deepcopy(files)
+    broken['resources.json']['configurations'][0]['sizes_bytes']['public_key']['decimal'] = '9007199254740993'
+    with pytest.raises(ValueError, match='Configuration resource identity differs'):
+        rp.validate_bundle(archive(broken, publication), IDENTITY)
+
+
+def test_configuration_hash_cannot_be_rebased_to_the_browser_projection():
+    files, publication = ec_stage9_fixture()
+    binding = publication['binding']; row = files['resources.json']['configurations'][0]
+    projected_hash = rp.digest({'format': 'crucible-configuration-v1', 'scheme': binding['scheme'],
+        'release': binding['release'], 'specification': binding['specification_sha256'], 'parameters': row['parameters']})
+    assert projected_hash != row['configuration']
+    row['configuration'] = binding['profiles'][0]['configuration'] = projected_hash
+    files['plan.json']['configurations'][0]['id'] = projected_hash
+    files['workflow.json']['outcomes'][0]['configuration'] = projected_hash
+    binding['definition_sha256'] = files['plan.json']['definition_sha256'] = rp.digest(files['declaration/definition.json'])
+    plan = files['plan.json']; plan['sha256'] = rp.digest({key: value for key, value in plan.items() if key != 'sha256'})
+    files['workflow.json']['plan_sha256'] = plan['sha256']
+    publication['expected'] = activation_for(binding)
+    with pytest.raises(ValueError, match='Parameter hash differs'):
+        rp.validate_bundle(archive(files, publication), IDENTITY)
 
 
 def desired_document(binding, source=IDENTITY, producer='d' * 64):
