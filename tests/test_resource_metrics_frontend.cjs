@@ -8,7 +8,7 @@ const profiles = [1, 2].map(n => ({id: 'fixture-' + n, profile_id: 'fixture-' + 
 const scheme = {id: 'resource-fixture', version: '1', name: 'Resource fixture', profiles, next_profile_id: 'fixture-1', profile_metrics: {'fixture-1': {public_key_bytes: 999, ciphertext_bytes: 999}}};
 const op = {complete: true, duration_ns: {median: 2000, q1: 1000, q3: 3000, n: 100}};
 const rows = profiles.map((p, i) => ({configuration: String(i), sizes_bytes: {public_key: 32 + i, ciphertext: 64, private_key: 48}, communication: {fresh_exchange_bytes: 96 + i, cached_exchange_bytes: 64},
-  native_evidence: [{implementation: impl, comparison_profile: method, platform_identified: true, computation: {keygen: op, encapsulate: op, decapsulate: op}, first_call: {keygen: {...op, duration_ns: {...op.duration_ns, median: 6000, n: 5}}}, memory_components: {'keygen:rss': {complete: true, values: {max: 8192, n: 5}}}, profile: {environment: {cpu: 'Fixture CPU'}}}],
+  native_evidence: [{implementation: impl, comparison_profile: method, platform_identified: true, computation: {keygen: op, encapsulate: op, decapsulate: op}, first_call: {keygen: {...op, duration_ns: {median: 6000, q1: 5000, q3: 7000, n: 5}}}, memory_components: {'keygen:rss': {complete: true, values: {max: 8192, n: 5}}}, profile: {method: {id: 'serialized-native-honest-v2'}, environment: {os: 'Linux', cpu: 'Fixture CPU'}, sampling: {workers: 5, trials: 20}}}],
   stack_evidence: [{implementation: impl, comparison_profile: method, operations: {keygen: {planned: 5, measured: 5, max_observed_bytes: 256}}}],
   memory_evidence: [{implementation: impl, comparison_profile: method, operations: {keygen: {planned: 2, measured: 2, max_observed_bytes: 1024}}}]}));
 const report = {scheme_id: scheme.id, version: scheme.version, state: 'current', historical: [], publication: {id, completeness: 'complete', received_at: 1800000000,
@@ -25,10 +25,23 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   const chart = app.$('#overview-chart-computation');
   assert.deepEqual(chart.querySelectorAll('.chart-point').map(p => p.dataset.value), ['2', '2']);
   assert.equal(chart.querySelectorAll('.resource-whisker').length, 2);
+  assert.equal(chart.querySelectorAll('.resource-whisker-cap').length, 4);
+  for (const cap of chart.querySelectorAll('.resource-whisker-cap')) {
+    assert.equal(Number(cap.getAttribute('x2')) - Number(cap.getAttribute('x1')), 10);
+    assert.equal(cap.getAttribute('y1'), cap.getAttribute('y2'));
+  }
+  assert.match(chart.querySelector('.chart-point').querySelector('title').textContent, /median 2 microseconds; middle 50% 1–3 microseconds; 100 samples/);
+  assert.match(chart.querySelector('details').textContent, /not a confidence interval or a hardware correction/);
+  assert.match(chart.querySelector('details').textContent, /5 workers × 20 measured calls each/);
+  assert.deepEqual(chart.querySelector('thead').querySelectorAll('th').map(n => n.textContent), ['Configuration', 'Median (µs)', 'Middle 50% (µs)', 'Samples']);
+  assert.deepEqual(chart.querySelector('tbody').querySelector('tr').querySelectorAll('td').map(n => n.textContent), ['Stage 1', '2', '1–3', '100']);
   for (const [view, value] of [['rss', '8192'], ['stack', '256'], ['heap_stack', '1024'], ['first', '6']]) {
     await change('#overview-chart-computation', view);
     assert.deepEqual(chart.querySelectorAll('.chart-point').map(p => p.dataset.value), [value, value]);
   }
+  assert.match(chart.querySelector('.chart-point').querySelector('title').textContent, /median 6 microseconds; middle 50% 5–7 microseconds; 5 samples/);
+  assert.match(chart.querySelector('details').textContent, /5 fresh workers, one first call each/);
+  assert.doesNotMatch(chart.querySelector('details').querySelector('table').textContent, /100/);
   assert.match(chart.textContent, /portable-v2/);
   assert.equal(chart.querySelector('.resource-evidence-links').querySelector('a').href, '/api/resource-publications/' + id + '/download');
   const model = app.window.CrucibleResources;
@@ -38,6 +51,23 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   assert.equal(model.point(undefined, 'rss', 'keygen', method).value, null);
   const incomplete = structuredClone(rows[0]); incomplete.native_evidence[0].computation.keygen.complete = false;
   assert.equal(model.point(incomplete, 'warm', 'keygen', method).value, null);
+  for (const stats of [{median: 2000, n: 100}, {median: 2000, q1: 3000, q3: 4000, n: 100},
+    {median: 2000, q1: 0, q3: 1000, n: 100}, {median: 2000, q1: -1, q3: 4000, n: 100},
+    {median: 2000, q1: 1000, q3: Infinity, n: 100}, {median: 2000, q1: 1000, q3: '3000', n: 100}]) {
+    const row = structuredClone(rows[0]); row.native_evidence[0].computation.keygen.duration_ns = stats;
+    const point = model.point(row, 'warm', 'keygen', method, impl);
+    assert.equal(point.value, 2, 'a valid median survives missing or invalid quartiles');
+    assert.equal(point.q1, null); assert.equal(point.q3, null);
+  }
+  const invalidRange = structuredClone(report);
+  invalidRange.resources.configurations[0].native_evidence[0].computation.keygen.duration_ns = {median: 2000, q1: 3000, q3: 1e100, n: 100};
+  invalidRange.resources.configurations[1].native_evidence[0].computation.keygen.duration_ns = {median: 2000};
+  const medianApp = await createApp({schemes: [scheme], hash: '#scheme/resource-fixture/1', responder: url => url.pathname === '/api/protocol/resources' ? invalidRange : undefined});
+  const medianChart = medianApp.$('#overview-chart-computation');
+  assert.equal(medianChart.querySelectorAll('.resource-whisker').length, 0);
+  assert.deepEqual(medianChart.querySelectorAll('.chart-point').map(p => p.dataset.value), ['2', '2']);
+  assert.match(medianChart.querySelectorAll('.chart-point')[1].querySelector('title').textContent, /quartiles unavailable; sample count unavailable/);
+  assert.equal(medianChart.querySelector('.chart-point').getAttribute('cy'), '43', 'invalid quartiles cannot distort the axis');
   const wrong = structuredClone(report); wrong.version = 'wrong';
   const other = await createApp({schemes: [scheme], hash: '#scheme/resource-fixture/1', responder: url => url.pathname === '/api/protocol/resources' ? wrong : undefined});
   assert.notEqual(other.$('#overview-badge-public').textContent, 'Current');
@@ -48,6 +78,28 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
     select.value = value; select.focus(); select.dispatchEvent({type: 'change'}); await flush();
     assert.equal(instance.document.activeElement, instance.$('#overview-chart-' + card).querySelector(`select[aria-label="${label}"]`));
   };
+  await choose(app, 'computation', 'Measure', 'rss');
+  assert.match(chart.querySelector('.resource-summary').textContent, /Includes pre-exec launcher memory/);
+  assert.match(chart.querySelector('details').textContent, /not the current executable’s RSS alone/);
+  assert.match(chart.querySelector('svg').getAttribute('aria-label'), /includes launcher memory/);
+  for (const [profile, warning, scope] of [
+    // The projection embeds the method and platform inside profile, not beside it.
+    [{method: {id: 'serialized-native-honest-v2'}, environment: {os: 'Linux'}}, true, null],
+    [{method: {id: 'serialized-native-honest-v1'}, environment: {os: 'Linux'}}, true, null],
+    [{method: {id: 'serialized-native-honest-v2'}, environment: {os: 'Darwin'}}, false, null],
+    [{method: {id: 'serialized-native-honest-v3', memory: {rss_methods: {Linux: {id: 'linux-proc-status-vmhwm-v1', scope: 'Current executable memory map resident high-water, excluding pre-exec launcher address spaces'}}}}, environment: {os: 'Linux', rss_method: 'linux-proc-status-vmhwm-v1'}}, false, 'Current executable memory map resident high-water'],
+    [{method: {id: 'future-profile'}, environment: {os: 'Linux'}}, false, null],
+    [{method: {id: 'serialized-native-honest-v2'}, environment: {}}, false, null],
+  ]) {
+    const scoped = structuredClone(report);
+    for (const row of scoped.resources.configurations) row.native_evidence[0].profile = profile;
+    const instance = await createApp({schemes: [scheme], hash: '#scheme/resource-fixture/1', responder: url => url.pathname === '/api/protocol/resources' ? scoped : undefined});
+    await choose(instance, 'computation', 'Measure', 'rss');
+    const target = instance.$('#overview-chart-computation');
+    assert.equal(target.querySelector('.resource-summary').textContent.includes('Includes pre-exec launcher memory'), warning);
+    if (scope) assert.ok(target.querySelector('details').textContent.includes(scope));
+    assert.deepEqual(target.querySelectorAll('.chart-point').map(p => p.dataset.value), ['8192', '8192'], 'scope correction never changes historical values');
+  }
   for (const state of ['not_calculated', 'queued', 'failed', 'outdated', 'retired', 'cancelled', 'timed_out']) {
     const missing = {scheme_id: scheme.id, version: scheme.version, state, publication: null, resources: null, historical: []};
     const instance = await createApp({schemes: [scheme], hash: '#scheme/resource-fixture/1', responder: url => url.pathname === '/api/protocol/resources' ? missing : undefined});
@@ -79,6 +131,11 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   assert.equal(historyApp.$('#overview-badge-public').textContent, 'Historical');
   assert.deepEqual(historicalChart.querySelectorAll('.chart-recovery-line').map(p => p.dataset.profileId), [profiles[1].id]);
   assert.deepEqual(historicalChart.querySelectorAll('.chart-point').map(p => p.dataset.value), ['32', '33']);
+  await choose(historyApp, 'computation', 'Report', historicalId);
+  await choose(historyApp, 'computation', 'Measure', 'rss');
+  assert.equal(historyApp.$('#overview-badge-computation').textContent, 'Historical');
+  assert.match(historyApp.$('#overview-chart-computation').querySelector('.resource-summary').textContent, /Includes pre-exec launcher memory/);
+  assert.deepEqual(historyApp.$('#overview-chart-computation').querySelectorAll('.chart-point').map(p => p.dataset.value), ['8192', '8192']);
   await choose(historyApp, 'public', 'Report', partialId);
   assert.equal(historicalChart.querySelectorAll('.chart-point').length, 0);
   assert.match(historicalChart.textContent, /Incomplete report · not plotted/);

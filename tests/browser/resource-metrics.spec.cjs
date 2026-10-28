@@ -24,7 +24,9 @@ for (const width of [1440, 390]) {
       const rows = [20,21].map(n=>({configuration:String(n),sizes_bytes:{public_key:32,ciphertext:64,private_key:48},
         communication:{fresh_exchange_bytes:96,cached_exchange_bytes:64},
         native_evidence:[{comparison_profile:method,implementation:impl,platform_identified:true,
-          computation:{keygen:op,encapsulate:op,decapsulate:op}, profile:{environment:{cpu:'Synthetic browser fixture'}},
+          computation:{keygen:op,encapsulate:op,decapsulate:op},
+          first_call:{keygen:{complete:true,duration_ns:{n:5,median:6000,q1:5000,q3:7000}}},
+          profile:{method:{id:'serialized-native-honest-v2'},environment:{os:'Linux',cpu:'Synthetic browser fixture'},sampling:{workers:5,trials:20}},
           memory_components:{'keygen:rss':{complete:true,values:{n:5,max:8192}}}}],
         stack_evidence:[{implementation:impl,comparison_profile:method,operations:{keygen:{measured:5,planned:5,max_observed_bytes:256}}}],
         memory_evidence:[{implementation:impl,comparison_profile:method,operations:{keygen:{measured:2,planned:2,max_observed_bytes:1024}}}]}));
@@ -43,16 +45,25 @@ for (const width of [1440, 390]) {
       await expect(graph.locator('.chart-recovery-area')).toBeVisible();
     }
     const measure=card.getByLabel('Measure',{exact:true});
+    await expect(card.locator('.resource-whisker')).toHaveCount(2);
+    await expect(card.locator('.resource-whisker-cap')).toHaveCount(4);
+    await expect(card.locator('.chart-point title').first()).toContainText('median 2 microseconds; middle 50% 1–3 microseconds; 100 samples');
+    await card.getByText('Values, method & source',{exact:true}).click();
+    await expect(card.getByRole('columnheader',{name:'Middle 50% (µs)',exact:true})).toBeVisible();
+    await expect(card).toContainText('not a confidence interval or a hardware correction');
+    await page.screenshot({path:testInfo.outputPath('resource-timing.png'),fullPage:true});
+    await measure.selectOption('first');
+    await expect(card.locator('.chart-point title').first()).toContainText('median 6 microseconds; middle 50% 5–7 microseconds; 5 samples');
     await measure.focus();
     await measure.selectOption('rss');
     await expect(measure).toBeFocused();
     await expect(card).toContainText('Maximum observed fresh-worker resident RAM');
+    await expect(card.locator('.resource-summary')).toContainText('Includes pre-exec launcher memory');
     await expect(card.locator('.chart-point')).toHaveCount(2);
     await expect(card.locator('.chart-point').first()).toHaveAttribute('data-value','8192');
     await measure.selectOption('heap_stack');
     await expect(card).toContainText('same Massif snapshot');
     await expect(card.locator('.chart-point').first()).toHaveAttribute('data-value','1024');
-    await card.getByText('Values, method & source',{exact:true}).click();
     await expect(card.getByRole('link',{name:'Download measurements & evidence'})).toHaveAttribute('href',/\/api\/resource-publications\/[a-f0-9]{64}\/download/);
     await expect(card).toContainText('browser-fixture');
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

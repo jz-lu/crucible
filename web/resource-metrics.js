@@ -19,6 +19,21 @@
   const labels = Object.fromEntries(Object.values(views).flat());
   const field = view => view === 'stack' ? 'stack_evidence' : view === 'heap_stack' ? 'memory_evidence' : 'native_evidence';
   const number = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+  const sampleCount = value => Number.isSafeInteger(value) && value > 0 ? value : null;
+  function rssScope(record) {
+    const method = record?.profile?.method, environment = record?.profile?.environment;
+    const includesLauncher = environment?.os === 'Linux' && ['serialized-native-honest-v1', 'serialized-native-honest-v2'].includes(method?.id);
+    if (includesLauncher) return {includesLauncher, text: 'Linux getrusage RSS includes the pre-exec Python launcher’s memory high-water mark. These retained values are not the current executable’s RSS alone.'};
+    const declared = method?.memory?.rss_methods?.[environment?.os];
+    return {includesLauncher: false, text: declared?.id === environment?.rss_method && typeof declared?.scope === 'string' ? declared.scope : ''};
+  }
+  function timingRange(p) {
+    return p.q1 !== null && p.q3 !== null ? `${p.q1}–${p.q3}` : '—';
+  }
+  function pointDescription(p, unit, timed) {
+    if (!timed) return `${p.label}: ${p.text} ${unit.toLowerCase()}`;
+    return `${p.label}: median ${p.text} ${unit.toLowerCase()}; ${p.q1 !== null && p.q3 !== null ? 'middle 50% ' + timingRange(p) + ' ' + unit.toLowerCase() : 'quartiles unavailable'}; ${p.samples === null ? 'sample count unavailable' : p.samples + ' samples'}. Within-run variation, not a confidence interval or hardware correction.`;
+  }
   function exact(value) {
     if (Number.isSafeInteger(value) && value >= 0) return String(value);
     if (value?.type === 'integer' && typeof value.decimal === 'string' && /^(0|[1-9][0-9]*)$/.test(value.decimal)) return value.decimal;
@@ -89,7 +104,8 @@
       const result = (view === 'warm' ? evidence.computation : evidence.first_call)?.[op];
       const stats = result?.duration_ns;
       if (result?.complete !== true || !evidence.platform_identified || number(stats?.median) === null) return {value: null, text: 'Not measured'};
-      return {value: stats.median / 1000, text: String(stats.median / 1000), q1: number(stats.q1) === null ? null : stats.q1 / 1000, q3: number(stats.q3) === null ? null : stats.q3 / 1000, samples: stats.n};
+      const quartiles = number(stats.q1) !== null && number(stats.q3) !== null && stats.q1 <= stats.median && stats.median <= stats.q3;
+      return {value: stats.median / 1000, text: String(stats.median / 1000), q1: quartiles ? stats.q1 / 1000 : null, q3: quartiles ? stats.q3 / 1000 : null, samples: sampleCount(stats.n)};
     }
     if (view === 'rss') {
       const result = evidence.memory_components?.[op + ':rss'];
@@ -150,6 +166,8 @@
     const methods = [...new Set(evidence.filter(row => row.implementation?.sha256 === binding?.implementation?.sha256).map(row => row.comparison_profile))].filter(value => typeof value === 'string' && value);
     if (!methods.includes(choice.profiles[field(view)])) choice.profiles[field(view)] = methods[0];
     const method = choice.profiles[field(view)];
+    const record = evidence.find(row => row.comparison_profile === method && row.implementation?.sha256 === binding?.implementation?.sha256);
+    const rss = view === 'rss' ? rssScope(record) : null;
     const points = profiles.map((profile, index) => ({...point(rows.get(mapping.get(profileId(profile))), view, choice.op, method, binding?.implementation), label: profileLabel(profile, scheme), x: named ? index + 1 : stagePosition(profile), id: profileId(profile)}));
     const recovery = recoveryFor?.(points.map(p => ({tier: p.x, profileId: p.id, label: p.label}))) || {points: [], tier: null, label: '', meaning: ''};
     const renderKey = JSON.stringify([key(scheme), cardId, choice, entry?.revision, Boolean(data), entry?.status === 'error', cache.get(requestKey(scheme))?.revision, profiles.map(p => [profileId(p), profileLabel(p, scheme), stagePosition(p)]), named, recovery]);
@@ -177,8 +195,9 @@
     const maximum = Math.max(1, ...measured.map(p => Math.max(p.value, p.q3 ?? 0)));
     const x = value => high === low ? 255 : 48 + (value - low) * 417 / (high - low);
     const y = value => 190 - value * 147 / maximum;
-    const chart = svg('svg', {viewBox: '0 0 480 240', role: 'img', class: 'overview-svg', 'aria-label': `${labels[view]} by ${named ? 'parameter set' : 'stage'}`});
-    chart.append(svg('title', {}, labels[view]), svg('desc', {}, `${measured.length} comparable observations. Missing values are gaps. Timing whiskers show sample quartiles.${recovery.label ? ' ' + recovery.label + '. ' + recovery.meaning : ''}`));
+    const chartLabel = labels[view] + (rss?.includesLauncher ? ' · includes launcher memory' : '');
+    const chart = svg('svg', {viewBox: '0 0 480 240', role: 'img', class: 'overview-svg', 'aria-label': `${chartLabel} by ${named ? 'parameter set' : 'stage'}`});
+    chart.append(svg('title', {}, chartLabel), svg('desc', {}, `${measured.length} comparable observations. Missing values are gaps.${timed ? ' Dots show medians; capped whiskers show the middle 50% of samples within this run, not confidence intervals or hardware corrections.' : ''}${rss?.text ? ' ' + rss.text : ''}${recovery.label ? ' ' + recovery.label + '. ' + recovery.meaning : ''}`));
     chart.append(svg('text', {x: 48, y: 19, class: 'chart-axis-title'}, unit));
     if (Number.isFinite(recovery.tier) && x(recovery.tier) > 48) chart.append(svg('rect', {x: 48, y: 43, width: x(recovery.tier) - 48, height: 147, class: 'chart-recovery-area', 'aria-hidden': 'true'}));
     for (let i = 0; i <= 3; i++) chart.append(svg('line', {x1: 48, x2: 465, y1: 43 + i * 49, y2: 43 + i * 49, class: 'chart-gridline'}));
@@ -193,9 +212,14 @@
     }
     if (!named) chart.append(svg('path', {d: path, class: 'chart-series'}));
     for (const p of measured) {
-      if (timed && p.q1 !== null && p.q3 !== null) chart.append(svg('line', {x1: x(p.x), x2: x(p.x), y1: y(p.q1), y2: y(p.q3), class: 'resource-whisker'}));
+      if (timed && p.q1 !== null && p.q3 !== null) {
+        const whisker = svg('g', {class: 'resource-whisker'});
+        whisker.append(svg('title', {}, pointDescription(p, unit, timed)), svg('line', {x1: x(p.x), x2: x(p.x), y1: y(p.q1), y2: y(p.q3)}));
+        for (const value of [p.q1, p.q3]) whisker.append(svg('line', {x1: x(p.x) - 5, x2: x(p.x) + 5, y1: y(value), y2: y(value), class: 'resource-whisker-cap'}));
+        chart.append(whisker);
+      }
       const dot = svg('circle', {cx: x(p.x), cy: y(p.value), r: 3, class: 'chart-point', 'data-profile-id': p.id, 'data-value': p.value});
-      dot.append(svg('title', {}, `${p.label}: ${p.text} ${unit.toLowerCase()}`)); chart.append(dot);
+      dot.append(svg('title', {}, pointDescription(p, unit, timed) + (rss?.includesLauncher ? ' Includes pre-exec launcher memory.' : ''))); chart.append(dot);
     }
     if (!measured.length) {
       const empty = publication ? complete ? 'No comparable measurements' : 'Incomplete report · not plotted' : data ? 'Resources not calculated' : entry?.status === 'error' ? 'Resources unavailable' : '';
@@ -212,30 +236,42 @@
       private_key: 'Serialized private-key storage. This is local storage, not transmitted communication.',
       fresh: 'Primitive payload for setup delivery, one public key and one ciphertext. Application framing and certificates are outside this profile.',
       ciphertext: 'Complete serialized ciphertext.', cached: 'Ciphertext payload with the recipient key and required public setup already cached.',
-      warm: 'Median of 100 native operation timings. Whiskers are sample quartiles; process startup is outside the timed interval.',
-      first: 'Median first-call time across five fresh workers, shown separately from warm operation timing.',
+      warm: 'Median warm operation time. Process startup and warmups are outside these samples.',
+      first: 'Median of one first call per fresh worker, kept separate from warm operation timings.',
       rss: 'Maximum observed fresh-worker resident RAM, including initialization, dependencies and caller buffers. Baseline is retained in the evidence; it is not subtracted.',
       stack: 'Maximum observed stack watermark in the 8 MiB probe. Reserved but unwritten stack can be missed.',
       heap_stack: 'Maximum observed tracked heap plus stack in the same Massif snapshot, including estimated allocator overhead. Code, static data and some allocations are outside this instrument.'
     };
     const stateDetail = {queued: 'The measurement workflow is queued.', failed: 'The latest measurement attempt failed.', cancelled: 'The latest measurement attempt was cancelled.', timed_out: 'The latest measurement attempt timed out.', outdated: 'No complete report matches the expected implementation and measurement policy.', retired: 'This resource binding has been retired.'};
     let summaryText = publication ? `${historical ? (reportLabel === 'Historical' ? 'Historical report' : reportLabel) + ' · ' : ''}${measured.length} of ${points.length} configurations shown.` : stateDetail[data?.state] || '';
+    if (measured.length && timed) summaryText += ' Median · middle 50% where available.';
+    if (measured.length && rss?.includesLauncher) summaryText += ' Includes pre-exec launcher memory.';
     if (entry?.status === 'error') summaryText = data ? 'Refresh failed. Retained report shown; retry below.' : 'The resource report could not be retrieved. Retry below.';
     target.append(element('p', summaryText, 'overview-chart-note resource-summary'));
     const details = element('details'), summary = element('summary', 'Values, method & source'); details.append(summary); details.open = detailsOpen;
     details.append(element('p', notes[view], 'overview-chart-note'));
+    if (timed) {
+      const sampling = record?.profile?.sampling;
+      const plan = sampleCount(sampling?.workers) && (view === 'first' || sampleCount(sampling?.trials))
+        ? view === 'first' ? ` Sampling plan: ${sampling.workers} fresh workers, one first call each.` : ` Sampling plan: ${sampling.workers} workers × ${sampling.trials} measured calls each.` : '';
+      details.append(element('p', 'Capped whiskers show the middle 50% (sample quartiles). This is variation within one run, not a confidence interval or a hardware correction.' + plan, 'overview-chart-note'));
+    }
+    if (rss?.text) details.append(element('p', rss.text, 'overview-chart-note'));
     if (data?.lifecycle && stateDetail[data.lifecycle.phase]) details.append(element('p', stateDetail[data.lifecycle.phase], 'overview-chart-note'));
     if (data?.lifecycle?.reason === 'measurement_incomplete') details.append(element('p', 'The attempt did not produce complete measurements. Its retained report is available from Report.', 'overview-chart-note'));
     if (['rss', 'stack', 'heap_stack'].includes(view)) details.append(element('p', 'Observed peaks do not prove a worst-case device RAM requirement.', 'overview-chart-note'));
     const table = element('table'), header = element('tr');
-    for (const title of ['Configuration', unit, 'Samples']) header.append(element('th', title));
+    for (const title of timed ? ['Configuration', 'Median (µs)', 'Middle 50% (µs)', 'Samples'] : ['Configuration', unit, 'Samples']) header.append(element('th', title));
     const thead = element('thead'); thead.append(header); const tbody = element('tbody');
-    for (const p of points) { const tr = element('tr'); tr.append(element('td', p.label), element('td', p.text), element('td', p.samples ?? '—')); tbody.append(tr); }
+    for (const p of points) {
+      const tr = element('tr'); tr.append(element('td', p.label), element('td', p.text));
+      if (timed) tr.append(element('td', p.value === null ? '—' : timingRange(p)));
+      tr.append(element('td', p.samples ?? '—')); tbody.append(tr);
+    }
     table.append(thead, tbody); const scroll = element('div', undefined, 'overview-values-scroll'); scroll.tabIndex = 0; scroll.append(table); details.append(scroll);
     const source = publication?.source || {};
     if (publication) details.append(element('p', `${reportLabel} implementation: ${binding.implementation.id}. Published ${new Date(publication.received_at * 1000).toLocaleString()}.`, 'overview-chart-note'));
     if (computational) {
-      const record = evidence.find(row => row.comparison_profile === method);
       const methodDetails = {comparison_profile: method, implementation_sha256: binding?.implementation?.sha256,
         environment: record?.environment || record?.profile?.environment, method: record?.profile,
         compiler: record?.compiler || record?.profile?.compiler};
