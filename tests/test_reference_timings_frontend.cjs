@@ -36,6 +36,18 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
     const denied=await boot({responder:(url,_,envelope)=>url.pathname==='/api/session'?envelope({user:null,access:{mode:'beta',allowed:false,status:'anonymous'}}):undefined});
     assert.equal(fetches(denied).length,0);assert.equal(denied.requests.some(r=>r.url.pathname==='/api/schemes'),false);
   });
+  await test('current resource views and session polls do not fetch unselected earlier timings',async()=>{
+    const app=await createApp({schemes:[scheme()],hash:'#scheme/alpha/1',responder:url=>url.pathname==='/api/protocol/benchmarks'?{method,report:report()}:undefined});
+    assert.equal(fetches(app).length,0);
+    await app.sandbox.synchronizeSession();await flush();assert.equal(fetches(app).length,0);
+    const select=card=>app.$('#overview-chart-'+card).querySelector('select[aria-label="Report"]');
+    select('public').value='legacy';select('public').dispatchEvent({type:'change'});await flush();assert.equal(fetches(app).length,0);
+    await selectEarlierTimings(app);assert.equal(fetches(app).length,1);assert.equal(points(app).length,2);
+    select('computation').value='current';select('computation').dispatchEvent({type:'change'});await flush();
+    app.sandbox.referenceTimingState(scheme()).checkedAt-=60001;
+    await app.sandbox.synchronizeSession();await flush();assert.equal(fetches(app).length,1);
+    await selectEarlierTimings(app);assert.equal(fetches(app).length,2);assert.equal(points(app).length,2);
+  });
   await test('measured medians plot in sensible units with gaps, provenance and accessible quartiles',async()=>{
     const app=await boot({responder:url=>url.pathname==='/api/protocol/benchmarks'?{method,report:report()}:undefined});
     assert.equal(fetches(app).length,1);assert.equal(fetches(app)[0].url.searchParams.get('version'),'1');

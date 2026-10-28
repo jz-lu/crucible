@@ -183,7 +183,8 @@ function browseWarmJobs() {
       return warmBytes(completeRelease(scheme.id, scheme.version) || null);
     });
     add('timing:' + key, async () => {
-      const full = completeRelease(scheme.id, scheme.version); if (!full) return 0;
+      const full = completeRelease(scheme.id, scheme.version);
+      if (!full || !window.CrucibleResources?.usesEarlierReferences(full, 'computation')) return 0;
       const existing = referenceTimingState(full);
       if (existing && Date.now() - existing.checkedAt < REFERENCE_TIMING_MAX_AGE_MS) return 0;
       await loadReferenceTimings(full); return warmBytes(referenceTimingState(full) || null);
@@ -1561,7 +1562,7 @@ async function synchronizeSession() {
       globalError('');
       if (state.screen === 'overview' && !document.hidden) {
         const scheme = selectedScheme();
-        if (scheme) loadReferenceTimings(scheme);
+        if (scheme && window.CrucibleResources?.usesEarlierReferences(scheme, 'computation')) loadReferenceTimings(scheme);
       }
       if (state.screen === 'scheme') {
         // Do not await a child that may itself request a session refresh on 401.
@@ -2760,6 +2761,9 @@ function renderOverviewChart(scheme, cardId) {
   if (window.CrucibleResources?.render({scheme, cardId, target, profiles: overviewProfiles(scheme),
       profileId, profileLabel, stagePosition, named: namedParameters(scheme), api,
       redraw: () => { if (hasAccess() && state.screen === 'overview' && selectedScheme()?.id === scheme.id && String(selectedScheme()?.version) === String(scheme.version)) renderOverviewChart(scheme, cardId); }})) return;
+  // Current resource measurements have already returned above. Fetch the old
+  // operation report only when its explicit earlier-reference view is chosen.
+  if (descriptor.kind === 'timing') loadReferenceTimings(scheme);
   const detailsOpen = target.querySelector('details')?.open === true;
   const timing = descriptor.kind === 'timing' ? referenceTimingState(scheme) : null;
   const card = target.closest('.overview-card');
@@ -2964,7 +2968,6 @@ function renderOverview(scheme, contextProfile = null) {
       card.append(chart); grid.append(card);
     }
   }
-  loadReferenceTimings(scheme);
   window.CrucibleResources?.load(scheme, api, () => {
     if (hasAccess() && state.screen === 'overview' && selectedScheme()?.id === scheme.id && String(selectedScheme()?.version) === String(scheme.version)) {
       for (const id of ['public', 'cipher', 'computation']) renderOverviewChart(scheme, id);

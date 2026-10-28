@@ -260,5 +260,5 @@
     if (choice.restoreLegacyFocus) target.querySelector('select[aria-label="' + choice.restoreLegacyFocus + '"]')?.focus({preventScroll: true});
     choice.restoreLegacyFocus = null;
   }
-  window.CrucibleResources = {load, render, fallback, clear: () => { cache.clear(); selections.clear(); }, point, exact, coordinate};
+  window.CrucibleResources = {load, render, fallback, usesEarlierReferences: (scheme, cardId) => selections.get(key(scheme) + cardId)?.report === 'legacy', clear: () => { cache.clear(); selections.clear(); }, point, exact, coordinate};
 })();

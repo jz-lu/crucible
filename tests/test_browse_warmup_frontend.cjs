@@ -64,21 +64,21 @@ let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS 
     app.$('#auth-dialog').showModal();await step(app);assert.deepEqual(calls,[]);
     app.$('#auth-dialog').close();await step(app);assert.deepEqual(calls,['mount']);
   });
-  await test('only current releases warm, while the selected release and its graph report take priority',async()=>{
+  await test('only current releases warm, while unselected historical timing reports are not fetched',async()=>{
     const values=[{...release('one'),previous_releases:[release('one','old')]},release('two'),release('three')];
     const {app,calls}=await appFixture({hash:'#scheme/two/1',values});
     await drain(app);
     const detail=app.requests.filter(row=>row.url.searchParams.get('projection')==='release');
     assert.deepEqual(detail.map(row=>row.url.searchParams.get('scheme_id')),['two','one','three']);
     assert.equal(detail.some(row=>row.url.searchParams.get('version')==='old'),false);
-    assert.equal(reads(app,'/api/protocol/benchmarks').length,3);
+    assert.equal(reads(app,'/api/protocol/benchmarks').length,0);
     assert.deepEqual(calls,['mount','timeline','list','map']);
     assert.equal(app.$('#overview-workspace').hidden,false);assert.equal(app.$('#notebook-workspace').hidden,true);
     assert.equal(app.requests.some(row=>row.options.method==='POST'||row.url.pathname==='/api/challenges'||row.url.pathname.startsWith('/api/submissions/')),false);
   });
   await test('warm profile shares a foreground request and recent results are consumed once without a duplicate GET',async()=>{
     const held=deferred(),{app}=await appFixture({extra:url=>url.pathname==='/api/people/alice'?held.promise:undefined});
-    // Static setup, timeline, index, navigation, first release, timing.
+    // Static setup, timeline, index, navigation, first release, skipped legacy timing.
     await drain(app,6);const warming=step(app);await flush();
     assert.equal(reads(app,'/api/people/alice').length,1);
     await app.navigate('#person/alice');assert.equal(reads(app,'/api/people/alice').length,1);
@@ -95,7 +95,7 @@ let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS 
     await drain(app,40);
     const details=app.requests.filter(row=>row.url.searchParams.get('projection')==='release').map(row=>row.url.searchParams.get('scheme_id'));
     assert.deepEqual(details,['release-9',...Array.from({length:7},(_,i)=>'release-'+(i+1))]);
-    assert.equal(reads(app,'/api/protocol/benchmarks').length,8);
+    assert.equal(reads(app,'/api/protocol/benchmarks').length,0);
     assert.equal(vm.runInContext('browseWarmState.done.size',app.sandbox),24);
     assert.equal(vm.runInContext('browseWarmState.done.has(\'release:["release-8","1"]\')',app.sandbox),false);
   });
@@ -156,10 +156,11 @@ let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS 
     assert.equal(app.requests.length,before);
   });
   await test('a rotated timing report cannot refill the old reference cache',async()=>{
-    const held=deferred(),{app}=await appFixture({extra:url=>url.pathname==='/api/protocol/benchmarks'?held.promise:undefined});
-    await drain(app,5);const warming=step(app);await flush();
+    const held=deferred(),{app}=await appFixture({hash:'#scheme/one/1',extra:url=>url.pathname==='/api/protocol/benchmarks'?held.promise:undefined});
+    const report=app.$('#overview-chart-computation').querySelector('select[aria-label="Report"]');
+    report.value='legacy';report.dispatchEvent({type:'change'});await flush();
     app.sandbox.setSession(app.envelope({user,csrf_token:'rotated'}));
-    held.resolve(app.envelope({method:{id:'fixture',version:1},report:null}));await warming;await flush();
+    held.resolve(app.envelope({method:{id:'fixture',version:1},report:null}));await flush();
     assert.equal(vm.runInContext('referenceTimings.size',app.sandbox),0);
   });
   console.log(passed+' bounded browse warmup checks passed');
