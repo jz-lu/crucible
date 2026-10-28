@@ -9,9 +9,11 @@ const fetches = app => app.requests.filter(r => r.url.pathname === '/api/protoco
   const app = await createApp({schemes:[scheme('alpha'),scheme('beta')],hash:'#scheme/alpha/1',
     responder:url => url.pathname === '/api/protocol/benchmarks' ? {report:{id:'must-not-be-requested'}} : undefined});
   const checkCards = () => {
-    for (const [id, expected] of [['public',['public_key','fresh']],['cipher',['ciphertext','cached']],['computation',['warm','rss']]]) {
+    for (const [id, expected] of [['public',['public_key','fresh']],['cipher',[]],['computation',['warm','rss']]]) {
       const chart = app.$('#overview-chart-'+id), card = chart.closest('.overview-card');
-      assert.deepEqual(chart.querySelector('select[aria-label="Measure"]').querySelectorAll('option').map(option=>option.value),expected);
+      const measure = chart.querySelector('select[aria-label="Measure"]');
+      assert.deepEqual(measure?.querySelectorAll('option').map(option=>option.value) || [],expected);
+      assert.ok(expected.length <= 2, 'at most two distinct measures per card');
       assert.equal(chart.querySelectorAll('.chart-point').length,0,'old profile metadata never fills missing measurements');
       assert.equal(card.querySelector('.reference-timing-caption'),null);
       assert.equal(card.querySelector('.overview-metric-options'),null,'retired timing buttons are not merely hidden');
@@ -47,5 +49,5 @@ const fetches = app => app.requests.filter(r => r.url.pathname === '/api/protoco
     responder:(url,_,envelope)=>url.pathname==='/api/session'?envelope({user:null,access:{mode:'beta',allowed:false,status:'anonymous'}}):undefined});
   assert.equal(fetches(denied).length,0);
   assert.equal(denied.requests.some(r=>r.url.pathname==='/api/schemes'),false);
-  console.log('PASS resource-only scheme pages, two measures, preserved security controls, no retired selectors or legacy reads, and access boundaries');
+  console.log('PASS resource-only scheme pages, at most two measures, preserved security controls, no retired selectors or legacy reads, and access boundaries');
 })().catch(error=>{console.error(error);process.exitCode=1;});

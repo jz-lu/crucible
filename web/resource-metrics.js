@@ -13,7 +13,7 @@
   const operations = [['keygen', 'Key generation'], ['encapsulate', 'Encapsulation'], ['decapsulate', 'Decapsulation']];
   const views = {
     public: [['public_key', 'Public key'], ['fresh', 'Fresh exchange']],
-    cipher: [['ciphertext', 'Ciphertext'], ['cached', 'Exchange with cached key']],
+    cipher: [['ciphertext', 'Ciphertext']],
     computation: [['warm', 'Operation time'], ['rss', 'Process RAM']]
   };
   const labels = Object.fromEntries(Object.values(views).flat());
@@ -169,9 +169,9 @@
     document.querySelector('#overview-title-' + cardId).textContent = computational ? 'Computation & memory' : labels[view];
     document.querySelector('#overview-badge-' + cardId).textContent = historical ? reportLabel : stateLabels[data?.state] || '';
     const controls = element('div', undefined, 'resource-controls');
-    controls.append(control('Measure', views[cardId], view, value => { choice.view = value; redraw(); }));
+    if (views[cardId].length > 1) controls.append(control('Measure', views[cardId], view, value => { choice.view = value; redraw(); }));
     if (computational) controls.append(control('Operation', operations, choice.op, value => { choice.op = value; redraw(); }));
-    target.append(controls);
+    if (controls.childElementCount) target.append(controls);
     const measured = points.filter(p => p.value !== null && Number.isFinite(p.x));
     const xs = points.map(p => p.x).filter(Number.isFinite), low = Math.min(...xs), high = Math.max(...xs);
     const maximum = Math.max(1, ...measured.map(p => Math.max(p.value, p.q3 ?? 0)));
@@ -179,7 +179,8 @@
     const y = value => 190 - value * 147 / maximum;
     const chartLabel = labels[view] + (rss?.includesLauncher ? ' · includes launcher memory' : '');
     const chart = svg('svg', {viewBox: '0 0 480 240', role: 'img', class: 'overview-svg', 'aria-label': `${chartLabel} by ${named ? 'parameter set' : 'stage'}`});
-    chart.append(svg('title', {}, chartLabel), svg('desc', {}, `${measured.length} comparable observations. Missing values are gaps.${timed ? ' Dots show medians; capped whiskers show the middle 50% of samples within this run, not confidence intervals or hardware corrections.' : ''}${rss?.text ? ' ' + rss.text : ''}${recovery.label ? ' ' + recovery.label + '. ' + recovery.meaning : ''}`));
+    const positions = !points.length ? ' No challenge stages published.' : named ? ' Distinct named parameter sets are not interpolated.' : xs.length ? ` Challenge stages ${low} to ${high}.` : ' No valid stage coordinates published.';
+    chart.append(svg('title', {}, chartLabel), svg('desc', {}, `${measured.length} comparable observations. Missing values are gaps.${positions}${timed ? ' Dots show medians; capped whiskers show the middle 50% of samples within this run, not confidence intervals or hardware corrections.' : ''}${rss?.text ? ' ' + rss.text : ''}${recovery.label ? ' ' + recovery.label + '. ' + recovery.meaning : ''}`));
     chart.append(svg('text', {x: 48, y: 19, class: 'chart-axis-title'}, unit));
     if (Number.isFinite(recovery.tier) && x(recovery.tier) > 48) chart.append(svg('rect', {x: 48, y: 43, width: x(recovery.tier) - 48, height: 147, class: 'chart-recovery-area', 'aria-hidden': 'true'}));
     for (let i = 0; i <= 3; i++) chart.append(svg('line', {x1: 48, x2: 465, y1: 43 + i * 49, y2: 43 + i * 49, class: 'chart-gridline'}));
@@ -192,7 +193,7 @@
       if (p.value === null || !Number.isFinite(p.x)) { connected = false; continue; }
       path += `${connected ? 'L' : 'M'}${x(p.x)} ${y(p.value)} `; connected = true;
     }
-    if (!named) chart.append(svg('path', {d: path, class: 'chart-series'}));
+    if (!named && path) chart.append(svg('path', {d: path, class: 'chart-series'}));
     for (const p of measured) {
       if (timed && p.q1 !== null && p.q3 !== null) {
         const whisker = svg('g', {class: 'resource-whisker'});
@@ -200,7 +201,7 @@
         for (const value of [p.q1, p.q3]) whisker.append(svg('line', {x1: x(p.x) - 5, x2: x(p.x) + 5, y1: y(value), y2: y(value), class: 'resource-whisker-cap'}));
         chart.append(whisker);
       }
-      const dot = svg('circle', {cx: x(p.x), cy: y(p.value), r: 3, class: 'chart-point', 'data-profile-id': p.id, 'data-value': p.value});
+      const dot = svg('circle', {cx: x(p.x), cy: y(p.value), r: 3, class: 'chart-point', 'data-profile-id': p.id, 'data-tier': p.x, 'data-value': p.value});
       dot.append(svg('title', {}, pointDescription(p, unit, timed) + (rss?.includesLauncher ? ' Includes pre-exec launcher memory.' : ''))); chart.append(dot);
     }
     if (!measured.length) {
@@ -255,7 +256,9 @@
       if (timed) tr.append(element('td', p.value === null ? '—' : timingRange(p)));
       tr.append(element('td', p.samples ?? '—')); tbody.append(tr);
     }
-    table.append(thead, tbody); const scroll = element('div', undefined, 'overview-values-scroll'); scroll.tabIndex = 0; scroll.append(table); details.append(scroll);
+    table.append(thead, tbody); const scroll = element('div', undefined, 'overview-values-scroll'); scroll.tabIndex = 0;
+    scroll.setAttribute('aria-label', chartLabel + ' values by ' + (named ? 'parameter set' : 'challenge stage'));
+    scroll.append(table); details.append(scroll);
     const source = publication?.source || {};
     if (publication) details.append(element('p', `${reportLabel} implementation: ${binding.implementation.id}. Published ${new Date(publication.received_at * 1000).toLocaleString()}.`, 'overview-chart-note'));
     if (computational) {

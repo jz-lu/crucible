@@ -21,7 +21,9 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   assert.equal(app.$('#overview-badge-public').textContent, 'Current');
   for (const card of ['public', 'cipher', 'computation']) {
     const target = app.$('#overview-chart-' + card);
-    assert.equal(target.querySelector('select[aria-label="Measure"]').querySelectorAll('option').length, 2);
+    const measure = target.querySelector('select[aria-label="Measure"]');
+    if (card === 'cipher') assert.equal(measure, null, 'cached exchange is ciphertext, so no redundant choice');
+    else assert.equal(measure.querySelectorAll('option').length, 2);
     assert.equal(target.querySelector('select[aria-label="Report"]'), null, 'one report does not need a selector');
     assert.equal(target.querySelector('select[aria-label="Measurement profile"]'), null, 'one measurement profile does not need a selector');
     assert.equal(target.closest('.overview-card').querySelector('.reference-timing-caption'), null);
@@ -240,5 +242,5 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   assert.equal(changed, 0, 'a retired account request cannot publish or redraw');
   await model.load(scheme, async () => report, () => changed++);
   assert.equal(changed, 1, 'the replacement account loads its own report');
-  console.log('PASS resource states, explicit historical/legacy evidence, incomplete reports, zero values, profile isolation, focus, cache and retired-account requests');
+  console.log('PASS resource states, explicit historical evidence, incomplete reports, zero values, profile isolation, focus, cache and retired-account requests');
 })().catch(error => { console.error(error); process.exitCode = 1; });

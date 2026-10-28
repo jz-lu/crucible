@@ -1,20 +1,26 @@
 // Run with `node tests/test_frontend.cjs`. These fixtures are not registered KEMs.
 const assert = require('node:assert/strict');
 const {createApp, flush} = require('./frontend-dom.cjs');
-async function earlierReferences(app) {
-  // These regressions exercise the preserved earlier reference renderer. It is
-  // now reachable only by an explicit selection, never by missing resource data.
-  for (const id of ['public', 'cipher', 'computation']) {
-    const select = app.$('#overview-chart-' + id)?.querySelector('select[aria-label="Report"]');
-    if (select) { select.value = 'legacy'; select.dispatchEvent({type:'change'}); await flush(); }
-  }
-  return app;
-}
-async function createReferenceApp(options) {
-  const app = await createApp(options), navigate = app.navigate;
-  app.navigate = async hash => { await navigate(hash); if (!app.$('#overview-workspace').hidden) await earlierReferences(app); };
-  if (!app.$('#overview-workspace').hidden) await earlierReferences(app);
-  return app;
+// Routing/geometry fixtures now supply stored resource publications explicitly.
+// These synthetic byte values are not fallback measurements from scheme metadata.
+async function createMeasuredApp(options) {
+  const original = options.responder;
+  return createApp({...options, responder: (url, request, envelope) => {
+    const answer = original?.(url, request, envelope);
+    if (answer !== undefined) return answer;
+    if (url.pathname !== '/api/protocol/resources') return undefined;
+    const releases = options.schemes.flatMap(scheme => [scheme, ...(scheme.previous_releases || [])]);
+    const scheme = releases.find(item => item.id === url.searchParams.get('scheme_id') && String(item.version) === url.searchParams.get('version'));
+    if (!scheme) return undefined;
+    const implementation = {id: 'synthetic-rendering-fixture', sha256: 'a'.repeat(64)};
+    return {scheme_id: scheme.id, version: scheme.version, state: 'current', historical: [],
+      publication: {id: 'b'.repeat(64), completeness: 'complete', received_at: 1800000000,
+        binding: {implementation, profiles: scheme.profiles.map(item => ({profile_id: item.id, configuration: item.id}))},
+        source: {repository: 'fixture/fixture', commit: 'c'.repeat(40), run_id: '1'}},
+      resources: {configurations: scheme.profiles.map(item => ({configuration: item.id,
+        sizes_bytes: {public_key: scheme.profile_metrics?.[item.id]?.public_key_bytes,
+          ciphertext: scheme.profile_metrics?.[item.id]?.ciphertext_bytes}, native_evidence: []}))}};
+  }});
 }
 const profile = (id, size) => ({id, profile_id: id, instance_size: size, name: id, shared_secret_bytes: 32, correctness: {kind: 'fixture', failure_bound: '0'}, parameters: {size}, encoding: {shared_secret_bytes: 32}});
 const schemes = [
@@ -180,7 +186,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
       overview: {strengths: ['Original scope.'], limitations: ['Old parameters.'], correctness: 'Original correctness claim.', security: 'Original security scope.'}};
     const current = {...schemes[0], previous_releases: [old],
       profile_metrics: {'alpha-3': {public_key_bytes: 90, ciphertext_bytes: 110}, 'alpha-4': {public_key_bytes: 91, ciphertext_bytes: 111}}};
-    const app = await createApp({schemes: [current]});
+    const app = await createMeasuredApp({schemes: [current]});
     const row = app.$('#kem-catalogue').querySelector('.kem-name').closest('tr');
     assert.equal(row.querySelector('.kem-name').href, '#scheme/fixture-alpha/7');
     assert.equal(row.querySelector('.kem-progress').textContent, 'Stage 3');
@@ -202,7 +208,6 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.requests.length, requests + 1);
     assert.equal(app.requests.at(-1).url.pathname, '/api/protocol/resources');
     assert.equal(app.requests.at(-1).url.searchParams.get('version'), '6');
-    await earlierReferences(app);
     assert.match(app.$('#overview-release').textContent, /Archived release 6/);
     assert.equal(app.$('#overview-summary').textContent, 'Archived construction.');
     assert.deepEqual(app.$('#overview-chart-public').querySelectorAll('.chart-point').map(point => point.dataset.value), ['7']);
@@ -272,7 +277,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.requests.some(request => request.options.method === 'POST'), false);
   });
   await test('named-set graphs use discrete points and exact recovery markers without interpolation or security invention', async () => {
-    const app = await createReferenceApp({schemes: [{...namedScheme, recovered_profile_ids: undefined,
+    const app = await createMeasuredApp({schemes: [{...namedScheme, recovered_profile_ids: undefined,
       profile_recoveries: [{profile_id: 'named-768'}, {profile_id: 'named-512'}]}], hash: '#scheme/fixture-named/1'});
     for (const id of ['public', 'cipher', 'computation', 'security']) {
       const chart = app.$('#overview-chart-' + id);
@@ -284,11 +289,11 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     const chart = app.$('#overview-chart-public');
     assert.deepEqual(chart.querySelectorAll('.chart-point').map(point => [point.dataset.profileId, point.dataset.value]),
       [['named-512', '100'], ['named-768', '120'], ['named-1024', '140']]);
-    assert.match(chart.querySelector('table').textContent, /Parameter set.*ML-KEM-512100.*ML-KEM-768120.*ML-KEM-1024140/);
+    assert.match(chart.querySelector('table').textContent, /Configuration.*ML-KEM-512100.*ML-KEM-768120.*ML-KEM-1024140/);
     assert.equal(app.$('#overview-chart-security').querySelectorAll('.chart-point').length, 0);
     assert.equal(app.$('#overview-chart-computation').querySelectorAll('.chart-point').length, 0);
     const single = {...namedScheme, profiles: [namedProfiles[0]], largest_recovered_profile_id: null, recovered_profile_ids: []};
-    const one = await createReferenceApp({schemes: [single], hash: '#scheme/fixture-named/1'});
+    const one = await createMeasuredApp({schemes: [single], hash: '#scheme/fixture-named/1'});
     const dot = one.$('#overview-chart-public').querySelector('.chart-point');
     assert.equal(Number.isFinite(Number(dot.getAttribute('cx'))), true);
     assert.equal(one.$('#overview-chart-public').querySelectorAll('.chart-point').length, 1);
@@ -319,7 +324,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.requests.some(request => request.options.method === 'POST'), false);
   });
   await test('all research graphs highlight the range to one highest-recovered tier line without inventing recoveries or security', async () => {
-    const app = await createReferenceApp({schemes: [researchScheme], hash: '#scheme/fixture-research/2'});
+    const app = await createMeasuredApp({schemes: [researchScheme], hash: '#scheme/fixture-research/2'});
     assert.match(app.$('#overview-release').textContent, /50 challenge stages/);
     assert.match(app.$('#overview-beta').textContent, /Research stages/);
     for (const id of ['public', 'cipher', 'computation', 'security']) {
@@ -338,7 +343,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.$('#overview-chart-computation').querySelectorAll('.chart-point').length, 0);
     assert.doesNotMatch(app.$('#overview-chart-security').textContent, /500|549/);
     const unrecovered = {...researchScheme, largest_recovered_profile_id: null, recovered_profile_ids: [], profile_recoveries: []};
-    const empty = await createReferenceApp({schemes: [unrecovered], hash: '#scheme/fixture-research/2'});
+    const empty = await createMeasuredApp({schemes: [unrecovered], hash: '#scheme/fixture-research/2'});
     assert.equal(empty.$('#overview-graphs').querySelectorAll('.chart-recovery-line').length, 0);
     assert.equal(empty.$('#overview-progress').textContent, '');
     assert.equal(empty.$('#overview-progress').hidden, true);
@@ -352,7 +357,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
   await test('research attack references are labeled honestly while explicit inherited-record policy is preserved', async () => {
     const reference = {...researchScheme, record_inheritance: true, initial_security_model: {id: 'fixture-rho', status: 'limited-reference'},
       profiles: researchProfiles.map(item => ({...item, initial_security_estimate: {model_id: 'fixture-rho', bits: item.instance_size + 7}}))};
-    const app = await createReferenceApp({schemes: [reference], hash: route(reference, 'research-4', 'protocol')});
+    const app = await createMeasuredApp({schemes: [reference], hash: route(reference, 'research-4', 'protocol')});
     assert.match(app.$('#profile-note').textContent, /Initial classical attack reference: ≈11 bits/);
     assert.match(app.$('#parameter-facts').textContent, /Initial classical attack reference/);
     assert.match(app.$('#protocol-record-rules').textContent, /stage or higher/);
@@ -380,14 +385,14 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.doesNotMatch(app.$('#leaderboard-footnote').textContent, /Via Stage/);
     assert.equal(app.$('#leaderboard-content').querySelector('.leaderboard-credit'), null);
   });
-  await test('fixed encoding graphs and switchable cost/security graphs preserve sparse stages without requests', async () => {
+  await test('stored resource graphs and switchable cost/security graphs preserve sparse stages without requests', async () => {
     const fixture = {...schemes[0], profiles: [20, 21, 50, 90].map(tier => profile('alpha-' + tier, tier)),
       largest_recovered_profile_id: 'alpha-50', next_profile_id: 'alpha-90',
       profile_metrics: {'alpha-20': {public_key_bytes: 0, ciphertext_bytes: 8}, 'alpha-21': {public_key_bytes: null, ciphertext_bytes: 9},
         'alpha-50': {public_key_bytes: 6, ciphertext_bytes: 10}, 'alpha-90': {public_key_bytes: 8, ciphertext_bytes: 12}},
       overview: {strengths: ['<script>not HTML</script>'], limitations: ['Specific limits.'], correctness: 'Exact fixture.', security: 'No security certification.'}};
     fixture.profiles[2].shared_secret_bytes = 16;
-    const app = await createReferenceApp({schemes: [fixture], user: {id: 'active-account', handle: 'active'}, hash: '#scheme/fixture-alpha/7'});
+    const app = await createMeasuredApp({schemes: [fixture], user: {id: 'active-account', handle: 'active'}, hash: '#scheme/fixture-alpha/7'});
     const chart = id => app.$('#overview-chart-' + id);
     const points = id => chart(id).querySelectorAll('.chart-point');
     assert.equal(app.$('#overview-graphs').querySelectorAll('.overview-card').length, 4);
@@ -395,35 +400,41 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal((chart('public').querySelector('.chart-series').getAttribute('d').match(/M/g) || []).length, 2, 'Missing data breaks the line instead of becoming zero');
     const [first, middle, last] = points('public').map(point => Number(point.getAttribute('cx')));
     assert.ok(Math.abs((middle - first) / (last - first) - 30 / 70) < 0.0001, 'Sparse stages use their numerical positions');
-    assert.match(chart('public').querySelector('table').textContent, /21Not reported/);
+    assert.match(chart('public').querySelector('table').textContent, /21Not declared/);
     assert.equal(chart('public').querySelector('.overview-values-scroll').tabIndex, 0);
-    assert.equal(chart('public').querySelector('.overview-values-scroll').getAttribute('aria-label'), 'Public-key size values by challenge stage');
+    assert.equal(chart('public').querySelector('.overview-values-scroll').getAttribute('aria-label'), 'Public key values by challenge stage');
     assert.equal(chart('public').querySelector('svg').namespaceURI, 'http://www.w3.org/2000/svg');
     assert.equal(chart('public').querySelector('svg').getAttribute('role'), 'img');
-    assert.match(chart('public').querySelector('desc').textContent, /3 published values.*20 to 90/);
+    assert.match(chart('public').querySelector('desc').textContent, /3 comparable observations.*20 to 90/);
     assert.equal(app.$('#overview-strengths').querySelectorAll('script').length, 0);
     assert.match(app.$('#overview-strengths').textContent, /<script>not HTML<\/script>/);
     const requestCount = app.requests.length, originalHash = app.location.hash;
     assert.equal(chart('public').closest('.overview-card').querySelectorAll('[data-overview-metric]').length, 0);
     assert.equal(chart('cipher').closest('.overview-card').querySelectorAll('[data-overview-metric]').length, 0);
-    assert.equal(app.$('#overview-graphs').querySelectorAll('[data-overview-metric]').length, 5);
-    assert.deepEqual(app.$('#overview-graphs').querySelectorAll('h2').map(e=>e.textContent), ['Public-key size', 'Ciphertext size', 'Operation time', 'Initial classical reference']);
+    assert.equal(app.$('#overview-graphs').querySelectorAll('[data-overview-metric]').length, 2);
+    assert.deepEqual(app.$('#overview-graphs').querySelectorAll('h2').map(e=>e.textContent), ['Public key', 'Ciphertext', 'Computation & memory', 'Initial classical reference']);
     assert.deepEqual(points('cipher').map(point => point.dataset.value), ['8', '9', '10', '12']);
     for (const id of ['computation', 'security']) {
       assert.equal(chart(id).querySelector('.chart-series'), null);
       assert.equal(points(id).length, 0);
-      assert.deepEqual(chart(id).querySelectorAll('.chart-tick').map(label => label.textContent), ['20', '21', '90']);
-      assert.match(chart(id).textContent, /No (timings|estimates) published/);
+      assert.deepEqual(chart(id).querySelectorAll('.chart-tick').filter(label => label.getAttribute('text-anchor') === 'middle').map(label => label.textContent), ['20', '21', '90']);
+      assert.match(chart(id).textContent, /No comparable measurements|No estimates published/g);
     }
-    assert.match(chart('computation').textContent, /Reference implementation timings use a shared measurement method/);
-    for (const [id, metric] of [['computation', 'encapsulate'], ['computation', 'decapsulate'], ['security', 'quantum']]) {
-      const button = chart(id).closest('.overview-card').querySelector('[data-overview-metric="' + metric + '"]');
-      button.focus(); button.click(); await flush();
-      assert.equal(points(id).length, 0);
-      assert.equal(button.getAttribute('aria-pressed'), 'true');
-      assert.equal(app.document.activeElement, button);
-      assert.match(chart(id).textContent, /No (timings|estimates) published/);
+    assert.match(chart('computation').textContent, /Median warm operation time/);
+    for (const operation of ['encapsulate', 'decapsulate']) {
+      const select = chart('computation').querySelector('select[aria-label="Operation"]');
+      select.focus(); select.value = operation; select.dispatchEvent({type: 'change'}); await flush();
+      assert.equal(points('computation').length, 0);
+      assert.equal(chart('computation').querySelector('select[aria-label="Operation"]').value, operation);
+      assert.equal(app.document.activeElement, chart('computation').querySelector('select[aria-label="Operation"]'));
+      assert.match(chart('computation').textContent, /No comparable measurements/);
     }
+    const quantum = chart('security').closest('.overview-card').querySelector('[data-overview-metric="quantum"]');
+    quantum.focus(); quantum.click(); await flush();
+    assert.equal(points('security').length, 0);
+    assert.equal(quantum.getAttribute('aria-pressed'), 'true');
+    assert.equal(app.document.activeElement, quantum);
+    assert.match(chart('security').textContent, /No estimates published/);
     assert.equal(app.requests.length, requestCount);
     assert.equal(app.location.hash, originalHash);
     assert.equal(app.requests.some(request => request.url.pathname === '/api/challenges' || request.url.pathname === '/api/leaderboard'), false);
@@ -435,9 +446,9 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
       profile_metrics: Object.fromEntries(invalid.map((value, index) => ['alpha-' + (20 + index), {public_key_bytes: value, ciphertext_bytes: value}]))};
     const single = {...schemes[1], profiles: [profile('beta-5', 5)], profile_metrics: {'beta-5': {public_key_bytes: 0, ciphertext_bytes: 0}}};
     const empty = {...schemes[1], id: 'empty', profiles: []};
-    const app = await createReferenceApp({schemes: [fixture, single, empty], hash: '#scheme/fixture-alpha/7'});
+    const app = await createMeasuredApp({schemes: [fixture, single, empty], hash: '#scheme/fixture-alpha/7'});
     assert.equal(app.$('#overview-chart-public').querySelectorAll('.chart-point').length, 0);
-    assert.match(app.$('#overview-chart-public').textContent, /No values published/);
+    assert.match(app.$('#overview-chart-public').textContent, /No comparable measurements/);
     assert.equal(app.$('#overview-chart-public').querySelectorAll('.chart-point').length, 0);
     await app.navigate('#scheme/fixture-beta/2');
     assert.deepEqual(app.$('#overview-chart-public').querySelectorAll('.chart-point').map(point => point.dataset.value), ['0']);
@@ -469,7 +480,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
   await test('overview recovery markers use the displayed release and real tier coordinates on every card, including empty estimates', async () => {
     const old = {...schemes[0], version: '6', profiles: [20, 24, 90].map(tier => profile('alpha-' + tier, tier)), largest_recovered_profile_id: 'alpha-24'};
     const current = {...old, version: '7', largest_recovered_profile_id: 'alpha-90', previous_releases: [old]};
-    const app = await createReferenceApp({schemes: [current], hash: '#scheme/fixture-alpha/6'});
+    const app = await createMeasuredApp({schemes: [current], hash: '#scheme/fixture-alpha/6'});
     const charts = () => app.$('#overview-graphs').querySelectorAll('.overview-card');
     for (const card of charts()) {
       const line = card.querySelector('.chart-recovery-line');
@@ -1342,7 +1353,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
       default_progression: {stage_count: 3, configuration_count: 5, stages: configurations.filter(item => item.stage_number != null).map(item => ({number: item.stage_number, profile_id: item.id}))},
       largest_recovered_profile_id: 'alpha-60', recovered_profile_ids: ['alpha-60'], next_profile_id: 'alpha-36',
       profile_metrics: Object.fromEntries(configurations.map(item => [item.id, {public_key_bytes: item.instance_size, ciphertext_bytes: item.instance_size + 5}]))};
-    const app = await createApp({schemes: [curated], hash: route(curated, 'alpha-60')});
+    const app = await createMeasuredApp({schemes: [curated], hash: route(curated, 'alpha-60')});
     assert.equal(app.$('#profile-label').textContent, 'Configuration');
     assert.equal(app.$('#size-range').textContent, 'Between 2 and 3');
     assert.equal(app.$('#size-slider-value').textContent, '—');
@@ -1369,7 +1380,6 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.match(app.location.hash, /profile=alpha-36/);
     extra.querySelectorAll('button')[0].click();await flush();assert.match(app.location.hash, /profile=alpha-24/);
     await app.navigate('#scheme/fixture-alpha/7');
-    await earlierReferences(app);
     assert.equal(app.$('#overview-release').textContent, '3 challenge stages');
     assert.match(app.$('#overview-progress').textContent, /Largest recovery.*Configuration dimension 60/);
     const chart = app.$('#overview-chart-public');

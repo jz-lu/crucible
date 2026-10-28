@@ -53,7 +53,8 @@ for (const width of [1440, 390]) {
     const measure=card.getByLabel('Measure',{exact:true});
     for (const name of ['public','cipher','computation']) {
       const graph=page.locator('#overview-chart-'+name);
-      await expect(graph.getByLabel('Measure',{exact:true}).locator('option')).toHaveCount(2);
+      if (name === 'cipher') await expect(graph.getByLabel('Measure',{exact:true})).toHaveCount(0);
+      else await expect(graph.getByLabel('Measure',{exact:true}).locator('option')).toHaveCount(2);
       await expect(graph.locator('details').getByLabel('Report',{exact:true})).toBeHidden();
       await expect(graph.getByLabel('Measurement profile',{exact:true})).toHaveCount(0);
       await expect(graph.locator('option[value="legacy"]')).toHaveCount(0);
