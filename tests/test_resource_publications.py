@@ -166,12 +166,13 @@ def test_signed_identity_pins_workflow_repository_audience_and_expiry(signing_ke
     else: assert auth.verify(token(private), ORIGIN + auth.UPLOAD_PATH, NOW, keys=keys) == IDENTITY
 
 
-def test_real_signed_upload_boundary_and_beta_read_privacy(system, signing_key, monkeypatch):
+@pytest.mark.parametrize('job_claims', [{}, {'job_workflow_ref': auth.WORKFLOW, 'job_workflow_sha': IDENTITY['commit']}])
+def test_real_signed_upload_boundary_and_beta_read_privacy(system, signing_key, monkeypatch, job_claims):
     app, client = system; private, keys = signing_key
     monkeypatch.setattr(auth, 'signing_keys', lambda _: keys)
     raw = archive(*fixture_files())
     assert client.post(auth.UPLOAD_PATH, content=raw, headers={'Content-Type': 'application/zip'}).status_code == 401
-    response = client.post(auth.UPLOAD_PATH, content=raw, headers={'Content-Type': 'application/zip', 'Authorization': token(private)})
+    response = client.post(auth.UPLOAD_PATH, content=raw, headers={'Content-Type': 'application/zip', 'Authorization': token(private, **job_claims)})
     assert response.status_code == 200, response.text
     assert response.headers['cache-control'] == 'no-store'
     assert client.post(auth.UPLOAD_PATH, content=raw, headers={'Content-Type': 'application/zip', 'Authorization': token(private), 'Origin': ORIGIN}).status_code == 401
@@ -179,6 +180,44 @@ def test_real_signed_upload_boundary_and_beta_read_privacy(system, signing_key, 
     object.__setattr__(app.state.settings, 'access_mode', 'beta')
     assert client.get('/api/protocol/resources?scheme_id=dhkem-x25519&version=1').status_code == 401
     assert client.get('/api/resource-publications/' + response.json()['publication_id'] + '/download').status_code == 401
+
+
+@pytest.mark.parametrize('job_claims', [
+    {}, {'job_workflow_ref': auth.WORKFLOW, 'job_workflow_sha': IDENTITY['commit']},
+])
+def test_direct_job_identity_accepts_only_the_same_workflow_source(signing_key, job_claims):
+    private, keys = signing_key
+    assert auth.verify(token(private, event_name='workflow_dispatch', **job_claims),
+                       ORIGIN + auth.UPLOAD_PATH, NOW, keys=keys) == IDENTITY
+
+
+@pytest.mark.parametrize('change', [
+    {'job_workflow_ref': auth.WORKFLOW.replace('publish-resources', 'evaluate')},
+    {'job_workflow_ref': auth.WORKFLOW.replace('refs/heads/main', 'refs/heads/other')},
+    {'job_workflow_ref': ''}, {'job_workflow_ref': None},
+    {'job_workflow_sha': None}, {'job_workflow_sha': 'b' * 40}, {'job_workflow_sha': ''},
+    {'environment': 'production'}, {'repository_id': '1'}, {'repository_owner_id': '1'},
+    {'workflow_ref': auth.WORKFLOW.replace('publish-resources', 'evaluate')},
+    {'workflow_sha': 'b' * 40}, {'ref': 'refs/heads/other'}, {'aud': 'https://other.invalid'},
+])
+def test_job_claims_do_not_delegate_or_bypass_identity_checks(signing_key, change):
+    private, keys = signing_key
+    claims = {'event_name': 'workflow_dispatch', 'job_workflow_ref': auth.WORKFLOW,
+              'job_workflow_sha': IDENTITY['commit'], **change}
+    with pytest.raises(HTTPException) as exc:
+        auth.verify(token(private, **claims), ORIGIN + auth.UPLOAD_PATH, NOW, keys=keys)
+    assert exc.value.status_code == 401
+
+
+def test_matching_job_claims_still_require_a_valid_signature(signing_key):
+    private, keys = signing_key
+    value = token(private, event_name='workflow_dispatch', job_workflow_ref=auth.WORKFLOW,
+                  job_workflow_sha=IDENTITY['commit'])
+    prefix, signature = value.rsplit('.', 1)
+    altered = ('A' if signature[0] != 'A' else 'B') + signature[1:]
+    with pytest.raises(HTTPException) as exc:
+        auth.verify(prefix + '.' + altered, ORIGIN + auth.UPLOAD_PATH, NOW, keys=keys)
+    assert exc.value.status_code == 401
 
 
 def test_authenticated_upload_bounds_body_and_expanded_archive(system, signing_key, monkeypatch):
