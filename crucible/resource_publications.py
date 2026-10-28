@@ -23,7 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column
 from starlette.concurrency import run_in_threadpool
 
-from . import registry, resource_identity
+from . import registry, resource_identity, resource_state
 from .db import Base
 from .public_json import catalogue_response
 
@@ -69,6 +69,27 @@ def _name(value):
     return value
 
 
+def validate_binding(binding):
+    require(type(binding) is dict and set(binding) == {"scheme_id", "version", "scheme", "release", "definition_sha256", "specification_sha256", "implementation", "profiles"}, "Invalid scheme binding")
+    require(binding["scheme_id"] == binding["scheme"] and binding["version"] == binding["release"], "Construction identity differs from the website release")
+    require(all(type(binding[k]) is str and SHA.fullmatch(binding[k]) for k in
+                ("definition_sha256", "specification_sha256")), "Invalid construction digest")
+    implementation = binding["implementation"]
+    require(type(implementation) is dict and set(implementation) == {"id", "sha256"}
+            and type(implementation["id"]) is str and 0 < len(implementation["id"]) <= 200
+            and type(implementation["sha256"]) is str and SHA.fullmatch(implementation["sha256"]), "Invalid implementation identity")
+    adapter = registry.adapter_for(binding["scheme_id"], binding["version"])
+    profiles = {x["profile_id"]: x for x in registry.presentation_manifests(adapter)}
+    mappings = binding["profiles"]
+    require(isinstance(mappings, list) and 0 < len(mappings) <= 500, "Invalid publication profile count")
+    require(len({x["profile_id"] for x in mappings}) == len(mappings) == len({x["configuration"] for x in mappings}), "Duplicate profile mapping")
+    require({x["profile_id"] for x in mappings} == set(profiles), "Main publication must cover every registered website profile")
+    for row in mappings:
+        require(set(row) == {"profile_id", "configuration", "protocol_sha256"} and row["profile_id"] in profiles, "Unknown website profile")
+        require(SHA.fullmatch(row["configuration"]) is not None and row["protocol_sha256"] == digest({k: profiles[row["profile_id"]].get(k) for k in PROFILE_FIELDS}), "Website algorithms, parameters or encoding differ")
+    return binding
+
+
 def validate_bundle(raw, identity):
     require(0 < len(raw) <= MAX_UPLOAD, "Publication exceeds the upload limit")
     with zipfile.ZipFile(io.BytesIO(raw)) as archive:
@@ -87,9 +108,49 @@ def validate_bundle(raw, identity):
         require(type(value) is dict, "Publication document must be an object")
         return value
     publication = document("publication.json")
-    require(set(publication) == {"format", "binding", "source", "evaluation_manifest_sha256", "resources_sha256"}
-            and publication["format"] == "crucible-website-publication-v1", "Unsupported publication format")
+    outcome = publication.get("outcome")
+    require(publication.get("format") == "crucible-website-publication-v2" and outcome in
+            {"complete", "incomplete", "failed", "cancelled", "timed_out"}, "Unsupported publication format")
+    common = {"format", "binding", "source", "expected", "outcome"}
+    require(set(publication) == common | ({"evaluation_manifest_sha256", "resources_sha256"} if outcome == "complete" else {"failure_sha256"}), "Invalid publication fields")
+    resource_state.validate_expected(publication["expected"])
+    binding = validate_binding(publication["binding"])
+    require(publication["expected"]["fingerprint"] == digest({"binding": binding, "producer": publication["expected"]["producer_sha256"]}), "Resource fingerprint differs")
     require(publication["source"] == identity, "Publication source differs from the authenticated workflow")
+    if outcome != "complete":
+        failure = document("failure.json")
+        require(hashlib.sha256(files["failure.json"]).hexdigest() == publication["failure_sha256"], "Failure inventory hash differs")
+        require(set(failure) == {"format", "reason", "measurement_job", "partial_status", "files"}
+                and failure["format"] == "crucible-resource-failure-v1", "Invalid failure report")
+        require(failure["reason"] in resource_state.REASONS and failure["reason"] != "scheduled", "Invalid failure reason")
+        job = failure["measurement_job"]
+        require(type(job) is dict and set(job) == {"id", "name", "run_id", "run_attempt", "status", "conclusion"}, "Invalid measurement job evidence")
+        require(type(job["id"]) is str and re.fullmatch(r"[1-9][0-9]{0,18}", job["id"])
+                and job["name"] == "Measure " + binding["scheme_id"] + "@" + binding["version"]
+                and job["run_id"] == identity["run_id"] and job["run_attempt"] == identity["run_attempt"]
+                and job["status"] == "completed" and job["conclusion"] in
+                    {"success", "failure", "cancelled", "timed_out", "skipped", "neutral", "action_required", "stale"}, "Measurement job differs")
+        if outcome in {"cancelled", "timed_out"}:
+            require(outcome == job["conclusion"], "Unsupported terminal outcome")
+        elif outcome == "incomplete":
+            require(job["conclusion"] == "failure", "Incomplete report needs a failed measurement job")
+        else:
+            require(job["conclusion"] in {"failure", "skipped", "neutral", "action_required", "stale"}
+                    or (job["conclusion"] == "success" and failure["reason"] in
+                        {"artifact_unavailable", "archive_audit_failed", "archive_capacity"}), "Unsupported failed outcome")
+        require(failure["partial_status"] in {"retained", "unavailable", "omitted_capacity"}
+                and type(failure["files"]) is list, "Invalid partial evidence status")
+        expected_files = {"publication.json", "failure.json"}
+        for row in failure["files"]:
+            require(type(row) is dict and set(row) == {"path", "sha256", "bytes"}, "Invalid partial inventory")
+            path = "partial/" + _name(row["path"])
+            require(path not in expected_files and path in files and type(row["bytes"]) is int and row["bytes"] >= 0
+                    and len(files[path]) == row["bytes"] and hashlib.sha256(files[path]).hexdigest() == row["sha256"], "Partial inventory differs")
+            expected_files.add(path)
+        require(set(files) == expected_files and (failure["partial_status"] == "retained" or not failure["files"]), "Unlisted partial evidence")
+        if outcome == "incomplete" and failure["partial_status"] == "retained":
+            require(document("partial/workflow.json").get("status") == "incomplete", "Missing incomplete measurement outcome")
+        return publication, {"configurations": [], "failure": failure}
     manifest = document("bundle/manifest.json")
     require(manifest["format"] == "crucible-evaluation-bundle-v1", "Unsupported evaluation bundle")
     require(hashlib.sha256(files["bundle/manifest.json"]).hexdigest() == publication["evaluation_manifest_sha256"], "Evaluation inventory hash differs")
@@ -102,18 +163,6 @@ def validate_bundle(raw, identity):
         expected.add(path)
     require(set(files) == expected, "Unlisted publication files")
     require(hashlib.sha256(files["bundle/resources.json"]).hexdigest() == publication["resources_sha256"], "Resource projection hash differs")
-    binding = publication["binding"]
-    require(set(binding) == {"scheme_id", "version", "scheme", "release", "definition_sha256", "specification_sha256", "implementation", "profiles"}, "Invalid scheme binding")
-    require(binding["scheme_id"] == binding["scheme"] and binding["version"] == binding["release"], "Construction identity differs from the website release")
-    adapter = registry.adapter_for(binding["scheme_id"], binding["version"])
-    profiles = {x["profile_id"]: x for x in registry.presentation_manifests(adapter)}
-    mappings = binding["profiles"]
-    require(isinstance(mappings, list) and 0 < len(mappings) <= 500, "Invalid publication profile count")
-    require(len({x["profile_id"] for x in mappings}) == len(mappings) == len({x["configuration"] for x in mappings}), "Duplicate profile mapping")
-    require({x["profile_id"] for x in mappings} == set(profiles), "Main publication must cover every registered website profile")
-    for row in mappings:
-        require(set(row) == {"profile_id", "configuration", "protocol_sha256"} and row["profile_id"] in profiles, "Unknown website profile")
-        require(SHA.fullmatch(row["configuration"]) is not None and row["protocol_sha256"] == digest({k: profiles[row["profile_id"]].get(k) for k in PROFILE_FIELDS}), "Website algorithms, parameters or encoding differ")
     plan, outcomes = document("bundle/plan.json"), document("bundle/workflow.json")
     definition, resources = document("bundle/declaration/definition.json"), document("bundle/resources.json")
     require(definition["scheme"] == binding["scheme"] and definition["release"] == binding["release"]
@@ -124,7 +173,7 @@ def validate_bundle(raw, identity):
             and digest(plan["implementation"]) == binding["implementation"]["sha256"], "Main implementation differs")
     require(plan["sha256"] == digest({k: v for k, v in plan.items() if k != "sha256"})
             == manifest["plan_sha256"] == outcomes["plan_sha256"], "Measurement plan differs")
-    expected_ids = [x["configuration"] for x in mappings]
+    expected_ids = [x["configuration"] for x in binding["profiles"]]
     require([x["id"] for x in plan["configurations"]] == expected_ids
             == [x["configuration"] for x in outcomes["outcomes"]]
             == [x["configuration"] for x in resources["configurations"]], "Measured route differs from the approved website mapping")
@@ -155,6 +204,17 @@ def latest(session, scheme, version):
                           .order_by(ResourcePublication.run_id.desc(), ResourcePublication.run_attempt.desc()).limit(1))
 
 
+def current_publication(session, scheme, version, activation=None):
+    activation = activation or resource_state.desired(session, scheme, version)
+    if activation is None:
+        return None
+    return session.scalar(select(ResourcePublication).where(ResourcePublication.scheme_id == scheme,
+        ResourcePublication.version == version,
+        ResourcePublication.publication["expected"]["activation_id"].as_string() == activation.id,
+        ResourcePublication.publication["outcome"].as_string() == "complete")
+        .order_by(ResourcePublication.run_id.desc(), ResourcePublication.run_attempt.desc()).limit(1))
+
+
 def ingest(db, raw, identity, now):
     try:
         publication, resources = validate_bundle(raw, identity)
@@ -169,10 +229,16 @@ def ingest(db, raw, identity, now):
     def receipt(session, row):
         if row.id != identifier:
             raise HTTPException(409, "This workflow run already published different evidence for this release.")
-        return {"publication_id": row.id, "current": latest(session, row.scheme_id, row.version).id == row.id,
+        selected = current_publication(session, row.scheme_id, row.version)
+        return {"publication_id": row.id, "current": selected is not None and selected.id == row.id,
                 "scheme_id": row.scheme_id, "version": row.version}
     try:
         with db.transaction(write=True) as session:
+            resource_state.lock(session)
+            try:
+                resource_state.check_activation(session, publication["expected"], binding["scheme_id"], binding["version"], identity, binding)
+            except (ValueError, KeyError, TypeError):
+                raise HTTPException(422, "Publication differs from a recorded resource activation.") from None
             row = existing(session)
             if row is None:
                 row = ResourcePublication(id=identifier, scheme_id=binding["scheme_id"], version=binding["version"],
@@ -218,9 +284,11 @@ class ResourceIngestBoundary:
             if len(auth) != 1 or b"origin" in headers or b"cookie" in headers:
                 raise HTTPException(401, "A resource publisher credential is required.")
             identity = await run_in_threadpool(resource_identity.verify, auth[0], self.settings.origins[0] + resource_identity.UPLOAD_PATH, self.clock())
-            if headers.get(b"content-type", b"") != b"application/zip":
-                raise HTTPException(415, "Send an application/zip resource publication.")
-            if b"content-encoding" in headers or int(headers.get(b"content-length", b"0")) > MAX_UPLOAD:
+            content_type = headers.get(b"content-type", b"")
+            if content_type not in {b"application/zip", b"application/json"}:
+                raise HTTPException(415, "Send a resource ZIP or state JSON document.")
+            limit = resource_state.MAX_CONTROL if content_type == b"application/json" else MAX_UPLOAD
+            if b"content-encoding" in headers or int(headers.get(b"content-length", b"0")) > limit:
                 raise HTTPException(413, "Resource publication is too large.")
             body = bytearray()
             async with asyncio.timeout(60):
@@ -229,11 +297,15 @@ class ResourceIngestBoundary:
                     if message["type"] == "http.disconnect":
                         return
                     body.extend(message.get("body", b""))
-                    if len(body) > MAX_UPLOAD:
+                    if len(body) > limit:
                         raise HTTPException(413, "Resource publication is too large.")
                     if not message.get("more_body", False):
                         break
-            result = await run_in_threadpool(ingest, self.db, bytes(body), identity, self.clock())
+            if content_type == b"application/json":
+                result = await run_in_threadpool(resource_state.ingest_control, self.db,
+                    resource_identity.strict_json(bytes(body)), identity, self.clock(), validate_binding)
+            else:
+                result = await run_in_threadpool(ingest, self.db, bytes(body), identity, self.clock())
             response = JSONResponse(result, 200)
         except HTTPException as exc:
             response = JSONResponse({"detail": exc.detail}, exc.status_code)
@@ -252,22 +324,57 @@ class ResourceIngestBoundary:
 
 def register_routes(app, db):
     @app.get("/api/protocol/resources")
-    def resources(request: Request, scheme_id: str, version: str):
+    def resources(request: Request, scheme_id: str, version: str, publication_id: str | None = None):
         try:
             registry.adapter_for(scheme_id, version)
         except (ValueError, KeyError):
             raise HTTPException(404, "Unknown scheme release.") from None
         with db.transaction() as session:
-            row = latest(session, scheme_id, version)
-            if row is None:
-                return {"publication": None, "scheme_id": scheme_id, "version": version}
-            projection = deepcopy(row.resources)
-            # This channel has no authority over the site's correctness/security.
-            for config in projection["configurations"]:
-                config.pop("security", None); config.pop("correctness", None)
-            document = {"publication": {**row.publication, "id": row.id, "received_at": row.created_at,
-                        "evidence_url": "/api/resource-publications/" + row.id + "/download"},
-                    "resources": projection, "scheme_id": scheme_id, "version": version}
+            activation = resource_state.desired(session, scheme_id, version)
+            current = current_publication(session, scheme_id, version, activation)
+            history = session.scalars(select(ResourcePublication).where(ResourcePublication.scheme_id == scheme_id,
+                ResourcePublication.version == version).order_by(ResourcePublication.run_id.desc(),
+                ResourcePublication.run_attempt.desc()).limit(20)).all()
+            lifecycle = resource_state.latest_lifecycle(session, activation)
+            incomplete = next((row for row in history if activation and
+                row.publication.get("expected", {}).get("activation_id") == activation.id and
+                row.publication.get("outcome", "complete") != "complete"), None)
+            if incomplete and (not lifecycle or (incomplete.run_id, incomplete.run_attempt) >= resource_state.order(lifecycle["source"])):
+                lifecycle = {"phase": "failed" if incomplete.publication["outcome"] == "incomplete" else incomplete.publication["outcome"],
+                    "reason": incomplete.resources["failure"]["reason"], "source": incomplete.publication["source"],
+                    "received_at": incomplete.created_at}
+            retired = activation is None and session.scalar(select(resource_state.ResourceActivation.id).where(
+                resource_state.ResourceActivation.scheme_id == scheme_id, resource_state.ResourceActivation.version == version).limit(1)) is not None
+            state = "current" if current else "retired" if retired else "outdated" if activation and history else "not_calculated"
+            if not current and lifecycle:
+                state = lifecycle["phase"]
+            # A late event from the same or an earlier successful execution cannot
+            # turn a complete report into a failed/pending result.
+            if current and lifecycle and resource_state.order(lifecycle["source"]) <= (current.run_id, current.run_attempt):
+                lifecycle = None
+            selected = current
+            if publication_id is not None:
+                if not SHA.fullmatch(publication_id):
+                    raise HTTPException(404, "Resource publication not found.")
+                selected = session.get(ResourcePublication, publication_id)
+                if selected is None or selected.scheme_id != scheme_id or selected.version != version:
+                    raise HTTPException(404, "Resource publication not found.")
+            def metadata(row, full=False):
+                outcome = row.publication.get("outcome", "complete")
+                data = deepcopy(row.publication) if full else {"source": row.publication["source"], "binding": {
+                    key: row.publication["binding"][key] for key in ("scheme_id", "version", "implementation")}}
+                return {**data, "id": row.id, "received_at": row.created_at, "outcome": outcome,
+                        "completeness": "complete" if outcome == "complete" else "incomplete",
+                        "evidence_url": "/api/resource-publications/" + row.id + "/download"}
+            projection = deepcopy(selected.resources) if selected else None
+            if projection:
+                for config in projection.get("configurations", []):
+                    config.pop("security", None); config.pop("correctness", None)
+            document = {"schema_revision": 2, "state": state, "publication": metadata(selected, True) if selected else None,
+                "resources": projection, "scheme_id": scheme_id, "version": version,
+                "expected": {**resource_state.expected_document(activation), "binding": activation.binding, "source": activation.source} if activation else None,
+                "lifecycle": lifecycle, "historical": [metadata(row) for row in history if not current or row.id != current.id],
+                "selected_historical": selected is not None and (not current or selected.id != current.id)}
             return catalogue_response(document, request.headers.get("accept-encoding"))
 
     @app.get("/api/resource-publications/{publication_id}/download")

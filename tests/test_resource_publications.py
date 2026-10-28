@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 import pytest
-from crucible import registry, resource_identity as auth, resource_publications as rp
+from crucible import registry, resource_identity as auth, resource_publications as rp, resource_state as rs
 from crucible.app import create_app
 from crucible.config import Settings
 
@@ -46,8 +46,28 @@ def fixture_files(identity=None):
     plan['sha256'] = rp.digest(plan)
     outcomes = {'plan_sha256': plan['sha256'], 'status': 'complete', 'outcomes': [{'configuration': config, **{k: {'status': 'measured'} for k in ('native', 'rss', 'stack', 'massif')}}]}
     files = {'plan.json': plan, 'workflow.json': outcomes, 'declaration/definition.json': definition, 'resources.json': {'configurations': [resource]}}
-    publication = {'format': 'crucible-website-publication-v1', 'source': identity, 'binding': binding}
+    publication = {'format': 'crucible-website-publication-v2', 'source': identity, 'binding': binding,
+                   'outcome': 'complete', 'expected': activation_for(binding)}
     return files, publication
+
+
+def desired_document(binding, source=IDENTITY, producer='d' * 64):
+    return {'format': 'crucible-resource-desired-v1', 'source': source, 'bindings': [{
+        'binding': binding, 'producer_sha256': producer,
+        'fingerprint': rp.digest({'binding': binding, 'producer': producer})}]}
+
+
+def activation_for(binding, source=IDENTITY, producer='d' * 64):
+    document = desired_document(binding, source, producer)
+    entry = document['bindings'][0]
+    return {'activation_id': rp.digest({'format': 'crucible-resource-activation-v1',
+        'snapshot_id': rp.digest(document), 'scheme_id': binding['scheme_id'], 'version': binding['version'],
+        'fingerprint': entry['fingerprint']}), 'fingerprint': entry['fingerprint'], 'producer_sha256': producer}
+
+
+def announce(db, source=IDENTITY, producer='d' * 64, binding=None):
+    binding = binding or fixture_files()[1]['binding']
+    return rs.ingest_control(db, desired_document(binding, source, producer), source, NOW, rp.validate_binding)
 
 
 def archive(files, publication, *, extra=None):
@@ -74,6 +94,7 @@ def system(tmp_path, monkeypatch):
     monkeypatch.setattr(registry, 'ADAPTERS', {('dhkem-x25519', '1'): adapter})
     monkeypatch.setattr(registry, 'CURRENT', {'dhkem-x25519': '1'})
     app = create_app(Settings(f"sqlite:///{tmp_path/'resource.db'}", b'r' * 32, origins=(ORIGIN,), rate_limits=False), clock=lambda: NOW, initialize=True)
+    announce(app.state.db)
     yield app, TestClient(app)
     app.state.db.engine.dispose()
 
