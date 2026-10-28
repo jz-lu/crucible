@@ -72,11 +72,12 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   const current = {scheme_id: scheme.id, version: scheme.version, state: 'outdated', publication: null, resources: null,
     historical: [past.publication, partial.publication]};
   past.historical = partial.historical = current.historical;
-  const historyApp = await createApp({schemes: [scheme], hash: '#scheme/resource-fixture/1', responder: url => url.pathname === '/api/protocol/resources'
+  const historyApp = await createApp({schemes: [{...scheme, record_inheritance: false, recovered_profile_ids: [profiles[1].id], largest_recovered_profile_id: profiles[1].id}], hash: '#scheme/resource-fixture/1', responder: url => url.pathname === '/api/protocol/resources'
     ? url.searchParams.get('publication_id') === historicalId ? past : url.searchParams.get('publication_id') === partialId ? partial : current : undefined});
   await choose(historyApp, 'public', 'Report', historicalId);
   const historicalChart = historyApp.$('#overview-chart-public');
   assert.equal(historyApp.$('#overview-badge-public').textContent, 'Historical');
+  assert.deepEqual(historicalChart.querySelectorAll('.chart-recovery-line').map(p => p.dataset.profileId), [profiles[1].id]);
   assert.deepEqual(historicalChart.querySelectorAll('.chart-point').map(p => p.dataset.value), ['32', '33']);
   await choose(historyApp, 'public', 'Report', partialId);
   assert.equal(historicalChart.querySelectorAll('.chart-point').length, 0);
@@ -114,6 +115,32 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   assert.equal(retainedApp.$('#overview-badge-public').textContent, 'Current');
   assert.equal(retainedApp.$('#overview-chart-public').querySelectorAll('.chart-point').length, 2);
   assert.match(retainedApp.$('#overview-chart-public').querySelector('details').textContent, /latest measurement attempt failed.*did not produce complete measurements/);
+
+  const recoveredScheme = {...scheme, record_inheritance: false, recovered_profile_ids: profiles.map(p => p.id), largest_recovered_profile_id: profiles[1].id};
+  const oldRelease = {...recoveredScheme, version: 'old', recovered_profile_ids: [profiles[0].id], largest_recovered_profile_id: profiles[0].id};
+  recoveredScheme.previous_releases = [oldRelease];
+  const recoveredApp = await createApp({schemes: [recoveredScheme], hash: '#scheme/resource-fixture/1', responder: (url, options, envelope) => url.pathname === '/api/protocol/resources'
+    ? url.searchParams.get('version') === 'old' ? {...structuredClone(report), version: 'old'} : structuredClone(report)
+    : url.pathname === '/api/schemes' ? envelope({schemes: [structuredClone(recoveredScheme)]}) : undefined});
+  for (const card of ['public', 'cipher', 'computation', 'security']) {
+    const target = recoveredApp.$('#overview-chart-' + card);
+    assert.deepEqual(target.querySelectorAll('.chart-recovery-line').map(p => p.dataset.profileId), [profiles[1].id]);
+    assert.equal(target.querySelector('.chart-recovery-line').getAttribute('x1'), '465');
+    assert.equal(target.querySelector('.chart-recovery-area').getAttribute('width'), '417');
+    assert.match(target.querySelector('desc').textContent, /not a security guarantee or recoveries at lower stages/);
+  }
+  recoveredScheme.recovered_profile_ids = [profiles[0].id]; recoveredScheme.largest_recovered_profile_id = profiles[0].id;
+  await recoveredApp.sandbox.refreshProfiles({background:true});
+  assert.equal(recoveredApp.$('#overview-chart-public').querySelector('.chart-recovery-line').getAttribute('x1'), '48', 'fresh progress invalidates only the relevant resource rendering');
+  assert.equal(recoveredApp.$('#overview-chart-public').querySelector('.chart-recovery-area'), null);
+  await recoveredApp.navigate('#scheme/resource-fixture/old');
+  assert.deepEqual(recoveredApp.$('#overview-chart-public').querySelectorAll('.chart-recovery-line').map(p => p.dataset.profileId), [profiles[0].id], 'archived graphs use archived release records');
+  const namedScheme = {...scheme, selection_kind: 'parameter-set', record_inheritance: false, recovered_profile_ids: [profiles[1].id], largest_recovered_profile_id: profiles[1].id};
+  const namedApp = await createApp({schemes: [namedScheme], hash: '#scheme/resource-fixture/1', responder: url => url.pathname === '/api/protocol/resources' ? structuredClone(report) : undefined});
+  const namedChart = namedApp.$('#overview-chart-public');
+  assert.deepEqual(namedChart.querySelectorAll('.chart-recovery-line').map(p => p.dataset.profileId), [profiles[1].id]);
+  assert.equal(namedChart.querySelector('.chart-recovery-area'), null, 'named sets do not inherit a shaded stage frontier');
+  assert.equal(namedChart.querySelector('.chart-series'), null);
 
   const stableSelect = publicChart.querySelector('select[aria-label="Measure"]'); stableSelect.focus();
   publicChart.querySelector('[data-resource-refresh]').click(); await flush();

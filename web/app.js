@@ -184,7 +184,7 @@ function browseWarmJobs() {
     });
     add('timing:' + key, async () => {
       const full = completeRelease(scheme.id, scheme.version);
-      if (!full || !window.CrucibleResources?.usesEarlierReferences(full, 'computation')) return 0;
+      if (!full || !window.CrucibleResources?.usesEarlierReferences?.(full, 'computation')) return 0;
       const existing = referenceTimingState(full);
       if (existing && Date.now() - existing.checkedAt < REFERENCE_TIMING_MAX_AGE_MS) return 0;
       await loadReferenceTimings(full); return warmBytes(referenceTimingState(full) || null);
@@ -1562,7 +1562,7 @@ async function synchronizeSession() {
       globalError('');
       if (state.screen === 'overview' && !document.hidden) {
         const scheme = selectedScheme();
-        if (scheme && window.CrucibleResources?.usesEarlierReferences(scheme, 'computation')) loadReferenceTimings(scheme);
+        if (scheme && window.CrucibleResources?.usesEarlierReferences?.(scheme, 'computation')) loadReferenceTimings(scheme);
       }
       if (state.screen === 'scheme') {
         // Do not await a child that may itself request a session refresh on 401.
@@ -2754,12 +2754,28 @@ function svgNode(tag, attributes = {}, text) {
   if (text !== undefined) element.textContent = String(text);
   return element;
 }
+// Both stored resource reports and earlier reference charts annotate the same
+// release-scoped recovery records. Named sets never inherit a numeric frontier.
+function overviewRecovery(scheme, values, named) {
+  const exact = exactProfileRecords(scheme), recoveredIds = new Set(recoveredProfileIds(scheme));
+  const recorded = exact ? values.filter(point => recoveredIds.has(point.profileId)) :
+    values.filter(point => point.profileId === scheme.largest_recovered_profile_id);
+  const points = named ? recorded : recorded.slice(-1);
+  const tier = !named ? points[0]?.tier : null;
+  const label = !points.length ? '' : !named ? 'Largest recovered · ' + points[0].label :
+    'Recovered · ' + (points.length > 3 ? `${points.length} parameter sets` : points.map(point => point.label).join(', '));
+  const meaning = named ? 'Red markers identify recorded recoveries, not a security guarantee or recoveries at other profiles.' :
+    exact ? 'The red line marks the highest recorded stage, not a security guarantee or recoveries at lower stages. The tinted area shows the range up to that stage.' :
+      'The red line marks a recorded recovery, not a security guarantee or individual recoveries at every lower stage.';
+  return {points, tier, label, meaning};
+}
 function renderOverviewChart(scheme, cardId) {
   const metric = state.overviewMetrics[cardId] || OVERVIEW_CARDS[cardId][0];
   const descriptor = {...OVERVIEW_METRICS[metric]};
   const target = $('#overview-chart-' + cardId);
   if (window.CrucibleResources?.render({scheme, cardId, target, profiles: overviewProfiles(scheme),
       profileId, profileLabel, stagePosition, named: namedParameters(scheme), api,
+      recoveryFor: points => overviewRecovery(scheme, points, namedParameters(scheme)),
       redraw: () => { if (hasAccess() && state.screen === 'overview' && selectedScheme()?.id === scheme.id && String(selectedScheme()?.version) === String(scheme.version)) renderOverviewChart(scheme, cardId); }})) return;
   // Current resource measurements have already returned above. Fetch the old
   // operation report only when its explicit earlier-reference view is chosen.
@@ -2769,7 +2785,6 @@ function renderOverviewChart(scheme, cardId) {
   const card = target.closest('.overview-card');
   const profiles = overviewProfiles(scheme);
   const named = namedParameters(scheme);
-  const exact = exactProfileRecords(scheme);
   const axisLabel = named ? 'Parameter set' : 'Challenge stage';
   const security = ['classical', 'quantum'].includes(metric);
   const evidence = security ? securityReferences(scheme, metric) : null;
@@ -2792,23 +2807,12 @@ function renderOverviewChart(scheme, cardId) {
   const indexedLabels = named && (profiles.length > 3 || values.some(point => point.label.length > 16));
   const measured = values.filter(point => point.value !== null);
   const minTier = values[0]?.tier, maxTier = values.at(-1)?.tier;
-  const recovered = profiles.find(profile => profileId(profile) === scheme.largest_recovered_profile_id);
-  const recoveredIds = new Set(recoveredProfileIds(scheme));
-  const recordedPoints = exact ? values.filter(point => recoveredIds.has(point.profileId)) : recovered ? values.filter(point => point.profileId === profileId(recovered)) : [];
-  // Numeric stages have a highest recorded coordinate. Named sets remain distinct,
-  // without treating their display order as a strength or security ranking.
-  const recoveredPoints = named ? recordedPoints : recordedPoints.slice(-1);
-  const recoveredTier = !named ? recoveredPoints[0]?.tier : null;
-  const recoveredLabel = !recoveredPoints.length ? '' : !named ? 'Largest recovered · ' + recoveredPoints[0].label :
-    'Recovered · ' + (recoveredPoints.length > 3 ? `${recoveredPoints.length} parameter sets` : recoveredPoints.map(point => point.label).join(', '));
+  const {points: recoveredPoints, tier: recoveredTier, label: recoveredLabel, meaning: recoveryMeaning} = overviewRecovery(scheme, values, named);
   setText('#overview-title-' + cardId, cardId === 'computation' ? 'Operation time' : descriptor.title);
   for (const button of card.querySelectorAll('[data-overview-metric]')) button.setAttribute('aria-pressed', String(button.dataset.overviewMetric === metric));
   const svg = svgNode('svg', {viewBox: '0 0 480 240', role: 'img', 'aria-labelledby': 'graph-title-' + cardId + ' graph-description-' + cardId, class: 'overview-svg'});
   svg.append(svgNode('title', {id: 'graph-title-' + cardId}, descriptor.title + ' by ' + axisLabel.toLowerCase()));
   const summary = measured.length ? `${measured.length} published values; ${descriptor.unit.toLowerCase()} on the vertical axis.` : 'No values have been published. This chart shows axes only.';
-  const recoveryMeaning = named ? 'Red markers identify recorded recoveries, not a security guarantee or recoveries at other profiles.' :
-    exact ? 'The red line marks the highest recorded stage, not a security guarantee or recoveries at lower stages. The tinted area shows the range up to that stage.' :
-      'The red line marks a recorded recovery, not a security guarantee or individual recoveries at every lower stage.';
   svg.append(svgNode('desc', {id: 'graph-description-' + cardId}, `${summary} ${named ? 'Distinct named parameter sets on the horizontal axis; points are not interpolated.' : values.length ? `Challenge stages ${minTier} to ${maxTier} on the horizontal axis.` : 'No challenge stages published.'}${recoveredLabel ? ` ${recoveredLabel}. ${recoveryMeaning}` : ''}`));
   const left = 48, right = 465, top = 43, bottom = 190;
   const x = tier => minTier === maxTier ? (left + right) / 2 : left + (tier - minTier) / (maxTier - minTier) * (right - left);

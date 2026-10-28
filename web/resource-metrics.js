@@ -120,7 +120,7 @@
     refresh.addEventListener('click', () => load(scheme, api, redraw, {refresh: true, publicationId: choice.report === 'current' ? null : choice.report}));
     return refresh;
   }
-  function render({scheme, cardId, target, profiles, profileId, profileLabel, stagePosition, named, redraw, api}) {
+  function render({scheme, cardId, target, profiles, profileId, profileLabel, stagePosition, named, recoveryFor, redraw, api}) {
     if (!views[cardId]) return false;
     const choice = selection(scheme, cardId);
     const card = target.closest('.overview-card');
@@ -150,7 +150,9 @@
     const methods = [...new Set(evidence.filter(row => row.implementation?.sha256 === binding?.implementation?.sha256).map(row => row.comparison_profile))].filter(value => typeof value === 'string' && value);
     if (!methods.includes(choice.profiles[field(view)])) choice.profiles[field(view)] = methods[0];
     const method = choice.profiles[field(view)];
-    const renderKey = JSON.stringify([key(scheme), cardId, choice, entry?.revision, Boolean(data), entry?.status === 'error', cache.get(requestKey(scheme))?.revision, profiles.map(p => [profileId(p), profileLabel(p, scheme), stagePosition(p)]), named]);
+    const points = profiles.map((profile, index) => ({...point(rows.get(mapping.get(profileId(profile))), view, choice.op, method, binding?.implementation), label: profileLabel(profile, scheme), x: named ? index + 1 : stagePosition(profile), id: profileId(profile)}));
+    const recovery = recoveryFor?.(points.map(p => ({tier: p.x, profileId: p.id, label: p.label}))) || {points: [], tier: null, label: '', meaning: ''};
+    const renderKey = JSON.stringify([key(scheme), cardId, choice, entry?.revision, Boolean(data), entry?.status === 'error', cache.get(requestKey(scheme))?.revision, profiles.map(p => [profileId(p), profileLabel(p, scheme), stagePosition(p)]), named, recovery]);
     if (target.dataset.resourceRenderKey === renderKey) return true;
     const focused = document.activeElement?.closest('.resource-chart') === target ? document.activeElement : null;
     const focusLabel = focused?.getAttribute('aria-label'), focusRefresh = focused?.dataset.resourceRefresh === 'true';
@@ -170,15 +172,15 @@
       profileControl.querySelector('select').disabled = methods.length < 2; controls.append(profileControl);
     }
     target.append(controls);
-    const points = profiles.map((profile, index) => ({...point(rows.get(mapping.get(profileId(profile))), view, choice.op, method, binding?.implementation), label: profileLabel(profile, scheme), x: named ? index + 1 : stagePosition(profile), id: profileId(profile)}));
     const measured = points.filter(p => p.value !== null && Number.isFinite(p.x));
     const xs = points.map(p => p.x).filter(Number.isFinite), low = Math.min(...xs), high = Math.max(...xs);
     const maximum = Math.max(1, ...measured.map(p => Math.max(p.value, p.q3 ?? 0)));
     const x = value => high === low ? 255 : 48 + (value - low) * 417 / (high - low);
     const y = value => 190 - value * 147 / maximum;
     const chart = svg('svg', {viewBox: '0 0 480 240', role: 'img', class: 'overview-svg', 'aria-label': `${labels[view]} by ${named ? 'parameter set' : 'stage'}`});
-    chart.append(svg('title', {}, labels[view]), svg('desc', {}, `${measured.length} comparable observations. Missing values are gaps. Timing whiskers show sample quartiles.`));
+    chart.append(svg('title', {}, labels[view]), svg('desc', {}, `${measured.length} comparable observations. Missing values are gaps. Timing whiskers show sample quartiles.${recovery.label ? ' ' + recovery.label + '. ' + recovery.meaning : ''}`));
     chart.append(svg('text', {x: 48, y: 19, class: 'chart-axis-title'}, unit));
+    if (Number.isFinite(recovery.tier) && x(recovery.tier) > 48) chart.append(svg('rect', {x: 48, y: 43, width: x(recovery.tier) - 48, height: 147, class: 'chart-recovery-area', 'aria-hidden': 'true'}));
     for (let i = 0; i <= 3; i++) chart.append(svg('line', {x1: 48, x2: 465, y1: 43 + i * 49, y2: 43 + i * 49, class: 'chart-gridline'}));
     chart.append(svg('path', {d: 'M48 43V190H465', class: 'chart-axis'}));
     for (const value of [0, maximum]) chart.append(svg('text', {x: 40, y: y(value) + 4, 'text-anchor': 'end', class: 'chart-tick'}, value.toLocaleString('en-US', {maximumSignificantDigits: 4})));
@@ -199,7 +201,12 @@
       const empty = publication ? complete ? 'No comparable measurements' : 'Incomplete report · not plotted' : data ? 'Resources not calculated' : entry?.status === 'error' ? 'Resources unavailable' : '';
       chart.append(svg('text', {x: 250, y: 110, 'text-anchor': 'middle', class: 'chart-empty-label'}, empty));
     }
+    for (const p of recovery.points) {
+      const marker = svg('line', {x1: x(p.tier), x2: x(p.tier), y1: 43, y2: 190, class: 'chart-recovery-line', 'data-tier': p.tier, 'data-profile-id': p.profileId});
+      marker.append(svg('title', {}, named ? 'Recovered · ' + p.label : recovery.label)); chart.append(marker);
+    }
     target.append(chart);
+    if (recovery.label) target.append(element('p', recovery.label, 'overview-recovery-note'));
     const notes = {
       public_key: 'Complete serialized public key. Shared built-in parameters are recorded in the evidence.',
       private_key: 'Serialized private-key storage. This is local storage, not transmitted communication.',

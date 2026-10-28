@@ -5,6 +5,14 @@ const {test, expect, signIn, gate} = require('./helpers.cjs');
 for (const width of [1440, 390]) {
   test(`resource views retain focus and show scoped RAM at ${width}px`, async ({page}, testInfo) => {
     await page.setViewportSize({width, height:1000});
+    await page.route('**/api/schemes?*', async route => {
+      const response=await route.fetch(); if(response.status()!==200) return route.fulfill({response});
+      const data=await response.json();
+      for(const scheme of data.schemes || (data.scheme ? [data.scheme] : [])) if(scheme.id==='teaching-dh-kem' && String(scheme.version)==='4') {
+        scheme.record_inheritance=false;scheme.recovered_profile_ids=['dh-20','dh-160'];scheme.largest_recovered_profile_id='dh-160';
+      }
+      return route.fulfill({response,json:data});
+    });
     await page.route('**/api/protocol/resources?*', async route => {
       const response = await route.fetch();
       if (response.status() !== 200) return route.fulfill({response});
@@ -28,6 +36,12 @@ for (const width of [1440, 390]) {
     await signIn(page,'bob',{navigate:false});
     const card=page.locator('#overview-chart-computation');
     await expect(page.locator('#overview-badge-computation')).toHaveText('Current');
+    for(const name of ['public','cipher','computation','security']) {
+      const graph=page.locator('#overview-chart-'+name);
+      await expect(graph.locator('.chart-recovery-line')).toHaveCount(1);
+      await expect(graph.locator('.chart-recovery-line')).toHaveAttribute('data-profile-id','dh-160');
+      await expect(graph.locator('.chart-recovery-area')).toBeVisible();
+    }
     const measure=card.getByLabel('Measure',{exact:true});
     await measure.focus();
     await measure.selectOption('rss');
