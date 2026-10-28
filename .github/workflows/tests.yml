@@ -67,6 +67,8 @@ jobs:
           tests/test_password_recovery_races.py
           tests/test_release_pipeline.py
           tests/test_resource_publications.py
+          tests/test_resource_state.py
+          tests/test_resource_state_migration.py
       - name: Run all standalone frontend regressions
         run: |
           node --version

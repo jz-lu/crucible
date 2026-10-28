@@ -521,7 +521,9 @@
       "test_researcher_profiles_migration.py"
     ],
     "resource-publications": [
-      "test_resource_publications.py"
+      "test_resource_publications.py",
+      "test_resource_state.py",
+      "test_resource_state_migration.py"
     ],
     "scoring": [
       "test_scoring_weights.py"
@@ -734,12 +736,14 @@
     "crucible/notebook_numbers.py": "46b25b5d455682be3f718de9897792909b24983a76972f9be162442c1920f151",
     "crucible/researcher_profiles.py": "18e50b6ee29c0931346ba794f10e52530e461b2ba0f646d9832c28eb02d715cb",
     "crucible/resource_identity.py": "221fc03d2884a7408d4bc3e3707d7ae1ef148f56c4dbb7c1a7ba2e779b3ec433",
-    "crucible/resource_publications.py": "0b2ed829cd5409a121f079402bdc274f36addb9de9d99f99402925d4c19ecabf",
+    "crucible/resource_publications.py": "63650e8e476c408ef4ec4c985cd1ba2bac1695781605e02c17614a5865039063",
+    "crucible/resource_state.py": "da004619bee08456cdfb2968a1604ca42a0a21c8f0200808b2313ef42675ab4b",
     "docs/beta-release-policy.txt": "549c69ce412bde8de427c755959450ce0cbaaf87c2c63297468eb864d2375c8a",
     "migrations/env.py": "9bf10fe07b2a859502f58d8ce011e11ec40ffd001401d115e63170b8f43a3744",
     "migrations/versions/0024_researcher_profiles.py": "669f3cf7e95618cf245dce4d10d0133a085330d920d189958f31be48b49cbf29",
     "migrations/versions/0025_notebook_numbers.py": "852f7b870b75123e21d8e4b063880c9887e59bbb3e2b5331098b5a2d7c06e317",
     "migrations/versions/0026_resource_publications.py": "dc784faf47ae0029c85c3a61726876582a518246945d1bd84373b05a1febbc56",
+    "migrations/versions/0027_resource_lifecycle.py": "77d8428a7c2a591e0d3013b8e53c57569fafed4130c209d8d821ee310a810dfe",
     "scripts/beta_preflight.py": "8511519397e79bbfc0e179b77a670507a19c4a558c46a75cd4de80880ed404d3"
   }
 }
