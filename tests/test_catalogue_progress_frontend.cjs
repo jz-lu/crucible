@@ -67,15 +67,13 @@ async function metadataFixture(hash) {
   }
   {
     const {app,deploy}=await metadataFixture('#scheme/fixture/current');
-    const report = app.$('#overview-chart-public').querySelector('select[aria-label="Report"]');
-    report.value = 'legacy'; report.dispatchEvent({type:'change'}); await flush();
-    assert.equal(app.$('#overview-chart-public').querySelector('.chart-point').dataset.value,'10');
+    assert.equal(snapshot(app).schemes[0].profile_metrics.p1.public_key_bytes,10);
+    assert.equal(app.$('#overview-chart-public').querySelector('.chart-point'),null,'old metadata does not silently fill a missing resource publication');
     assert.equal(app.$('#overview-security').textContent,'Original security discussion');
     deploy();await app.sandbox.refreshProfiles({background:true});
     assert.equal(snapshot(app).revision,'revised');
-    const updatedReport = app.$('#overview-chart-public').querySelector('select[aria-label="Report"]');
-    updatedReport.value = 'legacy'; updatedReport.dispatchEvent({type:'change'}); await flush();
-    assert.equal(app.$('#overview-chart-public').querySelector('.chart-point').dataset.value,'20');
+    assert.equal(snapshot(app).schemes[0].profile_metrics.p1.public_key_bytes,20,'preserved metadata still refreshes without becoming resource evidence');
+    assert.equal(app.$('#overview-chart-public').querySelector('.chart-point'),null);
     assert.equal(app.$('#overview-security').textContent,'Revised security discussion');
     assert.equal(app.$('#overview-summary').textContent,'Revised summary');
   }

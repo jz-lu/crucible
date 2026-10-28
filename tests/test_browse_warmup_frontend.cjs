@@ -31,7 +31,10 @@ async function appFixture({hash='#about',extra,values=releases,nb}={}) {
 const step=app=>vm.runInContext('runBrowseWarmup()',app.sandbox);
 async function drain(app,count=24){for(let i=0;i<count;i++){await step(app);await flush();}}
 const reads=(app,path)=>app.requests.filter(row=>row.url.pathname===path);
-let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
+let passed=0,completed=false;async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
+process.once('beforeExit',()=>{
+  if(!completed&&!process.exitCode){console.error('Browse warmup checks stopped before completion, possibly on an unresolved mock');process.exitCode=1;}
+});
 (async()=>{
   await test('only admitted reviewers prepare two queue pages in separately budgeted idle jobs without showing the workspace',async()=>{
     const calls=[],held=deferred();
@@ -110,8 +113,8 @@ let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS 
   });
   await test('warm profile shares a foreground request and recent results are consumed once without a duplicate GET',async()=>{
     const held=deferred(),{app}=await appFixture({extra:url=>url.pathname==='/api/people/alice'?held.promise:undefined});
-    // Static setup, timeline, index, navigation, first release, skipped legacy timing.
-    await drain(app,6);const warming=step(app);await flush();
+    // Static setup, timeline, index, navigation, first release; profile is next.
+    await drain(app,5);const warming=step(app);await flush();
     assert.equal(reads(app,'/api/people/alice').length,1);
     await app.navigate('#person/alice');assert.equal(reads(app,'/api/people/alice').length,1);
     held.resolve(app.envelope({person:{handle:'alice',points:7,records:[],recent_recoveries:[]}}));await warming;await flush();
@@ -121,20 +124,20 @@ let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS 
     await app.navigate('#about');await app.navigate('#person/alice');
     assert.equal(reads(app,'/api/people/alice').length,2,'The recent warm response is consumed only once');
   });
-  await test('an expanded catalogue still warms at most eight current releases and24 jobs, prioritizing the viewed one',async()=>{
+  await test('an expanded catalogue warms at most eight current releases within the24-job cap, prioritizing the viewed one',async()=>{
     const values=Array.from({length:9},(_,i)=>release('release-'+(i+1)));
     const {app}=await appFixture({hash:'#scheme/release-9/1',values});
     await drain(app,40);
     const details=app.requests.filter(row=>row.url.searchParams.get('projection')==='release').map(row=>row.url.searchParams.get('scheme_id'));
     assert.deepEqual(details,['release-9',...Array.from({length:7},(_,i)=>'release-'+(i+1))]);
     assert.equal(reads(app,'/api/protocol/benchmarks').length,0);
-    assert.equal(vm.runInContext('browseWarmState.done.size',app.sandbox),24);
+    assert.equal(vm.runInContext('browseWarmState.done.size',app.sandbox),16,'Eight release jobs and eight metadata jobs complete without obsolete timing jobs');
     assert.equal(vm.runInContext('browseWarmState.done.has(\'release:["release-8","1"]\')',app.sandbox),false);
   });
   await test('same-account CSRF rotation and a new account cannot retain an old warm result',async()=>{
     for(const next of [{...user},{id:'bob-id',handle:'bob'}]) {
       const held=deferred(),{app}=await appFixture({extra:url=>url.pathname==='/api/people/alice'?held.promise:undefined});
-      await drain(app,6);const warming=step(app);await flush();
+      await drain(app,5);const warming=step(app);await flush();
       app.sandbox.setSession(app.envelope({user:next,csrf_token:'rotated',access:{mode:'beta',allowed:true,status:'active'}}));
       held.resolve(app.envelope({person:{handle:'alice',points:9999,records:[],recent_recoveries:[]}}));await warming;await flush();
       assert.equal(vm.runInContext("cachedRead('person:alice')",app.sandbox),null);
@@ -187,13 +190,26 @@ let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS 
     await assert.rejects(app.sandbox.api('/api/protocol/proposals/validate',{specification:{}}),error=>error.status===403);
     assert.equal(app.requests.length,before);
   });
-  await test('a rotated timing report cannot refill the old reference cache',async()=>{
-    const held=deferred(),{app}=await appFixture({hash:'#scheme/one/1',extra:url=>url.pathname==='/api/protocol/benchmarks'?held.promise:undefined});
-    const report=app.$('#overview-chart-computation').querySelector('select[aria-label="Report"]');
-    report.value='legacy';report.dispatchEvent({type:'change'});await flush();
-    app.sandbox.setSession(app.envelope({user,csrf_token:'rotated'}));
-    held.resolve(app.envelope({method:{id:'fixture',version:1},report:null}));await flush();
-    assert.equal(vm.runInContext('referenceTimings.size',app.sandbox),0);
+  await test('a late resource response cannot refill a cache cleared by session or account rotation',async()=>{
+    for(const next of [{...user},{id:'bob-id',handle:'bob'}]){
+      const held=deferred();let requests=0;
+      const resource={scheme_id:'one',version:'1',publication:null,resources:null,state:'not_calculated',historical:[]};
+      const {app}=await appFixture({extra:url=>url.pathname==='/api/protocol/resources'?
+        (++requests===1?held.promise:resource):undefined});
+      let staleChanges=0;
+      const pending=app.window.CrucibleResources.load(releases[0],app.sandbox.api,()=>staleChanges++);await flush();
+      assert.equal(reads(app,'/api/protocol/resources').length,1,'The first-session resource request is pending');
+      app.sandbox.setSession(app.envelope({user:next,csrf_token:'rotated',access:{mode:'beta',allowed:true,status:'active'}}));
+      held.resolve({...resource,state:'failed'});await pending;await flush();
+      assert.equal(staleChanges,0,'The previous session must not repaint after rotation');
+      let changes=0;
+      await app.window.CrucibleResources.load(releases[0],app.sandbox.api,()=>changes++);
+      assert.equal(reads(app,'/api/protocol/resources').length,2,'The old completion must not supply a fresh cache hit to the new session');
+      assert.equal(changes,1,'Only the new authorized request updates its owner');
+      await app.window.CrucibleResources.load(releases[0],app.sandbox.api,()=>changes++);
+      assert.equal(reads(app,'/api/protocol/resources').length,2,'The new-session result is reusable normally');
+      assert.equal(changes,1);
+    }
   });
-  console.log(passed+' bounded browse warmup checks passed');
+  completed=true;console.log(passed+' bounded browse warmup checks passed');
 })().catch(error=>{console.error(error);process.exitCode=1;});
