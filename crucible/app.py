@@ -28,6 +28,7 @@ from .access_policy import AccessPolicy
 from . import benchmark_reports, assumption_sheets, agent_guidance
 from .reference_policy import METHOD as REFERENCE_METHOD
 from . import github_auth, password_recovery, researcher_profiles
+from . import resource_schema  # Register retained 0026/0027 tables without resource routes.
 
 
 SOURCE_REVISION_FILE = ROOT / "SOURCE_REVISION"

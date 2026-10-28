@@ -526,6 +526,9 @@
     "session-notebook": [
       "test_session_read_performance.py",
       "test_notebook_read_performance.py"
+    ],
+    "resource-schema-rollback": [
+      "test_resource_schema_rollback.py"
     ]
   },
   "python_version": "3.13.17",
@@ -730,10 +733,13 @@
     "crucible/data/approved_beta_releases.json": "d866a822cb468ac8284a941ba797ac1c87a2d94175c305dca08af41ebd67fe0a",
     "crucible/notebook_numbers.py": "46b25b5d455682be3f718de9897792909b24983a76972f9be162442c1920f151",
     "crucible/researcher_profiles.py": "18e50b6ee29c0931346ba794f10e52530e461b2ba0f646d9832c28eb02d715cb",
+    "crucible/resource_schema.py": "c65ab02384ba51d5b2d2337262c2ff575abed72c52cad47c53846e999b4c15a0",
     "docs/beta-release-policy.txt": "549c69ce412bde8de427c755959450ce0cbaaf87c2c63297468eb864d2375c8a",
-    "migrations/env.py": "c3f962b029b905ff0e2e065c97867fdf3535392e918adfc2c491cef8a6e90b82",
+    "migrations/env.py": "0b854831467c9e6d49868b4dbc550d0a5e2b4e41acba3f61bc357d5941b24e96",
     "migrations/versions/0024_researcher_profiles.py": "669f3cf7e95618cf245dce4d10d0133a085330d920d189958f31be48b49cbf29",
     "migrations/versions/0025_notebook_numbers.py": "852f7b870b75123e21d8e4b063880c9887e59bbb3e2b5331098b5a2d7c06e317",
+    "migrations/versions/0026_resource_publications.py": "dc784faf47ae0029c85c3a61726876582a518246945d1bd84373b05a1febbc56",
+    "migrations/versions/0027_resource_lifecycle.py": "77d8428a7c2a591e0d3013b8e53c57569fafed4130c209d8d821ee310a810dfe",
     "scripts/beta_preflight.py": "8511519397e79bbfc0e179b77a670507a19c4a558c46a75cd4de80880ed404d3"
   }
 }

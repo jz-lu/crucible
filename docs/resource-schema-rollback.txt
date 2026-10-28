@@ -1,0 +1,36 @@
+Schema-compatible rollback candidate
+====================================
+
+This unmerged candidate is based on e3ed12df71de56a1df3300ac6d2a1f7aa9168e3e:
+the previous Notes/profile interface with the mobile header fix. Its web assets,
+authentication, admission policies, cryptographic implementations and native
+dependencies are unchanged from that source.
+
+It understands schema head 0027 without providing the resource feature. The
+0026/0027 migrations are exact copies of the resource integration. The small
+resource_schema module only registers the three tables with SQLAlchemy so the
+normal metadata/migration check accepts the preserved schema. There is no
+resource upload receiver, OIDC publisher identity handler, lifecycle endpoint,
+download endpoint or resource graph. CRUCIBLE_RESOURCE_PUBLISHING does not enable
+anything in this candidate, even if it remains set during an image rollback.
+
+Existing publication metadata, original ZIPs and lifecycle events remain stored.
+No downgrade or evidence deletion is part of rollback. Normal beta accounts,
+notes, submissions, configuration and database remain in place. The measurement
+workflow would fail to deliver new reports while this image is selected; retain
+those workflow artifacts and replay/retry through the normal resource receiver
+after a compatible forward release. Do not interpret missing resource routes as
+successful publication or delete retained data to make an older image start.
+
+Release checks include the focused preservation/no-routes suite in both portable
+CI and the exact native image gate. The reviewed overlay explicitly pins the
+schema-only module, migration environment and two added migrations, leaving the
+original frozen baseline intact. The old hardcoded notebook migration checks now
+use the actual migration head when checking full metadata parity.
+
+This source is not a verified rollback image until Release beta passes against
+this exact branch/commit with Publish=true and Promote=false. Retain that run's
+immutable digest and evidence. Do not merge this branch into main or promote the
+beta channel. Selecting the verified image is a separate operator action, after
+checking the actual live schema and preserving deployment configuration. Neither
+this source work nor its release workflow changes the hosted database.

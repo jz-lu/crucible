@@ -4,6 +4,7 @@ import json
 from uuid import uuid4
 
 from alembic import command
+from alembic.script import ScriptDirectory
 from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import MetaData, delete as sql_delete, inspect, select, text
@@ -233,7 +234,7 @@ def test_migration_assigns_existing_notes_once_and_new_allocations_continue(tmp_
         assert allocated[new] == 3
         with db.engine.connect() as connection:
             assert snapshot(connection, metadata) == original
-            assert connection.scalar(text('SELECT version_num FROM alembic_version')) == '0025'
+            assert connection.scalar(text('SELECT version_num FROM alembic_version')) == ScriptDirectory.from_config(config).get_current_head()
             assert not connection.exec_driver_sql('PRAGMA foreign_key_check').all()
         with pytest.raises(RuntimeError, match='Cannot discard allocated'):
             command.downgrade(config, '0024')
