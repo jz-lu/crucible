@@ -23,12 +23,16 @@ function installNotebook(app) {
   for (const file of ['store.js','seed.js','notebook.js']) vm.runInContext(
     fs.readFileSync(path.resolve(__dirname, '../web/notebook', file), 'utf8'), app.sandbox, {filename:file});
 }
-async function boot(respond=()=>undefined) {
+async function boot(respond=()=>undefined, {initial=true, canWarm=()=>true}={}) {
   const app = await createApp({schemes:[], hash:'#about'});
   installNotebook(app);
   let owner=reviewer, csrf='session-one', now=1000000, navigation=Promise.resolve();
   app.sandbox.Date = class extends Date {static now() {return now;}};
   const requests=[], root=app.$('#review-notebook-workspace');
+  const timers=new Map();let timerId=0;
+  app.sandbox.setTimeout=(fn,delay=0)=>{const id=++timerId;timers.set(id,{fn,delay});return id;};
+  app.sandbox.clearTimeout=id=>timers.delete(id);
+  const advanceTimers=async(ms=250)=>{for(const[id,timer]of [...timers])if(timer.delay<=ms){timers.delete(id);await timer.fn();}await flush();};
   const api=async(url,body,options)=>{
     requests.push({url,body,options});
     const result=await respond(url,body,options);
@@ -39,11 +43,11 @@ async function boot(respond=()=>undefined) {
     throw Error('Unexpected request: '+url);
   };
   const controller=app.sandbox.window.CrucibleNotebook.mount(root,{api, account:()=>owner, session:()=>csrf,
-    reviewOnly:true, navigate:route=>{navigation=controller.show(new URLSearchParams(route.split('?')[1]||''));}});
+    reviewOnly:true, canWarm, navigate:route=>{navigation=controller.show(new URLSearchParams(route.split('?')[1]||''));}});
   const show=extra=>controller.show(new URLSearchParams({section:'publication',...extra}));
-  await show();
+  if(initial)await show();
   return {...app,root,controller,show,requests,q:name=>root.querySelector(`[data-nb="${name}"]`),
-    navigateDone:()=>navigation, advance:ms=>{now+=ms;},
+    navigateDone:()=>navigation, advance:ms=>{now+=ms;}, advanceTimers,
     account:(next,credential=csrf)=>{owner=next;csrf=credential;controller.setAccount(next);}};
 }
 const queueReads = app => app.requests.filter(row=>row.url.startsWith('/api/notebook/review-queue?'));
@@ -57,6 +61,107 @@ async function test(name, run) {
   } finally {clearTimeout(timeout);}
 }
 (async()=>{
+  await test('initial warming prepares exactly two compact pages without hidden rendering or note bodies',async()=>{
+    const app=await boot(url=>url.startsWith('/api/notebook/review-queue?')?
+      new URLSearchParams(url.split('?')[1]).has('after')?page('Second request','cursor-three'):page('First request','cursor-two'):undefined,{initial:false});
+    const first=await app.controller.warm('list'),second=await app.controller.warm('next');
+    assert.ok(first.bytes>0);assert.ok(second.bytes>0);assert.equal(queueReads(app).length,2);
+    assert.equal(app.q('list').querySelector('.nb-entry'),null);assert.equal(app.root.querySelector('.nb-publication-review'),null);
+    assert.equal(app.requests.some(row=>row.url.startsWith('/api/notebook/notes/')),false);
+    await app.show();assert.match(app.q('list').textContent,/First request/);assert.equal(app.q('more').disabled,false);
+    assert.equal(queueReads(app).length,2,'The just-prepared first page settles without another GET');
+    app.q('more').click();await flush();assert.match(app.q('list').textContent,/Second request/);
+    assert.equal(queueReads(app).length,2,'The just-prepared second page settles without another GET');
+    assert.ok(queueReads(app).every(row=>new URLSearchParams(row.url.split('?')[1]).get('summary')==='true'));
+  });
+  await test('visible paging prepares one next page after settling, without recursively crawling the queue',async()=>{
+    const app=await boot(url=>{
+      if(!url.startsWith('/api/notebook/review-queue?'))return;
+      const after=new URLSearchParams(url.split('?')[1]).get('after');
+      return after==='two'?page('Second request','three'):after==='three'?page('Third request','four'):after==='four'?page('Fourth request'):page('First request','two');
+    });
+    assert.equal(queueReads(app).length,1);await app.advanceTimers();assert.equal(queueReads(app).length,2);
+    await app.advanceTimers();assert.equal(queueReads(app).length,2);
+    app.q('more').click();await flush();assert.match(app.q('list').textContent,/Second request/);
+    assert.equal(queueReads(app).length,2);await app.advanceTimers();assert.equal(queueReads(app).length,3);
+    await app.advanceTimers();assert.equal(queueReads(app).length,3,'Third-page preparation must not crawl to page four');
+    app.q('more').click();await flush();assert.match(app.q('list').textContent,/Third request/);
+    assert.equal(queueReads(app).length,3);await app.advanceTimers();assert.equal(queueReads(app).length,4);
+  });
+  await test('foreground entry joins a pending preparation and full review readers remain fresh',async()=>{
+    const late=deferred();let waiting=true;
+    const app=await boot(url=>waiting&&url.startsWith('/api/notebook/review-queue?')?late.promise:undefined,{initial:false});
+    const warm=app.controller.warm('list');const visible=app.show();
+    assert.equal(queueReads(app).length,1);late.resolve(page());await Promise.all([warm,visible]);waiting=false;
+    assert.match(app.q('list').textContent,/Queued claim/);assert.equal(queueReads(app).length,1);
+    await app.show({note:'candidate',revision:'2'});await app.show();await app.show({note:'candidate',revision:'2'});
+    assert.equal(app.requests.filter(row=>row.url.startsWith('/api/notebook/notes/candidate')).length,2);
+  });
+  await test('prepared responses are consumed once and never renew their original five-minute freshness',async()=>{
+    const late=deferred();let waiting=false;
+    const app=await boot(url=>waiting&&url.startsWith('/api/notebook/review-queue?')?late.promise:undefined,{initial:false});
+    await app.controller.warm('list');app.advance(9000);await app.show();assert.equal(queueReads(app).length,1);
+    app.advance(291001);waiting=true;const expired=app.show();
+    assert.equal(app.q('list').querySelector('.nb-entry'),null);late.resolve(page('Fresh request'));await expired;
+    await app.show();assert.equal(queueReads(app).length,3,'Only a completed speculative response gets a single no-refetch visit');
+  });
+  await test('failed, oversized and malformed preparation cannot poison a later explicit read or warm page two',async()=>{
+    for(const mode of ['failed','oversized','malformed']){
+      let first=true;const huge=page('Too large','two');huge.notes[0].revisions[0].content.claim='x'.repeat(1000001);
+      const app=await boot(url=>{
+        if(!url.startsWith('/api/notebook/review-queue?')||!first)return;
+        if(mode==='failed')throw Error('Offline');
+        return mode==='oversized'?huge:{notes:[],next_after:7};
+      },{initial:false});
+      if(mode==='oversized')await app.controller.warm('list');else await assert.rejects(app.controller.warm('list'));
+      await app.controller.warm('next');assert.equal(queueReads(app).length,1);
+      first=false;await app.show();assert.equal(queueReads(app).length,2);assert.match(app.q('list').textContent,/Queued claim/);
+    }
+  });
+  await test('hidden tabs, Save-Data, foreground work, readers and navigation suppress optional next-page preparation',async()=>{
+    for(const mode of ['hidden','save-data','busy','reader','hide']){
+      let allowed=true;
+      const app=await boot(url=>url.startsWith('/api/notebook/review-queue?')?page('First request','two'):undefined,{canWarm:()=>allowed});
+      if(mode==='hidden')app.document.hidden=true;
+      if(mode==='save-data')app.sandbox.navigator.connection={saveData:true};
+      if(mode==='busy')allowed=false;
+      if(mode==='reader')await app.show({note:'candidate',revision:'2'});
+      if(mode==='hide')app.controller.hide();
+      await app.advanceTimers();assert.equal(queueReads(app).length,1,mode+' suppresses pending preparation');
+      if(['hidden','save-data','busy'].includes(mode)){await app.controller.warm('next');assert.equal(queueReads(app).length,1);}
+    }
+  });
+  await test('brief overlapping work defers one-ahead preparation; waiting is bounded and navigation still cancels it',async()=>{
+    for(const mode of ['idle','deadline','late-idle','hide','reader','failure']){
+      let allowed=false;
+      const app=await boot(url=>{
+        if(!url.startsWith('/api/notebook/review-queue?'))return;
+        if(mode==='failure'&&new URLSearchParams(url.split('?')[1]).has('after'))throw Error('Offline');
+        return page('First request','two');
+      },{canWarm:()=>allowed});
+      await app.advanceTimers();assert.equal(queueReads(app).length,1);
+      if(mode==='deadline'){app.advance(10000);await app.advanceTimers();}
+      if(mode==='late-idle')app.advance(10000);
+      if(mode==='hide')app.controller.hide();
+      if(mode==='reader')await app.show({note:'candidate',revision:'2'});
+      allowed=true;await app.advanceTimers();await app.advanceTimers();
+      assert.equal(queueReads(app).length,['idle','failure'].includes(mode)?2:1,mode);
+      await app.advanceTimers();assert.equal(queueReads(app).length,['idle','failure'].includes(mode)?2:1,'No recursive preparation or automatic network retry');
+    }
+  });
+  for(const change of ['account','session','write','denial'])await test('late prepared page cannot repopulate summaries after '+change,async()=>{
+    const late=deferred();let waiting=false;
+    const app=await boot(url=>url.startsWith('/api/notebook/review-queue?')?
+      waiting?late.promise:page('First request','two'):undefined,{initial:false});
+    await app.controller.warm('list');waiting=true;const warming=app.controller.warm('next');
+    if(change==='account')app.account({id:'other',handle:'other'});
+    if(change==='session')app.account(reviewer,'rotated');
+    if(change==='write')app.controller.invalidateReads();
+    if(change==='denial'){late.reject(Object.assign(Error('Reviewer access revoked'),{status:403}));await assert.rejects(warming);}
+    else{late.resolve(page('Old private second page'));await warming;}
+    waiting=false;const current=app.show();assert.doesNotMatch(app.q('list').textContent,/First request|Old private second page/);await current;
+    assert.equal(queueReads(app).length,3);assert.doesNotMatch(app.q('list').textContent,/Old private second page/);
+  });
   await test('returning queue paints compact summaries immediately and preserves unchanged expansion and focus',async()=>{
     const late=deferred();let held=false;
     const app=await boot(url=>held&&url.startsWith('/api/notebook/review-queue?')?late.promise:undefined);

@@ -76,6 +76,24 @@ def main():
                     session.add(notebook.NotebookPublication(id=str(uuid4()), revision_id=revision.id,
                         author_id=user.id, requested_at=now, idempotency_key=str(uuid4()),
                         request_sha256="2" * 64, test_only_self_review=False))
+                    # Three queue pages exercise real authorized cursor reads.
+                    # Keep the named reader fixture first in the oldest-first queue.
+                    for index in range(1, 52):
+                        queued_content = {**content, "title": f"Later publication fixture {index:02d}"}
+                        queued_note = notebook.NotebookNote(id=str(uuid4()), author_id=user.id,
+                            created_at=now + index / 1000, latest_revision=1, idempotency_key=str(uuid4()),
+                            request_sha256="3" * 64)
+                        session.add(queued_note)
+                        session.flush()
+                        queued_revision = notebook.NotebookRevision(id=str(uuid4()), note_id=queued_note.id,
+                            revision=1, created_at=now + index / 1000, content=queued_content,
+                            content_sha256=notebook._hash(queued_content), idempotency_key=str(uuid4()),
+                            request_sha256="4" * 64)
+                        session.add(queued_revision)
+                        session.flush()
+                        session.add(notebook.NotebookPublication(id=str(uuid4()), revision_id=queued_revision.id,
+                            author_id=user.id, requested_at=now + index / 1000, idempotency_key=str(uuid4()),
+                            request_sha256="5" * 64, test_only_self_review=False))
         print("Disposable browser fixture ready; portable DH catalogue only.", flush=True)
         try:
             uvicorn.run(app, host="127.0.0.1", port=8029, access_log=False, log_level="warning")

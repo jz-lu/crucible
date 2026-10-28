@@ -1,7 +1,54 @@
-const {test, expect, signIn, holdResponse} = require('./helpers.cjs');
+const {test, expect, signIn, holdResponse, useDataSaver} = require('./helpers.cjs');
+
+for (const width of [1440,390]) test(`publish requests prepare two pages, then only the next page at ${width}px`,async({page},testInfo)=>{
+  await page.setViewportSize({width,height:1000});
+  const requests=[],queuePath='/api/notebook/review-queue';
+  page.on('request',request=>requests.push({url:new URL(request.url()),method:request.method()}));
+  const firstResponse=page.waitForResponse(response=>new URL(response.url()).pathname===queuePath&&!new URL(response.url()).searchParams.has('after'));
+  const secondResponse=page.waitForResponse(response=>new URL(response.url()).pathname===queuePath&&new URL(response.url()).searchParams.has('after'));
+  await signIn(page,'queuereviewer');
+  const first=await firstResponse,second=await secondResponse;
+  const firstData=await first.json(),secondData=await second.json();
+  expect(firstData.notes).toHaveLength(25);expect(secondData.notes).toHaveLength(25);
+  for(const response of [first,second])expect(new URL(response.url()).searchParams.get('summary')).toBe('true');
+  for(const note of [...firstData.notes,...secondData.notes])expect(note.revisions[0].content.body).toBeUndefined();
+  const root=page.locator('#review-notebook-workspace'),list=root.locator('[data-nb="list"]');
+  await expect(root).not.toBeVisible();await expect(list.locator('.nb-entry')).toHaveCount(0);
+  const third=await holdResponse(page,url=>url.pathname===queuePath&&url.searchParams.get('after')===secondData.next_after);
+  try{
+    await page.evaluate(()=>{location.hash='#reviews?section=publication';});
+    await expect(list.locator('.nb-entry')).toHaveCount(25);
+    await expect(list).toContainText(firstData.notes[0].revisions[0].content.title);
+    await expect(list).not.toHaveAttribute('aria-busy','true');
+    expect(requests.filter(request=>request.url.pathname===queuePath)).toHaveLength(2);
+    await root.getByRole('button',{name:'Next page',exact:true}).click();
+    await expect(list).toContainText(secondData.notes[0].revisions[0].content.title);
+    await expect(list.locator('.nb-entry')).toHaveCount(25);
+    await expect(list).not.toHaveAttribute('aria-busy','true');
+    const thirdResponse=await third.arrived,thirdData=await thirdResponse.json();
+    expect(thirdData.notes.length).toBeGreaterThan(0);expect(thirdData.notes.length).toBeLessThan(25);
+    expect(thirdData.next_after).toBeNull();
+    expect(requests.filter(request=>request.url.pathname===queuePath)).toHaveLength(3);
+    expect(requests.filter(request=>request.url.pathname.startsWith('/api/notebook/notes/'))).toHaveLength(0);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await page.screenshot({path:testInfo.outputPath('publication-queue-prepared-page.png'),fullPage:true});
+    // A click while the speculative next read is pending joins the same GET.
+    await root.getByRole('button',{name:'Next page',exact:true}).click();
+    third.release();await third.delivered;
+    // Other browser journeys may have added legitimate pending requests to the
+    // shared disposable server. Verify the exact authorized response, not a
+    // fixed corpus total that is true only when this file runs in isolation.
+    await expect(list.locator('.nb-entry')).toHaveCount(thirdData.notes.length);
+    for(const note of thirdData.notes)await expect(list).toContainText(note.revisions[0].content.title);
+    await expect(list).not.toHaveAttribute('aria-busy','true');
+    expect(requests.filter(request=>request.url.pathname===queuePath)).toHaveLength(3);
+    expect(requests.filter(request=>request.method!=='GET').map(request=>request.url.pathname)).toEqual(['/api/auth/login']);
+  }finally{third.release();await third.remove();}
+});
 
 for (const width of [1440,390]) test(`publish requests retain cached summaries and refresh exact review readers at ${width}px`,async({page},testInfo)=>{
   await page.setViewportSize({width,height:1000});
+  await useDataSaver(page); // Deliberately exercise cold reads and ordinary refreshes.
   const requests=[];
   page.on('request',request=>requests.push({url:new URL(request.url()),method:request.method()}));
   await signIn(page,'queuereviewer');
