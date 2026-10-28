@@ -51,6 +51,14 @@ immutable GitHub subject formats are explicitly supported. Authentication proves
 workflow provenance, not independent scientific reproduction; numeric receipt
 audit remains the clean producer's responsibility.
 
+GitHub can include job_workflow_ref and job_workflow_sha even for the direct
+approved job. When either is present, both must match the exact approved workflow
+and signed source commit. A different reusable workflow is not delegated this
+capability. The 2026-10-28 direct-job compatibility change is an independently
+reviewed, exact source-hash overlay; the identity module remains immutable for
+ordinary releases. Signature, audience, repository/owner, branch, source, expiry
+and environment checks are unchanged. No migration or provider setting is needed.
+
 The exact POST /api/resource-publications accepts workflow OIDC, never browser
 cookies/origin or participant tokens. JSON control messages are bounded to 2 MiB;
 ZIP reports to 128 MiB compressed / 192 MiB expanded, with safe paths, exact
@@ -111,8 +119,12 @@ Deployment sequence (not an ordinary schema-unchanged release)
 5. Announce the full approved desired snapshot and dispatch one reviewed binding
    with publication enabled. Verify authenticated state, plotted measurements,
    incomplete/history handling and exact evidence download. Check anonymous reads
-   and other writes remain denied. Initialize other approved bindings; later
-   relevant merges update reports without another website build.
+   and other writes remain denied. Initialize other approved bindings through an
+   explicit all-bindings dispatch. Measurements and uploads are manual during
+   beta: neither repository pushes nor a schedule starts them. Later relevant
+   merges require another deliberate dispatch; reports can then update without
+   another website build. Before that dispatch the site describes the last
+   announced inputs, not every subsequent repository commit.
 
 Rollback preserves evidence. Select an earlier implementation in a new reviewed
 measurement-repo commit; the new activation requires remeasurement. Website
