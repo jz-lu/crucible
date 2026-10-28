@@ -40,6 +40,25 @@ function http(app, status, code) {
 let passed = 0;
 async function test(name, run) {await run(); console.log('PASS ' + name); passed++;}
 (async () => {
+  await test('header marks the actual destination: own profile, another profile, leaderboard and about', async () => {
+    const {app} = await boot();
+    const selected = () => ['challenge', 'people', 'notebook', 'research', 'about'].filter(kind => app.$('#nav-' + kind).classList.contains('selected'));
+    assert.deepEqual(selected(), []);
+    assert.equal(app.$('#nav-people').getAttribute('aria-current'), null);
+    assert.equal(app.$('#account-handle').getAttribute('aria-current'), 'page');
+    await app.navigate('#person/bob');
+    assert.deepEqual(selected(), []);
+    assert.equal(app.$('#account-handle').getAttribute('aria-current'), null);
+    await app.navigate('#people');
+    assert.deepEqual(selected(), ['people']);
+    assert.equal(app.$('#account-handle').classList.contains('selected'), false);
+    await app.navigate('#about');
+    assert.deepEqual(selected(), ['about']);
+    assert.equal(app.$('#nav-people').getAttribute('aria-current'), null);
+    await app.navigate('#person/alice');
+    assert.deepEqual(selected(), []);
+    assert.equal(app.$('#account-handle').classList.contains('selected'), true);
+  });
   await test('member detail renders safe optional text without replacing the username or fetching owner data', async () => {
     const {app} = await boot({handle: 'bob', initial: {...blank(), display_name: '<img src=x>', affiliation: 'Example Institute', position: 'Researcher', website: 'https://www.example.org/a'}});
     assert.equal(app.$('#person-title').textContent, 'bob');

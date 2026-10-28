@@ -37,6 +37,13 @@
       '#join': 'Private beta', '#auth': 'Sign in', '#reset-password': 'Reset password'}[path];
     return {page: 'neutral', title: title || 'Crucible'};
   }
+  function section(hash = window.location?.hash || '') {
+    if (typeof hash !== 'string' || hash.length > 4096) return null;
+    const [path, query = ''] = hash.split('?'), params = new URLSearchParams(query);
+    if (path === '#reviews' || params.get('review') === '1' || params.get('research_review') === '1') return null;
+    if (['', '#', '#challenge', '#propose'].includes(path) || /^#(?:scheme|challenge)\//.test(path)) return 'challenge';
+    return {'#people': 'people', '#notebook': 'notebook', '#about': 'about', '#research': 'research'}[path] || null;
+  }
   function apply() {
     if (typeof document === 'undefined') return;
     const root = document.documentElement || document.querySelector('html');
@@ -61,19 +68,18 @@
     root.classList.toggle('pending-notebook', route.title === 'Research notebook');
     const title = document.querySelector('#access-title');
     if (title) { title.textContent = route.title; title.removeAttribute('aria-hidden'); }
-    const path = (window.location?.hash || '').split('?')[0];
-    const selected = route.page === 'gate' ? null : path === '#notebook' ? '#nav-notebook' : path === '#about' ? '#nav-about' :
-      ['', '#', '#challenge'].includes(path) || /^#(?:scheme|challenge)\//.test(path) ? '#nav-challenge' : null;
-    for (const selector of ['#nav-challenge', '#nav-notebook', '#nav-about']) {
+    const selected = route.page === 'gate' ? null : section();
+    for (const kind of ['challenge', 'people', 'notebook', 'research', 'about']) {
+      const selector = '#nav-' + kind;
       const tab = document.querySelector(selector);
       if (!tab) continue;
-      tab.classList.toggle('selected', selector === selected);
-      if (selector === selected) tab.setAttribute('aria-current', 'page');
+      tab.classList.toggle('selected', kind === selected);
+      if (kind === selected) tab.setAttribute('aria-current', 'page');
       else tab.removeAttribute('aria-current');
     }
     return route;
   }
-  window.CruciblePendingPage = Object.freeze({describe, apply, remember});
+  window.CruciblePendingPage = Object.freeze({describe, section, apply, remember});
   apply();
   if (typeof document !== 'undefined' && typeof (document.documentElement || document.querySelector('html'))?.setAttribute === 'function') {
     // Interactive fires once parsing finishes, before a stalled deferred app
