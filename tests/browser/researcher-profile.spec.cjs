@@ -27,6 +27,15 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({width, height: 900});
     const original = await owner(page);
     try {
+      await expect(page.locator('#account-handle')).toHaveAttribute('aria-current', 'page');
+      await expect(page.locator('#nav-people')).not.toHaveAttribute('aria-current', 'page');
+      const headerHeight = await page.locator('.site-header').evaluate(node => node.getBoundingClientRect().height);
+      await page.locator('#nav-people').click();
+      await expect(page.locator('#nav-people')).toHaveAttribute('aria-current', 'page');
+      await expect(page.locator('#account-handle')).not.toHaveAttribute('aria-current', 'page');
+      await page.locator('#account-handle').click();
+      await expect(page.locator('#account-handle')).toHaveAttribute('aria-current', 'page');
+      expect(await page.locator('.site-header').evaluate(node => node.getBoundingClientRect().height)).toBe(headerHeight);
       const help = page.locator('.person-score-breakdown > summary');
       await expect(help).toHaveAccessibleName('Points breakdown');
       await expect(help).toHaveText('?');
@@ -85,6 +94,8 @@ for (const width of [1440, 390]) {
       const extra = []; page.on('request', req => {if (new URL(req.url()).pathname === '/api/me/profile') extra.push(req.url());});
       await page.goto('/#person/browser_bob');
       await expect(page.locator('#person-title')).toHaveText('browser_bob');
+      await expect(page.locator('#nav-people')).not.toHaveAttribute('aria-current', 'page');
+      await expect(page.locator('#account-handle')).not.toHaveAttribute('aria-current', 'page');
       await expect(page.locator('#person-content')).toHaveAttribute('aria-busy', 'false');
       await expect(page.locator('#edit-researcher-profile')).toBeHidden();
       expect(extra).toEqual([]);
