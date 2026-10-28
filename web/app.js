@@ -185,13 +185,6 @@ function browseWarmJobs() {
       await loadRelease(scheme.id, scheme.version);
       return warmBytes(completeRelease(scheme.id, scheme.version) || null);
     });
-    add('timing:' + key, async () => {
-      const full = completeRelease(scheme.id, scheme.version);
-      if (!full || !window.CrucibleResources?.usesEarlierReferences?.(full, 'computation')) return 0;
-      const existing = referenceTimingState(full);
-      if (existing && Date.now() - existing.checkedAt < REFERENCE_TIMING_MAX_AGE_MS) return 0;
-      await loadReferenceTimings(full); return warmBytes(referenceTimingState(full) || null);
-    });
   };
   // The viewed or most recently intended release precedes other graph data.
   if (ordered[0]) releaseJobs(ordered[0]);
@@ -1565,10 +1558,6 @@ async function synchronizeSession() {
       if (state.screen === 'person') await loadPerson(state.personHandle, {preserve: true});
       if (!current()) return;
       globalError('');
-      if (state.screen === 'overview' && !document.hidden) {
-        const scheme = selectedScheme();
-        if (scheme && window.CrucibleResources?.usesEarlierReferences?.(scheme, 'computation')) loadReferenceTimings(scheme);
-      }
       if (state.screen === 'scheme') {
         // Do not await a child that may itself request a session refresh on 401.
         if (changed && state.view === 'challenge') loadChallenge();
@@ -2759,7 +2748,7 @@ function svgNode(tag, attributes = {}, text) {
   if (text !== undefined) element.textContent = String(text);
   return element;
 }
-// Both stored resource reports and earlier reference charts annotate the same
+// Stored resource reports and security-reference charts annotate the same
 // release-scoped recovery records. Named sets never inherit a numeric frontier.
 function overviewRecovery(scheme, values, named) {
   const exact = exactProfileRecords(scheme), recoveredIds = new Set(recoveredProfileIds(scheme));
@@ -2782,16 +2771,16 @@ function redrawResourceCharts(scheme) {
   for (const id of ['public', 'cipher', 'computation']) renderOverviewChart(current, id);
 }
 function renderOverviewChart(scheme, cardId) {
+  const target = $('#overview-chart-' + cardId);
+  if (cardId !== 'security') {
+    window.CrucibleResources?.render({scheme, cardId, target, profiles: overviewProfiles(scheme),
+        profileId, profileLabel, stagePosition, named: namedParameters(scheme), api,
+        recoveryFor: points => overviewRecovery(scheme, points, namedParameters(scheme)),
+        redraw: () => redrawResourceCharts(scheme)});
+    return;
+  }
   const metric = state.overviewMetrics[cardId] || OVERVIEW_CARDS[cardId][0];
   const descriptor = {...OVERVIEW_METRICS[metric]};
-  const target = $('#overview-chart-' + cardId);
-  if (window.CrucibleResources?.render({scheme, cardId, target, profiles: overviewProfiles(scheme),
-      profileId, profileLabel, stagePosition, named: namedParameters(scheme), api,
-      recoveryFor: points => overviewRecovery(scheme, points, namedParameters(scheme)),
-      redraw: () => redrawResourceCharts(scheme)})) return;
-  // Current resource measurements have already returned above. Fetch the old
-  // operation report only when its explicit earlier-reference view is chosen.
-  if (descriptor.kind === 'timing') loadReferenceTimings(scheme);
   const detailsOpen = target.querySelector('details')?.open === true;
   const timing = descriptor.kind === 'timing' ? referenceTimingState(scheme) : null;
   const card = target.closest('.overview-card');
@@ -2929,8 +2918,6 @@ function renderOverviewChart(scheme, cardId) {
   }
   if (descriptor.kind === 'timing') renderTimingDetails(target, scheme, metric);
   if (detailsOpen && target.querySelector('details')) target.querySelector('details').open = true;
-  window.CrucibleResources?.fallback({scheme, cardId, target, api,
-    redraw: () => redrawResourceCharts(scheme)});
 }
 function renderOverview(scheme, contextProfile = null) {
   setText('#overview-title', scheme.name);
@@ -2963,9 +2950,8 @@ function renderOverview(scheme, contextProfile = null) {
       const badge = node('span', undefined, 'overview-badge'); badge.id = 'overview-badge-' + id;
       heading.append(title, badge);
       card.append(heading);
-      if (id === 'computation') card.append(node('p', 'Reference implementation timings', 'reference-timing-caption'));
       const metrics = OVERVIEW_CARDS[id];
-      if (metrics.length > 1) {
+      if (id === 'security' && metrics.length > 1) {
         const options = node('div', undefined, 'overview-metric-options');
         options.setAttribute('role', 'group'); options.setAttribute('aria-label', id === 'computation' ? 'Choose operation to time' : 'Choose metric for ' + id + ' chart');
         for (const metric of metrics) {

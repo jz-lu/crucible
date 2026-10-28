@@ -4086,6 +4086,7 @@ html[data-pending-page=notebook-timeline] [data-pending-layout=notebook] [data-n
 }
 
 .resource-controls { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .7rem; margin: .5rem 0; }
+.resource-controls > :only-child { grid-column: 1 / -1; }
 .resource-control { display: flex; min-width: 0; flex-direction: column; gap: .3rem; font-size: .75rem; color: var(--muted); }
 .resource-control select { width: 100%; min-width: 0; max-width: 100%; padding: .4rem .6rem; border: 1px solid var(--line); border-radius: .4rem; background: var(--surface); color: var(--ink); text-overflow: ellipsis; }
 .resource-control select:disabled { opacity: 1; color: var(--muted); cursor: default; }

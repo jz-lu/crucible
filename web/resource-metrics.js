@@ -12,9 +12,9 @@
   const currentData = scheme => usable(cache.get(requestKey(scheme)));
   const operations = [['keygen', 'Key generation'], ['encapsulate', 'Encapsulation'], ['decapsulate', 'Decapsulation']];
   const views = {
-    public: [['public_key', 'Public key'], ['fresh', 'Fresh exchange'], ['private_key', 'Serialized private key']],
+    public: [['public_key', 'Public key'], ['fresh', 'Fresh exchange']],
     cipher: [['ciphertext', 'Ciphertext'], ['cached', 'Exchange with cached key']],
-    computation: [['warm', 'Operation time'], ['first', 'First-call time'], ['rss', 'Process RAM'], ['stack', 'Stack'], ['heap_stack', 'Tracked heap + stack']]
+    computation: [['warm', 'Operation time'], ['rss', 'Process RAM']]
   };
   const labels = Object.fromEntries(Object.values(views).flat());
   const field = view => view === 'stack' ? 'stack_evidence' : view === 'heap_stack' ? 'memory_evidence' : 'native_evidence';
@@ -127,9 +127,8 @@
       const when = Number.isFinite(report.received_at) ? new Date(report.received_at * 1000).toLocaleDateString() : report.id.slice(0, 8);
       choices.push([report.id, `${when} · ${report.binding?.implementation?.id || 'Earlier report'}${report.completeness === 'complete' ? '' : ' · incomplete'}`]);
     }
-    if (!['current', 'legacy'].includes(choice.report) && !choices.some(([value]) => value === choice.report)) choices.push([choice.report, 'Selected report']);
-    choices.push(['legacy', 'Earlier site references']);
-    return control('Report', choices, choice.report, value => { choice.report = value; redraw(); });
+    if (choice.report !== 'current' && !choices.some(([value]) => value === choice.report)) choices.push([choice.report, 'Selected report']);
+    return choices.length > 1 ? control('Report', choices, choice.report, value => { choice.report = value; redraw(); }) : null;
   }
   function retryControl(scheme, choice, api, redraw) {
     const refresh = element('button', 'Refresh resource measurements', 'text-button'); refresh.type = 'button';
@@ -139,18 +138,6 @@
   function render({scheme, cardId, target, profiles, profileId, profileLabel, stagePosition, named, recoveryFor, redraw, api}) {
     if (!views[cardId]) return false;
     const choice = selection(scheme, cardId);
-    const card = target.closest('.overview-card');
-    const legacy = card.querySelector('.overview-metric-options');
-    const caption = card.querySelector('.reference-timing-caption');
-    if (choice.report === 'legacy') {
-      choice.restoreLegacyFocus = document.activeElement?.closest('.resource-chart') === target
-        ? document.activeElement.getAttribute('aria-label') : null;
-      if (legacy) legacy.hidden = false;
-      if (caption) caption.hidden = false;
-      return false;
-    }
-    if (legacy) legacy.hidden = true;
-    if (caption) caption.hidden = true;
     const historical = choice.report !== 'current', publicationId = historical ? choice.report : null;
     const entry = cache.get(requestKey(scheme, publicationId)), data = usable(entry);
     if (historical && (!entry || !data)) load(scheme, api, redraw, {publicationId});
@@ -182,13 +169,8 @@
     document.querySelector('#overview-title-' + cardId).textContent = computational ? 'Computation & memory' : labels[view];
     document.querySelector('#overview-badge-' + cardId).textContent = historical ? reportLabel : stateLabels[data?.state] || '';
     const controls = element('div', undefined, 'resource-controls');
-    controls.append(reportControl(scheme, choice, redraw));
     controls.append(control('Measure', views[cardId], view, value => { choice.view = value; redraw(); }));
     if (computational) controls.append(control('Operation', operations, choice.op, value => { choice.op = value; redraw(); }));
-    if (computational) {
-      const profileControl = control('Measurement profile', methods.length ? methods.map(value => [value, value.slice(0, 12)]) : [['', 'No comparable measurements']], method || '', value => { choice.profiles[field(view)] = value; redraw(); });
-      profileControl.querySelector('select').disabled = methods.length < 2; controls.append(profileControl);
-    }
     target.append(controls);
     const measured = points.filter(p => p.value !== null && Number.isFinite(p.x));
     const xs = points.map(p => p.x).filter(Number.isFinite), low = Math.min(...xs), high = Math.max(...xs);
@@ -249,6 +231,11 @@
     if (entry?.status === 'error') summaryText = data ? 'Refresh failed. Retained report shown; retry below.' : 'The resource report could not be retrieved. Retry below.';
     target.append(element('p', summaryText, 'overview-chart-note resource-summary'));
     const details = element('details'), summary = element('summary', 'Values, method & source'); details.append(summary); details.open = detailsOpen;
+    const evidenceControls = element('div', undefined, 'resource-controls');
+    const reports = reportControl(scheme, choice, redraw);
+    if (reports) evidenceControls.append(reports);
+    if (computational && methods.length > 1) evidenceControls.append(control('Measurement profile', methods.map(value => [value, value.slice(0, 12)]), method, value => { choice.profiles[field(view)] = value; redraw(); }));
+    if (evidenceControls.childElementCount) details.append(evidenceControls);
     details.append(element('p', notes[view], 'overview-chart-note'));
     if (timed) {
       const sampling = record?.profile?.sampling;
@@ -291,17 +278,5 @@
     else if (focusSummary) summary.focus({preventScroll: true});
     return true;
   }
-  function fallback({scheme, cardId, target, api, redraw}) {
-    if (!views[cardId]) return;
-    const choice = selection(scheme, cardId);
-    if (choice.report !== 'legacy') return;
-    target.removeAttribute('data-resource-render-key');
-    document.querySelector('#overview-badge-' + cardId).textContent = 'Earlier site reference';
-    const controls = element('div', undefined, 'resource-controls'); controls.append(reportControl(scheme, choice, redraw));
-    target.prepend(controls);
-    target.append(element('p', 'Earlier site reference data, kept separately from current repository measurements.', 'overview-chart-note'));
-    if (choice.restoreLegacyFocus) target.querySelector('select[aria-label="' + choice.restoreLegacyFocus + '"]')?.focus({preventScroll: true});
-    choice.restoreLegacyFocus = null;
-  }
-  window.CrucibleResources = {load, render, fallback, usesEarlierReferences: (scheme, cardId) => selections.get(key(scheme) + cardId)?.report === 'legacy', clear: () => { cache.clear(); selections.clear(); }, point, exact, coordinate};
+  window.CrucibleResources = {load, render, clear: () => { cache.clear(); selections.clear(); }, point, exact, coordinate};
 })();

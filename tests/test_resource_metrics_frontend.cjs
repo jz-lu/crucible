@@ -19,6 +19,13 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   const publicChart = app.$('#overview-chart-public');
   assert.deepEqual(publicChart.querySelectorAll('.chart-point').map(p => p.dataset.value), ['32', '33']);
   assert.equal(app.$('#overview-badge-public').textContent, 'Current');
+  for (const card of ['public', 'cipher', 'computation']) {
+    const target = app.$('#overview-chart-' + card);
+    assert.equal(target.querySelector('select[aria-label="Measure"]').querySelectorAll('option').length, 2);
+    assert.equal(target.querySelector('select[aria-label="Report"]'), null, 'one report does not need a selector');
+    assert.equal(target.querySelector('select[aria-label="Measurement profile"]'), null, 'one measurement profile does not need a selector');
+    assert.equal(target.closest('.overview-card').querySelector('.reference-timing-caption'), null);
+  }
   const change = async (selector, value) => { const select = app.$(selector).querySelector('select[aria-label="Measure"]'); select.value = value; select.dispatchEvent({type: 'change'}); await flush(); };
   await change('#overview-chart-public', 'fresh');
   assert.deepEqual(publicChart.querySelectorAll('.chart-point').map(p => p.dataset.value), ['96', '97']);
@@ -35,16 +42,17 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   assert.match(chart.querySelector('details').textContent, /5 workers × 20 measured calls each/);
   assert.deepEqual(chart.querySelector('thead').querySelectorAll('th').map(n => n.textContent), ['Configuration', 'Median (µs)', 'Middle 50% (µs)', 'Samples']);
   assert.deepEqual(chart.querySelector('tbody').querySelector('tr').querySelectorAll('td').map(n => n.textContent), ['Stage 1', '2', '1–3', '100']);
-  for (const [view, value] of [['rss', '8192'], ['stack', '256'], ['heap_stack', '1024'], ['first', '6']]) {
+  for (const [view, value] of [['rss', '8192']]) {
     await change('#overview-chart-computation', view);
     assert.deepEqual(chart.querySelectorAll('.chart-point').map(p => p.dataset.value), [value, value]);
   }
-  assert.match(chart.querySelector('.chart-point').querySelector('title').textContent, /median 6 microseconds; middle 50% 5–7 microseconds; 5 samples/);
-  assert.match(chart.querySelector('details').textContent, /5 fresh workers, one first call each/);
-  assert.doesNotMatch(chart.querySelector('details').querySelector('table').textContent, /100/);
   assert.match(chart.textContent, /portable-v2/);
   assert.equal(chart.querySelector('.resource-evidence-links').querySelector('a').href, '/api/resource-publications/' + id + '/download');
   const model = app.window.CrucibleResources;
+  const firstCall = model.point(rows[0], 'first', 'keygen', method, impl);
+  assert.equal(firstCall.value, 6); assert.equal(firstCall.samples, 5);
+  assert.equal(firstCall.q1, 5); assert.equal(firstCall.q3, 7);
+  assert.equal(rows[0].native_evidence[0].computation.keygen.duration_ns.n, 100, 'retained first-call evidence stays separate from the displayed warm series');
   assert.equal(model.coordinate({type: 'integer', decimal: '9007199254740993'}), null);
   assert.equal(model.exact({type: 'integer', decimal: '9007199254740993'}), '9007199254740993');
   assert.equal(model.point(rows[0], 'warm', 'keygen', 'different').value, null);
@@ -75,6 +83,7 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
 
   const choose = async (instance, card, label, value) => {
     const select = instance.$('#overview-chart-' + card).querySelector(`select[aria-label="${label}"]`);
+    if (select.closest('details')) select.closest('details').open = true;
     select.value = value; select.focus(); select.dispatchEvent({type: 'change'}); await flush();
     assert.equal(instance.document.activeElement, instance.$('#overview-chart-' + card).querySelector(`select[aria-label="${label}"]`));
   };
@@ -107,10 +116,9 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
     assert.match(target.textContent, /Resources not calculated/);
     assert.equal(target.querySelectorAll('.chart-point').length, 0, 'legacy sizes must not silently fill missing reports');
     const security = instance.$('#overview-chart-security').textContent;
-    await choose(instance, 'public', 'Report', 'legacy');
-    assert.equal(instance.$('#overview-badge-public').textContent, 'Earlier site reference');
-    assert.deepEqual(target.querySelectorAll('.chart-point').map(p => p.dataset.value), ['999']);
-    await choose(instance, 'public', 'Report', 'current');
+    assert.equal(target.querySelector('select[aria-label="Report"]'), null);
+    assert.doesNotMatch(target.textContent, /Earlier site reference/);
+    await choose(instance, 'public', 'Measure', 'fresh');
     assert.match(target.textContent, /Resources not calculated/);
     assert.equal(target.querySelectorAll('.chart-point').length, 0);
     assert.equal(instance.$('#overview-chart-security').textContent, security, 'resource choices leave security evidence unchanged');
@@ -128,6 +136,8 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
     ? url.searchParams.get('publication_id') === historicalId ? past : url.searchParams.get('publication_id') === partialId ? partial : current : undefined});
   await choose(historyApp, 'public', 'Report', historicalId);
   const historicalChart = historyApp.$('#overview-chart-public');
+  assert.ok(historicalChart.querySelector('select[aria-label="Report"]').closest('details'), 'historical report selection stays in the existing method disclosure');
+  assert.equal(historicalChart.querySelectorAll('option').some(option => option.value === 'legacy'), false);
   assert.equal(historyApp.$('#overview-badge-public').textContent, 'Historical');
   assert.deepEqual(historicalChart.querySelectorAll('.chart-recovery-line').map(p => p.dataset.profileId), [profiles[1].id]);
   assert.deepEqual(historicalChart.querySelectorAll('.chart-point').map(p => p.dataset.value), ['32', '33']);
@@ -160,6 +170,7 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   const zeroApp = await createApp({schemes: [scheme], hash: '#scheme/resource-fixture/1', responder: url => url.pathname === '/api/protocol/resources' ? zero : undefined});
   assert.deepEqual(zeroApp.$('#overview-chart-public').querySelectorAll('.chart-point').map(p => p.dataset.value), ['0', '33']);
   const zeroChart = zeroApp.$('#overview-chart-computation');
+  assert.ok(zeroChart.querySelector('select[aria-label="Measurement profile"]').closest('details'));
   assert.deepEqual(zeroChart.querySelectorAll('.chart-point').map(p => p.dataset.value), ['0']);
   assert.match(zeroChart.querySelector('.chart-series').getAttribute('d'), /^M[^L]+$/, 'incompatible profiles never share a curve');
   await choose(zeroApp, 'computation', 'Measurement profile', '9'.repeat(64));

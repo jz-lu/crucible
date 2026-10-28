@@ -14,9 +14,12 @@ for (const width of [1440, 390]) {
       return route.fulfill({response,json:data});
     });
     await page.route('**/api/protocol/resources?*', async route => {
-      const response = await route.fetch();
+      // Fictional historical IDs are not in the disposable database. Check the
+      // actual authenticated release read, then decorate it with UI-only history.
+      const fixtureUrl = new URL(route.request().url()), query = fixtureUrl.searchParams;
+      const authorizedUrl = new URL(fixtureUrl); authorizedUrl.searchParams.delete('publication_id');
+      const response = await route.fetch({url: authorizedUrl.href});
       if (response.status() !== 200) return route.fulfill({response});
-      const query = new URL(route.request().url()).searchParams;
       const scheme = query.get('scheme_id'), version = query.get('version');
       if (scheme !== 'teaching-dh-kem' || version !== '4') return route.fulfill({response});
       const impl = {id:'browser-fixture',sha256:'a'.repeat(64)}, method='b'.repeat(64);
@@ -30,9 +33,12 @@ for (const width of [1440, 390]) {
           memory_components:{'keygen:rss':{complete:true,values:{n:5,max:8192}}}}],
         stack_evidence:[{implementation:impl,comparison_profile:method,operations:{keygen:{measured:5,planned:5,max_observed_bytes:256}}}],
         memory_evidence:[{implementation:impl,comparison_profile:method,operations:{keygen:{measured:2,planned:2,max_observed_bytes:1024}}}]}));
-      await route.fulfill({response,json:{scheme_id:scheme,version,state:'current',historical:[],publication:{completeness:'complete',id:'c'.repeat(64),received_at:1800000000,
+      const publication={completeness:'complete',id:'c'.repeat(64),received_at:1800000000,
         binding:{implementation:impl,profiles:[20,21].map(n=>({profile_id:'dh-'+n,configuration:String(n)}))},
-        source:{repository:'countableclouds/crucible-schemes',commit:'d'.repeat(40),run_id:'12345'}},resources:{configurations:rows}}});
+        source:{repository:'countableclouds/crucible-schemes',commit:'d'.repeat(40),run_id:'12345'}};
+      const earlier={...publication,id:'e'.repeat(64)}, historical=query.has('publication_id');
+      await route.fulfill({response,json:{scheme_id:scheme,version,state:historical?'outdated':'current',selected_historical:historical,
+        historical:[earlier],publication:historical?earlier:publication,resources:{configurations:rows}}});
     });
     await page.goto('/#scheme/teaching-dh-kem/4');
     await signIn(page,'bob',{navigate:false});
@@ -45,6 +51,13 @@ for (const width of [1440, 390]) {
       await expect(graph.locator('.chart-recovery-area')).toBeVisible();
     }
     const measure=card.getByLabel('Measure',{exact:true});
+    for (const name of ['public','cipher','computation']) {
+      const graph=page.locator('#overview-chart-'+name);
+      await expect(graph.getByLabel('Measure',{exact:true}).locator('option')).toHaveCount(2);
+      await expect(graph.locator('details').getByLabel('Report',{exact:true})).toBeHidden();
+      await expect(graph.getByLabel('Measurement profile',{exact:true})).toHaveCount(0);
+      await expect(graph.locator('option[value="legacy"]')).toHaveCount(0);
+    }
     await expect(card.locator('.resource-whisker')).toHaveCount(2);
     await expect(card.locator('.resource-whisker-cap')).toHaveCount(4);
     await expect(card.locator('.chart-point title').first()).toContainText('median 2 microseconds; middle 50% 1–3 microseconds; 100 samples');
@@ -52,8 +65,6 @@ for (const width of [1440, 390]) {
     await expect(card.getByRole('columnheader',{name:'Middle 50% (µs)',exact:true})).toBeVisible();
     await expect(card).toContainText('not a confidence interval or a hardware correction');
     await page.screenshot({path:testInfo.outputPath('resource-timing.png'),fullPage:true});
-    await measure.selectOption('first');
-    await expect(card.locator('.chart-point title').first()).toContainText('median 6 microseconds; middle 50% 5–7 microseconds; 5 samples');
     await measure.focus();
     await measure.selectOption('rss');
     await expect(measure).toBeFocused();
@@ -61,9 +72,11 @@ for (const width of [1440, 390]) {
     await expect(card.locator('.resource-summary')).toContainText('Includes pre-exec launcher memory');
     await expect(card.locator('.chart-point')).toHaveCount(2);
     await expect(card.locator('.chart-point').first()).toHaveAttribute('data-value','8192');
-    await measure.selectOption('heap_stack');
-    await expect(card).toContainText('same Massif snapshot');
-    await expect(card.locator('.chart-point').first()).toHaveAttribute('data-value','1024');
+    await card.locator('details').getByLabel('Report',{exact:true}).selectOption('e'.repeat(64));
+    await expect(page.locator('#overview-badge-computation')).toHaveText('Historical');
+    await expect(card.locator('.chart-point').first()).toHaveAttribute('data-value','8192');
+    await expect(card.locator('.resource-summary')).toContainText('Includes pre-exec launcher memory');
+    await card.locator('details').getByLabel('Report',{exact:true}).selectOption('current');
     await expect(card.getByRole('link',{name:'Download measurements & evidence'})).toHaveAttribute('href',/\/api\/resource-publications\/[a-f0-9]{64}\/download/);
     await expect(card).toContainText('browser-fixture');
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -73,7 +86,7 @@ for (const width of [1440, 390]) {
     await expect(page.locator('#overview-badge-computation')).toHaveText('Current');
   });
 
-  test(`missing resource state preserves card geometry and requires explicit legacy choice at ${width}px`, async ({page}, testInfo) => {
+  test(`missing resources preserve card geometry without a legacy fallback at ${width}px`, async ({page}, testInfo) => {
     await page.setViewportSize({width, height:1000});
     const ready = gate(), release = gate();
     await page.route('**/api/protocol/resources?*', async route => {
@@ -88,7 +101,7 @@ for (const width of [1440, 390]) {
     await signIn(page, 'bob', {navigate:false});
     await ready.promise;
     const chart = page.locator('#overview-chart-public');
-    await expect(chart.getByLabel('Report', {exact:true})).toBeVisible();
+    await expect(chart.getByLabel('Measure', {exact:true})).toBeVisible();
     const card = chart.locator('..'), initial = await card.boundingBox();
     await expect(chart.locator('.chart-point')).toHaveCount(0);
     release.resolve();
@@ -96,10 +109,9 @@ for (const width of [1440, 390]) {
     await expect(page.locator('#overview-badge-public')).toHaveText('Outdated');
     const settled = await card.boundingBox();
     expect(Math.abs(initial.height - settled.height)).toBeLessThan(2);
-    await chart.getByLabel('Report', {exact:true}).selectOption('legacy');
-    await expect(page.locator('#overview-badge-public')).toHaveText('Earlier site reference');
-    await expect(chart.locator('.chart-point').first()).toBeVisible();
-    await chart.getByLabel('Report', {exact:true}).selectOption('current');
+    await expect(chart.getByLabel('Report', {exact:true})).toHaveCount(0);
+    await expect(chart).not.toContainText('Earlier site reference');
+    await chart.getByLabel('Measure', {exact:true}).selectOption('fresh');
     await expect(chart).toContainText('Resources not calculated');
     await expect(chart.locator('.chart-point')).toHaveCount(0);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
