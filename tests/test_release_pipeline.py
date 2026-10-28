@@ -28,6 +28,7 @@ def test_reviewed_contract_covers_current_source_and_all_historical_releases():
 
 
 @pytest.mark.parametrize('name', ['requirements.lock', 'crucible/kem.py', 'crucible/config.py',
+                                  'crucible/resource_identity.py',
                                   'crucible/generation.py', 'crucible/platform_pins.py',
                                   'scripts/build_sntrup.py', 'migrations/versions/0023_notebook_trash.py'])
 def test_runtime_changes_and_deletions_block_ordinary_release(name):

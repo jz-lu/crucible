@@ -736,7 +736,7 @@
     "crucible/data/approved_beta_releases.json": "d866a822cb468ac8284a941ba797ac1c87a2d94175c305dca08af41ebd67fe0a",
     "crucible/notebook_numbers.py": "46b25b5d455682be3f718de9897792909b24983a76972f9be162442c1920f151",
     "crucible/researcher_profiles.py": "18e50b6ee29c0931346ba794f10e52530e461b2ba0f646d9832c28eb02d715cb",
-    "crucible/resource_identity.py": "221fc03d2884a7408d4bc3e3707d7ae1ef148f56c4dbb7c1a7ba2e779b3ec433",
+    "crucible/resource_identity.py": "068fd102a41e924a45e276699c6f816993d585d3b184a79f3a8d78288f59c553",
     "crucible/resource_publications.py": "63650e8e476c408ef4ec4c985cd1ba2bac1695781605e02c17614a5865039063",
     "crucible/resource_state.py": "da004619bee08456cdfb2968a1604ca42a0a21c8f0200808b2313ef42675ab4b",
     "docs/beta-release-policy.txt": "549c69ce412bde8de427c755959450ce0cbaaf87c2c63297468eb864d2375c8a",

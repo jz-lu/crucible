@@ -83,8 +83,16 @@ def verify(authorization, audience, now=None, *, keys=None):
                     f"repo:countableclouds@{OWNER_ID}/crucible-schemes@{REPOSITORY_ID}:ref:refs/heads/main"}
         if claims.get("sub") not in subjects or claims.get("event_name") not in {"push", "workflow_dispatch"}:
             raise ValueError
-        if claims.get("job_workflow_ref") or claims.get("environment"):
-            raise ValueError  # This contract admits one direct, main-branch job.
+        # GitHub also emits these job-level claims for direct jobs. Admit only
+        # the same pinned workflow and source; a different reusable workflow is
+        # not delegated publication authority by the calling workflow.
+        job_ref = claims.get("job_workflow_ref")
+        job_sha = claims.get("job_workflow_sha")
+        if job_ref is not None or job_sha is not None:
+            if job_ref != WORKFLOW or job_sha != claims.get("sha"):
+                raise ValueError
+        if claims.get("environment"):
+            raise ValueError
         if any(type(claims.get(k)) is not int for k in ("iat", "nbf", "exp")):
             raise ValueError
         if not (claims["nbf"] <= now + 30 and now < claims["exp"]
