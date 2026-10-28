@@ -1,0 +1,145 @@
+AUTOMATIC MEASURED RESOURCE PUBLICATIONS — schema 0027
+
+The measurement repository is countableclouds/crucible-schemes. Its reviewed
+publication/registry.json selects one main implementation per scheme release
+and maps exact configurations to the website's existing profile IDs. Each mapping
+covers parameters, distributions, algorithms, encodings and KDF. Selecting a new
+measurement implementation does not change the site's challenge implementation,
+security claim, correctness admission or side-channel assessment.
+
+Relevant main-branch changes announce the complete desired catalogue, measure
+selected changed bindings, and publish audited evidence. Results live in the
+site's database and immutable ZIPs, not generated Git result commits. The clean
+publisher has short-lived GitHub OIDC authority; measurement jobs do not. Producer
+instructions and authentication reference:
+https://github.com/countableclouds/crucible-schemes/blob/main/docs/PUBLICATION.md
+https://docs.github.com/en/actions/reference/security/oidc
+
+Identity and current state
+
+Source commit/run/attempt are provenance, not measurement compatibility. Each
+binding's semantic fingerprint includes its resolved protocol/implementation
+mapping and the producer-input digest (including comparison profiles). An
+authenticated full desired snapshot is ordered by run ID then attempt. The
+producer checks current remote main before announcing it. Identical retries are
+idempotent; conflicting declarations or unseen older snapshots are rejected.
+Unchanged semantic bindings retain their activation across documentation-only
+commits. Changes, removal followed by re-addition, and rollback through a different
+binding create a new activation. A rollback must be measured again.
+
+A current graph requires a complete report matching the active activation,
+fingerprint, producer identity and exact profile mapping. Newer unrelated commits
+do not invalidate it. A newer failed recomputation of the same activated binding
+leaves the last complete report current and displays its separate failure state.
+A changed binding without measurements has no current curve. Older or late
+reports remain explicitly historical; they cannot revive an inactive activation.
+
+Queued, failed, cancelled and timed-out states require authenticated events or
+retained terminal measurement-job evidence. Missing data never implies queued or
+running. There is deliberately no inferred running state. Late terminal events
+cannot undo a complete report from the same execution. Failure/incomplete ZIPs
+retain source, exact run/attempt/job conclusion and partial-file inventory, but
+never contribute graph values. Unavailable/over-capacity partial evidence is
+explicitly marked rather than silently discarded or treated as complete.
+
+Authentication and formats
+
+The site pins GitHub repository ID, owner ID, main ref, exact publishing workflow,
+source commit, run/attempt and destination-specific audience. Signatures use the
+fixed GitHub issuer keys. PR/fork and other-workflow tokens are rejected. Old and
+immutable GitHub subject formats are explicitly supported. Authentication proves
+workflow provenance, not independent scientific reproduction; numeric receipt
+audit remains the clean producer's responsibility.
+
+The exact POST /api/resource-publications accepts workflow OIDC, never browser
+cookies/origin or participant tokens. JSON control messages are bounded to 2 MiB;
+ZIP reports to 128 MiB compressed / 192 MiB expanded, with safe paths, exact
+inventory, identity and complete-sampling checks. Uploaded data is never executed
+or rendered as HTML. The route authenticates before buffering, has a bounded
+deadline and one in-process upload slot. PostgreSQL transaction advisory locking
+serializes state transitions across processes; unique constraints back idempotency.
+
+Control JSON:
+- crucible-resource-desired-v1: source plus the FULL bindings array, including
+  unchanged bindings; omitted entries are removed. Empty intentionally removes all.
+  Each entry contains binding, fingerprint and producer_sha256. Response returns
+  snapshot_id/current plus the exact activation for each entry.
+- crucible-resource-event-v1: source, scheme_id, version, expected activation/
+  fingerprint/producer_sha256, phase and bounded reason. Exact retries are safe.
+
+Live ZIPs require crucible-website-publication-v2 with source, binding, expected
+activation and outcome. Complete reports retain v1's complete evaluation bundle
+and its strict route/sampling checks. Other outcomes retain failure.json and a
+bounded partial inventory. The publisher queries the exact run/attempt's Jobs API;
+artifact names include attempt. Rerun all jobs or dispatch afresh when new-attempt
+measurement evidence is needed; never relabel an older attempt. Same run/attempt/
+release has one immutable archive. Conflicting bytes need a new attempt.
+
+Old v1 reports already in the database remain readable historical evidence, but
+live v1 uploads are rejected: they cannot prove which desired activation they
+measured. Dry producer collection can still package v1 without uploading.
+
+Schema and data lifetime
+
+0026 added resource_publications: immutable source/projection JSON and deferred
+binary ZIP, unique by workflow run/attempt/release. 0027 adds resource_activations
+and resource_events: append-only semantic identity and desired/lifecycle evidence.
+It rewrites no existing tables and adds no sequence. Runtime uses existing table
+SELECT/INSERT privileges; backup needs SELECT on all three tables. Check the
+actual migration owner's table/default grants. Normal graph reads omit ZIP bytes.
+All three tables must be included in backups; preserve the permanent note-number
+sequence as well. Evidence is not pruned yet: monitor storage/backup growth.
+
+Deployment sequence (not an ordinary schema-unchanged release)
+
+1. Pass source and PostgreSQL gates and the exact native image gate with Promote
+   disabled. Retain immutable image/source receipts. Update native source pins
+   for resource modules and migrations without changing protocol/native pins.
+   Resource/release workflows do not silently migrate the hosted database.
+2. Use the existing operator backup/restore process for the actual current schema.
+   Restore-test an encrypted current backup and verify actual runtime/backup roles.
+   Never replace secrets, reinitialize accounts or import a development database.
+3. Apply the reviewed Alembic chain to 0027 with the migration role, verifying exact
+   head, all retained rows, sequence state and visibility to the backup role. The
+   application requires exact migration head; coordinate a prepared compatible
+   image/maintenance bridge, not an assumed old-image restart.
+4. Deploy the exact tested image. CRUCIBLE_RESOURCE_PUBLISHING=true enables the
+   existing application endpoint (false is the default). Measurement repository
+   variable CRUCIBLE_RESOURCE_ORIGIN holds the canonical HTTPS origin without a
+   trailing slash. This is public configuration. The OIDC audience is that origin
+   plus /api/resource-publications. No new hosting/database is needed.
+5. Announce the full approved desired snapshot and dispatch one reviewed binding
+   with publication enabled. Verify authenticated state, plotted measurements,
+   incomplete/history handling and exact evidence download. Check anonymous reads
+   and other writes remain denied. Initialize other approved bindings; later
+   relevant merges update reports without another website build.
+
+Rollback preserves evidence. Select an earlier implementation in a new reviewed
+measurement-repo commit; the new activation requires remeasurement. Website
+rollback needs a schema-0027-compatible image or a reviewed preservation plan.
+Populated resource tables refuse downgrade. Never erase evidence to satisfy an
+older image's startup check.
+
+Read API and interface
+
+GET /api/protocol/resources?scheme_id=...&version=... returns schema_revision=2,
+explicit state, expected binding, lifecycle, current publication/resources or
+null, and up to 20 historical report summaries. publication_id selects an exact
+historical report for that same release, including an incomplete report with no
+eligible graph configurations. It is marked selected_historical. Full source,
+measurement method and immutable ZIP remain available; old data is never silently
+presented as current. GET /api/resource-publications/{sha256}/download returns
+that exact ZIP. Both follow normal private member-read policy and agent scopes.
+
+Four cards remain. Public-key/ciphertext views distinguish fresh/cached exchange
+cost from private-key local storage. Computation selects timing, first-call time,
+process RAM, stack or simultaneously tracked heap+stack. Independent maxima are
+not summed, instrumented timing is not native timing, observed peaks are not RAM-
+fit guarantees, and a missing value is never zero. One compatible comparison
+profile is selected at a time; incompatible instruments/implementations stay gaps.
+Security remains on its separate existing evidence model.
+
+Resource caching is scoped to exact release and account/session; protected cache
+clearing and stale-request retirement follow the application lifecycle. Explicit
+refresh is available. Missing current measurements show Resources not calculated;
+historical reports and Earlier site references require explicit selection.

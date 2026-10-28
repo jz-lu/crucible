@@ -67,10 +67,14 @@ async function metadataFixture(hash) {
   }
   {
     const {app,deploy}=await metadataFixture('#scheme/fixture/current');
+    const report = app.$('#overview-chart-public').querySelector('select[aria-label="Report"]');
+    report.value = 'legacy'; report.dispatchEvent({type:'change'}); await flush();
     assert.equal(app.$('#overview-chart-public').querySelector('.chart-point').dataset.value,'10');
     assert.equal(app.$('#overview-security').textContent,'Original security discussion');
     deploy();await app.sandbox.refreshProfiles({background:true});
     assert.equal(snapshot(app).revision,'revised');
+    const updatedReport = app.$('#overview-chart-public').querySelector('select[aria-label="Report"]');
+    updatedReport.value = 'legacy'; updatedReport.dispatchEvent({type:'change'}); await flush();
     assert.equal(app.$('#overview-chart-public').querySelector('.chart-point').dataset.value,'20');
     assert.equal(app.$('#overview-security').textContent,'Revised security discussion');
     assert.equal(app.$('#overview-summary').textContent,'Revised summary');

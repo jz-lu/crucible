@@ -22,7 +22,7 @@ for (const [hint,hash,layout,title] of [['gate','#challenge','gate','Private bet
     await new Promise(done=>server.listen(0,'127.0.0.1',done));
     const origin='http://127.0.0.1:'+server.address().port;
     const context=await browser.newContext({viewport:{width:390,height:1000},serviceWorkers:'block'});
-    const allowed=new Set(['/','/app.js','/math.js','/assumptions.js','/proposal-retractions.js','/assets/crucible-logo.png','/api/session']);
+    const allowed=new Set(['/','/app.js','/math.js','/assumptions.js','/proposal-retractions.js','/resource-metrics.js','/assets/crucible-logo.png','/api/session']);
     try {
       await context.addInitScript(hint=>{
         sessionStorage.setItem('crucible.pending-presentation',hint);
