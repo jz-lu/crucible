@@ -142,6 +142,24 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   assert.equal(namedChart.querySelector('.chart-recovery-area'), null, 'named sets do not inherit a shaded stage frontier');
   assert.equal(namedChart.querySelector('.chart-series'), null);
 
+  let finishShared;
+  const sharedPending = new Promise(resolve => { finishShared = resolve; });
+  const sharedHistorical = {...structuredClone(report), state: 'outdated', selected_historical: true};
+  sharedHistorical.publication.id = historicalId;
+  const sharedCurrent = {scheme_id: scheme.id, version: scheme.version, state: 'outdated', publication: null, resources: null,
+    historical: [sharedHistorical.publication]};
+  sharedHistorical.historical = sharedCurrent.historical;
+  const sharedApp = await createApp({schemes: [scheme], hash: '#scheme/resource-fixture/1', responder: url => url.pathname === '/api/protocol/resources'
+    ? url.searchParams.has('publication_id') ? sharedPending : sharedCurrent : undefined});
+  const untouchedControl = sharedApp.$('#overview-chart-computation').querySelector('select[aria-label="Measure"]');
+  await choose(sharedApp, 'public', 'Report', historicalId);
+  await choose(sharedApp, 'cipher', 'Report', historicalId);
+  assert.equal(sharedApp.requests.filter(r => r.url.searchParams.get('publication_id') === historicalId).length, 1, 'two cards share one pending historical read');
+  finishShared(sharedHistorical); await flush();
+  assert.deepEqual(sharedApp.$('#overview-chart-public').querySelectorAll('.chart-point').map(p => p.dataset.value), ['32', '33']);
+  assert.deepEqual(sharedApp.$('#overview-chart-cipher').querySelectorAll('.chart-point').map(p => p.dataset.value), ['64', '64'], 'every waiting card repaints after a shared historical read');
+  assert.equal(sharedApp.$('#overview-chart-computation').querySelector('select[aria-label="Measure"]'), untouchedControl, 'unchanged cards keep their controls');
+
   const stableSelect = publicChart.querySelector('select[aria-label="Measure"]'); stableSelect.focus();
   publicChart.querySelector('[data-resource-refresh]').click(); await flush();
   assert.equal(publicChart.querySelector('select[aria-label="Measure"]'), stableSelect, 'unchanged refresh keeps the existing controls');

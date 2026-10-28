@@ -2769,6 +2769,13 @@ function overviewRecovery(scheme, values, named) {
       'The red line marks a recorded recovery, not a security guarantee or individual recoveries at every lower stage.';
   return {points, tier, label, meaning};
 }
+function redrawResourceCharts(scheme) {
+  const current = selectedScheme();
+  if (!hasAccess() || state.screen !== 'overview' || current?.id !== scheme.id || String(current.version) !== String(scheme.version)) return;
+  // One in-flight report can be selected by several cards. Refresh all readers;
+  // the resource renderer leaves unchanged controls and focus in place.
+  for (const id of ['public', 'cipher', 'computation']) renderOverviewChart(current, id);
+}
 function renderOverviewChart(scheme, cardId) {
   const metric = state.overviewMetrics[cardId] || OVERVIEW_CARDS[cardId][0];
   const descriptor = {...OVERVIEW_METRICS[metric]};
@@ -2776,7 +2783,7 @@ function renderOverviewChart(scheme, cardId) {
   if (window.CrucibleResources?.render({scheme, cardId, target, profiles: overviewProfiles(scheme),
       profileId, profileLabel, stagePosition, named: namedParameters(scheme), api,
       recoveryFor: points => overviewRecovery(scheme, points, namedParameters(scheme)),
-      redraw: () => { if (hasAccess() && state.screen === 'overview' && selectedScheme()?.id === scheme.id && String(selectedScheme()?.version) === String(scheme.version)) renderOverviewChart(scheme, cardId); }})) return;
+      redraw: () => redrawResourceCharts(scheme)})) return;
   // Current resource measurements have already returned above. Fetch the old
   // operation report only when its explicit earlier-reference view is chosen.
   if (descriptor.kind === 'timing') loadReferenceTimings(scheme);
@@ -2918,7 +2925,7 @@ function renderOverviewChart(scheme, cardId) {
   if (descriptor.kind === 'timing') renderTimingDetails(target, scheme, metric);
   if (detailsOpen && target.querySelector('details')) target.querySelector('details').open = true;
   window.CrucibleResources?.fallback({scheme, cardId, target, api,
-    redraw: () => { if (hasAccess() && state.screen === 'overview' && selectedScheme()?.id === scheme.id && String(selectedScheme()?.version) === String(scheme.version)) renderOverviewChart(scheme, cardId); }});
+    redraw: () => redrawResourceCharts(scheme)});
 }
 function renderOverview(scheme, contextProfile = null) {
   setText('#overview-title', scheme.name);
@@ -2972,11 +2979,7 @@ function renderOverview(scheme, contextProfile = null) {
       card.append(chart); grid.append(card);
     }
   }
-  window.CrucibleResources?.load(scheme, api, () => {
-    if (hasAccess() && state.screen === 'overview' && selectedScheme()?.id === scheme.id && String(selectedScheme()?.version) === String(scheme.version)) {
-      for (const id of ['public', 'cipher', 'computation']) renderOverviewChart(scheme, id);
-    }
-  });
+  window.CrucibleResources?.load(scheme, api, () => redrawResourceCharts(scheme));
   for (const id of Object.keys(OVERVIEW_CARDS)) renderOverviewChart(scheme, id);
   const overview = scheme.overview || {};
   for (const field of ['strengths', 'limitations']) {
