@@ -2237,12 +2237,13 @@ function personScoreBreakdown(person) {
   summary.setAttribute('aria-label', 'Points breakdown');
   const panel = node('div', undefined, 'person-score-help-panel');
   const values = node('dl', undefined, 'person-score-parts');
-  for (const [label, key] of [['Personal progress', 'progress'], ['First-record bonus', 'early_recovery'], ['Accepted proposals', 'scheme_contributions'], ['Research notes', 'note_contributions']]) {
+  for (const [label, key] of [['Record breakthroughs', 'early_recovery'], ['Admitted schemes', 'scheme_contributions'], ['Research bounties', 'bounty_points'], ['Research notes', 'note_contributions']]) {
     const part = node('div'); part.append(node('dt', label), node('dd', peopleNumber(person.score_breakdown[key]))); values.append(part);
   }
   panel.append(values);
-  panel.append(node('p', 'Each eligible scheme offers up to 500 personal-progress points and 2,000 points for your best first record. Configuration weights are fixed by the points policy; equal points do not imply equal attack difficulty. Each explicitly admitted new scheme earns 1,000 points.'));
-  panel.append(node('p', 'Intermediate stages and repeated solves do not accumulate extra points. Archived releases keep their records and are labelled when they are not scored. This is the provisional points policy.'));
+  panel.append(node('p', 'Your first advance of an eligible scheme’s recovery record earns 100 points, once per person per scheme. Ordinary progress and later advances remain recorded without additional points.'));
+  panel.append(node('p', 'A new admitted scheme earns 2,000 points plus 100 per completed active week. Withdrawal or retirement stops future accrual and preserves earned points. Bounties award their recorded reward after poster and independent reviewer approval.'));
+  panel.append(node('p', 'Archived releases retain their records and are labelled when they are not scored. Points recognize contributions; they do not compare attack difficulty. This policy is provisional.'));
   panel.append(node('p', 'Research-note contributions earn 1 or 2 points per supporting account through agent ratings. Changed or removed ratings update that credit. These points do not certify a claim or admit a scheme.'));
   breakdown.append(summary, panel);
   breakdown.addEventListener('keydown', event => {
