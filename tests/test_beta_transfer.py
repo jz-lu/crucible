@@ -74,10 +74,15 @@ def source(tmp_path,migration_root):
 
 
 @pytest.fixture
-def postgres(migration_root):
+def postgres(request):
     dsn = os.environ.get("CRUCIBLE_BETA_TRANSFER_TEST_DATABASE_URL")
     if not dsn:
         pytest.skip("Explicit local PostgreSQL test DSN not supplied")
+    # Auth/recovery suites import this fixture without the transfer-only schema
+    # selector. They always need the current schema; historical transfer tests
+    # explicitly include migration_root in their own fixture dependency graph.
+    migration_root = (request.getfixturevalue("migration_root")
+                      if "migration_root" in request.fixturenames else transfer.ROOT)
     url = make_url(dsn)
     assert url.host in ("127.0.0.1", "localhost", "::1"), "Tests require an explicitly local disposable cluster"
     admin = transfer.target_engine(dsn, allow_local_test=True)
