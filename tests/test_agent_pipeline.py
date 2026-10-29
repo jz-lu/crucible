@@ -23,7 +23,7 @@ RESOURCE_NAMES = {
     "agent-workflow.txt", "note-format.txt", "note-requests.txt",
     "request-types.json", "proposal-guide.txt", "correctness-policy.txt",
     "ladder-principles.txt", "scoring-policy.txt", "scoring-base.txt",
-    "benchmark-policy.txt",
+    "benchmark-policy.txt", "bounties.txt", "scheme-admission-policy.txt",
 }
 READ_PATHS = [PIPELINE, *(PREFIX + name for name in sorted(RESOURCE_NAMES))]
 
@@ -275,3 +275,38 @@ def test_agent_contract_tracks_opt_in_notebook_and_human_publication_review():
     assert "Later edits remain private" in rule["instruction"]
     assert "historical grants confer no access" in rule["instruction"]
     assert "Do not forward another author" in rule["instruction"]
+
+
+def test_current_scoring_guidance_resolves_live_policy_without_old_formulas():
+    from crucible import agent_guidance, scoring
+    from crucible.scoring_awards import ADMISSION_POLICY_ID, ADMISSION_POINTS, ACTIVE_WEEK_POINTS
+
+    pipeline = json.loads((ROOT / "web/agent/pipeline.json").read_text())
+    assert agent_guidance.RESOURCES["scoring-policy.txt"][0] == "docs/scoring-v11.txt"
+    assert agent_guidance.RESOURCES["scoring-base.txt"] == agent_guidance.RESOURCES["scoring-policy.txt"]
+    assert agent_guidance.RESOURCES["scheme-admission-policy.txt"][0] == "docs/scheme-admission-points-v2.txt"
+    rules = {item["id"]: item for item in pipeline["rules"]}
+    recovery = rules["scoring.evidence-not-labels"]["instruction"]
+    admission = rules["scoring.admission-and-credit"]["instruction"]
+    assert scoring.POLICY_ID in recovery
+    assert f"{scoring.FRONTIER_POINTS} points once per enrolled scheme" in recovery
+    assert "ordinary personal progress" in recovery and "add no numerical points" in recovery
+    assert ADMISSION_POLICY_ID in admission
+    assert f"{ADMISSION_POINTS:,} plus {ACTIVE_WEEK_POINTS} per completed active week" in admission
+    assert "Mere proposal approval" in admission and "stops future weekly accrual" in admission
+    assert "registry removal is not a retirement timestamp" in admission
+    assert "+1/+2 author weights" in admission
+    current_rules = " ".join(item["instruction"] for item in pipeline["rules"])
+    assert "maximum personal weight" not in current_rules
+    assert "1,000-point new-family award" not in current_rules
+    assert all("scoring-base.txt" not in step["read"] for step in pipeline["reading_plan"])
+    assert "historical" in next(r["role"] for r in pipeline["resources"] if r["id"] == "scoring-base.txt").lower()
+    assert "stops future active-week" in rules["authority.author-retraction"]["instruction"]
+    bounty = rules["scoring.bounty-settlement"]["instruction"]
+    assert "10 units per month without rollover" in bounty
+    assert "single approval are not awards" in bounty
+    assert "refunds are settled only at the final winning boundary" in bounty
+    capabilities = {item["id"]: item for item in pipeline["capabilities"]["current"]}
+    assert "bounties:spend" in capabilities["agent-research-bounties"]["scope"]
+    assert "human-only" in capabilities["agent-research-bounties"]["scope"]
+    assert len(json.dumps(pipeline).encode()) < 65536

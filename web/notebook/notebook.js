@@ -155,13 +155,14 @@
     } catch (error) { surface.remove(); throw error; }
   }
 
-  function mount(root, {navigate, api: requestAPI, account, session = () => null, currentReleases = () => [], mapFactory = mountResearchMap, prepareMapCatalogue = () => {}, canWarm = () => true, reviewOnly = false}) {
+  function mount(root, {navigate, api: requestAPI, account, session = () => null, currentReleases = () => [], mapFactory = mountResearchMap, prepareMapCatalogue = () => {}, prepareBounties = async () => {}, canWarm = () => true, reviewOnly = false}) {
     if (root.notebookController) return root.notebookController;
     let currentAccount = typeof account === 'function' ? account() : account;
     let accountId = currentAccount?.id == null ? null : String(currentAccount.id);
     let active = false, epoch = 0, request = 0, dialogEpoch = 0, notes = [], nextAfter = null;
     let params = new URLSearchParams(), search = '', tag = '', visibility = 'all', previewId = null;
     let mapController = null, mapPreparation = null, mapIdle = null, mapRequest = 0, timelineRequest = 0, listLoaded = false, cardAction = 0;
+    let bountyController = null, bountyPreparation = null;
     let curatedNotes = [], curatedLoaded = false, curatedPromise = null, timelinePreparation = null, indexPreparation = null;
     let pageCursors = [null], pageIndex = 0, knownPageCount = null, searchTimer = null;
     let reviewDraft = null, captureReviewDraft = () => {};
@@ -172,7 +173,7 @@
     const reviewListReads = new Map();
     let reviewPreparation = null, reviewPageTimer = null;
     function cancelReviewPagePreparation() { clearTimeout(reviewPageTimer); reviewPageTimer = null; }
-    function invalidateReads() { cancelReviewPagePreparation(); readCache.clear(); preparingNotes.clear(); preparingLists.clear(); reviewListReads.clear(); reviewPreparation = null; timelinePreparation = null; indexPreparation = null; warmEnabled = false; listStamp = null; timelineStamp = null; readEpoch++; }
+    function invalidateReads() { bountyController?.invalidateReads(); cancelReviewPagePreparation(); readCache.clear(); preparingNotes.clear(); preparingLists.clear(); reviewListReads.clear(); reviewPreparation = null; timelinePreparation = null; indexPreparation = null; warmEnabled = false; listStamp = null; timelineStamp = null; readEpoch++; }
     function cachedRead(key) {
       // Queue summaries can paint on return; decision forms and full revisions
       // still require a fresh server read, even in the same reviewer session.
@@ -264,6 +265,7 @@
         return prepareReviewPage(query);
       }
       warmEnabled = true;
+      if (kind === 'bounties') { const controller = await ensureBounties(); return controller ? controller.warm() : {bytes:0}; }
       if (kind === 'list') return prepareIndex();
       if (kind === 'timeline') {
         const result = await prepareTimeline(true);
@@ -298,6 +300,8 @@
     visualizations.append(el('span', 'nb-view-label', 'Visualizations'));
     const mapView = mark('map-view', button('Scheme map', () => navigateView('#notebook?view=map'), 'nb-view nb-visualization-view'));
     for (const event of ['pointerenter', 'focus']) mapView.addEventListener(event, () => { void prepareMap().catch(() => {}); });
+    const bountyView = mark('bounties-view', button('Bounties', () => navigateView(bountyController?.route() || '#notebook?view=bounties'), 'nb-view nb-visualization-view'));
+    for (const event of ['pointerenter', 'focus']) bountyView.addEventListener(event, () => { if (canWarm()) void ensureBounties().then(controller => controller?.warm()).catch(() => {}); });
     const timelineView = mark('timeline-view', button('Timeline', () => navigateView('#notebook?view=timeline'), 'nb-view nb-visualization-view'));
     for (const event of ['pointerenter', 'focus']) timelineView.addEventListener(event, prepareTimeline);
     function viewIcon(parts) {
@@ -313,12 +317,15 @@
     notesView.prepend(viewIcon([['rect',{x:5,y:3,width:14,height:18,rx:2}],['path',{d:'M9 8h6M9 12h6M9 16h4'}]]));
     mapView.prepend(viewIcon([['path',{d:'m7.7 6.2 8.6 4.6m0 2.4-8.6 4.6M6 8v8'}],['circle',{cx:6,cy:6,r:2}],['circle',{cx:18,cy:12,r:2}],['circle',{cx:6,cy:18,r:2}]]));
     timelineView.prepend(viewIcon([['path',{d:'M4 4v16h16M5 16h5v-5h5V6h5'}]]));
-    const visualizationTabs = el('div', 'nb-visualization-tabs'); visualizationTabs.append(mapView, timelineView);
+    const visualizationTabs = el('div', 'nb-visualization-tabs'); bountyView.prepend(viewIcon([['path',{d:'M5 21V3m0 1h13l-4 4 4 4H5'}]]));
+    visualizationTabs.append(mapView, bountyView, timelineView);
     visualizations.append(visualizationTabs); views.append(notesView, visualizations);
     const mapPanel = mark('map', el('section', 'nb-map-panel')); mapPanel.hidden = true;
     mapPanel.setAttribute('aria-label', 'Scheme map');
     const timelinePanel = mark('timeline', el('section', 'nb-timeline-panel')); timelinePanel.hidden = true;
     timelinePanel.setAttribute('aria-label', 'Notes over time');
+    const bountyPanel = mark('bounties', el('section', 'nb-bounties-panel')); bountyPanel.hidden = true;
+    bountyPanel.setAttribute('aria-label', 'Research bounties');
     const noticeNode = mark('notice', el('div', 'nb-notice')); noticeNode.setAttribute('role', 'status'); noticeNode.hidden = true;
     const library = mark('library', el('section')); const toolbar = el('div', 'nb-toolbar');
     const searchLabel = el('label', 'nb-search'); searchLabel.append(el('span', 'nb-sr-only', 'Search notes'));
@@ -345,8 +352,8 @@
     const dialog = mark('dialog', el('dialog', 'nb-dialog')); dialog.setAttribute('aria-label', 'Notebook editor');
     const dialogHeading = el('div', 'nb-dialog-heading'); dialogHeading.append(mark('dialog-title', el('h2')), mark('close', button('×', () => closeDialog(), 'nb-close'))); q('close').setAttribute('aria-label', 'Close notebook editor');
     dialog.append(dialogHeading, mark('dialog-body', el('div')));
-    if (reviewOnly) { root.classList.add('nb-review-workspace'); root.replaceChildren(noticeNode, library, full, dialog); }
-    else root.replaceChildren(heading, views, noticeNode, library, full, mapPanel, timelinePanel, dialog);
+    if (reviewOnly) { root.classList.add('nb-review-workspace'); root.replaceChildren(noticeNode, library, full, bountyPanel, dialog); }
+    else root.replaceChildren(heading, views, noticeNode, library, full, mapPanel, timelinePanel, bountyPanel, dialog);
     q('pagination').hidden = true;
 
     function notice(text, error = false) { q('notice').textContent = text; q('notice').hidden = !text; q('notice').classList.toggle('nb-error', error); }
@@ -375,12 +382,13 @@
       accountId = next; epoch++; request++; mapRequest++; timelineRequest++; listLoaded = false;
       q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy');
       q('timeline').replaceChildren();
+      bountyController?.destroy(); bountyController = null; bountyPreparation = null; q('bounties').replaceChildren();
       curatedNotes = []; curatedLoaded = false; curatedPromise = null; resetPages(); clearTimeout(searchTimer); searchTimer = null;
       mapController?.destroy(); mapController = null; q('map').replaceChildren(); notes = []; nextAfter = null; previewId = null; search = ''; tag = ''; visibility = 'all'; filter.input.value = 'all';
       q('search').value = ''; q('filter').replaceChildren(); q('page').textContent = ''; humanHint.hidden = true;
       closeDialog(true); q('dialog-body').replaceChildren(); q('list').replaceChildren(); q('full').replaceChildren(); q('count').textContent = ''; q('pagination').hidden = true; notice('');
     }
-    function hide() { captureReviewDraft(); captureReviewDraft = () => {}; cancelReviewPagePreparation(); clearPageSpace(); clearViewSpace(); timelinePreparation = null; cancelMapPreparation(); clearTimeout(searchTimer); searchTimer = null; active = false; request++; mapRequest++; timelineRequest++; q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy'); q('timeline').replaceChildren(); mapController?.hide(); if (q('dialog').open) { suspendedDialog = true; q('dialog').close(); } }
+    function hide() { captureReviewDraft(); captureReviewDraft = () => {}; bountyController?.hide(); cancelReviewPagePreparation(); clearPageSpace(); clearViewSpace(); timelinePreparation = null; cancelMapPreparation(); clearTimeout(searchTimer); searchTimer = null; active = false; request++; mapRequest++; timelineRequest++; q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy'); q('timeline').replaceChildren(); mapController?.hide(); if (q('dialog').open) { suspendedDialog = true; q('dialog').close(); } }
     const reviewUrl = (section, extra = {}) => '#reviews?' + new URLSearchParams({section, ...extra});
     function pageGuard() { const current = guard(), token = request; return () => current() && token === request; }
     function backToNotes() { return button(reviewOnly ? '← Publish requests' : '← Research notebook', () => navigate(reviewOnly ? reviewUrl('publication') : '#notebook'), 'nb-link nb-back'); }
@@ -392,16 +400,17 @@
       const readerHadFocus = !q('full').hidden && document.activeElement?.closest('.nb-full') === q('full');
       if (typeof account === 'function') setAccount(account());
       active = true; params = new URLSearchParams(nextParams);
-      if (reviewOnly) { params.delete('view'); if (params.get('section') === 'research' || params.has('research') || params.has('research_request')) { params.set('research', '1'); params.set('research_review', '1'); params.delete('review'); } else params.set('review', '1'); }
+      if (reviewOnly && params.get('section') !== 'bounties') { params.delete('view'); if (params.get('section') === 'research' || params.has('research') || params.has('research_request')) { params.set('research', '1'); params.set('research_review', '1'); params.delete('review'); } else params.set('review', '1'); }
       const inMap = params.get('view') === 'map';
-      const inTimeline = params.get('view') === 'timeline', inVisualization = inMap || inTimeline;
+      const inTimeline = params.get('view') === 'timeline', inBounties = reviewOnly ? params.get('section') === 'bounties' : ['bounties', 'guide'].includes(params.get('view')), inVisualization = inMap || inTimeline || inBounties;
       const inShared = !inVisualization && params.get('shared') === '1' && !params.has('note');
       if (inShared || params.get('filter') === 'shared') { params.delete('shared'); params.delete('state'); params.delete('filter'); visibility = 'all'; filter.input.value = 'all'; }
       request++; timelineRequest++;
-      for (const [control, selected] of [[notesView, !inVisualization], [mapView, inMap], [timelineView, inTimeline]]) {
+      for (const [control, selected] of [[notesView, !inVisualization], [mapView, inMap], [timelineView, inTimeline], [bountyView, inBounties]]) {
         if (selected) control.setAttribute('aria-current', 'page'); else control.removeAttribute('aria-current');
       }
-      q('map').hidden = !inMap; q('timeline').hidden = !inTimeline;
+      q('map').hidden = !inMap; q('timeline').hidden = !inTimeline; q('bounties').hidden = !inBounties;
+      if (!inBounties) bountyController?.hide();
       if (!inTimeline) q('timeline').replaceChildren();
       if (!inMap) mapController?.hide();
       const nextReviewMode = reviewOnly && params.get('review') === '1';
@@ -416,6 +425,7 @@
       if (!inTimeline) q('timeline').removeAttribute('aria-busy');
       q('new').disabled = !accountId; q('files').disabled = !accountId; q('publish-all').disabled = !accountId;
       if (!accountId) { q('list').replaceChildren(); q('full').replaceChildren(); notice('Sign in to read your notebook.'); return; }
+      if (inBounties) { await showBounties(); return; }
       if (inMap) { await showMap(); return; }
       if (inTimeline) { await showTimeline(); return; }
       if (inResearch) { if (params.has('research_request')) await readResearchRequest(params.get('research_request')); else await listResearchRequests(); return; }
@@ -430,6 +440,35 @@
         }).catch(() => {});
       }
       if (!reviewOnly && active && params.get('compose') === 'proposal' && !q('dialog').open) editNote(null, true);
+    }
+    function ensureBounties() {
+      if (bountyController) return Promise.resolve(bountyController);
+      if (bountyPreparation) return bountyPreparation;
+      const ownerId = accountId, generation = epoch, credential = currentSession;
+      const current = () => ownerId !== null && identity() === ownerId && epoch === generation && session() === credential;
+      const task = (async () => {
+        await prepareBounties();
+        if (!current()) return null;
+        bountyController = window.CrucibleBounties.mount(q('bounties'), {api, navigate:navigateView, current, canWarm, settleScroll:clearViewSpace, reviewOnly});
+        return bountyController;
+      })();
+      bountyPreparation = task;
+      task.finally(() => { if (bountyPreparation === task) bountyPreparation = null; }).catch(() => {});
+      return task;
+    }
+    async function showBounties() {
+      const owner = guard(), token = request, credential = currentSession;
+      const current = () => owner() && token === request && session() === credential;
+      if (!bountyController) {
+        const frame = params.has('bounty') || params.get('compose') === 'bounty' ? el('div', 'bty-detail-placeholder') : notebookPendingPart('[data-notebook-panel="bounties"]', 'Research bounties');
+        frame.setAttribute('aria-hidden', 'true'); q('bounties').replaceChildren(frame);
+      }
+      try {
+        const controller = await ensureBounties();
+        if (current() && controller) await controller.show(params);
+      } catch (error) {
+        if (current()) q('bounties').replaceChildren(el('p', 'nb-error', 'Bounties could not be retrieved.'), button('Try again', showBounties));
+      }
     }
     function cancelMapPreparation() {
       if (mapIdle !== null) clearTimeout(mapIdle);

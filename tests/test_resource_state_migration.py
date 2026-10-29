@@ -16,11 +16,14 @@ def test_0027_preserves_0026_publication_and_matches_metadata(tmp_path, monkeypa
             repository_id='1', run_id=1, run_attempt=1, created_at=1,
             publication={'format':'legacy fixture'}, resources={'configurations':[]}, bundle=b'untouched evidence'))
     command.upgrade(config, '0027')
-    command.check(config)
     with engine.connect() as connection:
         assert connection.scalar(text('SELECT bundle FROM resource_publications')) == b'untouched evidence'
         assert connection.scalar(text('SELECT count(*) FROM resource_activations')) == 0
         assert connection.scalar(text('SELECT count(*) FROM resource_events')) == 0
+    # Metadata describes the current application head, not historical 0027.
+    # Check this exact transition's preservation first, then current agreement.
+    command.upgrade(config, 'head')
+    command.check(config)
     # Empty additive tables can be removed; populated publication remains.
     command.downgrade(config, '0026')
     assert 'resource_events' not in inspect(engine).get_table_names()

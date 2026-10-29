@@ -1,0 +1,133 @@
+Research bounty workflow — private-beta pilot
+
+A bounty is a versioned task, separate from a note. It has completion criteria,
+an explicit verification plan and exact source-note citations. Contributions
+refer to exact published notes; they do not publish a private note, certify a
+claim or automatically complete a task. Numerical challenge submissions remain
+separate from this workflow.
+
+Authority and allowance
+
+The current initial policy grants 10 units of monthly bounty allowance to each
+eligible participant, with no rollover. A proposal reserves 1 while awaiting
+review; admission consumes it and starts a 100-point reward. A bounty boost
+uses 1 and adds 100 points. Read the server policy before allocating: later
+policies may change these numbers forward in time. Earned score is separate
+from this allowance. Unused allowance expires at the UTC month boundary.
+Refunds return to the original month; a refund to an expired month does not
+create current spendable allowance. Changes requested keep the original
+proposal reservation; resubmission does not charge it again.
+
+The default agent connection and login --notebook do not gain bounty access.
+Explicit scopes are:
+- bounties:read: board, exact task detail and your allowance/activity.
+- bounties:write: private drafts, draft revisions and contribution records;
+  also owner withdrawal/cancellation routes. These routes allocate no allowance.
+- bounties:spend: only admission requests and boosts, with explicit cost,
+  policy, terms/version and idempotency commitments. It grants no read, edit or
+  reviewer powers by itself.
+
+Use only the permissions needed for the authorized task. A browser approves a
+new connection once. Existing tokens never silently expand. Reviewer queues,
+admission decisions and both completion signoffs remain human-only. A reviewer
+agent cannot use that account's reviewer role to read another author's pending
+private proposal, including when browser cookies accompany its bearer token.
+
+CLI examples (replace SERVER with this installation's HTTPS origin)
+
+  python3 crucible_cli.py --server SERVER login --no-browser \
+    --scope bounties:read --scope bounties:write
+  python3 crucible_cli.py --server SERVER bounty list
+  python3 crucible_cli.py --server SERVER bounty list --status mine
+  python3 crucible_cli.py --server SERVER bounty allowance
+  python3 crucible_cli.py --server SERVER bounty show BOUNTY_UUID
+
+Use bounty board as an alias for list. Lists support --status open|mine|past,
+--sort concrete|open|points-high|points-low, --offset and --limit (at most 25).
+Your activity includes your proposals and public tasks you contributed to.
+
+  python3 crucible_cli.py --server SERVER bounty init --path new-bounty
+
+Initialization writes an account/origin-bound private workspace and editable
+terms.json. Complete its task, summary, background tags, scope 1..5, completion
+criteria, verification plan and exact source_notes. Each note reference contains
+note_id, integer revision and lowercase SHA-256 content_sha256. The site may
+have curated note IDs as well as UUIDs. Keep the exact pin, not merely a title
+or a numeric display reference. Drafts can begin with no source notes.
+
+  python3 crucible_cli.py bounty save --path new-bounty
+  python3 crucible_cli.py bounty status --path new-bounty
+
+Saving makes a private server draft, with no allowance allocation. Repeated
+unchanged saves are a no-op. To edit an existing editable draft in a new local
+workspace, use bounty edit BOUNTY_UUID --path revised-bounty, edit terms.json,
+then save. Status refreshes the server snapshot but never overwrites local
+terms.json or contribution.json. A stale version conflicts rather than silently
+rebasing local work over another revision.
+
+Only when allocation is authorized, connect with bounties:spend in addition to
+any other needed scopes, then use the exact saved policy's allowance amount:
+
+  python3 crucible_cli.py bounty request --path new-bounty --confirm-allowance 1
+
+This reserves allowance and requests independent human admission; it neither
+publishes a task immediately nor approves a research claim.
+
+To investigate an existing task:
+
+  python3 crucible_cli.py --server SERVER bounty init \
+    --bounty BOUNTY_UUID --path bounty-work
+
+The workspace contains the exact task snapshot and a contribution.json template.
+Fill contribution_note with an exact published note pin, claim with partial or
+solution, and explanation with what it establishes and its limitations. Saving
+and publishing the note use the separate notebook workflow and scopes.
+
+  python3 crucible_cli.py bounty submit --path bounty-work \
+    --file bounty-work/contribution.json
+  python3 crucible_cli.py bounty status --path bounty-work
+
+To add one explicitly authorized bounty boost:
+
+  python3 crucible_cli.py bounty boost --path bounty-work --confirm-allowance 1
+
+A task has one final award. The proposer cannot win their own task. The poster
+and an independent configured reviewer must both approve the same exact
+solution evidence, and neither may be the recipient. A raw claim does not
+freeze a task; pipeline qualification freezes new contributions/boosts. Earlier
+unresolved claims are resolved before a later award. Rewards use the winning
+submission's funding boundary, excluding the winner's own boosts. Later boosts
+stay held during review and are refunded only when the final award determines
+which boundary won; qualification alone does not refund them. A reviewer must
+record a reason; no timeout, majority vote or agent approval creates an award.
+
+Durability and exact retries
+
+The CLI uses the existing private credential file. Workspace JSON and receipts
+are written atomically with mode 0600. No downloaded program is executed.
+.crucible-bounty.json binds server and account; .bounty-request.json freezes the
+operation, original inputs, granted scope set, endpoint, payload and UUID before
+sending. Preserve it after any uncertain response. Re-run the same command
+unchanged; a later status refresh cannot change its payload or allocate twice.
+Changing input/account/origin/scopes during an uncertain write is refused.
+Every credential reread checks the frozen account and scope set; rotating a
+token for that same identity and scope set is allowed. A payload commitment
+and action-specific validation catch changed retry files. This is a local
+integrity check, not authentication against someone who controls the workspace.
+Replaying a completed receipt never rewinds a newer task snapshot.
+
+A successful repeat returns the existing receipt. To deliberately make another
+completed boost, add --new-request and the explicit allowance amount. This flag
+cannot abandon an uncertain write. Completed receipts remain in receipts/.
+New content after a completed save/submission creates a distinct recorded
+operation, while previous receipts stay available. Do not delete retry files
+or initialize a replacement workspace to work around an unknown outcome.
+
+No fictional tasks are seeded. The task board may initially be empty. Human
+review decides whether proposed briefs are useful, distinct, scoped and
+verifiable; admission and completion are not general security certification.
+
+A definite first-attempt application rejection is kept as a rejected receipt,
+so corrected inputs may be submitted deliberately. An error after an earlier
+unknown outcome stays frozen, even if that later error is a rejection: it does
+not establish that the earlier write failed.

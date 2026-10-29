@@ -7,11 +7,12 @@ There is deliberately no HTTP write endpoint for this operator action.
 """
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import time
 
-from sqlalchemy import Float, ForeignKey, Integer, String, Text, UniqueConstraint, select
+from sqlalchemy import CheckConstraint, Float, ForeignKey, Integer, String, Text, UniqueConstraint, case, cast, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -42,12 +43,92 @@ class SchemeAdmissionCredit(Base):
     evidence: Mapped[str] = mapped_column(Text)
 
 
+ADMISSION_POLICY_ID = "crucible-scheme-admission-points-v2"
+ADMISSION_POINTS = 2000
+ACTIVE_WEEK_POINTS = 100
+WEEK_SECONDS = 7 * 24 * 60 * 60
+
+
+class SchemeAdmissionRetirement(Base):
+    """One terminal, append-only cutoff; restoring registry code cannot resume it."""
+    __tablename__ = "scheme_admission_retirements"
+    __table_args__ = (CheckConstraint("created_at >= 0", name="ck_admission_retirement_time"),)
+    family_id: Mapped[str] = mapped_column(ForeignKey("scheme_admission_credits.family_id"), primary_key=True)
+    reviewer_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[float] = mapped_column(Float)
+    reason: Mapped[str] = mapped_column(Text)
+
+
+def admission_points_relation(as_of):
+    """Aggregate completed active weeks at one explicit time for the whole query.
+
+    Admission and retirement are durable decisions. Current registry contents,
+    runtime availability and proposal approval alone never define active time.
+    Author withdrawal provides a second terminal cutoff without editing evidence.
+    """
+    if isinstance(as_of, bool) or not isinstance(as_of, (int, float)) or not math.isfinite(as_of) or as_of < 0:
+        raise ValueError("Scoring time must be a finite nonnegative timestamp.")
+    credit, retirement = SchemeAdmissionCredit, SchemeAdmissionRetirement
+    withdrawal = proposal_retractions.ProposalRetraction
+    cutoff = case((retirement.created_at < as_of, retirement.created_at), else_=as_of)
+    cutoff = case((withdrawal.created_at < cutoff, withdrawal.created_at), else_=cutoff)
+    duration = case((cutoff > credit.created_at, cutoff - credit.created_at), else_=0)
+    weeks = cast(func.floor(duration / WEEK_SECONDS), Integer)
+    totals = (select(credit.user_id.label("user_id"),
+                     (ADMISSION_POINTS * func.count()).label("admission_points"),
+                     func.sum(weeks).label("active_weeks"),
+                     (ACTIVE_WEEK_POINTS * func.sum(weeks)).label("weekly_points"))
+              .outerjoin(retirement, retirement.family_id == credit.family_id)
+              .outerjoin(withdrawal, (withdrawal.target_kind == proposal_retractions.SCHEME) &
+                         (withdrawal.target_id == credit.proposal_id))
+              .where(credit.created_at <= as_of).group_by(credit.user_id)).subquery()
+    return select(totals, (totals.c.admission_points + totals.c.weekly_points).label("scheme_contributions"))
+
+
+def retire_scheme_credit(db, settings, *, family_id, reviewer_id, reason, dry_run=False, clock=time.time):
+    """Record a terminal family retirement now; exact retries retain the first cutoff.
+
+    This stops future weekly recognition, not past points, publication access or
+    challenge serving. Coordinate registry removal separately in the same rollout.
+    There is deliberately no backdating or automatic reinstatement operation.
+    """
+    if reviewer_id not in settings.reviewer_ids:
+        raise AdmissionCreditError("A configured reviewer must record scheme retirement.")
+    if not isinstance(reason, str) or not 20 <= len(reason.strip()) <= 10000:
+        raise AdmissionCreditError("Record 20 to 10000 characters explaining the retirement.")
+    reason = reason.strip()
+    try:
+        with db.transaction(write=True) as session:
+            credit = session.scalar(select(SchemeAdmissionCredit).where(
+                SchemeAdmissionCredit.family_id == family_id).with_for_update())
+            if credit is None:
+                raise AdmissionCreditError("An existing admission credit is required.")
+            if session.get(User, reviewer_id) is None:
+                raise AdmissionCreditError("Reviewer account not found.")
+            existing = session.get(SchemeAdmissionRetirement, family_id)
+            if existing is not None:
+                if existing.reviewer_id != reviewer_id or existing.reason != reason:
+                    raise AdmissionCreditError("This family already has a different immutable retirement.")
+                return {"created": False, "dry_run": dry_run, "retirement": credit_data(existing)}
+            timestamp = clock()
+            if isinstance(timestamp, bool) or not isinstance(timestamp, (int, float)) or not math.isfinite(timestamp) or timestamp < max(0, credit.created_at):
+                raise AdmissionCreditError("Retirement time must be finite and at or after admission.")
+            record = SchemeAdmissionRetirement(family_id=family_id, reviewer_id=reviewer_id,
+                                              created_at=timestamp, reason=reason)
+            if not dry_run:
+                session.add(record)
+                session.flush()
+            return {"created": not dry_run, "dry_run": dry_run, "retirement": credit_data(record)}
+    except IntegrityError:
+        raise AdmissionCreditError("This family has a conflicting retirement; no event was added.") from None
+
+
 class AdmissionCreditError(ValueError):
     """The operator request cannot establish a new, uniquely credited admission."""
 
 
 def credit_data(record):
-    return {column.name: getattr(record, column.name) for column in SchemeAdmissionCredit.__table__.columns}
+    return {column.name: getattr(record, column.name) for column in record.__table__.columns}
 
 
 def _digest(specification):

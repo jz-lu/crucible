@@ -54,6 +54,7 @@ PROTECTED_FILES = {
     '/notebook/' + name: media for name, media in {
         'seed.js': 'text/javascript', 'store.js': 'text/javascript',
         'notebook.js': 'text/javascript', 'notebook.css': 'text/css',
+        'bounties.js': 'text/javascript', 'bounties-api.js': 'text/javascript', 'bounties.css': 'text/css',
         'request-types.json': 'application/json',
     }.items()
 }

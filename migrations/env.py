@@ -1,3 +1,4 @@
+from crucible import bounty_models  # Reviewed bounty tasks and independent allowance/award journals.
 from crucible import research_reviews  # Register scoped research assessments.
 from crucible import proposal_retractions  # Register terminal author withdrawals.
 from crucible import proposal_notes  # noqa: F401 — durable scheme-review sources

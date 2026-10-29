@@ -43,6 +43,7 @@ DEFAULT_SCOPES = ("challenges:read", "challenges:write", "methods:read", "method
                   "submissions:read", "submissions:write", "proposals:read", "proposals:write",
                   "notes:read", "notes:rate")
 NOTEBOOK_SCOPES = ("notebook:read", "notebook:write", "notebook:publish")
+BOUNTY_SCOPES = ("bounties:read", "bounties:write", "bounties:spend")
 AGENT_PIPELINE = "/api/agent/pipeline"
 AGENT_GUIDANCE = "/api/agent/guidance/"
 PROPOSALS = "/api/protocol/proposals"
@@ -176,6 +177,7 @@ class Client:
     def __init__(self, server, config_path=DEFAULT_CONFIG):
         self.server, self.config_path = origin(server), Path(config_path).expanduser()
         self.expected_handle = None
+        self.expected_scopes = None
         # Environment proxy settings must not redirect loopback credentials.
         self.opener = build_opener(ProxyHandler({}), NoRedirect())
 
@@ -191,7 +193,13 @@ class Client:
             if not isinstance(credential, dict) or not isinstance(credential.get("access_token"), str):
                 raise ClientError("Connect this server first with the login command.", "login_required")
             if self.expected_handle is not None and credential.get("handle") != self.expected_handle:
+                if self.expected_scopes is not None:
+                    raise ClientError("The connected account changed. Restore the bounty workspace account before retrying.", "bounty_account_changed")
                 raise ClientError("The connected account changed. Reconnect the original proposal author before retrying.", "proposal_account_changed")
+            if self.expected_scopes is not None:
+                scopes = credential.get("scopes")
+                if not isinstance(scopes, list) or any(not isinstance(scope, str) for scope in scopes) or sorted(scopes) != self.expected_scopes:
+                    raise ClientError("The connection permissions changed. Restore the frozen bounty permissions before retrying.", "bounty_scopes_changed")
             expiry = credential.get("expires_at")
             if not isinstance(expiry, (int, float)) or not math.isfinite(expiry) or expiry <= time.time():
                 raise ClientError("This connection expired. Run login again.", "login_required")
@@ -264,6 +272,11 @@ class Client:
                                  422: "Check the note-format contract, required content fields and exact revision/hash."})
                 if parts.path.endswith("/delete"):
                     messages[409] = "Deletion requires the exact latest revision of an unsubmitted private draft. Submitted evidence is retained; an existing deletion requires its original retry file."
+            if parts.path == "/api/bounties" or parts.path.startswith("/api/bounties/") or parts.path == "/api/me/bounty-allowance":
+                messages.update({403: "Bounty actions need the explicit matching scope and task permission. Reviews remain human-only; proposers cannot win their own tasks.",
+                                 404: "This bounty or exact evidence is unavailable to this account.",
+                                 409: "The bounty version, allowance or frozen request conflicts with recorded state. Preserve the retry file and inspect bounty status before preparing another operation.",
+                                 422: "Check the exact task fields, note revision/hash, policy commitment and confirmed allowance amount."})
             # Never echo a request body, candidate, token, or arbitrary server error text.
             raise ClientError(messages.get(error.code, "The server could not complete the request."),
                               "http_" + str(error.code), details) from None
@@ -339,7 +352,7 @@ def login(client, args):
             raise ClientError("The server returned an invalid account identity.")
         scopes = result.get("scopes")
         if scopes is not None and (not isinstance(scopes, list) or any(
-                value not in DEFAULT_SCOPES + NOTEBOOK_SCOPES for value in scopes)):
+                value not in DEFAULT_SCOPES + NOTEBOOK_SCOPES + BOUNTY_SCOPES for value in scopes)):
             raise ClientError("The server returned unsupported permissions. No connection was saved.")
         config["servers"][client.server] = {"access_token": token, "expires_at": expiry, "handle": handle,
                                            **({"scopes": scopes} if scopes is not None else {})}
@@ -1300,6 +1313,353 @@ def notebook_command(client, args):
     return {"status": "recorded", "action": action, "receipt": receipt, "retry_file": str(retry_path)}
 
 
+# Bounty workspaces are private, origin-bound and never execute supplied code.
+BOUNTY_ROOT = "/api/bounties"
+BOUNTY_META = ".crucible-bounty.json"
+
+
+def bounty_metadata(path):
+    root = Path(path).expanduser().absolute()
+    value = load_json(root / BOUNTY_META)
+    if (value.get("format") != "crucible-bounty-workspace-v1"
+            or origin(value.get("server")) != value.get("server")
+            or not isinstance(value.get("owner_handle"), str)):
+        raise ClientError("Use bounty init to create an account-bound workspace.")
+    return root, value
+
+
+def bounty_identity(client, required):
+    credential = configuration(client.config_path)["servers"].get(client.server, {})
+    handle, scopes = credential.get("handle"), credential.get("scopes")
+    if (not isinstance(handle, str) or not re.fullmatch(r"[a-z0-9_]{3,32}", handle)
+            or not isinstance(scopes, list) or any(not isinstance(scope, str) for scope in scopes)
+            or len(set(scopes)) != len(scopes) or required not in scopes):
+        raise ClientError("Reconnect with the explicit " + required + " permission. Existing default connections gain no bounty permissions.", "bounty_scope_required")
+    client.expected_handle, client.expected_scopes = handle, sorted(scopes)
+    return handle, sorted(scopes)
+
+
+def bounty_pin(value):
+    if (not isinstance(value, dict) or set(value) != {"note_id", "revision", "content_sha256"}
+            or not isinstance(value["note_id"], str) or not 1 <= len(value["note_id"]) <= 108
+            or type(value["revision"]) is not int or value["revision"] < 1
+            or not isinstance(value["content_sha256"], str)
+            or not re.fullmatch(r"[0-9a-f]{64}", value["content_sha256"])):
+        raise ClientError("Use an exact note_id, revision and content_sha256 citation.")
+    return value
+
+
+def bounty_terms(value):
+    keys = {"title", "summary", "background_tags", "scope", "completion_criteria", "verification_plan", "source_notes"}
+    if not isinstance(value, dict) or set(value) != keys:
+        raise ClientError("Use the exact terms.json fields from bounty init.")
+    result = dict(value)
+    for field, maximum in (("title", 160), ("summary", 1200), ("completion_criteria", 6000), ("verification_plan", 6000)):
+        if not isinstance(value[field], str) or not 1 <= len(value[field].strip()) <= maximum:
+            raise ClientError("Complete the bounded task, summary, completion criteria and verification plan.")
+        result[field] = value[field].strip()
+    if type(value["scope"]) is not int or value["scope"] not in range(1, 6):
+        raise ClientError("Bounty scope must be an integer from 1 (open-ended) to 5 (concrete).")
+    tags = value["background_tags"]
+    if not isinstance(tags, list) or len(tags) > 8 or any(not isinstance(tag, str) or not 1 <= len(tag.strip()) <= 50 for tag in tags):
+        raise ClientError("Use at most eight short background tags.")
+    result["background_tags"] = [tag.strip() for tag in tags]
+    if len(set(result["background_tags"])) != len(tags):
+        raise ClientError("Do not repeat background tags.")
+    if not isinstance(value["source_notes"], list) or len(value["source_notes"]) > 12:
+        raise ClientError("Use at most twelve exact source-note citations.")
+    result["source_notes"] = [bounty_pin(pin) for pin in value["source_notes"]]
+    return result
+
+
+def checked_bounty(value, identifier=None):
+    task, policy = value.get("bounty"), value.get("policy")
+    if not isinstance(task, dict) or not isinstance(policy, dict):
+        raise ClientError("The server returned an invalid bounty record.")
+    notebook_id(task.get("id"))
+    if identifier is not None and task["id"] != identifier:
+        raise ClientError("The response names a different bounty.")
+    terms = bounty_terms(task.get("terms"))
+    if (type(task.get("version")) is not int or task["version"] < 1
+            or hashlib.sha256(encode(terms)).hexdigest() != task.get("terms_sha256")):
+        raise ClientError("The bounty terms do not match their exact recorded version and hash.")
+    if not isinstance(policy.get("id"), str) or not re.fullmatch(r"[0-9a-f]{64}", policy["id"]):
+        raise ClientError("The response has no exact bounty policy identity.")
+    return task
+
+
+def bounty_commitment(pending):
+    return hashlib.sha256(encode({key: pending[key] for key in
+        ("request", "endpoint", "body", "idempotency_key")})).hexdigest()
+
+
+def check_bounty_pending(pending):
+    """Validate both stored bytes and the action they represent before reuse.
+
+    The commitment detects accidental changes; it is not authentication against
+    someone who controls the local workspace. Semantic checks independently bind
+    the body to the user's unchanged command input on retry.
+    """
+    error = ClientError("The frozen bounty request changed or is invalid. Preserve it and restore its original contents before retrying.", "bounty_retry_invalid")
+    if not isinstance(pending, dict) or pending.get("format") != "crucible-bounty-retry-v1":
+        raise error
+    notebook_id(pending.get("idempotency_key"))
+    request, body, endpoint = pending.get("request"), pending.get("body"), pending.get("endpoint")
+    if (not isinstance(request, dict) or set(request) != {"server", "owner_handle", "scopes", "action", "input"}
+            or not isinstance(body, dict) or not isinstance(endpoint, str)
+            or pending.get("payload_sha256") != bounty_commitment(pending)):
+        raise error
+    if (origin(request["server"]) != request["server"]
+            or not isinstance(request["owner_handle"], str) or not re.fullmatch(r"[a-z0-9_]{3,32}", request["owner_handle"])
+            or not isinstance(request["scopes"], list) or any(not isinstance(scope, str) for scope in request["scopes"])
+            or request["scopes"] != sorted(set(request["scopes"]))):
+        raise error
+    action, semantic = request["action"], request["input"]
+    if not isinstance(semantic, dict) or not isinstance(action, str) or action not in {"save", "request", "boost", "submit"}:
+        raise error
+    if action == "save":
+        if set(semantic) != {"terms"} or body.get("terms") != bounty_terms(semantic["terms"]):
+            raise error
+        if endpoint == BOUNTY_ROOT:
+            if set(body) != {"terms"}: raise error
+        else:
+            match = re.fullmatch(re.escape(BOUNTY_ROOT) + r"/([0-9a-f-]{36})/revisions", endpoint)
+            if not match or set(body) != {"terms", "expected_version"}: raise error
+            notebook_id(match[1])
+    else:
+        target = notebook_id(semantic.get("bounty_id"))
+        suffix = {"request": "/admission-requests", "boost": "/boosts", "submit": "/submissions"}[action]
+        if endpoint != BOUNTY_ROOT + "/" + target + suffix:
+            raise error
+        if not isinstance(body.get("terms_sha256"), str) or not re.fullmatch(r"[0-9a-f]{64}", body["terms_sha256"]):
+            raise error
+        if action in {"request", "boost"}:
+            semantic_keys = {"bounty_id", "confirm_cost_units"} | ({"terms_sha256"} if action == "request" else set())
+            body_keys = {"expected_version", "terms_sha256", "policy_id", "confirm_cost_units"} | ({"units"} if action == "boost" else set())
+            if (set(semantic) != semantic_keys or set(body) != body_keys
+                    or type(body.get("confirm_cost_units")) is not int or body["confirm_cost_units"] < 1
+                    or body["confirm_cost_units"] != semantic["confirm_cost_units"]
+                    or not isinstance(body.get("policy_id"), str) or not re.fullmatch(r"[0-9a-f]{64}", body["policy_id"])):
+                raise error
+            if action == "boost" and (type(body["units"]) is not int or body["units"] != 1): raise error
+            if action == "request" and body["terms_sha256"] != semantic["terms_sha256"]: raise error
+        else:
+            contribution = semantic.get("contribution")
+            keys = {"contribution_note", "claim", "explanation"}
+            if (set(semantic) != {"bounty_id", "contribution"} or not isinstance(contribution, dict)
+                    or set(contribution) != keys or set(body) != keys | {"expected_version", "terms_sha256"}
+                    or any(body[key] != contribution[key] for key in keys)
+                    or contribution["claim"] not in {"partial", "solution"}
+                    or not isinstance(contribution["explanation"], str)
+                    or not 1 <= len(contribution["explanation"].strip()) <= 6000):
+                raise error
+            bounty_pin(contribution["contribution_note"])
+    if endpoint != BOUNTY_ROOT and (type(body.get("expected_version")) is not int or body["expected_version"] < 1):
+        raise error
+    return pending
+
+
+def bounty_pending(root):
+    path = root / ".bounty-request.json"
+    return check_bounty_pending(load_json(path)) if path.exists() else None
+
+
+def checked_bounty_effect(response, pending, target=None):
+    task = checked_bounty(response, target)
+    action, body = pending["request"]["action"], pending["body"]
+    expected_action = {"save": "create" if pending["endpoint"] == BOUNTY_ROOT else "revise",
+                       "request": "request_admission", "boost": "boost", "submit": "submit"}[action]
+    effect = response.get("receipt")
+    if (not isinstance(effect, dict) or effect.get("action") != expected_action or effect.get("task_id") != task["id"]
+            or type(effect.get("version")) is not int or effect["version"] != body.get("expected_version", 0) + 1
+            or task["version"] < effect["version"]):
+        raise ClientError("The server returned a receipt for a different bounty operation. Preserve the retry file.")
+    if action == "save":
+        if task.get("owner", {}).get("handle") != pending["request"]["owner_handle"]:
+            raise ClientError("The saved bounty belongs to a different account.")
+        if task["version"] == effect["version"] and task["terms"] != body["terms"]:
+            raise ClientError("The saved terms differ from the frozen request. Preserve the retry file.")
+    elif action == "boost":
+        notebook_id(effect.get("boost_id"))
+        if effect.get("spent_units") != body["confirm_cost_units"]:
+            raise ClientError("The receipt records a different allowance spend. Preserve the retry file.")
+    elif action == "request":
+        notebook_id(effect.get("reservation_id"))
+    else:
+        notebook_id(effect.get("submission_id"))
+        submission = next((item for item in task.get("submissions", []) if item.get("id") == effect["submission_id"]), None)
+        if (not submission or submission.get("contribution_note") != body["contribution_note"]
+                or submission.get("claim") != body["claim"]
+                or submission.get("author", {}).get("handle") != pending["request"]["owner_handle"]):
+            raise ClientError("The receipt does not identify the exact contributed evidence. Preserve the retry file.")
+    return task
+
+
+def remember_bounty(root, metadata, response):
+    current = metadata.get("bounty")
+    task = response["bounty"]
+    # A replay repairs an interrupted save, but never rewinds a later status read.
+    if current is None or task["version"] >= current["version"]:
+        metadata.update(bounty=task, policy=response["policy"])
+        save_json(root / BOUNTY_META, metadata)
+
+
+def bounty_write(client, args, root, metadata, action, semantic, endpoint, body, owner, scopes):
+    """One explicit operation; lost replies keep exact payload, key and identity."""
+    path = root / ".bounty-request.json"
+    identity = {"server": client.server, "owner_handle": owner, "scopes": scopes,
+                "action": action, "input": semantic}
+    pending = bounty_pending(root)
+    fresh = pending is None
+    if pending:
+        if pending.get("format") != "crucible-bounty-retry-v1":
+            raise ClientError("The bounty retry record has an unsupported format.")
+        notebook_id(pending.get("idempotency_key"))
+        same = pending.get("request") == identity
+        if "receipt" not in pending and "rejection" not in pending:
+            if not same or args.new_request:
+                raise ClientError("An uncertain bounty write is frozen. Restore its original input, account and scopes and rerun that command; do not start another request.", "bounty_retry_changed")
+            endpoint, body = pending["endpoint"], pending["body"]
+        elif same and not args.new_request:
+            if "rejection" in pending:
+                raise ClientError("The prior attempt was rejected without a recorded effect. Review the error and current task; change the input or deliberately use --new-request after resolving it.", "bounty_rejected")
+            response = pending.get("response")
+            if response:
+                checked_bounty_effect(response, pending, (metadata.get("bounty") or {}).get("id"))
+                remember_bounty(root, metadata, response)
+            return {"status": "recorded", "replayed_receipt": True, "receipt": pending["receipt"], "retry_file": str(path)}
+        else:
+            # Completed receipts remain independently durable before the current
+            # operation pointer advances. Uncertain operations never advance.
+            save_json(root / "receipts" / (pending["idempotency_key"] + ".json"), pending)
+            pending = None
+            fresh = True
+    if pending is None:
+        pending = {"format": "crucible-bounty-retry-v1", "request": identity,
+                   "endpoint": endpoint, "body": body, "idempotency_key": str(uuid4())}
+        pending["payload_sha256"] = bounty_commitment(pending)
+        check_bounty_pending(pending)
+        save_json(path, pending)
+    notebook_id(pending.get("idempotency_key"))
+    target = (metadata.get("bounty") or {}).get("id")
+    # Destination comes only from the exact local operation, not server prose.
+    allowed = {BOUNTY_ROOT} if action == "save" and not target else {
+        BOUNTY_ROOT + "/" + notebook_id(target) + suffix for suffix in
+        {"save": ["/revisions"], "request": ["/admission-requests"], "boost": ["/boosts"], "submit": ["/submissions"]}[action]}
+    if endpoint not in allowed:
+        raise ClientError("The frozen bounty destination does not match this workspace.")
+    try:
+        response = client.request(endpoint, {**body, "idempotency_key": pending["idempotency_key"]})
+    except ClientError as error:
+        # A first definite application rejection can be corrected. A rejection
+        # after an earlier unknown outcome cannot prove the earlier write failed.
+        if fresh and error.code in {"http_400", "http_401", "http_403", "http_404", "http_409", "http_410", "http_413", "http_422", "http_429"}:
+            pending["rejection"] = {"code": error.code}
+            save_json(path, pending)
+        raise
+    task = checked_bounty_effect(response, pending, target)
+    receipt = {"bounty_id": task["id"], "version": task["version"], "terms_sha256": task["terms_sha256"],
+               "status": task["status"], "reward_points": task["reward_points"], "effect": response.get("receipt"),
+               "url": client.server + "/#notebook?" + urlencode({"view": "bounties", "bounty": task["id"]})}
+    pending["receipt"] = receipt
+    pending["response"] = response
+    save_json(path, pending)
+    save_json(root / "receipts" / (pending["idempotency_key"] + ".json"), pending)
+    remember_bounty(root, metadata, response)
+    return {"status": "recorded", "receipt": receipt, "retry_file": str(path)}
+
+
+def bounty_command(client, args):
+    action = "list" if args.bounty_action == "board" else args.bounty_action
+    required = "bounties:spend" if action in {"request", "boost"} else "bounties:write" if action in {"save", "submit"} else "bounties:read"
+    owner, scopes = bounty_identity(client, required)
+    if action == "list":
+        return client.request(BOUNTY_ROOT + "?" + urlencode({"status": args.status, "sort": args.sort, "offset": args.offset, "limit": args.limit}))
+    if action == "allowance":
+        return client.request("/api/me/bounty-allowance")
+    if action == "show":
+        result = client.request(BOUNTY_ROOT + "/" + notebook_id(args.bounty_id))
+        checked_bounty(result, args.bounty_id)
+        return result
+    if action in {"init", "edit"}:
+        try:
+            root = empty_proposal_destination(args.path)
+        except ClientError as error:
+            raise ClientError(str(error).replace("proposal", "bounty")) from None
+        identifier = args.bounty_id if action == "edit" else args.bounty
+        if identifier:
+            result = client.request(BOUNTY_ROOT + "/" + notebook_id(identifier))
+            task = checked_bounty(result, identifier)
+            if action == "edit" and not task.get("capabilities", {}).get("edit"):
+                raise ClientError("This bounty is not an editable draft owned by your account.")
+            terms = task["terms"]
+        else:
+            result = client.request("/api/me/bounty-allowance")
+            task = None
+            terms = {"title": "", "summary": "", "background_tags": [], "scope": 3,
+                     "completion_criteria": "", "verification_plan": "", "source_notes": []}
+        metadata = {"format": "crucible-bounty-workspace-v1", "server": client.server,
+                    "owner_handle": owner, "bounty": task, "policy": result["policy"]}
+        save_json(root / BOUNTY_META, metadata)
+        save_json(root / "terms.json", terms)
+        save_json(root / "contribution.json", {"contribution_note": {"note_id": "", "revision": 1, "content_sha256": ""}, "claim": "partial", "explanation": ""})
+        private_write(root / "README.txt", "Private Crucible bounty workspace. No allowance was used.\nEdit terms.json, then bounty save --path . to save a private draft.\nReview the exact saved task with bounty status. Request admission only when authorized: bounty request --path . --confirm-allowance 1.\nFor an existing task, fill contribution.json with an exact published note pin, then bounty submit --path . --file contribution.json.\nA boost uses monthly allowance: bounty boost --path . --confirm-allowance 1.\nUnknown writes are frozen in .bounty-request.json. Retry the same command unchanged.\nCompleted receipts persist in receipts/. To deliberately repeat a completed boost, add --new-request; never use it after an uncertain result.\nStatus refreshes the saved server snapshot without overwriting terms.json or your contribution file.\nNo local code is executed, no review is approved, and read/init/save commands allocate no allowance.\n")
+        return {"status": "initialized", "path": str(root), "server": client.server, "owner_handle": owner, "bounty_id": task["id"] if task else None, "policy": result["policy"]}
+    root, metadata = bounty_metadata(args.path)
+    if metadata["server"] != client.server or metadata["owner_handle"] != owner:
+        raise ClientError("This bounty workspace belongs to a different server or account.", "bounty_owner_mismatch")
+    task = metadata.get("bounty")
+    if action == "status":
+        if task is None:
+            return {"status": "local_draft", "policy": metadata["policy"], "path": str(root)}
+        result = client.request(BOUNTY_ROOT + "/" + notebook_id(task["id"]))
+        checked_bounty(result, task["id"])
+        metadata.update(bounty=result["bounty"], policy=result["policy"])
+        save_json(root / BOUNTY_META, metadata)
+        return result
+    if task is not None:
+        checked_bounty({"bounty": task, "policy": metadata["policy"]}, task["id"])
+    context = {"expected_version": task["version"], "terms_sha256": task["terms_sha256"]} if task else {}
+    if action == "save":
+        terms = bounty_terms(load_json(root / "terms.json", 65536))
+        pending = bounty_pending(root)
+        if task and terms == task["terms"] and not (pending and "receipt" not in pending and "rejection" not in pending):
+            return {"status": "unchanged", "bounty_id": task["id"], "version": task["version"]}
+        endpoint = BOUNTY_ROOT + ("/" + task["id"] + "/revisions" if task else "")
+        body = {"terms": terms, **({"expected_version": task["version"]} if task else {})}
+        semantic = {"terms": terms}
+    else:
+        if task is None:
+            raise ClientError("Save the private draft first, or use bounty init --bounty ID for an existing task.")
+        if action in {"request", "boost"}:
+            policy = metadata["policy"]
+            pending = bounty_pending(root)
+            cost = policy["proposal_cost_units" if action == "request" else "boost_cost_units"]
+            if pending and "receipt" not in pending and "rejection" not in pending and pending.get("request", {}).get("action") == action:
+                cost = pending["body"]["confirm_cost_units"]
+            if type(args.confirm_allowance) is not int or args.confirm_allowance != cost:
+                raise ClientError("This operation requires an explicit --confirm-allowance matching the saved policy cost.", "bounty_cost_confirmation")
+            body = {**context, "policy_id": policy["id"], "confirm_cost_units": args.confirm_allowance,
+                    **({"units": 1} if action == "boost" else {})}
+            semantic = {"bounty_id": task["id"], "confirm_cost_units": args.confirm_allowance,
+                        **({"terms_sha256": task["terms_sha256"]} if action == "request" else {})}
+            endpoint = BOUNTY_ROOT + "/" + task["id"] + ("/admission-requests" if action == "request" else "/boosts")
+        elif action == "submit":
+            data = load_json(args.file, 16384)
+            if set(data) != {"contribution_note", "claim", "explanation"} or data["claim"] not in {"partial", "solution"}:
+                raise ClientError("Use the exact fields in contribution.json; distinguish partial progress from a claimed solution.")
+            bounty_pin(data["contribution_note"])
+            if not isinstance(data["explanation"], str) or not 1 <= len(data["explanation"].strip()) <= 6000:
+                raise ClientError("Explain the contribution within 6000 characters.")
+            data["explanation"] = data["explanation"].strip()
+            body = {**context, **data}
+            semantic = {"bounty_id": task["id"], "contribution": data}
+            endpoint = BOUNTY_ROOT + "/" + task["id"] + "/submissions"
+        else:
+            raise ClientError("Unknown bounty action.")
+    return bounty_write(client, args, root, metadata, action, semantic, endpoint, body, owner, scopes)
+
+
 def parser():
     command = argparse.ArgumentParser(description=__doc__)
     def common(target, suppress=False):
@@ -1316,7 +1676,7 @@ def parser():
             item.add_argument("--label", default="Crucible CLI")
             item.add_argument("--no-browser", action="store_true")
             item.add_argument("--notebook", action="store_true", help="Also request access to your own drafts, note writes and publication requests")
-            item.add_argument("--scope", action="append", choices=DEFAULT_SCOPES + NOTEBOOK_SCOPES,
+            item.add_argument("--scope", action="append", choices=DEFAULT_SCOPES + NOTEBOOK_SCOPES + BOUNTY_SCOPES,
                               help="Request only these permissions; repeat for each scope")
         if name == "guide":
             item.add_argument("--resource", help="Read a guidance file named in the model pipeline contract")
@@ -1399,6 +1759,25 @@ def parser():
             item.add_argument("--file", required=True, help="Workspace JSON for import, or note content JSON for create/revise")
         if name in {"import", "create", "revise", "request-publication", "delete", "restore"}:
             item.add_argument("--retry", help="Durable retry file; reuse unchanged after a lost response")
+    bounty = commands.add_parser("bounty", help="Read research tasks, save drafts and explicitly allocate monthly allowance")
+    common(bounty, True)
+    actions = bounty.add_subparsers(dest="bounty_action", required=True)
+    for name in ("list", "board", "show", "allowance", "init", "edit", "save", "request", "boost", "submit", "status"):
+        item = actions.add_parser(name)
+        common(item, True)
+        if name in {"show", "edit"}: item.add_argument("bounty_id", help="Exact bounty UUID")
+        if name in {"init", "edit", "save", "request", "boost", "submit", "status"}: item.add_argument("--path", default=".")
+        if name == "init": item.add_argument("--bounty", help="Read an existing task into a fresh private workspace")
+        if name in {"list", "board"}:
+            item.add_argument("--status", choices=("open", "mine", "past"), default="open")
+            item.add_argument("--sort", choices=("concrete", "open", "points-high", "points-low"), default="concrete")
+            item.add_argument("--offset", type=int, choices=range(0,10001), default=0, metavar="0..10000")
+            item.add_argument("--limit", type=int, choices=range(1, 26), default=6, metavar="1..25")
+        if name in {"save", "request", "boost", "submit"}:
+            item.add_argument("--new-request", action="store_true", help="Deliberately start another completed operation; never abandon an uncertain write")
+        if name in {"request", "boost"}:
+            item.add_argument("--confirm-allowance", type=int, required=True, help="Exact allowance cost displayed in the saved policy; this command allocates it")
+        if name == "submit": item.add_argument("--file", required=True, help="Exact contribution-note pin, claim and explanation JSON")
     return command
 
 
@@ -1410,6 +1789,11 @@ def main(argv=None):
             server = origin(metadata["server"])
             if args.server and origin(args.server) != server:
                 raise ClientError("The selected server differs from this workspace's bound server.")
+        elif args.action == "bounty" and args.bounty_action in {"save", "request", "boost", "submit", "status"}:
+            _, metadata = bounty_metadata(args.path)
+            server = metadata["server"]
+            if args.server and origin(args.server) != server:
+                raise ClientError("The selected server differs from this bounty workspace binding.")
         elif args.action == "proposal" and args.proposal_action in {"validate", "submit"}:
             _, metadata = proposal_metadata(args.path)
             server = metadata["server"]
@@ -1424,6 +1808,7 @@ def main(argv=None):
         elif args.action == "schemes": result = public_reference(client, "/api/schemes")
         elif args.action == "notes": result = notes_command(client, args)
         elif args.action == "notebook": result = notebook_command(client, args)
+        elif args.action == "bounty": result = bounty_command(client, args)
         elif args.action == "init": result = init_workspace(client, args)
         elif args.action == "get": result = workspace(client, download_challenge(client, args.challenge_id), args.path)
         elif args.action == "run": result = run_solver(args)

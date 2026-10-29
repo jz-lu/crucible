@@ -10,6 +10,7 @@ import os
 import platform
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 import sqlite3
 import uuid
@@ -22,10 +23,28 @@ from scripts import beta_transfer as transfer
 
 
 @pytest.fixture
-def source(tmp_path):
+def migration_root(request,tmp_path):
+    """Historical end-to-end transfers use the last pre-identity schema explicitly.
+
+    Current schemas retain their fail-closed allocator boundary; helper tests
+    below exercise only the new bounty rules without overriding that boundary.
+    """
+    if not hasattr(request,"param"):
+        return transfer.ROOT
+    assert request.param == "0024"
+    root=tmp_path/'supported-schema';versions=root/'migrations/versions';versions.mkdir(parents=True)
+    _,chain=transfer.migration_chain()
+    for revision in chain:
+        shutil.copyfile(revision.path,versions/Path(revision.path).name)
+        if revision.revision==request.param:break
+    return root
+
+
+@pytest.fixture
+def source(tmp_path,migration_root):
     path = tmp_path / "synthetic.sqlite3"
     engine = sa.create_engine("sqlite:///" + str(path))
-    head, revisions = transfer.migration_chain()
+    head, revisions = transfer.migration_chain(migration_root)
     with engine.begin() as connection:
         transfer.migrate_fixture(connection, revisions, head)
         # No usable password, email, token, or real user data in these fixtures.
@@ -55,10 +74,15 @@ def source(tmp_path):
 
 
 @pytest.fixture
-def postgres():
+def postgres(request):
     dsn = os.environ.get("CRUCIBLE_BETA_TRANSFER_TEST_DATABASE_URL")
     if not dsn:
         pytest.skip("Explicit local PostgreSQL test DSN not supplied")
+    # Auth/recovery suites import this fixture without the transfer-only schema
+    # selector. They always need the current schema; historical transfer tests
+    # explicitly include migration_root in their own fixture dependency graph.
+    migration_root = (request.getfixturevalue("migration_root")
+                      if "migration_root" in request.fixturenames else transfer.ROOT)
     url = make_url(dsn)
     assert url.host in ("127.0.0.1", "localhost", "::1"), "Tests require an explicitly local disposable cluster"
     admin = transfer.target_engine(dsn, allow_local_test=True)
@@ -67,7 +91,7 @@ def postgres():
         connection.exec_driver_sql("CREATE DATABASE " + transfer.quoted(name))
     engine = transfer.target_engine(url.set(database=name).render_as_string(hide_password=False), allow_local_test=True)
     try:
-        head, revisions = transfer.migration_chain()
+        head, revisions = transfer.migration_chain(migration_root)
         with engine.begin() as connection:
             transfer.migrate_fixture(connection, revisions, head)
         yield engine
@@ -195,11 +219,12 @@ def test_cli_errors_never_render_payload_or_dsn(monkeypatch, capsys, source):
     assert all(secret not in output for secret in ("SECRET", "private payload", "password_hash"))
 
 
-def test_real_pg_transfer_preserves_hashes_history_nulls_large_json_and_timestamps(source, postgres):
-    checked = transfer.transfer(source, postgres)
+@pytest.mark.parametrize("migration_root", ["0024"], indirect=True)
+def test_real_pg_transfer_preserves_hashes_history_nulls_large_json_and_timestamps(source, postgres,migration_root):
+    checked = transfer.transfer(source, postgres,root=migration_root)
     assert checked["status"] == "checked_no_writes"
     assert count(postgres, "users") == 0
-    applied = transfer.transfer(source, postgres, apply=True)
+    applied = transfer.transfer(source, postgres, apply=True,root=migration_root)
     assert applied["destination_verified"]
     assert applied["tables"] == checked["tables"]
     with postgres.connect() as connection:
@@ -210,25 +235,27 @@ def test_real_pg_transfer_preserves_hashes_history_nulls_large_json_and_timestam
         assert connection.exec_driver_sql("SELECT decision, reviewer_id, test_only_self_review FROM notebook_publications").one() == ("approved", "reviewer", False)
         assert connection.exec_driver_sql("SELECT COUNT(*) FROM beta_memberships").scalar_one() == 0
     with pytest.raises(transfer.TransferError, match="contains application data"):
-        transfer.transfer(source, postgres, apply=True)
+        transfer.transfer(source, postgres, apply=True,root=migration_root)
     assert count(postgres, "users") == 2
 
 
-def test_real_pg_partial_failure_rolls_back_every_table(source, postgres, monkeypatch):
+@pytest.mark.parametrize("migration_root", ["0024"], indirect=True)
+def test_real_pg_partial_failure_rolls_back_every_table(source, postgres, monkeypatch,migration_root):
     original = transfer.insert_table
-    def fail_after_users(src, dst, name, info):
-        original(src, dst, name, info)
+    def fail_after_users(src, dst, name, info, **kwargs):
+        original(src, dst, name, info, **kwargs)
         if name == "users":
             raise RuntimeError("synthetic interruption")
     monkeypatch.setattr(transfer, "insert_table", fail_after_users)
     with pytest.raises(RuntimeError):
-        transfer.transfer(source, postgres, apply=True)
+        transfer.transfer(source, postgres, apply=True,root=migration_root)
     with postgres.connect() as connection:
-        for name in transfer.dependency_order(transfer.expected_schema()[1]):
-            assert connection.exec_driver_sql("SELECT COUNT(*) FROM " + transfer.quoted(name)).scalar_one() == 0
+        for name in transfer.dependency_order(transfer.expected_schema(migration_root)[1]):
+            assert connection.exec_driver_sql("SELECT COUNT(*) FROM " + transfer.quoted(name)).scalar_one() == (1 if name == "bounty_policies" else 0)
 
 
-def test_real_pg_verification_mismatch_rolls_back(source, postgres, monkeypatch):
+@pytest.mark.parametrize("migration_root", ["0024"], indirect=True)
+def test_real_pg_verification_mismatch_rolls_back(source, postgres, monkeypatch,migration_root):
     original = transfer.fingerprint
     def changed(connection, name, info):
         result = original(connection, name, info)
@@ -237,38 +264,44 @@ def test_real_pg_verification_mismatch_rolls_back(source, postgres, monkeypatch)
         return result
     monkeypatch.setattr(transfer, "fingerprint", changed)
     with pytest.raises(transfer.TransferError, match="verification failed"):
-        transfer.transfer(source, postgres, apply=True)
+        transfer.transfer(source, postgres, apply=True,root=migration_root)
     assert count(postgres, "users") == 0
 
 
-def test_real_pg_lock_conflict_does_not_copy(source, postgres):
+@pytest.mark.parametrize("migration_root", ["0024"], indirect=True)
+def test_real_pg_lock_conflict_does_not_copy(source, postgres,migration_root):
     with postgres.begin() as connection:
         connection.exec_driver_sql("LOCK TABLE users IN ROW EXCLUSIVE MODE")
         with pytest.raises(sa.exc.DBAPIError):
-            transfer.transfer(source, postgres, apply=True)
+            transfer.transfer(source, postgres, apply=True,root=migration_root)
     assert count(postgres, "users") == 0
 
 
-def test_real_pg_schema_drift_does_not_copy(source, postgres):
+@pytest.mark.parametrize("migration_root", ["0024"], indirect=True)
+def test_real_pg_schema_drift_does_not_copy(source, postgres,migration_root):
     with postgres.begin() as connection:
         connection.exec_driver_sql("ALTER TABLE users ADD COLUMN unexpected TEXT")
     with pytest.raises(transfer.TransferError, match="schema"):
-        transfer.transfer(source, postgres, apply=True)
+        transfer.transfer(source, postgres, apply=True,root=migration_root)
     assert count(postgres, "users") == 0
 
 
 @pytest.fixture
-def all_table_source(tmp_path):
+def all_table_source(tmp_path,migration_root):
     """One synthetic record in every application table, including history."""
     path = tmp_path / "every-table.sqlite3"
-    head, revisions = transfer.migration_chain()
-    _, schema = transfer.expected_schema()
+    head, revisions = transfer.migration_chain(migration_root)
+    _, schema = transfer.expected_schema(migration_root)
     engine = sa.create_engine("sqlite:///" + str(path))
     records = {}
     with engine.begin() as connection:
         transfer.migrate_fixture(connection, revisions, head)
         for name in transfer.dependency_order(schema):
             info = schema[name]
+            if name == "bounty_policies":
+                # A migrated database already contains the exact immutable seed.
+                records[name] = dict(connection.exec_driver_sql("SELECT * FROM bounty_policies").mappings().one())
+                continue
             row = {}
             for column, kind, nullable in info["columns"]:
                 family = kind[0]
@@ -289,7 +322,7 @@ def all_table_source(tmp_path):
                 row["target_kind"] = "scheme_admission"
             for columns, parent, parent_columns in info["foreign_keys"]:
                 for column, parent_column in zip(columns, parent_columns):
-                    row[column] = records[parent][parent_column]
+                    row[column] = None if parent == name else records[parent][parent_column]
             names = list(row)
             statement = sa.text("INSERT INTO " + transfer.quoted(name) + " (" +
                 ", ".join(transfer.quoted(column) for column in names) + ") VALUES (" +
@@ -300,22 +333,24 @@ def all_table_source(tmp_path):
     return path
 
 
-def test_real_pg_all_migrated_tables_are_copied(all_table_source, postgres):
+@pytest.mark.parametrize("migration_root", ["0024"], indirect=True)
+def test_real_pg_all_migrated_tables_are_copied(all_table_source, postgres,migration_root):
     """Even historical/access/operator tables must not silently disappear."""
-    _, schema = transfer.expected_schema()
-    receipt = transfer.transfer(all_table_source, postgres, apply=True)
+    _, schema = transfer.expected_schema(migration_root)
+    receipt = transfer.transfer(all_table_source, postgres, apply=True,root=migration_root)
     assert receipt["application_rows"] == len(schema) - 1
     assert set(receipt["tables"]) == set(schema)
     assert all(table["rows"] == 1 for table in receipt["tables"].values())
 
 
-def test_real_pg_backup_restores_every_table(all_table_source, postgres, tmp_path):
+@pytest.mark.parametrize("migration_root", ["0024"], indirect=True)
+def test_real_pg_backup_restores_every_table(all_table_source, postgres, tmp_path,migration_root):
     """An actual logical backup restores to a separate empty fixture database."""
     dump_binary, restore_binary = shutil.which("pg_dump"), shutil.which("pg_restore")
     if not dump_binary or not restore_binary:
         pytest.skip("pg_dump and pg_restore binaries are required for recovery rehearsal")
-    receipt = transfer.transfer(all_table_source, postgres, apply=True)
-    head, schema = transfer.expected_schema()
+    receipt = transfer.transfer(all_table_source, postgres, apply=True,root=migration_root)
+    head, schema = transfer.expected_schema(migration_root)
     with postgres.connect() as connection:
         server_version = connection.exec_driver_sql("SHOW server_version").scalar_one()
     archive = tmp_path / "synthetic-recovery.dump"
@@ -361,3 +396,143 @@ def test_real_pg_backup_restores_every_table(all_table_source, postgres, tmp_pat
         with admin.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
             connection.exec_driver_sql("DROP DATABASE " + transfer.quoted(restored_name))
         admin.dispose()
+
+
+def journal_fixture():
+    engine = sa.create_engine("sqlite://")
+    with engine.begin() as connection:
+        connection.exec_driver_sql('CREATE TABLE bounty_allowance_events (id VARCHAR(36) NOT NULL PRIMARY KEY, original_event_id VARCHAR(36) REFERENCES bounty_allowance_events(id))')
+        info = transfer.schema_signature(connection)["bounty_allowance_events"]
+    return engine, info
+
+
+def test_only_exact_reviewed_nullable_journal_reference_is_supported():
+    engine, info = journal_fixture()
+    try:
+        assert transfer.dependency_order({"bounty_allowance_events": info}) == ["bounty_allowance_events"]
+        for key, replacement in (("primary_key", ("original_event_id",)),
+                                 ("foreign_keys", [(('original_event_id',), 'bounty_allowance_events', ('other',))]),
+                                 ("columns", [("id", ("string",36), False), ("original_event_id", ("string",36), False)])):
+            with pytest.raises(transfer.TransferError, match="cycles or self references"):
+                transfer.dependency_order({"bounty_allowance_events": {**info, key: replacement}})
+        with pytest.raises(transfer.TransferError, match="cycles or self references"):
+            transfer.dependency_order({"bounty_allowance_events": {**info,"foreign_keys":info['foreign_keys']+[(('user_id',),'users',('id',))]},
+                                       "users": {"foreign_keys":[(('event_id',),'bounty_allowance_events',('id',))]}})
+    finally:engine.dispose()
+
+
+def test_compensation_chain_is_ordered_before_bounded_batch_insert():
+    source, info = journal_fixture(); destination, _ = journal_fixture()
+    try:
+        with source.begin() as connection:
+            # Child rows precede their parents in storage and lexical order.
+            for index in range(501):
+                connection.execute(sa.text('INSERT INTO bounty_allowance_events VALUES (:id,:parent)'),
+                                   {'id':f'event-{index:04d}', 'parent':f'event-{index+1:04d}' if index<500 else None})
+        with source.connect() as src, destination.begin() as dst:
+            dst.exec_driver_sql('PRAGMA foreign_keys=ON')
+            order=transfer.journal_order(src,'bounty_allowance_events',info)
+            assert order[0]=='event-0500' and order[-1]=='event-0000'
+            transfer.insert_table(src,dst,'bounty_allowance_events',info,row_order=order)
+            assert transfer.fingerprint(src,'bounty_allowance_events',info)==transfer.fingerprint(dst,'bounty_allowance_events',info)
+    finally:source.dispose();destination.dispose()
+
+
+@pytest.mark.parametrize('rows', [[('a','a')],[('a','b'),('b','a')],[('a','missing')]])
+def test_journal_cycles_and_missing_parents_are_rejected(rows):
+    engine,info=journal_fixture()
+    try:
+        with engine.begin() as connection:
+            connection.execute(sa.text('INSERT INTO bounty_allowance_events VALUES (:id,:parent)'),
+                               [{'id':key,'parent':parent} for key,parent in rows])
+            with pytest.raises(transfer.TransferError, match='cyclic|missing original'):
+                transfer.journal_order(connection,'bounty_allowance_events',info)
+    finally:engine.dispose()
+
+
+@pytest.fixture
+def seed_pair():
+    head,revisions=transfer.migration_chain();engines=[sa.create_engine('sqlite://') for _ in range(2)]
+    for engine in engines:
+        with engine.begin() as connection:transfer.migrate_fixture(connection,revisions,head)
+    try:
+        with engines[0].connect() as source, engines[1].begin() as destination:
+            yield source,destination,transfer.schema_signature(source)
+    finally:
+        for engine in engines:engine.dispose()
+
+
+def test_exact_reviewed_seed_is_shared_without_copying_or_overwriting(seed_pair):
+    source,destination,schema=seed_pair
+    assert transfer.checked_seed_rows(source,destination,schema)=={'bounty_policies':{(transfer.INITIAL_BOUNTY_POLICY['id'],)}}
+    # Older schemas retain the original empty-target policy, with no invented seed.
+    assert transfer.checked_seed_rows(source,destination,{})=={}
+
+
+@pytest.mark.parametrize('side,change', [('source','configuration'),('destination','created_at'),
+                                        ('source','missing'),('destination','missing'),('destination','extra')])
+def test_changed_missing_or_extra_seed_state_is_refused(seed_pair,side,change):
+    source,destination,schema=seed_pair;connection=source if side=='source' else destination
+    if change=='configuration':connection.exec_driver_sql("UPDATE bounty_policies SET configuration='{}'")
+    elif change=='created_at':connection.exec_driver_sql('UPDATE bounty_policies SET created_at=0')
+    elif change=='missing':connection.exec_driver_sql('DELETE FROM bounty_policies')
+    else:connection.exec_driver_sql("INSERT INTO bounty_policies SELECT 'extra', '2027-01', configuration, created_by, created_at FROM bounty_policies")
+    with pytest.raises(transfer.TransferError,match='reviewed|initial bounty policy'):
+        transfer.checked_seed_rows(source,destination,schema)
+
+
+def test_real_pg_helpers_preserve_policy_history_and_refund_links(all_table_source,postgres):
+    # Component validation only. Full current-schema transfer intentionally
+    # rejects the notebook identity allocator until separately reviewed.
+    with closing(sqlite3.connect(all_table_source)) as connection:
+        connection.execute("INSERT INTO bounty_policies SELECT 'future-policy', '2027-01', configuration, created_by, created_at FROM bounty_policies")
+        connection.execute('UPDATE bounty_allowance_events SET task_id=NULL')
+        original=connection.execute('SELECT id FROM bounty_allowance_events').fetchone()[0]
+        connection.execute("""INSERT INTO bounty_allowance_events
+            SELECT 'a-refund',user_id,policy_id,month,'refund','refund-fixture',wallet_version+1,
+                   -available_delta,units,reward_points,task_id,task_sequence,terms_sha256,id,created_at+1
+            FROM bounty_allowance_events WHERE id=?""",(original,))
+        connection.commit()
+    _,schema=transfer.expected_schema()
+    with transfer.sqlite_snapshot(all_table_source) as source, postgres.begin() as destination:
+        seeds=transfer.checked_seed_rows(source,destination,schema)
+        assert count(postgres,'bounty_policies')==1
+        transfer.insert_table(source,destination,'users',schema['users'])
+        transfer.insert_table(source,destination,'bounty_policies',schema['bounty_policies'],skip_primary_keys=seeds['bounty_policies'])
+        order=transfer.journal_order(source,'bounty_allowance_events',schema['bounty_allowance_events'])
+        transfer.insert_table(source,destination,'bounty_allowance_events',schema['bounty_allowance_events'],row_order=order)
+        for name in ('users','bounty_policies','bounty_allowance_events'):
+            assert transfer.fingerprint(source,name,schema[name])==transfer.fingerprint(destination,name,schema[name])
+    assert count(postgres,'bounty_policies')==2
+    with postgres.connect() as connection:
+        assert connection.exec_driver_sql("SELECT original_event_id FROM bounty_allowance_events WHERE id='a-refund'").scalar_one()==original
+
+
+@pytest.mark.parametrize('side', ['source','destination'])
+def test_real_pg_seed_helper_rejects_changed_policy_without_writes(source,postgres,side):
+    if side=='source':
+        with closing(sqlite3.connect(source)) as connection:
+            connection.execute('UPDATE bounty_policies SET created_at=0');connection.commit()
+    else:
+        with postgres.begin() as connection:connection.exec_driver_sql('UPDATE bounty_policies SET created_at=0')
+    _,schema=transfer.expected_schema()
+    with transfer.sqlite_snapshot(source) as snapshot, postgres.begin() as destination:
+        with pytest.raises(transfer.TransferError,match='initial bounty policy'):
+            transfer.checked_seed_rows(snapshot,destination,schema)
+    assert count(postgres,'users')==0
+    assert count(postgres,'bounty_policies')==1
+
+
+def test_current_schema_identity_allocator_remains_explicitly_unsupported(source,postgres):
+    with pytest.raises(transfer.TransferError,match='Generated columns or sequences need a reviewed transfer update'):
+        transfer.transfer(source,postgres,apply=True)
+    assert count(postgres,'users')==0
+    assert count(postgres,'bounty_policies')==1
+
+
+def test_schema_discovery_never_imports_application_or_native_registry():
+    result=subprocess.run([sys.executable,'-c',
+        "import sys; from scripts import beta_transfer; beta_transfer.expected_schema(); "
+        "assert not any(name == 'crucible' or name.startswith('crucible.') for name in sys.modules)"],
+        cwd=transfer.ROOT,capture_output=True,timeout=30)
+    assert result.returncode==0, 'Schema-only transfer discovery imported application code or failed.'

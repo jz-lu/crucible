@@ -4036,27 +4036,31 @@ dialog.assumption-reader { width: min(760px, calc(100% - 40px)); padding: 0; bor
 .nb-heading-actions{display:flex;align-items:center;flex-shrink:0;gap:18px;flex-wrap:wrap}
 
 /* These fixed public controls describe the route, never account data. */
-html:is([data-pending-page=notebook-notes],[data-pending-page=notebook-map],[data-pending-page=notebook-timeline]) .access-workspace[aria-busy=true] {
+html:is([data-pending-page=notebook-notes],[data-pending-page=notebook-map],[data-pending-page=notebook-timeline],[data-pending-page=notebook-bounties]) .access-workspace[aria-busy=true] {
   width:100%;max-width:none;margin:0;padding:0;
 }
-html:is([data-pending-page=notebook-notes],[data-pending-page=notebook-map],[data-pending-page=notebook-timeline]) .access-workspace[aria-busy=true] > .access-heading {
+html:is([data-pending-page=notebook-notes],[data-pending-page=notebook-map],[data-pending-page=notebook-timeline],[data-pending-page=notebook-bounties]) .access-workspace[aria-busy=true] > .access-heading {
   display:none;
 }
-html:is([data-pending-page=notebook-notes],[data-pending-page=notebook-map],[data-pending-page=notebook-timeline]) [data-pending-layout=notebook],
+html:is([data-pending-page=notebook-notes],[data-pending-page=notebook-map],[data-pending-page=notebook-timeline],[data-pending-page=notebook-bounties]) [data-pending-layout=notebook],
 .notebook-frame[data-notebook-view] { display:block; }
 .notebook-frame [data-notebook-panel] { display:none; }
 html[data-pending-page=notebook-notes] [data-pending-layout=notebook] [data-notebook-panel=notes],
 html[data-pending-page=notebook-map] [data-pending-layout=notebook] [data-notebook-panel=map],
 html[data-pending-page=notebook-timeline] [data-pending-layout=notebook] [data-notebook-panel=timeline],
+html[data-pending-page=notebook-bounties] [data-pending-layout=notebook] [data-notebook-panel=bounties],
 .notebook-frame[data-notebook-view=notes] [data-notebook-panel=notes],
 .notebook-frame[data-notebook-view=map] [data-notebook-panel=map],
-.notebook-frame[data-notebook-view=timeline] [data-notebook-panel=timeline] { display:block; }
+.notebook-frame[data-notebook-view=timeline] [data-notebook-panel=timeline],
+.notebook-frame[data-notebook-view=bounties] [data-notebook-panel=bounties] { display:block; }
 html[data-pending-page=notebook-notes] [data-pending-layout=notebook] [data-notebook-tab=notes],
 html[data-pending-page=notebook-map] [data-pending-layout=notebook] [data-notebook-tab=map],
 html[data-pending-page=notebook-timeline] [data-pending-layout=notebook] [data-notebook-tab=timeline],
+html[data-pending-page=notebook-bounties] [data-pending-layout=notebook] [data-notebook-tab=bounties],
 .notebook-frame[data-notebook-view=notes] [data-notebook-tab=notes],
 .notebook-frame[data-notebook-view=map] [data-notebook-tab=map],
-.notebook-frame[data-notebook-view=timeline] [data-notebook-tab=timeline] { color:var(--ink);border-bottom-color:var(--ink); }
+.notebook-frame[data-notebook-view=timeline] [data-notebook-tab=timeline],
+.notebook-frame[data-notebook-view=bounties] [data-notebook-tab=bounties] { color:var(--ink);border-bottom-color:var(--ink); }
 .notebook-frame .nb-view:disabled { opacity:1;cursor:default; }
 .notebook-frame .nb-heading-actions { visibility:hidden; }
 .notebook-frame input:disabled,.notebook-frame select:disabled { opacity:1;color:var(--text);-webkit-text-fill-color:var(--text); }
@@ -4095,3 +4099,21 @@ html[data-pending-page=notebook-timeline] [data-pending-layout=notebook] [data-n
 .resource-chart > details > summary { cursor: pointer; }
 .resource-method { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 18rem; overflow: auto; padding: .8rem; font-size: .7rem; background: #edf2f8; border-radius: .4rem; }
 .resource-evidence-links { display: flex; flex-direction: column; gap: .4rem; font-size: .8rem; }
+
+/* Public bounty frame is geometry only; task records remain authenticated. */
+.nb-bounties-panel{max-width:1050px}
+.bty-shell-frame{padding:5px 0 24px}
+.bty-shell-heading{display:flex;justify-content:space-between;align-items:center;gap:20px;min-height:42px;margin:0 0 23px}
+.bty-shell-actions{display:flex;align-items:center;flex-wrap:wrap;justify-content:flex-end;gap:12px}
+.bty-shell-actions>span{width:140px;height:42px}
+.bty-shell-heading h2{font:650 29px/1.2 var(--display);margin:0;color:var(--ink)}
+.bty-shell-toolbar{height:36px;margin:0 0 16px}
+.bty-shell-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.bty-shell-grid>span{min-height:280px;border:1px solid var(--line);border-radius:7px;background:var(--surface)}
+@media(max-width:950px){.bty-shell-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.bty-shell-heading{align-items:flex-start;flex-wrap:wrap}.bty-shell-actions{justify-content:flex-start}.bty-shell-heading h2{font-size:27px}.bty-shell-grid{grid-template-columns:1fr;gap:13px}.nb-root .nb-visualization-tabs{flex-wrap:wrap;gap:8px 14px}}
+
+.bty-detail-placeholder{min-height:400px;max-width:820px;margin:5px auto 24px;border:1px solid var(--line);border-radius:7px;background:var(--surface)}
+
+@media(max-width:650px){.nb-root .nb-views{flex-wrap:wrap;gap:0 8px}.nb-root .nb-visualizations,.nb-root .nb-visualization-tabs{display:contents}.nb-root .nb-view-label,.nb-root .nb-visualizations::before{display:none}}
+@media(max-width:480px){.nb-root .nb-views{gap:0 6px}.nb-root .nb-view{font-size:12px;gap:4px}.nb-root .nb-view svg{width:14px;height:14px}}

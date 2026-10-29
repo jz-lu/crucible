@@ -24,6 +24,12 @@ PUBLIC = {
 # Explicit paths from the existing application. This is deliberately not a
 # prefix exemption: adding a route requires choosing its audience here.
 MEMBER_PATHS = {
+    "/api/bounties", "/api/bounties/review-queue", "/api/me/bounty-allowance",
+    "/api/bounties/{task_id}", "/api/bounties/{task_id}/revisions",
+    "/api/bounties/{task_id}/admission-requests", "/api/bounties/{task_id}/admission-decisions",
+    "/api/bounties/{task_id}/withdrawals", "/api/bounties/{task_id}/cancellations",
+    "/api/bounties/{task_id}/boosts", "/api/bounties/{task_id}/submissions",
+    "/api/bounties/{task_id}/submissions/{submission_id}/decisions",
     "/api/protocol/resources", "/api/resource-publications/{publication_id}/download",
     "/api/agent/pipeline", "/api/agent/guidance/{resource_name}",
     "/api/agent/notes", "/api/agent/notes/{note_id}", "/api/agent/notes/{note_id}/rating",

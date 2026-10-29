@@ -123,7 +123,7 @@ test('public route descriptions select bounded known layouts without querying ac
   const examples = [
     ['', 'catalogue', 'KEM Schemes'], ['#', 'catalogue', 'KEM Schemes'],
     ['#challenge', 'catalogue', 'KEM Schemes'], ['#people', 'people', 'Leaderboard'],
-    ['#notebook', 'notebook-notes', 'Research notebook'], ['#notebook?view=timeline', 'notebook-timeline', 'Research notebook'],
+    ['#notebook', 'notebook-notes', 'Research notebook'], ['#notebook?view=bounties', 'notebook-bounties', 'Research notebook'], ['#notebook?view=guide', 'notebook-bounties', 'Research notebook'], ['#notebook?view=timeline', 'notebook-timeline', 'Research notebook'],
     ['#notebook?view=map', 'notebook-map', 'Research notebook'], ['#notebook?view=unknown', 'notebook-notes', 'Research notebook'],
     ['#notebook?filter=mine&tag=private-looking-label', 'notebook-notes', 'Research notebook'],
     ['#notebook?note=private-id', 'list', 'Research notebook'],
@@ -305,8 +305,8 @@ test('unexecuted HTML starts neutral with inert decorative variants and no fabri
       assert.ok(controls.every(control => control.disabled), 'Every pre-access control is disabled');
     } else assert.equal(controls.length, 0, 'Other decorative layouts remain noninteractive');
   }
-  assert.deepEqual(frame.querySelectorAll('[data-notebook-tab]').map(node => node.getAttribute('data-notebook-tab')), ['notes', 'map', 'timeline']);
-  assert.deepEqual(frame.querySelectorAll('[data-notebook-panel]').map(node => node.getAttribute('data-notebook-panel')), ['notes', 'map', 'timeline']);
+  assert.deepEqual(frame.querySelectorAll('[data-notebook-tab]').map(node => node.getAttribute('data-notebook-tab')), ['notes', 'map', 'bounties', 'timeline']);
+  assert.deepEqual(frame.querySelectorAll('[data-notebook-panel]').map(node => node.getAttribute('data-notebook-panel')), ['notes', 'map', 'bounties', 'timeline']);
   assert.equal(frame.querySelector('.nb-count').textContent, '');
   assert.equal(frame.querySelector('.nb-timeline-total').textContent, '');
   assert.equal(frame.querySelector('.nb-timeline-plot').querySelectorAll('svg').length, 0);

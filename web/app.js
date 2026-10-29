@@ -214,6 +214,7 @@ function browseWarmJobs() {
   add('history', () => warmRead('history:' + (state.catalogueRevision || ''), '/api/me/submissions', data =>
     Array.isArray(data.submissions) && data.submissions.every(item => typeof item?.id === 'string' && item.id) ? {submissions: data.submissions} : null));
   for (const scheme of ordered.slice(1)) releaseJobs(scheme);
+  add('notebook:bounties', () => notebookWorkspace?.warm?.('bounties'));
   return jobs;
 }
 async function runBrowseWarmup() {
@@ -876,7 +877,7 @@ function renderReviewPage(query) {
   $('#review-account-back').href = state.user ? personRoute(state.user.handle) : '#people';
   $('#review-navigation').hidden = !allowed;
   $('#review-access-message').hidden = allowed;
-  for (const section of ['publication', 'schemes', 'research']) {
+  for (const section of ['publication', 'schemes', 'research', 'bounties']) {
     const link = $('#review-nav-' + section), selected = state.reviewSection === section;
     if (selected) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
   }
@@ -894,7 +895,7 @@ function renderReviewPage(query) {
     if (state.reviewSection === 'publication') {
       params.set('review', '1');
       for (const key of ['research', 'research_review', 'research_request']) params.delete(key);
-    } else {
+    } else if (state.reviewSection === 'research') {
       params.set('research', '1'); params.set('research_review', '1');
       for (const key of ['review', 'note', 'revision']) params.delete(key);
     }
@@ -960,6 +961,7 @@ function getNotebookWorkspace(reviewing = false) {
   const options = {navigate, api: reviewing ? api : notebookAPI,
     account: () => hasAccess() && (!reviewing || state.canReviewProposals) ? state.user : null,
     prepareMapCatalogue: loadMapCatalogue,
+    prepareBounties: () => Promise.all([loadNotebookAsset('/notebook/bounties.css', true), loadNotebookAsset('/notebook/bounties-api.js'), loadNotebookAsset('/notebook/bounties.js')]),
     currentReleases: () => hasAccess() ? (state.catalogueLoaded ? state.schemes : mapReleases || []) : [],
     canWarm: () => browseWarmAllowed() && !protectedRequests.size &&
       ![...document.querySelectorAll('dialog')].some(dialog => dialog.open) && !state.issueBusy && !state.submitBusy,
@@ -973,7 +975,8 @@ function notebookPendingFrame(params) {
   const frame = $('#notebook-frame-template').cloneNode(true);
   frame.removeAttribute('id'); frame.removeAttribute('data-pending-layout');
   frame.classList.remove('pending-page-preview'); frame.classList.add('notebook-shell-preview');
-  const view = ['map', 'timeline'].includes(params.get('view')) ? params.get('view') : 'notes';
+  const requestedView = params.get('view') === 'guide' ? 'bounties' : params.get('view');
+  const view = ['map', 'timeline', 'bounties'].includes(requestedView) ? requestedView : 'notes';
   frame.setAttribute('data-notebook-view', view);
   for (const tab of frame.querySelectorAll('[data-notebook-tab]')) {
     if (tab.getAttribute('data-notebook-tab') === view) tab.setAttribute('aria-current', 'page');
@@ -1005,7 +1008,7 @@ async function showNotebook(query, reviewing = false) {
   }
   if (!window.CrucibleNotebook || (!notebookAssetsReady && notebookAssetLoads.size)) {
     if (reviewing) setLoading(target, 'Loading review workspace…');
-    else if (params.has('note') || params.has('research_request') || params.has('research')) {
+    else if (params.has('note') || params.has('research_request') || params.has('research') || params.has('bounty') || params.get('compose') === 'bounty') {
       // A reader's private title and body remain unknown until its own read.
       const shell = node('div', undefined, 'notebook-shell-preview');
       shell.append(node('h1', 'Research notebook'));
@@ -1124,7 +1127,7 @@ function applyRoute(focus = false) {
   const reviewParams = new URLSearchParams(query);
   if (path === '#reviews') {
     const section = reviewParams.get('section');
-    state.reviewSection = ['publication', 'schemes', 'research'].includes(section) ? section : 'publication';
+    state.reviewSection = ['publication', 'schemes', 'research', 'bounties'].includes(section) ? section : 'publication';
     if (section !== state.reviewSection) { reviewParams.set('section', state.reviewSection); query = reviewParams.toString(); window.history.replaceState(null, '', '#reviews?' + query); }
   }
   let scheme, profile, handle, view = 'leaderboard';
@@ -1814,7 +1817,10 @@ const AGENT_SCOPE_LABELS = {
   'notes:rate': 'Rate other authors’ notes on your behalf, influencing reading priorities and author points',
   'notebook:read': 'Read and export your own notebook, including private drafts and feedback',
   'notebook:write': 'Create, import and revise your own private notes; delete and restore unsubmitted drafts',
-  'notebook:publish': 'Request publication review of your exact saved note revisions'
+  'notebook:publish': 'Request publication review of your exact saved note revisions',
+  'bounties:read': 'Read available bounty briefs, your activity and monthly allowance',
+  'bounties:write': 'Save and revise private bounty drafts, withdraw or cancel your tasks, and link exact contribution notes',
+  'bounties:spend': 'Use your monthly bounty allowance to request admission or boost existing bounties'
 };
 function agentScopeList(scopes) {
   const list = node('ul', undefined, 'agent-scope-list');
@@ -2234,12 +2240,13 @@ function personScoreBreakdown(person) {
   summary.setAttribute('aria-label', 'Points breakdown');
   const panel = node('div', undefined, 'person-score-help-panel');
   const values = node('dl', undefined, 'person-score-parts');
-  for (const [label, key] of [['Personal progress', 'progress'], ['First-record bonus', 'early_recovery'], ['Accepted proposals', 'scheme_contributions'], ['Research notes', 'note_contributions']]) {
+  for (const [label, key] of [['Record breakthroughs', 'early_recovery'], ['Admitted schemes', 'scheme_contributions'], ['Research bounties', 'bounty_points'], ['Research notes', 'note_contributions']]) {
     const part = node('div'); part.append(node('dt', label), node('dd', peopleNumber(person.score_breakdown[key]))); values.append(part);
   }
   panel.append(values);
-  panel.append(node('p', 'Each eligible scheme offers up to 500 personal-progress points and 2,000 points for your best first record. Configuration weights are fixed by the points policy; equal points do not imply equal attack difficulty. Each explicitly admitted new scheme earns 1,000 points.'));
-  panel.append(node('p', 'Intermediate stages and repeated solves do not accumulate extra points. Archived releases keep their records and are labelled when they are not scored. This is the provisional points policy.'));
+  panel.append(node('p', 'Your first advance of an eligible scheme’s recovery record earns 100 points, once per person per scheme. Ordinary progress and later advances remain recorded without additional points.'));
+  panel.append(node('p', 'A new admitted scheme earns 2,000 points plus 100 per completed active week. Withdrawal or retirement stops future accrual and preserves earned points. Bounties award their recorded reward after poster and independent reviewer approval.'));
+  panel.append(node('p', 'Archived releases retain their records and are labelled when they are not scored. Points recognize contributions; they do not compare attack difficulty. This policy is provisional.'));
   panel.append(node('p', 'Research-note contributions earn 1 or 2 points per supporting account through agent ratings. Changed or removed ratings update that credit. These points do not certify a claim or admit a scheme.'));
   breakdown.append(summary, panel);
   breakdown.addEventListener('keydown', event => {

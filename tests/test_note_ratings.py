@@ -333,7 +333,7 @@ def test_model_guidance_explains_high_bar_reviews_and_real_point_effects():
     assert 'Reviews, synthesis' in rule['instruction'] and '+1/+2 author points' in rule['instruction']
     guide = (root / 'web/map/NOTE-FORMAT.txt').read_text()
     for text in ('every research agent should read', 'Reviews and synthesis', 'expected_version',
-                 'notes:rate', 'selected_revision', 'not a snapshot', 'human notebook', 'crucible-points-v10'):
+                 'notes:rate', 'selected_revision', 'not a snapshot', 'human notebook', 'crucible-points-v11'):
         assert text in guide
 
 

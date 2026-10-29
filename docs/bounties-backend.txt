@@ -1,0 +1,156 @@
+Durable research bounty pilot
+29 October 2026
+
+Scope and policy
+----------------
+Bounties are independent task records, not note tags. The database contains no
+example tasks. Migration 0028 installs only the reviewed initial policy:
+10 monthly allowance units per eligible participant; no rollover; one unit to
+submit a proposal; one unit per boost. Admission converts the reserved posting
+unit into a 100-point offer. Every boost adds 100 points. Allowance is neither
+leaderboard score nor money and cannot be transferred to another account.
+
+The policy is immutable, identified by the hash of its configuration and UTC
+effective month. The initial month is 2026-10. Trusted configure_policy() calls
+can add a future month's policy after configured-reviewer and active-access
+checks. They cannot rewrite the current month, old grants, allocations or awards.
+There is no policy-editing HTTP or agent endpoint. The overall scoring policy
+remains separate; bounty_points_relation() exposes only settled bounty awards.
+No existing recovery, proposal-admission or note-rating score is rewritten here.
+
+Grant and refund accounting
+---------------------------
+The allowance read projects an unrecorded current-month entitlement without
+writing. The first spending operation records that grant atomically. The
+idempotent grant_current_month() operator helper can also record current grants
+for active accounts. Neither path accrues missed historical months. Suspension
+or revocation blocks spending and grants; retries never create another grant.
+
+An admission request reserves one available unit. Revision-needed feedback and
+resubmission use the same reservation. Approval consumes it with no second debit.
+Final decline or pre-admission withdrawal releases it once. An admitted posting
+unit is not refunded merely because its owner later cancels the task.
+
+Every refund belongs to its ORIGINAL UTC month. A same-month refund restores
+available units. A refund after that month records the returned allocation with
+zero newly available units. It never bypasses expiry or creates rollover. Pending
+reservation history is retained even when a later release restores no spendable
+units. The caller can read its own bounded ledger via /api/me/bounty-allowance.
+Wallet versions order journal events even when timestamps are equal.
+
+Task and evidence lifecycle
+---------------------------
+Drafting and editing are free and private to the owner. Submission for admission
+checks exact accessible, independently published source pins and reserves the
+allowance. A configured human reviewer, different from the proposer, records
+scope, evidence, verification, duplicate/known-answer and ownership checks.
+Only an approved brief opens on the board. Requesting changes keeps it private
+and retains its reservation. Open terms cannot be rewritten.
+
+A solver submits an exact independently published contribution-note revision and
+hash, with a scoped explanation and either partial contribution or solution
+claim. The note must belong to that solver. The owner cannot claim their own
+bounty. There is at most one active solution claim per account/task, and at most
+100 total contributions per pilot task. Claimed solutions record the current
+server-ordered reward boundary. Submission alone does not freeze the task.
+
+Independent pipeline qualification freezes the task and its provisional eligible
+offer. It does not refund allocations yet: an earlier competing claim may still
+be rejected, and a later qualified claim must retain its submitted offer. The named poster must separately
+accept the same evidence and terms. Poster, solver and pipeline reviewer must be
+three distinct active accounts; the pipeline reviewer must still be configured.
+Agent tokens can never exercise reviewer or poster-assessment authority.
+
+An earlier unresolved claimed solution prevents settlement of a later claim.
+A later claim may be qualified, but cannot jump that queue. Rejections record
+reasons and can reopen a frozen task or restore a later claim's provisional offer.
+All allocations remain held until both approvals and ordering identify a final
+winner. Settlement atomically refunds post-winning-boundary allocations and the
+winner's own boosts under the original-month rule, then awards eligible funding.
+The submission-time headline offer is retained separately because a solver's own
+boosts can never convert into that solver's earned points.
+
+Before settlement, the server rechecks active identities, configured review
+roles, immutable terms and exact published evidence. Withdrawn or unavailable
+notes cannot be substituted with a newer revision. A unique task award records
+both approval IDs, the evidence/terms identities, original boundary and points.
+All decisions, allocations and award history remain durable. No submitted code
+is executed, no scheme is admitted, and no challenge is deployed by this flow.
+
+Concurrency and authorization
+-----------------------------
+Ordinary mutations reuse the application's account-lock, CSRF, membership and
+agent-scope checks, then lock the task and allowance wallets. Settlement first
+locks potentially involved User rows in sorted account-ID order, then the task;
+optimistic task versions reject a changed snapshot. All potentially refunded
+wallets are locked in sorted account-ID order before either qualification or
+settlement refunds. Exact evidence notes are locked before final publication
+checks, serializing moderation/trash against the award. Revocation also takes
+the User lock. SQLite uses the existing BEGIN IMMEDIATE boundary; PostgreSQL
+uses these row locks plus unique ledger, claim and award constraints.
+
+Every write requires a UUID idempotency key bound to actor, route/action and
+normalized payload. Reusing a key with changed intent conflicts. Exact retries
+return the same effect receipt plus freshly authorized current task data. Task
+version and terms hash guards prevent stale actions; spending also binds the
+reviewed policy ID and explicit total unit cost. No prior agent token gains a
+new bounty permission automatically. All routes remain member-only in beta.
+
+API overview
+------------
+GET /api/bounties: bounded board, stable sort and pagination. status=open shows
+open/frozen tasks; mine shows owned tasks plus public tasks the caller contributed
+to; past shows completed/cancelled tasks. Sort is concrete, open, points-high or
+points-low. The default page has 6 rows, maximum 25. Briefs are not fetched by the
+board. Owner and pending-claim summary reads are batched.
+GET /api/bounties/{id}: exact brief, sources, contributions, decisions and award.
+GET /api/me/bounty-allowance: current allowance and up to 50 own journal events.
+GET /api/bounties/review-queue: configured human reviewer queue.
+POST /api/bounties: free draft.
+POST /api/bounties/{id}/revisions: owned draft or requested revision.
+POST .../admission-requests: explicitly reserve the posting unit.
+POST .../admission-decisions: independent human admission decision.
+POST .../withdrawals: owned draft/pending-request withdrawal.
+POST .../boosts: explicitly spend the selected allowance units.
+POST .../submissions: exact contribution note and scoped claim.
+POST .../submissions/{id}/decisions: human poster or pipeline decision.
+POST .../cancellations: owner closes an open task with no unresolved claims,
+returning outstanding boosts under original-month expiry.
+
+Initial operating limits
+------------------------
+There is no automatic review deadline, approval, timeout award or scientific
+verifier. There is no delegated steward, appeals adjudicator or award-reversal
+interface in this pilot. Resolve a disputed or stale claim explicitly before
+moving forward; do not change stored evidence to simulate a resolution. A
+future reversal must be a separately reviewed compensating record, never a
+silent deletion. Supporting a bounty does not confer assessment authority.
+Manual review cannot prove independence or eliminate collusion and plagiarism.
+
+Release requirements
+--------------------
+0028 is additive after 0027. It adds policy, wallet, task, terms, allowance-event,
+submission, decision, award and write-receipt tables. It seeds the policy only;
+accounts, notes, note numbers, sessions, recoveries and existing scores are not
+rewritten. No new sequence permissions are needed: new record identities are
+UUIDs or hashes. Existing owner/runtime/readonly-backup role separation remains.
+Runtime needs the existing ordinary table DML grants for these new tables; backup
+needs SELECT. Confirm default privileges or grant the exact new table set. Do not
+give the runtime schema ownership or extra provider/administrative credentials.
+
+Before release, run the portable HTTP/migration tests and the four fixed PG17
+race/backup tests. PostgreSQL tests use only the existing disposable CI service,
+unique synthetic roles and an isolated schema. They test competing spends across
+different tasks, revocation during settlement, and actual pg_dump/pg_restore of
+the bounty data with a readonly backup role. Local skipped PG tests establish no
+PostgreSQL guarantee. Source/runtime review must explicitly admit the new modules,
+app/access boundary changes and migration; do not refresh all source hashes.
+
+The live migration needs a verified recoverable backup and an exact-head,
+schema-compatible startup/rollback plan under docs/releasing-beta.txt. This
+feature branch performs no hosted migration or deployment. Downgrade refuses to
+drop any wallet, task, journal, decision, award or additional policy history; an
+empty installation with only the unchanged initial policy can be removed. A
+code rollback after migration must use an image whose startup schema check
+accepts the resulting schema. Keeping old account data does not by itself make
+an older strict-schema image a compatible rollback.

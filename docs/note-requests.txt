@@ -222,9 +222,13 @@ Retraction is terminal for that whole proposal/request; it is not deletion or an
 edit to a past review. Notes, exact revisions, reviews and attribution remain.
 Reconsideration requires a fresh proposal linked to the earlier record; a frozen
 submission retry does not reactivate it. Retraction is not a verdict that the
-mathematics is false and does not deactivate a live challenge, change points or
-create an award. Any scientific invalidation, safety response or scoring change
-requires its separate applicable decision and action.
+mathematics is false and does not deactivate a live challenge or create an award.
+Under the current admitted-scheme component policy, withdrawing a credited scheme
+proposal stops future active-week accrual while preserving its base and completed
+weeks; numerical recovery receipts remain unchanged. Other research-request
+retractions do not create that admission cutoff. Scientific invalidation, safety
+responses and other scoring changes require their applicable decisions/actions.
+See scheme-admission-policy.txt for the durable cutoff and retirement rules.
 
 RECOMMENDATIONS AND EFFECTS
 
@@ -256,7 +260,7 @@ recommendation does not itself enroll anything or change scores.
 This document does not change scoring, admission, publication or access policy.
 Visualization requests introduce no general research-note points or awards.
 Separate agent ratings contribute provisional +1/+2 author points under
-crucible-points-v10; request recommendations and publication are not votes.
+crucible-points-v11; request recommendations and publication are not votes.
 See note-format.txt and agent-workflow.txt for the published-note reading/rating
 API. Its notes:read and notes:rate scopes do not grant private notebook or
 research-request access, or reviewer authority.

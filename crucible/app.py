@@ -17,7 +17,7 @@ from sqlalchemy.orm import defer
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.concurrency import run_in_threadpool
 
-from . import beta_access, generation, generation_policy, implementation_builds, standard_schemes, kem, machine_auth, method_sources, notebook, people, protocol_proposals, registry, research, research_reviews
+from . import bounties, beta_access, generation, generation_policy, implementation_builds, standard_schemes, kem, machine_auth, method_sources, notebook, people, protocol_proposals, registry, research, research_reviews
 from .config import ROOT, Settings, load_settings
 from .db import AdapterVersion, Base, Challenge, Database, LoginSession, Method, ProfileIncident, RateBucket, Submission, User
 from .schemas import Credentials, NewChallenge, NewMethod, NewSubmission
@@ -1226,6 +1226,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     research.register_routes(app, db, settings, clock, user_for, throttle)
     protocol_proposals.register_routes(app, db, settings, clock, user_for, throttle)
     notebook.register_routes(app, db, settings, clock, user_for, throttle)
+    bounties.register_routes(app, db, settings, clock, user_for, throttle)
     research_reviews.register_routes(app, db, settings, clock, user_for, throttle)
     beta_access.register_routes(app, db, settings, clock, account_for, throttle)
     github_auth.register_routes(app, db, settings, clock, identity, issue_session, session_payload, password_operation, throttle)

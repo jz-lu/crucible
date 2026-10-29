@@ -79,6 +79,9 @@ def test_compact_people_preserve_ranking_and_real_components_without_unused_quer
     registered_receipt(app, bob, registry.code_hqc_v3, 1, 1)
     client = TestClient(app)
     full = client.get("/api/people").json()
+    assert [(row["handle"], row["points"], row["rank"]) for row in full["people"]] == [
+        ("alice", 100, 1), ("bob", 0, 2),
+    ]
     queries = []
     def capture(_, __, statement, ___, ____, _____):
         if statement.lstrip().lower().startswith(("select", "with")):
@@ -93,10 +96,27 @@ def test_compact_people_preserve_ranking_and_real_components_without_unused_quer
     omitted = {"records", "correct_submission_count", "schemes_recovered"}
     assert compact["people"] == [{k: v for k, v in row.items() if k not in omitted} for row in full["people"]]
     assert all(not omitted.intersection(row) for row in compact["people"])
-    # These are live aggregates, not a cached scoreboard.
+    # Bob's first genuine frontier advance earns the same flat award as Alice's.
+    # These are live aggregates, not a cached scoreboard or stage-weighted points.
     registered_receipt(app, bob, registry.code_hqc_v3, 5, 2)
     updated = client.get("/api/people?include_records=false").json()["people"]
-    assert updated[0]["handle"] == "bob" and updated[0]["points"] == 185
+    assert [(row["handle"], row["points"], row["rank"]) for row in updated] == [
+        ("alice", 100, 1), ("bob", 100, 1),
+    ]
+    assert all(row["score_breakdown"] == {
+        "progress": 0, "early_recovery": 100, "scheme_contributions": 0,
+        "note_contributions": 0, "bounty_points": 0,
+    } for row in updated)
+    # A first advance in a different scheme updates both the score and ranking.
+    registered_receipt(app, bob, registry.adapter_for("teaching-dh-kem"), 1, 3)
+    ranked = client.get("/api/people?include_records=false").json()["people"]
+    assert [(row["handle"], row["points"], row["rank"]) for row in ranked] == [
+        ("bob", 200, 1), ("alice", 100, 2),
+    ]
+    assert ranked[0]["score_breakdown"] == {
+        "progress": 0, "early_recovery": 200, "scheme_contributions": 0,
+        "note_contributions": 0, "bounty_points": 0,
+    }
 
 
 def test_modern_profile_skips_hidden_milestones_and_reuses_family_score_query(current_system, monkeypatch):

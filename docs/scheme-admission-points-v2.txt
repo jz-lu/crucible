@@ -1,0 +1,61 @@
+CRUCIBLE — ADMITTED-SCHEME RECOGNITION v2
+Decision date: 29 October 2026
+Component policy: crucible-scheme-admission-points-v2
+
+An actual SchemeAdmissionCredit earns its author 2,000 points. A merely approved
+proposal earns nothing. Existing admission evidence, exact source pins, family
+uniqueness and independent review requirements are unchanged.
+
+Each credited family earns 100 further points per completed active week, measured
+from its original Crucible admission timestamp, not its age in the literature.
+A week means 604,800 elapsed seconds. No partial weeks are awarded or rounded up.
+For one fixed as_of timestamp across the score query:
+
+  cutoff = min(as_of, explicit family retirement, author proposal withdrawal)
+  complete_weeks = floor(max(0, cutoff - admission_time) / 604800)
+  points = 2000 + 100 * complete_weeks
+
+A future-dated admission contributes nothing before its timestamp. Ordinary
+reads compute totals from durable events: no cron, repeated awards, reset on
+viewing, or weekly mutable balance is needed. A family withdrawal/retirement
+preserves the base and completed weeks, stopping future accrual. Independent
+note ratings and numerical recovery weights are unaffected by this component.
+Age and points are recognition incentives, not evidence of security or quality.
+
+The active-time ledger is explicit. SchemeAdmissionCredit starts an active
+family's clock. Author withdrawal uses the existing immutable ProposalRetraction
+created_at. A configured reviewer records a terminal family retirement with:
+
+  python scripts/retire_scheme_credit.py --family-id FAMILY \
+    --reviewer-id REVIEWER_UUID --reason-file reason.txt --dry-run
+
+Inspect the result; omit --dry-run to record it. Exact retries preserve the first
+cutoff; conflicting requests are rejected. The operator must coordinate this
+ledger action with actual family retirement from the catalogue. It does not
+change serving, note visibility, reviews or protocol artefacts. Temporary
+runtime failures, a new release of the same family, or catalogue presentation
+changes do not themselves retire a family. Registry removal alone is not a
+historical timestamp and must never be used to invent one.
+
+Retirement is terminal in this policy. Restoring registry code, retrying the
+original admission command or making a new alias does not resume accrual or
+create another base award. A future reinstatement policy would need explicit
+reviewed intervals and migration; it is not implemented here.
+
+ROLLOUT PREREQUISITE
+
+Before enabling this policy on an existing database, an operator must inventory
+all SchemeAdmissionCredit rows and reconcile any already-withdrawn or already-
+retired families. Existing author withdrawal timestamps are authoritative.
+The additive migration creates an empty retirement table; it fabricates no
+historical retirement dates and rewrites no admissions. If an already-retired
+family lacks durable timing evidence, resolve that policy question explicitly
+before release. The helper records retirement now and cannot backdate it to
+retroactively remove earned points. Do not assume today's registry proves when
+historical retirement occurred.
+
+Public participant responses retain scheme_contributions as the sum and add
+scheme_admission_breakdown with the component policy, base points, completed
+active weeks and weekly points. Query time is fixed internally; a changing clock
+is not embedded in each profile, so unchanged reads remain cache-stable. Private proposal/review
+identifiers, supporting evidence and retirement reasons are not exposed.

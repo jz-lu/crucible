@@ -75,6 +75,10 @@ jobs:
           tests/test_resource_publications.py tests/test_resource_chart_projection.py
           tests/test_resource_state.py
           tests/test_resource_state_migration.py
+          tests/test_bounties.py tests/test_bounties_migration.py
+          tests/test_bounty_agents.py tests/test_bounty_cli.py
+          tests/test_admission_weekly_points.py tests/test_scoring_awards.py
+          tests/test_numerical_frontier_points.py tests/test_bounty_scoring.py
       - name: State verification boundary
         shell: bash
         run: |
@@ -222,7 +226,7 @@ jobs:
       - name: Compare metadata queries, profile grants and stable note-number recovery
         env:
           CRUCIBLE_NOTEBOOK_PG_CONTAINER: ${{ job.services.postgres.id }}
-        run: python -m pytest -q tests/test_metadata_relations.py tests/test_researcher_profiles_postgresql.py tests/test_notebook_numbers_postgresql.py tests/test_resource_publications_postgresql.py
+        run: python -m pytest -q tests/test_metadata_relations.py tests/test_researcher_profiles_postgresql.py tests/test_notebook_numbers_postgresql.py tests/test_resource_publications_postgresql.py tests/test_bounties_postgresql.py
       - name: State verification boundary
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
@@ -243,6 +247,9 @@ jobs:
           Resource publication checks cover competing identical/conflicting
           uploads and byte-for-byte evidence and projection recovery through
           pg_dump/pg_restore of the synthetic publication table.
+          Bounty checks cover competing allowance spends, account revocation
+          during settlement, competing solution rewards and read-only backup
+          restoration of exact task, allowance and award records.
           EOF
   ci:
     name: CI passed

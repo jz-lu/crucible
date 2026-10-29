@@ -76,7 +76,12 @@ def _headline(user):
             "score_status": "active",
             "score_breakdown": {"progress": user.progress, "early_recovery": user.early_recovery,
                                 "scheme_contributions": user.scheme_contributions,
-                                "note_contributions": user.note_contributions},
+                                "note_contributions": user.note_contributions,
+                                "bounty_points": user.bounty_points},
+            "scheme_admission_breakdown": {"policy_id": scoring.ADMISSION_POLICY_ID,
+                                           "admission_points": user.admission_points,
+                                           "completed_active_weeks": user.admission_active_weeks,
+                                           "weekly_points": user.admission_weekly_points},
             "accepted_proposal_count": user.accepted_proposal_count}
 
 
@@ -143,8 +148,8 @@ def _summaries(session, users, *, family_scores=None):
 
 
 def _first_records(session, user_id, family_scores):
-    """One actual highest first-place receipt per enrolled scheme family."""
-    winners = [row.early_recovery_submission_id for (owner, _), row in family_scores.items()
+    """One highest actual frontier advance, separate from the first earning receipt."""
+    winners = [row.highest_frontier_submission_id for (owner, _), row in family_scores.items()
                if owner == user_id and row.early_recovery > 0]
     if not winners:
         return []
@@ -194,8 +199,12 @@ def register_routes(app, db, envelope):
                            recent_recoveries_has_more=len(rows) > RECENT_LIMIT)
             summary["first_records"] = _first_records(session, user.id, family_scores)
             if include_milestones:
-                winners = {(row["scheme_id"], row["scheme_version"], row["submission_id"], row["tier"])
-                           for row in summary["first_records"]}
+                # Display selection may prefer an unenrolled/archived release. The
+                # earning receipt remains bound to the frozen scoring release.
+                winners = {(scheme_id, scoring.FAMILY_RELEASES[scheme_id]["version"],
+                            score.early_recovery_submission_id, score.early_recovery_tier)
+                           for (owner, scheme_id), score in family_scores.items()
+                           if owner == user.id and score.early_recovery > 0}
                 summary["first_ten"] = milestones.summary(session, user.id, _record, winners)
         return envelope(person=summary, scoring=scoring.SCORING)
 

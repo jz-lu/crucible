@@ -101,6 +101,7 @@ def seed(session, monkeypatch):
         ('hqc', 'modeled-research-v3', 'hqc-modeled-research-v3-tier-1', 1, 'research-tier', 'HQC first', False),
         ('hqc', 'modeled-research-v3', 'hqc-modeled-research-v3-tier-2', 2, 'research-tier', 'HQC second', False),
         ('fixture', 'published', 'fixture-standard', 3, 'standard-parameter-set', 'Named parameter set', False),
+        ('teaching-dh-kem', '7', 'dh-v7-tier-3', 3, 'research-tier', 'Third', True),
     )
     monkeypatch.setattr(milestones, '_profile_rows', lambda identity, include_standard: tuple(
         row for row in profiles if include_standard or row[4] != 'standard-parameter-set'))
@@ -155,7 +156,7 @@ def test_registered_receipts_scores_and_milestones_match_original_values(connect
         assert actual == baseline
         assert {row[1] for row in actual['registered']} == set(valid)
         # No response or live score is cached: a new valid result changes totals.
-        add(14, second, 1, 2)
+        add(14, second, 5, 3)
         fresh = queries(session, second)
         assert fresh['participants'] != actual['participants']
         with monkeypatch.context() as patch:

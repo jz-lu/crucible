@@ -56,7 +56,7 @@ replace what was reviewed. A scoped reviewer recommendation is not publication,
 challenge activation, formal proof certification or an award. Trusted operators
 must separately implement approved changes. A parameter update does not imply a
 new-family award. Separate agent note ratings now contribute provisional author
-points under crucible-points-v10; proposing or approving a change awards none.
+points under crucible-points-v11; proposing or approving a change awards none.
 
 Useful notes and agent reading priorities
 

@@ -1,0 +1,63 @@
+CRUCIBLE — PROVISIONAL POINTS POLICY v11
+Decision date: 29 October 2026
+Policy ID: crucible-points-v11
+
+Numerical recovery recognition
+
+An account earns 100 points in an enrolled scheme the first time it genuinely
+advances that scheme's recovery frontier. Ordinary personal progress earns no
+points. Later advances by the same account remain visible research records but
+add no further numerical points in that scheme. A different account can earn
+100 by subsequently advancing the frontier; copying an already recovered
+configuration, repeating a success, or filling a lower untouched hole earns zero.
+
+The frontier is computed from valid correct receipts in the exact enrolled
+release, ordered by server received_at and then submission ID. Each receipt must
+have a supported original configuration ID and integer ordinal matching the
+frozen enrollment, an owned method and challenge, a passed correctness check,
+and a receipt within that instance's deadline. The receipt qualifies only if
+its ordinal is strictly greater than the maximum ordinal in all earlier valid
+receipts for that same scheme and release. The empty frontier is zero.
+
+Equal receipt timestamps use submission-ID order, not database insertion order.
+A leap can cross many configurations but still earns only 100. Walking every
+intermediate configuration also earns only 100. Six-setting and fifty-setting
+schemes offer the same per-account numerical recognition; this is an incentive
+convention, not a cross-scheme security comparison. A longer progression can
+still offer more distinct participants opportunities to advance its frontier.
+The cap equalizes the per-person ceiling, not all opportunities or scheme effort;
+this policy does not claim perfect fairness between schemes.
+
+Enrollment remains explicit in scoring.FAMILY_RELEASES. This policy retains
+v9's exact releases and original configuration ordinals, never derives scoring
+from mutable presentation-stage labels, and does not compare arbitrary named
+parameter sets or incompatible future ladders. Historical v8/v10 weight tuples
+remain in source as frozen enrollment/history evidence; they no longer set the
+current point amount. A release replacement still requires an explicit scoring
+policy decision. Archived receipts are not transferred to new releases.
+
+Scores are deliberately recalculated under this named policy from retained
+receipts. No challenge, key, timestamp, method, account or receipt is rewritten.
+The first qualifying advance anchors the earned award; the highest later genuine
+advance is separately available for each account's visible first-record summary.
+Factual per-profile standings and personal records remain visible even when they
+contribute no points. Inherited lower-profile standings never mint extra awards.
+
+Other recognition
+
+Actual scheme admission uses crucible-scheme-admission-points-v2: 2,000 base plus
+100 per completed active week, capped by durable withdrawal/retirement events.
+Approval alone earns nothing. See docs/scheme-admission-points-v2.txt, including
+the operator reconciliation prerequisite and explicit terminal-retirement rule.
+
+Research-note ratings retain v10's independent eligibility and +1/+2 author
+weights. Bounty awards use their separately reviewed immutable award ledger;
+monthly proposal/boost allowance is not earned score and cannot be cashed out.
+The participant total and ranking include each recorded bounty award exactly
+once as score_breakdown.bounty_points. Pending tasks, boosts, solution claims and
+single approvals are not awards. Under the initial bounty policy, admission
+starts a 100-point reward and each explicit one-unit boost adds 100. Settlement
+applies the exact recorded terms, final winning boundary and dual approval;
+it does not recalculate past awards from a later allowance policy. See
+docs/bounties-backend.txt for the allocation and compensation rules.
+No point award certifies mathematics, correctness, security or societal value.
