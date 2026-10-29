@@ -12,24 +12,22 @@ RESEARCH = tuple(registry.adapter_for(scheme) for scheme in
 
 
 @pytest.mark.parametrize("adapter", RESEARCH, ids=lambda adapter: adapter.SCHEME_ID)
-def test_existing_research_receipts_earn_progress_and_single_first_bonus(current_system, adapter):
+def test_existing_research_receipts_earn_one_flat_frontier_award(current_system, adapter):
     app, _, _ = current_system
     user = add_user(app, "alice")
     for tier in range(1, 6):
         registered_receipt(app, user, adapter, tier, tier)
     registered_receipt(app, user, adapter, 5, 6)
     data = person(app, "alice")
-    weight = {"dhkem-x25519": 50, "ml-kem": 416, "frodokem": 31, "sntrup": 92,
-              "hqc": 37, "classic-mceliece": 50}[adapter.SCHEME_ID]
-    assert data["points"] == 5 * weight
-    assert data["score_breakdown"] == {"progress": weight, "early_recovery": 4 * weight, "scheme_contributions": 0, "note_contributions": 0}
+    assert data["points"] == 100
+    assert data["score_breakdown"] == {"progress": 0, "early_recovery": 100, "scheme_contributions": 0, "note_contributions": 0}
     assert all(record["scoring_eligible"] for record in data["records"])
     profile = adapter.manifests()[4]
     assert standard_schemes.profile_presentation(profile)["scoring_eligible"]
     assert standard_schemes.beta_metadata(adapter.SCHEME_ID, profile)["scoring_eligible"]
 
 
-def test_exact_tier_first_bonus_does_not_inherit_from_higher_research_result(current_system):
+def test_lower_exact_profile_first_place_does_not_advance_the_frontier(current_system):
     app, _, _ = current_system
     alice, bob = (add_user(app, handle) for handle in ("alice", "bob"))
     adapter = registry.code_mceliece
@@ -37,11 +35,11 @@ def test_exact_tier_first_bonus_does_not_inherit_from_higher_research_result(cur
     first_four = registered_receipt(app, bob, adapter, 4, 1)
     registered_receipt(app, bob, adapter, 5, 2)
     data = person(app, "bob")
-    assert data["points"] == 210  # Best tier5 + retained first at exact tier4.
-    assert data["score_breakdown"]["early_recovery"] == 160
-    assert all(record["score"]["early_recovery_submission_id"] == first_four["submission_id"]
+    assert data["points"] == 0  # A new exact-profile hole is below the existing frontier.
+    assert data["score_breakdown"]["early_recovery"] == 0
+    assert all(record["score"]["early_recovery_submission_id"] is None
                for record in data["records"])
-    assert person(app, "alice")["points"] == 250
+    assert person(app, "alice")["points"] == 100
 
 
 def test_ec_preserves_its_registered_inherited_standings(current_system):
@@ -49,8 +47,8 @@ def test_ec_preserves_its_registered_inherited_standings(current_system):
     alice, bob = (add_user(app, handle) for handle in ("alice", "bob"))
     registered_receipt(app, alice, registry.adapter_for("dhkem-x25519"), 5, 0)
     registered_receipt(app, bob, registry.adapter_for("dhkem-x25519"), 4, 1)
-    assert person(app, "alice")["points"] == 250
-    assert person(app, "bob")["points"] == 40
+    assert person(app, "alice")["points"] == 100
+    assert person(app, "bob")["points"] == 0
 
 
 def test_hqc_bounds_and_other_releases_do_not_silently_enroll(current_system):

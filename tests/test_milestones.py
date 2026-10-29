@@ -1,4 +1,4 @@
-"""First-ten badges describe actual progress, without changing earned points."""
+"""Legacy milestone receipts stay factual under flat frontier recognition."""
 import json
 
 import pytest
@@ -44,8 +44,8 @@ def test_exact_hqc_profiles_keep_independent_places_and_lower_tier_highlights(cu
         assert set(pairs(milestones["highlights"])) == set(expected)
         assert {row["submission_id"] for row in milestones["history"]} == identifiers
         assert history(app, name)["milestones"] == milestones["history"]
-        assert data["points"] == (2500 if name == "alice" else 528)
-        winner = high["submission_id"] if name == "alice" else low["submission_id"]
+        assert data["points"] == (100 if name == "alice" else 0)
+        winner = high["submission_id"] if name == "alice" else None
         for row in milestones["history"]:
             assert row["profile_kind"] == "research-tier"
             assert row["profile_label"] == f'Tier {row["tier"]}'
@@ -61,8 +61,8 @@ def test_direct_or_incremental_progress_has_one_highlight_and_no_repeat_badges(c
     receipt(app, alice, 20, 21)
     receipt(app, alice, 1, 22)
     data = person(app, "alice")
-    assert data["points"] == 1000
-    assert data["score_breakdown"] == {"progress": 200, "early_recovery": 800, "scheme_contributions": 0, "note_contributions": 0}
+    assert data["points"] == 100
+    assert data["score_breakdown"] == {"progress": 0, "early_recovery": 100, "scheme_contributions": 0, "note_contributions": 0}
     assert pairs(data["first_ten"]["highlights"]) == [(20, 1)]
     assert len(data["first_ten"]["history"]) == len(achieved)
     assert data["first_ten"]["history"][0]["submission_id"] == achieved[-1]["submission_id"]
@@ -81,10 +81,10 @@ def test_first_eight_and_third_higher_are_both_highlights_but_only_first_earns_b
     before = people(app)
     data = person(app, "alice")
     assert set(pairs(data["first_ten"]["highlights"])) == {(8, 1), (higher, 3)}
-    assert data["score_breakdown"]["early_recovery"] == 320
+    assert data["score_breakdown"]["early_recovery"] == 100
     flagged = [row for row in data["first_ten"]["highlights"] if row["counts_toward_bonus"]]
     assert [row["submission_id"] for row in flagged] == [first["submission_id"]]
-    assert data["points"] == higher * 10 + 320
+    assert data["points"] == 100
     assert people(app) == before
     all_milestones = history(app)["milestones"]
     assert {first["submission_id"], third["submission_id"]} == {row["submission_id"] for row in all_milestones}

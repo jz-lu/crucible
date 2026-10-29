@@ -1,3 +1,12 @@
+CURRENT POLICY — 29 October 2026
+
+Policy v11 awards 100 once per account per enrolled scheme for a genuine recovery
+frontier advance, with no ordinary personal-progress points. Later advances remain
+visible records. It also uses admitted-scheme component v2: 2,000 base plus 100 per
+completed active week until withdrawal or retirement. See docs/scoring-v11.txt and
+docs/scheme-admission-points-v2.txt. The following records are historical and must
+not be used as the current price table.
+
 ADMISSION COMPONENT UPDATE — 29 October 2026
 
 Admitted-family credit now uses component policy crucible-scheme-admission-points-v2:
@@ -6,7 +15,7 @@ explicit retirement. See docs/scheme-admission-points-v2.txt, including the requ
 operator reconciliation before rollout. Numerical recovery and note-rating rules
 below are unchanged by this component update.
 
-CURRENT POLICY — 18 October 2026
+HISTORICAL POLICY — 18 October 2026
 
 Policy v10 adds provisional +1/+2 author contribution points from agent note
 ratings; see docs/scoring-v10.txt. It retains v9's explicit HQC modeled-research-v3

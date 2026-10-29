@@ -15,9 +15,8 @@ from .db import Challenge, Method, Submission, User
 from .scoring_awards import ADMISSION_POLICY_ID, ADMISSION_POINTS, ACTIVE_WEEK_POINTS, admission_points_relation
 
 
-POLICY_ID = "crucible-points-v10"
-PERSONAL_CEILING = 500
-FIRST_MULTIPLIER = 4
+POLICY_ID = "crucible-points-v11"
+FRONTIER_POINTS = 100
 
 # Frozen policy weights, indexed by the original configuration ordinal. These are
 # policy data, not computed from the registry or the displayed stage count.
@@ -58,7 +57,7 @@ def eligible_record(scheme_id, version, profile_id, tier):
 
 
 def progress_weight(scheme_id, version, profile_id, tier):
-    """Pinned personal-progress points, or None for an unenrolled configuration."""
+    """Historical v8/v10 weight (not current points), or None if unenrolled."""
     if not eligible_record(scheme_id, version, profile_id, tier):
         return None
     return FAMILY_RELEASES[scheme_id]["progress_weights"][tier - 1]
@@ -138,12 +137,11 @@ def metadata_relation(name, columns, rows, dialect):
 def score_relations(dialect="sqlite", *, as_of=None):
     """Build portable SQL aggregates; never load all receipts into Python.
 
-    A higher recovery reserves lower places only for an explicitly inheriting
-    release. Other releases rank actual recoveries at the exact profile only.
-    This matches the factual per-profile leaderboard. Only first earns a bonus.
-    A user receives only their greatest such bonus in each family, even after
-    many rounds or step-by-step attempts. First-ten milestone recognition is
-    independent of this points policy.
+    Only a strict advance beyond the prior exact-release recovery frontier can
+    earn numerical credit. Its account receives 100 once in that scheme, anchored
+    to their earliest advance. Later advances remain factual records. Ordering is
+    deterministic by server receipt time, then receipt ID; navigation stages and
+    inherited lower-profile records never change that comparison.
     """
     as_of = time.time() if as_of is None else as_of
     profile_rows = []
@@ -173,46 +171,40 @@ def score_relations(dialect="sqlite", *, as_of=None):
         parameter_type = func.json_type(Challenge.manifest, "$.parameter_bits")
         valid = valid.where(or_(size_type == "integer", and_(
             or_(size_type.is_(None), size_type == "null"), parameter_type == "integer")))
-    enrolled = valid.cte("score_enrolled")
-    # Collapse repeated hourly successes before expanding the enrolled thresholds.
-    # The expansion is bounded by distinct person/family/tier achievements,
-    # rather than by a participant's lifetime count of repeated submissions.
+    enrolled = valid.where(Submission.received_at <= as_of).cte("score_enrolled")
+    # Repeated hourly successes cannot establish a new frontier. Retain the
+    # first actual receipt per account/configuration before the window scan.
     attempts = select(enrolled, func.row_number().over(
         partition_by=(enrolled.c.user_id, enrolled.c.scheme_id, enrolled.c.tier),
         order_by=(enrolled.c.received_at, enrolled.c.submission_id),
     ).label("attempt_position")).cte("score_attempts")
     achievements = select(attempts).where(attempts.c.attempt_position == 1).cte("score_achievements")
-    progress = select(achievements.c.user_id, achievements.c.scheme_id,
-                      func.max(achievements.c.progress_points).label("progress")).group_by(
-                          achievements.c.user_id, achievements.c.scheme_id).cte("score_progress")
-    thresholds = profiles.alias("score_thresholds")
-    qualifying = select(achievements, thresholds.c.tier.label("threshold"),
-                        thresholds.c.progress_points.label("threshold_weight"), func.row_number().over(
-        partition_by=(achievements.c.user_id, achievements.c.scheme_id, thresholds.c.tier),
+    ordered = select(achievements, func.max(achievements.c.tier).over(
+        partition_by=(achievements.c.scheme_id, achievements.c.scheme_version),
         order_by=(achievements.c.received_at, achievements.c.submission_id),
-    ).label("user_position")).join(thresholds, and_(
-        achievements.c.scheme_id == thresholds.c.scheme_id,
-        achievements.c.scheme_version == thresholds.c.scheme_version,
-        or_(and_(achievements.c.record_inheritance.is_(True), achievements.c.tier >= thresholds.c.tier),
-            and_(achievements.c.record_inheritance.is_(False), achievements.c.tier == thresholds.c.tier)),
-    )).cte("score_qualifying")
-    first = select(qualifying).where(qualifying.c.user_position == 1).cte("score_first")
-    ranked = select(first, func.row_number().over(
-        partition_by=(first.c.scheme_id, first.c.threshold),
-        order_by=(first.c.received_at, first.c.submission_id),
-    ).label("early_rank")).cte("score_ranked")
-    bonus = case((ranked.c.early_rank == 1, FIRST_MULTIPLIER * ranked.c.threshold_weight), else_=0)
-    choices = select(ranked, bonus.label("early_recovery"), func.row_number().over(
-        partition_by=(ranked.c.user_id, ranked.c.scheme_id),
-        order_by=(bonus.desc(), ranked.c.threshold.desc(), ranked.c.received_at, ranked.c.submission_id),
-    ).label("bonus_position")).cte("score_choices")
-    best = select(choices).where(choices.c.bonus_position == 1).cte("score_best")
-    families = select(progress.c.user_id, progress.c.scheme_id, progress.c.progress,
-                      best.c.early_recovery, best.c.threshold.label("early_recovery_tier"),
-                      best.c.early_rank.label("early_recovery_rank"),
-                      best.c.submission_id.label("early_recovery_submission_id")).join(
-                          best, and_(progress.c.user_id == best.c.user_id,
-                                     progress.c.scheme_id == best.c.scheme_id)).cte("score_families")
+        rows=(None, -1),
+    ).label("previous_frontier")).cte("score_frontiers")
+    advances = select(ordered).where(ordered.c.tier > func.coalesce(ordered.c.previous_frontier, 0)).cte("score_advances")
+    ranked = select(advances, func.row_number().over(
+        partition_by=(advances.c.user_id, advances.c.scheme_id),
+        order_by=(advances.c.received_at, advances.c.submission_id),
+    ).label("award_position"), func.row_number().over(
+        partition_by=(advances.c.user_id, advances.c.scheme_id),
+        order_by=(advances.c.tier.desc(), advances.c.received_at, advances.c.submission_id),
+    ).label("record_position")).cte("score_advance_positions")
+    first = select(ranked).where(ranked.c.award_position == 1).cte("score_first_advance")
+    highest = select(ranked).where(ranked.c.record_position == 1).cte("score_highest_advance")
+    participants_by_family = select(achievements.c.user_id, achievements.c.scheme_id).distinct().cte("score_family_participants")
+    families = select(participants_by_family, literal(0).label("progress"),
+                      case((first.c.submission_id.is_not(None), FRONTIER_POINTS), else_=0).label("early_recovery"),
+                      first.c.tier.label("early_recovery_tier"),
+                      case((first.c.submission_id.is_not(None), 1), else_=None).label("early_recovery_rank"),
+                      first.c.submission_id.label("early_recovery_submission_id"),
+                      highest.c.submission_id.label("highest_frontier_submission_id")).outerjoin(
+                          first, and_(participants_by_family.c.user_id == first.c.user_id,
+                                      participants_by_family.c.scheme_id == first.c.scheme_id)).outerjoin(
+                          highest, and_(participants_by_family.c.user_id == highest.c.user_id,
+                                        participants_by_family.c.scheme_id == highest.c.scheme_id)).cte("score_families")
     recoveries = select(families.c.user_id, func.sum(families.c.progress).label("progress"),
                         func.sum(families.c.early_recovery).label("early_recovery")).group_by(
                             families.c.user_id).cte("score_recoveries")
@@ -230,7 +222,6 @@ def score_relations(dialect="sqlite", *, as_of=None):
                            func.coalesce(admissions.c.admission_points, 0).label("admission_points"),
                            func.coalesce(admissions.c.active_weeks, 0).label("admission_active_weeks"),
                            func.coalesce(admissions.c.weekly_points, 0).label("admission_weekly_points"),
-                           literal(as_of).label("score_as_of"),
                            note_total.label("note_contributions"), points.label("points"),
                            func.rank().over(order_by=points.desc()).label("rank"))
                     .outerjoin(recoveries, recoveries.c.user_id == User.id)

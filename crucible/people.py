@@ -147,8 +147,8 @@ def _summaries(session, users, *, family_scores=None):
 
 
 def _first_records(session, user_id, family_scores):
-    """One actual highest first-place receipt per enrolled scheme family."""
-    winners = [row.early_recovery_submission_id for (owner, _), row in family_scores.items()
+    """One highest actual frontier advance, separate from the first earning receipt."""
+    winners = [row.highest_frontier_submission_id for (owner, _), row in family_scores.items()
                if owner == user_id and row.early_recovery > 0]
     if not winners:
         return []
@@ -198,8 +198,7 @@ def register_routes(app, db, envelope):
                            recent_recoveries_has_more=len(rows) > RECENT_LIMIT)
             summary["first_records"] = _first_records(session, user.id, family_scores)
             if include_milestones:
-                winners = {(row["scheme_id"], row["scheme_version"], row["submission_id"], row["tier"])
-                           for row in summary["first_records"]}
+                winners = milestones.winning_keys(summary["records"])
                 summary["first_ten"] = milestones.summary(session, user.id, _record, winners)
         return envelope(person=summary, scoring=scoring.SCORING)
 

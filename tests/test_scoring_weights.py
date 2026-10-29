@@ -1,4 +1,4 @@
-"""Equal ceilings use pinned configurations, never mutable navigation stages."""
+"""Historical weights preserve enrollment; current awards are flat frontier credit."""
 import pytest
 import json
 from sqlalchemy import select
@@ -16,7 +16,7 @@ COUNTS = {"teaching-dh-kem": 50, "rsa-kem": 50, "dhkem-x25519": 50,
 
 
 def test_frozen_integer_weights_cover_all_current_configurations():
-    assert scoring.POLICY_ID == "crucible-points-v10"
+    assert scoring.POLICY_ID == "crucible-points-v11"
     for scheme, count in COUNTS.items():
         release = scoring.FAMILY_RELEASES[scheme]
         weights = release["progress_weights"]
@@ -46,11 +46,11 @@ def test_each_family_endpoint_has_equal_first_and_later_solver_caps(current_syst
     registered_receipt(app, alice, adapter, 1, 2)
     registered_receipt(app, bob, adapter, count, 3)
     first, later = person(app, "alice"), person(app, "bob")
-    assert first["points"] == 2500
-    assert first["score_breakdown"] == {"progress": 500, "early_recovery": 2000,
+    assert first["points"] == 100
+    assert first["score_breakdown"] == {"progress": 0, "early_recovery": 100,
                                          "scheme_contributions": 0, "note_contributions": 0}
     assert first["records"][0]["score"]["early_recovery_submission_id"] == best["submission_id"]
-    assert later["points"] == 500
+    assert later["points"] == 0
     assert later["score_breakdown"]["early_recovery"] == 0
 
 
@@ -65,7 +65,7 @@ def test_step_by_step_and_direct_recovery_have_identical_totals(current_system, 
         registered_receipt(app, user, adapter, ordinal, ordinal)
     after = person(app, "alice")
     assert before["score_breakdown"] == after["score_breakdown"]
-    assert after["points"] == 5 * (500 * 5 // COUNTS[scheme])
+    assert after["points"] == 100
 
 
 @pytest.mark.parametrize("scheme,ordinal,expected", [("sntrup", 17, 314)])
@@ -78,24 +78,24 @@ def test_off_route_configuration_keeps_its_weight_when_default_navigation_change
     route = progressions.for_release(scheme, adapter.SCHEME_VERSION, adapter.manifests())
     assert profile["id"] in route["additional_configuration_ids"]
     registered_receipt(app, user, adapter, ordinal, 0)
-    assert person(app, "alice")["points"] == 5 * expected
+    assert person(app, "alice")["points"] == 100
     # Scoring must not consult the display progression, adapter enumeration or
     # current release selection when pricing an already enrolled receipt.
     monkeypatch.setattr(progressions, "for_release", lambda *args, **kwargs: None)
     monkeypatch.setitem(registry.CURRENT, scheme, "future-presentation")
     participants, _ = scoring.score_relations()
     with app.state.db.transaction() as session:
-        assert session.scalar(select(participants.c.points).where(participants.c.id == user)) == 5 * expected
+        assert session.scalar(select(participants.c.points).where(participants.c.id == user)) == 100
 
 
-def test_postgresql_scoring_compiles_with_pinned_threshold_weights():
+def test_postgresql_scoring_compiles_with_pinned_ordinal_frontier():
     participants, families = scoring.score_relations("postgresql")
     for relation in (participants, families):
         sql = str(select(relation).compile(dialect=postgresql.dialect(),
                                           compile_kwargs={"literal_binds": True}))
-        assert "score_thresholds.progress_points AS threshold_weight" in sql
-        assert "4 * score_ranked.threshold_weight" in sql
-        assert "max(score_achievements.progress_points)" in sql
+        assert "score_thresholds" not in sql
+        assert "ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING" in sql
+        assert "max(score_achievements.tier)" in sql
         assert "json_type(" not in sql  # SQLite-only validation must not leak.
         bound = select(relation).compile(dialect=postgresql.dialect()).params.values()
         profiles = next(json.loads(value) for value in bound

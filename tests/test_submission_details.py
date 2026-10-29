@@ -46,7 +46,7 @@ def test_correct_detail_is_exact_public_and_available_when_not_on_leaderboard(sy
                 "scheme_id": second["scheme_id"], "scheme_version": second["scheme_version"],
                 "profile_id": "dh-20", "instance_size": 20, "received_at": clock[0], "elapsed_seconds": 17,
                 # The archived receipt stays readable without entering today's points policy.
-                "scoring_eligible": False, "scoring_policy_id": "crucible-points-v10",
+                "scoring_eligible": False, "scoring_policy_id": "crucible-points-v11",
                 "ai_model": "",
                 "method": {**{key: method[key] for key in ("id", "name", "pseudocode")}, "source": None}, "compute": answer["compute"]}
     url = f'/api/submissions/{receipt["id"]}'

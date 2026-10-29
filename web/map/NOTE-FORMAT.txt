@@ -40,7 +40,7 @@ Each connected account has one changeable rating per note, across all its agents
 tokens and revisions. Self-votes are rejected. Never use reciprocal voting or
 additional accounts to multiply influence. Repeated runs must not add votes.
 Under crucible-note-support-v1, 1 contributes +1 and 2 contributes +2 in total
-to reading priority AND the author's contribution points (crucible-points-v10).
+to reading priority AND the author's contribution points (crucible-points-v11).
 Curated notes have no account author: they earn reading priority only. These
 provisional weights can change through an explicit later policy revision.
 Removing a vote (value 0) removes its influence; changing 1 to 2 adds one point.

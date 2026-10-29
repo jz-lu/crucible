@@ -1,5 +1,4 @@
 """Participant pages preserve evidence; scores reward progress without repeats."""
-from collections import defaultdict
 import json
 from uuid import uuid4
 
@@ -89,7 +88,7 @@ def test_zero_result_accounts_have_shared_zero_rank_and_bounded_pagination(curre
     assert [row["handle"] for row in last["people"]] == ["charlie"]
     assert not last["pagination"]["has_more"]
     assert people(app, offset=99)["people"] == []
-    assert first["scoring"]["policy_id"] == "crucible-points-v10"
+    assert first["scoring"]["policy_id"] == "crucible-points-v11"
 
 
 @pytest.mark.parametrize("query", [{"limit": 0}, {"limit": 101}, {"offset": -1}, {"limit": "x"}])
@@ -145,17 +144,17 @@ def test_higher_recovery_reserves_lower_places_and_repeats_do_not_add_points(cur
     receipt(app, alice, 1, 2)
     receipt(app, alice, 4, 3)
     alice_data, bob_data = person(app, "alice"), person(app, "bob")
-    assert alice_data["points"] == 40 + 160
+    assert alice_data["points"] == 100
     assert alice_data["correct_submission_count"] == 3
     assert alice_data["records"][0]["submission_id"] == high["submission_id"]
     assert alice_data["records"][0]["score"]["early_recovery_rank"] == 1
-    assert bob_data["points"] == 20
+    assert bob_data["points"] == 0
     assert bob_data["records"][0]["score"]["early_recovery"] == 0
     assert bob_data["records"][0]["score"]["early_recovery_rank"] is None
     assert [row["handle"] for row in people(app)["people"]] == ["alice", "bob"]
 
 
-def test_only_single_best_bonus_survives_when_personal_best_later_increases(current_system):
+def test_first_earning_receipt_survives_when_personal_best_later_increases(current_system):
     app, _, _ = current_system
     alice = add_user(app, "alice")
     first = receipt(app, alice, 10, 0)
@@ -164,8 +163,8 @@ def test_only_single_best_bonus_survives_when_personal_best_later_increases(curr
         receipt(app, other, 11, index + 1)
     receipt(app, alice, 11, 20)
     data = person(app, "alice")
-    assert data["points"] == 110 + 400
-    assert data["score_breakdown"] == {"progress": 110, "early_recovery": 400, "scheme_contributions": 0, "note_contributions": 0}
+    assert data["points"] == 100
+    assert data["score_breakdown"] == {"progress": 0, "early_recovery": 100, "scheme_contributions": 0, "note_contributions": 0}
     record = data["records"][0]
     assert record["tier"] == 11 and record["score"]["early_recovery_tier"] == 10
     assert record["score"]["early_recovery_submission_id"] == first["submission_id"]
@@ -179,7 +178,7 @@ def test_only_first_earns_bonus_and_receipt_id_breaks_simultaneous_ties(current_
         receipt(app, user, 3, 1)
     rows = people(app)["people"]
     assert [row["handle"] for row in rows] == [f"solver_{index:02}" for index in range(11)]
-    assert [row["points"] for row in rows] == [150] + [30] * 10
+    assert [row["points"] for row in rows] == [100] + [0] * 10
     assert [row["rank"] for row in rows] == [1] + [2] * 10
     assert rows[0]["records"][0]["score"]["early_recovery_rank"] == 1
     for row in rows[1:]:
@@ -196,16 +195,16 @@ def test_first_nineteen_then_second_twenty_retains_only_first_nineteen_bonus(cur
     receipt(app, alice, 20, 2)
     receipt(app, carol, 20, 3)
     data = person(app, "alice")
-    assert data["points"] == 960
-    assert data["score_breakdown"] == {"progress": 200, "early_recovery": 760, "scheme_contributions": 0, "note_contributions": 0}
+    assert data["points"] == 100
+    assert data["score_breakdown"] == {"progress": 0, "early_recovery": 100, "scheme_contributions": 0, "note_contributions": 0}
     score = data["records"][0]["score"]
     assert score["early_recovery_tier"] == 19 and score["early_recovery_rank"] == 1
     assert score["early_recovery_submission_id"] == first["submission_id"]
-    assert person(app, "bob")["points"] == 1000
-    assert person(app, "carol")["points"] == 200
+    assert person(app, "bob")["points"] == 100
+    assert person(app, "carol")["points"] == 0
 
 
-def test_second_at_twenty_without_any_first_receipt_gets_only_progress(current_system):
+def test_second_at_twenty_without_a_frontier_advance_gets_no_points(current_system):
     app, _, _ = current_system
     alice, bob = (add_user(app, handle) for handle in ("alice", "bob"))
     receipt(app, alice, 20, 0)
@@ -213,8 +212,8 @@ def test_second_at_twenty_without_any_first_receipt_gets_only_progress(current_s
     receipt(app, bob, 19, 2)  # Earlier higher solve already reserved this place.
     receipt(app, bob, 20, 3)
     data = person(app, "bob")
-    assert data["points"] == 200
-    assert data["score_breakdown"] == {"progress": 200, "early_recovery": 0, "scheme_contributions": 0, "note_contributions": 0}
+    assert data["points"] == 0
+    assert data["score_breakdown"] == {"progress": 0, "early_recovery": 0, "scheme_contributions": 0, "note_contributions": 0}
 
 
 def test_archives_keep_exact_tiers_but_never_gain_current_score_or_double_family_credit(current_system, monkeypatch):
@@ -263,7 +262,7 @@ def test_recent_history_is_bounded_and_personal_best_is_not_latest_receipt(curre
     assert data["records"][0]["submission_id"] == highest["submission_id"]
     assert len(data["recent_recoveries"]) == 20 and data["recent_recoveries_has_more"]
     assert data["recent_recoveries"][0]["submission_id"] == later[-1]["submission_id"]
-    assert data["points"] == 200 + 800
+    assert data["points"] == 100
 
 
 def test_page_query_count_is_constant_and_matches_independent_score_calculation(current_system):
@@ -276,20 +275,12 @@ def test_page_query_count_is_constant_and_matches_independent_score_calculation(
         for attempt in range(3):
             receipts.append(receipt(app, user, (index * 7 + attempt * 3) % 15 + 1,
                                     index + attempt * 13))
-    expected = {}
-    places = defaultdict(list)
-    for tier in range(1, 51):
-        for user in users.values():
-            qualifying = [row for row in receipts if row["user_id"] == user and row["tier"] >= tier]
-            if qualifying:
-                row = min(qualifying, key=lambda item: (item["received_at"], item["submission_id"]))
-                places[tier].append(row)
-        places[tier].sort(key=lambda item: (item["received_at"], item["submission_id"]))
-    for handle, user in users.items():
-        highest = max(row["tier"] for row in receipts if row["user_id"] == user)
-        bonuses = [40*tier for tier, rows in places.items()
-                   if rows and rows[0]["user_id"] == user]
-        expected[handle] = 10*highest + max(bonuses, default=0)
+    winners, frontier = set(), 0
+    for row in sorted(receipts, key=lambda item: (item["received_at"], item["submission_id"])):
+        if row["tier"] > frontier:
+            winners.add(row["user_id"])
+            frontier = row["tier"]
+    expected = {handle:100 if user in winners else 0 for handle,user in users.items()}
     statements = []
     def capture(_, __, statement, ___, ____, _____):
         if statement.lstrip().lower().startswith(("select", "with")):
