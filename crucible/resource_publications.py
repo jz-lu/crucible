@@ -57,6 +57,54 @@ def digest(value):
     return hashlib.sha256(canonical(value)).hexdigest()
 
 
+def _chart_resources(resources):
+    """Project already validated evidence without repeating its measurement context.
+
+    The full report and archive remain the exact reproduction interface. This
+    view carries only chart values and their identity/method context; it neither
+    recomputes measurements nor changes which publications are current.
+    """
+    def fields(value, names):
+        return {name: deepcopy(value[name]) for name in names if name in value}
+
+    configurations, measurement_profiles, profile_signatures = [], {}, {}
+    for row in resources.get("configurations", []):
+        output = fields(row, ("configuration",))
+        output["sizes_bytes"] = fields(row.get("sizes_bytes", {}),
+                                      ("public_key", "private_key", "ciphertext"))
+        output["communication"] = fields(row.get("communication", {}),
+                                         ("fresh_exchange_bytes", "cached_exchange_bytes"))
+        output["native_evidence"] = []
+        for record in row.get("native_evidence", []):
+            profile_id = record.get("comparison_profile")
+            if not isinstance(profile_id, str) or not SHA.fullmatch(profile_id):
+                raise HTTPException(409, "Resource measurement context is inconsistent.")
+            context = {key: record[key] for key in ("profile", "environment", "compiler") if key in record}
+            try:
+                signature = canonical(context)
+            except (TypeError, ValueError):
+                raise HTTPException(409, "Resource measurement context is inconsistent.") from None
+            if profile_id in profile_signatures and profile_signatures[profile_id] != signature:
+                raise HTTPException(409, "Resource measurement context is inconsistent.")
+            if profile_id not in profile_signatures:
+                profile_signatures[profile_id] = signature
+                measurement_profiles[profile_id] = deepcopy(context)
+            evidence = fields(record, ("implementation", "comparison_profile", "platform_identified"))
+            for kind in ("computation", "first_call"):
+                if kind in record:
+                    evidence[kind] = {operation: fields(record[kind][operation], ("complete", "duration_ns"))
+                                      for operation in ("keygen", "encapsulate", "decapsulate")
+                                      if operation in record[kind]}
+            if "memory_components" in record:
+                evidence["memory_components"] = {
+                    operation + ":rss": fields(record["memory_components"][operation + ":rss"], ("complete", "values"))
+                    for operation in ("keygen", "encapsulate", "decapsulate")
+                    if operation + ":rss" in record["memory_components"]}
+            output["native_evidence"].append(evidence)
+        configurations.append(output)
+    return {"configurations": configurations, "measurement_profiles": measurement_profiles}
+
+
 def _portable_integers(value):
     """The producer's exact browser projection, applied only to declared data.
 
@@ -344,7 +392,10 @@ class ResourceIngestBoundary:
 
 def register_routes(app, db):
     @app.get("/api/protocol/resources")
-    def resources(request: Request, scheme_id: str, version: str, publication_id: str | None = None):
+    def resources(request: Request, scheme_id: str, version: str, publication_id: str | None = None,
+                  projection: str | None = None):
+        if projection not in (None, "charts"):
+            raise HTTPException(400, "Unknown resource projection.")
         try:
             registry.adapter_for(scheme_id, version)
         except (ValueError, KeyError):
@@ -390,15 +441,22 @@ def register_routes(app, db):
                 return {**data, "id": row.id, "received_at": row.created_at, "outcome": outcome,
                         "completeness": "complete" if outcome == "complete" else "incomplete",
                         "evidence_url": "/api/resource-publications/" + row.id + "/download"}
-            projection = deepcopy(selected.resources) if selected else None
-            if projection:
-                for config in projection.get("configurations", []):
+            resource_document = (_chart_resources(selected.resources) if projection == "charts" else
+                                 deepcopy(selected.resources)) if selected else None
+            if resource_document and projection is None:
+                for config in resource_document.get("configurations", []):
                     config.pop("security", None); config.pop("correctness", None)
-            document = {"schema_revision": 2, "state": state, "publication": metadata(selected, True) if selected else None,
-                "resources": projection, "scheme_id": scheme_id, "version": version,
+            publication = metadata(selected, True) if selected else None
+            if publication and projection == "charts":
+                publication = {key: publication[key] for key in
+                               ("id", "completeness", "outcome", "received_at", "binding", "source")}
+            document = {"schema_revision": 2, "state": state, "publication": publication,
+                "resources": resource_document, "scheme_id": scheme_id, "version": version,
                 "expected": {**resource_state.expected_document(activation), "binding": activation.binding, "source": activation.source} if activation else None,
                 "lifecycle": lifecycle, "historical": [metadata(row) for row in history if not current or row.id != current.id],
                 "selected_historical": selected is not None and (not current or selected.id != current.id)}
+            if projection == "charts":
+                document["projection"] = "charts"
             return catalogue_response(document, request.headers.get("accept-encoding"))
 
     @app.get("/api/resource-publications/{publication_id}/download")

@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const cache = new Map(), selections = new Map();
-  const freshFor = 60000, retainFor = 300000, maxReports = 24;
+  const freshFor = 60000, retainFor = 300000, maxReports = 24, maxBytes = 8 * 1024 * 1024;
   let revision = 0;
   const key = scheme => JSON.stringify([scheme.id, String(scheme.version)]);
   const requestKey = (scheme, publicationId) => key(scheme) + ':' + (publicationId || 'current');
@@ -65,31 +65,67 @@
       if (focused) card?.querySelector('select[aria-label="' + caption + '"]')?.focus();
     }); label.append(select); return label;
   }
-  async function load(scheme, api, changed, {refresh = false, publicationId = null} = {}) {
+  function load(scheme, api, changed, {refresh = false, publicationId = null, speculative = false} = {}) {
     const id = requestKey(scheme, publicationId), old = cache.get(id);
-    if (old && (old.status === 'loading' || !refresh && Date.now() - (old.checkedAt || 0) < freshFor)) return;
-    const entry = {status: 'loading', data: usable(old), loadedAt: old?.loadedAt, revision: old?.revision, signature: old?.signature};
+    if (old?.status === 'loading') {
+      if (changed) old.listeners.add(changed);
+      if (!speculative) old.foreground = true;
+      return old.task;
+    }
+    if (old && !refresh && Date.now() - (old.checkedAt || 0) < freshFor) {
+      cache.delete(id); cache.set(id, old);
+      return Promise.resolve({bytes: 0});
+    }
+    const entry = {status: 'loading', data: usable(old), loadedAt: old?.loadedAt, revision: old?.revision,
+      signature: old?.signature, bytes: old?.bytes || 0, foreground: !speculative, listeners: new Set(changed ? [changed] : [])};
     cache.delete(id); cache.set(id, entry);
     while (cache.size > maxReports) cache.delete(cache.keys().next().value);
-    try {
-      const query = {scheme_id: scheme.id, version: scheme.version};
-      if (publicationId) query.publication_id = publicationId;
-      const data = await api('/api/protocol/resources?' + new URLSearchParams(query));
-      if (cache.get(id) !== entry) return;
-      if (data.scheme_id !== scheme.id || String(data.version) !== String(scheme.version)) throw new Error('Resource report names another release.');
-      if (!states.has(data.state) || !Array.isArray(data.historical)) throw new Error('Resource report has no lifecycle identity.');
-      if (publicationId && data.publication?.id !== publicationId) throw new Error('Resource report names another publication.');
-      if (data.publication && (!Array.isArray(data.resources?.configurations) || !Array.isArray(data.publication.binding?.profiles))) throw new Error('Resource report is incomplete.');
-      const signature = JSON.stringify(data);
-      entry.revision = signature === entry.signature ? entry.revision : ++revision;
-      entry.signature = signature; entry.data = data; entry.status = 'ready'; entry.checkedAt = entry.loadedAt = Date.now();
-    } catch (error) {
-      if (cache.get(id) === entry) {
-        entry.status = 'error'; entry.checkedAt = Date.now();
-        if ([401, 403, 404].includes(error?.status)) { entry.data = null; entry.loadedAt = 0; }
+    entry.task = (async () => {
+      let bytes = 0;
+      try {
+        const query = {scheme_id: scheme.id, version: scheme.version, projection: 'charts'};
+        if (publicationId) query.publication_id = publicationId;
+        const data = await api('/api/protocol/resources?' + new URLSearchParams(query), undefined, {readRecovery: true});
+        if (cache.get(id) !== entry) return {bytes: 0};
+        const signature = JSON.stringify(data);
+        bytes = new TextEncoder().encode(signature).length;
+        if (data.scheme_id !== scheme.id || String(data.version) !== String(scheme.version)) throw new Error('Resource report names another release.');
+        if (!states.has(data.state) || !Array.isArray(data.historical)) throw new Error('Resource report has no lifecycle identity.');
+        if (publicationId && data.publication?.id !== publicationId) throw new Error('Resource report names another publication.');
+        if (data.publication && (!Array.isArray(data.resources?.configurations) || !Array.isArray(data.publication.binding?.profiles))) throw new Error('Resource report is incomplete.');
+        if (bytes > maxBytes) throw new Error('Resource report exceeds the browsing cache limit.');
+        entry.revision = signature === entry.signature ? entry.revision : ++revision;
+        entry.signature = signature; entry.data = data; entry.bytes = bytes;
+        entry.status = 'ready'; entry.checkedAt = entry.loadedAt = Date.now();
+        let total = [...cache.values()].reduce((sum, item) => sum + (item.bytes || 0), 0);
+        for (const [otherId, other] of cache) {
+          if (total <= maxBytes) break;
+          if (otherId !== id) { total -= other.bytes || 0; cache.delete(otherId); }
+        }
+      } catch (error) {
+        if (cache.get(id) === entry) {
+          entry.status = 'error'; entry.checkedAt = Date.now();
+          if ([401, 403, 404, 410].includes(error?.status)) { entry.data = null; entry.loadedAt = 0; entry.bytes = 0; entry.signature = null; }
+          // An unsuccessful optional read must not poison a later first visit.
+          // Once a visible reader joins, it owns the ordinary error/retry state.
+          if (!entry.foreground && !usable(entry)) cache.delete(id);
+        }
       }
+      if (cache.get(id) === entry) {
+        const listeners = [...entry.listeners]; entry.listeners.clear();
+        for (const listener of listeners) listener();
+      }
+      return {bytes};
+    })();
+    return entry.task;
+  }
+  function invalidateReads() {
+    // A restored document can reuse completed snapshots, never the old visit's
+    // in-flight promise or listeners. Late completions fail the identity check.
+    for (const [id, entry] of cache) if (entry.status === 'loading') {
+      if (usable(entry)) cache.set(id, {...entry, status: 'ready', checkedAt: 0, task: null, listeners: new Set()});
+      else cache.delete(id);
     }
-    if (cache.get(id) === entry) changed();
   }
   function point(row, view, op, profile, implementation) {
     if (!row) return {value: null, text: 'Not measured'};
@@ -153,7 +189,8 @@
     const methods = [...new Set(evidence.filter(row => row.implementation?.sha256 === binding?.implementation?.sha256).map(row => row.comparison_profile))].filter(value => typeof value === 'string' && value);
     if (!methods.includes(choice.profiles[field(view)])) choice.profiles[field(view)] = methods[0];
     const method = choice.profiles[field(view)];
-    const record = evidence.find(row => row.comparison_profile === method && row.implementation?.sha256 === binding?.implementation?.sha256);
+    const measurement = evidence.find(row => row.comparison_profile === method && row.implementation?.sha256 === binding?.implementation?.sha256);
+    const record = measurement ? {...(data.resources.measurement_profiles?.[method] || {}), ...measurement} : null;
     const rss = view === 'rss' ? rssScope(record) : null;
     const points = profiles.map((profile, index) => ({...point(rows.get(mapping.get(profileId(profile))), view, choice.op, method, binding?.implementation), label: profileLabel(profile, scheme), x: named ? index + 1 : stagePosition(profile), id: profileId(profile)}));
     const recovery = recoveryFor?.(points.map(p => ({tier: p.x, profileId: p.id, label: p.label}))) || {points: [], tier: null, label: '', meaning: ''};
@@ -275,5 +312,5 @@
     else if (focusSummary) summary.focus({preventScroll: true});
     return true;
   }
-  window.CrucibleResources = {load, render, clear: () => { cache.clear(); selections.clear(); }, point, exact, coordinate};
+  window.CrucibleResources = {load, render, invalidateReads, clear: () => { cache.clear(); selections.clear(); }, point, exact, coordinate};
 })();

@@ -216,3 +216,32 @@ verify this distinction rather than race legitimate background work.
 Local request counts establish removed waits, not universal hosted latency.
 Verify the exact released source before attributing a hosted result to a change.
 No framework migration or broad rewrite is implied by this interaction model.
+
+Implemented 29 October 2026: resource graphs participate in the existing finite
+scheme-preparation jobs. Each scheme job overlaps its release description and
+compact resource projection and charges both response sizes. The scheduler keeps
+its 24-job and eight-current-release bounds and checks its 4 MiB budget between
+jobs; the final job can exceed that byte threshold. Hover/focus intent and
+selected overview deep links start the independent resource read without waiting
+for the release description. Save-Data, hidden documents, foreground requests
+and open dialogs retain their existing optional-work guards. Preparation never
+issues a challenge or starts a measurement job.
+
+The opt-in resource projection=charts endpoint returns exact stored graph values,
+lifecycle/publication identities and deduplicated measurement context. The full
+API response and downloadable evidence remain unchanged. Contradictory context
+for one comparison-profile identity is rejected rather than silently merged.
+Chart caches remain in memory only: 60 seconds fresh, five minutes usable,
+at most 24 reports and 8 MiB of serialized report data. Quiet refresh retains a
+usable curve and unchanged controls. A foreground reader joins an in-flight
+prefetch and receives its completion; failed unused prefetches do not poison a
+later visit. A retired document detaches pending listeners before restoration.
+
+Confirmed note creation/import/revision/publication requests or reviews, profile
+edits, attack-method submissions and challenge issuance/submission invalidate
+their normal browsing summaries without discarding independent measurement
+reports. The exception lists exact existing paths and methods; unknown writes
+still clear the resource cache. Catalogue identity changes, account/session or
+capability changes, and denied access retain unconditional invalidation. Cached
+measurements do not authorize any action. A hard reload still requires a fresh
+session and authorized reads; background preparation reduces subsequent waits.
