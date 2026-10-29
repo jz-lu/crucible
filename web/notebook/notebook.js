@@ -164,6 +164,7 @@
     let mapController = null, mapPreparation = null, mapIdle = null, mapRequest = 0, timelineRequest = 0, listLoaded = false, cardAction = 0;
     let curatedNotes = [], curatedLoaded = false, curatedPromise = null, timelinePreparation = null, indexPreparation = null;
     let pageCursors = [null], pageIndex = 0, knownPageCount = null, searchTimer = null;
+    let reviewDraft = null, captureReviewDraft = () => {};
     let currentSession = session(), readEpoch = 0, listStamp = null, timelineStamp = null, listRefreshing = false, warmEnabled = false;
     const readCache = new Map();
     const preparingNotes = new Map();
@@ -193,7 +194,15 @@
       }
     }
     const api = async (path, body, options) => {
-      const result = await requestAPI(path, body, options);
+      const owner = accountId, credential = currentSession;
+      let result;
+      try { result = await requestAPI(path, body, options); }
+      catch (error) {
+        if (reviewOnly && owner === accountId && identity() === owner && credential === currentSession && session() === credential && [401, 403].includes(error.status)) {
+          clearReviewDraft(); if (active) notice(error.message, true);
+        }
+        throw error;
+      }
       // Keep this known format-only read warm; saves and unknown writes still
       // invalidate local snapshots even with a standalone notebook transport.
       const method = options?.method === undefined ? (body === undefined ? 'GET' : 'POST') : options.method;
@@ -362,7 +371,7 @@
       const next = value?.id == null ? null : String(value.id);
       const nextSession = session();
       if (next === accountId && nextSession === currentSession) return;
-      clearViewSpace(); currentSession = nextSession; invalidateReads(); cancelMapPreparation();
+      clearReviewDraft(); clearViewSpace(); currentSession = nextSession; invalidateReads(); cancelMapPreparation();
       accountId = next; epoch++; request++; mapRequest++; timelineRequest++; listLoaded = false;
       q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy');
       q('timeline').replaceChildren();
@@ -371,13 +380,14 @@
       q('search').value = ''; q('filter').replaceChildren(); q('page').textContent = ''; humanHint.hidden = true;
       closeDialog(true); q('dialog-body').replaceChildren(); q('list').replaceChildren(); q('full').replaceChildren(); q('count').textContent = ''; q('pagination').hidden = true; notice('');
     }
-    function hide() { cancelReviewPagePreparation(); clearPageSpace(); clearViewSpace(); timelinePreparation = null; cancelMapPreparation(); clearTimeout(searchTimer); searchTimer = null; active = false; request++; mapRequest++; timelineRequest++; q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy'); q('timeline').replaceChildren(); mapController?.hide(); if (q('dialog').open) { suspendedDialog = true; q('dialog').close(); } }
+    function hide() { captureReviewDraft(); captureReviewDraft = () => {}; cancelReviewPagePreparation(); clearPageSpace(); clearViewSpace(); timelinePreparation = null; cancelMapPreparation(); clearTimeout(searchTimer); searchTimer = null; active = false; request++; mapRequest++; timelineRequest++; q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy'); q('timeline').replaceChildren(); mapController?.hide(); if (q('dialog').open) { suspendedDialog = true; q('dialog').close(); } }
     const reviewUrl = (section, extra = {}) => '#reviews?' + new URLSearchParams({section, ...extra});
     function pageGuard() { const current = guard(), token = request; return () => current() && token === request; }
     function backToNotes() { return button(reviewOnly ? '← Publish requests' : '← Research notebook', () => navigate(reviewOnly ? reviewUrl('publication') : '#notebook'), 'nb-link nb-back'); }
     function url(id, revision) { return '#notebook?' + new URLSearchParams({note:id, ...(revision ? {revision:String(revision)} : {})}); }
     function openNote(id, revision) { navigate(reviewOnly ? reviewUrl('publication', {note:id, ...(revision ? {revision:String(revision)} : {})}) : url(id, revision)); }
     async function show(nextParams = new URLSearchParams()) {
+      captureReviewDraft(); captureReviewDraft = () => {};
       cancelReviewPagePreparation();
       const readerHadFocus = !q('full').hidden && document.activeElement?.closest('.nb-full') === q('full');
       if (typeof account === 'function') setAccount(account());
@@ -1048,6 +1058,7 @@
       }); flush(); return out;
     }
     async function loadNote(id) {
+      captureReviewDraft(); captureReviewDraft = () => {};
       const current = guard(), token = ++request, requested = params.get('revision'), expectedHash = params.get('sha256'), generation = readEpoch;
       const key = 'note:' + JSON.stringify([id, requested, expectedHash]), cached = cachedRead(key);
       const prepared = preparingNotes.get(key); preparingNotes.delete(key);
@@ -1083,6 +1094,11 @@
           return;
         }
         if (!current() || request !== token || generation !== readEpoch) return;
+        if (reviewOnly && reviewDraft?.noteId === note.id) {
+          const reviewed = note.revisions.find(item => item.revision === reviewDraft.revision &&
+            item.content_sha256 === reviewDraft.hash && item.publication?.requested_at === reviewDraft.requestedAt);
+          if (!note.can_review || (reviewed && reviewed.publication_status !== 'submitted')) clearReviewDraft();
+        }
         rememberRead(key, note);
         if (cached && JSON.stringify(cached) === JSON.stringify(note)) unlock();
         else {
@@ -1093,6 +1109,7 @@
         if (current() && request === token && generation === readEpoch) {
           readCache.delete(key);
           if (forbiddenRead(error)) {
+            if (reviewOnly && reviewDraft?.noteId === id) clearReviewDraft();
             invalidateReads(); notes = []; nextAfter = null; listLoaded = false; listStamp = null;
             q('list').replaceChildren(); q('count').textContent = '';
             q('full').replaceChildren(backToNotes());
@@ -1673,36 +1690,101 @@
         el('p', 'nb-hint', 'Publication approval does not verify the mathematics or activate a scheme.'));
       publicationForm(note, revision, container, present, false);
     }
-    function publicationForm(note, revision, container, present, reviewing = true) {
-      const panel = el('section', reviewing ? 'nb-publication-review' : 'nb-publication-request');
-      if (reviewing) {
-        panel.append(el('h3', '', 'Publication decision'), el('p', 'nb-hint', 'Review privacy, attribution, spam and suitability for research discussion. Unproved ideas, negative results and criticism can be published with their uncertainty stated. Approval lets all approved participants read this exact revision; it does not certify its mathematics or activate a scheme.'));
-        if (note.can_edit) panel.append(el('p', 'nb-hint', 'This is a development-only self-review, and the saved decision will be labeled as such.'));
+    function clearReviewDraft() { reviewDraft?.clear?.(); reviewDraft = null; captureReviewDraft = () => {}; }
+    function reviewDraftDirty() {
+      return Boolean(reviewDraft && (reviewDraft.pending || reviewDraft.busy || reviewDraft.reason || reviewDraft.decision !== 'approved'));
+    }
+    function publicationReviewForm(note, revision, container, present) {
+      const panel = el('section', 'nb-publication-review'); container.append(panel);
+      panel.append(el('h3', '', 'Publication decision'), el('p', 'nb-hint', 'Review privacy, attribution, spam and suitability for research discussion. Unproved ideas, negative results and criticism can be published with their uncertainty stated. Approval lets all approved participants read this exact revision; it does not certify its mathematics or activate a scheme.'));
+      if (note.can_edit) panel.append(el('p', 'nb-hint', 'This is a development-only self-review, and the saved decision will be labeled as such.'));
+      const requestedAt = revision.publication?.requested_at;
+      if (!Number.isFinite(requestedAt) || typeof revision.content_sha256 !== 'string' || !revision.content_sha256) {
+        panel.append(el('p', 'nb-error', 'The exact publication request could not be confirmed. Reload the note before reviewing.'));
+        return;
       }
+      const key = JSON.stringify([accountId, currentSession, note.id, revision.revision, revision.content_sha256, requestedAt]);
+      if (reviewDraft && reviewDraft.key !== key && reviewDraftDirty()) {
+        const retained = reviewDraft;
+        panel.append(el('p', 'nb-hint', 'Your review draft for another request is kept in this tab.'),
+          button('Return to review draft', () => { if (present() && reviewDraft === retained) openNote(retained.noteId, retained.revision); }, 'nb-button'));
+        if (reviewDraft.pending || reviewDraft.busy) panel.append(el('p', 'nb-hint', 'Check the original request’s receipt before starting another decision.'));
+        else panel.append(button('Discard draft and review this request', () => {
+          if (!present() || reviewDraft !== retained || !window.confirm('Discard the unsent publication decision and reason? This cannot be undone.')) return;
+          clearReviewDraft(); openNote(note.id, revision.revision);
+        }, 'nb-button'));
+        return;
+      }
+      if (!reviewDraft || reviewDraft.key !== key) reviewDraft = {key, account:accountId, credential:currentSession,
+        noteId:note.id, revision:revision.revision, hash:revision.content_sha256, requestedAt,
+        decision:'approved', reason:'', pending:null, busy:false, error:''};
+      const draft = reviewDraft;
+      const owns = () => reviewDraft === draft && identity() === draft.account && accountId === draft.account &&
+        session() === draft.credential && currentSession === draft.credential;
+      const visible = () => owns() && present();
       const form = el('form', 'nb-form'), error = el('p', 'nb-error'); error.setAttribute('role', 'alert');
-      const decision = field('Decision', 'decision', 'approved', {options:[{value:'approved',label:'Approve publication'}, {value:'changes_requested',label:'Request changes'}]});
-      const reason = field('Reason', 'reason', '', {required:true,rows:3,max:10000});
-      if (reviewing) form.append(decision.wrap, reason.wrap);
-      const actions = el('div', 'nb-form-actions'), save = el('button', 'nb-button nb-primary', reviewing ? 'Record publication decision' : 'Send publish request'); save.type = 'submit';
-      if (!reviewing) actions.append(button('Cancel', () => closeDialog(), 'nb-button'));
-      actions.append(save); form.append(error, actions); panel.append(form); container.append(panel);
+      const decision = field('Decision', 'decision', draft.decision, {options:[{value:'approved',label:'Approve publication'}, {value:'changes_requested',label:'Request changes'}]});
+      const reason = field('Reason', 'reason', draft.reason, {required:true,rows:3,max:10000});
+      const actions = el('div', 'nb-form-actions'), save = el('button', 'nb-button nb-primary'); save.type = 'submit';
+      actions.append(save); form.append(decision.wrap, reason.wrap, error, actions); panel.append(form);
+      const capture = () => { if (visible() && !draft.pending && !draft.busy) { draft.decision = decision.input.value; draft.reason = reason.input.value; } };
+      captureReviewDraft = capture;
+      draft.clear = () => { decision.input.value = 'approved'; reason.input.value = ''; decision.input.disabled = reason.input.disabled = save.disabled = true; error.textContent = ''; };
+      for (const control of [decision.input, reason.input]) for (const event of ['input', 'change']) control.addEventListener(event, capture);
+      draft.render = () => {
+        if (!visible()) return;
+        decision.input.disabled = reason.input.disabled = Boolean(draft.pending || draft.busy);
+        save.disabled = draft.busy;
+        save.textContent = draft.pending ? 'Retry the same request' : 'Record publication decision';
+        error.textContent = draft.error;
+      };
+      draft.render();
+      form.addEventListener('submit', async event => {
+        event.preventDefault(); if (!visible() || draft.busy) return;
+        capture();
+        if (!draft.reason.trim()) { draft.error = 'Explain the publication decision.'; draft.render(); return; }
+        draft.pending ||= {revision:draft.revision, content_sha256:draft.hash, idempotency_key:crypto.randomUUID(), decision:draft.decision, reason:draft.reason.trim()};
+        draft.busy = true; draft.error = ''; draft.render();
+        try {
+          await api('/api/notebook/notes/' + encodeURIComponent(draft.noteId) + '/publication-reviews', draft.pending);
+          if (!owns()) return;
+          clearReviewDraft();
+          // A confirmed receipt finishes the draft even if evidence navigation
+          // detached its original form. Never pull the reviewer off that evidence.
+          if (active && params.get('note') === draft.noteId && (!params.get('revision') || params.get('revision') === String(draft.revision))) {
+            openNote(draft.noteId, draft.revision); notice('Publication decision recorded.');
+          }
+        } catch (err) {
+          if (!owns()) return;
+          if (!uncertain(err)) draft.pending = null;
+          draft.error = err.message + (draft.pending ? ' Retry the same request to confirm its outcome.' : '');
+        } finally {
+          if (owns()) { draft.busy = false; draft.render(); }
+        }
+      });
+    }
+    function publicationForm(note, revision, container, present, reviewing = true) {
+      if (reviewing) return publicationReviewForm(note, revision, container, present);
+      const panel = el('section', 'nb-publication-request');
+      const form = el('form', 'nb-form'), error = el('p', 'nb-error'); error.setAttribute('role', 'alert');
+      const actions = el('div', 'nb-form-actions'), save = el('button', 'nb-button nb-primary', 'Send publish request'); save.type = 'submit';
+      actions.append(button('Cancel', () => closeDialog(), 'nb-button'), save);
+      form.append(error, actions); panel.append(form); container.append(panel);
       let pending = null, busy = false;
       form.addEventListener('submit', async event => {
         event.preventDefault(); if (busy || !present()) return;
-        if (reviewing && !reason.input.value.trim()) { error.textContent = 'Explain the publication decision.'; return; }
         busy = true; save.disabled = true; error.textContent = '';
-        pending ||= {revision:revision.revision,content_sha256:revision.content_sha256,idempotency_key:crypto.randomUUID(),...(reviewing ? {decision:decision.input.value,reason:reason.input.value.trim()} : {})};
-        decision.input.disabled = true; reason.input.disabled = true;
+        pending ||= {revision:revision.revision,content_sha256:revision.content_sha256,idempotency_key:crypto.randomUUID()};
         try {
-          await api('/api/notebook/notes/' + encodeURIComponent(note.id) + (reviewing ? '/publication-reviews' : '/publication-requests'), pending);
+          await api('/api/notebook/notes/' + encodeURIComponent(note.id) + '/publication-requests', pending);
           if (!present()) return;
-          if (!reviewing) closeDialog(true);
+          closeDialog(true);
           if (active) openNote(note.id, revision.revision);
-          notice(reviewing ? 'Publication decision recorded.' : 'Publish request pending.');
+          notice('Publish request pending.');
         } catch (err) {
           if (!present()) return; if (!uncertain(err)) pending = null;
           error.textContent = err.message + (pending ? ' Retry the same request to confirm its outcome.' : '');
-        } finally { if (present()) { busy = false; save.disabled = false; decision.input.disabled = Boolean(pending); reason.input.disabled = Boolean(pending); save.textContent = pending ? 'Retry the same request' : reviewing ? 'Record publication decision' : 'Send publish request'; } }
+        } finally { if (present()) { busy = false; save.disabled = false; save.textContent = pending ? 'Retry the same request' : 'Send publish request'; } }
       });
     }
     function openDialog(title, variant = '') { returnFocus = document.activeElement; hasUnsavedDraft = () => false; discardMessage = 'Discard the unsaved changes to this note?'; suspendedDialog = false; dialogEpoch++; q('dialog-title').textContent = title; q('dialog').setAttribute('aria-label', title); q('dialog').classList.toggle('nb-publish-dialog', variant === 'publication'); q('close').setAttribute('aria-label', 'Close dialog'); q('dialog-body').replaceChildren(); q('dialog').showModal(); return q('dialog-body'); }
@@ -1902,7 +1984,7 @@
     q('search').addEventListener('search', event => { search = event.target.value; changeQuery(); });
     q('dialog').addEventListener('cancel', event => { event.preventDefault(); closeDialog(); });
     q('dialog').addEventListener('close', () => { if (returnFocus?.isConnected) returnFocus.focus({preventScroll:true}); });
-    window.addEventListener('beforeunload', event => { if (hasUnsavedDraft()) { event.preventDefault(); event.returnValue = ''; } });
+    window.addEventListener('beforeunload', event => { captureReviewDraft(); if (hasUnsavedDraft() || reviewDraftDirty()) { event.preventDefault(); event.returnValue = ''; } });
     const controller = {show, hide, setAccount, invalidateReads, warm}; root.notebookController = controller; return controller;
   }
   window.CrucibleNotebook = Object.freeze({mount});

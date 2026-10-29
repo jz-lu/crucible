@@ -9,7 +9,7 @@ const requestTypes = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../web/
 const deferred = () => {let resolve, reject; const promise = new Promise((a,b) => {resolve=a; reject=b;}); return {promise,resolve,reject};};
 const page = (title='Queued claim', next_after=null) => ({notes:title === null ? [] : [record(title)], next_after});
 function record(title='Queued claim', full=false) {
-  const revision = {revision:2, content_sha256:'a'.repeat(64), created_at:100, publication_status:'submitted',
+  const revision = {revision:2, content_sha256:'a'.repeat(64), created_at:100, publication_status:'submitted', publication:{requested_at:99},
     summary:!full, content:{title, claim:'A precise claim', tags:['algebra'], kind:'conjecture',
       ...(full ? {conditions:'Fixture scope', body:'Full private review body'} : {})}};
   return {id:'candidate', owner:{id:'author',handle:'author'}, can_edit:false, can_review:true,
@@ -365,6 +365,126 @@ async function test(name, run) {
       assert.doesNotMatch(list().textContent,/Queued claim/,method+' '+suffix+' retires the cached queue');
       held.resolve(page());await pending;await flush();held=null;
     }
+  });
+  const dirtyReview = app => {
+    const reason = app.root.querySelector('[name="reason"]'), decision = app.root.querySelector('[name="decision"]');
+    reason.value = 'Check the attribution and exact scope.'; reason.dispatchEvent({type:'input'});
+    decision.value = 'changes_requested'; decision.dispatchEvent({type:'change'});
+  };
+  const warnsOnUnload = app => {const event={type:'beforeunload'};app.sandbox.window.dispatchEvent(event);return event.defaultPrevented===true;};
+  await test('review decision and reason survive evidence navigation but await a fresh authorized exact reader',async()=>{
+    const late=deferred();let held=false;
+    const app=await boot(url=>held&&url.startsWith('/api/notebook/notes/candidate')?late.promise:undefined);
+    await app.show({note:'candidate',revision:'2'});dirtyReview(app);
+    assert.equal(warnsOnUnload(app),true);
+    app.controller.hide();await app.show();assert.equal(warnsOnUnload(app),true);
+    held=true;const reopening=app.show({note:'candidate',revision:'2'});
+    assert.equal(app.root.querySelector('[name="reason"]'),null);
+    late.resolve({note:record('Queued claim',true)});await reopening;
+    assert.equal(app.root.querySelector('[name="reason"]').value,'Check the attribution and exact scope.');
+    assert.equal(app.root.querySelector('[name="decision"]').value,'changes_requested');
+    assert.equal(app.requests.filter(row=>row.url.startsWith('/api/notebook/notes/candidate')).length,2);
+    assert.equal(app.requests.some(row=>row.body),false);
+  });
+  await test('different note, revision, hash or request timestamp cannot inherit a review draft and require explicit discard',async()=>{
+    for(const change of ['note','revision','hash','request']){
+      let selected=record('Queued claim',true);
+      const app=await boot(url=>url.startsWith('/api/notebook/notes/')?{note:selected}:undefined);
+      await app.show({note:'candidate',revision:'2'});dirtyReview(app);await app.show();
+      selected=record('Different request',true);
+      if(change==='note')selected.id='different-note';
+      if(change==='revision')selected.revisions[0].revision=3;
+      if(change==='hash')selected.revisions[0].content_sha256='b'.repeat(64);
+      if(change==='request')selected.revisions[0].publication.requested_at=100;
+      await app.show({note:selected.id,revision:String(selected.revisions[0].revision)});
+      assert.equal(app.root.querySelector('[name="reason"]'),null,change);
+      assert.match(app.q('full').textContent,/review draft for another request/);
+      app.sandbox.window.confirm=()=>false;
+      byText(app.q('full'),'Discard draft and review this request').click();await flush();
+      assert.equal(app.root.querySelector('[name="reason"]'),null);
+      assert.equal(warnsOnUnload(app),true);
+      app.sandbox.window.confirm=()=>true;
+      byText(app.q('full'),'Discard draft and review this request').click();await app.navigateDone();
+      assert.equal(app.root.querySelector('[name="reason"]').value,'');
+      assert.equal(app.root.querySelector('[name="decision"]').value,'approved');
+      assert.equal(warnsOnUnload(app),false);
+      assert.equal(app.requests.some(row=>row.body),false);
+    }
+  });
+  await test('an uncertain decision retains its frozen payload after leaving, fresh return and retry',async()=>{
+    const late=deferred(),writes=[];let finished=false;
+    const app=await boot((url,body)=>{
+      if(url.endsWith('/publication-reviews')){writes.push(JSON.parse(JSON.stringify(body)));if(writes.length===1)return late.promise;finished=true;return{};}
+      if(url.startsWith('/api/notebook/notes/candidate')){const note=record('Queued claim',true);if(finished)note.revisions[0].publication_status='changes_requested';return{note};}
+    });
+    await app.show({note:'candidate',revision:'2'});dirtyReview(app);
+    app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
+    await app.show();late.reject(Object.assign(Error('Lost response'),{status:0}));await flush();
+    await app.show({note:'candidate',revision:'2'});
+    const reason=app.root.querySelector('[name="reason"]');assert.equal(reason.disabled,true);
+    assert.equal(reason.value,'Check the attribution and exact scope.');
+    assert.ok(byText(app.q('full'),'Retry the same request'));
+    reason.value='Mutation must not change a frozen retry';
+    app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();await app.navigateDone();
+    assert.deepEqual(writes[1],writes[0]);assert.equal(writes.length,2);
+    assert.equal(app.root.querySelector('.nb-form'),null);
+    assert.equal(warnsOnUnload(app),false);
+  });
+  await test('account, session, permission loss and finished server reviews clear retained review drafts',async()=>{
+    for(const change of ['account','session','denial','can-review','finished']){
+      let denied=false,canReview=true,status='submitted';
+      const app=await boot(url=>{
+        if(url.startsWith('/api/notebook/notes/candidate')){
+          if(denied)throw Object.assign(Error('Access denied'),{status:403});
+          const note=record('Queued claim',true);note.can_review=canReview;note.revisions[0].publication_status=status;return{note};
+        }
+      });
+      await app.show({note:'candidate',revision:'2'});dirtyReview(app);
+      if(change==='account')app.account({id:'other',handle:'other'});
+      if(change==='session')app.account(reviewer,'new-session');
+      if(change==='denial')denied=true;
+      if(change==='can-review')canReview=false;
+      if(change==='finished')status='approved';
+      await app.show({note:'candidate',revision:'2'});
+      assert.equal(warnsOnUnload(app),false,change);
+      denied=false;canReview=true;status='submitted';
+      await app.show({note:'candidate',revision:'2'});
+      assert.equal(app.root.querySelector('[name="reason"]').value,'',change);
+      assert.equal(app.requests.some(row=>row.body),false);
+    }
+  });
+  await test('a confirmed review receipt clears its draft while away without navigating off evidence',async()=>{
+    const late=deferred();let finished=false;
+    const app=await boot((url,body)=>{
+      if(url.endsWith('/publication-reviews'))return late.promise;
+      if(url.startsWith('/api/notebook/notes/candidate')){const note=record('Queued claim',true);if(finished)note.revisions[0].publication_status='approved';return{note};}
+    });
+    await app.show({note:'candidate',revision:'2'});dirtyReview(app);
+    app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
+    await app.show();finished=true;late.resolve({});await flush();
+    assert.equal(app.q('full').hidden,true);
+    assert.equal(warnsOnUnload(app),false);
+    await app.show({note:'candidate',revision:'2'});assert.equal(app.root.querySelector('.nb-form'),null);
+  });
+  await test('a late denial for an old account cannot clear a replacement reviewer draft',async()=>{
+    const late=deferred();
+    const app=await boot((url,body)=>url.endsWith('/publication-reviews')?late.promise:undefined);
+    await app.show({note:'candidate',revision:'2'});dirtyReview(app);
+    app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
+    app.account({id:'replacement',handle:'replacement'},'replacement-session');
+    await app.show({note:'candidate',revision:'2'});dirtyReview(app);
+    late.reject(Object.assign(Error('Old permission denied'),{status:403}));await flush();
+    assert.equal(app.root.querySelector('[name="reason"]').value,'Check the attribution and exact scope.');
+    assert.equal(app.root.querySelector('[name="reason"]').disabled,false);
+    assert.equal(warnsOnUnload(app),true);
+    assert.doesNotMatch(app.q('notice').textContent,/Old permission/);
+  });
+  await test('a missing exact request timestamp cannot unlock a review form',async()=>{
+    const app=await boot(url=>{if(url.startsWith('/api/notebook/notes/candidate')){const note=record('Queued claim',true);delete note.revisions[0].publication;return{note};}});
+    await app.show({note:'candidate',revision:'2'});
+    assert.equal(app.root.querySelector('.nb-form'),null);
+    assert.match(app.q('full').textContent,/exact publication request could not be confirmed/);
+    assert.equal(app.requests.some(row=>row.body),false);
   });
   console.log(`${passed} publication-queue frontend checks passed.`);
 })().catch(error=>{console.error(error);process.exitCode=1;});

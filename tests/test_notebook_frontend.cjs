@@ -12,8 +12,8 @@ const timeline = (overrides={}) => ({format:'crucible-notebook-timeline-v1',date
  points:[{date:'2026-10-16',created:2,total:2},{date:'2026-10-18',created:1,total:3}],server_time:Date.parse('2026-10-18T12:00:00Z')/1000,...overrides});
 const user = {id:1,handle:'alice'};
 const content = (title='Private claim') => ({title,claim:'A precise claim',conditions:'Scope',body:'Argument as text',tags:['algebra'],kind:'conjecture'});
-const revision = (number=1,title='Private claim',status='private') => ({revision:number,content_sha256:'hash-'+number,created_at:100,content:content(title),publication_status:status});
-const note = (overrides={}) => {const rev={...revision(),...Object.fromEntries(Object.entries(overrides).filter(([key])=>['revision','content_sha256','content','publication_status'].includes(key)))};const{content:ignored,...metadata}=overrides;return{id:'note-one',owner:user,can_edit:true,created_at:100,revision:rev.revision,content_sha256:rev.content_sha256,publication_status:rev.publication_status,revision_count:1,revisions:[rev],...metadata};};
+const revision = (number=1,title='Private claim',status='private') => ({revision:number,content_sha256:'hash-'+number,created_at:100,content:content(title),publication_status:status,...(status==='submitted'?{publication:{requested_at:99}}:{})});
+const note = (overrides={}) => {const rev={...revision(),...Object.fromEntries(Object.entries(overrides).filter(([key])=>['revision','content_sha256','content','publication_status','publication'].includes(key)))};const{content:ignored,...metadata}=overrides;return{id:'note-one',owner:user,can_edit:true,created_at:100,revision:rev.revision,content_sha256:rev.content_sha256,publication_status:rev.publication_status,revision_count:1,revisions:[rev],...metadata};};
 const deferred = () => {let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
 const proposalRecord = (id='proposal-one',kind='visualization_nomination') => ({id,kind,status:'submitted',effective:false,test_only_self_review:false});
 const proposalNote = (title='A submitted proposal',overrides={}) => {

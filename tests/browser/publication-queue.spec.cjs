@@ -100,6 +100,14 @@ for (const width of [1440,390]) test(`publish requests retain cached summaries a
       reader.release();await reader.delivered;await reader.remove();
       await expect(full).toContainText('QUEUEAUTHOR_PRIVATE_BROWSER_BODY');
       await expect(full.locator('.nb-publication-review')).toBeVisible();
+      if(visit===0){
+        await full.locator('[name="decision"]').selectOption('changes_requested');
+        await full.locator('[name="reason"]').fill('Browser fixture: check the exact attribution before publication.');
+      }else{
+        await expect(full.locator('[name="decision"]')).toHaveValue('changes_requested');
+        await expect(full.locator('[name="reason"]')).toHaveValue('Browser fixture: check the exact attribution before publication.');
+        await expect(full.getByRole('button',{name:'Record publication decision',exact:true})).toBeEnabled();
+      }
       const returning=await holdQueue();await full.getByRole('button',{name:'← Publish requests',exact:true}).click();
       await returning.arrived;
       await expect(row).toBeVisible();await expect(list.locator('.nb-reading')).toHaveCount(0);
