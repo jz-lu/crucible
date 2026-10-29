@@ -230,5 +230,9 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
       assert.match(f.host.textContent, /terms could not be verified/);
     } finally {f.close();}
   });
+  await test('a valid zero monthly allowance pauses new allocation without hiding the board', async () => {
+    const f = fixture({responder: url => url.pathname === '/api/bounties' ? {bounties:[task()],pagination:{offset:0,limit:6,has_more:false},policy:{...policy,monthly_units:0}} : undefined});
+    try {await f.show('view=bounties'); assert.equal(f.host.querySelectorAll('[data-bounty]').length, 1);} finally {f.close();}
+  });
   complete = true; console.log(passed + ' bounty production frontend checks passed');
 })().catch(error => {console.error(error); process.exitCode = 1;});
