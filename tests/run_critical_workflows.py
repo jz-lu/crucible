@@ -22,6 +22,7 @@ SUITES = (
     "test_note_ratings.py", "test_machine_auth.py",
     "test_researcher_profiles.py", "test_researcher_profiles_migration.py",
     "test_bounties.py", "test_bounties_migration.py",
+    "test_bounty_agents.py", "test_bounty_cli.py",
     "test_admission_weekly_points.py", "test_scoring_awards.py",
     "test_numerical_frontier_points.py", "test_bounty_scoring.py",
 )
