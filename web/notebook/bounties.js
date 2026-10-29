@@ -55,10 +55,30 @@
     const mine = button('Your activity', () => change({status: 'mine', page: 1}, 'heading'), 'bty-secondary-link');
     const past = button('Past bounties', () => change({status: 'past', page: 1}, 'heading'), 'bty-secondary-link');
     const open = button('← Research bounties', () => change({status: 'open', page: 1}, 'heading'), 'bty-secondary-link');
-    secondary.append(mine, past, open); board.append(listHeading, entries, pagination, secondary);
+    const agent = button('Copy agent prompt', () => { void copyAgentPrompt(); }, 'bty-secondary-link'); agent.hidden = reviewOnly;
+    secondary.append(mine, agent, past, open); board.append(listHeading, entries, pagination, secondary);
     const reader = el('section', 'bty-reader'), composer = el('section', 'bty-composer'); reader.hidden = composer.hidden = true;
     root.append(heading, notice, board, reader, composer);
     function announce(text, error = false) { notice.replaceChildren(); if (text) notice.append(el('p', error ? 'bty-error' : 'nb-notice', text)); }
+    function agentPrompt() {
+      const origin = new URL(window.location.href).origin;
+      const client = `python3 crucible_cli.py --server ${origin}`;
+      const first = state.id ? `bounty show ${state.id}` : 'bounty list';
+      const setup = state.id ? `bounty init --bounty ${state.id} --path bounty-work` : 'bounty init --path bounty-work';
+      return `Help me work on Crucible research bounties at ${origin}.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running. Reuse an existing connection with the needed permissions; otherwise connect with ${client} login --scope bounties:read --scope bounties:write --no-browser and let me approve it in my browser.\n\nRead ${client} guide, then ${client} guide --resource bounties.txt. Start with ${client} ${first}. If local work is useful, use a new directory: ${client} ${setup}. Read its README and exact task terms. Local initialization, reads and private draft saves use no monthly bounty allowance.\n\nKeep completion criteria and the verification plan explicit. Cite exact published note revisions and hashes; distinguish useful partial progress from a claimed solution. Saving a draft does not publish or admit a task. Linking a note does not approve a solution or award points.\n\nAllocate monthly bounty allowance only within my authorized request. Admission requests and boosts need a separately approved bounties:spend scope and an explicit --confirm-allowance amount matching the saved policy. Existing tokens gain no new permissions. Read the current allowance and costs; do not assume them. Never approve reviews through an agent. If a write response is lost, preserve .bounty-request.json and rerun the same command; do not create a replacement request. Return the saved task or contribution receipt and any unresolved questions.`;
+    }
+    async function copyAgentPrompt() {
+      if (!present() || reviewOnly) return;
+      const text = agentPrompt(), ownerRoute = route();
+      try {
+        await window.navigator.clipboard.writeText(text);
+        if (present() && route() === ownerRoute) announce('Agent prompt copied.');
+      } catch {
+        if (!present() || route() !== ownerRoute) return;
+        const box = el('textarea', 'bty-agent-prompt'); box.value = text; box.readOnly = true; box.rows = 8;
+        box.setAttribute('aria-label', 'Agent prompt'); notice.replaceChildren(box); box.focus(); box.select?.();
+      }
+    }
     function route(next = state) {
       const params = new URLSearchParams(reviewOnly ? {section: 'bounties'} : {view: 'bounties'});
       if (next.status && next.status !== 'open') params.set('status', next.status);
@@ -266,7 +286,7 @@
       }
       if (kind !== 'boost' && task.reservation?.status === 'held') text = `Your existing reservation of ${task.reservation.units} remains attached to this proposal. Submitting the revised brief uses no additional allowance.`;
       panel.append(el('h3', '', kind === 'boost' ? 'Confirm bounty boost' : 'Request bounty admission'), el('p', 'bty-form-hint', text));
-      if (task.pending_claim_count > 0 && kind === 'boost') panel.append(el('p', 'bty-form-hint', 'A solution is awaiting assessment. Your boost will return to its original month if an earlier submission qualifies; expired allowance cannot be spent.'));
+      if (task.pending_claim_count > 0 && kind === 'boost') panel.append(el('p', 'bty-form-hint', 'A solution is awaiting assessment. Your boost will return to its original month if an earlier submission receives the award; expired allowance cannot be spent.'));
       const cancel = button('Cancel', () => { action = null; signature = ''; paintDetail({bounty: task}); }); panel.append(cancel);
       if (policy?.status === 'ready' && Number.isSafeInteger(cost)) {
         formActions(form, key, kind === 'boost' ? 'Confirm boost' : 'Submit for review', () => mutate(key, () => ({...exactContext(task), policy_id: policy.id, confirm_cost_units: cost, ...(kind === 'boost' ? {units: 1} : {})}),
@@ -374,6 +394,7 @@
         if (task.capabilities.submit) actions.append(button('Link a contribution', () => change({detail: 'contribute'}, 'contribution-note'), 'nb-link'));
         if (task.capabilities.cancel) actions.append(button('Cancel bounty', () => { action = 'cancel'; signature = ''; paintDetail({bounty: task}); }, 'nb-link'));
         if (task.capabilities.withdraw) actions.append(button('Withdraw proposal', () => { action = 'withdraw'; signature = ''; paintDetail({bounty: task}); }, 'nb-link'));
+        if (!reviewOnly) actions.append(button('Copy agent prompt', () => { void copyAgentPrompt(); }, 'nb-link'));
         body.append(actions);
         if (action) body.append(['withdraw', 'cancel'].includes(action) ? withdrawalForm(task, action === 'cancel') : confirmAction(task, action));
         if (reviewOnly && task.capabilities.review_admission) body.append(admissionReview(task));
@@ -412,7 +433,7 @@
       const inReader = Boolean(state.id) && !state.compose;
       board.hidden = inReader || state.compose; reader.hidden = !inReader; composer.hidden = !state.compose; heading.hidden = inReader || state.compose;
       title.textContent = reviewOnly ? 'Bounty reviews' : state.status === 'mine' ? 'Your activity' : state.status === 'past' ? 'Past bounties' : 'Research bounties';
-      propose.hidden = reviewOnly; sortField.wrap.hidden = reviewOnly || state.status !== 'open'; sortField.input.value = state.sort;
+      propose.hidden = reviewOnly; secondary.hidden = reviewOnly; sortField.wrap.hidden = reviewOnly || state.status !== 'open'; sortField.input.value = state.sort;
       mine.hidden = past.hidden = reviewOnly || state.status !== 'open'; open.hidden = reviewOnly || state.status === 'open';
       void loadAllowance();
       if (state.compose && !state.id) proposalForm();

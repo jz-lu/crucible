@@ -234,5 +234,18 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
     const f = fixture({responder: url => url.pathname === '/api/bounties' ? {bounties:[task()],pagination:{offset:0,limit:6,has_more:false},policy:{...policy,monthly_units:0}} : undefined});
     try {await f.show('view=bounties'); assert.equal(f.host.querySelectorAll('[data-bounty]').length, 1);} finally {f.close();}
   });
+  await test('agent prompt names the exact task and requires separate explicit allowance authority', async () => {
+    const f = fixture(); let copied;
+    f.window.navigator.clipboard = {writeText: async value => copied = value};
+    try {
+      await f.show('view=bounties'); click(f.host, 'Copy agent prompt'); await flush();
+      assert.match(copied, /bounty list/); assert.match(copied, /--scope bounties:read --scope bounties:write/);
+      assert.match(copied, /separately approved bounties:spend scope/); assert.match(copied, /--confirm-allowance/);
+      await f.show('view=bounties&bounty=' + id);
+      button(f.host.querySelector('.bty-actions'), 'Copy agent prompt').click(); await flush();
+      assert.ok(copied.includes('bounty show ' + id));
+      assert.equal(f.requests.filter(r => r.body).length, 0);
+    } finally {f.close();}
+  });
   complete = true; console.log(passed + ' bounty production frontend checks passed');
 })().catch(error => {console.error(error); process.exitCode = 1;});
