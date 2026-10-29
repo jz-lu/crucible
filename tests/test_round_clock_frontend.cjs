@@ -107,5 +107,37 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
       assert.equal(posts(app).length, 0);
     }
   });
+  await test('a submission keeps its exact deadline through round rollover and a pending retry keeps its exact target', async () => {
+    const {app, server} = await boot();
+    const original = {id: 'old-instance', round_id: server.roundId, ends_at: server.roundId * 3600 + 1300,
+      status: 'open', public: {encoding: {shared_secret_bytes: 32}}};
+    app.sandbox.exactInstance = original;
+    vm.runInContext('state.submissionChallenge = exactInstance', app.sandbox);
+    app.$('#submission-dialog').showModal();
+    app.sandbox.updateClock();
+    assert.equal(app.$('#submission-time').textContent, '01:40 until this instance closes');
+    assert.equal(app.$('#overview-countdown').textContent, '40:00');
+    assert.equal(app.$('#submit-answer').disabled, false);
+    server.roundId++; server.second = 1;
+    app.sandbox.absorbClock(server.envelope({}));
+    assert.equal(app.$('#overview-countdown').textContent, '59:59');
+    assert.equal(app.$('#submission-time').textContent, 'This instance has closed.');
+    assert.equal(app.$('#submit-answer').disabled, true);
+    assert.match(app.$('#submission-error').textContent, /draft is kept/);
+    vm.runInContext("state.pendingAttempt = {challengeId:'old-instance',payload:{candidate:'frozen',idempotency_key:'one-answer'}}", app.sandbox);
+    const pending = vm.runInContext('JSON.stringify(state.pendingAttempt)', app.sandbox);
+    app.sandbox.updateClock();
+    assert.equal(app.$('#submit-answer').disabled, false);
+    assert.match(app.$('#submission-time').textContent, /closed.*original answer’s receipt/);
+    app.$('#submission-dialog').close();
+    await app.sandbox.openSubmission();
+    assert.equal(vm.runInContext('state.submissionChallenge.id', app.sandbox), 'old-instance');
+    assert.equal(vm.runInContext('JSON.stringify(state.pendingAttempt)', app.sandbox), pending);
+    assert.equal(app.$('#submit-answer').textContent, 'Retry the same answer →');
+    assert.equal(posts(app).length, 0);
+    vm.runInContext('state.round = null', app.sandbox);
+    app.sandbox.updateClock();
+    assert.match(app.$('#submission-time').textContent, /closed.*original answer’s receipt/);
+  });
   console.log(`\n${passed} shared round-clock checks passed.`);
 })().catch(error => { console.error(error); process.exitCode = 1; });

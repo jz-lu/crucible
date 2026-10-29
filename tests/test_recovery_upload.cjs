@@ -43,6 +43,8 @@ async function fixtureApp({methods, bytes = 32, mutationResponder, downloadRespo
     if (url.pathname === '/api/methods') return methods || {methods: []};
   }});
   app.targets = targets;
+  app.confirmations = [];
+  app.sandbox.window.confirm = message => { app.confirmations.push(message); return true; };
   const originalFetch = app.sandbox.fetch;
   app.sandbox.fetch = async (input, options = {}) => {
     const url = new URL(input, 'http://127.0.0.1:8000');
@@ -214,6 +216,15 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     const first = mutations(app).find(item => item.url.pathname.endsWith('/submit'));
     assert.equal(JSON.parse(first.options.body).ai_model, 'Reviewed Model 2; Original Model 1');
     assert.equal(Object.hasOwn(JSON.parse(mutations(app)[0].options.body), 'ai_model'), false, 'Annotation belongs to the result, not the reusable method');
+    app.$('#submission-dialog').close();
+    // A new shared round and a different visible target must not redirect a retry.
+    vm.runInContext(`state.timeOffset += 3600000;
+      state.round = {...state.round, id:state.round.id + 1, ends_at:state.round.ends_at + 3600};
+      state.challenge = {...state.challenge, id:'new-round-instance', round_id:state.round.id, ends_at:state.round.ends_at};`, app.sandbox);
+    await app.sandbox.openSubmission();
+    assert.equal(targetId(app), 'fixture-challenge');
+    assert.match(app.$('#submission-time').textContent, /closed.*original answer’s receipt/);
+    assert.equal(app.$('#submit-answer').disabled, false);
     app.$('#ai-model').value = 'Changed after the uncertain request';
     app.$('#submission-form').dispatchEvent({type: 'submit'}); await flush();
     const answers = mutations(app).filter(item => item.url.pathname.endsWith('/submit'));
@@ -534,6 +545,68 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(Object.hasOwn(body, '_instructions'), false);
     assert.equal(Object.hasOwn(body, 'challenge_id'), false);
     assert.equal(app.$('#submission-dialog').open, false);
+  });
+  await test('closing and reopening the same instance preserves every entered field without confirming', async () => {
+    const app = await fixtureApp(); fillExisting(app);
+    app.$('#candidate').value = '00'.repeat(32);
+    app.$('#method-select').value = 'new';
+    const before = draftSnapshot(app);
+    app.$('#submission-dialog').close();
+    app.$('#open-submission').click(); await flush();
+    assert.deepEqual(draftSnapshot(app), before);
+    assert.equal(app.confirmations.length, 0);
+    assert.equal(mutations(app).length, 0);
+  });
+  await test('declining an instance switch reopens the exact original draft; explicit discard resets it', async () => {
+    const app = await fixtureApp(); fillExisting(app);
+    app.$('#method-select').value = 'new';
+    const fields = snapshot(app);
+    app.$('#submission-dialog').close();
+    await app.navigate(route('fixture-21'));
+    app.sandbox.window.confirm = message => { app.confirmations.push(message); return false; };
+    app.$('#open-submission').click(); await flush();
+    assert.equal(app.$('#submission-dialog').open, true);
+    assert.equal(targetId(app), 'fixture-challenge');
+    assert.deepEqual(snapshot(app), fields);
+    assert.match(app.$('#submission-context').textContent, /Stage 20/);
+    assert.match(app.confirmations[0], /Discard.*switch to another instance/);
+    app.$('#submission-dialog').close();
+    app.sandbox.window.confirm = () => true;
+    app.$('#open-submission').click(); await flush();
+    assert.equal(targetId(app), 'second-challenge');
+    assert.equal(app.$('#candidate').value, '');
+    assert.equal(app.$('#method-name').value, '');
+    assert.equal(mutations(app).length, 0);
+  });
+  await test('declining a valid import preserves both same-target and different-target dirty drafts atomically', async () => {
+    for (const [id, bytes] of [['fixture-challenge', 32], ['second-challenge', 16]]) {
+      const app = await fixtureApp(); fillExisting(app);
+      const before = draftSnapshot(app);
+      app.sandbox.window.confirm = message => { app.confirmations.push(message); return false; };
+      await importText(app, JSON.stringify(record(id, bytes)));
+      assert.deepEqual(draftSnapshot(app), before);
+      assert.match(app.confirmations[0], /Discard.*import this result/);
+      assert.equal(app.$('#candidate').disabled, false);
+      assert.equal(mutations(app).length, 0);
+      assert.equal(app.$('#recovery-file-status').hidden, true);
+    }
+  });
+  await test('signout, account switch and access revocation clear the retained draft and retry', async () => {
+    for (const session of [
+      {user: null, csrf_token: 'next'},
+      {user: {id: 'other-account', handle: 'other'}, csrf_token: 'next'},
+      {user: {id: 'fixture-user', handle: 'fixture'}, csrf_token: 'next', access: {mode: 'beta', allowed: false, status: 'revoked'}}
+    ]) {
+      const app = await fixtureApp(); fillExisting(app);
+      vm.runInContext("state.pendingAttempt = {challengeId:'fixture-challenge',payload:{candidate:'private-answer'}}", app.sandbox);
+      app.$('#submission-dialog').close();
+      app.sandbox.setSession(app.envelope(session)); await flush();
+      assert.equal(targetId(app), null);
+      assert.equal(vm.runInContext('state.pendingAttempt', app.sandbox), null);
+      for (const id of formFields.filter(id => !['method-select', 'workers'].includes(id))) assert.equal(app.$('#' + id).value, '', id);
+      assert.equal(app.$('#submission-dialog').open, false);
+      assert.equal(mutations(app).length, 0);
+    }
   });
   console.log(`\n${passed} recovery-upload regressions passed.`);
 })().catch(error => { console.error(error); process.exitCode = 1; });
