@@ -756,6 +756,7 @@
     "migrations/versions/0028_research_bounties.py": "7de1421919557084f2d5d8cfc1d48a17695fdf0021cc4247e310098873bf0da9",
     "migrations/versions/0029_admission_lifecycle.py": "6b5397f000a1da985a2022ccfa6cf69490dedc5af1544686dda3ba67202b5c61",
     "scripts/beta_preflight.py": "8511519397e79bbfc0e179b77a670507a19c4a558c46a75cd4de80880ed404d3",
+    "scripts/beta_transfer.py": "fc4a208bb85d4f36fb191e39643863c07ff980decb730ef3b1e1c64b8e3cb735",
     "scripts/estimate_mceliece_candidates.py": "4400bcd8b1113d9d16754c64186e8387e8b70a05280005e4975d959e8fd4e441",
     "scripts/hqc_module_structure_checks.py": "46fdd4ab11948e52d70dffac27a82d39fe6f06ffe915a27519ed7684516a0741",
     "scripts/hqc_support_review.py": "6da678cb49a78757959c41da7d88b585d2f798f82091ecd98fedfdab14398449",
