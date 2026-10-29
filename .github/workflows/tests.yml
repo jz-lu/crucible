@@ -75,6 +75,7 @@ jobs:
           tests/test_resource_publications.py tests/test_resource_chart_projection.py
           tests/test_resource_state.py
           tests/test_resource_state_migration.py
+          tests/test_bounty_schema_boundary.py
       - name: State verification boundary
         shell: bash
         run: |

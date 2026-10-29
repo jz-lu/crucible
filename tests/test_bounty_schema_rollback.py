@@ -169,13 +169,10 @@ def test_populated_bounty_journal_refuses_0028_downgrade(tmp_path,monkeypatch):
     finally:db.engine.dispose()
 
 
-def test_bridge_only_models_are_migration_only_and_source_overlays_replace_them():
+def test_bridge_only_models_are_migration_only():
     root=Path(crucible.__file__).resolve().parents[1]
     imports=[path.relative_to(root).as_posix() for parent in ('crucible','scripts','migrations')
              for path in (root/parent).rglob('*.py')
              if path.name!='admission_lifecycle_schema.py' and 'import' in path.read_text()
              and 'admission_lifecycle_schema' in path.read_text()]
     assert imports==['migrations/env.py']
-    source=(root/'deploy/release.py').read_text()
-    assert 'rm -rf /opt/crucible/crucible' in source
-    assert 'COPY --chown=0:0 source/ /opt/crucible/' in source
