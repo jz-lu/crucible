@@ -285,6 +285,28 @@ def test_revocation_private_drafts_and_csrf_are_enforced(system):
     assert solver.post('/api/bounties',{'terms':terms(),'idempotency_key':str(uuid4())}).status_code==403
 
 
+def test_private_admission_visibility_requires_human_review_context(system, monkeypatch):
+    from crucible import machine_auth
+    from test_notebook_agents import agent
+    app,owner,reviewer,*_=system
+    pending=request(owner,create(owner));path='/api/bounties/'+pending['bounty']['id']
+    assert reviewer.client.get(path).status_code==200
+    # Isolate object authorization from the separately integrated bounty-scope
+    # registry while still exercising real device/token authentication.
+    required_scope=machine_auth.required_scope
+    monkeypatch.setattr(machine_auth,'required_scope',lambda method,url:
+        'notebook:read' if method=='GET' and url==path else required_scope(method,url))
+    client=agent(app,reviewer,['notebook:read'])
+    for cookies in ({},reviewer.client.cookies,owner.client.cookies):
+        client.cookies.clear();client.cookies.update(cookies)
+        assert client.get(path).status_code==404
+    approved=decision(reviewer,pending)
+    assert approved['bounty']['status']=='open'
+    response=client.get(path)
+    assert response.status_code==200
+    assert not response.json()['bounty']['capabilities']['review_admission']
+
+
 def test_partial_work_and_declined_claim_never_lock_or_award(system):
     app,owner,reviewer,solver,supporter,*_=system
     value=submit(solver,opened(system),published(solver,reviewer),'partial')

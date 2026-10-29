@@ -263,12 +263,12 @@ def register_routes(app, db, settings, clock, user_for, throttle):
         if not protocol_proposals.is_reviewer(settings, user):
             raise HTTPException(403, 'A configured reviewer is required.')
 
-    def task_for(session, user, identifier, *, lock=False):
+    def task_for(session, user, identifier, *, lock=False, private_review=False):
         query = select(BountyTask).where(BountyTask.id == str(identifier))
         if lock: query = query.with_for_update().execution_options(populate_existing=True)
         task = session.scalar(query)
         visible = task and (task.owner_id == user.id or task.status in PUBLIC_STATES or
-                  (protocol_proposals.is_reviewer(settings, user) and task.reservation_id is not None))
+                  (private_review and protocol_proposals.is_reviewer(settings, user) and task.reservation_id is not None))
         if not visible: raise HTTPException(404, 'Bounty not found.')
         return task
 
@@ -362,7 +362,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 # order BEFORE the task and ordinary authenticated actor lock.
                 # Version checking after the task lock rejects changed snapshots.
                 observed = account(request, session, human=human)
-                observed_task = task_for(session, observed, identifier)
+                observed_task = task_for(session, observed, identifier, private_review=human)
                 active = select(BountySubmission.id).where(BountySubmission.task_id == observed_task.id,
                     BountySubmission.claim == 'solution', BountySubmission.status.in_(('pending', 'qualified')))
                 participants = {observed.id, observed_task.owner_id}
@@ -375,8 +375,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             if receipt:
                 if receipt.request_sha256 != commitment:
                     raise HTTPException(409, 'This identifier already belongs to a different bounty operation.')
-                return response(session, user, task_for(session, user, receipt.task_id), request, receipt.effect)
-            task = task_for(session, user, identifier, lock=True) if identifier else None
+                return response(session, user, task_for(session, user, receipt.task_id, private_review=human), request, receipt.effect)
+            task = task_for(session, user, identifier, lock=True, private_review=human) if identifier else None
             if task: version(task, body)
             now = clock()
             task, effect = apply(session, user, task, now)
@@ -456,7 +456,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
     def read_task(task_id: UUID, request: Request):
         with db.transaction() as session:
             user = account(request, session)
-            return response(session, user, task_for(session, user, task_id), request)
+            return response(session, user, task_for(session, user, task_id,
+                            private_review='authorization' not in request.headers), request)
 
     @app.post('/api/bounties')
     def create_task(body: CreateInput, request: Request):
