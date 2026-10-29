@@ -52,7 +52,7 @@
     listHeading.append(count, sortField.wrap);
     const entries = el('div', 'bty-grid'), pagination = el('nav', 'bty-pagination'); pagination.setAttribute('aria-label', 'Bounty pages');
     const secondary = el('nav', 'bty-secondary'); secondary.setAttribute('aria-label', 'Bounty collections');
-    const mine = button('Your bounties', () => change({status: 'mine', page: 1}, 'heading'), 'bty-secondary-link');
+    const mine = button('Your activity', () => change({status: 'mine', page: 1}, 'heading'), 'bty-secondary-link');
     const past = button('Past bounties', () => change({status: 'past', page: 1}, 'heading'), 'bty-secondary-link');
     const open = button('← Research bounties', () => change({status: 'open', page: 1}, 'heading'), 'bty-secondary-link');
     secondary.append(mine, past, open); board.append(listHeading, entries, pagination, secondary);
@@ -118,7 +118,7 @@
       const openBoard = state.status === 'open' && !reviewOnly;
       entries.classList.toggle('bty-grid', openBoard); entries.classList.toggle('bty-management-list', !openBoard);
       count.textContent = result.bounties.length ? (openBoard ? 'Open tasks' : reviewOnly ? 'Awaiting review' : '') : '';
-      if (!result.bounties.length) entries.append(el('p', 'bty-no-results', reviewOnly ? 'No bounty reviews are waiting.' : state.status === 'mine' ? 'Your proposals and bounties will appear here.' : state.status === 'past' ? 'No completed bounties yet.' : 'No open bounties yet.'));
+      if (!result.bounties.length) entries.append(el('p', 'bty-no-results', reviewOnly ? 'No bounty reviews are waiting.' : state.status === 'mine' ? 'Your proposals and contributions will appear here.' : state.status === 'past' ? 'No completed bounties yet.' : 'No open bounties yet.'));
       for (const item of result.bounties) {
         const card = button('', () => change({id: item.id, detail: 'brief'}, 'reader-title'), openBoard ? 'nb-card bty-question' : 'bty-management-row');
         card.dataset.bounty = item.id; card.dataset.bountyFocus = item.id;
@@ -264,6 +264,7 @@
         cost = policy?.proposal_cost_units;
         text = Number.isSafeInteger(cost) ? `Reserve ${cost} of your monthly bounty allowance while this proposal is reviewed. Approval starts its ${policy?.proposal_reward_points ?? policy?.default_base_reward_points ?? policy?.points_per_boost}-point reward. If declined or withdrawn before admission, the reservation returns to its original month; expired allowance cannot be spent.` : 'The bounty allocation policy is not ready.';
       }
+      if (kind !== 'boost' && task.reservation?.status === 'held') text = `Your existing reservation of ${task.reservation.units} remains attached to this proposal. Submitting the revised brief uses no additional allowance.`;
       panel.append(el('h3', '', kind === 'boost' ? 'Confirm bounty boost' : 'Request bounty admission'), el('p', 'bty-form-hint', text));
       if (task.pending_claim_count > 0 && kind === 'boost') panel.append(el('p', 'bty-form-hint', 'A solution is awaiting assessment. Your boost will return to its original month if an earlier submission qualifies; expired allowance cannot be spent.'));
       const cancel = button('Cancel', () => { action = null; signature = ''; paintDetail({bounty: task}); }); panel.append(cancel);
@@ -348,7 +349,7 @@
       // A quiet read must never overwrite an unsaved or uncertain decision.
       if (reader.querySelector('form') && signature && action === null && state.detail !== 'contribute') return;
       signature = nextSignature; reader.replaceChildren();
-      reader.append(button('← ' + (reviewOnly ? 'Bounty reviews' : state.status === 'mine' ? 'Your bounties' : state.status === 'past' ? 'Past bounties' : 'Research bounties'), () => change({id: '', detail: 'brief'}, task.id), 'nb-link bty-reader-back'));
+      reader.append(button('← ' + (reviewOnly ? 'Bounty reviews' : state.status === 'mine' ? 'Your activity' : state.status === 'past' ? 'Past bounties' : 'Research bounties'), () => change({id: '', detail: 'brief'}, task.id), 'nb-link bty-reader-back'));
       const article = el('article', 'bty-detail'), heading = el('div', 'bty-detail-heading'), title = el('h2', '', task.title); title.tabIndex = -1; title.dataset.bountyFocus = 'reader-title';
       heading.append(el('p', 'bty-meta', statuses[task.status] || task.status), title, el('p', 'bty-byline', 'Posted by ' + task.owner.handle + ' · brief revision ' + (task.revision || 1)));
       const tabs = el('nav', 'bty-detail-tabs'); tabs.setAttribute('aria-label', 'Bounty information');
@@ -410,7 +411,7 @@
       state = next;
       const inReader = Boolean(state.id) && !state.compose;
       board.hidden = inReader || state.compose; reader.hidden = !inReader; composer.hidden = !state.compose; heading.hidden = inReader || state.compose;
-      title.textContent = reviewOnly ? 'Bounty reviews' : state.status === 'mine' ? 'Your bounties' : state.status === 'past' ? 'Past bounties' : 'Research bounties';
+      title.textContent = reviewOnly ? 'Bounty reviews' : state.status === 'mine' ? 'Your activity' : state.status === 'past' ? 'Past bounties' : 'Research bounties';
       propose.hidden = reviewOnly; sortField.wrap.hidden = reviewOnly || state.status !== 'open'; sortField.input.value = state.sort;
       mine.hidden = past.hidden = reviewOnly || state.status !== 'open'; open.hidden = reviewOnly || state.status === 'open';
       void loadAllowance();

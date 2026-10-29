@@ -139,3 +139,5 @@
 
 .bty-decision-history{margin-top:24px;font-size:12px;color:var(--muted)}
 .bty-decision-history summary{cursor:pointer}
+
+.bty-error:empty{display:none}

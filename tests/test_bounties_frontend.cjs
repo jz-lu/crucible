@@ -222,5 +222,13 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
       const ref = f.host.querySelector('.bty-note-ref'); assert.match(ref.textContent, /Unavailable note/); assert.equal(ref.getAttribute('href'), null);
     } finally {f.close();}
   });
+  await test('missing reward-policy terms fail closed before showing a spending action', async () => {
+    const f = fixture({responder: url => url.pathname === '/api/bounties/' + id ? {bounty: task(), policy:{status:'ready',id:'incomplete',monthly_units:10}} : undefined});
+    try {
+      await f.show('view=bounties&bounty=' + id);
+      assert.equal(button(f.host, 'Boost this bounty'), undefined);
+      assert.match(f.host.textContent, /terms could not be verified/);
+    } finally {f.close();}
+  });
   complete = true; console.log(passed + ' bounty production frontend checks passed');
 })().catch(error => {console.error(error); process.exitCode = 1;});

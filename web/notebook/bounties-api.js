@@ -13,6 +13,14 @@
         !value.capabilities || typeof value.capabilities !== 'object') throw Error('The bounty response could not be verified.');
     return value;
   }
+  function validatePolicy(value) {
+    const policy = value?.policy;
+    if (!policy || !['ready', 'pending'].includes(policy.status) || typeof policy.id !== 'string' || !policy.id) throw Error('The bounty policy could not be verified.');
+    if (policy.status === 'ready' && !['monthly_units', 'proposal_cost_units', 'boost_cost_units', 'points_per_boost'].every(key => Number.isSafeInteger(policy[key]) && policy[key] > 0)) throw Error('The bounty allowance terms could not be verified.');
+    const initial = policy.proposal_reward_points ?? policy.default_base_reward_points;
+    if (policy.status === 'ready' && (!Number.isSafeInteger(initial) || initial < 1)) throw Error('The initial bounty reward could not be verified.');
+    return value;
+  }
   function parseReferences(text, {single = false} = {}) {
     let value;
     try { value = JSON.parse(text); } catch { value = text.trim(); }
@@ -78,13 +86,13 @@
       if (!Array.isArray(value?.bounties) || value.bounties.length > 6 ||
           !Number.isSafeInteger(value.pagination?.offset) || value.pagination.offset < 0 ||
           value.pagination.limit !== 6 || typeof value.pagination.has_more !== 'boolean') throw Error('The bounty list could not be verified.');
-      value.bounties.forEach(item => validateTask(item)); return value;
+      value.bounties.forEach(item => validateTask(item)); return validatePolicy(value);
     }
     const detailPath = id => {
       if (!idPattern.test(id)) throw Error('This bounty link is invalid.');
       return '/api/bounties/' + id;
     };
-    const validateDetail = id => value => { validateTask(value?.bounty, id); if (!value.bounty.terms) throw Error('The bounty brief is missing.'); return value; };
+    const validateDetail = id => value => { validateTask(value?.bounty, id); if (!value.bounty.terms) throw Error('The bounty brief is missing.'); return validatePolicy(value); };
     async function write(path, body, id) {
       if (!current()) throw Object.assign(Error('This session is no longer active.'), {status: 403});
       const result = await api(path, body);
@@ -104,7 +112,7 @@
       allowance: settings => read('/api/me/bounty-allowance', value => {
         if (!Number.isSafeInteger(value?.allowance?.available_units) || value.allowance.available_units < 0 ||
             !Number.isSafeInteger(value.allowance.monthly_units) || value.allowance.monthly_units < 0) throw Error('The allowance response could not be verified.');
-        return value;
+        return validatePolicy(value);
       }, settings),
       create: body => write('/api/bounties', body),
       revise: (id, body) => write(detailPath(id) + '/revisions', body, id),
