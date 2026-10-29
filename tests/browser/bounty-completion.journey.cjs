@@ -82,4 +82,8 @@ test('a reviewed bounty spends explicit allowance and awards one independently a
   expect(completed.bounty.status).toBe('completed'); expect(completed.bounty.award.points).toBe(200);
   await expect(panel()).toContainText('Recorded award'); await expect(panel()).toContainText('200 points · browser_alice');
   await page.reload(); await expect(panel()).toContainText('200 points · browser_alice');
+  await page.goto('/#person/browser_alice');
+  await expect(page.locator('.person-stats > div').filter({has:page.getByLabel('Points breakdown', {exact:true})}).locator(':scope > dd')).toHaveText('200');
+  await page.getByLabel('Points breakdown', {exact:true}).click();
+  await expect(page.locator('.person-score-parts > div').filter({has:page.getByText('Research bounties', {exact:true})}).locator('dd')).toHaveText('200');
 });
