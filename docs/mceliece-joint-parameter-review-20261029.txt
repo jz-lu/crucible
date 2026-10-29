@@ -1,0 +1,236 @@
+MCELIECE: JOINT PARAMETER STUDY AND IMPLEMENTATION BOUNDARY
+Assessment: 2026-10-29
+
+Decision
+
+Ship the reproducible offline screen, independent public-artifact verification,
+and tests. Keep the existing length-research-v1 implementation and records intact.
+Do not activate a new progression from this study: its generic attack models are
+deliberately incomplete and the new tuples have no reviewed native implementation.
+
+This is a concrete advance over the 17 October review: 45,497 tuples are now
+enumerated reproducibly, nine receive 81 source-pinned partial ISD estimates under
+three resource models, and the published TII-254 equivalent key is independently
+checked against its complete public binary code. A defensible security/cost route
+is still unresolved. The six-point control ray below is a diagnostic sample, NOT
+a new set of stages. Neither a round stage count nor attractive curves determine
+the construction.
+
+What the current path gives up
+
+The current route fixes m=12 and t=64 and increases n from840 to3488. Its parity
+matrix has r=mt=768 rows; its syndrome remains96 bytes. The public matrix grows
+as n grows. This is authentic shortening of the same binary Goppa family with
+the same error-correcting capability, but a particularly costly way to make tiny
+research instances. It is a controlled experiment rather than a joint optimum.
+
+The existing smaller-n encap slowdown has a separate explanation. FixedWeight
+restarts if sampled positions repeat. At n840 its ideal expected batch count is
+11.7385; at n3488 it is1.78876. This does not justify changing the parameter path
+just to make measured time monotone. More positions can reduce sampler work
+while increasing matrix multiplication, key size and decoding work.
+
+Finite domain and exact encoding
+
+The new screen exhausts m=7..12, t=2..64, byte-aligned n satisfying
+mt<n<=min(3488,2^m): 45,497 tuples. Counts by m are131,465,1750,5489,13297,24365.
+This includes the old endpoint, not every useful binary Goppa construction.
+Byte alignment is a deliberate search restriction; the scheme itself allows
+other lengths, including the public TII-254 case below.
+
+With r=mt and k=n-r, canonical costs are:
+  public key: r*ceil(k/8) bytes; ciphertext: ceil(r/8) bytes.
+Each public matrix row is padded separately. Rounding r*k once understates size
+for many new tuples. Padding-bit acceptance/rejection is a protocol decision,
+not an implementation detail to leave unspecified. [1]
+
+All candidate integer constraints and sizes are deterministic. The full JSONL
+table is optional output; its canonical ordered rows hash is:
+5f720bf9be9c6188d2b7e93968946b34cb11058f691162a5267bee747bdfa5cf
+No field called current_security_bits contains a number.
+
+Correctness and implementation domain
+
+The binary irreducible Goppa construction has distance at least2t+1, giving
+unique correction of honest weight-t errors under the declared exact decoder.
+Changing m,n,t need not worsen this mathematical correctness contract. However,
+integer feasibility alone supplies neither a valid implementation nor a full-
+rank systematic public-key generator. The screen proves the small binary field
+polynomials irreducible, but does not supply the degree-t extension polynomial
+needed by the seeded generator for every tuple, nor review a generalized native
+decoder. [1]
+
+The existing native clean worker assumes m12/t64 in field arithmetic, extension
+arithmetic, support/Benes handling, sampling buffers, decoding and private-key
+layout. Replacing three macros is insufficient. A new release must pin field and
+extension representations, complete key/support distributions, matrix generation
+failure behavior, exact padding policy, KDF and rejection behavior. Bounded
+generation aborts are an availability event, distinct from honest disagreement.
+
+An independent small test constructs GF16 with z^4+z+1, g=x^2+x+z^3, support0..11,
+and a full-rank8x12 check matrix. It exhausts all79 errors of weight0,1,2 and
+checks their syndromes are distinct. Canonical padded public rows are
+0b0704080e0d0201. This checks a real tiny instance and the encoding formulas;
+it does not test a new general production decoder or its constant-time behavior.
+
+Diagnostic joint-scaling sample
+
+For m=7..12, preserve the old anchor's support fraction n/2^m and parity fraction
+mt/n as closely as integer/byte rounding permits:
+  n=8*nearest(3488*2^m/(4096*8)); t=nearest(768*n/(3488*m)), ties upward.
+The rule is explicit and has no optimized-security claim.
+
+  m      n    t       public key B   ciphertext B   expected sampler batches
+  7    112    4                308              4                  1.05693
+  8    216    6               1008              6                  1.07348
+  9    440   11               4257             13                  1.13430
+ 10    872   19              16340             24                  1.21836
+ 11   1744   35              65450             49                  1.40979
+ 12   3488   64             261120             96                  1.78876
+
+The sampler column evaluates the GENERALIZED mathematical FixedWeight procedure
+in specification5.4, with uniform bits. It is not timing or an assertion that a
+native worker exists for these points. Existing native m12/t64 measurements are
+separate. Low-degree/other structural vulnerabilities can overturn any attractive
+generic-model comparison; those points are not automatically suitable stages.
+
+Source-pinned generic decoding screen
+
+CryptographicEstimators2.1.1 was retrieved at commit
+071cce7a942af423422cb0c6d6af55778c72e4d1. We inspected its SDProblem, SDAlgorithm,
+Prange and algorithm exports. The separate runner executes Prange, Stern and
+MayOzerov only, recording all chosen optimizer parameters, rather than treating
+a raw Prange trial count as work. [2]
+
+Inputs are n,k=n-mt,w=t, nsolutions=0 in LOG2 units (one planted solution), and
+bit_complexities=1. The contexts are constant-access unlimited memory,
+constant-access8GiB (2^36 modeled memory bits), and cube-root-access unlimited
+memory. These are estimator accounting conventions, not measured hardware.
+The upstream optimizer's default finite search/heuristics are retained. No
+global algorithm-parameter optimum is claimed.
+
+Cheapest log2 modeled bit operations AMONG THESE THREE ALGORITHMS:
+
+  (m,n,t)              constant access   constant,8GiB   cube-root access
+  (7,112,4)                    19.798          19.798             24.401
+  (7,120,4)                    20.055          20.055             24.722
+  (8,216,6)                    24.410          24.410             30.522
+  (9,440,11)                   34.749          34.749             41.327
+  (10,872,19)                  52.018          52.018             60.081
+  (11,1744,35)                 83.875          86.559             95.486
+  current(12,840,64)           30.542          30.542             37.296
+  current(12,1680,64)          84.556          84.905             93.471
+  anchor(12,3488,64)          140.795         149.315            160.315
+
+Within this partial model, (9,440,11) uses fewer key/ciphertext bytes than the
+current first stage and has a higher cheapest modeled cost in all three contexts.
+This is a reason to investigate joint parameters, NOT proof of actual equal-
+security dominance. Other attacks can be cheaper, especially at small t. The
+three anchor values also show why one unqualified security-bits label is unsafe.
+
+Coverage explicitly missing: other upstream ISD algorithms, progressive sieving
+ISD, Goppa-specific recovery, quantum/many-target variants, empirical full-size
+calibration and any cryptanalytic lower bound. Generic cost estimates are attack
+estimates, not guarantees that every attack costs at least that much. [2,3]
+
+Contemporary structural evidence
+
+GIJS proves a public-code distinguisher in its stated asymptotic regime and gives
+heuristic decryption/equivalent-key extensions. Distinguishing the code alone
+does not win Crucible's shared-secret recovery challenge. [4] Weis improves
+heuristic recovery and analyzes different memory-charging conventions; full-size
+estimates depend on stated assumptions. [5] These cannot be silently combined
+with our generic numbers or transplanted to every reduced tuple.
+
+The TII-254 artifact makes a concrete smaller-instance result checkable. Its
+published equivalent key at (m8,n223,t12) was verified here, independently of its
+Sage verifier: exact field and Goppa irreducibility; all223 distinct support
+elements; reconstruction of96 binary check rows by coefficient expansion; full
+rank and equality of the complete public binary row space. Mutation tests reject
+an altered public bit, support, polynomial and field representation. [6]
+
+This is independent verification of the PUBLISHED equivalent key, not discovery
+or re-execution of the attack. The author deserves recovery credit. We did not
+run its expensive GPU operator, reproduce reported attack time, or identify the
+original secret key. Its historical254 label is not a certified security level.
+No inference of a feasible full-size attack follows from this check.
+
+Selection and review contract
+
+The offline modeled-frontier helper requires explicit reviewed-domain coverage,
+finite work, provenance and a matching game/resource context for both generic
+decoding and structural recovery. Missing coverage never becomes infinity. All
+current sample rows are blocked from that comparison. A proved inapplicability
+of a particular attack would require a separately reviewed domain statement;
+the current conservative helper does not encode N/A as infinite work.
+
+Even passing the helper would only create a conditional modeled Pareto set over
+public-key bytes, ciphertext bytes and covered attack cost. It never admits a
+configuration. Runtime/memory tradeoffs, structural exceptions, implementation
+review, correctness, distribution fidelity and endpoint choice remain necessary.
+
+Next research implementation should first select a SMALL justified subset under
+an explicitly stated incomplete-model policy, if reviewers accept that research
+purpose. Add full Goppa/decoder/KEM reference behavior and independent native
+conformance, not one fixed toy key or truncated seed entropy. Keep the published
+348864 endpoint as an identified historical anchor unless a new assessment
+justifies a different target; it is not currently certified128-bit security.
+Create a separate immutable release and map new stages only after that review.
+Preserve old sources, challenges, receipts, scores and benchmark bindings.
+
+Reproduction
+
+No new dependency is required for enumeration, public-key verification or tests:
+
+  python3 -B scripts/mceliece_candidate_screen.py \
+    --output /tmp/mceliece-screen.json --candidate-jsonl /tmp/mceliece-candidates.jsonl
+  python3 -B scripts/verify_tii254_key.py \
+    --artifact tests/fixtures/tii254 --output /tmp/tii254-check.json
+  python3 -m pytest -q tests/test_mceliece_candidate_screen.py
+
+The external estimator is deliberately isolated from application dependencies:
+
+  git clone https://github.com/Crypto-TII/CryptographicEstimators.git /tmp/ce-mceliece
+  git -C /tmp/ce-mceliece checkout 071cce7a942af423422cb0c6d6af55778c72e4d1
+  python3.11 -m venv /tmp/ce-mceliece-env
+  /tmp/ce-mceliece-env/bin/pip install -r scripts/requirements-mceliece-screen.txt
+  /tmp/ce-mceliece-env/bin/python -B scripts/estimate_mceliece_candidates.py \
+    --estimator-checkout /tmp/ce-mceliece --output /tmp/mceliece-isd.json
+
+The runner rejects a different or dirty estimator checkout. Numerical dependency
+versions and Python version are recorded. Python3.11.14 was used here. CI verifies
+artifact identities/scope and the exact independent checks; it does not install
+or re-run the external estimator. Source runtime pins and live profiles are not
+changed by any of these scripts.
+
+Primary sources and evidence scope
+
+[1] Classic McEliece specification2022-10-23, sections3,4,5.4,6.2.
+https://classic.mceliece.org/mceliece-spec-20221023.pdf
+Reviewed the prior downloaded exact PDF/text in the29October curve audit:
+PDF SHA256 dcc6878852ef8a00a7bedd859da661770cf85d2c3d9239e06d25e4a0d365fd12.
+Fresh fetch failed in this pass; the retained bytes were used.
+
+[2] TII CryptographicEstimators, exact source commit inspected and executed:
+https://github.com/Crypto-TII/CryptographicEstimators/tree/071cce7a942af423422cb0c6d6af55778c72e4d1
+SDEstimator/{sd_problem.py,sd_algorithm.py,SDAlgorithms/}; base_algorithm.py.
+
+[3] Yu et al., Progressive Sieving-Style Information-Set Decoding Algorithm.
+https://eprint.iacr.org/2026/633
+Current primary abstract checked29October; its heuristic model was not reproduced.
+
+[4] Ghoshal, Ishai, Jain, Sun, Quasipolynomial Cryptanalysis of the McEliece
+Cryptosystem (or: PIR Meets McEliece), revision27August2026.
+https://eprint.iacr.org/2026/1630
+[5] Weis, Improving GIJS Key Recovery for Classic McEliece, v0.5,6October2026.
+https://eprint.iacr.org/2026/1984
+For[4,5], current primary abstracts/revision metadata checked29October; proofs
+and full-size costs not independently validated. Full Weis PDF fetch returned403.
+
+[6] Saarinen, Two-Anchor Holdout/Hermite: Solving the TII-254 McEliece Key
+Recovery Challenge, revision24September2026.
+https://eprint.iacr.org/2026/1986
+Public artifact exact commit49c3e84a47e47c1ea0722859f1c0ad560c27d2da:
+https://github.com/mjosaarinen/tii254-artifact/tree/49c3e84a47e47c1ea0722859f1c0ad560c27d2da
+Unchanged public/recovered-key fixture inputs, original MIT license and attribution
+are under tests/fixtures/tii254. The local verification receipt records their hashes.

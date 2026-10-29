@@ -1,0 +1,357 @@
+{
+  "format": "crucible-mceliece-candidate-screen-v1",
+  "status": "offline-screen-only-no-new-live-progression",
+  "domain": {
+    "m": [
+      7,
+      12
+    ],
+    "t": [
+      2,
+      64
+    ],
+    "n_alignment": 8,
+    "constraints": "m*t<n<=min(3488,2**m)",
+    "candidate_count": 45497,
+    "counts_by_m": {
+      "7": 131,
+      "8": 465,
+      "9": 1750,
+      "10": 5489,
+      "11": 13297,
+      "12": 24365
+    },
+    "ordered_candidate_rows_sha256": "5f720bf9be9c6188d2b7e93968946b34cb11058f691162a5267bee747bdfa5cf"
+  },
+  "encoding": "CM 2022-10-23 section 6.2; zero padding per public row and syndrome",
+  "not_established": [
+    "full-rank systematic generation for each candidate",
+    "extension-field polynomial and serialized private-key format",
+    "generalized decoder and KEM conformance",
+    "complete generic and structural attack analysis",
+    "runtime/memory Pareto efficiency or global optimum"
+  ],
+  "control_ray_rule": {
+    "n": "8*nearest(3488*2^m/(4096*8)); ties upward",
+    "t": "nearest(768*n/(3488*m)); ties upward",
+    "purpose": "diagnostic sample, not a selected live progression"
+  },
+  "control_ray": [
+    {
+      "candidate_id": "m7-n112-t4",
+      "m": 7,
+      "n": 112,
+      "t": 4,
+      "r": 28,
+      "k": 84,
+      "public_key_bytes": 308,
+      "ciphertext_bytes": 4,
+      "public_row_padding_bits": 4,
+      "ciphertext_padding_bits": 4,
+      "field_polynomial_bits": 131,
+      "prange_log2_trials_only": 8.244776494572408,
+      "fixed_weight": {
+        "batch": 8,
+        "success_probability": 0.9461359756824095,
+        "expected_batches": 1.0569305318706865
+      },
+      "live_registered": false,
+      "implementation_admission": "not determined by this screen",
+      "current_security_bits": null,
+      "missing_evidence": [
+        "complete applicable attack-model review",
+        "new tuples: extension-field representation and native conformance"
+      ]
+    },
+    {
+      "candidate_id": "m8-n216-t6",
+      "m": 8,
+      "n": 216,
+      "t": 6,
+      "r": 48,
+      "k": 168,
+      "public_key_bytes": 1008,
+      "ciphertext_bytes": 6,
+      "public_row_padding_bits": 0,
+      "ciphertext_padding_bits": 0,
+      "field_polynomial_bits": 283,
+      "prange_log2_trials_only": 13.387613823525424,
+      "fixed_weight": {
+        "batch": 12,
+        "success_probability": 0.931546881446288,
+        "expected_batches": 1.0734832781012953
+      },
+      "live_registered": false,
+      "implementation_admission": "not determined by this screen",
+      "current_security_bits": null,
+      "missing_evidence": [
+        "complete applicable attack-model review",
+        "new tuples: extension-field representation and native conformance"
+      ]
+    },
+    {
+      "candidate_id": "m9-n440-t11",
+      "m": 9,
+      "n": 440,
+      "t": 11,
+      "r": 99,
+      "k": 341,
+      "public_key_bytes": 4257,
+      "ciphertext_bytes": 13,
+      "public_row_padding_bits": 3,
+      "ciphertext_padding_bits": 5,
+      "field_polynomial_bits": 515,
+      "prange_log2_trials_only": 24.321679943916536,
+      "fixed_weight": {
+        "batch": 22,
+        "success_probability": 0.8816007267796139,
+        "expected_batches": 1.1343003353149277
+      },
+      "live_registered": false,
+      "implementation_admission": "not determined by this screen",
+      "current_security_bits": null,
+      "missing_evidence": [
+        "complete applicable attack-model review",
+        "new tuples: extension-field representation and native conformance"
+      ]
+    },
+    {
+      "candidate_id": "m10-n872-t19",
+      "m": 10,
+      "n": 872,
+      "t": 19,
+      "r": 190,
+      "k": 682,
+      "public_key_bytes": 16340,
+      "ciphertext_bytes": 24,
+      "public_row_padding_bits": 6,
+      "ciphertext_padding_bits": 2,
+      "field_polynomial_bits": 1033,
+      "prange_log2_trials_only": 42.82605513914156,
+      "fixed_weight": {
+        "batch": 38,
+        "success_probability": 0.8207779529554716,
+        "expected_batches": 1.2183563123244021
+      },
+      "live_registered": false,
+      "implementation_admission": "not determined by this screen",
+      "current_security_bits": null,
+      "missing_evidence": [
+        "complete applicable attack-model review",
+        "new tuples: extension-field representation and native conformance"
+      ]
+    },
+    {
+      "candidate_id": "m11-n1744-t35",
+      "m": 11,
+      "n": 1744,
+      "t": 35,
+      "r": 385,
+      "k": 1359,
+      "public_key_bytes": 65450,
+      "ciphertext_bytes": 49,
+      "public_row_padding_bits": 1,
+      "ciphertext_padding_bits": 7,
+      "field_polynomial_bits": 2053,
+      "prange_log2_trials_only": 78.08532974359983,
+      "fixed_weight": {
+        "batch": 70,
+        "success_probability": 0.7093246739357587,
+        "expected_batches": 1.4097916465409277
+      },
+      "live_registered": false,
+      "implementation_admission": "not determined by this screen",
+      "current_security_bits": null,
+      "missing_evidence": [
+        "complete applicable attack-model review",
+        "new tuples: extension-field representation and native conformance"
+      ]
+    },
+    {
+      "candidate_id": "m12-n3488-t64",
+      "m": 12,
+      "n": 3488,
+      "t": 64,
+      "r": 768,
+      "k": 2720,
+      "public_key_bytes": 261120,
+      "ciphertext_bytes": 96,
+      "public_row_padding_bits": 0,
+      "ciphertext_padding_bits": 0,
+      "field_polynomial_bits": 4105,
+      "prange_log2_trials_only": 142.78322916621192,
+      "fixed_weight": {
+        "batch": 128,
+        "success_probability": 0.5590472029259707,
+        "expected_batches": 1.7887577198600535
+      },
+      "live_registered": true,
+      "implementation_admission": "not determined by this screen",
+      "current_security_bits": null,
+      "missing_evidence": [
+        "complete applicable attack-model review",
+        "new tuples: extension-field representation and native conformance"
+      ]
+    }
+  ],
+  "incumbent_examples": [
+    {
+      "candidate_id": "m12-n840-t64",
+      "m": 12,
+      "n": 840,
+      "t": 64,
+      "r": 768,
+      "k": 72,
+      "public_key_bytes": 6912,
+      "ciphertext_bytes": 96,
+      "public_row_padding_bits": 0,
+      "ciphertext_padding_bits": 0,
+      "field_polynomial_bits": 4105,
+      "prange_log2_trials_only": 8.616931592884896,
+      "fixed_weight": {
+        "batch": 512,
+        "success_probability": 0.08518994578515739,
+        "expected_batches": 11.73847442657053
+      },
+      "live_registered": true,
+      "implementation_admission": "not determined by this screen",
+      "current_security_bits": null,
+      "missing_evidence": [
+        "complete applicable attack-model review",
+        "new tuples: extension-field representation and native conformance"
+      ]
+    },
+    {
+      "candidate_id": "m12-n1680-t64",
+      "m": 12,
+      "n": 1680,
+      "t": 64,
+      "r": 768,
+      "k": 912,
+      "public_key_bytes": 87552,
+      "ciphertext_bytes": 96,
+      "public_row_padding_bits": 0,
+      "ciphertext_padding_bits": 0,
+      "field_polynomial_bits": 4105,
+      "prange_log2_trials_only": 74.41663549238916,
+      "fixed_weight": {
+        "batch": 256,
+        "success_probability": 0.29658796222736755,
+        "expected_batches": 3.3716810098765544
+      },
+      "live_registered": true,
+      "implementation_admission": "not determined by this screen",
+      "current_security_bits": null,
+      "missing_evidence": [
+        "complete applicable attack-model review",
+        "new tuples: extension-field representation and native conformance"
+      ]
+    },
+    {
+      "candidate_id": "m12-n3488-t64",
+      "m": 12,
+      "n": 3488,
+      "t": 64,
+      "r": 768,
+      "k": 2720,
+      "public_key_bytes": 261120,
+      "ciphertext_bytes": 96,
+      "public_row_padding_bits": 0,
+      "ciphertext_padding_bits": 0,
+      "field_polynomial_bits": 4105,
+      "prange_log2_trials_only": 142.78322916621192,
+      "fixed_weight": {
+        "batch": 128,
+        "success_probability": 0.5590472029259707,
+        "expected_batches": 1.7887577198600535
+      },
+      "live_registered": true,
+      "implementation_admission": "not determined by this screen",
+      "current_security_bits": null,
+      "missing_evidence": [
+        "complete applicable attack-model review",
+        "new tuples: extension-field representation and native conformance"
+      ]
+    }
+  ],
+  "old_proxy_counterexample": {
+    "candidate_id": "m7-n120-t4",
+    "m": 7,
+    "n": 120,
+    "t": 4,
+    "r": 28,
+    "k": 92,
+    "public_key_bytes": 336,
+    "ciphertext_bytes": 4,
+    "public_row_padding_bits": 4,
+    "ciphertext_padding_bits": 4,
+    "field_polynomial_bits": 131,
+    "prange_log2_trials_only": 8.648177795724818,
+    "fixed_weight": {
+      "batch": 8,
+      "success_probability": 0.9507171570703576,
+      "expected_batches": 1.0518375444927361
+    },
+    "live_registered": false,
+    "implementation_admission": "not determined by this screen",
+    "current_security_bits": null,
+    "missing_evidence": [
+      "complete applicable attack-model review",
+      "new tuples: extension-field representation and native conformance"
+    ]
+  },
+  "comparison": {
+    "conditional_modeled_frontier": [],
+    "blocked": [
+      {
+        "candidate_id": "m10-n872-t19",
+        "reasons": [
+          "generic_decoding: coverage unresolved",
+          "goppa_structural_recovery: coverage unresolved"
+        ]
+      },
+      {
+        "candidate_id": "m11-n1744-t35",
+        "reasons": [
+          "generic_decoding: coverage unresolved",
+          "goppa_structural_recovery: coverage unresolved"
+        ]
+      },
+      {
+        "candidate_id": "m12-n3488-t64",
+        "reasons": [
+          "generic_decoding: coverage unresolved",
+          "goppa_structural_recovery: coverage unresolved"
+        ]
+      },
+      {
+        "candidate_id": "m7-n112-t4",
+        "reasons": [
+          "generic_decoding: coverage unresolved",
+          "goppa_structural_recovery: coverage unresolved"
+        ]
+      },
+      {
+        "candidate_id": "m8-n216-t6",
+        "reasons": [
+          "generic_decoding: coverage unresolved",
+          "goppa_structural_recovery: coverage unresolved"
+        ]
+      },
+      {
+        "candidate_id": "m9-n440-t11",
+        "reasons": [
+          "generic_decoding: coverage unresolved",
+          "goppa_structural_recovery: coverage unresolved"
+        ]
+      }
+    ],
+    "live_admission": false
+  },
+  "required_before_new_release": [
+    "review applicable attacks including low-degree structure",
+    "select and justify tradeoff objective",
+    "independent native implementation/correctness/conformance review",
+    "new immutable release/progression; preserve old evidence"
+  ]
+}
