@@ -219,6 +219,17 @@ rather than only the endpoint. Benchmarks are optional until available, but an u
 not be advertised as a measured improvement. Natural gaps are preferable to
 artificially inefficient intermediates. Keep the correctness upper bound fixed.
 
+The review records three separate domains: mathematical admissibility, support
+by the pinned executable, and coverage of the correctness and attack models.
+Parameter generality in a specification does not establish decoder generality.
+Keep candidate tables, exclusion reasons, exact model options, commands and
+source pins with the evidence. An optimizer's best result under an incomplete
+model is a candidate, not a security guarantee or an admission decision. In
+particular, report missing structural attacks separately from generic decoding
+estimates, and distinguish planted-instance and random-instance assumptions.
+Plan replacement release/profile identities and any scoring treatment before
+activation; existing recoveries and measurement publications keep their identities.
+
 The validator checks bounded fields and labels, never executes a search or
 compares arbitrary formulas. Approval and admission enforce presence of the plan
 and its manual check; truth and coverage remain reviewer responsibilities.

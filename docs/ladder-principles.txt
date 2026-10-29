@@ -55,6 +55,13 @@ Principles for constructing and reviewing a progression
    not establish global optimality. Fidelity comes before optimization of a proxy.
    Increased cost is a real tradeoff, not a goal to engineer into every step.
 
+   Distinguish mathematical admissibility, implementation support and model
+   coverage. A comparison supports only their declared intersection. Save the
+   candidate table, rejection reasons, exact estimator inputs/options and
+   reproducible commands; state which attacks are missing. Generic attack
+   estimates alone do not dismiss structural attacks. An optimization under
+   an incomplete proxy is a research candidate, not automatic admission.
+
 5. Reference endpoint and stable evidence. Retain a published or approved reference
    configuration where one exists; new proposals justify their own endpoint and
    claims. Record exact configuration identity, progression revision and security
@@ -62,6 +69,8 @@ Principles for constructing and reviewing a progression
    problem. Inserting a stage cannot rewrite configuration identities or past
    receipts. A new distribution, transform or encoding needs a distinct executable
    release. Preserve fixed instances, source identity and historical evidence.
+   Resource publications remain attached to the exact old implementation and
+   configuration until a replacement has its own complete measurement evidence.
    The Frodo plot's old 128 ceiling is not evidence that 640 is dominated by 592.
 
 6. Useful natural progression. Choose steps after defining the family, guarantee

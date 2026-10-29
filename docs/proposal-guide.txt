@@ -1,5 +1,5 @@
 CRUCIBLE — PROPOSAL GUIDELINES
-Guide revision: 2026-10-18
+Guide revision: 2026-10-29
 
 Two review levels
 
@@ -237,6 +237,22 @@ Requirements before approval
    uncertainty. Justify efficient choices or competing tradeoffs within that
    domain; finite comparisons do not prove global optimality. Without calibrated
    estimates, explain defensible structural/resource choices and the unknowns.
+
+   Keep three domains distinct: mathematically admissible parameters, the
+   parameters actually implemented and checked by the pinned worker, and those
+   covered by the attack/correctness models. Their intersection is the domain
+   that the comparison can support. An arbitrary parameter vector accepted by
+   a JSON schema is not evidence that a decoder or its analysis supports it.
+   A smaller proxy cost is not enough to admit a replacement configuration.
+
+   Record the candidate table, rejection reasons, estimator inputs/options,
+   source pins and commands with the selection evidence. Compare like units
+   and premises; list missing attacks, including structural attacks where
+   relevant. Do not silently replace a planted-instance problem by a random
+   instance or count an assumption as a measured result. Name the old and new
+   exact releases and explain any effect on records, resource reports and
+   scoring. A cheaper ciphertext may be worthwhile even when another cost
+   rises; a falling operation time need not indicate an invalid progression.
 
 5. Make the evidence inspectable.
    Spend a separate pass checking citations against primary sources, exact
