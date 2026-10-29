@@ -96,7 +96,10 @@
     function focusAfter() {
       if (!nextFocus || !present()) return;
       const node = nextFocus === 'heading' ? title : root.querySelector('[data-bounty-focus="' + nextFocus + '"]') || root.querySelector('[name="' + nextFocus + '"]');
-      (node && !node.disabled ? node : title).focus({preventScroll: true}); nextFocus = null; settleScroll();
+      const target = node && !node.disabled ? node : title;
+      const actionTransition = nextFocus.startsWith('action-');
+      target.focus({preventScroll: true}); nextFocus = null; settleScroll();
+      if (actionTransition) (target.closest('.bty-action-panel') || target).scrollIntoView({block: 'nearest'});
     }
     function updateAllowance() {
       const stamp = JSON.stringify(allowance);
@@ -281,6 +284,15 @@
       composer.append(form); focusAfter();
     }
     function exactContext(task) { return {expected_version: task.version, terms_sha256: task.terms_sha256}; }
+    function actionButton(text, kind, run, cls) {
+      const trigger = button(text, run, cls); trigger.dataset.bountyFocus = 'action-' + kind; return trigger;
+    }
+    function showAction(result, kind) {
+      action = kind; signature = ''; nextFocus = 'action-panel'; paintDetail(result);
+    }
+    function closeAction(task, kind) {
+      action = null; signature = ''; nextFocus = 'action-' + kind; paintDetail({bounty: task});
+    }
     function confirmAction(task, kind) {
       const key = kind + ':' + task.id;
       const panel = el('section', 'bty-action-panel'), form = el('form', 'nb-form bty-form');
@@ -295,7 +307,7 @@
       if (kind !== 'boost' && task.reservation?.status === 'held') text = `Your existing reservation of ${task.reservation.units} remains attached to this proposal. Submitting the revised brief uses no additional allowance.`;
       panel.append(el('h3', '', kind === 'boost' ? 'Confirm bounty boost' : 'Request bounty admission'), el('p', 'bty-form-hint', text));
       if (task.pending_claim_count > 0 && kind === 'boost') panel.append(el('p', 'bty-form-hint', 'A solution is awaiting assessment. Your boost will return to its original month if an earlier submission receives the award; expired allowance cannot be spent.'));
-      const cancel = button('Cancel', () => { action = null; signature = ''; paintDetail({bounty: task}); }); panel.append(cancel);
+      const cancel = button('Cancel', () => closeAction(task, kind)); panel.append(cancel);
       if (policy?.status === 'ready' && Number.isSafeInteger(cost)) {
         formActions(form, key, kind === 'boost' ? 'Confirm boost' : 'Submit for review', () => mutate(key, () => ({...exactContext(task), policy_id: policy.id, confirm_cost_units: cost, ...(kind === 'boost' ? {units: 1} : {})}),
           body => kind === 'boost' ? client.boost(task.id, body) : client.admission(task.id, body), result => saved(result, kind === 'boost' ? 'Bounty boost recorded.' : 'Bounty submitted for review.')));
@@ -311,7 +323,7 @@
         if (!present() || request !== token || state.id !== id) return;
         allowance = wallet.allowance; policy = result.policy || wallet.policy || policy; updateAllowance();
         if (!result.bounty.capabilities[kind === 'boost' ? 'boost' : 'request_admission']) throw Error('This action is no longer available. Refresh the bounty.');
-        action = kind; signature = ''; paintDetail(result);
+        showAction(result, kind);
       } catch (error) { if (present() && token === request && !error.retired) announce(error.message, true); }
     }
     function contributionForm(task) {
@@ -329,7 +341,7 @@
       panel.append(el('h3', '', cancellation ? 'Cancel bounty' : 'Withdraw bounty proposal'), el('p', 'bty-form-hint', cancellation ? 'Boosts return to their original month; expired allowance cannot be spent. The allowance used to publish this task is not returned.' : 'A pending reservation returns to its original month. An expired allowance cannot be spent.'));
       attachForm(form, {reason: field('Reason', 'withdrawal-reason', draft.values.reason, {rows: 3, max: 2000})}, draft, key);
       formActions(form, key, cancellation ? 'Confirm cancellation' : 'Confirm withdrawal', () => mutate(key, () => ({expected_version: task.version, reason: draft.values.reason.trim()}), body => cancellation ? client.cancel(task.id, body) : client.withdraw(task.id, body), result => { drafts.delete(key); saved(result, cancellation ? 'Bounty cancelled.' : 'Bounty proposal withdrawn.'); }));
-      panel.append(form); return panel;
+      panel.append(button('Cancel', () => closeAction(task, cancellation ? 'cancel' : 'withdraw')), form); return panel;
     }
     function decisionForm(task, submission, kind) {
       const key = 'decision:' + task.id + ':' + submission.id + ':' + kind;
@@ -397,14 +409,18 @@
         const facts = el('div', 'bty-task-facts'); facts.append(spectrum(task.scope), reward(task.reward_points)); body.append(facts, el('p', 'bty-context', task.summary), section('Completion criteria', task.terms.completion_criteria), section('How it is verified', task.terms.verification_plan));
         const actions = el('div', 'bty-actions');
         if (task.capabilities.edit) actions.append(button('Edit draft', () => change({compose: true}, 'bounty-title')));
-        if (task.capabilities.request_admission) actions.append(button('Submit for review', () => { void beginAction('admission'); }));
-        if (task.capabilities.boost) actions.append(button('Boost this bounty', () => { void beginAction('boost'); }, 'nb-button nb-primary'));
+        if (task.capabilities.request_admission) actions.append(actionButton('Submit for review', 'admission', () => { void beginAction('admission'); }));
+        if (task.capabilities.boost) actions.append(actionButton('Boost this bounty', 'boost', () => { void beginAction('boost'); }, 'nb-button nb-primary'));
         if (task.capabilities.submit) actions.append(button('Link a contribution', () => change({detail: 'contribute'}, 'contribution-note'), 'nb-link'));
-        if (task.capabilities.cancel) actions.append(button('Cancel bounty', () => { action = 'cancel'; signature = ''; paintDetail({bounty: task}); }, 'nb-link'));
-        if (task.capabilities.withdraw) actions.append(button('Withdraw proposal', () => { action = 'withdraw'; signature = ''; paintDetail({bounty: task}); }, 'nb-link'));
+        if (task.capabilities.cancel) actions.append(actionButton('Cancel bounty', 'cancel', () => showAction({bounty: task}, 'cancel'), 'nb-link'));
+        if (task.capabilities.withdraw) actions.append(actionButton('Withdraw proposal', 'withdraw', () => showAction({bounty: task}, 'withdraw'), 'nb-link'));
         if (!reviewOnly) actions.append(button('Copy agent prompt', () => { void copyAgentPrompt(); }, 'nb-link'));
         body.append(actions);
-        if (action) body.append(['withdraw', 'cancel'].includes(action) ? withdrawalForm(task, action === 'cancel') : confirmAction(task, action));
+        if (action) {
+          const panel = ['withdraw', 'cancel'].includes(action) ? withdrawalForm(task, action === 'cancel') : confirmAction(task, action);
+          const heading = panel.querySelector('h3'); heading.tabIndex = -1; heading.dataset.bountyFocus = 'action-panel';
+          body.append(panel);
+        }
         if (reviewOnly && task.capabilities.review_admission) body.append(admissionReview(task));
         if (task.decisions?.length) {
           const history = el('details', 'bty-decision-history'); history.append(el('summary', '', 'Review history'));

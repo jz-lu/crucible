@@ -22,7 +22,7 @@ async function fixture(page, {review = false} = {}) {
   return reads;
 }
 for (const width of [1440, 390]) test(`bounty board, exact detail and proposal retain a compact ${width}px layout`, async ({page}, testInfo) => {
-  await page.setViewportSize({width,height:1000}); await useDataSaver(page);
+  await page.setViewportSize({width,height:width === 390 ? 844 : 1000}); await useDataSaver(page);
   const reads = await fixture(page);
   await signIn(page); await page.locator('[data-nb="bounties-view"]').click();
   const panel = page.locator('[data-nb="bounties"]');
@@ -40,10 +40,18 @@ for (const width of [1440, 390]) test(`bounty board, exact detail and proposal r
   await panel.locator('.bty-question').click();
   await expect(panel.getByRole('heading',{name:'Completion criteria'})).toBeVisible();
   await expect(panel.getByRole('heading',{name:'How it is verified'})).toBeVisible();
-  await panel.getByRole('button',{name:'Boost this bounty',exact:true}).click();
-  await expect(panel.getByRole('heading',{name:'Confirm bounty boost'})).toBeVisible();
+  const boost = panel.getByRole('button',{name:'Boost this bounty',exact:true});
+  await boost.focus(); await boost.press('Enter');
+  await expect(panel.getByRole('heading',{name:'Confirm bounty boost'})).toBeFocused();
+  const confirmation = await panel.locator('.bty-action-panel').boundingBox();
+  expect(confirmation.y).toBeGreaterThanOrEqual(0);
+  // scrollIntoView rounds the scroll offset to physical pixels.
+  expect(confirmation.y + confirmation.height).toBeLessThanOrEqual(page.viewportSize().height + 1);
+  await page.keyboard.press('Tab');
+  await expect(panel.getByRole('button',{name:'Cancel',exact:true})).toBeFocused();
   await expect(panel.locator('.bty-action-panel')).toContainText('100 reward points');
   await panel.getByRole('button',{name:'Cancel',exact:true}).click();
+  await expect(boost).toBeFocused();
   await panel.getByRole('button',{name:'← Research bounties',exact:true}).click();
   await panel.getByRole('button',{name:'Propose a bounty',exact:true}).click();
   await panel.getByLabel('The task',{exact:true}).fill('Unsaved local fixture');

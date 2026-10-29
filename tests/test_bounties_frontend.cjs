@@ -137,6 +137,30 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
       assert.equal(writes[0].body.units, 1); assert.equal(writes[0].body.policy_id, policy.id);
     } finally {f.close();}
   });
+  await test('explicit action panels focus their heading and cancel returns to the trigger without refresh theft', async () => {
+    const f = fixture({responder: url => url.pathname === '/api/bounties/' + id ? {bounty: task(id, {
+      capabilities: {boost: true, request_admission: true, cancel: true, withdraw: true}}), policy} : undefined});
+    try {
+      await f.show('view=bounties&bounty=' + id);
+      for (const [trigger, heading, confirmation] of [
+        ['Boost this bounty', 'Confirm bounty boost', 'Confirm boost'],
+        ['Submit for review', 'Request bounty admission', 'Submit for review'],
+        ['Cancel bounty', 'Cancel bounty', 'Confirm cancellation'],
+        ['Withdraw proposal', 'Withdraw bounty proposal', 'Confirm withdrawal']
+      ]) {
+        button(f.host, trigger).focus(); click(f.host, trigger); await flush();
+        const panel = f.host.querySelector('.bty-action-panel');
+        assert.equal(f.document.activeElement, panel.querySelector('h3'));
+        assert.equal(f.document.activeElement.textContent, heading);
+        const confirm = button(panel, confirmation); confirm.focus();
+        await f.show('view=bounties&bounty=' + id);
+        assert.equal(f.document.activeElement, confirm, 'Quiet reads must not steal action focus.');
+        click(panel, 'Cancel');
+        assert.equal(f.document.activeElement, button(f.host, trigger));
+        assert.equal(f.host.querySelector('.bty-action-panel'), null);
+      }
+    } finally {f.close();}
+  });
   await test('a rejection after a lost boost reply cannot mint a replacement spend', async () => {
     let attempts = 0;
     const f = fixture({responder: url => {
