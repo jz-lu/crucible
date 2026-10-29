@@ -1,0 +1,18 @@
+Interim release: research bounties remain unavailable
+29 October 2026
+
+The user requested the completed site improvements before public task-board
+content is ready. Settings.bounties_enabled defaults to false and is not loaded
+from the environment. Enabling the board is a deliberate later code release;
+ordinary deployments require no extra provider configuration.
+
+The same capability controls first-paint markup, notebook navigation, route
+normalization, idle preparation, reviewer navigation, protected bounty assets,
+API registration, opt-in agent permissions and served agent guidance. Old
+bounty links return to Notes or Publish requests without requesting bounty data.
+Tests opt in explicitly to keep the complete future workflow exercised.
+
+Schema0029 and all stored research, accounts, tasks, allowance events and awards
+remain untouched. Earned ledger entries continue to count if any already exist;
+the interim UI omits the bounty score label. No tasks, allocations or awards are
+created by disabling or enabling this release capability.

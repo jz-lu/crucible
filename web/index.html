@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-bounties-enabled="false">
   <head>
     <meta charset="utf-8">
     <!-- critical-canvas -->
@@ -126,7 +126,7 @@
                 <span class="nb-view-label">Visualizations</span>
                 <div class="nb-visualization-tabs">
                   <button class="nb-view nb-visualization-view" data-notebook-tab="map" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m7.7 6.2 8.6 4.6m0 2.4-8.6 4.6M6 8v8"></path><circle cx="6" cy="6" r="2"></circle><circle cx="18" cy="12" r="2"></circle><circle cx="6" cy="18" r="2"></circle></svg>Scheme map</button>
-                  <button class="nb-view nb-visualization-view" data-notebook-tab="bounties" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 21V3m0 1h13l-4 4 4 4H5"></path></svg>Bounties</button>
+                  <button hidden class="nb-view nb-visualization-view" data-notebook-tab="bounties" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 21V3m0 1h13l-4 4 4 4H5"></path></svg>Bounties</button>
                   <button class="nb-view nb-visualization-view" data-notebook-tab="timeline" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 4v16h16M5 16h5v-5h5V6h5"></path></svg>Timeline</button>
                 </div>
               </div>
@@ -220,7 +220,7 @@
         <nav id="review-navigation" class="review-navigation" aria-label="Review queues" hidden>
           <a id="review-nav-publication" href="#reviews?section=publication">Publish requests</a>
           <a id="review-nav-schemes" href="#reviews?section=schemes">Scheme proposals</a>
-          <a id="review-nav-bounties" href="#reviews?section=bounties">Bounties</a>
+          <a hidden id="review-nav-bounties" href="#reviews?section=bounties">Bounties</a>
           <a id="review-nav-research" href="#reviews?section=research">Proposed changes</a>
         </nav>
         <p id="review-access-message" class="empty-state">The review center is available to configured reviewers.</p>

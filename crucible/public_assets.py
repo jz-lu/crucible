@@ -140,9 +140,10 @@ class Asset:
 
 
 class PublicAssets:
-    def __init__(self, web_root, *, frozen=False):
+    def __init__(self, web_root, *, frozen=False, bounties_enabled=False):
         self.root = Path(web_root).resolve()
         self.frozen = frozen
+        self.bounties_enabled = bounties_enabled
         self._snapshot = self.snapshot() if frozen else None
 
     def snapshot(self):
@@ -169,6 +170,8 @@ class PublicAssets:
         if not index.resolve().is_relative_to(self.root):
             raise RuntimeError('Public HTML shell escaped its fixed directory.')
         html = read(index).decode()
+        html = html.replace('data-bounties-enabled="false"',
+                            'data-bounties-enabled="' + str(self.bounties_enabled).lower() + '"', 1)
         html = html.replace('<!-- critical-canvas -->', '<style>' + FIRST_PAINT_STYLE + '</style>')
         main_link = '<link rel="stylesheet" href="/styles.css">'
         if html.count(main_link) != 1:

@@ -567,7 +567,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.equal(app.q('library').hidden,true);assert.equal(app.q('map').hidden,false);
   assert.equal(app.q('map-view').getAttribute('aria-current'),'page');
   assert.equal(app.q('notes-view').getAttribute('aria-current'),null);
-  assert.equal(app.root.querySelector('.nb-visualizations').textContent,'VisualizationsScheme mapBountiesTimeline');
+  assert.equal(app.root.querySelector('.nb-visualizations').textContent,'VisualizationsScheme mapTimeline');
   app.q('notes-view').click();await flush();
   assert.equal(app.q('library').hidden,false);assert.equal(app.q('map').hidden,true);
   assert.equal(app.q('search').value,'Private');assert.match(app.q('list').textContent,/Private claim/);

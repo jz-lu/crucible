@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const {createApp, flush} = require('./frontend-dom.cjs');
 const user = {id: 'alice-id', handle: 'alice'};
 const deferred = () => {let resolve; const promise = new Promise(yes => resolve = yes); return {promise, resolve};};
-async function boot({prepare, reviewOnly = false} = {}) {
+async function boot({prepare, reviewOnly = false, bountiesEnabled = true} = {}) {
   const app = await createApp({schemes: [], hash: '#about'}), calls = [];
   let account = user, credential = 'one', preparationCount = 0, routeTask = Promise.resolve();
   for (const file of ['store.js', 'seed.js', 'notebook.js']) vm.runInContext(fs.readFileSync('web/notebook/' + file, 'utf8'), app.sandbox, {filename: file});
@@ -17,7 +17,7 @@ async function boot({prepare, reviewOnly = false} = {}) {
     api: async path => {
       if (path.startsWith('/api/notebook/notes?')) return {notes: [], next_after: null};
       throw Error('Unexpected read: ' + path);
-    }, account: () => account, session: () => credential, canWarm: () => true, reviewOnly,
+    }, account: () => account, session: () => credential, canWarm: () => true, reviewOnly, bountiesEnabled,
     prepareBounties: async () => {preparationCount++; await prepare?.();},
     navigate: route => {app.history.pushState(null, '', route); return routeTask = controller.show(new URLSearchParams(route.split('?')[1]));}
   });
@@ -27,6 +27,28 @@ async function boot({prepare, reviewOnly = false} = {}) {
 let passed = 0;
 async function test(name, work) {await work(); passed++; console.log('PASS ' + name);}
 (async () => {
+  await test('default application normalizes old bounty and review links before loading', async () => {
+    for (const hash of ['#notebook?view=bounties', '#notebook?view=guide', '#notebook?bounty=old&compose=bounty', '#reviews?section=bounties']) {
+      const app = await createApp({schemes: [], hash, bootstrap: true, responder: (url, options, envelope) => {
+        if (url.pathname === '/api/session') return envelope({user, csrf_token:'one', access:{allowed:true}, capabilities:{review_protocol_proposals:true}});
+        if (url.pathname === '/api/notebook/notes') return {notes:[],next_after:null};
+      }});
+      assert.equal(app.window.CrucibleFeatures.bounties, false);
+      assert.equal(app.window.CruciblePendingPage.describe(hash).page === 'notebook-bounties', false);
+      assert.doesNotMatch(app.location.hash, /bounty|bounties|guide/);
+      assert.equal(app.$('#review-nav-bounties').hidden, true);
+      assert.equal(app.requests.some(r => /bount/.test(r.url.pathname)), false);
+      assert.equal(app.document.querySelectorAll('script,link').some(n => /bount/.test(n.src || n.href || '')), false);
+    }
+  });
+  await test('disabled bounties have no tab, reads, warmup or deep-link view', async () => {
+    const app = await boot({bountiesEnabled: false});
+    await app.controller.show(new URLSearchParams('view=bounties&compose=bounty'));
+    await app.controller.warm('bounties');
+    assert.equal(app.root.querySelector('.nb-visualization-tabs').textContent, 'Scheme mapTimeline');
+    assert.equal(app.prepared(), 0); assert.equal(app.calls.length, 0);
+    assert.equal(app.q('library').hidden, false); assert.equal(app.q('bounties').hidden, true);
+  });
   await test('bounty intent warms one modular controller without showing or replacing the notebook', async () => {
     const app = await boot(); await app.controller.show();
     assert.equal(app.prepared(), 0);

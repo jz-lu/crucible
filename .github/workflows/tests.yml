@@ -75,7 +75,7 @@ jobs:
           tests/test_resource_publications.py tests/test_resource_chart_projection.py
           tests/test_resource_state.py
           tests/test_resource_state_migration.py
-          tests/test_bounties.py tests/test_bounties_migration.py
+          tests/test_bounties.py tests/test_bounties_migration.py tests/test_bounty_availability.py
           tests/test_bounty_agents.py tests/test_bounty_cli.py
           tests/test_admission_weekly_points.py tests/test_scoring_awards.py
           tests/test_numerical_frontier_points.py tests/test_bounty_scoring.py

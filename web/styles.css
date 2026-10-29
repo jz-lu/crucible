@@ -4117,3 +4117,8 @@ html[data-pending-page=notebook-bounties] [data-pending-layout=notebook] [data-n
 
 @media(max-width:650px){.nb-root .nb-views{flex-wrap:wrap;gap:0 8px}.nb-root .nb-visualizations,.nb-root .nb-visualization-tabs{display:contents}.nb-root .nb-view-label,.nb-root .nb-visualizations::before{display:none}}
 @media(max-width:480px){.nb-root .nb-views{gap:0 6px}.nb-root .nb-view{font-size:12px;gap:4px}.nb-root .nb-view svg{width:14px;height:14px}}
+
+/* An unavailable release capability must stay absent even in first-paint frames. */
+html:not([data-bounties-enabled="true"]) [data-notebook-tab="bounties"],
+html:not([data-bounties-enabled="true"]) [data-notebook-panel="bounties"],
+html:not([data-bounties-enabled="true"]) #review-nav-bounties { display: none !important; }

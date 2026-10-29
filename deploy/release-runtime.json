@@ -538,6 +538,7 @@
     ],
     "bounties": [
       "test_bounties.py",
+      "test_bounty_availability.py",
       "test_bounties_migration.py",
       "test_bounty_agents.py",
       "test_bounty_cli.py",
@@ -745,7 +746,7 @@
     "crucible/bounties.py": "d346caedf0a95c67c065158744b723c96fa68131b5a85268a02354f217dc2783",
     "crucible/bounty_allowance.py": "854d9edd06704daed73233868913232f68556c0f4163da0e601be0a261675d0b",
     "crucible/bounty_models.py": "623f61a7904cd7fc21857ec5da7825f8823c600063d8994a5b3b35c900a19de4",
-    "crucible/config.py": "52a7f6dc13967a47ebac54bb7c1919215ce746b63d73c5be10f3b6dde42d5ce9",
+    "crucible/config.py": "4a788f1e7c028838e2c675562a9d44512c1409700839a7eb216bd496beb417e0",
     "crucible/data/approved_beta_releases.json": "d866a822cb468ac8284a941ba797ac1c87a2d94175c305dca08af41ebd67fe0a",
     "crucible/data/display_evidence/1810c55c7d211c5cc364341589a5375903ee7de41f4d990d76326eac1ab19af7.json": "1810c55c7d211c5cc364341589a5375903ee7de41f4d990d76326eac1ab19af7",
     "crucible/data/display_evidence/5c3fe87412f7908761f3db856dfa9299857901199f9c57c5a33269ca65b77389.json": "5c3fe87412f7908761f3db856dfa9299857901199f9c57c5a33269ca65b77389",

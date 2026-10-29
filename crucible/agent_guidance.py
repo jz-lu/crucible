@@ -27,3 +27,34 @@ def is_guidance_read(method, path):
     return method == "GET" and (
         path == PIPELINE_PATH or path in {RESOURCE_PREFIX + name for name in RESOURCES}
     )
+
+
+def pipeline(root, *, bounties_enabled=False):
+    """Advertise only workflows enabled by this application release."""
+    import json
+    value = json.loads((root / "web" / "agent" / "pipeline.json").read_text())
+    value["features"] = {"bounties": bounties_enabled}
+    if not bounties_enabled:
+        for resource in value["resources"]:
+            if resource["id"] == "scoring-policy.txt":
+                resource["role"] = "Current provisional points policy crucible-points-v11: numerical frontier awards, actual admission recognition and note support."
+        value["resources"] = [row for row in value["resources"] if row["id"] != "bounties.txt"]
+        value["reading_plan"] = [row for row in value["reading_plan"] if row["task"] != "research_bounty"]
+        value["rules"] = [row for row in value["rules"] if row["id"] != "scoring.bounty-settlement"]
+        value["capabilities"]["current"] = [row for row in value["capabilities"]["current"]
+                                               if row["id"] != "agent-research-bounties"]
+    return value
+
+
+def guidance(root, resource_name, *, bounties_enabled=False):
+    resource = RESOURCES.get(resource_name)
+    if resource is None or (resource_name == "bounties.txt" and not bounties_enabled):
+        return None
+    path, media_type = resource
+    body = (root / path).read_bytes()
+    # Explicit source markers keep release-specific sections independent of prose.
+    # Enabled guidance omits the markers too; no ad-hoc sentence matching.
+    import re
+    body = re.sub(rb"<!-- feature:bounties -->\n(.*?)<!-- endfeature:bounties -->\n",
+                  lambda match: match[1] if bounties_enabled else b"", body, flags=re.DOTALL)
+    return body, media_type

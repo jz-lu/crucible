@@ -47,8 +47,9 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
     assert.equal(app.$('#person-title').textContent, 'alpha');
     assert.equal(app.$('#person-workspace').hidden, false);
     assert.equal(app.$('#recovery-dialog').open, false);
-    assert.match(app.$('#person-content').textContent, /Record breakthroughs100Admitted schemes0Research bounties100Research notes0/);
+    assert.match(app.$('#person-content').textContent, /Record breakthroughs100Admitted schemes0Research notes0/);
     assert.match(app.$('#person-content').textContent, /100 points, once per person per scheme/);
+    assert.doesNotMatch(app.$('#person-content').textContent, /[Bb]ounties/);
     assert.doesNotMatch(app.$('#person-content').textContent, /500 personal-progress|2,000 points for your best first/);
     app.history.back(); await flush();
     assert.equal(app.$('#catalogue-workspace').hidden, false);

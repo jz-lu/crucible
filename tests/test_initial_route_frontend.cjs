@@ -34,8 +34,8 @@ function events() {
     }
   };
 }
-function fixture({hash = '', parsed = true, appFirst = false, hint, storageBlocked = false, resolvedView} = {}) {
-  const root = element(), nodes = new Map([['html', root]]), requests = [], timers = new Map();
+function fixture({hash = '', parsed = true, appFirst = false, hint, storageBlocked = false, resolvedView, bountiesEnabled = false} = {}) {
+  const root = element({'data-bounties-enabled': String(bountiesEnabled)}), nodes = new Map([['html', root]]), requests = [], timers = new Map();
   const document = {...events(), documentElement: root, readyState: parsed ? 'complete' : 'loading', body: null,
     querySelector: selector => nodes.get(selector) || null, querySelectorAll: () => []};
   const stored = new Map(hint === undefined ? [] : [['crucible.pending-presentation', hint]]);
@@ -123,7 +123,7 @@ test('public route descriptions select bounded known layouts without querying ac
   const examples = [
     ['', 'catalogue', 'KEM Schemes'], ['#', 'catalogue', 'KEM Schemes'],
     ['#challenge', 'catalogue', 'KEM Schemes'], ['#people', 'people', 'Leaderboard'],
-    ['#notebook', 'notebook-notes', 'Research notebook'], ['#notebook?view=bounties', 'notebook-bounties', 'Research notebook'], ['#notebook?view=guide', 'notebook-bounties', 'Research notebook'], ['#notebook?view=timeline', 'notebook-timeline', 'Research notebook'],
+    ['#notebook', 'notebook-notes', 'Research notebook'], ['#notebook?view=bounties', 'notebook-notes', 'Research notebook'], ['#notebook?view=guide', 'notebook-notes', 'Research notebook'], ['#notebook?view=timeline', 'notebook-timeline', 'Research notebook'],
     ['#notebook?view=map', 'notebook-map', 'Research notebook'], ['#notebook?view=unknown', 'notebook-notes', 'Research notebook'],
     ['#notebook?filter=mine&tag=private-looking-label', 'notebook-notes', 'Research notebook'],
     ['#notebook?note=private-id', 'list', 'Research notebook'],
@@ -143,6 +143,12 @@ test('public route descriptions select bounded known layouts without querying ac
   assert.deepEqual({...describe({})}, {page: 'neutral', title: 'Crucible'});
   assert.deepEqual(f.requests.map(item => item.url), ['/api/session']);
   assert.equal(Object.isFrozen(f.window.CruciblePendingPage), true);
+});
+
+test('bounty first frame requires the explicit release capability', () => {
+  const f = fixture({bountiesEnabled: true});
+  assert.equal(f.window.CruciblePendingPage.describe('#notebook?view=bounties').page, 'notebook-bounties');
+  assert.equal(f.window.CruciblePendingPage.describe('#notebook?view=guide').page, 'notebook-bounties');
 });
 
 test('private note, request and review selections never become pre-access content or data requests', () => {

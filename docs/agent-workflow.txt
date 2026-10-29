@@ -527,6 +527,7 @@ The standalone technical-review request type is retired: no new requests or
 assessments are accepted. Existing packets and assessments remain readable as
 history and do not appear in the pending review queue.
 
+<!-- feature:bounties -->
 Research bounties
 
 Use `guide --resource bounties.txt` for the current task and allowance contract.
@@ -537,3 +538,4 @@ and (when allocation is authorized) bounties:spend scopes needed. Init and save
 allocate no allowance. Request and boost require --confirm-allowance. Unknown
 write outcomes retain the exact origin/account/scope-bound retry payload; never
 replace it with a new request. Human-only review is separate from agent access.
+<!-- endfeature:bounties -->

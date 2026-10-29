@@ -34,7 +34,7 @@ def main():
     registry.CURRENT = {dh_v4.SCHEME_ID: dh_v4.SCHEME_VERSION}
     with tempfile.TemporaryDirectory(prefix="crucible-browser-checks-") as tmp:
         queue_reviewer_id = str(uuid4())
-        settings = Settings("sqlite:///" + tmp + "/fixture.db", secrets.token_bytes(32),
+        settings = Settings("sqlite:///" + tmp + "/fixture.db", secrets.token_bytes(32), bounties_enabled=True,
                             origins=(ORIGIN,), access_mode="beta", rate_limits=False,
                             reviewer_ids=(queue_reviewer_id,),
                             github_login_enabled=True, github_client_id="synthetic-browser-client",
