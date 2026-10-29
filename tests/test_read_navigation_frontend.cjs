@@ -76,8 +76,14 @@ let passed=0;async function test(name,run){await run();passed++;console.log('PAS
  });
  await test('scheme intent only prefetches exact read-only details, without issuing challenges',async()=>{
   const app=await boot();const before=app.requests.length;app.$('#kem-catalogue').querySelector('.kem-name').dispatchEvent({type:'pointerenter'});await flush();
-  // This fixture is the legacy full response, so its detail is already present.
-  assert.equal(app.requests.length,before);assert.equal(app.requests.some(r=>r.options.method==='POST'),false);
+  // The legacy full response already contains its description, but graph data
+  // is prepared separately so entering this scheme does not start a new wait.
+  const reads=app.requests.slice(before);assert.equal(reads.length,1);
+  assert.equal(reads[0].url.pathname,'/api/protocol/resources');
+  assert.equal(reads[0].url.searchParams.get('scheme_id'),'fixture');
+  assert.equal(reads[0].url.searchParams.get('version'),'2');
+  assert.equal(reads[0].url.searchParams.get('projection'),'charts');
+  assert.equal(app.requests.some(r=>r.options.method==='POST'),false);
  });
 
  await test('People and profile intent reads are consumed once by their next visible route',async()=>{
