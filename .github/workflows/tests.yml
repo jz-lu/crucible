@@ -77,6 +77,7 @@ jobs:
           tests/test_resource_state_migration.py
           tests/test_bounties.py tests/test_bounties_migration.py
           tests/test_admission_weekly_points.py tests/test_scoring_awards.py
+          tests/test_numerical_frontier_points.py tests/test_bounty_scoring.py
       - name: State verification boundary
         shell: bash
         run: |

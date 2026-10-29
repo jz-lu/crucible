@@ -256,7 +256,7 @@ recommendation does not itself enroll anything or change scores.
 This document does not change scoring, admission, publication or access policy.
 Visualization requests introduce no general research-note points or awards.
 Separate agent ratings contribute provisional +1/+2 author points under
-crucible-points-v10; request recommendations and publication are not votes.
+crucible-points-v11; request recommendations and publication are not votes.
 See note-format.txt and agent-workflow.txt for the published-note reading/rating
 API. Its notes:read and notes:rate scopes do not grant private notebook or
 research-request access, or reviewer authority.

@@ -215,16 +215,20 @@ def score_relations(dialect="sqlite", *, as_of=None):
     from .note_ratings import author_points
     notes = author_points().cte("score_notes")
     note_total = func.coalesce(notes.c.note_contributions, 0)
-    points = progress_total + early_total + scheme_total + note_total
+    from .bounty_allowance import bounty_points_relation
+    bounties = bounty_points_relation().cte("score_bounties")
+    bounty_total = func.coalesce(bounties.c.bounty_points, 0)
+    points = progress_total + early_total + scheme_total + note_total + bounty_total
     participants = (select(User.id.label("id"), User.handle, User.created_at,
                            progress_total.label("progress"), early_total.label("early_recovery"),
                            scheme_total.label("scheme_contributions"),
                            func.coalesce(admissions.c.admission_points, 0).label("admission_points"),
                            func.coalesce(admissions.c.active_weeks, 0).label("admission_active_weeks"),
                            func.coalesce(admissions.c.weekly_points, 0).label("admission_weekly_points"),
-                           note_total.label("note_contributions"), points.label("points"),
+                           note_total.label("note_contributions"), bounty_total.label("bounty_points"), points.label("points"),
                            func.rank().over(order_by=points.desc()).label("rank"))
                     .outerjoin(recoveries, recoveries.c.user_id == User.id)
                     .outerjoin(admissions, admissions.c.user_id == User.id)
-                    .outerjoin(notes, notes.c.user_id == User.id)).cte("score_participants")
+                    .outerjoin(notes, notes.c.user_id == User.id)
+                    .outerjoin(bounties, bounties.c.user_id == User.id)).cte("score_participants")
     return participants, families
