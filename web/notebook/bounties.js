@@ -220,11 +220,14 @@
       });
     }
     async function mutate(key, make, perform, success) {
-      let body = pendingWrites.get(key);
-      if (!body) { body = {...make(), idempotency_key: crypto.randomUUID()}; pendingWrites.set(key, body); }
+      let pending = pendingWrites.get(key);
+      if (!pending) {
+        pending = {body: {...make(), idempotency_key: crypto.randomUUID()}, uncertain: false};
+        pendingWrites.set(key, pending);
+      }
       const ownerRoute = route();
       try {
-        const result = await perform(body);
+        const result = await perform(pending.body);
         if (!owns()) return;
         pendingWrites.delete(key); client.invalidateReads(); allowance = null;
         if (present() && ownerRoute === route()) { policy = result.policy || policy; success(result); }
@@ -233,7 +236,12 @@
           if (drafts.has(key)) drafts.get(key).dirty = false;
         }
       } catch (error) {
-        if (owns() && error.status >= 400 && error.status < 500) pendingWrites.delete(key);
+        if (owns()) {
+          // A later rejection cannot prove that an earlier lost response did
+          // not commit. Preserve its identity until the receipt is recovered.
+          if (!pending.uncertain && error.status >= 400 && error.status < 500) pendingWrites.delete(key);
+          else pending.uncertain = true;
+        }
         throw error;
       }
     }

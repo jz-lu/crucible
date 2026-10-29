@@ -137,6 +137,44 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
       assert.equal(writes[0].body.units, 1); assert.equal(writes[0].body.policy_id, policy.id);
     } finally {f.close();}
   });
+  await test('a rejection after a lost boost reply cannot mint a replacement spend', async () => {
+    let attempts = 0;
+    const f = fixture({responder: url => {
+      if (url.pathname.endsWith('/boosts')) {
+        attempts++;
+        if (attempts < 3) return Promise.reject(Object.assign(Error('Synthetic interrupted retry'), {status: attempts === 1 ? 0 : 409}));
+        return {bounty: task(id, {version: 2, reward_points: 200}), policy};
+      }
+    }});
+    try {
+      await f.show('view=bounties&bounty=' + id); click(f.host, 'Boost this bounty'); await flush();
+      submit(f.host); await flush(); submit(f.host); await flush();
+      assert.ok(button(f.host, 'Retry the same request'));
+      submit(f.host); await flush(); await f.routed();
+      const writes = f.requests.filter(r => r.url.pathname.endsWith('/boosts'));
+      assert.equal(writes.length, 3);
+      assert.deepEqual(writes[0].body, writes[1].body);
+      assert.deepEqual(writes[0].body, writes[2].body);
+    } finally {f.close();}
+  });
+  await test('a definite first rejection allows a deliberate new boost request', async () => {
+    let attempts = 0;
+    const f = fixture({responder: url => {
+      if (url.pathname.endsWith('/boosts')) {
+        if (++attempts === 1) return Promise.reject(Object.assign(Error('Synthetic stale version'), {status: 409}));
+        return {bounty: task(id, {version: 2, reward_points: 200}), policy};
+      }
+    }});
+    try {
+      await f.show('view=bounties&bounty=' + id); click(f.host, 'Boost this bounty'); await flush();
+      submit(f.host); await flush();
+      assert.equal(button(f.host, 'Retry the same request'), undefined);
+      submit(f.host); await flush(); await f.routed();
+      const writes = f.requests.filter(r => r.url.pathname.endsWith('/boosts'));
+      assert.equal(writes.length, 2);
+      assert.notEqual(writes[0].body.idempotency_key, writes[1].body.idempotency_key);
+    } finally {f.close();}
+  });
   await test('a revoked component cannot paint old data, preserve drafts or perform writes', async () => {
     const pending = deferred();
     const f = fixture({responder: url => url.pathname === '/api/bounties' ? pending.promise : undefined});
