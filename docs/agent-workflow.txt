@@ -305,8 +305,12 @@ wire names. supported_tiers continues to list legacy numeric configuration
 selectors, including off-route settings. Describe the default stage mapping
 separately in mapping and parameter_progression. Refer to
 ladder-principles.txt and the annotated template for review requirements. Current
-ordinal scoring is provisional; existing configuration credit is preserved when
-stage numbering changes. This guidance introduces no replacement formula.
+scoring uses explicit release enrollment and original configuration ordinals,
+independent of presentation-stage numbering. Under crucible-points-v11, each
+account earns 100 points once per scheme on its first genuine advance of that
+release's prior recovery frontier; ordinary progress and later advances add no
+numerical points. Read scoring-policy.txt for validity and ordering rules, and
+scheme-admission-policy.txt for separate actual-admission recognition.
 
 Separate demonstrated results, estimates, assumptions and unresolved claims. Never
 invent a correctness bound, implementation hash, security estimate or reference.

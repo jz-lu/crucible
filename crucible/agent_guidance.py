@@ -16,8 +16,9 @@ RESOURCES = {
     "proposal-guide.txt": ("docs/proposal-guide.txt", "text/plain"),
     "correctness-policy.txt": ("docs/correctness-policy-v1.txt", "text/plain"),
     "ladder-principles.txt": ("docs/ladder-principles.txt", "text/plain"),
-    "scoring-policy.txt": ("docs/scoring-v10.txt", "text/plain"),
-    "scoring-base.txt": ("docs/scoring-v8.txt", "text/plain"),
+    "scoring-policy.txt": ("docs/scoring-v11.txt", "text/plain"),
+    "scoring-base.txt": ("docs/scoring-v11.txt", "text/plain"),
+    "scheme-admission-policy.txt": ("docs/scheme-admission-points-v2.txt", "text/plain"),
     "benchmark-policy.txt": ("docs/reference-benchmarks.txt", "text/plain"),
 }
 
