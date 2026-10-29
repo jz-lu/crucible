@@ -13,7 +13,8 @@ from uuid import uuid4
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from crucible import beta_access, dh_v3, dh_v4, github_auth, kem, notebook, registry
+from crucible import beta_access, bounty_allowance, dh_v3, dh_v4, github_auth, kem, notebook, registry
+from crucible.bounty_models import BountyPolicy
 from crucible.app import create_app
 from crucible.config import Settings
 from crucible.db import LoginSession, User
@@ -45,6 +46,11 @@ def main():
         now = time.time()
         encoded = passwords.hash(PASSWORD)
         with app.state.db.transaction(write=True) as session:
+            # create_all is test-only and does not execute migration policy seeds.
+            # Use the reviewed initial policy, never illustrative tasks or awards.
+            session.add(BountyPolicy(id=bounty_allowance.INITIAL_ID,
+                effective_month=bounty_allowance.INITIAL_MONTH,
+                configuration=dict(bounty_allowance.INITIAL_CONFIGURATION), created_at=now))
             for actor in ("alice", "bob", "revoked", "bulkdesktop", "bulkmobile", "queueauthor", "queuereviewer", "numbers"):
                 user = User(id=queue_reviewer_id if actor == "queuereviewer" else str(uuid4()), handle="browser_" + actor,
                             password_hash=encoded, created_at=now)
