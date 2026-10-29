@@ -1,0 +1,277 @@
+HQC AND MODULE-LATTICE PROGRESSION REVIEW — 29 OCTOBER 2026
+
+Scope: supplemental mathematical review and offline candidates against website
+source c2ce5f4504e3f2c25f41dc17fb8a69d26cb08082. Nothing here changes frozen
+configuration IDs, encodings, distributions, challenge histories or admission.
+The new deductions below are study findings, not an external review endorsement.
+
+DECISION
+
+Keep the current configurations and their source-bound receipts. Add the stronger
+support evidence for HQC stages 1–4 as a supplemental review, without rewriting
+their frozen statistical-correctness manifests. Retain explicit conditional-tail
+labels for stages 5–66. The official 2026 HQC endpoint is a future versioned
+integration task, not a safe numeric weight edit.
+
+The six module degrees remain a defensible small research progression, but their
+compression choices are not communication-optimal even within the present
+analytical bounds. An offline candidate path can save bytes at early stages and
+remove the extra independent-compression premise at degree 128 for a 16-byte
+ciphertext cost. Implement and review that path separately before making it the
+default. Keep the published degree-256 ML-KEM-512 endpoint intact.
+
+The common 2^-128 honest-failure target is an envelope, not identical failure
+rates at all stages. Perfect correctness is useful where it follows naturally;
+forcing it across the whole family would introduce unnecessary cost. Conditional
+or conjectural evidence is permitted by the current policy, so finding a missing
+model-transfer proof is not itself grounds to remove a playable research tuple.
+
+1. HQC: A STRONGER RESULT FOR THE FIRST FOUR EXISTING STAGES
+
+For binary cyclic products, wt(x*r2) <= wt(x)*wt(r2)=w*wr. Cancellations can
+only decrease weight. Hence every supported honest residual, before truncation,
+has weight at most B=2*w*wr+we. Truncating to the encoded length cannot increase it.
+
+The inner repeated RM(1,7) code has length n2=128*r and minimum distance 64*r.
+Nearest-word decoding is uniquely correct below 32*r errors in an inner block.
+At exactly 32*r a tie can occur; count that entire block as potentially wrong.
+RS(n1,16), where n1=16+2*delta, corrects any delta wrong symbols. Therefore a
+concatenated decoder failure requires at least delta+1 potentially wrong inner
+blocks, hence at least (delta+1)*32*r errors in total. Sufficient condition:
+
+    2*w*wr+we < (delta+1)*32*r.
+
+This is deliberately strict. It does not assume random tie breaking. Bad inner
+blocks may decode arbitrarily; RS absorbs up to delta of them. Below that limit,
+the RS codeword is uniquely determined because its distance is 2*delta+1.
+
+Current stages 1–4 all use RS(18,16) and r=1. They correct every <=63-bit pattern:
+
+    Stage    w    wr=we    residual maximum    guaranteed capacity
+      1      1      2             6                  63
+      2      2      3            15                  63
+      3      3      4            28                  63
+      4      4      5            45                  63
+
+At stage 5 the residual support bound becomes 66, so this argument stops.
+Its failure to apply is NOT proof that stage 5 actually fails or misses 2^-128.
+The helper checks all 66 rows and finds exactly these first four guarantees.
+
+Scope: all messages and all supported fixed-weight draws, including the actual
+biased finite sampler, provided arithmetic, encodings and decoding implement the
+stated construction faithfully. No independent-coordinate surrogate, ideal-XOF
+sampling assumption or rare-tail estimate is needed for this support argument.
+Resource aborts, memory safety and side channels are separate. This is a coding
+argument plus source/conformance evidence, not a formal proof of the C program.
+
+Pinned source review: reed_muller.c sums repeated blocks, applies the Hadamard
+transform and selects an absolute peak. Its strict greater-than comparison
+implements deterministic first-peak tie breaking. reed_solomon.c computes
+2*delta syndromes, the error locator and error values, then corrects symbols.
+The existing hqc_growth_decoder_check.c fixture tests delta maximally damaged
+inner blocks and one just below the RM threshold; test_hqc_model.py applies it
+to every distinct codec with undefined-behavior instrumentation. These fixtures
+support implementation conformance; finite tests are not the distance theorem.
+
+2. HQC: WHAT THE CORRELATION PREMISE ACTUALLY NEEDS TO SAY
+
+Actual residual noise is not IID. An exact invariant is
+
+    parity(x*r2 + r1*y + e) = 2*w*wr + we = we (mod 2).
+
+An IID Bernoulli surrogate assigns substantial mass to the opposite parity.
+For the current parameter range p<=1/2 and we/n<=1/2, the exact uniform-support
+marginal used by the surrogate has p>=we/n. If we is even, opposite-parity probability is
+(1-(1-2p)^n)/2. Using (1-x)^n <= 1/(1+nx), this is at least we/(1+2*we),
+which is >=2/5 for every current even we. If we is odd it is at least 1/2.
+Thus the actual and IID full-vector distributions cannot be negligibly close
+in total variation. A generic negligible-distance bridge is the wrong claim.
+
+This does NOT refute the intended one-sided bound on the particular decoder's
+failure event. That event can have a conservative IID bound despite very
+different distributions. The required premise is decoder-event domination for
+the specific ring, supports, truncation, codec and message experiment.
+
+The October 2026 specification motivates its Model 1 conservativity in the high
+weight regime, with simulation evidence. Transferring that argument to reduced
+tuples remains an additional conjecture. Exact rational evaluation of the
+surrogate cannot establish the transfer; ordinary simulation cannot establish
+a 2^-128 tail either. More safety margin inside the surrogate does not repair
+a missing transfer argument.
+
+scripts/hqc_module_structure_checks.py supplies another reproducible warning: complete
+enumeration at the tiny primitive-prime ring n=11, w=2, wr=we=3 gives same-weight
+error vectors with different probabilities. For example two weight-3 patterns
+have counts 13,770,163 and 13,792,911 out of 13,588,678,125 outcomes. Actual cyclic
+noise need not even be radially symmetric. This is an algebraic example, not a
+deployed-parameter correctness counterexample. It explains why the Model 1/2
+radial-symmetry tie argument must not silently become an unconditional statement.
+
+3. HQC: CURRENT ENDPOINT AND ATTACK CONTEXT
+
+The current live research endpoint matches the 2025-08-22 construction:
+n=17669, w=66, wr=we=75, RS(46,16), RM repeated three times.
+
+The official specification dated 2026-10-12 changes HQC-1 to w=67, wr=we=76;
+switches GF(256) representation to x^8+x^4+x^3+x+1 (0x11b); and makes the
+32-byte seed-only secret-key format the default. The public-key/ciphertext sizes
+remain 2241/4433 bytes. Decapsulation can include expansion overhead, mitigated
+by caching expanded keys. A current-reference integration must define which
+key representation its timing scope measures and retain it in evidence.
+
+The spec explicitly says its weight increase uses refined failure analysis and
+compensates recent attack improvements. Carrier et al.'s MAGE-Stern preprint
+reports about three bits of time and twelve bits of memory improvement over
+the previously best HQC attack in a consistent logic-gate model. Its roughly
+140-bit estimate is about three bits below the stated NIST-1 target in that
+model, not a statement that NIST-1 universally means exactly 128 operations.
+Do not attach this estimate to a differently dated tuple or a lower stage.
+
+The published new Model 2 bound is about 2^-127.9 (Table 16). It does not certify
+the site's literal <=2^-128 envelope, although it is also not a lower bound and
+does not demonstrate a violation. The old conservative Model 1 calculation on
+the new weights gives only about 2^-117.36. Merely editing the weight fields
+would lose the current certificate and fail to implement the new reference.
+
+Future work: pin new source and complete transcript vectors; review GF and key
+format changes; implement/verify current correlated-model arithmetic and its
+dependencies; decide whether a tighter bound or a deliberately modified reviewed
+codec establishes the site's envelope; rerun relevant attack estimates and
+measurements. Keep old receipts and labels as the dated 2025 research family.
+
+4. MODULE LATTICE: SMALL RINGS ARE DIFFERENT RESEARCH CONSTRUCTIONS
+
+The six current degrees 8,16,32,64,128,256 preserve q=3329, module rank 2,
+CBD3 secrets/key errors/encryption randomness and CBD2 encryption errors.
+The current incomplete NTT implements the correct negacyclic ring for every
+degree; independent schoolbook-product tests already cover this property.
+
+Because q-1=3328=13*256, x^n+1 splits into n linear factors for n<=128 here.
+At n=256 it instead has 128 irreducible quadratic factors: the multiplicative
+order of 3329 modulo 512 is 2. The reduced rings therefore do not simply inherit
+the endpoint's algebraic attack behavior or security estimate. The study checks
+the factor degrees and directly enumerates roots modulo q.
+
+The full native message entropy is n bits, not 256 merely because the output
+shared key contains 32 bytes. Deterministic public re-encapsulation permits
+enumerating 2^n candidate messages and matching the ciphertext. This is a
+generic upper attack route, not an exact hardness estimate. Altering compression
+does not increase native message entropy. Keep this visible in review metadata.
+
+5. MODULE LATTICE: REPRODUCIBLE COMPRESSION CANDIDATES
+
+We hold q/rank/noise/degree/message space fixed and search du,dv in 1..12 to
+minimize ciphertext bytes. Public-key bytes are unaffected. The existing
+Chernoff calculation is generalized to the exactly enumerated rounding support
+at each bit width. Selected witnesses are checked with exact rationals; a
+floating-point search ranks options. We do NOT claim global optimality, and a
+candidate not certified by this search is not proved incorrect or inadmissible.
+
+Two evidence modes are retained:
+  Conservative: actual deterministic u-rounding may depend on A,r,e1; bound it
+  by its exact maximum and use the symmetric secret MGF. No independent-uniform
+  rounding premise is used. Noise primitives still follow the stated independent
+  ideal CBD model, not an information-theoretic fixed-SHAKE theorem.
+  Modeled: u-rounding is additionally replaced by independent rounding errors
+  from uniform coefficients, independent of secrets/noise. Its bridge to the
+  actual modified-ring construction is unproved here. v-rounding is worst-case
+  bounded in both modes. No result at n256 establishes transfer at lower degrees.
+
+Candidate conservative path, choosing one of tied minimum-byte options:
+
+  n    du,dv    PK bytes   CT old -> candidate   PK+CT old -> candidate   bound
+  8     8,3       56           24 -> 19               80 -> 75           0
+ 16     9,2       80           48 -> 40              128 -> 120          2^-158
+ 32     9,3      128           96 -> 84              224 -> 212          2^-176
+ 64    10,3      224          192 -> 184             416 -> 408          2^-141
+128    11,3      416          384 -> 400             800 -> 816          2^-131
+256    10,4      800          768 -> 768            1568 -> 1568          modeled
+
+The first four save communication within the conservative envelope. At n128 the
+16 extra ciphertext bytes remove an additional heuristic bridge: current widths
+have only a 2^-95 conservative certificate, whereas this candidate gets 2^-131.
+That is an explicit evidence/size tradeoff, not a claim the old tuple fails.
+Do not silently replace the standard n256 endpoint: its unchanged modeled bound
+certifies 2^-128, and it has independent endpoint conformance evidence.
+
+For comparison, the minimum modeled sizes found are CT=17,38,76,168,352,768 bytes
+at n=8,16,32,64,128,256, respectively. In particular n128 du9,dv4 gives CT352
+and an exact modeled bound <=2^-138; it saves bytes but retains the extra premise.
+These alternatives expose a genuine review choice rather than prove one unique
+best path. The published-model endpoint and lower research stages must retain
+their distinct evidentiary labels.
+
+The current core deliberately only accepts du10,dv4 and encodes only certain
+widths. These new tuples are not executable live profiles. A new implementation
+must add canonical packing/unpacking, purpose/version separation, all-message
+small-degree roundtrips, malformed-input/rejection tests, independent ring tests,
+precise full-KEM claims and new artifacts/measurements. Ciphertext coarsening
+alone does not establish a full KEM reduction. Avoid inflating stage counts with
+all nearby widths: expose the configuration space but select a simple reviewed
+default path on the evidence/communication frontier.
+
+6. REPRODUCTION AND INTEGRATION
+
+The repository contains these offline review files:
+  scripts/hqc_support_review.py
+  scripts/mlkem_compression_candidates.py
+  scripts/hqc_module_structure_checks.py
+  tests/test_hqc_support_review.py
+  tests/test_mlkem_compression_candidates.py
+  tests/test_hqc_module_structure_checks.py
+  docs/hqc-module-progression-review.txt
+
+No application handler imports or calls these offline scripts. No admission is
+automated. The support helper computes exact support bounds independently;
+attaching a statistical tail label additionally requires an exact reviewed
+parameter/certificate binding. The CLI verifies the complete frozen input file.
+The compression calculator rejects unknown models and unsupported parameter
+domains instead of silently substituting a model.
+
+From the website root:
+  python -B scripts/hqc_support_review.py --output /tmp/hqc-support-review.json
+  python -B scripts/mlkem_compression_candidates.py --output /tmp/module-candidates.json
+  python -B scripts/hqc_module_structure_checks.py --output /tmp/hqc-module-structure.json
+  python -B -m pytest -q tests/test_hqc_support_review.py tests/test_mlkem_compression_candidates.py tests/test_hqc_module_structure_checks.py
+
+45 targeted checks pass against the real frozen inputs. Existing standard-width
+certificate exponents are reproduced. Exact source/parameter pins are preserved.
+Repository checks cover the full small-ring noise witness and factorization.
+Native scheme execution was not rerun by these offline scripts; existing source-
+bound native conformance fixtures remain separate and necessary.
+
+PRIMARY SOURCES AND EXACT SNAPSHOTS
+
+HQC team, specification 2026-10-12, changelog; Tables8,9,16; Sections6.1.1–6.1.5.
+https://pqc-hqc.org/doc/hqc_specifications_2026_10_12.pdf
+Downloaded PDF SHA256:
+009703472472887eed33551df2dab5dfd8c0bd1a98ec944068b6a5679de5a9d5
+
+HQC team, specification 2025-08-22, retained research endpoint.
+https://pqc-hqc.org/doc/hqc_specifications_2025_08_22.pdf
+
+Carrier, Hatey, Luzzi, Tillich, Multilevel Amortized Gaussian Elimination in
+Information-Set Decoding: Applications to HQC and PCG, preprint2026/1498.
+https://eprint.iacr.org/2026/1498
+
+Pinned liboqs source commit 5a1a854b0dc9f2141bdc771c555ee60c37950183:
+https://github.com/open-quantum-safe/liboqs/tree/5a1a854b0dc9f2141bdc771c555ee60c37950183/src/kem/hqc/pqc-hqc_hqc-1_ref
+reed_muller.c SHA256:
+aca120a4c67e7d3653972d86130fec2aba490c3a971c2c085d55aa2a20662da6
+reed_solomon.c SHA256:
+9e01d64d7b91dd5f8a91a9a9ead64d24cfb9240c94929be9cdd2fcf232b4551c
+The builder's full upstream archive pin is
+83c6e6cff490638312e1e20ed5de593fb5d7bfab162235f6238f519d6a1feafb.
+
+NIST FIPS203 (2024), parameters and fixed-degree endpoint algorithms:
+https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf
+
+Barbosa et al., CCS2025, concrete decryption correctness and model boundaries:
+https://www.cryptojedi.org/papers/frodoec-20250831.pdf
+
+Duriez and Tommasini, Dependency-Aware ROM/CBD Correctness Bounds for ML-KEM-768
+at the Heuristic Failure Scale, preprint2026-09-09, arXiv2609.09983.
+https://arxiv.org/abs/2609.09983
+The public abstract claims dependency-preserving analysis in an explicit ROM/CBD
+model for ML-KEM-768. This study has not independently verified its large proof
+capsule and transfers none of that claim to ML-KEM-512 or the reduced rings.

@@ -1,0 +1,776 @@
+{
+  "schema": "crucible-module-compression-candidates-v1",
+  "status": "offline-candidates-not-admission",
+  "basis_sha256": "97cf0a4a18337d328ec70d5da83ced73258b60d9cc26a98f741c69fa2266d77c",
+  "search_domain": {
+    "degrees": [
+      8,
+      16,
+      32,
+      64,
+      128,
+      256
+    ],
+    "du": [
+      1,
+      12
+    ],
+    "dv": [
+      1,
+      12
+    ],
+    "q": 3329,
+    "rank": 2,
+    "eta1": 3,
+    "eta2": 2
+  },
+  "search_qualification": "Floating optimization ranks candidates. Exact selected witnesses establish bounds; no global optimality or hardness theorem.",
+  "correctness_qualification": "Conservative mode retains actual rounding dependence under independent ideal CBD draws. Modeled mode adds an unproved independent-uniform-u-compression bridge.",
+  "configurations": [
+    {
+      "n": 8,
+      "public_key_bytes": 56,
+      "modes": [
+        {
+          "mode": "conservative-compression",
+          "minimum_ciphertext_bytes": 19,
+          "minimal_candidates": [
+            {
+              "n": 8,
+              "rank": 2,
+              "q": 3329,
+              "eta1": 3,
+              "eta2": 2,
+              "du": 7,
+              "dv": 5,
+              "mode": "conservative-compression",
+              "ciphertext_bytes": 19,
+              "u_rounding_bound": 13,
+              "v_rounding_bound": 52,
+              "residual_support_bound": 918,
+              "argument": "chernoff-union-bound",
+              "threshold": 780,
+              "proposed_witness": [
+                2307023,
+                1000000
+              ],
+              "bits": 174.32559608,
+              "meets_target": true,
+              "certified_exponent": 174,
+              "exact_bound_sha256": "3969d001e471de4b4bdcb1a4e6af869fb5b8e5d06a9e08c1ddadc787e81b0526"
+            },
+            {
+              "n": 8,
+              "rank": 2,
+              "q": 3329,
+              "eta1": 3,
+              "eta2": 2,
+              "du": 8,
+              "dv": 3,
+              "mode": "conservative-compression",
+              "ciphertext_bytes": 19,
+              "u_rounding_bound": 7,
+              "v_rounding_bound": 208,
+              "residual_support_bound": 786,
+              "argument": "deterministic-support",
+              "bits": null,
+              "meets_target": true
+            }
+          ],
+          "cheaper_candidates_not_certified_in_numerical_search": 66,
+          "strongest_cheaper_bound_bits": 121.541497403,
+          "baseline": {
+            "n": 8,
+            "rank": 2,
+            "q": 3329,
+            "eta1": 3,
+            "eta2": 2,
+            "du": 10,
+            "dv": 4,
+            "mode": "conservative-compression",
+            "ciphertext_bytes": 24,
+            "u_rounding_bound": 2,
+            "v_rounding_bound": 104,
+            "residual_support_bound": 442,
+            "argument": "deterministic-support",
+            "bits": null,
+            "meets_target": true
+          }
+        },
+        {
+          "mode": "independent-uniform-u-compression",
+          "minimum_ciphertext_bytes": 17,
+          "minimal_candidates": [
+            {
+              "n": 8,
+              "rank": 2,
+              "q": 3329,
+              "eta1": 3,
+              "eta2": 2,
+              "du": 7,
+              "dv": 3,
+              "mode": "independent-uniform-u-compression",
+              "ciphertext_bytes": 17,
+              "u_rounding_bound": 13,
+              "v_rounding_bound": 208,
+              "residual_support_bound": 1074,
+              "argument": "chernoff-union-bound",
+              "threshold": 624,
+              "proposed_witness": [
+                1401603,
+                1000000
+              ],
+              "bits": 132.9692839,
+              "meets_target": true,
+              "certified_exponent": 132,
+              "exact_bound_sha256": "17449d0da9da484b8a5afd85494078aef25c154df1799093a800e0d58923b4ce"
+            }
+          ],
+          "cheaper_candidates_not_certified_in_numerical_search": 54,
+          "strongest_cheaper_bound_bits": 59.530229488,
+          "baseline": {
+            "n": 8,
+            "rank": 2,
+            "q": 3329,
+            "eta1": 3,
+            "eta2": 2,
+            "du": 10,
+            "dv": 4,
+            "mode": "independent-uniform-u-compression",
+            "ciphertext_bytes": 24,
+            "u_rounding_bound": 2,
+            "v_rounding_bound": 104,
+            "residual_support_bound": 442,
+            "argument": "deterministic-support",
+            "bits": null,
+            "meets_target": true
+          }
+        }
+      ]
+    },
+    {
+      "n": 16,
+      "public_key_bytes": 80,
+      "modes": [
+        {
+          "mode": "conservative-compression",
+          "minimum_ciphertext_bytes": 40,
+          "minimal_candidates": [
+            {
+              "n": 16,
+              "rank": 2,
+              "q": 3329,
+              "eta1": 3,
+              "eta2": 2,
+              "du": 8,
+              "dv": 4,
+              "mode": "conservative-compression",
+              "ciphertext_bytes": 40,
+              "u_rounding_bound": 7,
+              "v_rounding_bound": 104,
+              "residual_support_bound": 1258,
+              "argument": "chernoff-union-bound",
+              "threshold": 728,
+              "proposed_witness": [
+                1415569,
+                1000000
+              ],
+              "bits": 144.588739541,
+              "meets_target": true,
+              "certified_exponent": 144,
+              "exact_bound_sha256": "e8832c34ec2c56fa24276d8832135e51557acfd46a2d30b5d912200035ff2c6f"
+            },
+            {
+              "n": 16,
+              "rank": 2,
+              "q": 3329,
+              "eta1": 3,
+              "eta2": 2,
+              "du": 9,
+              "dv": 2,
+              "mode": "conservative-compression",
+              "ciphertext_bytes": 40,
+              "u_rounding_bound": 3,
+              "v_rounding_bound": 416,
+              "residual_support_bound": 1186,
+              "argument": "chernoff-union-bound",
+              "threshold": 416,
+              "proposed_witness": [
+                1745719,
+                1000000
+              ],
+              "bits": 158.172174142,
+              "meets_target": true,
+              "certified_exponent": 158,
+              "exact_bound_sha256": "c1ee2a831c55d16ec7b3c0ccfc657136e43a64b71eb466d07900d66fe725c46f"
+            }
+          ],
+          "cheaper_candidates_not_certified_in_numerical_search": 72,
+          "strongest_cheaper_bound_bits": 99.364031187,
+          "baseline": {
+            "n": 16,
+            "rank": 2,
+            "q": 3329,
+            "eta1": 3,
+            "eta2": 2,
+            "du": 10,
+            "dv": 4,
+            "mode": "conservative-compression",
+            "ciphertext_bytes": 48,
+            "u_rounding_bound": 2,
+            "v_rounding_bound": 104,
+            "residual_support_bound": 778,
+            "argument": "deterministic-support",
+            "bits": null,
+            "meets_target": true
+          }
+        },
+        {
+          "mode": "independent-uniform-u-compression",
+          "minimum_ciphertext_bytes": 38,
+          "minimal_candidates": [
+            {
+              "n": 16,
+              "rank": 2,
+              "q": 3329,
+              "eta1": 3,
+              "eta2": 2,
+              "du": 8,
+              "dv": 3,
+              "mode": "independent-uniform-u-compression",
+              "ciphertext_bytes": 38,
+              "u_rounding_bound": 7,
+              "v_rounding_bound": 208,
+              "residual_support_bound": 1362,
+              "argument": "chernoff-union-bound",
+              "threshold": 624,
+              "proposed_witness": [
+                792403,
+                500000
+              ],
+              "bits": 223.484819275,
+              "meets_target": true,
+              "certified_exponent": 223,
+              "exact_bound_sha256": "2bd9d47468dea7c2609d7fa8df85e654644102a200a4199d49a3ba1a61732c5d"
+            }
+          ],
+          "cheaper_candidates_not_certified_in_numerical_search": 66,
+          "strongest_cheaper_bound_bits": 107.714021984,
+          "baseline": {
+            "n": 16,
+            "rank": 2,
+            "q": 3329,
+            "eta1": 3,
+            "eta2": 2,
+            "du": 10,
+            "dv": 4,
+            "mode": "independent-uniform-u-compression",
+            "ciphertext_bytes": 48,
+            "u_rounding_bound": 2,
+            "v_rounding_bound": 104,
+            "residual_support_bound": 778,
+            "argument": "deterministic-support",
+            "bits": null,
+            "meets_target": true
+          }
+        }
+      ]
+    },
+    {
+      "n": 32,
+      "public_key_bytes": 128,
+      "modes": [
+        {
+          "mode": "conservative-compression",
+          "minimum_ciphertext_bytes": 84,
+          "minimal_candidates": [
+            {
+              "n": 32,
+              "rank": 2,
+              "q": 3329,
+              "eta1": 3,
+              "eta2": 2,
+              "du": 9,
+              "dv": 3,
+              "mode": "conservative-compression",
+              "ciphertext_bytes": 84,
+              "u_rounding_bound": 3,
+              "v_rounding_bound": 208,
+              "residual_support_bound": 1746,
+              "argument": "chernoff-union-bound",
+              "threshold": 624,
+              "proposed_witness": [
+                375621,
+                250000
+              ],
+              "bits": 176.273586595,
+              "meets_target": true,
+              "certified_exponent": 176,
+              "exact_bound_sha256": "7e5660aadecc2af0699475f17cc7e226d140a1297bf02a688904c021c64b2882"
+            }
+          ],
+          "cheaper_candidates_not_certified_in_numerical_search": 78,
+          "strongest_cheaper_bound_bits": 74.953700715,
+          "baseline": {
+            "n": 32,
+            "rank": 2,
+            "q": 3329,
+            "eta1": 3,
+            "eta2": 2,
+            "du": 10,
+            "dv": 4,
+            "mode": "conservative-compression",
+            "ciphertext_bytes": 96,
+            "u_rounding_bound": 2,
+            "v_rounding_bound": 104,
+            "residual_support_bound": 1450,
+            "argument": "chernoff-union-bound",
+            "threshold": 728,
+            "proposed_witness": [
+              1953861,
+              1000000
+            ],
+            "bits": 367.936412683,
+            "meets_target": true,
+            "certified_exponent": 367,
+            "exact_bound_sha256": "59aee9aa2717e086be3bd2f233083370109161945bb38f1acf32aae6ac98532e"
+          }
+        },
+        {
+          "mode": "independent-uniform-u-compression",
+          "minimum_ciphertext_bytes": 76,
+          "minimal_candidates": [
+            {
+              "n": 32,
+              "rank": 2,
+              "q": 3329,
+              "eta1": 3,
+              "eta2": 2,
+              "du": 8,
+              "dv": 3,
+              "mode": "independent-uniform-u-compression",
+              "ciphertext_bytes": 76,
+              "u_rounding_bound": 7,
+              "v_rounding_bound": 208,
+              "residual_support_bound": 2514,
+              "argument": "chernoff-union-bound",
+              "threshold": 624,
+              "proposed_witness": [
+                651387,
+                500000
+              ],
+              "bits": 131.482819909,
+              "meets_target": true,
+              "certified_exponent": 131,
+              "exact_bound_sha256": "12b000f300dae47e8a515c61775f0a9367d0f096dc284c807ede317dee2ce761"
+            }
+          ],
+          "cheaper_candidates_not_certified_in_numerical_search": 66,
+          "strongest_cheaper_bound_bits": 61.327082931,
+          "baseline": {
+            "n": 32,
+            "rank": 2,
+            "q": 3329,
+            "eta1": 3,
+            "eta2": 2,
+            "du": 10,
+            "dv": 4,
+            "mode": "independent-uniform-u-compression",
+            "ciphertext_bytes": 96,
+            "u_rounding_bound": 2,
+            "v_rounding_bound": 104,
+            "residual_support_bound": 1450,
+            "argument": "chernoff-union-bound",
+            "threshold": 728,
+            "proposed_witness": [
+              1146051,
+              500000
+            ],
+            "bits": 565.786726038,
+            "meets_target": true,
+            "certified_exponent": 565,
+            "exact_bound_sha256": "7f0a6ee8b9054dc6686a05e7720dc44959e528dffa6598bbc0903fca07344ce1"
+          }
+        }
+      ]
+    },
+    {
+      "n": 64,
+      "public_key_bytes": 224,
+      "modes": [
+        {
+          "mode": "conservative-compression",
+          "minimum_ciphertext_bytes": 184,
+          "minimal_candidates": [
+            {
+              "n": 64,
+              "rank": 2,
+              "q": 3329,
+              "eta1": 3,
+              "eta2": 2,
+              "du": 9,
+              "dv": 5,
+              "mode": "conservative-compression",
+              "ciphertext_bytes": 184,
+              "u_rounding_bound": 3,
+              "v_rounding_bound": 52,
+              "residual_support_bound": 3126,
+              "argument": "chernoff-union-bound",
+              "threshold": 780,
+              "proposed_witness": [
+                128741,
+                100000
+              ],
+              "bits": 135.375549435,
+              "meets_target": true,
+              "certified_exponent": 135,
+              "exact_bound_sha256": "8af356652bce8c36f5b160b4bb05e3dd443111fe27362cf25054a758fbdd1ff0"
+            },
+            {
+              "n": 64,
+              "rank": 2,
+              "q": 3329,
+              "eta1": 3,
+              "eta2": 2,
+              "du": 10,
+              "dv": 3,
+              "mode": "conservative-compression",
+              "ciphertext_bytes": 184,
+              "u_rounding_bound": 2,
+              "v_rounding_bound": 208,
+              "residual_support_bound": 2898,
+              "argument": "chernoff-union-bound",
+              "threshold": 624,
+              "proposed_witness": [
+                275639,
+                200000
+              ],
+              "bits": 141.706879518,
+              "meets_target": true,
+              "certified_exponent": 141,
+              "exact_bound_sha256": "963cd6f00a25a96c1a46ce2a8627ca8c31f35d13b198cb1eecc403aae9f5aa25"
+            }
+          ],
+          "cheaper_candidates_not_certified_in_numerical_search": 90,
+          "strongest_cheaper_bound_bits": 117.053762009,
+          "baseline": {
+            "n": 64,
+            "rank": 2,
+            "q": 3329,
+            "eta1": 3,
+            "eta2": 2,
+            "du": 10,
+            "dv": 4,
+            "mode": "conservative-compression",
+            "ciphertext_bytes": 192,
+            "u_rounding_bound": 2,
+            "v_rounding_bound": 104,
+            "residual_support_bound": 2794,
+            "argument": "chernoff-union-bound",
+            "threshold": 728,
+            "proposed_witness": [
+              1444871,
+              1000000
+            ],
+            "bits": 193.401610204,
+            "meets_target": true,
+            "certified_exponent": 193,
+            "exact_bound_sha256": "38aa97ceb4f55018cf6f555ddf456c5eabe8d870c5254d16f92fb03ef1e1de00"
+          }
+        },
+        {
+          "mode": "independent-uniform-u-compression",
+          "minimum_ciphertext_bytes": 168,
+          "minimal_candidates": [
+            {
+              "n": 64,
+              "rank": 2,
+              "q": 3329,
+              "eta1": 3,
+              "eta2": 2,
+              "du": 9,
+              "dv": 3,
+              "mode": "independent-uniform-u-compression",
+              "ciphertext_bytes": 168,
+              "u_rounding_bound": 3,
+              "v_rounding_bound": 208,
+              "residual_support_bound": 3282,
+              "argument": "chernoff-union-bound",
+              "threshold": 624,
+              "proposed_witness": [
+                144061,
+                100000
+              ],
+              "bits": 183.717992566,
+              "meets_target": true,
+              "certified_exponent": 183,
+              "exact_bound_sha256": "c7acd86b53bfa16f2a9f1083b51df2a61a3d88511f347ac2f3613d9965282549"
+            }
+          ],
+          "cheaper_candidates_not_certified_in_numerical_search": 78,
+          "strongest_cheaper_bound_bits": 98.832864866,
+          "baseline": {
+            "n": 64,
+            "rank": 2,
+            "q": 3329,
+            "eta1": 3,
+            "eta2": 2,
+            "du": 10,
+            "dv": 4,
+            "mode": "independent-uniform-u-compression",
+            "ciphertext_bytes": 192,
+            "u_rounding_bound": 2,
+            "v_rounding_bound": 104,
+            "residual_support_bound": 2794,
+            "argument": "chernoff-union-bound",
+            "threshold": 728,
+            "proposed_witness": [
+              181361,
+              100000
+            ],
+            "bits": 383.238092894,
+            "meets_target": true,
+            "certified_exponent": 383,
+            "exact_bound_sha256": "40fe8b2f12b4b9304a6ab6c334c8de0774f04a334c9c9a364f6092189260665a"
+          }
+        }
+      ]
+    },
+    {
+      "n": 128,
+      "public_key_bytes": 416,
+      "modes": [
+        {
+          "mode": "conservative-compression",
+          "minimum_ciphertext_bytes": 400,
+          "minimal_candidates": [
+            {
+              "n": 128,
+              "rank": 2,
+              "q": 3329,
+              "eta1": 3,
+              "eta2": 2,
+              "du": 11,
+              "dv": 3,
+              "mode": "conservative-compression",
+              "ciphertext_bytes": 400,
+              "u_rounding_bound": 1,
+              "v_rounding_bound": 208,
+              "residual_support_bound": 4818,
+              "argument": "chernoff-union-bound",
+              "threshold": 624,
+              "proposed_witness": [
+                672159,
+                500000
+              ],
+              "bits": 131.16034439,
+              "meets_target": true,
+              "certified_exponent": 131,
+              "exact_bound_sha256": "3c3623f1b4af6f69f3e7c38de4d084f7ee883b93504b0db022da133e05aa215c"
+            }
+          ],
+          "cheaper_candidates_not_certified_in_numerical_search": 102,
+          "strongest_cheaper_bound_bits": 95.410255226,
+          "baseline": {
+            "n": 128,
+            "rank": 2,
+            "q": 3329,
+            "eta1": 3,
+            "eta2": 2,
+            "du": 10,
+            "dv": 4,
+            "mode": "conservative-compression",
+            "ciphertext_bytes": 384,
+            "u_rounding_bound": 2,
+            "v_rounding_bound": 104,
+            "residual_support_bound": 5482,
+            "argument": "chernoff-union-bound",
+            "threshold": 728,
+            "proposed_witness": [
+              121471,
+              100000
+            ],
+            "bits": 95.410255226,
+            "meets_target": false,
+            "certified_exponent": 95,
+            "exact_bound_sha256": "66562f71f7aaf54585e382a2480b67656495b872b17b08fc7924ff725ce68af3"
+          }
+        },
+        {
+          "mode": "independent-uniform-u-compression",
+          "minimum_ciphertext_bytes": 352,
+          "minimal_candidates": [
+            {
+              "n": 128,
+              "rank": 2,
+              "q": 3329,
+              "eta1": 3,
+              "eta2": 2,
+              "du": 9,
+              "dv": 4,
+              "mode": "independent-uniform-u-compression",
+              "ciphertext_bytes": 352,
+              "u_rounding_bound": 3,
+              "v_rounding_bound": 104,
+              "residual_support_bound": 6250,
+              "argument": "chernoff-union-bound",
+              "threshold": 728,
+              "proposed_witness": [
+                1291087,
+                1000000
+              ],
+              "bits": 138.200724047,
+              "meets_target": true,
+              "certified_exponent": 138,
+              "exact_bound_sha256": "ffc6214326135635d0965b20b88e6cc77009a1b78118260886550286b4f19f46"
+            }
+          ],
+          "cheaper_candidates_not_certified_in_numerical_search": 84,
+          "strongest_cheaper_bound_bits": 101.924257419,
+          "baseline": {
+            "n": 128,
+            "rank": 2,
+            "q": 3329,
+            "eta1": 3,
+            "eta2": 2,
+            "du": 10,
+            "dv": 4,
+            "mode": "independent-uniform-u-compression",
+            "ciphertext_bytes": 384,
+            "u_rounding_bound": 2,
+            "v_rounding_bound": 104,
+            "residual_support_bound": 5482,
+            "argument": "chernoff-union-bound",
+            "threshold": 728,
+            "proposed_witness": [
+              752321,
+              500000
+            ],
+            "bits": 236.062499352,
+            "meets_target": true,
+            "certified_exponent": 236,
+            "exact_bound_sha256": "01e77a3a8256d42d9098a726aa780621a5925d752f129d73d66d3fde27fe3437"
+          }
+        }
+      ]
+    },
+    {
+      "n": 256,
+      "public_key_bytes": 800,
+      "modes": [
+        {
+          "mode": "conservative-compression",
+          "minimum_ciphertext_bytes": 864,
+          "minimal_candidates": [
+            {
+              "n": 256,
+              "rank": 2,
+              "q": 3329,
+              "eta1": 3,
+              "eta2": 2,
+              "du": 12,
+              "dv": 3,
+              "mode": "conservative-compression",
+              "ciphertext_bytes": 864,
+              "u_rounding_bound": 0,
+              "v_rounding_bound": 208,
+              "residual_support_bound": 7890,
+              "argument": "chernoff-union-bound",
+              "threshold": 624,
+              "proposed_witness": [
+                668897,
+                500000
+              ],
+              "bits": 128.945011508,
+              "meets_target": true,
+              "certified_exponent": 128,
+              "exact_bound_sha256": "5bd5b98bd1b8deb7422ef007740ac921c39fae2f1e50a5d42daccff4d0254e49"
+            }
+          ],
+          "cheaper_candidates_not_certified_in_numerical_search": 114,
+          "strongest_cheaper_bound_bits": 88.706388267,
+          "baseline": {
+            "n": 256,
+            "rank": 2,
+            "q": 3329,
+            "eta1": 3,
+            "eta2": 2,
+            "du": 10,
+            "dv": 4,
+            "mode": "conservative-compression",
+            "ciphertext_bytes": 768,
+            "u_rounding_bound": 2,
+            "v_rounding_bound": 104,
+            "residual_support_bound": 10858,
+            "argument": "chernoff-union-bound",
+            "threshold": 728,
+            "proposed_witness": [
+              1104167,
+              1000000
+            ],
+            "bits": 43.212684933,
+            "meets_target": false,
+            "certified_exponent": 43,
+            "exact_bound_sha256": "f585e65196b6a0d4c249b3fa91f3f6502533ce700577cbb71f32d38bff093144"
+          }
+        },
+        {
+          "mode": "independent-uniform-u-compression",
+          "minimum_ciphertext_bytes": 768,
+          "minimal_candidates": [
+            {
+              "n": 256,
+              "rank": 2,
+              "q": 3329,
+              "eta1": 3,
+              "eta2": 2,
+              "du": 10,
+              "dv": 4,
+              "mode": "independent-uniform-u-compression",
+              "ciphertext_bytes": 768,
+              "u_rounding_bound": 2,
+              "v_rounding_bound": 104,
+              "residual_support_bound": 10858,
+              "argument": "chernoff-union-bound",
+              "threshold": 728,
+              "proposed_witness": [
+                640523,
+                500000
+              ],
+              "bits": 128.041429812,
+              "meets_target": true,
+              "certified_exponent": 128,
+              "exact_bound_sha256": "a73397f3b27873ad70119003b4d2df0821d91299e5af24bc417ce8085206555c"
+            }
+          ],
+          "cheaper_candidates_not_certified_in_numerical_search": 96,
+          "strongest_cheaper_bound_bits": 93.099823529,
+          "baseline": {
+            "n": 256,
+            "rank": 2,
+            "q": 3329,
+            "eta1": 3,
+            "eta2": 2,
+            "du": 10,
+            "dv": 4,
+            "mode": "independent-uniform-u-compression",
+            "ciphertext_bytes": 768,
+            "u_rounding_bound": 2,
+            "v_rounding_bound": 104,
+            "residual_support_bound": 10858,
+            "argument": "chernoff-union-bound",
+            "threshold": 728,
+            "proposed_witness": [
+              640523,
+              500000
+            ],
+            "bits": 128.041429812,
+            "meets_target": true,
+            "certified_exponent": 128,
+            "exact_bound_sha256": "a73397f3b27873ad70119003b4d2df0821d91299e5af24bc417ce8085206555c"
+          }
+        }
+      ]
+    }
+  ]
+}

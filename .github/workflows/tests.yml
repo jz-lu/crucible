@@ -45,6 +45,10 @@ jobs:
           tests/test_kem.py
           tests/test_module_compressed_v4_core.py
           tests/test_mlkem_correctness_certificate.py
+          tests/test_mlkem_compression_candidates.py
+          tests/test_hqc_support_review.py
+          tests/test_hqc_module_structure_checks.py
+          tests/test_mceliece_candidate_screen.py
           tests/test_common_correctness_policy.py
           tests/test_exact_parameters.py
           tests/test_beta_invitations.py

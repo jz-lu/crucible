@@ -117,11 +117,11 @@
   "proposal_guide": {
     "note": {
       "id": "curated:proposal-advice",
-      "revision": 8,
-      "content_sha256": "6dd277dd6083c7bb738b38bef897e148bd1d98f7dad87afbea29bd240b32612f",
-      "url": "#notebook?note=curated%3Aproposal-advice&revision=8&sha256=6dd277dd6083c7bb738b38bef897e148bd1d98f7dad87afbea29bd240b32612f"
+      "revision": 9,
+      "content_sha256": "8c2ea6ba441045676fe31981cb632c9037a57f63dac79eac2443ba758f2c89aa",
+      "url": "#notebook?note=curated%3Aproposal-advice&revision=9&sha256=8c2ea6ba441045676fe31981cb632c9037a57f63dac79eac2443ba758f2c89aa"
     },
-    "evidence_sha256": "5c3fe87412f7908761f3db856dfa9299857901199f9c57c5a33269ca65b77389",
-    "snapshot_file": "5c3fe87412f7908761f3db856dfa9299857901199f9c57c5a33269ca65b77389.json"
+    "evidence_sha256": "1810c55c7d211c5cc364341589a5375903ee7de41f4d990d76326eac1ab19af7",
+    "snapshot_file": "1810c55c7d211c5cc364341589a5375903ee7de41f4d990d76326eac1ab19af7.json"
   }
 }

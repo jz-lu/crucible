@@ -163,6 +163,11 @@ def comparison_blockers(row, context):
     estimates fail it: unknown structural attacks are never infinity/zero.
     """
     blockers = []
+    if not isinstance(context, dict) or any(
+        not isinstance(context.get(key), str) or not context[key].strip()
+        for key in ("game", "unit", "memory_access")
+    ):
+        blockers.append("comparison: explicit game, work unit and memory accounting required")
     for kind in REQUIRED_COVERAGE:
         evidence = row.get("attack_evidence", {}).get(kind)
         if not isinstance(evidence, dict) or evidence.get("coverage") != "reviewed-for-domain":
@@ -234,7 +239,8 @@ def study():
             "control_ray": ray,
             "incumbent_examples": [diagnostic_row(Candidate(12, n, 64)) for n in (840, 1680, 3488)],
             "old_proxy_counterexample": diagnostic_row(Candidate(7, 120, 4)),
-            "comparison": modeled_frontier(ray, {"game": "single public-key/ciphertext shared-secret recovery"}),
+            "comparison": modeled_frontier(ray, {"game": "single public-key/ciphertext shared-secret recovery",
+                "unit": "modeled bit operations", "memory_access": "constant"}),
             "required_before_new_release": ["review applicable attacks including low-degree structure",
                                             "select and justify tradeoff objective",
                                             "independent native implementation/correctness/conformance review",

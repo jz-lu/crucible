@@ -240,8 +240,10 @@ Requirements before approval
 
    Keep three domains distinct: mathematically admissible parameters, the
    parameters actually implemented and checked by the pinned worker, and those
-   covered by the attack/correctness models. Their intersection is the domain
-   that the comparison can support. An arbitrary parameter vector accepted by
+   covered by the attack/correctness models. Live executable comparisons and
+   measured claims require the relevant domains to overlap. Offline analytical
+   candidates may lie outside implementation support, but must be labelled
+   unimplemented and cannot be admitted on that basis. A parameter vector accepted by
    a JSON schema is not evidence that a decoder or its analysis supports it.
    A smaller proxy cost is not enough to admit a replacement configuration.
 

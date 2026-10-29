@@ -101,6 +101,17 @@ def test_unknown_structural_model_cannot_win_comparison():
     assert not result["live_admission"]
 
 
+@pytest.mark.parametrize("context", [None, {}, "unspecified", {"game": "one syndrome"},
+                                    {**CONTEXT, "unit": " "}, {**CONTEXT, "memory_access": None}])
+def test_missing_accounting_cannot_be_self_certified_by_matching_evidence(context):
+    row = covered_row(screen.Candidate(7, 112, 4))
+    for evidence in row["attack_evidence"].values():
+        evidence["context"] = deepcopy(context)
+    result = screen.modeled_frontier([row], context)
+    assert not result["conditional_modeled_frontier"]
+    assert any("explicit game" in reason for reason in result["blocked"][0]["reasons"])
+
+
 @pytest.mark.parametrize("invalid", [None, math.inf, math.nan, True, -1])
 def test_missing_or_infinite_work_cannot_mean_unbounded_security(invalid):
     row = covered_row(screen.Candidate(7, 112, 4))
