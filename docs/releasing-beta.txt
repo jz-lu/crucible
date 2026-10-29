@@ -33,6 +33,26 @@ Pushes and merges never trigger this workflow. Moving beta can trigger an existi
 App Platform Autodeploy subscription; the workflow itself never edits an app,
 its environment or its database.
 
+Focused local feedback
+----------------------
+Before pushing navigation, browsing warmup or resource-chart cache changes, run:
+
+    python tests/preflight.py browse
+
+This explicit fail-fast profile runs eight related standalone frontend suites,
+starting with cross-feature navigation assertions. It requires Node22.23.4,
+matching CI; use --node /path/to/node when the default Node version differs.
+It installs nothing and contacts no hosted service. The profile covers synthetic
+navigation, resource reads/rendering, bounded warmup, session/access changes,
+response parsing and read recovery. It does not claim complete change-impact
+analysis, real-browser coverage or hosted performance measurements.
+
+For release-workflow/helper edits, run python tests/preflight.py release from the
+project Python environment. Use --list to see the exact selections. Profiles are
+small, reviewable lists in tests/preflight.py: extend or add one when an adjacent
+regression becomes relevant. Run other affected tests as needed. A green local
+profile never replaces the complete required CI or native release verification.
+
 Source CI reuse on main
 -----------------------
 Main releases reuse the latest successful CI push run for the exact selected Git
