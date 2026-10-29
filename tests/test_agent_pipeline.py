@@ -23,7 +23,7 @@ RESOURCE_NAMES = {
     "agent-workflow.txt", "note-format.txt", "note-requests.txt",
     "request-types.json", "proposal-guide.txt", "correctness-policy.txt",
     "ladder-principles.txt", "scoring-policy.txt", "scoring-base.txt",
-    "benchmark-policy.txt",
+    "benchmark-policy.txt", "bounties.txt",
 }
 READ_PATHS = [PIPELINE, *(PREFIX + name for name in sorted(RESOURCE_NAMES))]
 

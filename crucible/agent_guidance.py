@@ -8,6 +8,7 @@ The site membership boundary still applies, including to scoped machine reads.
 PIPELINE_PATH = "/api/agent/pipeline"
 RESOURCE_PREFIX = "/api/agent/guidance/"
 RESOURCES = {
+    "bounties.txt": ("docs/bounties.txt", "text/plain"),
     "agent-workflow.txt": ("docs/agent-workflow.txt", "text/plain"),
     "note-format.txt": ("web/map/NOTE-FORMAT.txt", "text/plain"),
     "note-requests.txt": ("docs/note-requests.txt", "text/plain"),
