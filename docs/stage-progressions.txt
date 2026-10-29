@@ -1,3 +1,40 @@
+CURRENT ROUTE SNAPSHOT — 29 October 2026
+
+Family              Release                       Stages  Configurations
+Finite-field DH     7                                  50              50
+RSA                 4                                  50              50
+Elliptic-curve DH    curve-compressed-v2                 50              50
+Module lattice      compressed-research-v4               6               6
+Frodo               anchor-research-v3                  80              80
+NTRU Prime          3                                  25              27
+HQC                 modeled-research-v3                 66              66
+McEliece            length-research-v1                  50              50
+TOTAL                                                 377             379
+
+These are the current default routes, not a new admission or security review.
+The table is checked against crucible/progressions.py and the current registry
+by tests/test_progressions.py. NTRU's two off-route configurations remain
+accessible. The named standard/reference releases have their own configurations;
+the full resource measurement catalogue includes 395 configurations across
+14 releases. That is a different count from the eight current default routes.
+
+The common correctness target is an acceptable upper bound, not identical
+failure probability at every stage. Conditional/model-based bounds retain their
+premises. A published endpoint is an interpretive anchor, not an automatic
+128-bit claim for it or for reduced configurations. In particular, McEliece's
+fixed m=12/t=64 path is controlled shortening, not a joint parameter frontier;
+HQC's current endpoint is specifically the August 2025 construction. See the
+dated review documents for attack coverage and correctness-model limitations.
+
+Changing a route, construction, encoding, model or implementation has distinct
+evidence requirements. Do not rewrite the existing configuration IDs, frozen
+manifests, recoveries or resource publications to make an improved candidate
+appear to have been tested already. Stage count changes alone are not a
+scientific improvement. Current recommendations are in ladder-principles.txt
+and the parameter-selection section of proposal-guide.txt.
+
+HISTORICAL ROLLOUT RECORD — the dated sections below retain their original counts
+
 17 OCTOBER UPDATE — current HQC modeled-research-v3 route
 
 HQC now has 66 natural stages, one for each supported secret weight 1..66 with

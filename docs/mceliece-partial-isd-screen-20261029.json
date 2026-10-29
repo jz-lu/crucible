@@ -1,0 +1,1074 @@
+{
+  "format": "crucible-mceliece-partial-isd-screen-v1",
+  "source": {
+    "repository": "https://github.com/Crypto-TII/CryptographicEstimators",
+    "commit": "071cce7a942af423422cb0c6d6af55778c72e4d1"
+  },
+  "python": "3.11.14",
+  "dependencies": {
+    "scipy": "1.16.2",
+    "numpy": "2.4.6",
+    "sympy": "1.14.0",
+    "prettytable": "3.16.0",
+    "python-flint": "0.8.0",
+    "pytest": "8.4.2"
+  },
+  "status": "partial-generic-model-not-security-bits-or-live-selection",
+  "game": "one planted weight-t solution to one syndrome; one public key and ciphertext",
+  "model": {
+    "nsolutions_log2": 0,
+    "bit_complexities": 1,
+    "algorithms": [
+      "Prange",
+      "Stern",
+      "MayOzerov"
+    ],
+    "time_units": "estimator modeled bit operations",
+    "memory_units": "estimator modeled bits",
+    "scope": "generic decoding only; optimizer uses upstream default finite ranges/heuristics",
+    "not_covered": [
+      "remaining upstream ISD algorithms",
+      "progressive sieving ISD (2026/633)",
+      "Goppa structural recovery (2026/1630,1984,1986)",
+      "quantum or many-target attacks",
+      "full-size empirical calibration",
+      "complete cryptanalytic lower bounds"
+    ]
+  },
+  "contexts": [
+    {
+      "id": "constant-access-unbounded-memory",
+      "memory_access": 0,
+      "memory_bound_log2_bits": null
+    },
+    {
+      "id": "constant-access-8GiB",
+      "memory_access": 0,
+      "memory_bound_log2_bits": 36
+    },
+    {
+      "id": "cube-root-access-unbounded-memory",
+      "memory_access": 3,
+      "memory_bound_log2_bits": null
+    }
+  ],
+  "rows": [
+    {
+      "candidate_id": "m7-n112-t4",
+      "m": 7,
+      "n": 112,
+      "t": 4,
+      "r": 28,
+      "k": 84,
+      "public_key_bytes": 308,
+      "ciphertext_bytes": 4,
+      "public_row_padding_bits": 4,
+      "ciphertext_padding_bits": 4,
+      "estimates": [
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 24.666841260745223,
+          "log2_memory_bits": 11.665335917185175,
+          "parameters": {
+            "r": 0
+          }
+        },
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 19.798319447767753,
+          "log2_memory_bits": 13.627533884472792,
+          "parameters": {
+            "r": 0,
+            "p": 1,
+            "l": 8
+          }
+        },
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 21.189813527094653,
+          "log2_memory_bits": 15.979782430703086,
+          "parameters": {
+            "r": 0,
+            "depth": 2
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 24.666841260745223,
+          "log2_memory_bits": 11.665335917185175,
+          "parameters": {
+            "r": 0
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 19.798319447767753,
+          "log2_memory_bits": 13.627533884472792,
+          "parameters": {
+            "r": 0,
+            "p": 1,
+            "l": 8
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 21.189813527094653,
+          "log2_memory_bits": 15.979782430703086,
+          "parameters": {
+            "r": 0,
+            "depth": 2
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 28.64955573634817,
+          "log2_memory_bits": 11.665335917185175,
+          "parameters": {
+            "r": 0
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 24.401446680813216,
+          "log2_memory_bits": 13.627533884472792,
+          "parameters": {
+            "r": 0,
+            "p": 1,
+            "l": 8
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 26.292010758008367,
+          "log2_memory_bits": 14.702172685365547,
+          "parameters": {
+            "r": 0,
+            "depth": 2
+          }
+        }
+      ]
+    },
+    {
+      "candidate_id": "m7-n120-t4",
+      "m": 7,
+      "n": 120,
+      "t": 4,
+      "r": 28,
+      "k": 92,
+      "public_key_bytes": 336,
+      "ciphertext_bytes": 4,
+      "public_row_padding_bits": 4,
+      "ciphertext_padding_bits": 4,
+      "estimates": [
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 25.169778235448543,
+          "log2_memory_bits": 11.76487159073609,
+          "parameters": {
+            "r": 0
+          }
+        },
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 20.055180445805405,
+          "log2_memory_bits": 13.825753832883112,
+          "parameters": {
+            "r": 0,
+            "p": 1,
+            "l": 8
+          }
+        },
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 21.35515365745149,
+          "log2_memory_bits": 16.305634287546713,
+          "parameters": {
+            "r": 0,
+            "depth": 2
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 25.169778235448543,
+          "log2_memory_bits": 11.76487159073609,
+          "parameters": {
+            "r": 0
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 20.055180445805405,
+          "log2_memory_bits": 13.825753832883112,
+          "parameters": {
+            "r": 0,
+            "p": 1,
+            "l": 8
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 21.35515365745149,
+          "log2_memory_bits": 16.305634287546713,
+          "parameters": {
+            "r": 0,
+            "depth": 2
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 29.183595069099656,
+          "log2_memory_bits": 11.76487159073609,
+          "parameters": {
+            "r": 0
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 24.721721250405434,
+          "log2_memory_bits": 13.825753832883112,
+          "parameters": {
+            "r": 0,
+            "p": 1,
+            "l": 8
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 26.547828480987455,
+          "log2_memory_bits": 14.978352958165143,
+          "parameters": {
+            "r": 0,
+            "depth": 2
+          }
+        }
+      ]
+    },
+    {
+      "candidate_id": "m8-n216-t6",
+      "m": 8,
+      "n": 216,
+      "t": 6,
+      "r": 48,
+      "k": 168,
+      "public_key_bytes": 1008,
+      "ciphertext_bytes": 6,
+      "public_row_padding_bits": 0,
+      "ciphertext_padding_bits": 0,
+      "estimates": [
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 32.312426327131206,
+          "log2_memory_bits": 13.369597346278677,
+          "parameters": {
+            "r": 0
+          }
+        },
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 24.410302318582303,
+          "log2_memory_bits": 20.532348314833254,
+          "parameters": {
+            "r": 0,
+            "p": 2,
+            "l": 13
+          }
+        },
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 24.556798660908754,
+          "log2_memory_bits": 18.738593694822818,
+          "parameters": {
+            "r": 0,
+            "depth": 2
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 32.312426327131206,
+          "log2_memory_bits": 13.369597346278677,
+          "parameters": {
+            "r": 0
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 24.410302318582303,
+          "log2_memory_bits": 20.532348314833254,
+          "parameters": {
+            "r": 0,
+            "p": 2,
+            "l": 13
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 24.556798660908754,
+          "log2_memory_bits": 18.738593694822818,
+          "parameters": {
+            "r": 0,
+            "depth": 2
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 36.833215285395056,
+          "log2_memory_bits": 13.369597346278677,
+          "parameters": {
+            "r": 0
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 30.851496827201288,
+          "log2_memory_bits": 15.516438734607949,
+          "parameters": {
+            "r": 0,
+            "p": 1,
+            "l": 7
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 30.521519193882312,
+          "log2_memory_bits": 17.17062927045356,
+          "parameters": {
+            "r": 0,
+            "depth": 2
+          }
+        }
+      ]
+    },
+    {
+      "candidate_id": "m9-n440-t11",
+      "m": 9,
+      "n": 440,
+      "t": 11,
+      "r": 99,
+      "k": 341,
+      "public_key_bytes": 4257,
+      "ciphertext_bytes": 13,
+      "public_row_padding_bits": 3,
+      "ciphertext_padding_bits": 5,
+      "estimates": [
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 46.36175289760041,
+          "log2_memory_bits": 15.425215903299385,
+          "parameters": {
+            "r": 0
+          }
+        },
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 35.15004771357581,
+          "log2_memory_bits": 23.596642929906928,
+          "parameters": {
+            "r": 0,
+            "p": 2,
+            "l": 17
+          }
+        },
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 34.749146528978486,
+          "log2_memory_bits": 21.70171256893974,
+          "parameters": {
+            "r": 0,
+            "depth": 2
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 46.36175289760041,
+          "log2_memory_bits": 15.425215903299385,
+          "parameters": {
+            "r": 0
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 35.15004771357581,
+          "log2_memory_bits": 23.596642929906928,
+          "parameters": {
+            "r": 0,
+            "p": 2,
+            "l": 17
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 34.749146528978486,
+          "log2_memory_bits": 21.70171256893974,
+          "parameters": {
+            "r": 0,
+            "depth": 2
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 51.543788975292,
+          "log2_memory_bits": 15.425215903299385,
+          "parameters": {
+            "r": 0
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 43.02176811616982,
+          "log2_memory_bits": 23.596642929906928,
+          "parameters": {
+            "r": 0,
+            "p": 2,
+            "l": 17
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 41.327295329432125,
+          "log2_memory_bits": 18.19921222841056,
+          "parameters": {
+            "r": 0,
+            "depth": 2
+          }
+        }
+      ]
+    },
+    {
+      "candidate_id": "m10-n872-t19",
+      "m": 10,
+      "n": 872,
+      "t": 19,
+      "r": 190,
+      "k": 682,
+      "public_key_bytes": 16340,
+      "ciphertext_bytes": 24,
+      "public_row_padding_bits": 6,
+      "ciphertext_padding_bits": 2,
+      "estimates": [
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 67.73395068058038,
+          "log2_memory_bits": 17.345613152812675,
+          "parameters": {
+            "r": 0
+          }
+        },
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 53.234512744396994,
+          "log2_memory_bits": 26.593577935728042,
+          "parameters": {
+            "r": 0,
+            "p": 2,
+            "l": 16
+          }
+        },
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 52.01825223563007,
+          "log2_memory_bits": 34.44385698055827,
+          "parameters": {
+            "r": 0,
+            "depth": 2
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 67.73395068058038,
+          "log2_memory_bits": 17.345613152812675,
+          "parameters": {
+            "r": 0
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 53.234512744396994,
+          "log2_memory_bits": 26.593577935728042,
+          "parameters": {
+            "r": 0,
+            "p": 2,
+            "l": 16
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 52.01825223563007,
+          "log2_memory_bits": 34.44385698055827,
+          "parameters": {
+            "r": 0,
+            "depth": 2
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 73.54180781061473,
+          "log2_memory_bits": 17.345613152812675,
+          "parameters": {
+            "r": 0
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 62.10213059041814,
+          "log2_memory_bits": 26.593577935728042,
+          "parameters": {
+            "r": 0,
+            "p": 2,
+            "l": 16
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 60.08136416619361,
+          "log2_memory_bits": 21.181812253801098,
+          "parameters": {
+            "r": 0,
+            "depth": 2
+          }
+        }
+      ]
+    },
+    {
+      "candidate_id": "m11-n1744-t35",
+      "m": 11,
+      "n": 1744,
+      "t": 35,
+      "r": 385,
+      "k": 1359,
+      "public_key_bytes": 65450,
+      "ciphertext_bytes": 49,
+      "public_row_padding_bits": 1,
+      "ciphertext_padding_bits": 7,
+      "estimates": [
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 105.93564231427631,
+          "log2_memory_bits": 19.77099934038398,
+          "parameters": {
+            "r": 7
+          }
+        },
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 88.14953482697756,
+          "log2_memory_bits": 37.39865019901248,
+          "parameters": {
+            "r": 7,
+            "p": 3,
+            "l": 27
+          }
+        },
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 83.87467878936793,
+          "log2_memory_bits": 59.35880077648372,
+          "parameters": {
+            "r": 7,
+            "depth": 2
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 105.93564231427631,
+          "log2_memory_bits": 19.77099934038398,
+          "parameters": {
+            "r": 7
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 88.17433433762248,
+          "log2_memory_bits": 29.582200310532833,
+          "parameters": {
+            "r": 7,
+            "p": 2,
+            "l": 20
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 86.5587209183255,
+          "log2_memory_bits": 33.54958686447296,
+          "parameters": {
+            "r": 7,
+            "depth": 2
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 112.54087050393125,
+          "log2_memory_bits": 19.77099934038398,
+          "parameters": {
+            "r": 7
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 98.03661860574275,
+          "log2_memory_bits": 29.582200310532833,
+          "parameters": {
+            "r": 7,
+            "p": 2,
+            "l": 20
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 95.48619483015207,
+          "log2_memory_bits": 23.19942073684799,
+          "parameters": {
+            "r": 7,
+            "depth": 2
+          }
+        }
+      ]
+    },
+    {
+      "candidate_id": "m12-n840-t64",
+      "m": 12,
+      "n": 840,
+      "t": 64,
+      "r": 768,
+      "k": 72,
+      "public_key_bytes": 6912,
+      "ciphertext_bytes": 96,
+      "public_row_padding_bits": 0,
+      "ciphertext_padding_bits": 0,
+      "estimates": [
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 35.11151181867491,
+          "log2_memory_bits": 19.521600439723727,
+          "parameters": {
+            "r": 7
+          }
+        },
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 30.54220387621389,
+          "log2_memory_bits": 20.78838698041863,
+          "parameters": {
+            "r": 7,
+            "p": 2,
+            "l": 13
+          }
+        },
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 30.617237445354917,
+          "log2_memory_bits": 20.071797522284207,
+          "parameters": {
+            "r": 7,
+            "depth": 2
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 35.11151181867491,
+          "log2_memory_bits": 19.521600439723727,
+          "parameters": {
+            "r": 7
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 30.54220387621389,
+          "log2_memory_bits": 20.78838698041863,
+          "parameters": {
+            "r": 7,
+            "p": 2,
+            "l": 13
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 30.617237445354917,
+          "log2_memory_bits": 20.071797522284207,
+          "parameters": {
+            "r": 7,
+            "depth": 2
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 41.63448574431211,
+          "log2_memory_bits": 19.521600439723727,
+          "parameters": {
+            "r": 7
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 37.4834537412822,
+          "log2_memory_bits": 20.78838698041863,
+          "parameters": {
+            "r": 7,
+            "p": 2,
+            "l": 13
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 37.29612778036788,
+          "log2_memory_bits": 19.766813568470276,
+          "parameters": {
+            "r": 7,
+            "depth": 2
+          }
+        }
+      ]
+    },
+    {
+      "candidate_id": "m12-n1680-t64",
+      "m": 12,
+      "n": 1680,
+      "t": 64,
+      "r": 768,
+      "k": 912,
+      "public_key_bytes": 87552,
+      "ciphertext_bytes": 96,
+      "public_row_padding_bits": 0,
+      "ciphertext_padding_bits": 0,
+      "estimates": [
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 102.91121571817918,
+          "log2_memory_bits": 20.521600439723727,
+          "parameters": {
+            "r": 7
+          }
+        },
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 85.9186012435333,
+          "log2_memory_bits": 28.383075114849497,
+          "parameters": {
+            "r": 7,
+            "p": 2,
+            "l": 19
+          }
+        },
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 84.55589309423944,
+          "log2_memory_bits": 36.05646033438335,
+          "parameters": {
+            "r": 7,
+            "depth": 2
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 102.91121571817918,
+          "log2_memory_bits": 20.521600439723727,
+          "parameters": {
+            "r": 7
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 85.9186012435333,
+          "log2_memory_bits": 28.383075114849497,
+          "parameters": {
+            "r": 7,
+            "p": 2,
+            "l": 19
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 84.90476589216708,
+          "log2_memory_bits": 35.91325538768629,
+          "parameters": {
+            "r": 7,
+            "depth": 2
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 109.76428294418083,
+          "log2_memory_bits": 20.521600439723727,
+          "parameters": {
+            "r": 7
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 95.38167185154154,
+          "log2_memory_bits": 28.383075114849497,
+          "parameters": {
+            "r": 7,
+            "p": 2,
+            "l": 19
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 93.47090376007975,
+          "log2_memory_bits": 22.47038481603905,
+          "parameters": {
+            "r": 7,
+            "depth": 2
+          }
+        }
+      ]
+    },
+    {
+      "candidate_id": "m12-n3488-t64",
+      "m": 12,
+      "n": 3488,
+      "t": 64,
+      "r": 768,
+      "k": 2720,
+      "public_key_bytes": 261120,
+      "ciphertext_bytes": 96,
+      "public_row_padding_bits": 0,
+      "ciphertext_padding_bits": 0,
+      "estimates": [
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 173.3877536088415,
+          "log2_memory_bits": 21.57553924683453,
+          "parameters": {
+            "r": 7
+          }
+        },
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 151.408560049585,
+          "log2_memory_bits": 49.81441527517879,
+          "parameters": {
+            "r": 7,
+            "p": 4,
+            "l": 39
+          }
+        },
+        {
+          "context": "constant-access-unbounded-memory",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 140.79539727645346,
+          "log2_memory_bits": 86.59182480819277,
+          "parameters": {
+            "r": 7,
+            "depth": 3
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 173.3877536088415,
+          "log2_memory_bits": 21.57553924683453,
+          "parameters": {
+            "r": 7
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 152.39752034179565,
+          "log2_memory_bits": 32.586604229881665,
+          "parameters": {
+            "r": 7,
+            "p": 2,
+            "l": 21
+          }
+        },
+        {
+          "context": "constant-access-8GiB",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 149.3147763209563,
+          "log2_memory_bits": 35.626830608873426,
+          "parameters": {
+            "r": 7,
+            "depth": 2
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "Prange",
+          "status": "estimated",
+          "log2_bit_operations": 180.5894340658498,
+          "log2_memory_bits": 21.57553924683453,
+          "parameters": {
+            "r": 7
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "Stern",
+          "status": "estimated",
+          "log2_bit_operations": 163.2604965871774,
+          "log2_memory_bits": 32.586604229881665,
+          "parameters": {
+            "r": 7,
+            "p": 2,
+            "l": 21
+          }
+        },
+        {
+          "context": "cube-root-access-unbounded-memory",
+          "algorithm": "MayOzerov",
+          "status": "estimated",
+          "log2_bit_operations": 160.3154270736536,
+          "log2_memory_bits": 25.179033131182436,
+          "parameters": {
+            "r": 7,
+            "depth": 2
+          }
+        }
+      ]
+    }
+  ]
+}

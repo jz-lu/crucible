@@ -1,0 +1,45 @@
+PROGRESSION REVIEW: INTEGRATION BOUNDARY — 29 October 2026
+
+This pass adds offline research tools, reproducible evidence and clearer review
+guidance. It does not activate replacement stages or alter existing parameters,
+encodings, correctness manifests, implementations, scores or resource bindings.
+
+Scientific review
+
+- McEliece: enumerate 45,497 bounded joint tuples; retain 81 explicitly partial
+  generic-decoding estimates and independent verification of the published
+  TII-254 equivalent key. New tuples remain unimplemented research candidates.
+  See mceliece-joint-parameter-review-20261029.txt.
+- HQC: supplement the first four configurations with a deterministic support
+  argument. Preserve the conditional model qualification for the others; a
+  full-vector parity obstruction does not refute decoder-event conservativity.
+- Module lattice: retain exact candidate compression witnesses and the distinction
+  between conservative rounding and independent-compression modeling. New widths
+  are not executable configurations. See hqc-module-progression-review-20261029.txt.
+
+The four new portable test suites are included in the required Python source CI
+matrix. Offline helpers reject missing accounting contexts, unknown compression
+models and parameter/certificate mismatches. These checks do not certify security.
+Independent agent reviews covered the mathematical scope, source attribution,
+helper failure behavior and implementation boundary; this is not human scientific
+admission or formal verification of a new cryptographic release.
+
+Exact release overlay
+
+The release guard initially refused the added offline scripts and evidence data,
+as intended. A separate read-only review verified that all existing application
+Python files, old scripts, frozen cryptographic inputs, schema/migrations and
+dependency locks were unchanged from c2ce5f4. No application route imports the
+new offline helpers. The proposal guide adds revisions8 and9 while preserving
+all earlier revisions and evidence bytes; every scheme evidence binding is unchanged.
+
+The reviewed overlay pins exactly seven new scripts/requirements files, the two
+new guide evidence snapshots and display_note_bindings.json. The baseline, prior
+overlays, mutable paths/prefixes, native test batches and all32 retained release
+manifests stay unchanged. No broader exemption, automatic admission, database
+migration, provider-setting edit or benchmark publication is introduced.
+
+Local validation: 78 scientific helper checks plus113 release-contract checks
+pass after the narrow reviewed overlay. A separate52-check progression/guide
+run passed. Required hosted CI and native image verification remain mandatory
+before the ordinary website release; local checks do not replace them.

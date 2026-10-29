@@ -1,0 +1,85 @@
+{
+  "schema": "crucible-hqc-module-structure-checks-v1",
+  "hqc_small_ring_dependence": {
+    "n": 11,
+    "w": 2,
+    "wr": 3,
+    "we": 3,
+    "denominator": 13588678125,
+    "primitive_prime_ring": true,
+    "same_weight_different_probability": [
+      {
+        "weight": 3,
+        "low_count": 13770163,
+        "low_pattern": "00000001011",
+        "high_count": 13792911,
+        "high_pattern": "11100000000"
+      },
+      {
+        "weight": 5,
+        "low_count": 13328634,
+        "low_pattern": "00000011111",
+        "high_count": 13369290,
+        "high_pattern": "11101001000"
+      },
+      {
+        "weight": 7,
+        "low_count": 12957406,
+        "low_pattern": "00011011111",
+        "high_count": 12997336,
+        "high_pattern": "11111100100"
+      }
+    ],
+    "scope": "Exact algebraic joint-noise witness, NOT a deployed-tuple DFR refutation."
+  },
+  "module_factorization": [
+    {
+      "n": 8,
+      "irreducible_factor_degree": 1,
+      "factor_count": 8,
+      "linear_roots": 8,
+      "message_entropy_bits": 8,
+      "generic_full_message_enumeration_candidates": "256"
+    },
+    {
+      "n": 16,
+      "irreducible_factor_degree": 1,
+      "factor_count": 16,
+      "linear_roots": 16,
+      "message_entropy_bits": 16,
+      "generic_full_message_enumeration_candidates": "65536"
+    },
+    {
+      "n": 32,
+      "irreducible_factor_degree": 1,
+      "factor_count": 32,
+      "linear_roots": 32,
+      "message_entropy_bits": 32,
+      "generic_full_message_enumeration_candidates": "4294967296"
+    },
+    {
+      "n": 64,
+      "irreducible_factor_degree": 1,
+      "factor_count": 64,
+      "linear_roots": 64,
+      "message_entropy_bits": 64,
+      "generic_full_message_enumeration_candidates": "18446744073709551616"
+    },
+    {
+      "n": 128,
+      "irreducible_factor_degree": 1,
+      "factor_count": 128,
+      "linear_roots": 128,
+      "message_entropy_bits": 128,
+      "generic_full_message_enumeration_candidates": "340282366920938463463374607431768211456"
+    },
+    {
+      "n": 256,
+      "irreducible_factor_degree": 2,
+      "factor_count": 128,
+      "linear_roots": 0,
+      "message_entropy_bits": 256,
+      "generic_full_message_enumeration_candidates": "115792089237316195423570985008687907853269984665640564039457584007913129639936"
+    }
+  ]
+}

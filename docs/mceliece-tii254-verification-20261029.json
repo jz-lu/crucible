@@ -1,0 +1,21 @@
+{
+  "status": "verified-equivalent-public-code",
+  "m": 8,
+  "n": 223,
+  "t": 12,
+  "binary_rank": 96,
+  "field_irreducible": true,
+  "goppa_irreducible": true,
+  "support_distinct": true,
+  "row_space_equal": true,
+  "not_verified": [
+    "original secret-key identity",
+    "GPU recovery execution or total attack cost",
+    "attack scaling to full-size McEliece",
+    "a production KEM decoder"
+  ],
+  "input_sha256": {
+    "public_key.txt": "d1b7c7d808d2f129ecbbf6ea3c1d69a0a37c6e811ff8a1d856da131d46d2ccd6",
+    "recovered_key.json": "4fc9cde536a82bc3b44a6250fa2e045e5e23bf0e5953e834282e7f3b16c64c1a"
+  }
+}
