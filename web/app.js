@@ -42,6 +42,7 @@ window.addEventListener('pagehide', () => {
   sessionSynchronization = null; state.roundRefreshing = false;
   state.challengeStartIntent = null;
   notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
+  window.CrucibleResources?.invalidateReads?.();
   suspendResearcherEditor();
 });
 window.addEventListener('pageshow', event => {
@@ -81,9 +82,10 @@ let browseWarmIntent = null;
 const BROWSE_WARM_BYTES = 4 * 1024 * 1024, BROWSE_WARM_JOBS = 24;
 let readViewEpoch = 0;
 let renderedReads = new WeakMap();
-function invalidateReadViews() {
+function invalidateReadViews({resourceReports = true} = {}) {
   readViews.clear(); pendingReads.clear(); intendedReads.clear(); renderedReads = new WeakMap(); readViewEpoch++;
-  warmedReads.clear(); notebookEarlyReads.clear(); referenceTimings.clear(); window.CrucibleResources?.clear();
+  warmedReads.clear(); notebookEarlyReads.clear(); referenceTimings.clear();
+  if (resourceReports) window.CrucibleResources?.clear();
   browseWarmScheduled = null; browseWarmIntent = null;
 }
 function primeRead(key, path) {
@@ -149,6 +151,15 @@ function scheduleBrowseWarmup() {
   }, 200);
 }
 function warmBytes(value) { return new TextEncoder().encode(JSON.stringify(value)).length; }
+function prepareResourceReport(scheme, speculative = true) {
+  if (!hasAccess() || !scheme) return Promise.resolve({bytes: 0});
+  return window.CrucibleResources?.load(scheme, api, () => redrawResourceCharts(scheme), {speculative}) || Promise.resolve({bytes: 0});
+}
+function primeRouteResources(scheme) {
+  // A selected overview can fetch its independent report alongside the release
+  // description. Neither request creates a challenge or grants access.
+  if (/^#scheme\/[^/]+\/[^/?]+(?:\?|$)/.test(window.location.hash)) void prepareResourceReport(scheme, false);
+}
 async function warmRead(key, path, project) {
   if (cachedRead(key)) return 0;
   const epoch = readViewEpoch;
@@ -181,9 +192,12 @@ function browseWarmJobs() {
   const releaseJobs = scheme => {
     const key = releaseKey(scheme.id, scheme.version);
     add('release:' + key, async () => {
-      if (completeRelease(scheme.id, scheme.version)) return 0;
-      await loadRelease(scheme.id, scheme.version);
-      return warmBytes(completeRelease(scheme.id, scheme.version) || null);
+      // One bounded scheme job, at most two independent reads. Charge both
+      // responses without adding eight jobs beyond the reviewer's queue limit.
+      const hadRelease = Boolean(completeRelease(scheme.id, scheme.version));
+      const results = await Promise.allSettled([loadRelease(scheme.id, scheme.version), prepareResourceReport(scheme)]);
+      const resourceBytes = results[1].status === 'fulfilled' ? results[1].value?.bytes || 0 : 0;
+      return resourceBytes + (hadRelease ? 0 : warmBytes(completeRelease(scheme.id, scheme.version) || null));
     });
   };
   // The viewed or most recently intended release precedes other graph data.
@@ -832,6 +846,7 @@ async function loadAuthorizedWorkspace() {
     // must match navigation before a complete release can reach a renderer.
     const target = routeRelease();
     primeRouteChallenge(target);
+    primeRouteResources(target);
     if (target) void loadRelease(target.id, target.version).catch(() => {});
     const person = window.location.hash.split('?')[0].match(/^#person\/([^/]+)$/);
     if (person) {
@@ -1081,6 +1096,7 @@ function applyRoute(focus = false) {
     const current = () => ownsDocument(lifecycle) && hasAccess() && routeRequest === workspaceLoadRequest && window.location.hash === route && account === state.user?.id && csrf === state.csrf;
     showRouteLoading();
     primeRouteChallenge(targetRelease);
+    primeRouteResources(targetRelease);
     void loadRelease(targetRelease.id, targetRelease.version).then(loaded => {
       if (loaded && current()) applyRoute(focus);
     }).catch(error => {
@@ -1313,7 +1329,13 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
     // conservative invalidation, including unknown paths and methods.
     const readOnlyValidation = method === 'POST' && path === '/api/protocol/proposals/validate';
     if (protectedRequest && !['GET', 'HEAD'].includes(method) && !readOnlyValidation) {
-      invalidateReadViews(); notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
+      // These exact actions change participant content/progress, never the
+      // separately published measurement corpus. Unknown writes still clear it.
+      const unrelatedToResources = method === 'PUT' && path === '/api/me/profile' || method === 'POST' && (
+        ['/api/notebook/notes', '/api/notebook/import', '/api/challenges', '/api/methods'].includes(path) ||
+        /^\/api\/notebook\/notes\/[^/?]+\/(?:revisions|publication-requests|publication-reviews)$/.test(path) ||
+        /^\/api\/challenges\/[^/?]+\/submit$/.test(path));
+      invalidateReadViews({resourceReports: !unrelatedToResources}); notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
     }
     if (!raw && ownsDocument(lifecycle) && (!initialSession || sessionOwner === state.sessionRevision) && (!recoverRead || ownsRead())) absorbClock(data);
     return data;
@@ -1681,6 +1703,7 @@ function prepareSchemeLink(link, scheme) {
     if (!hasAccess() || !state.catalogueLoaded || navigator.connection?.saveData || releaseLoads.size >= 2 ||
         !availableReleases().some(item => item.id === scheme.id && String(item.version) === String(scheme.version))) return;
     browseWarmIntent = {id: scheme.id, version: String(scheme.version)};
+    void prepareResourceReport(scheme);
     void loadRelease(scheme.id, String(scheme.version)).then(scheduleBrowseWarmup, () => {});
   };
   link.addEventListener('pointerenter', prepare); link.addEventListener('focus', prepare);
