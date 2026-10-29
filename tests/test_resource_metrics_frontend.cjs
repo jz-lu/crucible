@@ -33,12 +33,9 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   assert.deepEqual(publicChart.querySelectorAll('.chart-point').map(p => p.dataset.value), ['96', '97']);
   const chart = app.$('#overview-chart-computation');
   assert.deepEqual(chart.querySelectorAll('.chart-point').map(p => p.dataset.value), ['2', '2']);
-  assert.equal(chart.querySelectorAll('.resource-whisker').length, 2);
-  assert.equal(chart.querySelectorAll('.resource-whisker-cap').length, 4);
-  for (const cap of chart.querySelectorAll('.resource-whisker-cap')) {
-    assert.equal(Number(cap.getAttribute('x2')) - Number(cap.getAttribute('x1')), 10);
-    assert.equal(cap.getAttribute('y1'), cap.getAttribute('y2'));
-  }
+  assert.equal(chart.querySelectorAll('.resource-whisker').length, 0);
+  assert.equal(chart.querySelectorAll('.resource-whisker-cap').length, 0);
+  assert.equal(chart.querySelector('.chart-point').getAttribute('cy'), '43', 'the axis fits displayed medians, not hidden quartiles');
   assert.match(chart.querySelector('.chart-point').querySelector('title').textContent, /median 2 microseconds; middle 50% 1–3 microseconds; 100 samples/);
   assert.match(chart.querySelector('details').textContent, /not a confidence interval or a hardware correction/);
   assert.match(chart.querySelector('details').textContent, /5 workers × 20 measured calls each/);

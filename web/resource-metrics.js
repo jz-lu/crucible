@@ -174,13 +174,13 @@
     if (controls.childElementCount) target.append(controls);
     const measured = points.filter(p => p.value !== null && Number.isFinite(p.x));
     const xs = points.map(p => p.x).filter(Number.isFinite), low = Math.min(...xs), high = Math.max(...xs);
-    const maximum = Math.max(1, ...measured.map(p => Math.max(p.value, p.q3 ?? 0)));
+    const maximum = Math.max(1, ...measured.map(p => p.value));
     const x = value => high === low ? 255 : 48 + (value - low) * 417 / (high - low);
     const y = value => 190 - value * 147 / maximum;
     const chartLabel = labels[view] + (rss?.includesLauncher ? ' · includes launcher memory' : '');
     const chart = svg('svg', {viewBox: '0 0 480 240', role: 'img', class: 'overview-svg', 'aria-label': `${chartLabel} by ${named ? 'parameter set' : 'stage'}`});
     const positions = !points.length ? ' No challenge stages published.' : named ? ' Distinct named parameter sets are not interpolated.' : xs.length ? ` Challenge stages ${low} to ${high}.` : ' No valid stage coordinates published.';
-    chart.append(svg('title', {}, chartLabel), svg('desc', {}, `${measured.length} comparable observations. Missing values are gaps.${positions}${timed ? ' Dots show medians; capped whiskers show the middle 50% of samples within this run, not confidence intervals or hardware corrections.' : ''}${rss?.text ? ' ' + rss.text : ''}${recovery.label ? ' ' + recovery.label + '. ' + recovery.meaning : ''}`));
+    chart.append(svg('title', {}, chartLabel), svg('desc', {}, `${measured.length} comparable observations. Missing values are gaps.${positions}${timed ? ' Dots show medians. Sample variation is retained in Values, method & source.' : ''}${rss?.text ? ' ' + rss.text : ''}${recovery.label ? ' ' + recovery.label + '. ' + recovery.meaning : ''}`));
     chart.append(svg('text', {x: 48, y: 19, class: 'chart-axis-title'}, unit));
     if (Number.isFinite(recovery.tier) && x(recovery.tier) > 48) chart.append(svg('rect', {x: 48, y: 43, width: x(recovery.tier) - 48, height: 147, class: 'chart-recovery-area', 'aria-hidden': 'true'}));
     for (let i = 0; i <= 3; i++) chart.append(svg('line', {x1: 48, x2: 465, y1: 43 + i * 49, y2: 43 + i * 49, class: 'chart-gridline'}));
@@ -195,12 +195,6 @@
     }
     if (!named && path) chart.append(svg('path', {d: path, class: 'chart-series'}));
     for (const p of measured) {
-      if (timed && p.q1 !== null && p.q3 !== null) {
-        const whisker = svg('g', {class: 'resource-whisker'});
-        whisker.append(svg('title', {}, pointDescription(p, unit, timed)), svg('line', {x1: x(p.x), x2: x(p.x), y1: y(p.q1), y2: y(p.q3)}));
-        for (const value of [p.q1, p.q3]) whisker.append(svg('line', {x1: x(p.x) - 5, x2: x(p.x) + 5, y1: y(value), y2: y(value), class: 'resource-whisker-cap'}));
-        chart.append(whisker);
-      }
       const dot = svg('circle', {cx: x(p.x), cy: y(p.value), r: 3, class: 'chart-point', 'data-profile-id': p.id, 'data-tier': p.x, 'data-value': p.value});
       dot.append(svg('title', {}, pointDescription(p, unit, timed) + (rss?.includesLauncher ? ' Includes pre-exec launcher memory.' : ''))); chart.append(dot);
     }
@@ -227,7 +221,7 @@
     };
     const stateDetail = {queued: 'The measurement workflow is queued.', failed: 'The latest measurement attempt failed.', cancelled: 'The latest measurement attempt was cancelled.', timed_out: 'The latest measurement attempt timed out.', outdated: 'No complete report matches the expected implementation and measurement policy.', retired: 'This resource binding has been retired.'};
     let summaryText = publication ? `${historical ? (reportLabel === 'Historical' ? 'Historical report' : reportLabel) + ' · ' : ''}${measured.length} of ${points.length} configurations shown.` : stateDetail[data?.state] || '';
-    if (measured.length && timed) summaryText += ' Median · middle 50% where available.';
+    if (measured.length && timed) summaryText += ' Median.';
     if (measured.length && rss?.includesLauncher) summaryText += ' Includes pre-exec launcher memory.';
     if (entry?.status === 'error') summaryText = data ? 'Refresh failed. Retained report shown; retry below.' : 'The resource report could not be retrieved. Retry below.';
     target.append(element('p', summaryText, 'overview-chart-note resource-summary'));
@@ -242,7 +236,7 @@
       const sampling = record?.profile?.sampling;
       const plan = sampleCount(sampling?.workers) && (view === 'first' || sampleCount(sampling?.trials))
         ? view === 'first' ? ` Sampling plan: ${sampling.workers} fresh workers, one first call each.` : ` Sampling plan: ${sampling.workers} workers × ${sampling.trials} measured calls each.` : '';
-      details.append(element('p', 'Capped whiskers show the middle 50% (sample quartiles). This is variation within one run, not a confidence interval or a hardware correction.' + plan, 'overview-chart-note'));
+      details.append(element('p', 'The table retains the middle 50% (sample quartiles). This is variation within one run, not a confidence interval or a hardware correction.' + plan, 'overview-chart-note'));
     }
     if (rss?.text) details.append(element('p', rss.text, 'overview-chart-note'));
     if (data?.lifecycle && stateDetail[data.lifecycle.phase]) details.append(element('p', stateDetail[data.lifecycle.phase], 'overview-chart-note'));

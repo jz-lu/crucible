@@ -59,8 +59,8 @@ for (const width of [1440, 390]) {
       await expect(graph.getByLabel('Measurement profile',{exact:true})).toHaveCount(0);
       await expect(graph.locator('option[value="legacy"]')).toHaveCount(0);
     }
-    await expect(card.locator('.resource-whisker')).toHaveCount(2);
-    await expect(card.locator('.resource-whisker-cap')).toHaveCount(4);
+    await expect(card.locator('.resource-whisker')).toHaveCount(0);
+    await expect(card.locator('.resource-whisker-cap')).toHaveCount(0);
     await expect(card.locator('.chart-point title').first()).toContainText('median 2 microseconds; middle 50% 1–3 microseconds; 100 samples');
     await card.getByText('Values, method & source',{exact:true}).click();
     await expect(card.getByRole('columnheader',{name:'Middle 50% (µs)',exact:true})).toBeVisible();
