@@ -278,7 +278,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                                                          max_per_account=settings.auth_concurrency)
     policy = AccessPolicy()
     app.state.access_policy = policy
-    public_assets = PublicAssets(ROOT / "web", frozen=settings.production)
+    public_assets = PublicAssets(ROOT / "web", frozen=settings.production, bounties_enabled=settings.bounties_enabled)
     protected_assets = ProtectedAssets(ROOT / "web")
     app.add_middleware(RequestBoundary, settings=settings, clock=clock, db=db, policy=policy)
     app.add_middleware(resource_publications.ResourceIngestBoundary, db=db, settings=settings, clock=clock)
@@ -360,7 +360,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         access = beta_access.access_payload(session, settings, user) if access is None else access
         return envelope(user={"id": user.id, "handle": user.handle} if user else None, access=access,
                         auth=github_auth.auth_payload(session, settings, user) if auth is None else auth,
-                        capabilities={"manage_beta_access": beta_access.is_admin(settings, user) and access["allowed"],
+                        capabilities={"bounties": settings.bounties_enabled, "manage_beta_access": beta_access.is_admin(settings, user) and access["allowed"],
                                       "review_protocol_proposals": protocol_proposals.is_reviewer(settings, user) and access["allowed"],
                                       "self_review_protocol_proposals": protocol_proposals.can_self_review(settings, user) and access["allowed"]},
                         csrf_token=mac(settings.secret, "csrf-v1", raw.encode("ascii")))
@@ -1084,6 +1084,8 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     def notebook_asset(asset_name: str, request: Request):
         # Only these fixed UI assets are exposed. Saved notebook data uses
         # authenticated routes with per-note ownership/publication checks.
+        if not settings.bounties_enabled and asset_name in {"bounties.js", "bounties-api.js", "bounties.css"}:
+            raise HTTPException(404, "Not found.")
         return protected_assets.response(request)
 
     @app.get("/assets/crucible-logo.png")
@@ -1100,16 +1102,16 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
 
     @app.get(agent_guidance.PIPELINE_PATH)
     def agent_pipeline():
-        return FileResponse(ROOT / "web" / "agent" / "pipeline.json", media_type="application/json",
+        return JSONResponse(agent_guidance.pipeline(ROOT, bounties_enabled=settings.bounties_enabled),
                             headers={"Cache-Control": "no-store"})
 
     @app.get("/api/agent/guidance/{resource_name}")
     def agent_guidance_resource(resource_name: str):
-        resource = agent_guidance.RESOURCES.get(resource_name)
+        resource = agent_guidance.guidance(ROOT, resource_name, bounties_enabled=settings.bounties_enabled)
         if resource is None:
             raise HTTPException(404, "Agent guidance not found.")
-        path, media_type = resource
-        return FileResponse(ROOT / path, media_type=media_type, headers={"Cache-Control": "no-store"})
+        body, media_type = resource
+        return Response(body, media_type=media_type, headers={"Cache-Control": "no-store"})
 
     @app.get("/api/protocol/proposal-guide")
     def proposal_guide(note: bool = False, data: bool = False, evidence_sha256: str | None = None):
@@ -1226,7 +1228,8 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     research.register_routes(app, db, settings, clock, user_for, throttle)
     protocol_proposals.register_routes(app, db, settings, clock, user_for, throttle)
     notebook.register_routes(app, db, settings, clock, user_for, throttle)
-    bounties.register_routes(app, db, settings, clock, user_for, throttle)
+    if settings.bounties_enabled:
+        bounties.register_routes(app, db, settings, clock, user_for, throttle)
     research_reviews.register_routes(app, db, settings, clock, user_for, throttle)
     beta_access.register_routes(app, db, settings, clock, account_for, throttle)
     github_auth.register_routes(app, db, settings, clock, identity, issue_session, session_payload, password_operation, throttle)

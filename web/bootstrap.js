@@ -1,6 +1,7 @@
 // Public route structure only: no account, scheme description or research data
 // is needed to choose the first frame. Unknown routes stay deliberately neutral.
 (() => {
+  window.CrucibleFeatures = Object.freeze({bounties: typeof document !== 'undefined' && document.documentElement?.getAttribute?.('data-bounties-enabled') === 'true'});
   if (window.CruciblePendingPage) return;
   const presentationKey = 'crucible.pending-presentation';
   function remember(allowed) {
@@ -17,9 +18,9 @@
     if (path === '#people') return {page: 'people', title: 'Leaderboard'};
     if (path === '#notebook') {
       if (params.get('review') === '1' || params.get('research_review') === '1') return {page: 'list', title: 'Review center'};
-      if (params.has('note') || params.has('research_request') || params.has('research') || params.has('bounty') || params.get('compose') === 'bounty') return {page: 'list', title: 'Research notebook'};
+      if (params.has('note') || params.has('research_request') || params.has('research') || (window.CrucibleFeatures.bounties && (params.has('bounty') || params.get('compose') === 'bounty'))) return {page: 'list', title: 'Research notebook'};
       const view = params.get('view');
-      return {page: ['bounties', 'guide'].includes(view) ? 'notebook-bounties' : view === 'timeline' ? 'notebook-timeline' : view === 'map' ? 'notebook-map' : 'notebook-notes', title: 'Research notebook'};
+      return {page: window.CrucibleFeatures.bounties && ['bounties', 'guide'].includes(view) ? 'notebook-bounties' : view === 'timeline' ? 'notebook-timeline' : view === 'map' ? 'notebook-map' : 'notebook-notes', title: 'Research notebook'};
     }
     if (path.startsWith('#person/')) {
       let title = 'Profile';

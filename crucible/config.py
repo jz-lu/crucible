@@ -69,6 +69,9 @@ class Settings:
     session_seconds: int = 86400
     reviewer_ids: tuple[str, ...] = ()
     allow_self_review: bool = False
+    # Release capability: enable deliberately in code once the task board is ready.
+    # No deployment environment variable is required for the interim release.
+    bounties_enabled: bool = False
     access_mode: str = "open"
     access_admin_ids: tuple[str, ...] = ()
     generation_concurrency: int = 2
@@ -89,6 +92,8 @@ class Settings:
     github_client_secret: str = field(default="", repr=False)
 
     def __post_init__(self):
+        if type(self.bounties_enabled) is not bool:
+            raise RuntimeError("Bounty availability must be explicitly enabled or disabled.")
         if type(self.github_login_enabled) is not bool:
             raise RuntimeError("GitHub sign-in must be explicitly enabled or disabled.")
         if self.github_login_enabled:

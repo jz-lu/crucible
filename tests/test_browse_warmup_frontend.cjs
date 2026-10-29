@@ -107,7 +107,7 @@ process.once('beforeExit',()=>{
     assert.deepEqual(detail.map(row=>row.url.searchParams.get('scheme_id')),['two','one','three']);
     assert.equal(detail.some(row=>row.url.searchParams.get('version')==='old'),false);
     assert.equal(reads(app,'/api/protocol/benchmarks').length,0);
-    assert.deepEqual(calls,['mount','timeline','list','map','bounties']);
+    assert.deepEqual(calls,['mount','timeline','list','map']);
     assert.equal(app.$('#overview-workspace').hidden,false);assert.equal(app.$('#notebook-workspace').hidden,true);
     assert.equal(app.requests.some(row=>row.options.method==='POST'||row.url.pathname==='/api/challenges'||row.url.pathname.startsWith('/api/submissions/')),false);
   });
@@ -131,7 +131,7 @@ process.once('beforeExit',()=>{
     const details=app.requests.filter(row=>row.url.searchParams.get('projection')==='release').map(row=>row.url.searchParams.get('scheme_id'));
     assert.deepEqual(details,['release-9',...Array.from({length:7},(_,i)=>'release-'+(i+1))]);
     assert.equal(reads(app,'/api/protocol/benchmarks').length,0);
-    assert.equal(vm.runInContext('browseWarmState.done.size',app.sandbox),17,'Eight release jobs and nine metadata jobs complete within the existing cap');
+    assert.equal(vm.runInContext('browseWarmState.done.size',app.sandbox),16,'Eight release jobs and eight enabled metadata jobs complete within the existing cap');
     assert.equal(vm.runInContext('browseWarmState.done.has(\'release:["release-8","1"]\')',app.sandbox),false);
   });
   await test('same-account CSRF rotation and a new account cannot retain an old warm result',async()=>{

@@ -155,7 +155,7 @@
     } catch (error) { surface.remove(); throw error; }
   }
 
-  function mount(root, {navigate, api: requestAPI, account, session = () => null, currentReleases = () => [], mapFactory = mountResearchMap, prepareMapCatalogue = () => {}, prepareBounties = async () => {}, canWarm = () => true, reviewOnly = false}) {
+  function mount(root, {navigate, api: requestAPI, account, session = () => null, currentReleases = () => [], mapFactory = mountResearchMap, prepareMapCatalogue = () => {}, prepareBounties = async () => {}, bountiesEnabled = false, canWarm = () => true, reviewOnly = false}) {
     if (root.notebookController) return root.notebookController;
     let currentAccount = typeof account === 'function' ? account() : account;
     let accountId = currentAccount?.id == null ? null : String(currentAccount.id);
@@ -265,7 +265,7 @@
         return prepareReviewPage(query);
       }
       warmEnabled = true;
-      if (kind === 'bounties') { const controller = await ensureBounties(); return controller ? controller.warm() : {bytes:0}; }
+      if (kind === 'bounties') { if (!bountiesEnabled) return {bytes:0}; const controller = await ensureBounties(); return controller ? controller.warm() : {bytes:0}; }
       if (kind === 'list') return prepareIndex();
       if (kind === 'timeline') {
         const result = await prepareTimeline(true);
@@ -318,7 +318,7 @@
     mapView.prepend(viewIcon([['path',{d:'m7.7 6.2 8.6 4.6m0 2.4-8.6 4.6M6 8v8'}],['circle',{cx:6,cy:6,r:2}],['circle',{cx:18,cy:12,r:2}],['circle',{cx:6,cy:18,r:2}]]));
     timelineView.prepend(viewIcon([['path',{d:'M4 4v16h16M5 16h5v-5h5V6h5'}]]));
     const visualizationTabs = el('div', 'nb-visualization-tabs'); bountyView.prepend(viewIcon([['path',{d:'M5 21V3m0 1h13l-4 4 4 4H5'}]]));
-    visualizationTabs.append(mapView, bountyView, timelineView);
+    visualizationTabs.append(mapView, ...(bountiesEnabled ? [bountyView] : []), timelineView);
     visualizations.append(visualizationTabs); views.append(notesView, visualizations);
     const mapPanel = mark('map', el('section', 'nb-map-panel')); mapPanel.hidden = true;
     mapPanel.setAttribute('aria-label', 'Scheme map');
@@ -400,6 +400,11 @@
       const readerHadFocus = !q('full').hidden && document.activeElement?.closest('.nb-full') === q('full');
       if (typeof account === 'function') setAccount(account());
       active = true; params = new URLSearchParams(nextParams);
+      if (!bountiesEnabled) {
+        if (['bounties', 'guide'].includes(params.get('view'))) params.delete('view');
+        if (params.get('section') === 'bounties') params.set('section', 'publication');
+        params.delete('bounty'); if (params.get('compose') === 'bounty') params.delete('compose');
+      }
       if (reviewOnly && params.get('section') !== 'bounties') { params.delete('view'); if (params.get('section') === 'research' || params.has('research') || params.has('research_request')) { params.set('research', '1'); params.set('research_review', '1'); params.delete('review'); } else params.set('review', '1'); }
       const inMap = params.get('view') === 'map';
       const inTimeline = params.get('view') === 'timeline', inBounties = reviewOnly ? params.get('section') === 'bounties' : ['bounties', 'guide'].includes(params.get('view')), inVisualization = inMap || inTimeline || inBounties;
@@ -442,6 +447,7 @@
       if (!reviewOnly && active && params.get('compose') === 'proposal' && !q('dialog').open) editNote(null, true);
     }
     function ensureBounties() {
+      if (!bountiesEnabled) return Promise.resolve(null);
       if (bountyController) return Promise.resolve(bountyController);
       if (bountyPreparation) return bountyPreparation;
       const ownerId = accountId, generation = epoch, credential = currentSession;

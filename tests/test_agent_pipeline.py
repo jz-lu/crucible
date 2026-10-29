@@ -25,7 +25,7 @@ RESOURCE_NAMES = {
     "ladder-principles.txt", "scoring-policy.txt", "scoring-base.txt",
     "benchmark-policy.txt", "bounties.txt", "scheme-admission-policy.txt",
 }
-READ_PATHS = [PIPELINE, *(PREFIX + name for name in sorted(RESOURCE_NAMES))]
+READ_PATHS = [PIPELINE, *(PREFIX + name for name in sorted(RESOURCE_NAMES - {"bounties.txt"}))]
 
 
 def credential(app, scopes=machine_auth.SCOPES, *, state="active"):
@@ -47,12 +47,14 @@ def assert_document(response, path):
 
     assert response.status_code == 200, (path, response.text)
     if path == PIPELINE:
-        expected = ROOT / "web" / "agent" / "pipeline.json"
+        expected = None
         media_type = "application/json"
+        assert response.json() == agent_guidance.pipeline(ROOT, bounties_enabled=False)
     else:
-        relative_path, media_type = agent_guidance.RESOURCES[path.removeprefix(PREFIX)]
-        expected = ROOT / relative_path
-    assert response.content == expected.read_bytes()
+        body, media_type = agent_guidance.guidance(ROOT, path.removeprefix(PREFIX), bounties_enabled=False)
+        expected = body
+    if expected is not None:
+        assert response.content == expected
     assert response.headers["content-type"].startswith(media_type)
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["x-content-type-options"] == "nosniff"

@@ -24,7 +24,7 @@ def make_system(database_url, monkeypatch, *, initialize=True, seed_policy=True)
     now = [datetime(2026,10,29,tzinfo=timezone.utc).timestamp()]
     ids = [str(uuid4()) for _ in range(5)]
     settings = Settings(database_url, b'b' * 32, origins=(ORIGIN,),
-                        reviewer_ids=(ids[1], ids[4]), rate_limits=False, access_mode='beta')
+                        reviewer_ids=(ids[1], ids[4]), rate_limits=False, access_mode='beta', bounties_enabled=True)
     app = create_app(settings, clock=lambda:now[0], initialize=initialize)
     with app.state.db.transaction(write=True) as session:
         session.add_all([User(id=i, handle=h, created_at=now[0]) for i,h in zip(ids, ('poster','reviewer','solver','supporter','reviewer2'))])

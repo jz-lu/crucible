@@ -222,8 +222,13 @@ def _token_data(token, now):
 
 
 def register_routes(app, db, settings, clock, user_for, throttle):
+    def require_available_scopes(scopes):
+        if not settings.bounties_enabled and set(scopes).intersection(BOUNTY_SCOPES):
+            raise HTTPException(400, "Bounty permissions are not available in this release.")
+
     @app.post("/api/agent/connect/start")
     def start(body: ConnectInput, request: Request):
+        require_available_scopes(body.scopes)
         throttle(request, "agent-connect-start", 300 if settings.access_mode == "beta" else 10, 600)
         for _ in range(3):
             raw = "crd_" + secrets.token_urlsafe(32)
@@ -270,6 +275,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 # Approval arrived while acquiring the connection lock. Retry
                 # in User->Connection order instead of inverting revocation.
                 return {"status": "pending", "interval": POLL_INTERVAL}
+            require_available_scopes(connection.scopes)
             if status == "pending":
                 if connection.last_polled_at is not None and now < connection.last_polled_at + POLL_INTERVAL:
                     raise HTTPException(429, "Wait before checking this connection again.", headers={"Retry-After": str(POLL_INTERVAL)})
@@ -314,6 +320,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
         with db.transaction() as session:
             user = user_for(request, session)
             connection = owned_connection(session, code, user)
+            require_available_scopes(connection.scopes)
             return {"connection": _connection_data(connection, clock())}
 
     @app.post("/api/agent/connect/{code}/approve")
@@ -322,6 +329,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
         with db.transaction(write=True) as session:
             user = user_for(request, session, mutation=True)
             connection = owned_connection(session, code, user, write=True)
+            require_available_scopes(connection.scopes)
             now = clock()
             status = _status(connection, now)
             if status in {"expired", "denied"}:
