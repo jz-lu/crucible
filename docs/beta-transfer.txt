@@ -1,9 +1,21 @@
 Crucible initial beta database transfer
 =====================================
 
+Current support boundary — 29 October 2026
+-----------------------------------------
+This SQLite-to-PostgreSQL tool intentionally refuses the PostgreSQL identity
+allocator used by notebook_numbers since schema 0025. It therefore cannot
+perform a full transfer of the current schema 0029. Do not bypass that check,
+remove note numbers, or downgrade a database to make this command run.
+
+The actual hosted PostgreSQL rollout uses reviewed additive migrations and
+PostgreSQL backup/restore instead. Those procedures preserve the allocator and
+are separate from this one-time development-data import tool. The commands
+below describe its historical, supported-schema workflow.
+
 Purpose
 -------
-This is a one-time SQLite-to-PostgreSQL copy into an empty, already migrated
+This is a one-time SQLite-to-PostgreSQL copy into a fresh, already migrated
 beta database. It is not an update/deployment command. After beta starts,
 keep beta's database in place and apply reviewed Alembic migrations; never
 replace it with a fresh copy of the development database.
@@ -36,7 +48,8 @@ Read-only check (run from the repository)
 
 The command creates a temporary private snapshot using SQLite's backup API,
 checks integrity and foreign keys, checks both schemas against this checkout's
-migrated schema, confirms the target is empty, and prints a JSON receipt with
+migrated schema, confirms the target has no application state beyond an exact
+reviewed migration seed, and prints a JSON receipt with
 only schema head, table names, row counts and SHA-256 digests. It does not copy
 any rows. The snapshot is removed afterwards.
 
@@ -47,11 +60,16 @@ Stop writes to the local source and take a protected backup. Then run:
   python -m scripts.beta_transfer --source /protected/path/crucible.db --apply
 
 This takes a new consistent source snapshot, exclusively locks target tables
-against concurrent writes, rechecks emptiness, and inserts in foreign-key
+against concurrent writes, rechecks the fresh-target condition, and inserts in foreign-key
 order. Counts and typed content digests must match for every table before
 one transaction commits. A failed insert, lock conflict or verification
 mismatch rolls back the whole transaction. Existing target application data
-always causes refusal; the tool has no delete, overwrite or reset mode.
+always causes refusal except the exact initial schema 0028 bounty policy seed.
+That seed must independently match the reviewed content in both source and
+target; the target may contain no additional policy rows. It is retained without
+update, deletion or reinsertion. All additional source policy history is copied
+and remains part of final table verification. No delete, overwrite or reset
+mode exists. This component support does not bypass the allocator limitation.
 
 Save the resulting receipt in protected operational records. If connectivity
 is lost during commit, do not assume the target is empty: inspect it before
@@ -80,10 +98,15 @@ Fidelity and limits
 * Database collation does not affect receipts: rows are hashed individually
   and those hashes are sorted before the table digest is computed. Digests
   and counts are deterministic for the same schema and semantic content.
-* Current migrations have no foreign-key cycles or self references. A future
-  cycle/self reference, generated column, sequence, unsupported type or
-  branched migration fails closed pending a reviewed transfer update; the
-  tool never disables foreign-key checks.
+* The only supported self-reference is the exact nullable
+  bounty_allowance_events.original_event_id → id edge. IDs/parent links are
+  ordered and validated before any destination write; full journal payloads
+  are read in batches of 250. Missing parents and cycles fail closed. All other
+  self-references/general cycles still require a separate review. Foreign-key
+  checks are never disabled.
+* Generated/identity columns, sequences, unsupported types and branched
+  migrations fail closed. The known notebook_numbers identity blocker applies
+  even though the new bounty seed/journal helpers are independently tested.
 * The expected schema is obtained from trusted migration upgrade functions
   applied to a fresh in-memory fixture. This avoids importing the app or
   native cryptographic registry. Only the fixture executes these migrations.
@@ -149,3 +172,24 @@ synthetic dataset. It does NOT verify DigitalOcean managed backups, cloud
 point-in-time recovery, provider retention, encryption configuration, real
 user-volume performance, secret recovery or full application failover. Those
 remain deployment checks on the eventual hosted beta.
+
+Reviewed follow-up required — notebook allocator transfer
+-------------------------------------------------------
+A future SQLite-to-PostgreSQL transfer needs an explicit notebook_numbers
+allocator contract. Preserve SQLite's sqlite_sequence high-watermark as well as
+existing aliases, including deleted/rolled-back-number gaps where the source
+allocator records them. MAX(number) or row count is not sufficient. Copy exact
+references using reviewed PostgreSQL identity semantics and preserve the next
+allocation without lowering it. Review sequence ownership, concurrent access,
+transaction/rollback behavior and recovery before enabling this capability.
+General generated-column/sequence support remains outside this narrow task.
+
+Executed narrow rehearsal — 29 October 2026
+-----------------------------------------
+37 tests passed in an owned, disposable PostgreSQL 17 cluster bound only to
+loopback. Historical full-copy, rollback and pg_dump/pg_restore tests used the
+last pre-identity schema 0024 explicitly. Current-schema tests checked exact
+policy-seed retention/rejection, bounded parent-before-child journal insertion,
+and the unchanged identity-allocator refusal. This is not proof of a full
+current-schema SQLite-to-PostgreSQL transfer, hosted transport or production
+backup recovery. No hosted database or real credentials were used.
