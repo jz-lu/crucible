@@ -69,19 +69,14 @@ jobs:
           tests/test_resource_publications.py
           tests/test_resource_state.py
           tests/test_resource_state_migration.py
-      - name: Run all standalone frontend regressions
-        run: |
-          node --version
-          for test in tests/test_*.cjs; do
-            node "$test"
-          done
       - name: State verification boundary
         shell: bash
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
           ## Portable source checks only
           This job checks compilation, migrations, the explicitly listed source-only
-          Python tests, and all standalone JavaScript regressions. It does not build
+          Python tests. Standalone JavaScript regressions run in their own required
+          job, independently of the Python matrix. This job does not build
           or validate the registered native cryptographic workers.
 
           The separate manual Release beta workflow validates the exact reviewed
@@ -90,6 +85,24 @@ jobs:
           docs/releasing-beta.txt for the precise scope. This portable job does not
           bypass native pins or claim full native/backend verification.
           EOF
+  frontend-checks:
+    name: Standalone frontend regressions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.23.4'
+      - name: Run all standalone frontend regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s failglob
+          node --version
+          for test in tests/test_*.cjs; do
+            node "$test"
+          done
   critical-workflows:
     name: Critical research and account workflows
     runs-on: ubuntu-latest
@@ -223,14 +236,15 @@ jobs:
   ci:
     name: CI passed
     if: always()
-    needs: [portable-source-checks, critical-workflows, release-contract, browser-checks, metadata-postgresql]
+    needs: [portable-source-checks, frontend-checks, critical-workflows, release-contract, browser-checks, metadata-postgresql]
     runs-on: ubuntu-latest
     steps:
       - name: Require every source check
         env:
           SOURCE_RESULT: ${{ needs.portable-source-checks.result }}
+          FRONTEND_RESULT: ${{ needs.frontend-checks.result }}
           CONTRACT_RESULT: ${{ needs.release-contract.result }}
           BROWSER_RESULT: ${{ needs.browser-checks.result }}
           METADATA_RESULT: ${{ needs.metadata-postgresql.result }}
           WORKFLOW_RESULT: ${{ needs.critical-workflows.result }}
-        run: test "$SOURCE_RESULT" = success && test "$WORKFLOW_RESULT" = success && test "$CONTRACT_RESULT" = success && test "$BROWSER_RESULT" = success && test "$METADATA_RESULT" = success
+        run: test "$SOURCE_RESULT" = success && test "$FRONTEND_RESULT" = success && test "$WORKFLOW_RESULT" = success && test "$CONTRACT_RESULT" = success && test "$BROWSER_RESULT" = success && test "$METADATA_RESULT" = success

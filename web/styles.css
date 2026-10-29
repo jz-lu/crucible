@@ -4093,7 +4093,5 @@ html[data-pending-page=notebook-timeline] [data-pending-layout=notebook] [data-n
 .resource-summary { min-height: 3.2em; }
 .resource-chart > details { margin-top: .7rem; }
 .resource-chart > details > summary { cursor: pointer; }
-.resource-whisker { stroke: #596f8c; stroke-width: 1.5; }
-.resource-whisker line { vector-effect: non-scaling-stroke; }
 .resource-method { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 18rem; overflow: auto; padding: .8rem; font-size: .7rem; background: #edf2f8; border-radius: .4rem; }
 .resource-evidence-links { display: flex; flex-direction: column; gap: .4rem; font-size: .8rem; }

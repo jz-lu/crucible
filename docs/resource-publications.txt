@@ -153,9 +153,10 @@ selects Operation time or Process RAM, with a separate operation selector for
 key generation, encapsulation or decapsulation. Security remains on its separate
 existing evidence model. The measured cards expose at most two Measure choices.
 
-Operation time shows the median warm-operation duration and, where available,
-capped whiskers for the middle 50% of samples. That spread describes within-run
-variation, not a confidence interval or a correction for different hardware.
+Operation time plots the median warm-operation duration without error bars.
+The middle 50% of samples remains in the numerical table and point descriptions.
+That spread describes within-run variation, not a confidence interval or a
+correction for different hardware. The graph axis fits the displayed medians.
 Process RAM shows maximum observed RSS with its declared platform/method scope;
 historical Linux v1/v2 records explicitly warn that they include pre-exec launcher
 memory. Baselines are retained rather than subtracted. Observed peaks are not

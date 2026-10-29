@@ -8,7 +8,11 @@ means portable Python tests, migrations, the explicit critical research/account
 workflow gate, frontend regressions, disposable Chromium
 browser checks, actual SQLite/PostgreSQL 17 metadata-query parity, and the reviewed
 runtime source contract passed. The exact portable workflow selection lives in
-tests/run_critical_workflows.py and fails on skipped checks. See
+tests/run_critical_workflows.py and fails on skipped checks.
+Standalone frontend regressions have one required pinned-Node job alongside the
+Python matrix. The same test-file glob is preserved; failed, cancelled or skipped
+frontend checks fail the aggregate and prevent the release image job from starting.
+See
 docs/browser-checks.txt for the browser fixture and its scope. It does not mean native workers were rebuilt or
 every backend/platform test ran. Optional PostgreSQL fixtures are explicitly
 skipped without their dedicated synthetic database configuration.

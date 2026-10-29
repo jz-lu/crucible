@@ -3,6 +3,7 @@ import base64
 import importlib.util
 import json
 from pathlib import Path
+import re
 import stat
 import subprocess
 import textwrap
@@ -221,12 +222,95 @@ def test_workflow_is_manual_and_promotes_only_after_successful_publication():
     assert 'if: always()\n        run: rm -rf -- "$RUNNER_TEMP/crucible-registry-auth"' in workflow
     aggregate = (ROOT / '.github/workflows/tests.yml').read_text()
     assert 'name: CI passed' in aggregate
-    assert 'needs: [portable-source-checks, critical-workflows, release-contract, browser-checks, metadata-postgresql]' in aggregate
+    assert 'needs: [portable-source-checks, frontend-checks, critical-workflows, release-contract, browser-checks, metadata-postgresql]' in aggregate
+    assert 'FRONTEND_RESULT: ${{ needs.frontend-checks.result }}' in aggregate
+    assert 'test "$FRONTEND_RESULT" = success' in aggregate
     assert 'WORKFLOW_RESULT: ${{ needs.critical-workflows.result }}' in aggregate
     assert 'test "$WORKFLOW_RESULT" = success' in aggregate
     assert 'BROWSER_RESULT: ${{ needs.browser-checks.result }}' in aggregate
     assert 'test "$BROWSER_RESULT" = success' in aggregate
     assert 'test "$METADATA_RESULT" = success' in aggregate
+
+
+def ci_job(name):
+    workflow = (ROOT / '.github/workflows/tests.yml').read_text()
+    return re.split(r'\n  [a-z][\w-]*:\n', workflow.split(f'  {name}:\n', 1)[1], maxsplit=1)[0]
+
+
+def frontend_command():
+    return textwrap.dedent(ci_job('frontend-checks').split('        run: |\n', 1)[1])
+
+
+def test_frontend_ci_runs_once_without_the_python_matrix():
+    frontend = ci_job('frontend-checks')
+    assert 'matrix:' not in frontend and 'setup-python' not in frontend
+    assert "node-version: '22.23.4'" in frontend
+    assert 'shell: bash' in frontend
+    assert 'Run all standalone frontend regressions' not in ci_job('portable-source-checks')
+    workflow = (ROOT / '.github/workflows/tests.yml').read_text()
+    assert workflow.count('for test in tests/test_*.cjs; do') == 1
+
+
+@pytest.mark.parametrize('failed_position', [None, 0, -1])
+def test_actual_frontend_ci_command_enumerates_every_suite_and_fails_closed(tmp_path, failed_position):
+    # Run the workflow's real shell with a harmless Node stand-in. The filenames
+    # come from the actual source tree, so newly added suites stay in this check.
+    suites = sorted(path.name for path in (ROOT / 'tests').glob('test_*.cjs'))
+    assert suites
+    tests = tmp_path / 'tests'
+    tests.mkdir()
+    for name in [*suites, 'frontend-dom.cjs']:
+        (tests / name).touch()
+    binary = tmp_path / 'bin'
+    binary.mkdir()
+    node = binary / 'node'
+    node.write_text('#!/bin/bash\n'
+                    'if [ "$1" = --version ]; then exit 0; fi\n'
+                    'printf "%s\\n" "$1" >> "$RECORD"\n'
+                    'if [ "$1" = "$FAIL_TEST" ]; then exit 23; fi\n')
+    node.chmod(0o700)
+    record = tmp_path / 'calls'
+    failed = '' if failed_position is None else 'tests/' + suites[failed_position]
+    result = subprocess.run(['/bin/bash', '-c', frontend_command()], cwd=tmp_path,
+                            env={'PATH': str(binary), 'RECORD': str(record), 'FAIL_TEST': failed},
+                            capture_output=True, text=True)
+    expected = ['tests/' + name for name in suites]
+    if failed:
+        expected = expected[:expected.index(failed) + 1]
+    assert record.read_text().splitlines() == expected
+    assert result.returncode == (23 if failed else 0)
+
+
+def test_frontend_ci_refuses_an_empty_suite_directory(tmp_path):
+    (tmp_path / 'tests').mkdir()
+    binary = tmp_path / 'bin'
+    binary.mkdir()
+    node = binary / 'node'
+    node.write_text('#!/bin/bash\nexit 0\n')
+    node.chmod(0o700)
+    result = subprocess.run(['/bin/bash', '-c', frontend_command()], cwd=tmp_path,
+                            env={'PATH': str(binary)}, capture_output=True, text=True)
+    assert result.returncode != 0
+
+
+@pytest.mark.parametrize('changed_job', [
+    'portable-source-checks', 'frontend-checks', 'critical-workflows',
+    'release-contract', 'browser-checks', 'metadata-postgresql',
+])
+@pytest.mark.parametrize('status', ['success', 'failure', 'cancelled', 'skipped', ''])
+def test_actual_ci_aggregate_requires_success_from_every_job(changed_job, status):
+    aggregate = ci_job('ci')
+    assert 'if: always()' in aggregate
+    results = dict(re.findall(r'([A-Z_]+): \$\{\{ needs\.([\w-]+)\.result \}\}', aggregate))
+    needed = set(re.search(r'needs: \[([^]]+)\]', aggregate)[1].split(', '))
+    assert set(results.values()) == needed
+    assert changed_job in needed
+    environment = {variable: status if job == changed_job else 'success'
+                   for variable, job in results.items()}
+    command = aggregate.split('        run: ', 1)[1].strip()
+    result = subprocess.run(['/bin/bash', '-c', command], env=environment,
+                            capture_output=True, text=True)
+    assert (result.returncode == 0) == (status == 'success')
 
 
 @pytest.mark.parametrize('succeeded,publish,promote,expected', [

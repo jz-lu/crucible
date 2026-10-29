@@ -51,7 +51,10 @@ Run relevant checks for your changes and describe their results. Source CI cover
 the supported Python versions, fresh migrations, portable backend tests, all
 standalone JavaScript regressions, and a real Chromium browser suite. See
 [browser checks](docs/browser-checks.txt) for the disposable local setup and its
-verification boundaries. Pull requests run these checks; feature branches do
+verification boundaries. The standalone JavaScript suites run once in a required
+job on pinned Node 22, independently of the Python-version matrix. All current
+`tests/test_*.cjs` files are included automatically; a failed or skipped frontend
+job blocks `CI passed`. Pull requests run these checks; feature branches do
 not duplicate them with a second push-triggered run. The release workflow also tests the image with
 its reviewed Linux native runtime. The critical-workflow gate separately covers
 research, publication, permissions, ratings and scoped agents with disposable
