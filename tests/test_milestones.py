@@ -132,6 +132,24 @@ def test_archives_and_schemes_never_share_places_or_dominance(current_system, mo
     assert moved[old["submission_id"]]["is_current"] and not moved[old["submission_id"]]["counts_toward_bonus"]
 
 
+def test_profile_and_paged_award_flags_ignore_display_release_selection(current_system, monkeypatch):
+    app, _, _ = current_system
+    alice = add_user(app, "alice")
+    receipt(app, alice, 50, 0, version="5")
+    earned = receipt(app, alice, 2, 1)
+    highest = receipt(app, alice, 4, 2)
+    for display_version in ("7", "5", "7"):
+        monkeypatch.setitem(registry.CURRENT, "teaching-dh-kem", display_version)
+        data = person(app, "alice")
+        page = history(app)["milestones"]
+        assert data["points"] == 100
+        assert data["records"][0]["scheme_version"] == display_version
+        assert data["first_records"][0]["submission_id"] == highest["submission_id"]
+        for rows in (data["first_ten"]["history"], page):
+            assert [row["submission_id"] for row in rows if row["counts_toward_bonus"]] == [earned["submission_id"]]
+        assert data["first_ten"]["history"] == page
+
+
 def test_invalid_profiles_sizes_and_failed_or_inconsistent_receipts_cannot_suppress_or_occupy_places(current_system):
     app, _, _ = current_system
     alice, bob = (add_user(app, name) for name in ("alice", "bob"))

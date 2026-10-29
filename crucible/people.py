@@ -199,7 +199,12 @@ def register_routes(app, db, envelope):
                            recent_recoveries_has_more=len(rows) > RECENT_LIMIT)
             summary["first_records"] = _first_records(session, user.id, family_scores)
             if include_milestones:
-                winners = milestones.winning_keys(summary["records"])
+                # Display selection may prefer an unenrolled/archived release. The
+                # earning receipt remains bound to the frozen scoring release.
+                winners = {(scheme_id, scoring.FAMILY_RELEASES[scheme_id]["version"],
+                            score.early_recovery_submission_id, score.early_recovery_tier)
+                           for (owner, scheme_id), score in family_scores.items()
+                           if owner == user.id and score.early_recovery > 0}
                 summary["first_ten"] = milestones.summary(session, user.id, _record, winners)
         return envelope(person=summary, scoring=scoring.SCORING)
 
