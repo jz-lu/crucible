@@ -27,7 +27,11 @@ def digest(spec):
 
 
 @pytest.fixture
-def admission(tmp_path):
+def admission(tmp_path, monkeypatch):
+    # Admission/scoring tests exercise real RSA source checks, without unrelated native PQ builds.
+    monkeypatch.setattr(registry, "ADAPTERS", {("rsa-kem", CURRENT_RSA.SCHEME_VERSION): CURRENT_RSA})
+    monkeypatch.setattr(registry, "CURRENT", {"rsa-kem": CURRENT_RSA.SCHEME_VERSION})
+    from crucible import app as _app  # Register the full foreign-key metadata in isolated runs.
     db = Database(f"sqlite:///{tmp_path / 'admissions.db'}")
     Base.metadata.create_all(db.engine)
     author_id, reviewer_id = str(uuid4()), str(uuid4())
@@ -148,9 +152,12 @@ def test_duplicate_exact_operator_requests_are_safe_across_connections(admission
     assert count(db) == 1
 
 
-def test_people_api_counts_explicit_admission_once_and_does_not_expose_private_review(admission):
+def test_people_api_counts_explicit_admission_once_and_does_not_expose_private_review(admission, monkeypatch):
     from fastapi.testclient import TestClient
     from crucible.app import create_app
+    from crucible import scoring
+    from types import SimpleNamespace
+    monkeypatch.setattr(scoring, "time", SimpleNamespace(time=lambda: 10))
     db, settings, args, _ = admission
     app = create_app(settings)
     with TestClient(app, base_url="http://127.0.0.1:8000") as client:
@@ -160,11 +167,11 @@ def test_people_api_counts_explicit_admission_once_and_does_not_expose_private_r
         assert all(person["accepted_proposal_count"] == 0 for person in client.get("/api/people").json()["people"])
         award_scheme_credit(db, settings, **args)
         after = client.get("/api/people/author").json()["person"]
-        assert after["points"] == after["score_breakdown"]["scheme_contributions"] == 1000
+        assert after["points"] == after["score_breakdown"]["scheme_contributions"] == 2000
         assert after["accepted_proposal_count"] == 1
         award_scheme_credit(db, settings, **args)
         retried = client.get("/api/people/author").json()["person"]
-        assert retried["points"] == 1000 and retried["accepted_proposal_count"] == 1
+        assert retried["points"] == 2000 and retried["accepted_proposal_count"] == 1
         board = client.get("/api/people").json()
         assert board["people"][0]["handle"] == "author"
         assert board["people"][0]["accepted_proposal_count"] == 1

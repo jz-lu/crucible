@@ -6,12 +6,13 @@ Repeated hourly receipts and intermediate tiers never add cumulative points.
 """
 from functools import lru_cache
 import json
+import time
 
 from sqlalchemy import Boolean, Integer, JSON, String, and_, case, cast, column, func, literal, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
 
 from .db import Challenge, Method, Submission, User
-from .scoring_awards import SchemeAdmissionCredit
+from .scoring_awards import ADMISSION_POLICY_ID, ADMISSION_POINTS, ACTIVE_WEEK_POINTS, admission_points_relation
 
 
 POLICY_ID = "crucible-points-v10"
@@ -45,7 +46,9 @@ FAMILY_RELEASES = {
     "hqc": {"version": "modeled-research-v3", "profile_prefix": "hqc-modeled-research-v3-tier-", "max_tier": 66, "progress_weights": _WEIGHTS_66, "record_inheritance": False},
     "classic-mceliece": {"version": "length-research-v1", "profile_prefix": "classic-mceliece-length-research-v1-tier-", "max_tier": 50, "progress_weights": _WEIGHTS_50, "record_inheritance": False},
 }
-SCORING = {"status": "active", "policy_id": POLICY_ID, "ordering": "points_desc_handle"}
+SCORING = {"status": "active", "policy_id": POLICY_ID, "ordering": "points_desc_handle",
+           "scheme_admissions": {"policy_id": ADMISSION_POLICY_ID, "admission_points": ADMISSION_POINTS,
+                                 "completed_active_week_points": ACTIVE_WEEK_POINTS}}
 
 
 def eligible_record(scheme_id, version, profile_id, tier):
@@ -132,7 +135,7 @@ def metadata_relation(name, columns, rows, dialect):
     raise ValueError("Unsupported metadata database dialect")
 
 
-def score_relations(dialect="sqlite"):
+def score_relations(dialect="sqlite", *, as_of=None):
     """Build portable SQL aggregates; never load all receipts into Python.
 
     A higher recovery reserves lower places only for an explicitly inheriting
@@ -142,6 +145,7 @@ def score_relations(dialect="sqlite"):
     many rounds or step-by-step attempts. First-ten milestone recognition is
     independent of this points policy.
     """
+    as_of = time.time() if as_of is None else as_of
     profile_rows = []
     for family, release in FAMILY_RELEASES.items():
         profile_rows.extend((family, release["version"], f'{release["profile_prefix"]}{tier}', tier,
@@ -212,9 +216,7 @@ def score_relations(dialect="sqlite"):
     recoveries = select(families.c.user_id, func.sum(families.c.progress).label("progress"),
                         func.sum(families.c.early_recovery).label("early_recovery")).group_by(
                             families.c.user_id).cte("score_recoveries")
-    admissions = select(SchemeAdmissionCredit.user_id,
-                        (1000 * func.count()).label("scheme_contributions")).group_by(
-                            SchemeAdmissionCredit.user_id).cte("score_admissions")
+    admissions = admission_points_relation(as_of).cte("score_admissions")
     progress_total = func.coalesce(recoveries.c.progress, 0)
     early_total = func.coalesce(recoveries.c.early_recovery, 0)
     scheme_total = func.coalesce(admissions.c.scheme_contributions, 0)
@@ -224,7 +226,12 @@ def score_relations(dialect="sqlite"):
     points = progress_total + early_total + scheme_total + note_total
     participants = (select(User.id.label("id"), User.handle, User.created_at,
                            progress_total.label("progress"), early_total.label("early_recovery"),
-                           scheme_total.label("scheme_contributions"), note_total.label("note_contributions"), points.label("points"),
+                           scheme_total.label("scheme_contributions"),
+                           func.coalesce(admissions.c.admission_points, 0).label("admission_points"),
+                           func.coalesce(admissions.c.active_weeks, 0).label("admission_active_weeks"),
+                           func.coalesce(admissions.c.weekly_points, 0).label("admission_weekly_points"),
+                           literal(as_of).label("score_as_of"),
+                           note_total.label("note_contributions"), points.label("points"),
                            func.rank().over(order_by=points.desc()).label("rank"))
                     .outerjoin(recoveries, recoveries.c.user_id == User.id)
                     .outerjoin(admissions, admissions.c.user_id == User.id)

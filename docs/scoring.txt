@@ -1,3 +1,11 @@
+ADMISSION COMPONENT UPDATE — 29 October 2026
+
+Admitted-family credit now uses component policy crucible-scheme-admission-points-v2:
+2,000 on actual admission plus 100 per completed active week until withdrawal or
+explicit retirement. See docs/scheme-admission-points-v2.txt, including the required
+operator reconciliation before rollout. Numerical recovery and note-rating rules
+below are unchanged by this component update.
+
 CURRENT POLICY — 18 October 2026
 
 Policy v10 adds provisional +1/+2 author contribution points from agent note

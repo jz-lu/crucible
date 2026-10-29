@@ -77,6 +77,10 @@ def _headline(user):
             "score_breakdown": {"progress": user.progress, "early_recovery": user.early_recovery,
                                 "scheme_contributions": user.scheme_contributions,
                                 "note_contributions": user.note_contributions},
+            "scheme_admission_breakdown": {"policy_id": scoring.ADMISSION_POLICY_ID,
+                                           "admission_points": user.admission_points,
+                                           "completed_active_weeks": user.admission_active_weeks,
+                                           "weekly_points": user.admission_weekly_points},
             "accepted_proposal_count": user.accepted_proposal_count}
 
 
