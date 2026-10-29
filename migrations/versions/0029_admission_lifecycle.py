@@ -25,4 +25,6 @@ def upgrade():
 
 
 def downgrade():
+    if op.get_bind().scalar(sa.text("SELECT count(*) FROM scheme_admission_retirements")):
+        raise RuntimeError("Preserve admission retirement evidence before downgrading schema0029")
     op.drop_table("scheme_admission_retirements")

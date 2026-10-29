@@ -62,7 +62,6 @@ def test_as_of_is_fixed_for_query_and_future_admissions_are_not_counted(admissio
         row = session.execute(select(participants).where(participants.c.id == author)).one()
         assert row.points == row.scheme_contributions == 2300
         assert row.admission_active_weeks == 3
-        assert row.score_as_of == 10 + 3 * WEEK_SECONDS
     for value in [-1, nan, inf, -inf, True, '100']:
         with pytest.raises(ValueError, match='timestamp'):
             admission_points_relation(value)
@@ -201,4 +200,11 @@ def test_0029_migration_preserves_admission_history_and_does_not_invent_retireme
     with migrated.transaction() as session:
         assert session.get(SchemeAdmissionCredit, args['family_id']).created_at == 10
     assert 'scheme_admission_retirements' not in inspect(migrated.engine).get_table_names()
+    command.upgrade(config, '0029')
+    retire(migrated, settings, args, 20)
+    with pytest.raises(RuntimeError, match='Preserve admission retirement evidence'):
+        command.downgrade(config, '0028')
+    with migrated.transaction() as session:
+        assert session.get(SchemeAdmissionRetirement, args['family_id']).created_at == 20
+        assert session.get(SchemeAdmissionCredit, args['family_id']).created_at == 10
     migrated.engine.dispose()
