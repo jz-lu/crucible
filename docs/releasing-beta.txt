@@ -33,6 +33,37 @@ Pushes and merges never trigger this workflow. Moving beta can trigger an existi
 App Platform Autodeploy subscription; the workflow itself never edits an app,
 its environment or its database.
 
+Source CI reuse on main
+-----------------------
+Main releases reuse the latest successful CI push run for the exact selected Git
+commit instead of launching a second copy. If that run is queued or running,
+release waits up to 15 minutes. The source gate uses read-only GitHub Actions
+metadata and accepts only jz-lu/crucible, main, push, and .github/workflows/tests.yml.
+It requires all three Python matrix jobs, the frontend, browser, critical
+workflows, PostgreSQL, runtime-contract jobs, and CI passed to be completed and
+successful in the same run attempt. Its explicit job inventory must be updated
+alongside deliberate CI changes; an unexpected or missing job blocks release.
+This does not change the intentional optional Python test skips described above.
+
+PR checks, another commit's success, arbitrary matching check names and locally
+created receipts cannot satisfy the gate. A newer failed or pending push run
+cannot fall back to an older success. Missing evidence, API errors, a changed run
+attempt or incomplete job lists stop the release before registry authentication.
+After a failure, inspect CI for that exact main commit; fix the underlying issue
+or use Re-run all jobs, then restart Release beta. Re-run failed jobs alone may
+lack the complete same-attempt evidence and is intentionally insufficient.
+Candidate branches with Promote disabled still execute the reusable source
+workflow normally. Native image verification always runs before publication.
+
+The release artifact includes crucible-source-ci.json with the exact source SHA,
+workflow, run ID, attempt and gate inventory. Reuse saves duplicate Actions work;
+when main CI is already complete it also removes that wait from the release.
+It does not remove native verification or the provider's deployment time. The
+source gate is an accidental-drift guard, not a boundary against an authorized
+maintainer changing both the workflow and its verifier. Main protection and
+review remain necessary; no repository or provider permissions are broadened
+beyond read-only Actions access for the release job.
+
 One-time setup
 --------------
 Add the repository secret DIGITALOCEAN_REGISTRY_TOKEN. It must have Registry Read and Update permission for

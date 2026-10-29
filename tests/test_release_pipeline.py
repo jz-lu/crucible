@@ -347,14 +347,20 @@ def test_workflow_promotion_requires_main_success_and_both_boolean_inputs(succee
 ])
 def test_workflow_candidate_branches_require_promotion_disabled(ref, promote, allowed):
     workflow = (ROOT / '.github/workflows/release-beta.yml').read_text()
-    expected = "startsWith(github.ref, 'refs/heads/') && (github.ref == 'refs/heads/main' || !inputs.promote)"
-    for job in ('source-checks', 'native-release'):
-        # Read only job-level lines; step conditions cannot satisfy this gate.
-        lines = workflow.split(f'  {job}:\n', 1)[1].splitlines()
-        condition = next(line.removeprefix('    if: ') for line in lines if line.startswith('    if: '))
-        assert condition == expected
+    candidate = "startsWith(github.ref, 'refs/heads/') && github.ref != 'refs/heads/main' && !inputs.promote"
+    assert f'    if: {candidate}\n    uses: ./.github/workflows/tests.yml' in workflow
     assert (ref.startswith('refs/heads/') and (ref == 'refs/heads/main' or not promote)) is allowed
-    assert 'needs: source-checks' in workflow
+    native = workflow.split('  native-release:\n', 1)[1].split('    runs-on:', 1)[0]
+    condition = native.split('    if: ', 1)[1].splitlines()[0]
+    assert condition == "${{ !cancelled() && startsWith(github.ref, 'refs/heads/') && ((github.ref == 'refs/heads/main' && needs.source-checks.result == 'skipped') || (github.ref != 'refs/heads/main' && !inputs.promote && needs.source-checks.result == 'success')) }}"
+    assert 'needs: source-checks' in native
+    for source_result in ('success', 'skipped', 'failure', 'cancelled'):
+        for cancelled in (True, False):
+            permitted = (not cancelled and ref.startswith('refs/heads/') and
+                         ((ref == 'refs/heads/main' and source_result == 'skipped') or
+                          (ref != 'refs/heads/main' and not promote and source_result == 'success')))
+            expected = allowed and not cancelled and source_result == ('skipped' if ref == 'refs/heads/main' else 'success')
+            assert permitted is expected
 
 
 def run_release_summary(tmp_path, monkeypatch, *, publish, promote):
@@ -365,6 +371,7 @@ def run_release_summary(tmp_path, monkeypatch, *, publish, promote):
     script = summary.split('          import json, os, pathlib\n', 1)[1].split('\n          PY', 1)[0]
     script = 'import json, os, pathlib\n' + textwrap.dedent(script)
     monkeypatch.setenv('RELEASE_OUTPUT', str(tmp_path))
+    monkeypatch.setenv('RUNNER_TEMP', str(tmp_path))
     monkeypatch.setenv('GITHUB_REPOSITORY', 'jz-lu/crucible')
     monkeypatch.setenv('PUBLISH_REQUESTED', str(publish).lower())
     monkeypatch.setenv('PROMOTE_REQUESTED', str(promote).lower())
