@@ -1,3 +1,4 @@
+from crucible import bounty_models, admission_lifecycle_schema  # Preserve 0028/0029 metadata only.
 from crucible import research_reviews  # Register scoped research assessments.
 from crucible import proposal_retractions  # Register terminal author withdrawals.
 from crucible import proposal_notes  # noqa: F401 — durable scheme-review sources

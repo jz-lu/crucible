@@ -497,6 +497,9 @@
       "test_browser_admission.py",
       "test_catalogue_progress_access.py"
     ],
+    "bounty-schema-fallback": [
+      "test_bounty_schema_rollback.py"
+    ],
     "catalogue": [
       "test_catalogue_progress.py",
       "test_recovery_summary.py",
@@ -732,6 +735,8 @@
   "retained_backup_config": "sha256:5bbaba546a20bbcf8aae1e6efe000d6b22cad6cef9775b8092abfaa7afa8deee",
   "retained_backup_image": "registry.digitalocean.com/crucible-beta/backup@sha256:491572468a1654fb241ab50d2c36f0b34bfb685df308104739dd8fd7ff1b9ac7",
   "reviewed_overlay_files": {
+    "crucible/admission_lifecycle_schema.py": "334505269889508c14d2a2ed033eaf1072d98f56a11185301bc7a204c4dc3287",
+    "crucible/bounty_models.py": "623f61a7904cd7fc21857ec5da7825f8823c600063d8994a5b3b35c900a19de4",
     "crucible/config.py": "52a7f6dc13967a47ebac54bb7c1919215ce746b63d73c5be10f3b6dde42d5ce9",
     "crucible/data/approved_beta_releases.json": "d866a822cb468ac8284a941ba797ac1c87a2d94175c305dca08af41ebd67fe0a",
     "crucible/data/display_evidence/1810c55c7d211c5cc364341589a5375903ee7de41f4d990d76326eac1ab19af7.json": "1810c55c7d211c5cc364341589a5375903ee7de41f4d990d76326eac1ab19af7",
@@ -743,11 +748,13 @@
     "crucible/resource_publications.py": "1a5ceeffcb532f6eb732b5660efc39c11707d79e6f50f2742b7c158f216522bf",
     "crucible/resource_state.py": "da004619bee08456cdfb2968a1604ca42a0a21c8f0200808b2313ef42675ab4b",
     "docs/beta-release-policy.txt": "549c69ce412bde8de427c755959450ce0cbaaf87c2c63297468eb864d2375c8a",
-    "migrations/env.py": "9bf10fe07b2a859502f58d8ce011e11ec40ffd001401d115e63170b8f43a3744",
+    "migrations/env.py": "77a4556d8df7ca968995e792e90db09bcf5787c928c497ad7156286235d7c185",
     "migrations/versions/0024_researcher_profiles.py": "669f3cf7e95618cf245dce4d10d0133a085330d920d189958f31be48b49cbf29",
     "migrations/versions/0025_notebook_numbers.py": "852f7b870b75123e21d8e4b063880c9887e59bbb3e2b5331098b5a2d7c06e317",
     "migrations/versions/0026_resource_publications.py": "dc784faf47ae0029c85c3a61726876582a518246945d1bd84373b05a1febbc56",
     "migrations/versions/0027_resource_lifecycle.py": "77d8428a7c2a591e0d3013b8e53c57569fafed4130c209d8d821ee310a810dfe",
+    "migrations/versions/0028_research_bounties.py": "7de1421919557084f2d5d8cfc1d48a17695fdf0021cc4247e310098873bf0da9",
+    "migrations/versions/0029_admission_lifecycle.py": "6b5397f000a1da985a2022ccfa6cf69490dedc5af1544686dda3ba67202b5c61",
     "scripts/beta_preflight.py": "8511519397e79bbfc0e179b77a670507a19c4a558c46a75cd4de80880ed404d3",
     "scripts/estimate_mceliece_candidates.py": "4400bcd8b1113d9d16754c64186e8387e8b70a05280005e4975d959e8fd4e441",
     "scripts/hqc_module_structure_checks.py": "46fdd4ab11948e52d70dffac27a82d39fe6f06ffe915a27519ed7684516a0741",

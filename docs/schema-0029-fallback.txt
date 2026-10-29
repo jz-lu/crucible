@@ -1,0 +1,28 @@
+CRUCIBLE — SCHEMA-0029 OLD-APPLICATION FALLBACK
+
+This branch preserves the exact application, web interface, authentication,
+point calculations, runtime releases and cryptographic artifacts of main 98affe4.
+Its only executable additions are the exact reviewed 0028/0029 migrations,
+bounty table models, a schema-only retirement model and Alembic registration.
+The migration head is exactly 0029. It is not a dual-head compatibility bypass.
+
+Use this fallback image only against an already-migrated 0029 database. Preserve
+the database and all new task, allowance, award and retirement records. Do not
+run a downgrade to enable rollback. The original migration guards refuse to
+remove populated evidence. Existing accounts, notes and recoveries are retained.
+
+This fallback deliberately has no bounty routes or interface and uses the old
+points policy. New bounty awards and active-week recognition remain stored but
+are not included in its old displays. Returning to the feature release restores
+those views from retained evidence; the fallback does not reverse awards.
+
+Only migrations/env.py imports admission_lifecycle_schema. The ordinary full
+release does not contain that module and defines the retirement model in
+scoring_awards. deploy/release.py replaces the complete source directories, so
+an image overlay cannot retain this extra module as an orphaned runtime input.
+
+Local tests exercise populated 0027→0029 upgrades, metadata equality, the old
+application at 0029, old points/UI identity, retained evidence and populated
+schema downgrade refusal. The release contract pins all five schema inputs.
+Local checks are not hosted or PostgreSQL validation; the exact image still
+needs native verification and a restored-database exercise before relying on it.
