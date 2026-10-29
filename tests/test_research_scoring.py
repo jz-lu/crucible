@@ -20,7 +20,7 @@ def test_existing_research_receipts_earn_one_flat_frontier_award(current_system,
     registered_receipt(app, user, adapter, 5, 6)
     data = person(app, "alice")
     assert data["points"] == 100
-    assert data["score_breakdown"] == {"progress": 0, "early_recovery": 100, "scheme_contributions": 0, "note_contributions": 0}
+    assert data["score_breakdown"] == {"progress": 0, "early_recovery": 100, "scheme_contributions": 0, "note_contributions": 0, "bounty_points": 0}
     assert all(record["scoring_eligible"] for record in data["records"])
     profile = adapter.manifests()[4]
     assert standard_schemes.profile_presentation(profile)["scoring_eligible"]

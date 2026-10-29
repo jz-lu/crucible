@@ -46,7 +46,7 @@ def test_existing_receipts_gain_points_derivationally_without_rewriting_history(
         assert person(app, "alice")["points"] == 200
     updated = person(app, "alice")
     assert updated["points"] == 800
-    assert updated["score_breakdown"] == {"progress": 0, "early_recovery": 800, "scheme_contributions": 0, "note_contributions": 0}
+    assert updated["score_breakdown"] == {"progress": 0, "early_recovery": 800, "scheme_contributions": 0, "note_contributions": 0, "bounty_points": 0}
     assert updated["correct_submission_count"] == updated["schemes_recovered"] == 8
     assert {record["submission_id"] for record in updated["records"]} == {row["submission_id"] for row in rows}
     assert sum(record["score"]["total"] for record in updated["records"]) == 800
@@ -112,7 +112,7 @@ def test_exact_progress_and_bonus_are_maxima_not_per_profile_sums(current_system
     registered_receipt(app, user, adapter, 1, 7)
     data = person(app, "alice")
     assert data["points"] == 100
-    assert data["score_breakdown"] == {"progress": 0, "early_recovery": 100, "scheme_contributions": 0, "note_contributions": 0}
+    assert data["score_breakdown"] == {"progress": 0, "early_recovery": 100, "scheme_contributions": 0, "note_contributions": 0, "bounty_points": 0}
     assert sum(row["score"]["total"] for row in data["records"] if row["score"]) == 100
 
 
@@ -236,7 +236,7 @@ def test_natural_tier_above_fifty_gets_full_first_bonus_without_cumulative_steps
     registered_receipt(app, alice, adapter, 80, 2)
     registered_receipt(app, bob, adapter, 80, 3)
     data = person(app, 'alice')
-    assert data['score_breakdown'] == {'progress': 0, 'early_recovery': 100, 'scheme_contributions': 0, 'note_contributions': 0}
+    assert data['score_breakdown'] == {'progress': 0, 'early_recovery': 100, 'scheme_contributions': 0, 'note_contributions': 0, 'bounty_points': 0}
     assert data['points'] == 100
     assert data['records'][0]['score']['early_recovery_submission_id'] == lower['submission_id']
     assert data['first_records'][0]['tier'] == 80

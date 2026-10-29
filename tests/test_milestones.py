@@ -62,7 +62,7 @@ def test_direct_or_incremental_progress_has_one_highlight_and_no_repeat_badges(c
     receipt(app, alice, 1, 22)
     data = person(app, "alice")
     assert data["points"] == 100
-    assert data["score_breakdown"] == {"progress": 0, "early_recovery": 100, "scheme_contributions": 0, "note_contributions": 0}
+    assert data["score_breakdown"] == {"progress": 0, "early_recovery": 100, "scheme_contributions": 0, "note_contributions": 0, "bounty_points": 0}
     assert pairs(data["first_ten"]["highlights"]) == [(20, 1)]
     assert len(data["first_ten"]["history"]) == len(achieved)
     assert data["first_ten"]["history"][0]["submission_id"] == achieved[-1]["submission_id"]

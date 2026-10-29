@@ -48,7 +48,7 @@ def test_each_family_endpoint_has_equal_first_and_later_solver_caps(current_syst
     first, later = person(app, "alice"), person(app, "bob")
     assert first["points"] == 100
     assert first["score_breakdown"] == {"progress": 0, "early_recovery": 100,
-                                         "scheme_contributions": 0, "note_contributions": 0}
+                                         "scheme_contributions": 0, "note_contributions": 0, "bounty_points": 0}
     assert first["records"][0]["score"]["early_recovery_submission_id"] == best["submission_id"]
     assert later["points"] == 0
     assert later["score_breakdown"]["early_recovery"] == 0
