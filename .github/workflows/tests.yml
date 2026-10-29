@@ -167,6 +167,9 @@ jobs:
       - name: Run disposable loopback browser checks
         working-directory: tests/browser
         run: npm test
+      - name: Verify the complete participant recovery journey in isolation
+        working-directory: tests/browser
+        run: npx --no-install playwright test --config participant.config.cjs
       - name: Retain synthetic browser failure evidence
         if: failure()
         uses: actions/upload-artifact@v5
@@ -175,6 +178,8 @@ jobs:
           path: |
             tests/browser/playwright-report
             tests/browser/test-results
+            tests/browser/participant-report
+            tests/browser/participant-results
           retention-days: 7
       - name: State browser verification boundary
         if: always()

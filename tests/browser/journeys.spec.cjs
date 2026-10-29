@@ -32,6 +32,14 @@ test('scheme record to ready challenge and manual tools is one complete usable j
   await page.locator('#open-submission').click();
   await expect(page.locator('#submission-dialog')).toBeVisible();
   await expect(page.locator('#candidate')).toBeEnabled();
+  await page.locator('#candidate').fill('00'.repeat(32));
+  await page.locator('#method-name').fill('Unsent fixture method');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#submission-dialog')).toBeHidden();
+  await page.locator('#open-submission').click();
+  await expect(page.locator('#submission-dialog')).toBeVisible();
+  await expect(page.locator('#candidate')).toHaveValue('00'.repeat(32));
+  await expect(page.locator('#method-name')).toHaveValue('Unsent fixture method');
   await page.keyboard.press('Escape');
   await expect(page.locator('#submission-dialog')).toBeHidden();
   await expect(page.locator('#open-submission')).toBeFocused();

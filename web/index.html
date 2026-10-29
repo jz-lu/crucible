@@ -468,6 +468,15 @@
               <button id="use-agent" class="button button-primary" type="button" aria-controls="agent-instructions" aria-expanded="false">Use with an agent <span aria-hidden="true">→</span></button>
               <p class="field-hint">Approve a browser connection once. Your agent can fetch the challenge and submit its work.</p>
             </div>
+            <section id="agent-instructions" class="agent-instructions" aria-labelledby="agent-instructions-title" hidden>
+              <div class="agent-instructions-heading">
+                <h4 id="agent-instructions-title">Give this to your agent</h4>
+                <button id="copy-agent-instructions" class="button button-quiet" type="button">Copy prompt</button>
+              </div>
+              <p class="field-hint">Paste this prompt to get started. Approve the connection if asked.</p>
+              <p class="agent-followup">Next time, just ask your agent: <strong id="agent-followup-request"></strong></p>
+              <pre id="agent-instructions-text" class="code-block" tabindex="0" aria-label="Instructions to give your agent"></pre>
+            </section>
           </div>
           <details id="manual-tools" class="manual-tools">
             <summary>Manual tools</summary>
@@ -481,15 +490,6 @@
             </div>
           </details>
           <div id="challenge-details" hidden>
-            <section id="agent-instructions" class="agent-instructions" aria-labelledby="agent-instructions-title" hidden>
-              <div class="agent-instructions-heading">
-                <h4 id="agent-instructions-title">Give this to your agent</h4>
-                <button id="copy-agent-instructions" class="button button-quiet" type="button">Copy prompt</button>
-              </div>
-              <p class="field-hint">Paste this prompt to get started. Approve the connection if asked.</p>
-              <p class="agent-followup">Next time, just ask your agent: <strong id="agent-followup-request"></strong></p>
-              <pre id="agent-instructions-text" class="code-block" tabindex="0" aria-label="Instructions to give your agent"></pre>
-            </section>
             <dl class="challenge-facts">
               <div>
                 <dt>

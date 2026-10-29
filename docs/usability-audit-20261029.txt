@@ -1,0 +1,55 @@
+Participant and reviewer continuity audit — 29 October 2026
+==========================================================
+
+Scope
+-----
+Disposable beta accounts and the real application on loopback. No hosted notes,
+accounts, challenge receipts or publication decisions were created or modified.
+Manual desktop inspection covered sign-in, catalogue/record/challenge navigation,
+agent handoff, manual inputs, note creation, publication confirmation and reviewer
+navigation. Automated desktop/mobile journeys cover the changed interactions.
+This is a focused audit, not a claim of full accessibility or production coverage.
+
+Findings and changes
+--------------------
+1. Closing a submission dialog erased the recovered-key field while retaining
+   some method fields. Keep the full draft in tab memory for its exact instance;
+   replacing it with another instance/import requires explicit discard. Account,
+   session and access changes clear it. Nothing is added to browser storage.
+
+2. A retained submission could show the next shared round's countdown. Use its
+   own immutable instance deadline. An uncertain submission retries its original
+   payload and idempotency key even after that deadline, to obtain its receipt.
+
+3. Agent instructions were separated from their entry button by Manual tools.
+   Place them directly below the button. Completed/closed instances offer an
+   inspection prompt that explicitly rules out a new answer to that instance.
+
+4. Reviewers lost an unsent decision/reason when following evidence. Retain one
+   bounded review draft for the exact account, session, note revision, hash and
+   publication request. Reauthorize the reader before restoring the form. A
+   second request offers return/discard; an uncertain decision must first resolve
+   its original receipt. Completion or access loss clears the retained draft.
+   This is tab memory, not durable/offline authoring; reload warns before loss.
+
+Evidence and limits
+-------------------
+Focused Node suites cover submission/import replacement, clock rollover,
+byte-identical uncertain retries, review draft continuity and account isolation.
+The browsing preflight passed 83 checks; release-helper preflight passed 207.
+Existing desktop/mobile publication journeys verify draft restoration following
+fresh authorized reader fetches. Manual inspection reproduced the old key-loss
+behavior and verified retained reviewer text after leaving and returning.
+
+A separate actual recovery journey downloads a weak toy DH instance, solves only
+its public inputs, submits it and reads back the durable receipt. It verifies the
+key is absent from the returned receipt and details. The method/compute report is
+marked synthetic; this proves participant plumbing, not cryptanalytic novelty or
+benchmark accuracy. The runner uses its own disposable database to avoid changing
+other tests' scheme-wide records. CI runs both browser suites without retries.
+
+Release boundary
+----------------
+No production schema, cryptographic construction, scoring rule or bounty workflow
+changes are included in this pass. Required source CI and native release gates
+remain necessary, followed by hosted identity/access and changed-flow checks.

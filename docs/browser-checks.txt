@@ -20,6 +20,7 @@ Run from the repository with the existing Python dependencies installed:
   cd tests/browser
   npx --no-install playwright install --with-deps chromium
   npm test
+  npx --no-install playwright test --config participant.config.cjs
 
 Playwright 1.62.1 and its transitive packages are pinned in package-lock.json.
 They are development-only dependencies. CI installs the matching browser. For a
@@ -35,8 +36,13 @@ serves the real checked-out web assets and enforces session/membership rules.
 Only the fixture subprocess limits the registry to portable DH release 4 and
 its declared record-comparison releases 2 and 3, using the established portable
 authentication-test pattern. Production registration, artifact verification and
-database schema are unchanged. The complete challenge journey issues a small
-synthetic DH instance and downloads its inputs; no real attack is submitted.
+database schema are unchanged. The ordinary navigation journey issues a small
+synthetic DH instance and downloads its inputs. The separate participant journey
+uses a fresh fixture server/database: it downloads public inputs, runs the existing
+toy DH solver on exactly that JSON, submits the recovered key through the actual
+form, and opens its saved receipt. Its compute report is explicitly synthetic,
+not benchmark evidence. This run is isolated because an accepted recovery changes
+the scheme-wide record; it must not contaminate the other tests' unsolved fixtures.
 Mail is disabled. GitHub's external identity exchange is replaced only inside
 the test fixture; a browser test intercepts the provider navigation and returns
 to the real local callback. State, binding, session rotation and page loading

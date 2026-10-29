@@ -13,6 +13,8 @@ __pycache__/
 .coverage
 playwright-report/
 tests/browser/test-results/
+tests/browser/participant-results/
+tests/browser/participant-report/
 
 .native/
 .native-pq/

@@ -23,7 +23,7 @@ const state = {
   agentInstructionsKey: null, challengeStartIntent: null, profileMetadataPending: null,
   screen: 'catalogue', reviewSection: 'publication', schemeId: null, schemeVersion: null,
   overviewMetrics: {computation: 'keygen', security: 'classical'},
-  importBusy: false, recoveryImportRequest: 0, submissionFormRevision: 0,
+  importBusy: false, recoveryImportRequest: 0, submissionFormRevision: 0, submissionDraftBaseline: null,
 };
 let toastTimer;
 let roundRetryAt = 0;
@@ -604,7 +604,7 @@ function clearProtectedState() {
   research.request++; research.recoveriesRequest++; research.targets = []; research.target = null; research.findings = []; research.recoveries = [];
   for (const selector of ['#kem-catalogue', '#people-content', '#person-content', '#leaderboard-content', '#history-content', '#recovery-content', '#connect-content', '#overview-graphs', '#target-catalogue']) $(selector).replaceChildren();
   for (const dialog of document.querySelectorAll('dialog')) if (dialog.open && dialog !== authDialog) dialog.close();
-  $('#submission-form').reset();
+  resetSubmissionForm();
   // A fresh shell also releases notebook closures and private data held by the
   // previous page. The next bootstrap stays on the access screen, without a loop.
   if (reloadShell && typeof window.location.reload === 'function') window.location.reload();
@@ -1410,7 +1410,7 @@ function setSession(data) {
     state.recoveryImportRequest++;
     state.importBusy = false;
     state.submissionFormRevision++;
-    $('#submission-form').reset();
+    resetSubmissionForm();
     lockSubmissionFields(false);
     setError('#recovery-file-error', '');
     $('#recovery-file-status').hidden = true;
@@ -1507,19 +1507,25 @@ function renderOverviewClock(scheme = selectedScheme(), remaining = roundRemaini
 }
 function updateClock() {
   const remaining = hasAccess() ? roundRemaining() : null;
-  const clock = renderRoundCountdowns(remaining);
+  renderRoundCountdowns(remaining);
   renderOverviewClock(undefined, remaining);
   if (!hasAccess()) return;
   updateConnectionExpiry();
-  if (remaining === null) return;
-  setText('#submission-time', remaining ? clock + ' until the round ends' : 'This round has ended.');
-  const formExpired = state.submissionChallenge && now() >= state.submissionChallenge.ends_at;
+  const deadline = state.submissionChallenge?.ends_at;
+  const formRemaining = Number.isFinite(deadline) ? Math.max(0, Math.ceil(deadline - now())) : null;
+  const formExpired = formRemaining === 0;
+  const formClock = formRemaining === null ? '' : String(Math.floor(formRemaining / 60)).padStart(2, '0') + ':' + String(formRemaining % 60).padStart(2, '0');
+  setText('#submission-time', formRemaining === null ? '' : formExpired
+    ? state.pendingAttempt ? 'This instance has closed. You can still check the original answer’s receipt.' : 'This instance has closed.'
+    : formClock + ' until this instance closes');
+  updateAgentAction();
   $('#submit-answer').disabled = state.submitBusy || state.importBusy || Boolean(formExpired && !state.pendingAttempt) || sharedKeyBytes(state.submissionChallenge) === null;
   updateRecoveryControls();
   if (formExpired && submissionDialog.open && !state.submitBusy && !state.pendingAttempt) {
-    setError('#submission-error', 'This round has ended. Close this form to receive an instance for the new round.');
+    setError('#submission-error', 'This instance has closed. Your draft is kept in this tab; close the form to choose a new instance.');
   }
   $('#open-submission').disabled = !state.ready || state.submitBusy || state.importBusy || state.challengeLoading;
+  if (remaining === null) return;
   const staleChallenge = state.challenge && state.challenge.round_id !== state.round.id;
   if ((remaining === 0 || staleChallenge) && state.ready && !state.roundRefreshing && !state.submitBusy && Date.now() >= roundRetryAt) refreshRound();
 }
@@ -1976,10 +1982,19 @@ function agentInstructions(challenge) {
   const folder = './crucible-attack-' + challenge.id.slice(0, 8);
   const schemeId = challenge.scheme_id || challenge.public?.scheme_id || state.schemeId;
   const selection = namedParameters(selectedScheme(), state.profile) || intermediateConfiguration(state.profile) ? '--profile-id ' + quote(profileId()) : '--stage ' + instanceSize(state.profile);
-  return `Retrieve my selected ${selectedScheme()?.name || schemeId} challenge ${namedParameters(selectedScheme(), state.profile) ? 'for' : 'at'} ${profileLabel(state.profile, selectedScheme())}.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running. If login is needed, run ${client} login and let me approve in my browser.\n\nBefore work, read and follow the model pipeline contract at ${origin}/api/agent/pipeline: run ${client} guide. It identifies the supported workflows, exact source contracts and permission boundaries. The workspace saves a copy as pipeline.json; never put credentials in prompts or research files.\n\nFetch this exact instance into a fresh folder:\n${client} get --challenge-id ${quote(challenge.id)} --path ${quote(folder)}\nDeadline: ${utcDate(challenge.ends_at)}. Follow the workspace README for the attack and submission workflow. Record the AI model(s) that implemented the result in ai_model, with exact versions when known; never guess. Leave it blank when not reported.\n\nNext time I can just ask: “${agentFollowupRequest()}”\nFor those future requests, use ${client} init ${quote(schemeId)} ${selection} --path NEW_EMPTY_FOLDER. No website visit needed while connected.`;
+  const terminal = !canSubmitChallenge(challenge);
+  const purpose = terminal ? 'Inspect my completed or closed' : 'Retrieve my selected';
+  const workflow = terminal
+    ? 'This instance cannot accept a new answer. Inspect its public inputs and any existing submission or receipt; do not attempt a new submission. Ask before starting a different instance.'
+    : `Deadline: ${utcDate(challenge.ends_at)}. Follow the workspace README for the attack and submission workflow. Record the AI model(s) that implemented the result in ai_model, with exact versions when known; never guess. Leave it blank when not reported.`;
+  return `${purpose} ${selectedScheme()?.name || schemeId} challenge ${namedParameters(selectedScheme(), state.profile) ? 'for' : 'at'} ${profileLabel(state.profile, selectedScheme())}.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running. If login is needed, run ${client} login and let me approve in my browser.\n\nBefore work, read and follow the model pipeline contract at ${origin}/api/agent/pipeline: run ${client} guide. It identifies the supported workflows, exact source contracts and permission boundaries. The workspace saves a copy as pipeline.json; never put credentials in prompts or research files.\n\nFetch this exact instance into a fresh folder:\n${client} get --challenge-id ${quote(challenge.id)} --path ${quote(folder)}\n${workflow}\n\nNext time I can just ask: “${agentFollowupRequest()}”\nFor those future requests, use ${client} init ${quote(schemeId)} ${selection} --path NEW_EMPTY_FOLDER. No website visit needed while connected.`;
 }
 function agentInstructionsKey() {
-  return state.user && state.challenge ? JSON.stringify([state.user.id, state.challenge.id]) : null;
+  return state.user && state.challenge ? JSON.stringify([state.user.id, state.challenge.id, canSubmitChallenge(state.challenge)]) : null;
+}
+function updateAgentAction() {
+  setText('#use-agent', state.challenge && !canSubmitChallenge(state.challenge) ? 'Inspect with an agent →' : 'Use with an agent →');
+  if (!$('#agent-instructions').hidden && state.agentInstructionsKey !== agentInstructionsKey()) showAgentInstructions();
 }
 function resetAgentInstructions() {
   state.agentInstructionsKey = null;
@@ -3372,6 +3387,7 @@ function renderRecordChallengeAction() {
 function renderChallenge() {
   if (state.agentInstructionsKey !== agentInstructionsKey()) resetAgentInstructions();
   $('#use-agent').disabled = !state.user || !state.challenge || state.challengeLoading;
+  updateAgentAction();
   $('#manual-instance-tools').hidden = !state.challenge || state.challengeLoading;
   $('#open-submission').hidden = false;
   $('#open-submission').disabled = !state.ready || state.submitBusy || state.importBusy || state.challengeLoading;
@@ -3916,7 +3932,6 @@ for (const dialog of document.querySelectorAll('dialog')) {
       if (hasAccess() && !state.ready && !state.authCallbackBusy && !state.githubCompleteBusy) void loadAuthorizedWorkspace().catch(error => globalError(error.message));
       if (state.challengeStartIntent?.awaitingSignIn) state.challengeStartIntent = null;
     }
-    if (dialog === submissionDialog && !state.pendingAttempt && !state.submitBusy) $('#candidate').value = '';
     if (dialog === submissionDialog) {
       state.recoveryImportRequest++;
       state.importBusy = false;
@@ -4289,6 +4304,7 @@ async function importRecoveryFile(file) {
     const target = submissionTarget(challenge);
     if (!target.scheme || !target.profile) throw new Error('This instance’s scheme, release, or parameter profile is unavailable. Refresh the page and try again.');
     const result = parseRecoveryFile(text, challenge);
+    if (!confirmSubmissionReplacement('import this result')) return;
     // Commit target and draft together, only after the whole file is valid.
     state.submissionChallenge = challenge;
     renderSubmissionTarget();
@@ -4328,6 +4344,23 @@ function downloadRecoveryTemplate() {
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+function submissionDraftSnapshot() {
+  // Only user-authored values: file controls and display state are not the draft.
+  return JSON.stringify(['candidate', 'method-select', 'method-name', 'method-pseudocode', 'ai-model',
+    'hardware', 'workers', 'wall-seconds', 'precomputation', 'peak-memory', 'compute-notes'].map(id => {
+    const value = $('#' + id).value;
+    return id === 'method-select' ? value || 'new' : id === 'workers' ? value || '1' : value;
+  }));
+}
+function resetSubmissionForm() {
+  $('#submission-form').reset();
+  renderMethodOptions('new');
+  state.submissionDraftBaseline = submissionDraftSnapshot();
+}
+function confirmSubmissionReplacement(action) {
+  return state.submissionDraftBaseline === null || submissionDraftSnapshot() === state.submissionDraftBaseline ||
+    window.confirm(`Discard your unsent submission draft and ${action}? This cannot be undone.`);
+}
 function lockSubmissionFields(lock) {
   for (const field of $('#submission-form').querySelectorAll('input, textarea, select')) field.disabled = lock;
 }
@@ -4361,11 +4394,14 @@ async function openSubmission() {
   if (!state.user) return openAuth($('#open-submission'));
   if (state.submitBusy || state.importBusy || (state.challengeLoading && !state.pendingAttempt)) return;
   // An uncertain answer must keep its original target and retry identifier.
-  const challenge = state.pendingAttempt ? state.submissionChallenge : isChallengeOpen() ? state.challenge : null;
+  let challenge = state.pendingAttempt ? state.submissionChallenge : isChallengeOpen() ? state.challenge : null;
+  if (state.submissionChallenge?.id !== challenge?.id && !confirmSubmissionReplacement('switch to another instance')) {
+    challenge = state.submissionChallenge;
+  }
   const accountId = state.user?.id;
   const sameChallenge = state.submissionChallenge?.id === challenge?.id;
   if (!sameChallenge) {
-    $('#submission-form').reset();
+    resetSubmissionForm();
     state.pendingAttempt = null;
     lockSubmissionFields(false);
     state.submissionFormRevision++;
@@ -4434,7 +4470,7 @@ $('#submission-form').addEventListener('submit', async event => {
     const data = await api('/api/challenges/' + encodeURIComponent(state.pendingAttempt.challengeId) + '/submit', state.pendingAttempt.payload);
     if (state.challenge?.id === data.challenge.id) state.challenge = data.challenge;
     state.pendingAttempt = null;
-    $('#submission-form').reset();
+    resetSubmissionForm();
     lockSubmissionFields(false);
     submissionDialog.close();
     renderChallenge();

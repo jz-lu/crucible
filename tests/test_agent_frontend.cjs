@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const vm = require('node:vm');
 const {createApp, flush} = require('./frontend-dom.cjs');
 const user = {id: 'account-a', handle: 'owner'};
 const scopes = ['challenges:read','challenges:write','methods:read','methods:write','submissions:read','submissions:write'];
@@ -201,6 +202,29 @@ async function test(name, run) {await run();console.log('PASS '+name);passed++;}
     for(const [url,expected] of [['/api/methods/method-one/source/download',1],['https://untrusted.example/code',0],['javascript:alert(1)',0]]){
       app.sandbox.renderRecovery({handle:'owner',status:'correct',received_at:100,elapsed_seconds:1,method:{name:'Method',pseudocode:'Inspect me',source:{download_url:url}},compute:{}},'Fixture');
       assert.equal(app.$('#recovery-content').querySelectorAll('a').length,expected);
+    }
+  });
+  await test('terminal and newly expired instances offer inspection instead of a futile submission workflow', async () => {
+    for (const status of ['solved', 'incorrect', 'expired', 'open']) {
+      const app = await createApp({schemes, user, hash:'#challenge/fixture/1?profile=tier-1&view=challenge', responder:(url, options, envelope) => {
+        if (url.pathname === '/api/challenges') {
+          const clock = envelope({});
+          return envelope({challenge:{id:'terminal-instance', profile_id:'tier-1', round_id:clock.round.id,
+            issued_at:clock.server_time, ends_at:clock.round.ends_at, status,
+            public:{scheme_id:'fixture',version:'1',encoding:{shared_secret_bytes:32}}}});
+        }
+      }});
+      app.$('#use-agent').click();
+      if (status === 'open') {
+        assert.match(app.$('#agent-instructions-text').textContent, /attack and submission workflow/);
+        vm.runInContext('state.challenge.ends_at = now() - 1', app.sandbox);
+        app.sandbox.updateClock();
+      }
+      assert.equal(app.$('#use-agent').textContent, 'Inspect with an agent →');
+      assert.match(app.$('#agent-instructions-text').textContent, /cannot accept a new answer.*existing submission or receipt/);
+      assert.match(app.$('#agent-instructions-text').textContent, /get --challenge-id 'terminal-instance'/);
+      assert.doesNotMatch(app.$('#agent-instructions-text').textContent, /attack and submission workflow|Deadline:/);
+      assert.equal(writes(app).length, 0);
     }
   });
   console.log(`${passed} agent handoff frontend checks passed.`);

@@ -103,7 +103,7 @@ async function test(name, run) {await run(); passed++; console.log('PASS '+name)
   await test('real notebook controller follows the account review route and records an exact inline publication decision', async () => {
     const digest='e'.repeat(64); let approved=false;
     const content={title:'Exact publication candidate',claim:'A deliberately unproved fixture.',conditions:'Fixture only.',body:'Reproducible fixture evidence.',tags:['algebra'],kind:'conjecture'};
-    const revision=()=>({revision:3,content_sha256:digest,created_at:100,content,publication_status:approved?'approved':'submitted'});
+    const revision=()=>({revision:3,content_sha256:digest,created_at:100,content,publication_status:approved?'approved':'submitted',publication:{requested_at:99}});
     const candidate=()=>({id:'publication-one',owner:participant,can_edit:false,can_review:true,created_at:100,revision:3,revision_count:3,content_sha256:digest,publication_status:revision().publication_status,revisions:[revision()]});
     const app=await boot({hash:'#about',notebook:null,hook:(url,options)=>{
       if(url.pathname==='/api/notebook/review-queue')return{notes:[candidate()],next_after:null};
@@ -135,7 +135,7 @@ async function test(name, run) {await run(); passed++; console.log('PASS '+name)
   await test('real ordinary and reviewer notebook controllers stay separate and clear on capability loss and sign-out', async () => {
     const digest='f'.repeat(64);
     const content={title:'Private review seam fixture',claim:'A private fixture claim.',conditions:'Fixture only.',body:'Private fixture body.',tags:[],kind:'conjecture'};
-    const revision={revision:1,content_sha256:digest,created_at:100,content,publication_status:'submitted'};
+    const revision={revision:1,content_sha256:digest,created_at:100,content,publication_status:'submitted',publication:{requested_at:99}};
     const record={id:'seam-one',owner:reviewer,can_edit:true,can_review:true,created_at:100,revision:1,revision_count:1,content_sha256:digest,publication_status:'submitted',revisions:[revision]};
     const app=await boot({hash:'#about',notebook:null,hook:url=>{
       if(url.pathname==='/api/notebook/notes/seam-one')return{note:record};
