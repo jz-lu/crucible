@@ -32,7 +32,8 @@ LEGACY_SCOPES = ("challenges:read", "challenges:write", "methods:read", "methods
                  "submissions:read", "submissions:write")
 DEFAULT_SCOPES = LEGACY_SCOPES + ("proposals:read", "proposals:write", "notes:read", "notes:rate")
 NOTEBOOK_SCOPES = ("notebook:read", "notebook:write", "notebook:publish")
-SCOPES = DEFAULT_SCOPES + NOTEBOOK_SCOPES
+BOUNTY_SCOPES = ("bounties:read", "bounties:write", "bounties:spend")
+SCOPES = DEFAULT_SCOPES + NOTEBOOK_SCOPES + BOUNTY_SCOPES
 ANONYMOUS_POST_PATHS = frozenset({"/api/agent/connect/start", "/api/agent/connect/poll"})
 _UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 _TOKEN = re.compile(r"Bearer (cru_[A-Za-z0-9_-]{43})", re.IGNORECASE)
@@ -102,6 +103,8 @@ def required_scope(method, path):
         # applies only to the fixed documentation paths, never account data.
         return SCOPES
     if method == "GET":
+        if path in {"/api/bounties", "/api/me/bounty-allowance"} or re.fullmatch(rf"/api/bounties/{_UUID}", path):
+            return "bounties:read"
         if path in {"/api/notebook/notes", "/api/notebook/export"} or re.fullmatch(
                 rf"/api/notebook/(?:notes|imports)/{_UUID}", path):
             return "notebook:read"
@@ -122,6 +125,10 @@ def required_scope(method, path):
                         rf"/api/protocol/proposals/{_UUID}(?:/revisions)?", path):
             return "proposals:read"
     if method == "POST":
+        if re.fullmatch(rf"/api/bounties/{_UUID}/(?:admission-requests|boosts)", path):
+            return "bounties:spend"
+        if path == "/api/bounties" or re.fullmatch(rf"/api/bounties/{_UUID}/(?:revisions|withdrawals|submissions|cancellations)", path):
+            return "bounties:write"
         if path in {"/api/notebook/notes", "/api/notebook/import"} or re.fullmatch(
                 rf"/api/notebook/notes/{_UUID}/(?:revisions|delete|restore)", path):
             return "notebook:write"

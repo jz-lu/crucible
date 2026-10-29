@@ -1817,7 +1817,10 @@ const AGENT_SCOPE_LABELS = {
   'notes:rate': 'Rate other authors’ notes on your behalf, influencing reading priorities and author points',
   'notebook:read': 'Read and export your own notebook, including private drafts and feedback',
   'notebook:write': 'Create, import and revise your own private notes; delete and restore unsubmitted drafts',
-  'notebook:publish': 'Request publication review of your exact saved note revisions'
+  'notebook:publish': 'Request publication review of your exact saved note revisions',
+  'bounties:read': 'Read available bounty briefs, your activity and monthly allowance',
+  'bounties:write': 'Save private bounty drafts and link exact contribution notes',
+  'bounties:spend': 'Use your monthly bounty allowance to request admission or boost existing bounties'
 };
 function agentScopeList(scopes) {
   const list = node('ul', undefined, 'agent-scope-list');
