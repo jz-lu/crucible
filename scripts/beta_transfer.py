@@ -1,6 +1,9 @@
-"""Copy an explicit SQLite snapshot into an empty, migrated PostgreSQL database.
+"""Copy an explicit SQLite snapshot into a fresh, migrated PostgreSQL database.
 
 No application/native imports, schema changes, data deletion, or implicit DSNs.
+Identity/sequence columns remain unsupported, including notebook_numbers at
+schema 0025+. Do not bypass this guard: allocator high-watermarks need a separate
+reviewed transfer. This script is not used for PostgreSQL backup/restore rollout.
 The source backup and checks are read-only. --apply is the only write mode.
 """
 from __future__ import annotations
@@ -9,6 +12,7 @@ import argparse
 from contextlib import closing, contextmanager
 from decimal import Decimal
 import hashlib
+import heapq
 import json
 import math
 import os
@@ -27,6 +31,18 @@ from sqlalchemy.pool import NullPool
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGET_ENV = "CRUCIBLE_BETA_TRANSFER_DATABASE_URL"
+
+# Exact schema 0028 seed only. Keep independent of application/native imports;
+# adding another migration seed requires an explicit transfer review.
+INITIAL_BOUNTY_POLICY = {
+    "id": "c392e762f76b1dd9e1db2e3db06e33ef238e0eda4977618ae53592ef6753a0b7",
+    "effective_month": "2026-10",
+    "configuration": {"monthly_units": 10, "proposal_cost_units": 1, "boost_cost_units": 1,
+        "points_per_boost": 100, "proposal_reward_points": 100, "carryover": "expires",
+        "refund_rule": "original_month", "claim_order": "earliest_qualifying"},
+    "created_by": None, "created_at": 1793232000.0,
+}
+JOURNAL_SELF_FK = (("original_event_id",), "bounty_allowance_events", ("id",))
 
 
 class TransferError(Exception):
@@ -127,9 +143,20 @@ def expected_schema(root=ROOT):
         engine.dispose()
 
 
+def reviewed_journal_reference(name, info):
+    """Only the existing nullable compensation→original-event edge is supported."""
+    self_refs = [fk for fk in info["foreign_keys"] if fk[1] == name]
+    columns = {column: (kind, nullable) for column, kind, nullable in info.get("columns", [])}
+    return (name == "bounty_allowance_events" and self_refs == [JOURNAL_SELF_FK]
+            and info.get("primary_key") == ("id",)
+            and columns.get("id") == (("string", 36), False)
+            and columns.get("original_event_id") == (("string", 36), True))
+
+
 def dependency_order(schema):
-    """Current migrations are acyclic. Fail closed if that ever changes."""
-    pending = {name: {fk[1] for fk in info["foreign_keys"]}
+    """Tables are acyclic except the reviewed, separately ordered journal edge."""
+    pending = {name: {fk[1] for fk in info["foreign_keys"]
+                      if not (reviewed_journal_reference(name, info) and fk == JOURNAL_SELF_FK)}
                for name, info in schema.items() if name != "alembic_version"}
     order = []
     while pending:
@@ -248,12 +275,84 @@ def normalized(value, kind):
     return ["text", value]
 
 
-def table_rows(connection, name, info):
+def selected_columns(info):
     # JSON is read as text so SQL NULL, JSON null and arbitrary-size numbers
     # survive driver deserialization without rounding or being conflated.
-    columns = [f"CAST({quoted(column)} AS TEXT)" if kind[0] == "json" else quoted(column)
-               for column, kind, nullable in info["columns"]]
-    return connection.exec_driver_sql(f"SELECT {', '.join(columns)} FROM {quoted(name)}")
+    return [f"CAST({quoted(column)} AS TEXT)" if kind[0] == "json" else quoted(column)
+            for column, kind, nullable in info["columns"]]
+
+
+def table_rows(connection, name, info, *, primary_key=None):
+    query = f"SELECT {', '.join(selected_columns(info))} FROM {quoted(name)}"
+    if primary_key is None:
+        return connection.exec_driver_sql(query)
+    if len(primary_key) != len(info["primary_key"]):
+        raise TransferError("Seed key does not match the reviewed schema.")
+    query += " WHERE " + " AND ".join(f"{quoted(column)} = :k{i}" for i, column in enumerate(info["primary_key"]))
+    return connection.execute(sa.text(query), {f"k{i}": value for i, value in enumerate(primary_key)})
+
+
+def journal_order(source, name, info):
+    """Validate the one reviewed self-FK without loading journal payloads.
+
+    Retain only IDs and parent links; full rows are read in batches of 250 later.
+    Reject cycles/missing parents before any destination write, even in dry run.
+    """
+    if not reviewed_journal_reference(name, info):
+        raise TransferError("Unreviewed row dependency ordering.")
+    parents = {identifier: parent for identifier, parent in source.exec_driver_sql(
+        'SELECT "id", "original_event_id" FROM "bounty_allowance_events"')}
+    children = {}
+    ready = []
+    for identifier, parent in parents.items():
+        if parent is None:
+            ready.append(identifier)
+        elif parent not in parents:
+            raise TransferError("Bounty journal references a missing original event.")
+        else:
+            children.setdefault(parent, []).append(identifier)
+    heapq.heapify(ready)
+    order = []
+    while ready:
+        identifier = heapq.heappop(ready)
+        order.append(identifier)
+        for child in children.get(identifier, ()):
+            heapq.heappush(ready, child)
+    if len(order) != len(parents):
+        raise TransferError("Bounty journal contains a cyclic original-event reference.")
+    return order
+
+
+def ordered_journal_rows(source, name, info, order):
+    id_index = next(i for i, column in enumerate(info["columns"]) if column[0] == "id")
+    for offset in range(0, len(order), 250):
+        keys = order[offset:offset + 250]
+        parameters = {f"k{i}": key for i, key in enumerate(keys)}
+        query = f"SELECT {', '.join(selected_columns(info))} FROM {quoted(name)} WHERE id IN (" + ",".join(":"+key for key in parameters) + ")"
+        rows = {row[id_index]: row for row in source.execute(sa.text(query), parameters)}
+        if set(rows) != set(keys):
+            raise TransferError("Bounty journal changed within its read-only snapshot.")
+        yield from (rows[key] for key in keys)
+
+
+def checked_seed_rows(source, destination, schema):
+    """Only the exact immutable migration seed may pre-exist in a fresh target."""
+    if "bounty_policies" not in schema:
+        return {}
+    info = schema["bounty_policies"]
+    if info["primary_key"] != ("id",) or {column for column, _, _ in info["columns"]} != set(INITIAL_BOUNTY_POLICY):
+        raise TransferError("Bounty policy seed schema needs a reviewed transfer update.")
+    expected = [normalized(json.dumps(INITIAL_BOUNTY_POLICY[column]) if kind[0] == "json"
+                           else INITIAL_BOUNTY_POLICY[column], kind)
+                for column, kind, _ in info["columns"]]
+    key = (INITIAL_BOUNTY_POLICY["id"],)
+    for connection in (source, destination):
+        rows = list(table_rows(connection, "bounty_policies", info, primary_key=key))
+        if len(rows) != 1 or [normalized(value, kind) for value, (_, kind, _) in zip(rows[0], info["columns"])] != expected:
+            raise TransferError("The reviewed initial bounty policy must match exactly in source and destination.")
+    if destination.exec_driver_sql('SELECT count(*) FROM "bounty_policies"').scalar_one() != 1:
+        raise TransferError("Destination contains application data beyond its reviewed migration seed; no records were transferred.")
+    return {"bounty_policies": {key}}
 
 
 def fingerprint(connection, name, info):
@@ -294,14 +393,18 @@ def target_engine(dsn, *, allow_local_test=False):
         raise TransferError("Use an explicit PostgreSQL/psycopg DSN with verified TLS; local rehearsal requires its explicit flag.") from None
 
 
-def insert_table(source, destination, name, info):
+def insert_table(source, destination, name, info, *, skip_primary_keys=(), row_order=None):
     columns = info["columns"]
     expressions = [f"CAST(:v{i} AS JSON)" if kind[0] == "json" else f":v{i}"
                    for i, (_, kind, _) in enumerate(columns)]
     statement = sa.text(f"INSERT INTO {quoted(name)} ({', '.join(quoted(c[0]) for c in columns)}) "
                         f"VALUES ({', '.join(expressions)})")
     batch = []
-    for row in table_rows(source, name, info):
+    key_indexes = [next(i for i, column in enumerate(columns) if column[0] == key) for key in info["primary_key"]]
+    rows = ordered_journal_rows(source, name, info, row_order) if row_order is not None else table_rows(source, name, info)
+    for row in rows:
+        if tuple(row[i] for i in key_indexes) in skip_primary_keys:
+            continue
         values = {f"v{i}": bool(value) if kind[0] == "boolean" and value is not None else value
                   for i, (value, (_, kind, _)) in enumerate(zip(row, columns))}
         batch.append(values)
@@ -318,6 +421,8 @@ def transfer(source_path, engine, *, apply=False, root=ROOT):
     with sqlite_snapshot(source_path) as source:
         verify_schema(source, head, expected, "Source")
         evidence = {name: fingerprint(source, name, expected[name]) for name in sorted(expected)}
+        row_orders = {name: journal_order(source, name, expected[name]) for name in order
+                      if reviewed_journal_reference(name, expected[name])}
         with engine.connect().execution_options(isolation_level="REPEATABLE READ") as destination:
             with destination.begin():
                 if not apply:
@@ -331,12 +436,16 @@ def transfer(source_path, engine, *, apply=False, root=ROOT):
                 tables = ', '.join('public.' + quoted(name) for name in sorted(expected))
                 destination.exec_driver_sql(f"LOCK TABLE {tables} IN {mode} MODE NOWAIT")
                 verify_schema(destination, head, expected, "Destination")
+                seeds = checked_seed_rows(source, destination, expected)
                 for name in order:
+                    if name in seeds:
+                        continue
                     if destination.exec_driver_sql(f"SELECT 1 FROM {quoted(name)} LIMIT 1").first():
                         raise TransferError("Destination contains application data; no records were transferred.")
                 if apply:
                     for name in order:
-                        insert_table(source, destination, name, expected[name])
+                        insert_table(source, destination, name, expected[name],
+                                     skip_primary_keys=seeds.get(name, ()), row_order=row_orders.get(name))
                     actual = {name: fingerprint(destination, name, expected[name]) for name in sorted(expected)}
                     if actual != evidence:
                         raise TransferError("Destination verification failed; the transfer was rolled back.")
@@ -349,7 +458,7 @@ def transfer(source_path, engine, *, apply=False, root=ROOT):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", required=True, type=Path, help="Explicit SQLite database path (read-only backup).")
-    parser.add_argument("--apply", action="store_true", help="Commit a verified copy into the empty target.")
+    parser.add_argument("--apply", action="store_true", help="Commit a verified copy into a fresh target containing only reviewed migration seeds.")
     parser.add_argument("--allow-local-test-db", action="store_true", help="Allow non-TLS loopback PostgreSQL rehearsal only.")
     args = parser.parse_args(argv)
     engine = None
