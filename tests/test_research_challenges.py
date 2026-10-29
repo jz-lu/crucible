@@ -53,7 +53,7 @@ def test_real_tiers_issue_verify_and_preserve_exact_evidence(beta, monkeypatch, 
             assert scheme["next_profile_id"] == profiles[0]["id"]
             assert scheme["recovered_profile_ids"] == [profile["id"]]
     person = actor.client.get("/api/people/research_tester").json()["person"]
-    assert person["points"] == 2500, "Policy v9 pins the same endpoint ceiling for every current family"
+    assert person["points"] == 100, "Policy v11 awards one flat genuine frontier advance per family"
     assert all(record["tier"] is not None and record["scoring_eligible"] for record in person["records"])
     assert sum(record["score"] is not None for record in person["records"]) == 1
     assert len(person["records"]) == 1

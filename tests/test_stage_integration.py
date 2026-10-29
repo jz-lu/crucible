@@ -38,7 +38,7 @@ def test_current_module_route_has_six_exact_configurations_and_no_inherited_reco
     assert scheme["profiles"][-1]["standard_equivalence"].startswith("FIPS203 ML-KEM-512")
     assert all(p.get("initial_security_estimate") is None for p in scheme["profiles"])
     data = person(app,"compressed_endpoint_solver")
-    assert data["points"] == 2500
+    assert data["points"] == 100
     assert data["records"][0]["submission_id"] == solved["submission_id"]
     board = TestClient(app).get("/api/leaderboard",params={"scheme_id":"ml-kem","profile_id":"module-lwe-v4-tier-1"})
     assert board.status_code == 200 and board.json()["entries"] == []
