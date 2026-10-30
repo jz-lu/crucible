@@ -31,6 +31,37 @@ def publish(owner, reviewer, note):
     approve(reviewer, note)
 
 
+def test_passage_locator_keeps_exact_revision_edge_and_original_authored_url(system):
+    _, owner, reviewer, reader, _ = system
+    target = create(owner, content(body="## Premise A\nA stated unproved premise.\n\n## Premise B\nAnother premise."))
+    link = reference(target, "challenges")
+    link["url"] += "&location=L2"
+    source = create(owner, content(references=[link]))
+    assert source["revisions"][0]["content"]["references"] == [link]
+    edge = graph(owner, source).json()["links"][0]
+    assert edge["target"]["revision"] == target["revision"]
+    assert edge["target"]["content_sha256"] == target["content_sha256"]
+    publish(owner, reviewer, source)
+    # Publishing the citation never reveals its private target.
+    assert graph(reader, source).json()["links"] == []
+    publish(owner, reviewer, target)
+    assert len(graph(reader, target, "incoming").json()["links"]) == 1
+
+
+def test_passage_parser_rejects_ambiguous_unpinned_and_invalid_locations():
+    target = {"id": "fixture", "revision": 1, "content_sha256": "a" * 64}
+    original = reference(target)
+    for location in ("", "L0", "L01", "L-1", "L1.5", "L1000001", "L1&location=L2", "L1&other=value", "L1%0A"):
+        value = {**original, "url": original["url"] + "&location=" + location}
+        assert list(notebook_graph.references({"references": [value]})) == []
+    for url in ("/#notebook?note=fixture&location=L1", "/#notebook?note=fixture&revision=1&location=L1"):
+        assert list(notebook_graph.references({"references": [{"url": url}]})) == []
+    for location in ("L1", "L17", "L1000000"):
+        value = {**original, "url": original["url"] + "&location=" + location}
+        edges = list(notebook_graph.references({"references": [value]}))
+        assert len(edges) == 1 and edges[0]["target_revision"] == 1
+
+
 def test_exact_revision_chain_can_revisit_a_note_without_a_cycle(system):
     _, owner, reviewer, reader, _ = system
     first = create(owner, content(title="Construction, version one"))
