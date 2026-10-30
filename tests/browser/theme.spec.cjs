@@ -15,6 +15,10 @@ async function expectTheme(page, theme) {
     background: getComputedStyle(element).backgroundColor,
     color: getComputedStyle(element).color,
   }))).toEqual({background: palette[theme].background, color: palette[theme].color});
+  // The saved theme must select the vessel's matching RESI color on first
+  // paint and after both kinds of reload, without replacing the decoded PNG.
+  await expect(page.locator('.site-header .brand-mark')).toHaveCSS('filter',
+    new RegExp(`url\\("#crucible-vessel-${theme}"\\)`));
 }
 
 for (const selected of ['dark', 'light']) {
