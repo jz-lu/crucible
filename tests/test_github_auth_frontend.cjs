@@ -58,6 +58,54 @@ async function appWith({hash = '#challenge', signedIn = null, status, config = a
     assert.equal(paths(app).filter(path => path === '/api/auth/github/start').length, 1);
     assert.deepEqual(destinations, ['https://github.com/login/oauth/authorize?client_id=fixture&state=opaque']);
   });
+  await test('returning participants explicitly leave invitation context before ordinary GitHub sign-in', async () => {
+    const app = await appWith({hash: '#join?token=old_invitation_token', responder: (url, options) => {
+      if (url.pathname === '/api/auth/github/start') {
+        assert.deepEqual(JSON.parse(options.body), {mode: 'login', return_route: '#notebook'});
+        return {authorization_url: 'https://github.com/login/oauth/authorize?state=normal-signin'};
+      }
+    }});
+    state(app).returnRoute = '#notebook'; state(app).invitationDelivery = {masked_recipient: 'fixture'};
+    state(app).authMode = 'register'; app.$('#access-code').value = '12345678'; app.$('#auth-password').value = 'Discarded synthetic secret';
+    assert.equal(app.$('#access-existing-account').hidden, false);
+    const before = app.requests.length; app.$('#access-existing-account').click(); await flush();
+    assert.equal(app.requests.length, before); assert.equal(state(app).invitationToken, null);
+    assert.equal(state(app).invitationDelivery, null); assert.equal(app.$('#access-code').value, '');
+    assert.equal(app.$('#auth-password').value, ''); assert.equal(app.location.hash, '#notebook');
+    assert.equal(state(app).authMode, 'login'); assert.equal(app.$('#register-mode').hidden, true);
+    assert.equal(app.$('#auth-dialog').open, true); assert.equal(app.$('#auth-existing-account').hidden, true);
+    assert.equal(app.document.activeElement, app.$('#auth-github'));
+    const destinations = []; app.location.assign = value => destinations.push(value);
+    app.$('#auth-github').click(); await flush();
+    assert.deepEqual(destinations, ['https://github.com/login/oauth/authorize?state=normal-signin']);
+    assert.ok(!paths(app).some(path => /invitations|register|github\/complete/.test(path)));
+  });
+  for (const inDialog of [false, true]) await test('unavailable invitation errors retain an explicit returning-account escape ' + (inDialog ? 'in dialog' : 'at access gate'), async () => {
+    const app = await appWith({hash: '#join?token=unavailable_invitation_token'});
+    const fetch = app.sandbox.fetch;
+    app.sandbox.fetch = async (url, options) => String(url).includes('/api/auth/github/start') ?
+      {ok: false, status: 403, json: async () => ({detail: 'This invitation is invalid or unavailable.'})} : fetch(url, options);
+    if (inDialog) app.$('#auth-button').click();
+    app.$(inDialog ? '#auth-github' : '#access-github').click(); await flush();
+    assert.match(app.$(inDialog ? '#auth-github-error' : '#access-error').textContent, /invalid or unavailable/);
+    const escape = app.$(inDialog ? '#auth-existing-account' : '#access-existing-account');
+    assert.equal(escape.hidden, false); assert.equal(escape.disabled, false);
+    escape.click(); await flush();
+    assert.equal(state(app).invitationToken, null); assert.equal(app.location.hash, '#challenge');
+    assert.equal(app.$('#auth-github-error').hidden, true); assert.equal(app.$('#access-error').hidden, true);
+    assert.equal(app.$('#auth-dialog').open, true); assert.equal(state(app).authMode, 'login');
+    app.$('#auth-dialog').close(); assert.equal(app.document.activeElement, app.$('#access-github'));
+  });
+  await test('returning-account controls are absent outside invitation flow and cannot interrupt an active provider start', async () => {
+    const normal = await appWith(); assert.equal(normal.$('#access-existing-account').hidden, true);
+    const signed = await appWith({hash: '#join?token=old_invitation_token', signedIn: user});
+    assert.equal(signed.$('#access-existing-account').hidden, true); assert.equal(signed.$('#access-continue').hidden, false);
+    const gate = deferred(), app = await appWith({hash: '#join?token=active_invitation_token', responder: url => url.pathname === '/api/auth/github/start' ? gate.promise : undefined});
+    app.location.assign = () => {}; app.$('#access-github').click(); await flush();
+    assert.equal(app.$('#access-existing-account').disabled, true);
+    app.$('#access-existing-account').click(); assert.equal(state(app).invitationToken, 'active_invitation_token');
+    gate.resolve({authorization_url: 'https://github.com/login/oauth/authorize'}); await flush();
+  });
   await test('provider navigation rejects an unexpected authorization host', async () => {
     const app = await appWith({responder: url => url.pathname === '/api/auth/github/start' ? {authorization_url: 'https://example.org/steal'} : undefined});
     app.location.assign = () => { throw new Error('must not navigate'); };
