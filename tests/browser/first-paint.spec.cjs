@@ -66,7 +66,12 @@ async function assertInlineMainStyle(page, response, {notebookPrepared = false} 
   const policies = (await response.headersArray()).filter(header => header.name.toLowerCase() === 'content-security-policy');
   expect(policies).toHaveLength(1);
   expect(policies[0].value).not.toContain('unsafe-inline');
-  const css = readFileSync(resolve(__dirname, '../../web/styles.css'), 'utf8');
+  const css = readFileSync(resolve(__dirname, '../../web/styles.css'), 'utf8')
+    .replace(/url\('(\/vendor\/resi\/[^']+\.woff2)'\)/g, (_, asset) => {
+      const bytes = readFileSync(resolve(__dirname, '../../web' + asset));
+      const version = createHash('sha256').update(bytes).digest('hex').slice(0,24);
+      return `url('${asset}?v=${version}')`;
+    });
   await expect(page.locator('head > style[data-main-style]')).toHaveCount(1);
   expect(await page.locator('head > style[data-main-style]').textContent()).toBe(css);
   const styles = await page.locator('head > style').allTextContents();
@@ -113,7 +118,7 @@ const bodyStyle = element => {
   const style = getComputedStyle(element);
   return {background: style.backgroundColor, color: style.color, size: style.fontSize, height: style.lineHeight};
 };
-const expectedBodyStyle = {background: 'rgb(246, 249, 253)', color: 'rgb(45, 69, 99)', size: '14px', height: '22.4px'};
+const expectedBodyStyle = {background: 'rgb(235, 237, 230)', color: 'rgb(40, 60, 48)', size: '14px', height: '22.4px'};
 
 // The external endpoint remains available for tools, but first paint must not
 // depend on requesting it. Holding authorization also checks the pending shell.
@@ -136,7 +141,7 @@ test('the public shell is fully styled before access resolves without requesting
       background: getComputedStyle(element).backgroundColor,
       padding: getComputedStyle(element).padding,
       radius: getComputedStyle(element).borderRadius,
-    }))).toEqual({width: 520, background: 'rgb(255, 255, 255)', padding: '32px', radius: '12px'});
+    }))).toEqual({width: 520, background: 'rgb(248, 249, 244)', padding: '32px', radius: '12px'});
     expect(attempted).toEqual([]);
     expect(await page.evaluate(() => window.fixtureCspViolations)).toEqual([]);
   } finally {session.release(); await session.delivered; await session.remove();}
@@ -159,7 +164,7 @@ test('an admitted catalogue and ordinary reload retain full typography and layou
   });
   const before = await catalogueStyle();
   expect(before).toMatchObject({paddingTop: '31px', titleSize: '32px', titleWeight: '700', overflow: false});
-  expect(before.titleFamily).toContain('Avenir Next Condensed');
+  expect(before.titleFamily).toContain('Cardo');
   expect(before.headerCells).toHaveLength(4);
   expect(before.headerCells.every(width => width > 0)).toBe(true);
   const reloaded = await page.reload();

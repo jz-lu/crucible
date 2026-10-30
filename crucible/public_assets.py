@@ -23,9 +23,12 @@ from starlette.staticfiles import StaticFiles
 # Keep the minimal canvas independently hash-authorized. The trusted main
 # stylesheet receives its own snapshot-bound hash below; user CSS stays blocked.
 FIRST_PAINT_STYLE = (
-    'html{background:#f6f9fd;color-scheme:light}'
-    'body{margin:0;background:#f6f9fd;color:#2d4563;'
-    "font:14px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
+    'html{--paper:#ebede6;--text:#283c30;background:var(--paper);color-scheme:light}'
+    'html[data-theme=dark]{--paper:#171a18;--text:#ccd4cc;color-scheme:dark}'
+    '@media(prefers-color-scheme:dark){html:not([data-theme=light]){'
+    '--paper:#171a18;--text:#ccd4cc;color-scheme:dark}}'
+    'body{margin:0;background:var(--paper);color:var(--text);'
+    "font:14px/1.6 'IBM Plex Sans',Arial,sans-serif;"
     '-webkit-font-smoothing:antialiased}[hidden]{display:none!important}'
 )
 _style_hash = base64.b64encode(hashlib.sha256(FIRST_PAINT_STYLE.encode()).digest()).decode()
@@ -38,6 +41,8 @@ CONTENT_SECURITY_POLICY = (
 PUBLIC_FILES = (
     '/styles.css', '/app.js', '/bootstrap.js', '/math.js', '/assumptions.js',
     '/proposal-retractions.js', '/resource-metrics.js', '/assets/crucible-logo.png',
+    '/assets/resi-logo.png', '/vendor/resi/cardo-normal-400-latin.woff2',
+    '/vendor/resi/cardo-normal-700-latin.woff2', '/vendor/resi/plex-sans-normal-100-700-latin.woff2',
 )
 
 PROTECTED_FILES = {
@@ -165,6 +170,11 @@ class PublicAssets:
                 return 'url(' + relative + '?v=' + font.version + ')' if font else match.group(0)
             css = re.sub(r'url\((fonts/[^\s)]+)\)', font_url, assets[css_url].body.decode())
             assets[css_url] = Asset(css.encode(), 'text/css')
+        main_css = assets['/styles.css'].body.decode('utf-8')
+        for url, asset in assets.items():
+            if url.startswith('/vendor/resi/') and url.endswith('.woff2'):
+                main_css = main_css.replace("url('" + url + "')", "url('" + url + '?v=' + asset.version + "')")
+        assets['/styles.css'] = Asset(main_css.encode(), 'text/css')
         index = self.root / 'index.html'
         if not index.resolve().is_relative_to(self.root):
             raise RuntimeError('Public HTML shell escaped its fixed directory.')

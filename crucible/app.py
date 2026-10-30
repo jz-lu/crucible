@@ -1086,6 +1086,10 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         # authenticated routes with per-note ownership/publication checks.
         return protected_assets.response(request)
 
+    @app.get("/assets/resi-logo.png")
+    @app.get("/vendor/resi/cardo-normal-400-latin.woff2")
+    @app.get("/vendor/resi/cardo-normal-700-latin.woff2")
+    @app.get("/vendor/resi/plex-sans-normal-100-700-latin.woff2")
     @app.get("/assets/crucible-logo.png")
     def logo(request: Request):
         return public_assets.response(request)
