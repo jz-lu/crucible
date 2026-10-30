@@ -22,7 +22,7 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   for (const card of ['public', 'cipher', 'computation']) {
     const target = app.$('#overview-chart-' + card);
     const measure = target.querySelector('select[aria-label="Measure"]');
-    if (card === 'cipher') assert.equal(measure, null, 'cached exchange is ciphertext, so no redundant choice');
+    if (card !== 'public') assert.equal(measure, null, 'a single measure needs no selector');
     else assert.equal(measure.querySelectorAll('option').length, 2);
     assert.equal(target.querySelector('select[aria-label="Report"]'), null, 'one report does not need a selector');
     assert.equal(target.querySelector('select[aria-label="Measurement profile"]'), null, 'one measurement profile does not need a selector');
@@ -41,13 +41,13 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   assert.match(chart.querySelector('details').textContent, /5 workers × 20 measured calls each/);
   assert.deepEqual(chart.querySelector('thead').querySelectorAll('th').map(n => n.textContent), ['Configuration', 'Median (µs)', 'Middle 50% (µs)', 'Samples']);
   assert.deepEqual(chart.querySelector('tbody').querySelector('tr').querySelectorAll('td').map(n => n.textContent), ['Stage 1', '2', '1–3', '100']);
-  for (const [view, value] of [['rss', '8192']]) {
-    await change('#overview-chart-computation', view);
-    assert.deepEqual(chart.querySelectorAll('.chart-point').map(p => p.dataset.value), [value, value]);
-  }
+  assert.equal(app.$('#overview-title-computation').textContent, 'Computation');
+  assert.deepEqual(chart.querySelector('select[aria-label="Operation"]').querySelectorAll('option').map(option => option.value), ['keygen', 'encapsulate', 'decapsulate']);
+  assert.equal(chart.querySelector('option[value="rss"]'), null);
   assert.match(chart.textContent, /portable-v2/);
   assert.equal(chart.querySelector('.resource-evidence-links').querySelector('a').href, '/api/resource-publications/' + id + '/download');
   const model = app.window.CrucibleResources;
+  assert.deepEqual(rows.map(row => model.point(row, 'rss', 'keygen', method, impl).value), [8192, 8192], 'raw memory evidence remains readable although it is not a graph choice');
   const firstCall = model.point(rows[0], 'first', 'keygen', method, impl);
   assert.equal(firstCall.value, 6); assert.equal(firstCall.samples, 5);
   assert.equal(firstCall.q1, 5); assert.equal(firstCall.q3, 7);
@@ -87,10 +87,10 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
     select.value = value; select.focus(); select.dispatchEvent({type: 'change'}); await flush();
     assert.equal(instance.document.activeElement, instance.$('#overview-chart-' + card).querySelector(`select[aria-label="${label}"]`));
   };
-  await choose(app, 'computation', 'Measure', 'rss');
-  assert.match(chart.querySelector('.resource-summary').textContent, /Includes pre-exec launcher memory/);
-  assert.match(chart.querySelector('details').textContent, /not the current executable’s RSS alone/);
-  assert.match(chart.querySelector('svg').getAttribute('aria-label'), /includes launcher memory/);
+  await choose(app, 'computation', 'Operation', 'encapsulate');
+  await choose(app, 'computation', 'Operation', 'decapsulate');
+  assert.deepEqual(chart.querySelectorAll('.chart-point').map(p => p.dataset.value), ['2', '2']);
+  assert.match(model.rssScope(rows[0].native_evidence[0]).text, /not the current executable’s RSS alone/);
   for (const [profile, warning, scope] of [
     // The projection embeds the method and platform inside profile, not beside it.
     [{method: {id: 'serialized-native-honest-v2'}, environment: {os: 'Linux'}}, true, null],
@@ -102,12 +102,11 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   ]) {
     const scoped = structuredClone(report);
     for (const row of scoped.resources.configurations) row.native_evidence[0].profile = profile;
-    const instance = await createApp({schemes: [scheme], hash: '#scheme/resource-fixture/1', responder: url => url.pathname === '/api/protocol/resources' ? scoped : undefined});
-    await choose(instance, 'computation', 'Measure', 'rss');
-    const target = instance.$('#overview-chart-computation');
-    assert.equal(target.querySelector('.resource-summary').textContent.includes('Includes pre-exec launcher memory'), warning);
-    if (scope) assert.ok(target.querySelector('details').textContent.includes(scope));
-    assert.deepEqual(target.querySelectorAll('.chart-point').map(p => p.dataset.value), ['8192', '8192'], 'scope correction never changes historical values');
+    const retained = scoped.resources.configurations;
+    const interpretation = model.rssScope(retained[0].native_evidence[0]);
+    assert.equal(interpretation.includesLauncher, warning);
+    if (scope) assert.ok(interpretation.text.includes(scope));
+    assert.deepEqual(retained.map(row => model.point(row, 'rss', 'keygen', method, impl).value), [8192, 8192], 'scope correction never changes historical values');
   }
   for (const state of ['not_calculated', 'queued', 'failed', 'outdated', 'retired', 'cancelled', 'timed_out']) {
     const missing = {scheme_id: scheme.id, version: scheme.version, state, publication: null, resources: null, historical: []};
@@ -142,10 +141,11 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   assert.deepEqual(historicalChart.querySelectorAll('.chart-recovery-line').map(p => p.dataset.profileId), [profiles[1].id]);
   assert.deepEqual(historicalChart.querySelectorAll('.chart-point').map(p => p.dataset.value), ['32', '33']);
   await choose(historyApp, 'computation', 'Report', historicalId);
-  await choose(historyApp, 'computation', 'Measure', 'rss');
+  await choose(historyApp, 'computation', 'Operation', 'decapsulate');
   assert.equal(historyApp.$('#overview-badge-computation').textContent, 'Historical');
-  assert.match(historyApp.$('#overview-chart-computation').querySelector('.resource-summary').textContent, /Includes pre-exec launcher memory/);
-  assert.deepEqual(historyApp.$('#overview-chart-computation').querySelectorAll('.chart-point').map(p => p.dataset.value), ['8192', '8192']);
+  assert.equal(historyApp.$('#overview-chart-computation').querySelector('select[aria-label="Measure"]'), null);
+  assert.deepEqual(historyApp.$('#overview-chart-computation').querySelectorAll('.chart-point').map(p => p.dataset.value), ['2', '2']);
+  assert.deepEqual(past.resources.configurations.map(row => model.point(row, 'rss', 'keygen', method, impl).value), [8192, 8192], 'historical memory evidence is unchanged');
   await choose(historyApp, 'public', 'Report', partialId);
   assert.equal(historicalChart.querySelectorAll('.chart-point').length, 0);
   assert.match(historicalChart.textContent, /Incomplete report · not plotted/);
@@ -250,14 +250,14 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   sharedHistorical.historical = sharedCurrent.historical;
   const sharedApp = await createApp({schemes: [scheme], hash: '#scheme/resource-fixture/1', responder: url => url.pathname === '/api/protocol/resources'
     ? url.searchParams.has('publication_id') ? sharedPending : sharedCurrent : undefined});
-  const untouchedControl = sharedApp.$('#overview-chart-computation').querySelector('select[aria-label="Measure"]');
+  const untouchedControl = sharedApp.$('#overview-chart-computation').querySelector('select[aria-label="Operation"]');
   await choose(sharedApp, 'public', 'Report', historicalId);
   await choose(sharedApp, 'cipher', 'Report', historicalId);
   assert.equal(sharedApp.requests.filter(r => r.url.searchParams.get('publication_id') === historicalId).length, 1, 'two cards share one pending historical read');
   finishShared(sharedHistorical); await flush();
   assert.deepEqual(sharedApp.$('#overview-chart-public').querySelectorAll('.chart-point').map(p => p.dataset.value), ['32', '33']);
   assert.deepEqual(sharedApp.$('#overview-chart-cipher').querySelectorAll('.chart-point').map(p => p.dataset.value), ['64', '64'], 'every waiting card repaints after a shared historical read');
-  assert.equal(sharedApp.$('#overview-chart-computation').querySelector('select[aria-label="Measure"]'), untouchedControl, 'unchanged cards keep their controls');
+  assert.equal(sharedApp.$('#overview-chart-computation').querySelector('select[aria-label="Operation"]'), untouchedControl, 'unchanged cards keep their controls');
 
   const stableSelect = publicChart.querySelector('select[aria-label="Measure"]'); stableSelect.focus();
   publicChart.querySelector('[data-resource-refresh]').click(); await flush();

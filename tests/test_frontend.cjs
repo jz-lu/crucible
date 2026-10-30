@@ -412,7 +412,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(chart('public').closest('.overview-card').querySelectorAll('[data-overview-metric]').length, 0);
     assert.equal(chart('cipher').closest('.overview-card').querySelectorAll('[data-overview-metric]').length, 0);
     assert.equal(app.$('#overview-graphs').querySelectorAll('[data-overview-metric]').length, 2);
-    assert.deepEqual(app.$('#overview-graphs').querySelectorAll('h2').map(e=>e.textContent), ['Public key', 'Ciphertext', 'Computation & memory', 'Initial classical reference']);
+    assert.deepEqual(app.$('#overview-graphs').querySelectorAll('h2').map(e=>e.textContent), ['Public key', 'Ciphertext', 'Computation', 'Initial classical reference']);
     assert.deepEqual(points('cipher').map(point => point.dataset.value), ['8', '9', '10', '12']);
     for (const id of ['computation', 'security']) {
       assert.equal(chart(id).querySelector('.chart-series'), null);

@@ -2854,7 +2854,7 @@ function renderOverviewChart(scheme, cardId) {
   const measured = values.filter(point => point.value !== null);
   const minTier = values[0]?.tier, maxTier = values.at(-1)?.tier;
   const {points: recoveredPoints, tier: recoveredTier, label: recoveredLabel, meaning: recoveryMeaning} = overviewRecovery(scheme, values, named);
-  setText('#overview-title-' + cardId, cardId === 'computation' ? 'Operation time' : descriptor.title);
+  setText('#overview-title-' + cardId, cardId === 'computation' ? 'Computation' : descriptor.title);
   for (const button of card.querySelectorAll('[data-overview-metric]')) button.setAttribute('aria-pressed', String(button.dataset.overviewMetric === metric));
   const svg = svgNode('svg', {viewBox: '0 0 480 240', role: 'img', 'aria-labelledby': 'graph-title-' + cardId + ' graph-description-' + cardId, class: 'overview-svg'});
   svg.append(svgNode('title', {id: 'graph-title-' + cardId}, descriptor.title + ' by ' + axisLabel.toLowerCase()));
