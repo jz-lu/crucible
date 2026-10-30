@@ -34,7 +34,7 @@ FIRST_PAINT_STYLE = (
 _style_hash = base64.b64encode(hashlib.sha256(FIRST_PAINT_STYLE.encode()).digest()).decode()
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; script-src 'self'; style-src 'self' 'sha256-" + _style_hash
-    + "'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+    + "'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
 ).encode('ascii')
 
 
@@ -44,6 +44,37 @@ PUBLIC_FILES = (
     '/assets/resi-logo.png', '/vendor/resi/cardo-normal-400-latin.woff2',
     '/vendor/resi/cardo-normal-700-latin.woff2', '/vendor/resi/plex-sans-normal-100-700-latin.woff2',
 )
+
+# These two faces determine the persistent page heading and navigation geometry.
+# Their bytes already belong to the fixed public inventory. Embedding them in
+# the trusted stylesheet removes a network race when a pending frame becomes
+# its live controller; optional remote fonts can differ across those DOM trees.
+CRITICAL_FONTS = frozenset({
+    '/vendor/resi/cardo-normal-700-latin.woff2',
+    '/vendor/resi/plex-sans-normal-100-700-latin.woff2',
+})
+
+
+def embed_critical_fonts(css, assets):
+    embedded = set()
+
+    def face(match):
+        value = match.group(0)
+        for url in CRITICAL_FONTS:
+            source = "url('" + url + "')"
+            if source not in value:
+                continue
+            encoded = base64.b64encode(assets[url].body).decode('ascii')
+            value = value.replace(source, "url('data:font/woff2;base64," + encoded + "')")
+            # There is no network wait for an embedded face. Let the browser
+            # decode it before showing text rather than freezing a fallback.
+            value, count = re.subn(r'font-display:\s*[^;]+;', 'font-display: block;', value)
+            if not count:
+                value = value[:-1] + 'font-display: block;}'
+            embedded.add(url)
+        return value
+
+    return re.sub(r'@font-face\s*\{[^}]*\}', face, css), embedded
 
 PROTECTED_FILES = {
     '/map/' + name: media for name, media in {
@@ -170,7 +201,7 @@ class PublicAssets:
                 return 'url(' + relative + '?v=' + font.version + ')' if font else match.group(0)
             css = re.sub(r'url\((fonts/[^\s)]+)\)', font_url, assets[css_url].body.decode())
             assets[css_url] = Asset(css.encode(), 'text/css')
-        main_css = assets['/styles.css'].body.decode('utf-8')
+        main_css, embedded_fonts = embed_critical_fonts(assets['/styles.css'].body.decode('utf-8'), assets)
         for url, asset in assets.items():
             if url.startswith('/vendor/resi/') and url.endswith('.woff2'):
                 main_css = main_css.replace("url('" + url + "')", "url('" + url + '?v=' + asset.version + "')")
@@ -180,6 +211,9 @@ class PublicAssets:
             raise RuntimeError('Public HTML shell escaped its fixed directory.')
         html = read(index).decode()
         html = html.replace('<!-- critical-canvas -->', '<style>' + FIRST_PAINT_STYLE + '</style>')
+        for url in embedded_fonts:
+            html = html.replace('<link rel="preload" href="' + url
+                                + '" as="font" type="font/woff2" crossorigin>', '')
         main_link = '<link rel="stylesheet" href="/styles.css">'
         if html.count(main_link) != 1:
             raise RuntimeError('Public HTML must contain one main stylesheet link.')

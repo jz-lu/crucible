@@ -23,9 +23,21 @@ Existing recovery, warning and scientific graph colors keep their meanings.
 Layouts, routes, disclosure behavior, caching and motion remain unchanged.
 The footer pairs the existing Crucible mark with the original RESI identity.
 
-Fonts are self-hosted, preloaded and content-versioned. Optional font display
-avoids a late swap if fonts miss the initial render window. The first-paint
-canvas matches the complete stylesheet; dimensions are reserved for both marks.
+Fonts are self-hosted with original bytes and provenance retained. Integration
+CI exposed a limitation of optional font display: replacing a pending heading
+with its live controller could change from fallback to Cardo, shifting width.
+The public-asset builder now embeds the critical Cardo700 and variable Plex
+faces into the already inline, hash-authorized main stylesheet. Their block
+display waits only for local font decoding, removing the extra network race;
+their redundant preloads are removed. Cardo400 remains optional, versioned and
+preloaded. The first-paint canvas matches the complete stylesheet; dimensions
+are reserved for both marks.
+
+This adds about 61 KB to a full gzip HTML response, replacing about 59 KB of
+separate WOFF2 downloads on a cold visit. Unchanged normal reloads still return
+304; changed releases and forced full HTML reloads transfer those bytes again.
+No font-readiness state machine or fixed-width title workaround is introduced.
+Only font-src gains data: permission; scripts/styles retain exact CSP hashes.
 
 Local preview: http://127.0.0.1:8788/preview
 Launcher: .local/serve-preview.py (ignored, never part of deployed application).
