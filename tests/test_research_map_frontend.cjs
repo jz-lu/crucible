@@ -106,4 +106,51 @@ console.log('PASS network-only map, compact popup, inline research note, retaine
     assert.doesNotMatch($('#mobile-inspector').textContent,/Conditions & scope/,'A late body cannot reopen or replace a different context');stale.destroy();
   }
   console.log('PASS lazy note-body loading, failed-read retry, retained SVG and late response ownership');
+
+  const map = $('#landscape');
+  let notifyResize, observed, disconnected = 0;
+  sandbox.ResizeObserver = class {
+    constructor(callback) { notifyResize = callback; }
+    observe(node) { observed = node; }
+    disconnect() { disconnected++; }
+  };
+  map.clientWidth = 350;
+  const responsive = sandbox.CrucibleResearchMap.mount(document);
+  responsive.show();
+  assert.equal(observed, map);
+  assert.equal(listeners.has('resize'), false, 'One container observer owns modern resize updates');
+  const viewWidth = () => Number($('.network-svg').getAttribute('viewBox').split(' ')[2]);
+  assert.equal(viewWidth(), 350);
+  const mobileSVG = $('.network-svg');
+  map.clientWidth = 1048;
+  notifyResize();
+  assert.equal(viewWidth(), 1120, 'Desktop geometry is ready before the observer returns, without a trailing timer');
+  assert.notEqual($('.network-svg'), mobileSVG);
+  const desktopSVG = $('.network-svg');
+  notifyResize();
+  assert.equal($('.network-svg'), desktopSVG, 'Height-only observations cannot create a render loop');
+  responsive.hide(); map.clientWidth = 680; notifyResize();
+  assert.equal($('.network-svg'), desktopSVG, 'A hidden map does not rebuild on resize');
+  responsive.show();
+  assert.equal(viewWidth(), 680, 'Returning uses the actual new container width');
+  const resumedSVG = $('.network-svg');
+  responsive.destroy(); map.clientWidth = 390; notifyResize();
+  assert.equal(disconnected, 1);
+  assert.equal($('.network-svg'), resumedSVG, 'A late observation cannot render after destroy');
+  assert.equal(listeners.size, 0);
+  delete sandbox.ResizeObserver;
+
+  const fallback = sandbox.CrucibleResearchMap.mount(document);
+  fallback.show();
+  const resize = listeners.get('resize');
+  assert.equal(typeof resize, 'function');
+  map.clientWidth = 1100; resize();
+  assert.equal(viewWidth(), 1120, 'The no-observer fallback also updates geometry');
+  const fallbackSVG = $('.network-svg');
+  fallback.hide(); map.clientWidth = 390; resize();
+  assert.equal($('.network-svg'), fallbackSVG);
+  fallback.destroy(); resize();
+  assert.equal($('.network-svg'), fallbackSVG);
+  assert.equal(listeners.size, 0, 'Fallback listener is removed with its controller');
+  console.log('PASS before-paint map reflow, stable width, hidden/destroyed ownership and fallback cleanup');
 })().catch(error=>{console.error(error);process.exitCode=1;});
