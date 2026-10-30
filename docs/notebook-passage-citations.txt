@@ -1,0 +1,40 @@
+EXACT NOTE PASSAGE CITATIONS
+===========================
+
+An optional location identifies a passage inside one immutable saved note body:
+
+  /#notebook?note=NOTE_ID&revision=REVISION&sha256=CONTENT_SHA256&location=L17
+
+L17 means the 1-based source line at which a rendered body block starts. Blank
+lines count. A heading or prose line starts a block; a nonempty fenced code block
+is addressed by its opening fence line. Interior code lines, blank lines and
+empty code fences are not independent block locations. The existing renderer
+renders each nonblank prose line independently; this change does not rewrite or
+reflow stored note source. Supported locations are L1 through L1000000, without
+leading zeroes. Locations apply to the body, not Summary or Conditions.
+Passage URLs contain only these four fields; conflicting view or filter options
+are rejected rather than silently taking the reader to a different notebook page.
+
+In the full reader, hover or keyboard-focus a block to reveal its quiet paragraph
+link. Touch layouts show the action directly. It opens the existing citation
+dialog with the selected source line, exact revision and content hash. The link
+and citation JSON can be copied without a write. Citations can identify any
+passage: assumptions, constructions, evidence, caveats, code or other statements.
+They do not assign scientific status or create a technical review workflow.
+
+Following a passage link first requires ordinary note access and an exact saved
+revision/hash match. It focuses and marks that block. A malformed or unpinned
+location is rejected; a missing block produces an explicit error, with an option
+to read the same pinned revision. It never silently selects the latest revision.
+Subsequent edits get a new revision and hash; older passage links remain tied to
+their original source and line numbering. Agents should obtain actual source
+lines from the saved revision or copy these citations, not infer them from titles.
+
+The authored reference URL retains the location, and its scope can explain the
+claim being cited. The existing graph index still connects note/revision/hash
+identities. A graph edge is not a passage-level assertion or a new access grant.
+Canonical note IDs, permanent note numbers, immutable revisions and content
+hashes retain their existing meanings. No database migration is needed.
+
+Rendering continues to use the existing safe text/math renderer; code stays
+literal text. No authored HTML, external fetching or new editor is introduced.

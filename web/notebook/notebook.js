@@ -25,6 +25,22 @@
   const selectedRevision = note => note.revisions?.find(revision => revision.revision === note.revision) || note.revisions?.[note.revisions.length - 1];
   const citationLabel = reference => (typeof reference.id === 'string' ? '[' + reference.id + '] ' : '') + reference.title;
   const relationLabels = {cites:'Cites',builds_on:'Builds on',supports:'Supports',challenges:'Challenges',reproduces:'Reproduces',responds_to:'Responds to'};
+  // Locations address source lines in one immutable body, never a moving title
+  // slug or the latest revision. Blank lines and fenced-code lines still count.
+  const validLocation = value => /^L[1-9][0-9]{0,6}$/.test(value || '') && Number(value.slice(1)) <= 1000000;
+  function passagePinError(fields) {
+    if (!fields.has('location')) return null;
+    if (!validLocation(fields.get('location'))) return 'This passage location is invalid. Use a citation copied from the saved note.';
+    if (!fields.get('note') || !/^(?:[1-9][0-9]?|100)$/.test(fields.get('revision') || '') ||
+        !/^[0-9a-f]{64}$/.test(fields.get('sha256') || '') ||
+        ['note', 'revision', 'sha256', 'location'].some(key => fields.getAll(key).length !== 1)) {
+      return 'A passage citation requires one exact note, revision and content hash. Open the original citation; no latest revision has been selected.';
+    }
+    if ([...fields.keys()].some(key => !['note', 'revision', 'sha256', 'location'].includes(key))) {
+      return 'A passage citation cannot select another notebook view. Use the exact passage link without additional route options.';
+    }
+    return null;
+  }
 
   // References are authored evidence. Links never fetch a source or grant access.
   function citationTarget(value) {
@@ -33,8 +49,10 @@
     if (!['https:', 'http:'].includes(target.protocol) || target.username || target.password) return null;
     if (target.origin === new URL(window.location.href).origin && target.pathname === '/' && target.hash.startsWith('#notebook?')) {
       const fields = new URLSearchParams(target.hash.slice('#notebook?'.length));
+      if (target.search || [...fields.keys()].some(key => !['note', 'revision', 'sha256', 'location'].includes(key) || fields.getAll(key).length !== 1)) return null;
       if (!fields.get('note') || !/^[1-9][0-9]*$/.test(fields.get('revision') || '')) return null;
       if (fields.has('sha256') && !/^[0-9a-f]{64}$/.test(fields.get('sha256'))) return null;
+      if (passagePinError(fields)) return null;
       return {href:target.hash, internal:true, pinned:fields.has('sha256')};
     }
     if (!/^https?:\/\//i.test(value.trim())) return null;
@@ -425,6 +443,12 @@
       if (!inTimeline) q('timeline').removeAttribute('aria-busy');
       q('new').disabled = !accountId; q('files').disabled = !accountId; q('publish-all').disabled = !accountId;
       if (!accountId) { q('list').replaceChildren(); q('full').replaceChildren(); notice('Sign in to read your notebook.'); return; }
+      const pinError = passagePinError(params);
+      if (pinError) {
+        mapController?.hide(); bountyController?.hide();
+        q('library').hidden = q('map').hidden = q('timeline').hidden = q('bounties').hidden = true;
+        q('full').hidden = false; q('full').replaceChildren(backToNotes(), el('p', 'nb-error', pinError)); return;
+      }
       if (inBounties) { await showBounties(); return; }
       if (inMap) { await showMap(); return; }
       if (inTimeline) { await showTimeline(); return; }
@@ -1085,20 +1109,37 @@
     function tagLabel(value) { return ({'human-written':'Human-written', literature:'Literature', 'scheme-description':'Scheme', comparison:'Comparison', procedure:'Procedure', 'research-lead':'Research lead', 'attack-analysis':'Attack analysis'})[value] || value; }
     function renderTags(r) { const group = el('div', 'nb-tags'); if (r.kind) group.append(el('span', 'nb-kind', r.kind)); r.tags.filter(t => t !== 'literature').forEach(t => group.append(button(tagLabel(t), () => { tag = t; search = ''; previewId = null; resetPages(); navigate('#notebook'); }, 'nb-tag' + (['scheme-description','research-lead','attack-analysis','comparison','procedure'].includes(t) ? ' nb-purpose-' + t : '')))); return group; }
     function section(title, text) { const s = el('section', 'nb-section'); s.append(el('h3', '', title), math('p', '', text)); return s; }
-    function bodyContent(text) {
-      const out = el('section', 'nb-body'); let inCode = false, buffer = [];
-      const flush = () => { if (buffer.length) { out.append(el('pre', '', buffer.join('\n'))); buffer = []; } };
-      String(text).split('\n').forEach(line => {
-        if (line.startsWith('```')) { if (inCode) flush(); inCode = !inCode; return; }
+    function bodyContent(text, onCite) {
+      const out = el('section', 'nb-body'); let inCode = false, buffer = [], codeLine = 0;
+      const append = (node, line) => {
+        if (!onCite) { out.append(node); return; }
+        const location = 'L' + line, block = el('div', 'nb-passage');
+        block.setAttribute('data-nb-location', location); block.tabIndex = -1;
+        const cite = button('¶', () => onCite(location), 'nb-passage-link');
+        cite.title = 'Cite passage at line ' + line;
+        cite.setAttribute('aria-label', cite.title);
+        block.append(node, cite); out.append(block);
+      };
+      const flush = () => { if (buffer.length) { append(el('pre', '', buffer.join('\n')), codeLine); buffer = []; } };
+      String(text).split('\n').forEach((line, index) => {
+        if (line.startsWith('```')) { if (inCode) flush(); else codeLine = index + 1; inCode = !inCode; return; }
         if (inCode) { buffer.push(line); return; } if (!line.trim()) return;
-        if (/^#{1,3} /.test(line)) out.append(math('h3', '', line.replace(/^#{1,3} /, '')));
-        else if (/^https:\/\/\S+$/.test(line.trim())) { const a = el('a', '', line.trim()); a.href = line.trim(); a.target = '_blank'; a.rel = 'noopener noreferrer'; const p = el('p'); p.append(a); out.append(p); }
-        else out.append(math('p', '', line));
+        if (/^#{1,3} /.test(line)) append(math('h3', '', line.replace(/^#{1,3} /, '')), index + 1);
+        else if (/^https:\/\/\S+$/.test(line.trim())) { const a = el('a', '', line.trim()); a.href = line.trim(); a.target = '_blank'; a.rel = 'noopener noreferrer'; const p = el('p'); p.append(a); append(p, index + 1); }
+        else append(math('p', '', line), index + 1);
       }); flush(); return out;
+    }
+    function focusReader() {
+      const location = params.get('location');
+      const passage = validLocation(location) ? q('full').querySelector('[data-nb-location="' + location + '"]') : null;
+      (passage || q('full').querySelector('h2'))?.focus({preventScroll:true});
+      if (passage) passage.scrollIntoView({block:'center'});
     }
     async function loadNote(id) {
       captureReviewDraft(); captureReviewDraft = () => {};
       const current = guard(), token = ++request, requested = params.get('revision'), expectedHash = params.get('sha256'), generation = readEpoch;
+      const pinError = passagePinError(params);
+      if (pinError) { q('full').replaceChildren(backToNotes(), el('p', 'nb-error', pinError)); return; }
       const key = 'note:' + JSON.stringify([id, requested, expectedHash]), cached = cachedRead(key);
       const prepared = preparingNotes.get(key); preparingNotes.delete(key);
       let unlock = () => {};
@@ -1107,7 +1148,7 @@
         if (!id.startsWith('curated:')) unlock = lockReader();
         // Cached navigation needs the same focus handoff as a first visit.
         // Quiet revalidation below must not steal focus back from the reader.
-        q('full').querySelector('h2')?.focus({preventScroll:true});
+        focusReader();
       }
       else q('full').replaceChildren(backToNotes(), reading('Loading note…'));
       try {
@@ -1125,7 +1166,7 @@
           const chosen = requested ? note.revisions.find(value => String(value.revision) === requested) : latestRevision(note);
           if (!cached) {
             renderFull(note, requested, true);
-            q('full').querySelector('h2')?.focus({preventScroll:true});
+            focusReader();
           }
           rememberRead(key, note);
           if (chosen) await refreshCuratedStatus(note, chosen, key,
@@ -1142,7 +1183,7 @@
         if (cached && JSON.stringify(cached) === JSON.stringify(note)) unlock();
         else {
           renderFull(note, requested);
-          if (!cached) q('full').querySelector('h2')?.focus({preventScroll:true});
+          if (!cached) focusReader();
         }
       } catch (error) {
         if (current() && request === token && generation === readEpoch) {
@@ -1200,9 +1241,22 @@
     }
     function renderFull(note, requested, requestsPending = false) {
       const full = q('full'); full.replaceChildren(backToNotes());
+      const pinError = passagePinError(params);
+      if (pinError) { full.append(el('p', 'nb-error', pinError)); return; }
       const revision = requested ? note.revisions.find(r => String(r.revision) === requested) : note.revisions.find(r => r.revision === note.revision) || note.revisions[note.revisions.length - 1];
       if (!revision) { full.append(el('h2', 'nb-full-title', 'Revision not available')); return; }
       const r = revision.content, heading = el('h2', 'nb-full-title', r.title); heading.tabIndex = -1;
+      const body = bodyContent(r.body, location => citeNote(note, revision, location));
+      const location = params.get('location');
+      if (location) {
+        const passage = body.querySelector('[data-nb-location="' + location + '"]');
+        if (!passage) {
+          full.append(heading, el('p', 'nb-error', 'Passage ' + location + ' is not present in this saved revision. The link must identify the start of a paragraph, heading or code block.'),
+            button('Read this exact revision', () => navigate(url(note.id, revision.revision) + '&sha256=' + encodeURIComponent(revision.content_sha256))));
+          return;
+        }
+        passage.classList.add('nb-passage-selected');
+      }
       const headingRow = el('div', 'nb-reader-heading');
       const noteActions = el('div', 'nb-note-actions');
       const number = noteNumber(note);
@@ -1225,7 +1279,7 @@
       full.append(renderTags(r));
       full.append(section('Summary', r.claim), section('Conditions', r.conditions));
       if (!reviewOnly) full.append(requestPanel(note, revision, requestsPending));
-      const researchTools = el('details', 'nb-details'); researchTools.append(el('summary', '', 'Continue this research'), button('Download agent research task', () => downloadResearchTask(note, revision))); full.append(researchTools, bodyContent(r.body));
+      const researchTools = el('details', 'nb-details'); researchTools.append(el('summary', '', 'Continue this research'), button('Download agent research task', () => downloadResearchTask(note, revision))); full.append(researchTools, body);
       const sources = el('section', 'nb-section nb-citations'); sources.append(el('h3', '', 'Citations'));
       const references = Array.isArray(r.references) ? r.references : r.references == null ? [] : [r.references];
       const list = el('ol', 'nb-research-sources');
@@ -1499,16 +1553,17 @@
       if (params.get('connections') === '1') explore.click();
       return section;
     }
-    function citeNote(note, revision) {
-      const container = openDialog('Cite this note'), present = dialogGuard();
-      const link = url(note.id, revision.revision) + '&sha256=' + encodeURIComponent(revision.content_sha256);
+    function citeNote(note, revision, location = null) {
+      const container = openDialog(location ? 'Cite this passage' : 'Cite this note'), present = dialogGuard();
+      const link = url(note.id, revision.revision) + '&sha256=' + encodeURIComponent(revision.content_sha256) + (location ? '&location=' + location : '');
       const number = noteNumber(note);
-      const reference = {title:(number ? number + ' · ' : '') + revision.content.title + ' · revision ' + revision.revision, url:'/' + link, scope:'', relation:'cites'};
+      const passageLabel = location ? ' · body line ' + location.slice(1) : '';
+      const reference = {title:(number ? number + ' · ' : '') + revision.content.title + ' · revision ' + revision.revision + passageLabel, url:'/' + link, scope:location ? 'Body, line ' + location.slice(1) + '. ' : '', relation:'cites'};
       const source = field('Exact revision link', 'citation-link', new URL(window.location.href).origin + '/' + link);
       source.input.readOnly = true;
       const summary = el('p', 'nb-hint'); summary.setAttribute('role', 'status');
       const copy = (text, message) => async () => { try { await navigator.clipboard.writeText(text); if (present()) summary.textContent = message; } catch (_) { if (present()) summary.textContent = 'Select and copy the text below.'; } };
-      if (number) container.append(el('p', 'nb-citation-number', number + ' · revision ' + revision.revision));
+      if (number || location) container.append(el('p', 'nb-citation-number', (number ? number + ' · ' : '') + 'revision ' + revision.revision + passageLabel));
       container.append(el('p', 'nb-hint', 'Paste this link into another note’s Citations. It pins the revision and content hash; it does not change who can read the note.'), source.wrap, button('Copy citation link', copy(source.input.value, 'Citation link copied.')));
       const details = el('details', 'nb-details'); details.append(el('summary', '', 'For an agent'));
       const text = JSON.stringify(reference, null, 2);

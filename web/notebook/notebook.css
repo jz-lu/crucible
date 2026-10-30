@@ -89,6 +89,12 @@
 .nb-number-action:hover{color:var(--primary);text-decoration:underline;text-underline-offset:3px}
 .nb-number-action:focus-visible{outline:2px solid var(--primary);outline-offset:3px}
 .nb-citation-number{font:500 15px/1.6 var(--mono);color:var(--ink);margin:0 0 14px}
+.nb-passage{position:relative;padding-inline-end:1.8rem;scroll-margin-top:6rem}
+.nb-passage-link{position:absolute;inset-inline-end:0;top:0;min-width:26px;min-height:28px;padding:0;background:none;color:var(--muted);font:16px/1.75 var(--sans);opacity:.6}
+.nb-passage-link:hover,.nb-passage-link:focus-visible{color:var(--primary);opacity:1}
+.nb-passage-selected{background:var(--light);box-shadow:-3px 0 0 var(--primary)}
+.nb-passage:focus{outline:1px solid var(--primary);outline-offset:4px}
+@media(hover:hover) and (pointer:fine){.nb-passage-link{opacity:0}.nb-passage:hover>.nb-passage-link,.nb-passage:focus-within>.nb-passage-link{opacity:.7}.nb-passage-link:focus-visible{opacity:1}}
 .nb-reader-heading .nb-note-actions{flex-wrap:wrap}
 .nb-reader-heading:has(.nb-note-actions>.nb-number-action:only-child){grid-template-columns:minmax(0,1fr) auto;gap:16px}
 .nb-entry-heading .nb-note-status{flex-wrap:wrap}

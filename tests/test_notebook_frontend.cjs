@@ -729,6 +729,77 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   shown.revisions[0].scheme_review={...review,retracted:true};await app.show('note-one');
   assert.equal(app.q('full').querySelector('.nb-scheme-state').textContent,'Retracted by proposer');
  });
+ await test('passages count source lines and cite headings, prose and fenced code without changing content',async()=>{
+  const hash='a'.repeat(64),body='# A statement\n\nA formula $x^2$.\n\n```python\nprint("<script>literal</script>")\n```\n\nA second statement.';
+  const saved=note({content_sha256:hash,content:{...content(),body}});
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:saved}:undefined});
+  await app.show('note-one',1);
+  const blocks=app.q('full').querySelectorAll('.nb-passage');
+  assert.deepEqual(blocks.map(block=>block.getAttribute('data-nb-location')),['L1','L3','L5','L9']);
+  assert.equal(blocks[2].querySelector('pre').textContent,'print("<script>literal</script>")');
+  assert.equal(app.q('full').querySelector('script'),null);
+  const before=app.requests.length;let copied;app.sandbox.navigator.clipboard={writeText:async value=>{copied=value;}};
+  blocks[1].querySelector('button').click();
+  assert.match(app.q('dialog-body').querySelector('[name="citation-link"]').value,/revision=1&sha256=a{64}&location=L3$/);
+  byText(app.q('dialog-body'),'Copy citation JSON').click();await flush();
+  const citation=JSON.parse(copied);
+  assert.equal(citation.url,'/#notebook?note=note-one&revision=1&sha256='+hash+'&location=L3');
+  assert.match(citation.scope,/Body, line 3/);assert.match(citation.title,/body line 3/);
+  assert.equal(app.requests.length,before);
+ });
+ await test('passage navigation pins the old revision and focuses its source block even after later edits',async()=>{
+  const hash='a'.repeat(64),old={...revision(1,'Original statement'),content_sha256:hash,content:{...content('Original statement'),body:'# Claim\n\nOriginal body.'}};
+  const latest={...revision(2,'Edited statement'),content_sha256:'b'.repeat(64),content:{...content('Edited statement'),body:'Inserted line\n# Claim\n\nChanged body.'}};
+  const saved=note({...latest,revisions:[old,latest]});
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:saved}:undefined});
+  const pin=new URLSearchParams({note:'note-one',revision:'1',sha256:hash,location:'L3'});
+  await app.controller.show(pin);
+  const target=app.q('full').querySelector('.nb-passage-selected');
+  assert.equal(target.getAttribute('data-nb-location'),'L3');assert.match(target.textContent,/Original body/);
+  assert.equal(app.document.activeElement,target);assert.doesNotMatch(app.q('full').textContent,/Changed body/);
+  await app.controller.show(pin);assert.equal(app.document.activeElement,app.q('full').querySelector('.nb-passage-selected'));
+ });
+ await test('missing passage locations show an explicit error and offer only the exact pinned revision',async()=>{
+  const hash='a'.repeat(64),saved=note({content_sha256:hash,content:{...content(),body:'# Claim\n\n```\ncode\n```'}});
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:saved}:undefined});
+  for(const location of ['L2','L4','L999','L1000000']) {
+   await app.controller.show(new URLSearchParams({note:'note-one',revision:'1',sha256:hash,location}));
+   assert.match(app.q('full').textContent,/not present in this saved revision/);assert.equal(app.q('full').querySelector('.nb-body'),null);
+  }
+  byText(app.q('full'),'Read this exact revision').click();await app.whenNavigated();
+  assert.equal(app.location.hash,'#notebook?note=note-one&revision=1&sha256='+hash);
+  assert.ok(app.q('full').querySelector('.nb-body'));
+ });
+ await test('unbound, duplicate and malformed passage pins fail before fetching or displaying a note',async()=>{
+  const hash='a'.repeat(64),app=await boot();
+  for(const query of [
+   'location=L1',
+   'note=note-one&location=L1',
+   'note=note-one&revision=1&location=L1',
+   'note=note-one&revision=1&sha256='+hash+'&location=L0',
+   'note=note-one&revision=1&sha256='+hash+'&location=L01',
+   'note=note-one&revision=1&sha256='+hash+'&location=L1000001',
+   'note=note-one&revision=1&sha256='+hash+'&location=L1&location=L3',
+   'note=note-one&revision=1&revision=2&sha256='+hash+'&location=L1',
+   ...['view=map','view=timeline','view=bounties','research=1','connections=1'].map(extra=>'note=note-one&revision=1&sha256='+hash+'&location=L1&'+extra),
+   'note=note-one&revision=1&sha256='+hash+'&location='+encodeURIComponent('L1"] img')
+  ]) {
+   const before=app.requests.length;await app.controller.show(new URLSearchParams(query));
+   assert.match(app.q('full').textContent,/passage (location|citation)/);assert.equal(app.q('full').querySelector('.nb-body'),null);
+   assert.equal(app.requests.length,before);
+  }
+ });
+ await test('authored passage links stay pinned and invalid location links are inert',async()=>{
+  const prefix='/#notebook?note=prior&revision=1', hash='b'.repeat(64);
+  const refs=[{title:'Exact passage',url:prefix+'&sha256='+hash+'&location=L3',scope:'Its statement.'},
+   {title:'Unpinned passage',url:prefix+'&location=L3'},
+   {title:'Ambiguous passage',url:prefix+'&sha256='+hash+'&location=L3&location=L4'},
+   {title:'Malformed passage',url:prefix+'&sha256='+hash+'&location=L0'}];
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:note({content:{...content(),references:refs}})}:undefined});
+  await app.show('note-one');const links=app.q('full').querySelector('.nb-research-sources').querySelectorAll('a');
+  assert.equal(links.length,1);assert.equal(links[0].href,prefix.slice(1)+'&sha256='+hash+'&location=L3');
+  assert.ok(app.requests.every(row=>!row.url.includes('prior')));
+ });
  await test('every note has citations and citing it pins the selected revision without writing or fetching',async()=>{
   const hash='a'.repeat(64), saved=note({content_sha256:hash});
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:saved}:undefined});
