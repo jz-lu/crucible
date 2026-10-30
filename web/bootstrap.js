@@ -1,3 +1,48 @@
+// Apply the nonsensitive color preference before any document content paints.
+// Like RESI, an unset preference follows the operating system until toggled.
+(() => {
+  if (window.CrucibleTheme || typeof document === 'undefined') return;
+  const root = document.documentElement, key = 'crucible.theme';
+  if (typeof root?.setAttribute !== 'function') return;
+  let preference = null, media = null, bound = false;
+  const valid = value => value === 'light' || value === 'dark';
+  try { const saved = window.localStorage.getItem(key); if (valid(saved)) preference = saved; } catch {}
+  try { media = window.matchMedia('(prefers-color-scheme: dark)'); } catch {}
+  const current = () => preference || (media?.matches ? 'dark' : 'light');
+  function apply() {
+    const theme = current(), next = theme === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', theme);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#171a18' : '#ebede6');
+    const button = document.querySelector('#theme-toggle');
+    if (button) {
+      button.setAttribute('aria-label', `Switch to ${next} theme`);
+      button.setAttribute('title', `Switch to ${next} theme`);
+      button.setAttribute('data-next-theme', next);
+      const label = document.querySelector('#theme-toggle-label');
+      if (label) label.textContent = `${next === 'dark' ? 'Dark' : 'Light'} mode`;
+      button.hidden = false;
+      if (!bound) {
+        bound = true;
+        button.addEventListener('click', () => {
+          preference = current() === 'dark' ? 'light' : 'dark';
+          try { window.localStorage.setItem(key, preference); } catch {}
+          apply();
+        });
+      }
+    }
+  }
+  window.CrucibleTheme = Object.freeze({apply});
+  apply();
+  // Do not wait for deferred application code, authentication or data requests.
+  if (document.readyState === 'loading') document.addEventListener('readystatechange', apply);
+  media?.addEventListener?.('change', apply);
+  window.addEventListener?.('storage', event => {
+    if (event.key !== key && event.key !== null) return;
+    preference = valid(event.newValue) ? event.newValue : null;
+    apply();
+  });
+})();
+
 // Public route structure only: no account, scheme description or research data
 // is needed to choose the first frame. Unknown routes stay deliberately neutral.
 (() => {

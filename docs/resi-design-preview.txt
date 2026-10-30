@@ -1,0 +1,127 @@
+RESI VISUAL ALIGNMENT — APPROVED INTEGRATION
+
+Approved for integration and deployment on 2026-10-30. The current design uses
+Georgia for the Crucible wordmark and catalogue scheme names, Cardo for display
+headings, and IBM Plex Sans for navigation and other interface text. Both logos
+remain transparent and adapt to light/dark mode. The visible bottom-left mode
+control remembers the user's choice. No database migration or scientific,
+scoring, bounty-workflow, account or notebook-content change is included.
+The notes below retain the local preview's implementation and validation history;
+the local sample server and database are not included in the application.
+
+Reference: https://resi.org/ (retrieved 2026-10-29).
+Original logo: https://resi.org/mark-resi-human-circuit.png, 1416 × 1111.
+It is a raster image embedded by RESI inside an SVG wrapper, not a true vector.
+The original PNG is preserved without upscaling or redrawing. Hashes and font
+sources are recorded in resi-brand-assets.json. Font licenses are vendored.
+
+Cardo supplies display headings. The Crucible wordmark uses regular Georgia,
+in both header and footer, as do the catalogue's scheme names. IBM Plex Sans
+supplies navigation, forms, tables and the quiet Notes list. RESI's
+sage paper, dark ink and green accents replace the blue interface palette.
+Existing recovery, warning and scientific graph colors keep their meanings.
+Layouts, routes, disclosure behavior, caching and motion remain unchanged.
+The footer pairs the existing Crucible mark with the original RESI identity.
+
+Fonts are self-hosted with original bytes and provenance retained. Integration
+CI exposed a limitation of optional font display: replacing a pending heading
+with its live controller could change from fallback to Cardo, shifting width.
+The public-asset builder now embeds the critical Cardo700 and variable Plex
+faces into the already inline, hash-authorized main stylesheet. Their block
+display waits only for local font decoding, removing the extra network race;
+their redundant preloads are removed. Cardo400 remains optional, versioned and
+preloaded. The first-paint canvas matches the complete stylesheet; dimensions
+are reserved for both marks.
+
+This adds about 61 KB to a full gzip HTML response, replacing about 59 KB of
+separate WOFF2 downloads on a cold visit. Unchanged normal reloads still return
+304; changed releases and forced full HTML reloads transfer those bytes again.
+No font-readiness state machine or fixed-width title workaround is introduced.
+Only font-src gains data: permission; scripts/styles retain exact CSP hashes.
+
+Local preview: http://127.0.0.1:8788/preview
+Launcher: .local/serve-preview.py (ignored, never part of deployed application).
+The preview is loopback-only with a synthetic account, sample private notes and
+five existing portable current adapters. It does not read production config,
+credentials, accounts or research. Native-only schemes are omitted locally;
+no underlying scheme parameters or cryptographic implementations are changed.
+The ordinary initial bounty policy is seeded only in the fixture. Its board is
+empty and usable; there are no example bounty tasks or rewards. Bounties is not
+hidden in this candidate.
+
+Checks: 65 public-asset and caching checks passed using the explicitly restricted
+portable DH/RSA registry. This verifies asset behavior, not native KEM runtime.
+Actual loopback health, catalogue, Notes, profile, logo and font HTTP checks pass.
+Desktop Schemes, Notes, profile and paired footer visually reviewed in Chrome
+at 1512 logical pixels. Profile, footer, Notes collapse/expand and map checked
+at 390 x 844. No text/control collisions observed in those views. Quiet status
+text has 6.57:1 contrast on paper and 7.33:1 on the lighter surface. The red
+recovery line/area retain #d32f3d in light mode; the empty synthetic fixture has no recovery
+record, so that state was source-checked rather than visually exercised.
+
+A separate map resize fix (c9929ef) removes the old 120 ms delay before geometry
+updates. It uses the existing container observer, ignores unchanged widths,
+and preserves hidden/destroyed controller ownership. Renderer and loading
+checks pass. Root browser QA verified desktop → 390 x 844 → desktop in dark
+mode, with appropriate geometry in both transitions and no enlarged leftover
+mobile arrangement. This behavioral fix remains its own reviewable commit.
+Full reader and recovered-graph visual checks remain outside this pass.
+The local-only footer explicitly labels the sample account and notes.
+This section records the preview checks before integration was approved.
+
+LIGHT / DARK CANDIDATE — 2026-10-29
+
+The bottom-left half-circle control follows RESI's placement and interaction:
+https://resi.org/ (official page and Base stylesheet inspected on 2026-10-29).
+The unset preference follows the operating system. Clicking or keyboard-
+activating the native button saves only 'light' or 'dark' as crucible.theme in
+localStorage. Storage failure leaves the switch usable for the current page.
+Changing that preference in another tab updates this one; clearing it restores
+OS behavior. No account, authentication, data-cache or network policy changes.
+
+An inline, hash-authorized bootstrap applies the palette before body parsing;
+the independent critical canvas also includes dark and OS fallback colors.
+There is no theme transition animation or content movement. The map's shadow
+root inherits semantic tokens; the standalone map has its own matching defaults.
+Recovery remains red; solved records remain green. Badges and graph regions
+retain their semantic colors with contrast-adjusted dark equivalents. The
+unaltered official RESI raster stays transparent in both themes. Its dark-mode
+filter matches the official site's invert/hue-rotate treatment, inspected at
+https://resi.org/_astro/Base.BnY0XzHy.css on 2026-10-29. Crucible uses the same
+approach with a small brightness/contrast adjustment to keep the blue flame
+legible beside a pale vessel and key. Light mode retains the original colors.
+Rectangular and circular pale backings were tried and rejected; none remains.
+
+10 theme regressions cover early paint selection, explicit preferences, OS
+changes, blocked storage, missing matchMedia, cross-tab changes, repeated script
+execution, native button semantics, shadow inheritance and computed palette
+contrast. Main text and semantic badge combinations meet 4.5:1; the recovery
+line meets 3:1 against the graph surface, in both themes. These are calculated
+palette checks, not a claim of a complete accessibility audit.
+
+Root visual QA: desktop light/dark Schemes, keyboard Enter activation, dark
+reload persistence, expanded Notes, and dark map at desktop and 390px mobile
+and back to desktop passed. First paint is validated by early-script/CSP tests;
+no browser filmstrip has been captured. Map resizing is separately fixed by
+c9929ef and verified through both responsive transitions as recorded above.
+The local server must restart after Python critical-canvas changes. These
+observations concern the preview; the approved release has its own CI and
+hosted verification record.
+
+Transparent logo follow-up: both modes checked in the desktop header and at
+390px mobile, with the paired footer marks also checked in dark mode. Original
+image bytes, dimensions, and reserved layout geometry remain unchanged.
+
+DISCOVERABILITY AND WORDMARK FOLLOW-UP — 2026-10-30
+
+The theme control now has a visible Light mode / Dark mode action label, with a
+fixed 128 x 44 px footprint so neither wording moves content. It is a body-level
+utility rather than a footer child. The earlier icon-only treatment was too
+easy to miss; no CSS hiding bug was found. Existing live/older tabs need the
+local preview and a refresh to receive this local-only feature.
+
+The Crucible wordmark now trials regular Georgia at 34px (30px mobile, 24px in
+the footer), with slightly tighter tracking. This uses a separate brand token;
+navigation and other UI text retain IBM Plex Sans. Georgia is a system-font
+candidate with Times New Roman / serif fallbacks, not an added font download.
+Desktop dark and mobile light layouts and keyboard theme switching were checked.

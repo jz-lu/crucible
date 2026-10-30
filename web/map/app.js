@@ -15,7 +15,7 @@
     let noteById = notes ? new Map(notes.notes.map(n => [n.id, n])) : null;
     const map = $('#landscape'), modal = $('#mobile-details'), detail = $('#mobile-inspector');
     const search = $('#search'), state = {filter:'all', query:'', selected:null};
-    let visible = true, destroyed = false, resizeTimer, renderedWidth = 0, rendered = false, detailRequest = 0;
+    let visible = true, destroyed = false, renderedWidth = 0, rendered = false, detailRequest = 0;
     const descriptions = {
       all:'Documented KEMs, each backed by a research note.',
       scored:'KEMs with an enrolled challenge release, from the current map snapshot.',
@@ -196,15 +196,20 @@
       }
     });
     root.addEventListener('click', onClick);
-    const onResize = () => { clearTimeout(resizeTimer); if (visible) resizeTimer = setTimeout(render, 120); };
-    window.addEventListener('resize', onResize);
-    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (map.clientWidth > 0 && map.clientWidth !== renderedWidth) onResize(); }) : null;
-    observer?.observe(map);
+    // ResizeObserver runs before paint: replace the old geometry in that same
+    // cycle instead of briefly stretching a mobile SVG across a desktop width.
+    // A height-only observation after rendering must keep the current DOM.
+    const onResize = () => {
+      if (!destroyed && visible && map.clientWidth > 0 && map.clientWidth !== renderedWidth) render();
+    };
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(onResize) : null;
+    if (observer) observer.observe(map);
+    else window.addEventListener('resize', onResize);
     return {
       show() { if (!destroyed) { visible = true; if (!rendered || map.clientWidth !== renderedWidth) render(); } },
       hide() { visible = false; detailRequest++; if (modal.open) modal.close(); },
       destroy() {
-        destroyed = true; visible = false; detailRequest++; clearTimeout(resizeTimer); observer?.disconnect();
+        destroyed = true; visible = false; detailRequest++; observer?.disconnect();
         window.removeEventListener('resize', onResize); root.removeEventListener('click', onClick);
         if (modal.open) modal.close();
       }

@@ -1,0 +1,42 @@
+{
+  "retrieved_at": "2026-10-29",
+  "reference": "https://resi.org/",
+  "stylesheet": "https://resi.org/_astro/Base.BnY0XzHy.css",
+  "font_source": "https://resi.org/fonts/",
+  "font_licenses": "Google Fonts official repositories: ofl/cardo/OFL.txt and ofl/ibmplexsans/OFL.txt",
+  "assets": [
+    {
+      "path": "web/vendor/resi/Cardo-OFL.txt",
+      "sha256": "8e28b778b6e1a7ff9ca72f4dee2d53120aa2856dc1bfd0be44307e365b0e45bb",
+      "bytes": 4372
+    },
+    {
+      "path": "web/vendor/resi/IBMPlexSans-OFL.txt",
+      "sha256": "37784b44044a4ffd9256702b7c0982c37e5c8887ba90c6dca0479aea93dc898d",
+      "bytes": 4363
+    },
+    {
+      "path": "web/vendor/resi/cardo-normal-400-latin.woff2",
+      "sha256": "c0a8e24244241209f450c50f86a0dfcb5a891806184095b31abdbb136e9b38cc",
+      "bytes": 15476
+    },
+    {
+      "path": "web/vendor/resi/cardo-normal-700-latin.woff2",
+      "sha256": "6985e79e5078958897e276228b9838c3bd5bb7bbaad662cb3f742e87c39e6e4c",
+      "bytes": 19220
+    },
+    {
+      "path": "web/vendor/resi/plex-sans-normal-100-700-latin.woff2",
+      "sha256": "056e4e2459f57a0033c8c9c844ff19d6e42ac8602027803d4345823bcc939818",
+      "bytes": 40240
+    },
+    {
+      "path": "web/assets/resi-logo.png",
+      "sha256": "b5e4ecef0482edd87a2885f106bdebf809d97ccee6a232aaaa480f25324b4a80",
+      "bytes": 584221,
+      "source": "https://resi.org/mark-resi-human-circuit.png",
+      "width": 1416,
+      "height": 1111
+    }
+  ]
+}

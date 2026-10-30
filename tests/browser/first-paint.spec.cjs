@@ -2,6 +2,10 @@ const {test, expect, holdResponse, signIn} = require('./helpers.cjs');
 const {createHash} = require('node:crypto');
 const {readFileSync} = require('node:fs');
 const {resolve} = require('node:path');
+const criticalFontPaths = [
+  '/vendor/resi/cardo-normal-700-latin.woff2',
+  '/vendor/resi/plex-sans-normal-100-700-latin.woff2',
+];
 
 test('the complete decoded logo fills its reserved frame without partial paint or movement', async ({page}) => {
   const image = await holdResponse(page, url => url.pathname === '/assets/crucible-logo.png');
@@ -66,9 +70,29 @@ async function assertInlineMainStyle(page, response, {notebookPrepared = false} 
   const policies = (await response.headersArray()).filter(header => header.name.toLowerCase() === 'content-security-policy');
   expect(policies).toHaveLength(1);
   expect(policies[0].value).not.toContain('unsafe-inline');
-  const css = readFileSync(resolve(__dirname, '../../web/styles.css'), 'utf8');
+  expect(policies[0].value.split(';').map(value => value.trim()).filter(value => value.startsWith('font-src ')))
+    .toEqual(["font-src 'self' data:"]);
+  const css = readFileSync(resolve(__dirname, '../../web/styles.css'), 'utf8')
+    .replace(/@font-face\s*\{[^}]*\}/g, face => {
+      const asset = criticalFontPaths.find(path => face.includes(`url('${path}')`));
+      if (!asset) return face;
+      const bytes = readFileSync(resolve(__dirname, '../../web' + asset));
+      return face.replace(`url('${asset}')`, `url('data:font/woff2;base64,${bytes.toString('base64')}')`)
+        .replace(/font-display:\s*[^;]+;/, 'font-display: block;');
+    })
+    .replace(/url\('(\/vendor\/resi\/[^']+\.woff2)'\)/g, (_, asset) => {
+      const bytes = readFileSync(resolve(__dirname, '../../web' + asset));
+      const version = createHash('sha256').update(bytes).digest('hex').slice(0,24);
+      return `url('${asset}?v=${version}')`;
+    });
   await expect(page.locator('head > style[data-main-style]')).toHaveCount(1);
   expect(await page.locator('head > style[data-main-style]').textContent()).toBe(css);
+  expect(await page.locator('head > link[rel="preload"][as="font"]').evaluateAll(links =>
+    links.map(link => new URL(link.href).pathname))).toEqual(['/vendor/resi/cardo-normal-400-latin.woff2']);
+  expect(await page.evaluate(() => [
+    document.fonts.check('700 36px Cardo'),
+    document.fonts.check('400 14px "IBM Plex Sans"'),
+  ]), 'critical fonts decode with the first styled frame').toEqual([true, true]);
   const styles = await page.locator('head > style').allTextContents();
   expect(styles).toHaveLength(2); // Existing critical canvas plus exact main CSS.
   expect(policies[0].value.match(/'sha256-[^']+'/g)).toHaveLength(3);
@@ -102,6 +126,11 @@ async function blockExternalMainStyle(page) {
   await page.route('**/styles.css*', route => {
     attempted.push(route.request().url()); return route.abort('connectionreset');
   });
+  for (const path of criticalFontPaths) {
+    await page.route('**' + path + '*', route => {
+      attempted.push(route.request().url()); return route.abort('connectionreset');
+    });
+  }
   await page.addInitScript(() => {
     window.fixtureCspViolations = [];
     document.addEventListener('securitypolicyviolation', event => window.fixtureCspViolations.push(event.violatedDirective));
@@ -113,7 +142,7 @@ const bodyStyle = element => {
   const style = getComputedStyle(element);
   return {background: style.backgroundColor, color: style.color, size: style.fontSize, height: style.lineHeight};
 };
-const expectedBodyStyle = {background: 'rgb(246, 249, 253)', color: 'rgb(45, 69, 99)', size: '14px', height: '22.4px'};
+const expectedBodyStyle = {background: 'rgb(235, 237, 230)', color: 'rgb(40, 60, 48)', size: '14px', height: '22.4px'};
 
 // The external endpoint remains available for tools, but first paint must not
 // depend on requesting it. Holding authorization also checks the pending shell.
@@ -136,7 +165,7 @@ test('the public shell is fully styled before access resolves without requesting
       background: getComputedStyle(element).backgroundColor,
       padding: getComputedStyle(element).padding,
       radius: getComputedStyle(element).borderRadius,
-    }))).toEqual({width: 520, background: 'rgb(255, 255, 255)', padding: '32px', radius: '12px'});
+    }))).toEqual({width: 520, background: 'rgb(248, 249, 244)', padding: '32px', radius: '12px'});
     expect(attempted).toEqual([]);
     expect(await page.evaluate(() => window.fixtureCspViolations)).toEqual([]);
   } finally {session.release(); await session.delivered; await session.remove();}
@@ -159,7 +188,7 @@ test('an admitted catalogue and ordinary reload retain full typography and layou
   });
   const before = await catalogueStyle();
   expect(before).toMatchObject({paddingTop: '31px', titleSize: '32px', titleWeight: '700', overflow: false});
-  expect(before.titleFamily).toContain('Avenir Next Condensed');
+  expect(before.titleFamily).toContain('Cardo');
   expect(before.headerCells).toHaveLength(4);
   expect(before.headerCells.every(width => width > 0)).toBe(true);
   const reloaded = await page.reload();

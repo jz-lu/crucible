@@ -3,13 +3,14 @@ import re
 import base64
 import hashlib
 import gzip
+import json
 
 import pytest
 
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
-from crucible.public_assets import PUBLIC_FILES, PublicAssets
+from crucible.public_assets import CRITICAL_FONTS, PUBLIC_FILES, PublicAssets
 from test_beta_boundary import private_app
 
 
@@ -67,6 +68,57 @@ def test_fonts_are_versioned_and_unknown_paths_never_become_cacheable(private_ap
     for path in ('/vendor/katex/missing.js', '/vendor/katex/%2e%2e/app.js', '/unknown.js'):
         response = client.get(path)
         assert response.status_code == 404 and response.headers['cache-control'] == 'no-store'
+
+
+def test_critical_font_bytes_are_embedded_once_with_no_external_dependency(private_app):
+    from crucible.config import ROOT
+    client = TestClient(private_app)
+    response = client.get('/')
+    css = re.search(r'<style data-main-style>(.*?)</style>', response.text, re.S).group(1)
+    provenance = {row['path']: row for row in json.loads((ROOT / 'docs/resi-brand-assets.json').read_text())['assets']}
+    faces = re.findall(r'@font-face\s*\{[^}]*\}', css)
+    encoded = [re.search(r"url\('data:font/woff2;base64,([^']+)'\)", face) for face in faces]
+    embedded = [base64.b64decode(match.group(1), validate=True) for match in encoded if match]
+    assert len(embedded) == len(CRITICAL_FONTS) == 2
+    assert {hashlib.sha256(value).hexdigest() for value in embedded} == {
+        provenance['web' + url]['sha256'] for url in CRITICAL_FONTS}
+    for url in CRITICAL_FONTS:
+        original = (ROOT / 'web' / url.lstrip('/')).read_bytes()
+        assert embedded.count(original) == 1
+        assert url not in css and url not in response.text
+        version = hashlib.sha256(original).hexdigest()[:24]
+        standalone = client.get(url + '?v=' + version)
+        assert standalone.content == original
+        assert standalone.headers['content-type'] == 'font/woff2'
+        assert standalone.headers['cache-control'] == 'private, max-age=31536000, immutable'
+        assert client.get(url + '?v=' + version, headers={'If-None-Match': standalone.headers['etag']}).status_code == 304
+    for face, match in zip(faces, encoded):
+        assert ('font-display: block;' if match else 'font-display: optional;') in face
+    assert '/vendor/resi/cardo-normal-400-latin.woff2?v=' in css
+    assert len(re.findall(r'<link rel="preload"[^>]+as="font"', response.text)) == 1
+    policies = dict((part.split()[0], part.split()[1:]) for part in response.headers['content-security-policy'].split(';') if part.strip())
+    assert policies['font-src'] == ["'self'", 'data:']
+    digest = base64.b64encode(hashlib.sha256(css.encode()).digest()).decode()
+    assert "'sha256-" + digest + "'" in policies['style-src']
+    assert 'data:' not in policies['script-src'] and 'data:' not in policies['style-src']
+
+
+def test_embedded_font_edit_invalidates_css_and_shell_together(tmp_path):
+    url = '/vendor/resi/cardo-normal-700-latin.woff2'
+    css = ("@font-face {font-family: Cardo; font-display: optional; src: url('" + url + "');}").encode()
+    root = small_public_root(tmp_path, css)
+    assets = PublicAssets(root)
+    before = assets.snapshot()
+    original = (root / url.lstrip('/')).read_bytes()
+    assert base64.b64encode(original) in before['/styles.css'].body
+    (root / url.lstrip('/')).write_bytes(b'different local fixture font')
+    after = assets.snapshot()
+    assert before['/styles.css'].etag != after['/styles.css'].etag
+    assert before['/'].etag != after['/'].etag
+    assert embedded_style(after['/']) == after['/styles.css'].body
+    digest = base64.b64encode(hashlib.sha256(after['/styles.css'].body).digest()).decode()
+    style_policy = re.search(rb"style-src ([^;]+)", after['/'].content_security_policy).group(1)
+    assert ("'sha256-" + digest + "'").encode() in style_policy
 
 
 def test_version_query_cannot_cache_or_bypass_private_routes(private_app):
@@ -320,8 +372,16 @@ def test_critical_canvas_matches_base_typography_with_one_exact_csp_hash(frozen_
     sans, = re.findall(r'--sans:\s*([^;]+);', css)
     assert 'font:14px/1.6 ' + sans + ';' in critical
     assert 'font: 14px/1.6 var(--sans);' in css
-    assert 'background:#f6f9fd' in critical and '--paper: #f6f9fd;' in css
-    assert 'color:#2d4563' in critical and '--text: #2d4563;' in css
+    # The early canvas agrees with both complete palettes, including the OS
+    # fallback before bootstrap has applied an explicit saved preference.
+    for selector in (':root', ':root[data-theme=dark]'):
+        palette = re.search(re.escape(selector) + r'\s*\{([^}]+)\}', css).group(1)
+        for token in ('paper', 'text'):
+            color = re.search('--' + token + r':\s*([^;]+);', palette).group(1)
+            assert '--' + token + ':' + color in critical
+    assert 'background:var(--paper)' in critical and 'color:var(--text)' in critical
+    assert 'html[data-theme=dark]' in critical
+    assert '@media(prefers-color-scheme:dark){html:not([data-theme=light])' in critical
     assert '[hidden]{display:none!important}' in critical
     assert 'visibility:' not in critical and 'animation:' not in critical
     digest = base64.b64encode(hashlib.sha256(critical.encode()).digest()).decode()

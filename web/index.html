@@ -3,12 +3,15 @@
   <head>
     <meta charset="utf-8">
     <!-- critical-canvas -->
-    <meta name="theme-color" content="#f6f9fd">
+    <meta name="theme-color" content="#ebede6">
     <script src="/bootstrap.js" async></script>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Recover a shared key. Share the method and computational cost. Timed challenges and documented progress in open cryptographic research.">
-    <meta name="color-scheme" content="light">
+    <meta name="color-scheme" content="light dark">
     <link rel="icon" type="image/png" href="/assets/crucible-logo.png">
+    <link rel="preload" href="/vendor/resi/plex-sans-normal-100-700-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/vendor/resi/cardo-normal-700-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/vendor/resi/cardo-normal-400-latin.woff2" as="font" type="font/woff2" crossorigin>
     <title>
       Crucible — shared cryptographic scrutiny
     </title>
@@ -854,8 +857,20 @@
           <img class="brand-mark" src="/assets/crucible-logo.png" width="30" height="42" alt="" decoding="async" fetchpriority="low" loading="lazy">
           <span>Crucible</span>
         </a>
+        <a class="resi-footer-brand" href="https://resi.org/" aria-label="RESI — The Institute for Responsible Superintelligence" target="_blank" rel="noopener noreferrer">
+          <img src="/assets/resi-logo.png" width="43" height="34" alt="" loading="lazy" decoding="async">
+          <span>RESI</span>
+        </a>
       </footer>
     </main>
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch color theme" hidden>
+      <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+        <path class="theme-half-dark" d="M10 2.5a7.5 7.5 0 0 0 0 15z"></path>
+        <path class="theme-half-light" d="M10 2.5a7.5 7.5 0 0 1 0 15z"></path>
+        <circle class="theme-outline" cx="10" cy="10" r="7.5" fill="none" stroke-width="1.4"></circle>
+      </svg>
+      <span id="theme-toggle-label" aria-hidden="true">Color mode</span>
+    </button>
     <dialog id="auth-dialog" aria-labelledby="auth-title">
       <div class="dialog-top">
         <p class="eyebrow">
