@@ -4211,6 +4211,10 @@ html[data-pending-page=notebook-bounties] [data-pending-layout=notebook] [data-n
 .notebook-frame[data-notebook-view=bounties] [data-notebook-tab=bounties] { color:var(--ink);border-bottom-color:var(--ink); }
 .notebook-frame .nb-view:disabled { opacity:1;cursor:default; }
 .notebook-frame .nb-heading-actions { visibility:hidden; }
+/* The task board is a main destination; its frame has no notebook toolbar. */
+html[data-pending-page=notebook-bounties] [data-pending-layout=notebook] > :is(.nb-heading,.nb-views),
+.notebook-frame[data-notebook-view=bounties] > :is(.nb-heading,.nb-views) { display:none; }
+html[data-bounties-enabled="false"] #nav-bounties { display:none!important; }
 .notebook-frame input:disabled,.notebook-frame select:disabled { opacity:1;color:var(--text);-webkit-text-fill-color:var(--text); }
 .notebook-frame input::placeholder { color:var(--muted);opacity:1; }
 .access-workspace[aria-busy=true] .notebook-frame h1 { font:650 36px/1.15 var(--display);letter-spacing:normal;min-height:0; }

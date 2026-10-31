@@ -103,6 +103,12 @@ verified. The browser profile lets participants revoke connected agents.
 
 ## Research notebook
 
+Bounties has its own main-navigation tab immediately after Schemes
+(`/#bounties`). Private drafts and submitted proposals appear in **Your activity**.
+Existing notebook bounty links redirect to the same task or collection there.
+The bounty composer offers searchable source notes; select a result to add its
+ID tag, or remove a tag with ×. Each selection keeps its exact note revision.
+
 Open **Research notebook** in the main navigation (`/#notebook`). Titles expand
 into tags and a claim; **Read full note** opens the conditions and full argument.
 Saved notes now belong to your account and persist in the server database. Each

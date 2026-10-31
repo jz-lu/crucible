@@ -3,6 +3,9 @@
 const $ = selector => document.querySelector(selector);
 // Keep the research interface dormant while the first MVP focuses on numerical challenges.
 const RESEARCH_ENABLED = false;
+// Honor the explicit release capability when it is supplied by the server.
+const bountyFeatureAvailable = () => window.CrucibleFeatures?.bounties !== false &&
+  (document.documentElement || document.querySelector('html'))?.getAttribute?.('data-bounties-enabled') !== 'false';
 const state = {
   auth: {}, authPanel: 'signin', githubBusy: false, githubPending: false, githubCompleteBusy: false, authCallbackBusy: false, githubLinkContext: null,
   passwordResetToken: null, passwordResetBusy: false, passwordRecoveryBusy: false,
@@ -214,7 +217,7 @@ function browseWarmJobs() {
   add('history', () => warmRead('history:' + (state.catalogueRevision || ''), '/api/me/submissions', data =>
     Array.isArray(data.submissions) && data.submissions.every(item => typeof item?.id === 'string' && item.id) ? {submissions: data.submissions} : null));
   for (const scheme of ordered.slice(1)) releaseJobs(scheme);
-  add('notebook:bounties', () => notebookWorkspace?.warm?.('bounties'));
+  if (bountyFeatureAvailable()) add('notebook:bounties', () => notebookWorkspace?.warm?.('bounties'));
   return jobs;
 }
 async function runBrowseWarmup() {
@@ -780,7 +783,7 @@ function showRouteLoading() {
     const decoded = handle && decodeURIComponent(handle);
     if (decoded && decoded.length <= 100 && !/[\u0000-\u001f\u007f]/.test(decoded)) profileName = decoded;
   } catch { /* Malformed profile URLs never become display markup. */ }
-  const title = known?.name || (release ? 'Scheme' : path.startsWith('#person/') ? profileName : path === '#notebook' ? 'Research notebook' : path === '#reviews' ? 'Review center' : path === '#propose' ? 'Propose a scheme' : 'KEM Schemes');
+  const title = known?.name || (release ? 'Scheme' : path.startsWith('#person/') ? profileName : path === '#bounties' ? 'Bounties' : path === '#notebook' ? 'Research notebook' : path === '#reviews' ? 'Review center' : path === '#propose' ? 'Propose a scheme' : 'KEM Schemes');
   const profileRoute = path.startsWith('#person/');
   routeLoadingPanel.classList.toggle('profile-route-preview', profileRoute);
   state.screen = 'loading';
@@ -833,7 +836,7 @@ function routeNeedsCatalogue() {
   // Profile records still need the catalogue's mapping from native parameters
   // to human stage labels. Keep that dependency until the record API supplies it.
   // Notebook visualizations load their small release-link index independently.
-  if (path === '#notebook') return false;
+  if (['#notebook', '#bounties'].includes(path)) return false;
   return true;
 }
 async function loadAuthorizedWorkspace() {
@@ -984,12 +987,13 @@ function notebookPendingFrame(params) {
   }
   return frame;
 }
-async function showNotebook(query, reviewing = false) {
+async function showNotebook(query, reviewing = false, bountyPage = false) {
   const account = state.user?.id, csrf = state.csrf, section = state.reviewSection, request = ++notebookShowRequest, lifecycle = documentEpoch;
   const params = new URLSearchParams(query || window.location.hash.split('?')[1] || '');
+  if (bountyPage) params.set('view', 'bounties');
   const target = $(reviewing ? '#review-notebook-workspace' : '#notebook-workspace');
   const current = () => ownsDocument(lifecycle) && request === notebookShowRequest && hasAccess() && account === state.user?.id && csrf === state.csrf &&
-    (reviewing ? state.screen === 'reviews' && state.canReviewProposals && state.reviewSection === section && section !== 'schemes' : state.screen === 'notebook');
+    (reviewing ? state.screen === 'reviews' && state.canReviewProposals && state.reviewSection === section && section !== 'schemes' : state.screen === (bountyPage ? 'bounties' : 'notebook'));
   if (!current()) return;
   // Resolve the tiny action-link index alongside notebook assets, rather than
   // competing with the map's six assets after its controller becomes available.
@@ -1011,7 +1015,7 @@ async function showNotebook(query, reviewing = false) {
     else if (params.has('note') || params.has('research_request') || params.has('research') || params.has('bounty') || params.get('compose') === 'bounty') {
       // A reader's private title and body remain unknown until its own read.
       const shell = node('div', undefined, 'notebook-shell-preview');
-      shell.append(node('h1', 'Research notebook'));
+      shell.append(node('h1', bountyPage ? 'Bounties' : 'Research notebook'));
       const frame = node('div', undefined, 'loading-preview');
       frame.setAttribute('aria-hidden', 'true');
       for (let index = 0; index < 4; index++) {
@@ -1073,7 +1077,7 @@ $('#access-continue').addEventListener('click', async () => {
   catch (error) { globalError(error.message); }
 });
 function workspaceSelector(screen) {
-  return {loading: '#route-loading', access: '#access-workspace', scheme: '#workspace', overview: '#overview-workspace', assumptions: '#assumptions-workspace', notebook: '#notebook-workspace', reviews: '#review-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
+  return {loading: '#route-loading', access: '#access-workspace', scheme: '#workspace', overview: '#overview-workspace', assumptions: '#assumptions-workspace', notebook: '#notebook-workspace', bounties: '#notebook-workspace', reviews: '#review-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
 }
 function applyRoute(focus = false) {
   if (documentRetired) return;
@@ -1124,6 +1128,17 @@ function applyRoute(focus = false) {
     legacyParams.set('section', section); path = '#reviews'; query = legacyParams.toString();
     window.history.replaceState(null, '', path + '?' + query);
   }
+  // Keep existing task links, including saved proposal selections. Passage
+  // citations retain their original query so their exact-pin validator runs.
+  if (path === '#notebook' && !legacyParams.has('location') &&
+      (['bounties', 'guide'].includes(legacyParams.get('view')) || legacyParams.has('bounty') || legacyParams.get('compose') === 'bounty')) {
+    legacyParams.delete('view'); path = '#bounties'; query = legacyParams.toString();
+    window.history.replaceState(null, '', path + (query ? '?' + query : ''));
+  }
+  if (path === '#bounties' && !bountyFeatureAvailable()) {
+    path = '#notebook'; query = '';
+    window.history.replaceState(null, '', path);
+  }
   const reviewParams = new URLSearchParams(query);
   if (path === '#reviews') {
     const section = reviewParams.get('section');
@@ -1131,8 +1146,8 @@ function applyRoute(focus = false) {
     if (section !== state.reviewSection) { reviewParams.set('section', state.reviewSection); query = reviewParams.toString(); window.history.replaceState(null, '', '#reviews?' + query); }
   }
   let scheme, profile, handle, view = 'leaderboard';
-  let screen = path === '#connect' ? 'connect' : path === '#people' ? 'people' : path === '#propose' ? 'propose' : path === '#reviews' ? 'reviews' : path === '#about' ? 'about' : path === '#notebook' ? 'notebook' : path === '#research' ? 'research' : 'catalogue';
-  let invalid = !['#challenge', '#notebook', '#research', '#about', '#propose', '#reviews', '#people', '#connect'].includes(path);
+  let screen = path === '#connect' ? 'connect' : path === '#people' ? 'people' : path === '#propose' ? 'propose' : path === '#reviews' ? 'reviews' : path === '#about' ? 'about' : path === '#bounties' ? 'bounties' : path === '#notebook' ? 'notebook' : path === '#research' ? 'research' : 'catalogue';
+  let invalid = !['#challenge', '#notebook', '#bounties', '#research', '#about', '#propose', '#reviews', '#people', '#connect'].includes(path);
   const personMatch = path.match(/^#person\/([^/]+)$/);
   if (personMatch) {
     try {
@@ -1215,10 +1230,12 @@ function applyRoute(focus = false) {
   if (screen === 'notebook') {
     showNotebook(query);
   }
+  if (screen === 'bounties') showNotebook(query, false, true);
   document.title = ['scheme', 'overview'].includes(screen) ? scheme.name + (screen === 'overview' ? ' overview' : '') + ' — Crucible' : screen === 'person' ? handle + ' — Crucible' : screen === 'people' ? 'Leaderboard — Crucible' : screen === 'research' ? 'Research — Crucible' : screen === 'about' ? 'About us — Crucible' : screen === 'propose' ? 'Propose a scheme — Crucible' : 'Schemes — Crucible';
   if (screen === 'assumptions') document.title = `Assumptions · ${scheme.name} — Crucible`;
   if (screen === 'connect') document.title = 'Connect an agent — Crucible';
   if (screen === 'notebook') document.title = 'Research notebook — Crucible';
+  if (screen === 'bounties') document.title = 'Bounties — Crucible';
   if (screen === 'reviews') document.title = 'Review center — Crucible';
   renderReviewAccountLink();
   if (focus && previousScreen !== screen) $(workspaceSelector(screen)).focus({preventScroll: ['catalogue', 'people'].includes(screen)});
@@ -5366,7 +5383,7 @@ function showWorkspace(name) {
   const preparingMap = name === 'loading' && hasAccess() && pendingPath === '#notebook' && new URLSearchParams(pendingQuery).get('view') === 'map';
   // Catalogue arrival must not detach the connected map being prepared for
   // this same destination. Other routes and access loss still cancel it.
-  if (name !== 'notebook' && !preparingMap) notebookWorkspace?.hide();
+  if (!['notebook', 'bounties'].includes(name) && !preparingMap) notebookWorkspace?.hide();
   if (name !== 'reviews' || state.reviewSection === 'schemes') reviewNotebookWorkspace?.hide();
   if (name !== 'assumptions') assumptionsWorkspace?.clear();
   const enteringResearch = !research.visible && name === 'research';
@@ -5382,7 +5399,9 @@ function showWorkspace(name) {
   $('#workspace').hidden = name !== 'scheme';
   $('#overview-workspace').hidden = name !== 'overview';
   $('#assumptions-workspace').hidden = name !== 'assumptions';
-  $('#notebook-workspace').hidden = name !== 'notebook';
+  $('#notebook-workspace').hidden = !['notebook', 'bounties'].includes(name);
+  $('#notebook-workspace').setAttribute('aria-label', name === 'bounties' ? 'Bounties' : 'Research notebook');
+  $('#nav-bounties').hidden = !bountyFeatureAvailable();
   $('#review-workspace').hidden = name !== 'reviews';
   $('#review-notebook-workspace').hidden = name !== 'reviews' || state.reviewSection === 'schemes' || !state.canReviewProposals;
   $('#research-workspace').hidden = !research.visible;
@@ -5393,7 +5412,7 @@ function showWorkspace(name) {
   $('#connect-workspace').hidden = name !== 'connect';
   const navigationSection = name === 'loading' ? window.CruciblePendingPage?.section?.() :
     ['catalogue', 'scheme', 'overview', 'assumptions', 'propose'].includes(name) ? 'challenge' : name;
-  for (const kind of ['challenge', 'people', 'notebook', 'research', 'about']) {
+  for (const kind of ['challenge', 'bounties', 'people', 'notebook', 'research', 'about']) {
     const button = $('#nav-' + kind);
     const selected = kind === navigationSection;
     button.classList.toggle('selected', selected);
@@ -5813,6 +5832,7 @@ $('#finding-form').addEventListener('submit', async event => {
 $('#nav-challenge').addEventListener('click', () => navigate('#challenge'));
 $('#nav-people').addEventListener('click', () => navigate('#people'));
 $('#nav-notebook').addEventListener('click', () => navigate('#notebook'));
+$('#nav-bounties').addEventListener('click', () => navigate(notebookWorkspace?.bountyRoute?.() || '#bounties'));
 $('#refresh-people').addEventListener('click', () => loadPeople());
 $('#more-people').addEventListener('click', () => loadPeople(true));
 $('#nav-about').addEventListener('click', () => navigate('#about'));
@@ -5852,6 +5872,13 @@ for (const event of ['pointerenter', 'focus']) {
     void loadNotebookAsset('/notebook/notebook.css', true).catch(() => {});
     for (const path of ['/notebook/seed.js', '/notebook/store.js', '/notebook/notebook.js']) void loadNotebookAsset(path).catch(() => {});
   });
+  $('#nav-bounties').addEventListener(event, () => {
+    if (!bountyFeatureAvailable() || !browseWarmAllowed() || navigator.connection?.saveData) return;
+    const owner = state.user?.id, csrf = state.csrf, lifecycle = documentEpoch;
+    void ensureNotebookAssets().then(() => {
+      if (ownsDocument(lifecycle) && hasAccess() && state.user?.id === owner && state.csrf === csrf) return getNotebookWorkspace().warm('bounties');
+    }).catch(() => {});
+  });
 }
 async function initialize() {
   if (documentRetired) return;
@@ -5865,7 +5892,7 @@ async function initialize() {
     $('#access-workspace').setAttribute('aria-busy', 'true');
     $('#access-workspace').removeAttribute('data-catalogue-pending');
     const path = window.location.hash.split('?')[0];
-    setText('#access-title', path === '#notebook' ? 'Research notebook' : path === '#about' ? 'About us' : path === '#people' ? 'Leaderboard' : 'Crucible');
+    setText('#access-title', path === '#bounties' ? 'Bounties' : path === '#notebook' ? 'Research notebook' : path === '#about' ? 'About us' : path === '#people' ? 'Leaderboard' : 'Crucible');
     $('#access-title').removeAttribute('aria-hidden');
     window.CruciblePendingPage?.apply();
     setText('#access-description', 'Checking access…');

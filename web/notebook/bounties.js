@@ -35,12 +35,12 @@
   function mount(host, {api, navigate, current = () => true, canWarm = () => true, settleScroll = () => {}, reviewOnly = false, client: suppliedClient}) {
     const client = suppliedClient || window.CrucibleBountyAPI.createClient(api, current);
     let active = false, destroyed = false, request = 0, state = {}, policy = null, allowance = null, selected = null, signature = '';
-    let nextFocus = null, pageTimer = null, action = null;
+    let nextFocus = null, pageTimer = null, action = null, pickerNumber = 0;
     const drafts = new Map(), pendingWrites = new Map(), completedWrites = new Map();
     const owns = () => !destroyed && current();
     const present = () => active && owns();
     const root = el('div', 'bty-root'); host.replaceChildren(root);
-    const heading = el('div', 'bty-heading'), title = el('h2', '', 'Research bounties'); title.tabIndex = -1;
+    const heading = el('div', 'bty-heading'), title = el(reviewOnly ? 'h2' : 'h1', '', 'Bounties'); title.tabIndex = -1;
     const titleRow = el('div', 'bty-title-row'); titleRow.append(title);
     const headingActions = el('div', 'bty-heading-actions'), allowanceNode = el('span', 'bty-allowance');
     const propose = button('Propose a bounty', () => change({compose: true, id: ''}, 'bounty-title'));
@@ -54,7 +54,7 @@
     const secondary = el('nav', 'bty-secondary'); secondary.setAttribute('aria-label', 'Bounty collections');
     const mine = button('Your activity', () => change({status: 'mine', page: 1}, 'heading'), 'bty-secondary-link');
     const past = button('Past bounties', () => change({status: 'past', page: 1}, 'heading'), 'bty-secondary-link');
-    const open = button('← Research bounties', () => change({status: 'open', page: 1}, 'heading'), 'bty-secondary-link');
+    const open = button('← Bounties', () => change({status: 'open', page: 1}, 'heading'), 'bty-secondary-link');
     const agent = button('Copy agent prompt', () => { void copyAgentPrompt(); }, 'bty-secondary-link'); agent.hidden = reviewOnly;
     secondary.append(mine, agent, past, open); board.append(listHeading, entries, pagination, secondary);
     const reader = el('section', 'bty-reader'), composer = el('section', 'bty-composer'); reader.hidden = composer.hidden = true;
@@ -80,14 +80,14 @@
       }
     }
     function route(next = state) {
-      const params = new URLSearchParams(reviewOnly ? {section: 'bounties'} : {view: 'bounties'});
+      const params = new URLSearchParams(reviewOnly ? {section: 'bounties'} : {});
       if (next.status && next.status !== 'open') params.set('status', next.status);
       if (next.sort && next.sort !== 'concrete') params.set('sort', next.sort);
       if (next.page > 1) params.set('page', String(next.page));
       if (next.id) params.set('bounty', next.id);
       if (next.detail && next.detail !== 'brief') params.set('detail', next.detail);
       if (next.compose) params.set('compose', 'bounty');
-      return (reviewOnly ? '#reviews?' : '#notebook?') + params;
+      return (reviewOnly ? '#reviews' : '#bounties') + (params.size ? '?' + params : '');
     }
     function change(patch, focus) {
       if (!present()) return;
@@ -146,7 +146,7 @@
       signature = nextSignature; entries.replaceChildren(); pagination.replaceChildren();
       const openBoard = state.status === 'open' && !reviewOnly;
       entries.classList.toggle('bty-grid', openBoard); entries.classList.toggle('bty-management-list', !openBoard);
-      count.textContent = result.bounties.length ? (openBoard ? 'Open tasks' : reviewOnly ? 'Awaiting review' : '') : '';
+      count.textContent = reviewOnly ? 'Awaiting review' : state.status === 'mine' ? 'Your activity' : state.status === 'past' ? 'Past bounties' : 'Open tasks';
       if (!result.bounties.length) entries.append(el('p', 'bty-no-results', reviewOnly ? 'No bounty reviews are waiting.' : state.status === 'mine' ? 'Your proposals and contributions will appear here.' : state.status === 'past' ? 'No completed bounties yet.' : 'No open bounties yet.'));
       for (const item of result.bounties) {
         const card = button('', () => change({id: item.id, detail: 'brief'}, 'reader-title'), openBoard ? 'nb-card bty-question' : 'bty-management-row');
@@ -205,10 +205,149 @@
         form.append(field.wrap);
       }
     }
+    function sourceNotePicker(form, draft, key) {
+      const wrap = el('div', 'nb-field bty-note-picker'), label = el('label'), input = el('input');
+      const identifier = 'bounty-source-' + ++pickerNumber, ownerRoute = route();
+      input.id = identifier; input.name = 'bounty-sources'; input.type = 'search'; input.maxLength = 200;
+      input.value = draft.sourceQuery || ''; input.placeholder = 'Search notes by title or #ID…';
+      input.disabled = pendingWrites.has(key); input.setAttribute('autocomplete', 'off');
+      input.setAttribute('role', 'combobox'); input.setAttribute('aria-autocomplete', 'list');
+      input.setAttribute('aria-haspopup', 'listbox'); input.setAttribute('aria-expanded', 'false');
+      label.setAttribute('for', identifier); label.textContent = 'Source-note citations';
+      const tags = el('div', 'bty-source-tags'); tags.setAttribute('role', 'list'); tags.setAttribute('aria-label', 'Selected source notes');
+      const help = el('p', 'bty-note-picker-help', 'Select up to 12 notes. Source notes must be published before you submit the bounty for review.');
+      help.id = identifier + '-help'; input.setAttribute('aria-describedby', help.id);
+      const popup = el('div', 'bty-note-dropdown'), list = el('div', 'bty-note-options'), status = el('p', 'bty-note-search-status');
+      popup.hidden = true; list.id = identifier + '-options'; list.setAttribute('role', 'listbox'); list.setAttribute('aria-label', 'Source notes');
+      input.setAttribute('aria-controls', list.id); status.setAttribute('role', 'status');
+      const more = button('Show more notes', () => { if (editable()) { input.focus({preventScroll: true}); void load(true); } }, 'nb-link bty-note-more');
+      const retry = button('Try note search again', () => { if (editable()) { input.focus({preventScroll: true}); void load(); } }, 'nb-link bty-note-more');
+      more.dataset.sourceControl = retry.dataset.sourceControl = 'true';
+      for (const control of [more, retry]) control.addEventListener('pointerdown', event => event.preventDefault());
+      popup.append(list, status, more, retry); wrap.append(label, input, tags, help, popup);
+      let records = [], next = null, activeIndex = -1, generation = 0, timer = null, busy = false, failure = '', rows = [];
+      const current = () => present() && form.isConnected && route() === ownerRoute;
+      const editable = () => current() && !input.disabled && !pendingWrites.has(key) && !completedWrites.has(key);
+      const noteLabel = note => Number.isSafeInteger(note.number) && note.number > 0 ? '#' + String(note.number).padStart(4, '0') : note.note_id;
+      function close() {
+        generation++; clearTimeout(timer); timer = null; popup.hidden = true;
+        input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant');
+      }
+      function paintTags() {
+        tags.replaceChildren();
+        for (const pin of draft.values.sources) {
+          const tag = el('span', 'bty-source-tag'); tag.setAttribute('role', 'listitem');
+          const text = el('span', 'bty-source-id', noteLabel(pin)); text.title = (pin.title || pin.note_id) + ' · Revision ' + pin.revision;
+          const remove = button('×', () => {
+            if (!editable() || !remove.isConnected) return;
+            draft.values.sources = draft.values.sources.filter(source => source !== pin); draft.dirty = true;
+            paintTags(); input.focus({preventScroll: true}); if (!popup.hidden) void load();
+          }, 'bty-source-remove');
+          remove.dataset.sourceControl = 'true'; remove.disabled = input.disabled;
+          remove.setAttribute('aria-label', 'Remove source ' + noteLabel(pin) + ', revision ' + pin.revision);
+          remove.addEventListener('pointerdown', event => event.preventDefault());
+          tag.append(text, remove); tags.append(tag);
+        }
+        tags.hidden = !draft.values.sources.length;
+      }
+      function highlight(index) {
+        activeIndex = index;
+        rows.forEach((row, position) => row.setAttribute('aria-selected', String(position === index)));
+        if (rows[index]) { input.setAttribute('aria-activedescendant', rows[index].id); rows[index].scrollIntoView({block: 'nearest'}); }
+        else input.removeAttribute('aria-activedescendant');
+      }
+      function choose(note, row) {
+        if (!editable() || popup.hidden || !row.isConnected || draft.values.sources.length >= 12 ||
+            draft.values.sources.some(pin => pin.note_id === note.note_id)) return;
+        draft.values.sources.push({...note}); draft.dirty = true; draft.sourceQuery = ''; input.value = '';
+        paintTags(); input.focus({preventScroll: true}); void load();
+      }
+      function paint() {
+        list.replaceChildren(); rows = []; activeIndex = -1; input.removeAttribute('aria-activedescendant');
+        const selected = new Set(draft.values.sources.map(pin => pin.note_id));
+        for (const note of records.filter(note => !selected.has(note.note_id))) {
+          const row = button('', () => choose(note, row), 'bty-note-option'); row.setAttribute('role', 'option'); row.tabIndex = -1;
+          row.setAttribute('aria-label', noteLabel(note) + ' ' + (note.title || 'Untitled note') + ', revision ' + note.revision);
+          row.id = identifier + '-option-' + rows.length; row.setAttribute('aria-selected', 'false'); row.dataset.sourceControl = 'true';
+          row.disabled = input.disabled || draft.values.sources.length >= 12;
+          const name = el('span', 'bty-note-option-title'); name.append(el('strong', '', noteLabel(note)), el('span', '', note.title || 'Untitled note'));
+          row.append(name, el('small', '', 'Revision ' + note.revision + (note.publication_status === 'private' ? ' · Private draft' : '')));
+          row.addEventListener('pointerdown', event => event.preventDefault());
+          row.addEventListener('pointermove', () => { if (!row.disabled) highlight(rows.indexOf(row)); });
+          rows.push(row); list.append(row);
+        }
+        list.setAttribute('aria-busy', String(busy));
+        status.textContent = draft.values.sources.length >= 12 ? '12 notes selected. Remove a tag to add another.' : failure ||
+          (busy ? 'Searching notes…' : rows.length ? '' : records.length ? 'These notes are already selected.' : input.value.trim() ? 'No matching notes.' : 'No notes are available.');
+        more.hidden = !next || Boolean(failure) || draft.values.sources.length >= 12;
+        more.disabled = busy || input.disabled; retry.hidden = !failure; retry.disabled = input.disabled;
+      }
+      async function load(append = false) {
+        clearTimeout(timer); timer = null;
+        if (!editable()) return;
+        const token = ++generation, query = input.value.trim(), after = append ? next : null;
+        popup.hidden = false; input.setAttribute('aria-expanded', 'true'); failure = ''; busy = true;
+        if (!append) { records = []; next = null; }
+        paint();
+        if (draft.values.sources.length >= 12) { busy = false; paint(); return; }
+        try {
+          const result = await client.notes({query, after});
+          if (!current() || input.disabled || token !== generation || query !== input.value.trim()) return;
+          if (after && result.next_after === after) throw Error('The next note page could not be verified.');
+          const known = new Set(records.map(note => note.note_id));
+          records = [...records, ...result.notes.filter(note => !known.has(note.note_id))]; next = result.next_after;
+          for (const pin of draft.values.sources) {
+            const found = records.find(note => note.note_id === pin.note_id);
+            if (found) { pin.number = found.number; if (!pin.title && pin.revision === found.revision) pin.title = found.title; }
+          }
+          busy = false; paintTags(); paint();
+        } catch (error) {
+          if (!current() || token !== generation) return;
+          if (error.retired) { close(); return; }
+          busy = false; records = []; next = null; failure = error.message || 'Notes could not be retrieved.'; paint();
+        }
+      }
+      const open = () => { if (editable() && popup.hidden) void load(); };
+      input.addEventListener('focus', open); input.addEventListener('click', open);
+      input.addEventListener('input', () => {
+        if (!editable()) return;
+        draft.sourceQuery = input.value; generation++; clearTimeout(timer); records = []; next = null; busy = true; failure = '';
+        popup.hidden = false; input.setAttribute('aria-expanded', 'true'); paint();
+        timer = setTimeout(() => { if (editable()) void load(); }, 180);
+      });
+      input.addEventListener('keydown', event => {
+        if (!editable()) return;
+        if (event.key === 'Escape') { event.preventDefault(); close(); }
+        else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          if (popup.hidden) {
+            const pending = load(), token = generation;
+            void pending.then(() => { if (editable() && token === generation && !popup.hidden && rows.length) highlight(event.key === 'ArrowDown' ? 0 : rows.length - 1); });
+            return;
+          }
+          if (rows.length && draft.values.sources.length < 12) highlight(activeIndex < 0 ? (event.key === 'ArrowDown' ? 0 : rows.length - 1) : (activeIndex + (event.key === 'ArrowDown' ? 1 : rows.length - 1)) % rows.length);
+        } else if (event.key === 'Enter') { event.preventDefault(); if (!popup.hidden && rows[activeIndex]) rows[activeIndex].click(); else open(); }
+      });
+      wrap.addEventListener('focusout', event => { if (event.relatedTarget?.closest?.('.bty-note-picker') !== wrap) close(); });
+      form.addEventListener('submit', close); paintTags();
+      if (draft.values.sources.some(pin => !Number.isSafeInteger(pin.number))) {
+        // Resolve permanent display numbers without loading note bodies or
+        // changing the exact revisions already selected in the saved draft.
+        void client.noteIndex().then(result => {
+          if (!current() || input.disabled) return;
+          for (const pin of draft.values.sources) {
+            const found = result.notes.find(note => note.note_id === pin.note_id);
+            if (found) pin.number = found.number;
+          }
+          paintTags();
+        }).catch(() => {}); // The full saved note ID remains a valid label.
+      }
+      return wrap;
+    }
     function formActions(form, key, label, run) {
       if (completedWrites.has(key)) {
         const receipt = completedWrites.get(key);
-        for (const input of form.querySelectorAll('input, textarea, select')) input.disabled = true;
+        for (const input of form.querySelectorAll('input, textarea, select, [data-source-control]')) input.disabled = true;
         form.append(el('p', 'nb-notice', 'This request was saved while you were browsing.'), button('View bounty', () => {
           completedWrites.delete(key); drafts.delete(key); change(receiptSelection(receipt.bounty), 'reader-title');
         }));
@@ -220,11 +359,11 @@
       form.addEventListener('submit', async event => {
         event.preventDefault(); if (!present() || save.disabled) return;
         save.disabled = true; error.textContent = '';
-        for (const input of form.querySelectorAll('input, textarea, select')) input.disabled = true;
+        for (const input of form.querySelectorAll('input, textarea, select, [data-source-control]')) input.disabled = true;
         try { await run(error); }
         catch (failure) { if (present() && !failure.retired) error.textContent = failure.message || 'This request could not be completed.'; }
         finally {
-          if (present() && save.isConnected) { save.disabled = false; save.textContent = pendingWrites.has(key) ? 'Retry the same request' : label; for (const input of form.querySelectorAll('input, textarea, select')) input.disabled = pendingWrites.has(key); }
+          if (present() && save.isConnected) { save.disabled = false; save.textContent = pendingWrites.has(key) ? 'Retry the same request' : label; for (const input of form.querySelectorAll('input, textarea, select, [data-source-control]')) input.disabled = pendingWrites.has(key); }
         }
       });
     }
@@ -261,10 +400,14 @@
     function proposalForm(task = null) {
       const key = task ? 'edit:' + task.id : 'new';
       const terms = task?.terms || {};
-      const draft = draftFor(key, {title: terms.title || '', summary: terms.summary || '', tags: (terms.background_tags || []).join(', '), scope: String(terms.scope || 3), completion: terms.completion_criteria || '', verification: terms.verification_plan || '', sources: terms.source_notes ? JSON.stringify(terms.source_notes, null, 2) : ''});
+      const sources = (terms.source_notes || []).map(pin => {
+        const detail = task?.sources?.find(item => item.note_id === pin.note_id && item.revision === pin.revision && item.content_sha256 === pin.content_sha256);
+        return {...pin, number: detail?.number ?? detail?.note_number ?? null, title: detail?.title || ''};
+      });
+      const draft = draftFor(key, {title: terms.title || '', summary: terms.summary || '', tags: (terms.background_tags || []).join(', '), scope: String(terms.scope || 3), completion: terms.completion_criteria || '', verification: terms.verification_plan || '', sources});
       if (task && !Number.isInteger(draft.baseVersion)) draft.baseVersion = task.version;
-      composer.replaceChildren(button('← Research bounties', () => change({compose: false, detail: 'brief'}, 'heading'), 'nb-link'));
-      const heading = el('h2', '', task ? 'Edit bounty draft' : 'Propose a bounty'); composer.append(heading);
+      composer.replaceChildren(button('← Bounties', () => change({compose: false, detail: 'brief'}, 'heading'), 'nb-link'));
+      const heading = el(reviewOnly ? 'h2' : 'h1', '', task ? 'Edit bounty draft' : 'Propose a bounty'); composer.append(heading);
       if (task && draft.baseVersion !== task.version && !pendingWrites.has(key)) {
         const reset = button('Discard local edits and load the latest draft', () => { drafts.delete(key); proposalForm(task); });
         composer.append(el('p', 'bty-form-hint', 'This draft changed elsewhere. Your local edits remain here until you choose to replace them.'), reset);
@@ -275,16 +418,17 @@
         summary: field('A short description', 'bounty-summary', v.summary, {rows: 3, max: 1200}),
         completion: field('What counts as completion?', 'bounty-completion', v.completion, {rows: 4, max: 6000}),
         verification: field('How will it be verified?', 'bounty-verification', v.verification, {rows: 4, max: 6000}),
-        sources: field('Exact source-note citations', 'bounty-sources', v.sources, {rows: 4, max: 12000, required: false}),
         tags: field('Useful background', 'bounty-tags', v.tags, {max: 300, required: false}),
         scope: field('Open-ended → Concrete', 'bounty-scope', v.scope, {options: [1, 2, 3, 4, 5].map(n => [String(n), n + ' / 5'])})
       };
-      attachForm(form, fields, draft, key);
-      form.append(el('p', 'bty-form-hint', 'Paste a link or JSON from Cite this note. For several sources, use a JSON array. Saving a private draft uses no allowance; requesting admission is a separate step.'));
+      attachForm(form, {title: fields.title, summary: fields.summary, completion: fields.completion, verification: fields.verification}, draft, key);
+      form.append(sourceNotePicker(form, draft, key));
+      attachForm(form, {tags: fields.tags, scope: fields.scope}, draft, key);
+      form.append(el('p', 'bty-form-hint', 'Saving a private draft uses no allowance; requesting admission is a separate step.'));
       formActions(form, key, 'Save private draft', async () => {
         await mutate(key, () => {
           const v = draft.values;
-          return {...(task ? {expected_version: draft.baseVersion} : {}), terms: {title: v.title.trim(), summary: v.summary.trim(), background_tags: v.tags.split(',').map(t => t.trim()).filter(Boolean), scope: Number(v.scope), completion_criteria: v.completion.trim(), verification_plan: v.verification.trim(), source_notes: v.sources.trim() ? window.CrucibleBountyAPI.parseReferences(v.sources) : []}};
+          return {...(task ? {expected_version: draft.baseVersion} : {}), terms: {title: v.title.trim(), summary: v.summary.trim(), background_tags: v.tags.split(',').map(t => t.trim()).filter(Boolean), scope: Number(v.scope), completion_criteria: v.completion.trim(), verification_plan: v.verification.trim(), source_notes: v.sources.map(({note_id, revision, content_sha256}) => ({note_id, revision, content_sha256}))}};
         }, body => task ? client.revise(task.id, body) : client.create(body), result => { drafts.delete(key); saved(result, 'Private bounty draft saved.'); });
       });
       composer.append(form); focusAfter();
@@ -395,8 +539,8 @@
       // A quiet read must never overwrite an unsaved or uncertain decision.
       if (reader.querySelector('form') && signature && action === null && state.detail !== 'contribute') return;
       signature = nextSignature; reader.replaceChildren();
-      reader.append(button('← ' + (reviewOnly ? 'Bounty reviews' : state.status === 'mine' ? 'Your activity' : state.status === 'past' ? 'Past bounties' : 'Research bounties'), () => change({id: '', detail: 'brief'}, task.id), 'nb-link bty-reader-back'));
-      const article = el('article', 'bty-detail'), heading = el('div', 'bty-detail-heading'), title = el('h2', '', task.title); title.tabIndex = -1; title.dataset.bountyFocus = 'reader-title';
+      reader.append(button('← ' + (reviewOnly ? 'Bounty reviews' : state.status === 'mine' ? 'Your activity' : state.status === 'past' ? 'Past bounties' : 'Bounties'), () => change({id: '', detail: 'brief'}, task.id), 'nb-link bty-reader-back'));
+      const article = el('article', 'bty-detail'), heading = el('div', 'bty-detail-heading'), title = el(reviewOnly ? 'h2' : 'h1', '', task.title); title.tabIndex = -1; title.dataset.bountyFocus = 'reader-title';
       heading.append(el('p', 'bty-meta', statuses[task.status] || task.status), title, el('p', 'bty-byline', 'Posted by ' + task.owner.handle + ' · brief revision ' + (task.revision || 1)));
       const tabs = el('nav', 'bty-detail-tabs'); tabs.setAttribute('aria-label', 'Bounty information');
       for (const [name, label] of [['brief', 'The task'], ['notes', 'Starting notes'], ['contributions', 'Contributions']]) {
@@ -462,7 +606,7 @@
       state = next;
       const inReader = Boolean(state.id) && !state.compose;
       board.hidden = inReader || state.compose; reader.hidden = !inReader; composer.hidden = !state.compose; heading.hidden = inReader || state.compose;
-      title.textContent = reviewOnly ? 'Bounty reviews' : state.status === 'mine' ? 'Your activity' : state.status === 'past' ? 'Past bounties' : 'Research bounties';
+      title.textContent = reviewOnly ? 'Bounty reviews' : 'Bounties';
       propose.hidden = reviewOnly; secondary.hidden = reviewOnly; sortField.wrap.hidden = reviewOnly || state.status !== 'open'; sortField.input.value = state.sort;
       mine.hidden = past.hidden = reviewOnly || state.status !== 'open'; open.hidden = reviewOnly || state.status === 'open';
       void loadAllowance();

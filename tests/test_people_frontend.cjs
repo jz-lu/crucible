@@ -13,7 +13,7 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
 (async () => {
   await test('Leaderboard precedes My submissions in account navigation and loads only on demand', async () => {
     const app = await createApp({schemes, responder: baseResponder});
-    assert.deepEqual(app.$('.primary-nav').children.filter(e => !e.hidden).map(e => e.textContent.trim()), ['Schemes', 'Research notebook', 'About us']);
+    assert.deepEqual(app.$('.primary-nav').children.filter(e => !e.hidden).map(e => e.textContent.trim()), ['Schemes', 'Bounties', 'Research notebook', 'About us']);
     const accountActions = app.$('.account-actions').children;
     assert.equal(accountActions.indexOf(app.$('#nav-people')), accountActions.indexOf(app.$('#history-button')) - 1);
     assert.equal(app.$('#history-button').hidden, true);

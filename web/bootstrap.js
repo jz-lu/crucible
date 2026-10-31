@@ -48,6 +48,9 @@
 (() => {
   if (window.CruciblePendingPage) return;
   const presentationKey = 'crucible.pending-presentation';
+  const bountyAvailable = () => window.CrucibleFeatures?.bounties !== false &&
+    (typeof document === 'undefined' ||
+      (document.documentElement || document.querySelector?.('html'))?.getAttribute?.('data-bounties-enabled') !== 'false');
   function remember(allowed) {
     if (typeof allowed !== 'boolean') return;
     // This hint changes only the public frame on the next document load. It
@@ -60,6 +63,13 @@
     const params = new URLSearchParams(query);
     if (['', '#', '#challenge'].includes(path)) return {page: 'catalogue', title: 'KEM Schemes'};
     if (path === '#people') return {page: 'people', title: 'Leaderboard'};
+    const legacyBounty = path === '#notebook' && !params.has('location') &&
+      params.get('review') !== '1' && params.get('research_review') !== '1' &&
+      (['bounties', 'guide'].includes(params.get('view')) || params.has('bounty') || params.get('compose') === 'bounty');
+    if (path === '#bounties' || legacyBounty) {
+      if (!bountyAvailable()) return {page: 'notebook-notes', title: 'Research notebook'};
+      return {page: params.has('bounty') || params.get('compose') === 'bounty' ? 'list' : 'notebook-bounties', title: 'Bounties'};
+    }
     if (path === '#notebook') {
       if (params.get('review') === '1' || params.get('research_review') === '1') return {page: 'list', title: 'Review center'};
       if (params.has('note') || params.has('research_request') || params.has('research') || params.has('bounty') || params.get('compose') === 'bounty') return {page: 'list', title: 'Research notebook'};
@@ -86,6 +96,8 @@
     if (typeof hash !== 'string' || hash.length > 4096) return null;
     const [path, query = ''] = hash.split('?'), params = new URLSearchParams(query);
     if (path === '#reviews' || params.get('review') === '1' || params.get('research_review') === '1') return null;
+    if (path === '#bounties' || path === '#notebook' && !params.has('location') &&
+        (['bounties', 'guide'].includes(params.get('view')) || params.has('bounty') || params.get('compose') === 'bounty')) return bountyAvailable() ? 'bounties' : 'notebook';
     if (['', '#', '#challenge', '#propose'].includes(path) || /^#(?:scheme|challenge)\//.test(path)) return 'challenge';
     return {'#people': 'people', '#notebook': 'notebook', '#about': 'about', '#research': 'research'}[path] || null;
   }
@@ -110,11 +122,11 @@
     const route = hint === 'gate' ? {page: 'gate', title: 'Private beta'} :
       hint !== 'workspace' && described.page === 'catalogue' ? {page: 'neutral', title: 'Crucible'} : described;
     root.setAttribute('data-pending-page', route.page);
-    root.classList.toggle('pending-notebook', route.title === 'Research notebook');
+    root.classList.toggle('pending-notebook', ['Research notebook', 'Bounties'].includes(route.title));
     const title = document.querySelector('#access-title');
     if (title) { title.textContent = route.title; title.removeAttribute('aria-hidden'); }
     const selected = route.page === 'gate' ? null : section();
-    for (const kind of ['challenge', 'people', 'notebook', 'research', 'about']) {
+    for (const kind of ['challenge', 'bounties', 'people', 'notebook', 'research', 'about']) {
       const selector = '#nav-' + kind;
       const tab = document.querySelector(selector);
       if (!tab) continue;
