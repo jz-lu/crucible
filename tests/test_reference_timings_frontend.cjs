@@ -9,10 +9,14 @@ const fetches = app => app.requests.filter(r => r.url.pathname === '/api/protoco
   const app = await createApp({schemes:[scheme('alpha'),scheme('beta')],hash:'#scheme/alpha/1',
     responder:url => url.pathname === '/api/protocol/benchmarks' ? {report:{id:'must-not-be-requested'}} : undefined});
   const checkCards = () => {
-    for (const [id, expected] of [['public',['public_key','fresh']],['cipher',[]],['computation',['warm','rss']]]) {
+    for (const [id, expected] of [['public',['public_key','fresh']],['cipher',[]],['computation',[]]]) {
       const chart = app.$('#overview-chart-'+id), card = chart.closest('.overview-card');
       const measure = chart.querySelector('select[aria-label="Measure"]');
       assert.deepEqual(measure?.querySelectorAll('option').map(option=>option.value) || [],expected);
+      if (id === 'computation') {
+        assert.equal(app.$('#overview-title-computation').textContent, 'Computation');
+        assert.deepEqual(chart.querySelector('select[aria-label="Operation"]').querySelectorAll('option').map(option => option.value), ['keygen','encapsulate','decapsulate']);
+      }
       assert.ok(expected.length <= 2, 'at most two distinct measures per card');
       assert.equal(chart.querySelectorAll('.chart-point').length,0,'old profile metadata never fills missing measurements');
       assert.equal(card.querySelector('.reference-timing-caption'),null);

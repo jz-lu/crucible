@@ -2854,7 +2854,7 @@ function renderOverviewChart(scheme, cardId) {
   const measured = values.filter(point => point.value !== null);
   const minTier = values[0]?.tier, maxTier = values.at(-1)?.tier;
   const {points: recoveredPoints, tier: recoveredTier, label: recoveredLabel, meaning: recoveryMeaning} = overviewRecovery(scheme, values, named);
-  setText('#overview-title-' + cardId, cardId === 'computation' ? 'Operation time' : descriptor.title);
+  setText('#overview-title-' + cardId, cardId === 'computation' ? 'Computation' : descriptor.title);
   for (const button of card.querySelectorAll('[data-overview-metric]')) button.setAttribute('aria-pressed', String(button.dataset.overviewMetric === metric));
   const svg = svgNode('svg', {viewBox: '0 0 480 240', role: 'img', 'aria-labelledby': 'graph-title-' + cardId + ' graph-description-' + cardId, class: 'overview-svg'});
   svg.append(svgNode('title', {id: 'graph-title-' + cardId}, descriptor.title + ' by ' + axisLabel.toLowerCase()));
@@ -3954,6 +3954,10 @@ function safeAuthReturnRoute(value) {
 function authenticationRoute() { return /^#(?:auth|reset-password)(?:\?|$)/.test(window.location.hash); }
 function renderAuthMethods() {
   const github = state.auth?.github_enabled === true;
+  for (const selector of ['#access-existing-account', '#auth-existing-account']) {
+    $(selector).hidden = !state.invitationToken || Boolean(state.user);
+    $(selector).disabled = state.githubBusy || state.githubCompleteBusy || state.invitationBusy;
+  }
   $('#access-github').hidden = !github;
   $('#access-github').disabled = state.githubBusy;
   $('#access-sign-in').classList.toggle('button-primary', !github);
@@ -3985,6 +3989,21 @@ function renderAccountSignIn() {
   $('#account-link-github').disabled = state.githubBusy;
   setText('#account-link-github', state.githubBusy ? 'Connecting…' : 'Link GitHub');
 }
+function signInExistingAccount(trigger, password = false) {
+  if (state.user || state.githubBusy || state.githubCompleteBusy || state.invitationBusy || $('#auth-submit').disabled) return;
+  // This explicit choice leaves the invitation flow. The server still rejects
+  // unavailable invitations, and new identities still require a valid one.
+  state.invitationToken = null; state.invitationDelivery = null; state.githubPending = false;
+  $('#access-code').value = ''; $('#auth-password').value = ''; setError('#access-error', '');
+  state.returnRoute = safeAuthReturnRoute(state.returnRoute);
+  window.history.replaceState(null, '', state.returnRoute);
+  renderAccessGate(); setAuthMode('login'); openAuth(trigger);
+  dialogTriggers.set(authDialog, state.auth?.github_enabled ? $('#access-github') : $('#access-sign-in'));
+  if (password || !state.auth?.github_enabled) { $('#auth-password-options').open = true; $('#auth-handle').focus(); }
+  else $('#auth-github').focus();
+}
+$('#access-existing-account').addEventListener('click', () => signInExistingAccount($('#access-existing-account')));
+$('#auth-existing-account').addEventListener('click', () => signInExistingAccount($('#auth-existing-account')));
 async function startGitHub(mode = 'login', trigger = $('#auth-github'), password) {
   if (!state.auth?.github_enabled || state.githubBusy || (mode === 'link' ? !state.user : Boolean(state.user))) return;
   const account = state.user?.id, csrf = state.csrf, dialogStart = trigger === $('#auth-github') || trigger === $('#github-link-submit');
@@ -4110,7 +4129,7 @@ $('#github-link-form').addEventListener('submit', event => {
   $('#github-link-password').value = '';
   void startGitHub('link', $('#github-link-submit'), password);
 });
-$('#github-existing-account').addEventListener('click', () => { state.githubPending = false; window.history.replaceState(null, '', safeAuthReturnRoute(state.returnRoute)); setAuthMode('login'); $('#auth-password-options').open = true; $('#auth-handle').focus(); });
+$('#github-existing-account').addEventListener('click', () => signInExistingAccount($('#github-existing-account'), true));
 $('#github-handle-form').addEventListener('submit', async event => {
   event.preventDefault();
   if (!state.githubPending || state.githubCompleteBusy || state.user) return;

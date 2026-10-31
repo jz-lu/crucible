@@ -87,9 +87,9 @@ Recovery remains red; solved records remain green. Badges and graph regions
 retain their semantic colors with contrast-adjusted dark equivalents. The
 unaltered official RESI raster stays transparent in both themes. Its dark-mode
 filter matches the official site's invert/hue-rotate treatment, inspected at
-https://resi.org/_astro/Base.BnY0XzHy.css on 2026-10-29. Crucible uses the same
-approach with a small brightness/contrast adjustment to keep the blue flame
-legible beside a pale vessel and key. Light mode retains the original colors.
+https://resi.org/_astro/Base.BnY0XzHy.css on 2026-10-29. The first Crucible
+candidate used a related brightness/contrast treatment and the original light
+colors. The accepted Emerald/RESI vessel treatment below supersedes that trial.
 Rectangular and circular pale backings were tried and rejected; none remains.
 
 10 theme regressions cover early paint selection, explicit preferences, OS
@@ -125,3 +125,30 @@ the footer), with slightly tighter tracking. This uses a separate brand token;
 navigation and other UI text retain IBM Plex Sans. Georgia is a system-font
 candidate with Times New Roman / serif fallbacks, not an added font download.
 Desktop dark and mobile light layouts and keyboard theme switching were checked.
+
+ACCEPTED EMERALD FLAME AND RESI-MATCHED VESSEL — 2026-10-30
+
+The original Crucible PNG remains unchanged, transparent, and shared by the
+header/footer. CSS gives the flame the selected Emerald treatment in each mode.
+A reusable static SVG filter then colors only the vessel, beginning at row 130
+of the 192px source image. Complementary composites retain SourceAlpha rather
+than stacking duplicate images or adding a background. The filters use sRGB
+explicitly. Source colors #002154 (light) and #c4e5ff (dark) account for the
+image's near-opaque alpha and match RESI's human figure on the existing canvas.
+Actual browser samples of 72 interior bowl pixels were uniformly #012255 in
+light mode and #c3e4fe in dark mode, matching the representative RESI head.
+
+The same single img elements, reserved 38x54 / 32x46 / 30x42px frames, decode gate,
+accessible wordmarks and theme preference handling remain in place. RESI's
+artwork and filters are unchanged. No extra image fetch, event handler, public
+asset, network permission or CSP relaxation is introduced. Static filter
+definitions appear before the header; the trusted inline stylesheet remains
+covered by its normal snapshot-specific CSP hash.
+
+Validation: 67 public-asset checks and 10 focused browser checks passed, including
+delayed/interrupted image decode, inline bootstrap, stored opposite-OS themes,
+ordinary/forced reloads and denied storage. The theme checks now assert the
+selected vessel filter too. Actual synthetic local app screenshots were
+reviewed at 1440px and 390px, both light/dark, including the paired footer. No
+seam, image distortion, overflow, browser errors or CSP violations observed.
+These visual checks used Chromium; no new cross-browser claim is made.

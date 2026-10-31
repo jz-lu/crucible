@@ -24,6 +24,24 @@
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body data-access-pending="true">
+    <svg class="brand-filter-definitions" aria-hidden="true" focusable="false" width="0" height="0" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- The vessel begins at row 130 of the unchanged 192px-high PNG.
+             Composite complementary regions, retaining its antialiased alpha. -->
+        <filter id="crucible-vessel-light" color-interpolation-filters="sRGB" primitiveUnits="objectBoundingBox" x="0" y="0" width="100%" height="100%">
+          <feFlood x="0" y="0.677083333333" width="1" height="0.322916666667" flood-color="#002154" result="vessel-paint"/>
+          <feComposite in="vessel-paint" in2="SourceAlpha" operator="in" result="vessel"/>
+          <feComposite in="SourceGraphic" in2="vessel-paint" operator="out" result="flame"/>
+          <feMerge><feMergeNode in="flame"/><feMergeNode in="vessel"/></feMerge>
+        </filter>
+        <filter id="crucible-vessel-dark" color-interpolation-filters="sRGB" primitiveUnits="objectBoundingBox" x="0" y="0" width="100%" height="100%">
+          <feFlood x="0" y="0.677083333333" width="1" height="0.322916666667" flood-color="#c4e5ff" result="vessel-paint"/>
+          <feComposite in="vessel-paint" in2="SourceAlpha" operator="in" result="vessel"/>
+          <feComposite in="SourceGraphic" in2="vessel-paint" operator="out" result="flame"/>
+          <feMerge><feMergeNode in="flame"/><feMergeNode in="vessel"/></feMerge>
+        </filter>
+      </defs>
+    </svg>
     <a class="skip-link" href="#catalogue-workspace">
       Skip to main content
     </a>
@@ -188,6 +206,7 @@
           <button id="access-sign-in" class="button button-primary" type="button">Sign in</button>
           <button id="access-register" class="button button-quiet" type="button" hidden>Create account</button>
         </div>
+        <button id="access-existing-account" class="text-button auth-back" type="button" hidden>Already joined? Sign in</button>
         <div id="access-verification" hidden>
           <p id="access-account"></p>
           <button id="access-send-code" class="button button-primary" type="button">Email a verification code</button>
@@ -889,6 +908,7 @@
       <div id="auth-sign-in-methods">
         <button id="auth-github" class="button button-primary full-width github-sign-in" type="button" hidden>Continue with GitHub</button>
         <p id="auth-github-error" class="form-error" role="alert" hidden></p>
+        <button id="auth-existing-account" class="text-button auth-back" type="button" hidden>Already joined? Sign in</button>
         <details id="auth-password-options" class="auth-password-options sole-method" open>
           <summary>Use a password</summary>
           <div class="auth-switch" role="group" aria-label="Account action">

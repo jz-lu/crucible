@@ -3,7 +3,7 @@ const {test, expect, signIn, gate} = require('./helpers.cjs');
 // UI-only measurements decorate an authorized fixture response. This never
 // registers or publishes evidence; backend identity/ZIP checks have separate tests.
 for (const width of [1440, 390]) {
-  test(`resource views retain focus and show scoped RAM at ${width}px`, async ({page}, testInfo) => {
+  test(`resource timing keeps operation focus, history and evidence at ${width}px`, async ({page}, testInfo) => {
     await page.setViewportSize({width, height:1000});
     await page.route('**/api/schemes?*', async route => {
       const response=await route.fetch(); if(response.status()!==200) return route.fulfill({response});
@@ -27,7 +27,7 @@ for (const width of [1440, 390]) {
       const rows = [20,21].map(n=>({configuration:String(n),sizes_bytes:{public_key:32,ciphertext:64,private_key:48},
         communication:{fresh_exchange_bytes:96,cached_exchange_bytes:64},
         native_evidence:[{comparison_profile:method,implementation:impl,platform_identified:true,
-          computation:{keygen:op,encapsulate:op,decapsulate:op},
+          computation:{keygen:op,encapsulate:{...op,duration_ns:{...op.duration_ns,median:4000,q1:3000,q3:5000}},decapsulate:{...op,duration_ns:{...op.duration_ns,median:8000,q1:7000,q3:9000}}},
           first_call:{keygen:{complete:true,duration_ns:{n:5,median:6000,q1:5000,q3:7000}}},
           profile:{method:{id:'serialized-native-honest-v2'},environment:{os:'Linux',cpu:'Synthetic browser fixture'},sampling:{workers:5,trials:20}},
           memory_components:{'keygen:rss':{complete:true,values:{n:5,max:8192}}}}],
@@ -50,10 +50,12 @@ for (const width of [1440, 390]) {
       await expect(graph.locator('.chart-recovery-line')).toHaveAttribute('data-profile-id','dh-160');
       await expect(graph.locator('.chart-recovery-area')).toBeVisible();
     }
-    const measure=card.getByLabel('Measure',{exact:true});
+    const operation=card.getByLabel('Operation',{exact:true});
+    await expect(page.locator('#overview-title-computation')).toHaveText('Computation');
+    await expect(operation.locator('option')).toHaveText(['Key generation','Encapsulation','Decapsulation']);
     for (const name of ['public','cipher','computation']) {
       const graph=page.locator('#overview-chart-'+name);
-      if (name === 'cipher') await expect(graph.getByLabel('Measure',{exact:true})).toHaveCount(0);
+      if (name !== 'public') await expect(graph.getByLabel('Measure',{exact:true})).toHaveCount(0);
       else await expect(graph.getByLabel('Measure',{exact:true}).locator('option')).toHaveCount(2);
       await expect(graph.locator('details').getByLabel('Report',{exact:true})).toBeHidden();
       await expect(graph.getByLabel('Measurement profile',{exact:true})).toHaveCount(0);
@@ -66,22 +68,24 @@ for (const width of [1440, 390]) {
     await expect(card.getByRole('columnheader',{name:'Middle 50% (µs)',exact:true})).toBeVisible();
     await expect(card).toContainText('not a confidence interval or a hardware correction');
     await page.screenshot({path:testInfo.outputPath('resource-timing.png'),fullPage:true});
-    await measure.focus();
-    await measure.selectOption('rss');
-    await expect(measure).toBeFocused();
-    await expect(card).toContainText('Maximum observed fresh-worker resident RAM');
-    await expect(card.locator('.resource-summary')).toContainText('Includes pre-exec launcher memory');
+    await operation.focus();
+    await operation.selectOption('encapsulate');
+    await expect(operation).toBeFocused();
     await expect(card.locator('.chart-point')).toHaveCount(2);
-    await expect(card.locator('.chart-point').first()).toHaveAttribute('data-value','8192');
+    await expect(card.locator('.chart-point').first()).toHaveAttribute('data-value','4');
+    await operation.selectOption('decapsulate');
+    await expect(operation).toBeFocused();
+    await expect(card.locator('.chart-point').first()).toHaveAttribute('data-value','8');
+    await expect(card.locator('option[value="rss"]')).toHaveCount(0);
     await card.locator('details').getByLabel('Report',{exact:true}).selectOption('e'.repeat(64));
     await expect(page.locator('#overview-badge-computation')).toHaveText('Historical');
-    await expect(card.locator('.chart-point').first()).toHaveAttribute('data-value','8192');
-    await expect(card.locator('.resource-summary')).toContainText('Includes pre-exec launcher memory');
+    await expect(card.locator('.chart-point').first()).toHaveAttribute('data-value','8');
+    await expect(operation).toHaveValue('decapsulate');
     await card.locator('details').getByLabel('Report',{exact:true}).selectOption('current');
     await expect(card.getByRole('link',{name:'Download measurements & evidence'})).toHaveAttribute('href',/\/api\/resource-publications\/[a-f0-9]{64}\/download/);
     await expect(card).toContainText('browser-fixture');
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-    await page.screenshot({path:testInfo.outputPath('resource-memory.png'),fullPage:true});
+    await page.screenshot({path:testInfo.outputPath('resource-operation-history.png'),fullPage:true});
     await page.locator('#nav-challenge').click();
     await page.goto('/#scheme/teaching-dh-kem/4');
     await expect(page.locator('#overview-badge-computation')).toHaveText('Current');

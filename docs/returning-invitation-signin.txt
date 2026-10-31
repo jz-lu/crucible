@@ -1,0 +1,40 @@
+RETURNING TO CRUCIBLE THROUGH AN OLD INVITATION
+=============================================
+
+Local reproduction and fix; no production account diagnosis or access change.
+
+The invitation URL populates the browser's invitation context. GitHub start
+normally carries that token so a new participant can choose a handle, verify
+their invited mailbox and activate beta membership. The server validates a
+supplied invitation before contacting GitHub. A redeemed, expired, revoked or
+otherwise unavailable invitation is rejected at that point, even when the
+person intended to sign in to an already-linked GitHub account.
+
+The ordinary GitHub sign-in path, without an invitation token, already works
+for an existing linked account. Unlinked identities still need a valid invite;
+sign-in does not regrant revoked membership or bypass private-beta access.
+
+The local UI now offers “Already joined? Sign in” on the invitation gate and in
+its sign-in dialog, including beside an unavailable-invitation error. Only this
+explicit choice clears the invitation token, verification state/code and typed
+password, removes the invitation from the URL, and opens normal sign-in. It
+keeps a safe intended destination. GitHub remains primary when configured;
+password sign-in remains available. Cancelling returns keyboard focus to a
+visible sign-in control. A pending provider attempt cannot be interrupted by
+this action. The existing choose-handle/password escape uses the same cleanup.
+
+First-time invitation flows still send their token. Backend validation, account
+linking, mailbox proof, membership checks and OAuth protections are unchanged.
+There is no automatic retry without the token, account creation, re-invitation,
+password reset or access grant.
+
+Evidence: frontend regressions cover original valid-invitation transport, both
+error surfaces, safe destination/context cleanup, busy states and focus. The
+isolated browser tests use a synthetic unavailable token against the real local
+invitation check (403), then exercise normal GitHub sign-in with a locally
+intercepted provider callback into an existing disposable account. These tests
+do not identify the cause of any particular beta participant's reported issue.
+
+Relevant implementation: web/app.js captureInvitation/startGitHub/
+signInExistingAccount; crucible/github_auth.py start/callback/complete;
+crucible/beta_access.py validate_registration_invitation.

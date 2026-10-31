@@ -61,6 +61,7 @@
   --display: 'Cardo',Georgia,serif;
   --wordmark: 'IBM Plex Sans',Arial,sans-serif;
   --brand-wordmark: Georgia,'Times New Roman',serif;
+  --crucible-image-filter: grayscale(1) sepia(1) hue-rotate(80deg) saturate(3.1) brightness(.92) contrast(.95) url('#crucible-vessel-light');
   --header-text-size: 16px;
   --sans: 'IBM Plex Sans',Arial,sans-serif;
   --mono: 'SFMono-Regular',Consolas,'Liberation Mono',monospace;
@@ -68,7 +69,7 @@
 
 :root[data-theme=dark] {
   --brand-image-filter: invert(1) hue-rotate(180deg);
-  --crucible-image-filter: invert(1) hue-rotate(180deg) brightness(1.2) contrast(.85);
+  --crucible-image-filter: invert(1) grayscale(1) sepia(1) hue-rotate(80deg) saturate(3.1) brightness(.97) contrast(.8) url('#crucible-vessel-dark');
   --paper: #171a18;
   --surface: #202622;
   --ink: #e4e7e0;
@@ -118,7 +119,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme=light]) {
   --brand-image-filter: invert(1) hue-rotate(180deg);
-  --crucible-image-filter: invert(1) hue-rotate(180deg) brightness(1.2) contrast(.85);
+  --crucible-image-filter: invert(1) grayscale(1) sepia(1) hue-rotate(80deg) saturate(3.1) brightness(.97) contrast(.8) url('#crucible-vessel-dark');
   --paper: #171a18;
   --surface: #202622;
   --ink: #e4e7e0;
@@ -370,6 +371,16 @@ button {
   /* Preserve the transparent artwork and its original frame. */
   object-fit: cover;
   filter: var(--crucible-image-filter, none);
+}
+
+/* The original PNG and its decode gate stay shared by header and footer.
+   These static filters preserve its alpha while matching the vessel to RESI. */
+.brand-filter-definitions {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 .decode-brand-marks .brand-mark:not([data-logo-ready=true]) {

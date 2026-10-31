@@ -14,7 +14,7 @@
   const views = {
     public: [['public_key', 'Public key'], ['fresh', 'Fresh exchange']],
     cipher: [['ciphertext', 'Ciphertext']],
-    computation: [['warm', 'Operation time'], ['rss', 'Process RAM']]
+    computation: [['warm', 'Operation time']]
   };
   const labels = Object.fromEntries(Object.values(views).flat());
   const field = view => view === 'stack' ? 'stack_evidence' : view === 'heap_stack' ? 'memory_evidence' : 'native_evidence';
@@ -203,7 +203,7 @@
     target.replaceChildren();
     target.dataset.resourceRenderKey = renderKey;
     target.classList.add('resource-chart');
-    document.querySelector('#overview-title-' + cardId).textContent = computational ? 'Computation & memory' : labels[view];
+    document.querySelector('#overview-title-' + cardId).textContent = computational ? 'Computation' : labels[view];
     document.querySelector('#overview-badge-' + cardId).textContent = historical ? reportLabel : stateLabels[data?.state] || '';
     const controls = element('div', undefined, 'resource-controls');
     if (views[cardId].length > 1) controls.append(control('Measure', views[cardId], view, value => { choice.view = value; redraw(); }));
@@ -312,5 +312,5 @@
     else if (focusSummary) summary.focus({preventScroll: true});
     return true;
   }
-  window.CrucibleResources = {load, render, invalidateReads, clear: () => { cache.clear(); selections.clear(); }, point, exact, coordinate};
+  window.CrucibleResources = {load, render, invalidateReads, clear: () => { cache.clear(); selections.clear(); }, point, rssScope, exact, coordinate};
 })();

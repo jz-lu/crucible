@@ -41,8 +41,12 @@ def references(content):
             url = urlsplit(value["url"])
             if url.scheme or url.netloc or url.path not in ("", "/") or url.query or not url.fragment.startswith("notebook?"):
                 continue
-            fields = parse_qs(url.fragment[len("notebook?"):], strict_parsing=True, max_num_fields=3)
-            if set(fields) != {"note", "revision", "sha256"} or any(len(items) != 1 for items in fields.values()):
+            fields = parse_qs(url.fragment[len("notebook?"):], strict_parsing=True, keep_blank_values=True, max_num_fields=4)
+            if (set(fields) not in ({"note", "revision", "sha256"}, {"note", "revision", "sha256", "location"})
+                    or any(len(items) != 1 for items in fields.values())):
+                continue
+            location = fields.get("location", [None])[0]
+            if location is not None and (not re.fullmatch(r"L[1-9][0-9]{0,6}", location) or int(location[1:]) > 1_000_000):
                 continue
             identifier, number, digest = (fields[key][0] for key in ("note", "revision", "sha256"))
             if not 1 <= len(identifier) <= 100 or identifier != identifier.strip() or any(ord(c) < 32 for c in identifier):
@@ -52,6 +56,10 @@ def references(content):
         except ValueError:
             continue
         relation = value.get("relation")
+        # A passage is an authored locator within this immutable revision.
+        # The existing graph stays at note-revision granularity; the original
+        # URL is retained in source content. Neither grants target access nor
+        # establishes that the passage exists or supports the claimed relation.
         yield {"position": position, "target_note_id": identifier, "target_revision": int(number),
                "target_sha256": digest, "relation": relation if isinstance(relation, str) and relation in RELATIONS else "cites",
                "scope": value.get("scope", "")[:10000] if isinstance(value.get("scope", ""), str) else ""}
