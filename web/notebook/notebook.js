@@ -318,8 +318,6 @@
     visualizations.append(el('span', 'nb-view-label', 'Visualizations'));
     const mapView = mark('map-view', button('Scheme map', () => navigateView('#notebook?view=map'), 'nb-view nb-visualization-view'));
     for (const event of ['pointerenter', 'focus']) mapView.addEventListener(event, () => { void prepareMap().catch(() => {}); });
-    const bountyView = mark('bounties-view', button('Bounties', () => navigateView(bountyController?.route() || '#notebook?view=bounties'), 'nb-view nb-visualization-view'));
-    for (const event of ['pointerenter', 'focus']) bountyView.addEventListener(event, () => { if (canWarm()) void ensureBounties().then(controller => controller?.warm()).catch(() => {}); });
     const timelineView = mark('timeline-view', button('Timeline', () => navigateView('#notebook?view=timeline'), 'nb-view nb-visualization-view'));
     for (const event of ['pointerenter', 'focus']) timelineView.addEventListener(event, prepareTimeline);
     function viewIcon(parts) {
@@ -335,15 +333,15 @@
     notesView.prepend(viewIcon([['rect',{x:5,y:3,width:14,height:18,rx:2}],['path',{d:'M9 8h6M9 12h6M9 16h4'}]]));
     mapView.prepend(viewIcon([['path',{d:'m7.7 6.2 8.6 4.6m0 2.4-8.6 4.6M6 8v8'}],['circle',{cx:6,cy:6,r:2}],['circle',{cx:18,cy:12,r:2}],['circle',{cx:6,cy:18,r:2}]]));
     timelineView.prepend(viewIcon([['path',{d:'M4 4v16h16M5 16h5v-5h5V6h5'}]]));
-    const visualizationTabs = el('div', 'nb-visualization-tabs'); bountyView.prepend(viewIcon([['path',{d:'M5 21V3m0 1h13l-4 4 4 4H5'}]]));
-    visualizationTabs.append(mapView, bountyView, timelineView);
+    const visualizationTabs = el('div', 'nb-visualization-tabs');
+    visualizationTabs.append(mapView, timelineView);
     visualizations.append(visualizationTabs); views.append(notesView, visualizations);
     const mapPanel = mark('map', el('section', 'nb-map-panel')); mapPanel.hidden = true;
     mapPanel.setAttribute('aria-label', 'Scheme map');
     const timelinePanel = mark('timeline', el('section', 'nb-timeline-panel')); timelinePanel.hidden = true;
     timelinePanel.setAttribute('aria-label', 'Notes over time');
     const bountyPanel = mark('bounties', el('section', 'nb-bounties-panel')); bountyPanel.hidden = true;
-    bountyPanel.setAttribute('aria-label', 'Research bounties');
+    bountyPanel.setAttribute('aria-label', 'Bounties');
     const noticeNode = mark('notice', el('div', 'nb-notice')); noticeNode.setAttribute('role', 'status'); noticeNode.hidden = true;
     const library = mark('library', el('section')); const toolbar = el('div', 'nb-toolbar');
     const searchLabel = el('label', 'nb-search'); searchLabel.append(el('span', 'nb-sr-only', 'Search notes'));
@@ -424,10 +422,11 @@
       const inShared = !inVisualization && params.get('shared') === '1' && !params.has('note');
       if (inShared || params.get('filter') === 'shared') { params.delete('shared'); params.delete('state'); params.delete('filter'); visibility = 'all'; filter.input.value = 'all'; }
       request++; timelineRequest++;
-      for (const [control, selected] of [[notesView, !inVisualization], [mapView, inMap], [timelineView, inTimeline], [bountyView, inBounties]]) {
+      for (const [control, selected] of [[notesView, !inVisualization], [mapView, inMap], [timelineView, inTimeline]]) {
         if (selected) control.setAttribute('aria-current', 'page'); else control.removeAttribute('aria-current');
       }
       q('map').hidden = !inMap; q('timeline').hidden = !inTimeline; q('bounties').hidden = !inBounties;
+      heading.hidden = views.hidden = !reviewOnly && inBounties;
       if (!inBounties) bountyController?.hide();
       if (!inTimeline) q('timeline').replaceChildren();
       if (!inMap) mapController?.hide();
@@ -484,7 +483,7 @@
       const owner = guard(), token = request, credential = currentSession;
       const current = () => owner() && token === request && session() === credential;
       if (!bountyController) {
-        const frame = params.has('bounty') || params.get('compose') === 'bounty' ? el('div', 'bty-detail-placeholder') : notebookPendingPart('[data-notebook-panel="bounties"]', 'Research bounties');
+        const frame = params.has('bounty') || params.get('compose') === 'bounty' ? el('div', 'bty-detail-placeholder') : notebookPendingPart('[data-notebook-panel="bounties"]', 'Bounties');
         frame.setAttribute('aria-hidden', 'true'); q('bounties').replaceChildren(frame);
       }
       try {
@@ -2079,7 +2078,9 @@
     q('dialog').addEventListener('cancel', event => { event.preventDefault(); closeDialog(); });
     q('dialog').addEventListener('close', () => { if (returnFocus?.isConnected) returnFocus.focus({preventScroll:true}); });
     window.addEventListener('beforeunload', event => { captureReviewDraft(); if (hasUnsavedDraft() || reviewDraftDirty()) { event.preventDefault(); event.returnValue = ''; } });
-    const controller = {show, hide, setAccount, invalidateReads, warm}; root.notebookController = controller; return controller;
+    const controller = {show, hide, setAccount, invalidateReads, warm,
+      bountyRoute: () => bountyController?.route() || '#bounties'};
+    root.notebookController = controller; return controller;
   }
   window.CrucibleNotebook = Object.freeze({mount});
 })();

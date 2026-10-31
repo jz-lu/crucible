@@ -88,6 +88,29 @@
           value.pagination.limit !== 6 || typeof value.pagination.has_more !== 'boolean') throw Error('The bounty list could not be verified.');
       value.bounties.forEach(item => validateTask(item)); return validatePolicy(value);
     }
+    function noteSearchPath({query = '', after = null} = {}) {
+      if (typeof query !== 'string' || query.length > 200 || after !== null && (typeof after !== 'string' || after.length > 768)) throw Error('Use up to 200 characters to search notes.');
+      return '/api/notebook/notes?' + new URLSearchParams({limit: '25', scope: 'all', include_curated: 'true',
+        ...(query.trim() ? {q: query.trim()} : {}), ...(after ? {after} : {})});
+    }
+    function validateNotes(value, maximum = 25) {
+      if (!Array.isArray(value?.notes) || value.notes.length > maximum ||
+          value.next_after !== null && (typeof value.next_after !== 'string' || !value.next_after || value.next_after.length > 768)) throw Error('The note search response could not be verified.');
+      const ids = new Set(), notes = [];
+      for (const note of value.notes) {
+        if (!note || typeof note !== 'object') throw Error('The note search response could not be verified.');
+        if (note.deletion || note.publication_status === 'withdrawn') continue;
+        const revision = Array.isArray(note.revisions) ? note.revisions.find(item => item.revision === note.revision) : null;
+        if (typeof note.id !== 'string' || !note.id || note.id.length > 108 || ids.has(note.id) ||
+            !Number.isSafeInteger(note.revision) || note.revision < 1 || !hashPattern.test(note.content_sha256 || '') ||
+            revision?.content_sha256 !== note.content_sha256 || typeof revision?.content?.title !== 'string' ||
+            note.number != null && (!Number.isSafeInteger(note.number) || note.number < 1)) throw Error('The note search response could not be verified.');
+        ids.add(note.id);
+        notes.push({note_id: note.id, revision: note.revision, content_sha256: note.content_sha256,
+          number: note.number ?? null, title: revision.content.title, publication_status: note.publication_status});
+      }
+      return {notes, next_after: value.next_after};
+    }
     const detailPath = id => {
       if (!idPattern.test(id)) throw Error('This bounty link is invalid.');
       return '/api/bounties/' + id;
@@ -109,6 +132,12 @@
         return value;
       }, settings),
       detail: (id, settings) => read(detailPath(id), validateDetail(id), settings),
+      notes: (options, settings) => read(noteSearchPath(options), validateNotes, settings),
+      noteIndex: () => read('/api/notebook/notes?projection=index&include_curated=true', value => {
+        if (value?.format !== 'crucible-notebook-summary-index-v1' || value.scope !== 'all' || value.include_curated !== true ||
+            typeof value.complete !== 'boolean') throw Error('The note index could not be verified.');
+        return validateNotes(value, 500);
+      }),
       allowance: settings => read('/api/me/bounty-allowance', value => {
         if (!Number.isSafeInteger(value?.allowance?.available_units) || value.allowance.available_units < 0 ||
             !Number.isSafeInteger(value.allowance.monthly_units) || value.allowance.monthly_units < 0) throw Error('The allowance response could not be verified.');

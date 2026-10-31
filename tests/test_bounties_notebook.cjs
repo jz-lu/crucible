@@ -10,7 +10,7 @@ async function boot({prepare, reviewOnly = false} = {}) {
   for (const file of ['store.js', 'seed.js', 'notebook.js']) vm.runInContext(fs.readFileSync('web/notebook/' + file, 'utf8'), app.sandbox, {filename: file});
   app.sandbox.window.CrucibleBounties = {mount(root, options) {
     calls.push({kind: 'mount', root, options});
-    return {show: async params => calls.push({kind: 'show', params: new URLSearchParams(params)}), hide: () => calls.push({kind: 'hide'}), destroy: () => {calls.push({kind: 'destroy'}); root.replaceChildren();}, invalidateReads: () => calls.push({kind: 'invalidate'}), warm: async () => {calls.push({kind: 'warm'}); return {bytes: 42};}, route: () => reviewOnly ? '#reviews?section=bounties' : '#notebook?view=bounties'};
+    return {show: async params => calls.push({kind: 'show', params: new URLSearchParams(params)}), hide: () => calls.push({kind: 'hide'}), destroy: () => {calls.push({kind: 'destroy'}); root.replaceChildren();}, invalidateReads: () => calls.push({kind: 'invalidate'}), warm: async () => {calls.push({kind: 'warm'}); return {bytes: 42};}, route: () => reviewOnly ? '#reviews?section=bounties' : '#bounties'};
   }};
   const root = app.$(reviewOnly ? '#review-notebook-workspace' : '#notebook-workspace');
   const controller = app.sandbox.window.CrucibleNotebook.mount(root, {
@@ -27,17 +27,24 @@ async function boot({prepare, reviewOnly = false} = {}) {
 let passed = 0;
 async function test(name, work) {await work(); passed++; console.log('PASS ' + name);}
 (async () => {
-  await test('bounty intent warms one modular controller without showing or replacing the notebook', async () => {
+  await test('bounty preparation reuses one controller and its page omits notebook navigation', async () => {
     const app = await boot(); await app.controller.show();
     assert.equal(app.prepared(), 0);
-    app.q('bounties-view').dispatchEvent({type: 'pointerenter'}); await flush();
+    assert.equal(app.q('bounties-view'), null);
+    await app.controller.warm('bounties');
     assert.equal(app.prepared(), 1); assert.equal(app.q('bounties').hidden, true);
     assert.deepEqual(app.calls.map(c => c.kind), ['mount', 'warm']);
     assert.equal(app.q('library').hidden, false);
-    app.q('bounties-view').click(); await app.routeTask();
+    await app.controller.show(new URLSearchParams('view=bounties'));
     assert.equal(app.q('library').hidden, true); assert.equal(app.q('bounties').hidden, false);
     assert.equal(app.calls.at(-1).params.get('view'), 'bounties');
-    assert.equal(app.root.querySelector('.nb-visualization-tabs').textContent, 'Scheme mapBountiesTimeline');
+    assert.equal(app.root.querySelector('.nb-visualization-tabs').textContent, 'Scheme mapTimeline');
+    assert.equal(app.root.querySelector('.nb-heading').hidden, true);
+    assert.equal(app.root.querySelector('.nb-views').hidden, true);
+    assert.equal(app.controller.bountyRoute(), '#bounties');
+    await app.controller.show();
+    assert.equal(app.root.querySelector('.nb-heading').hidden, false);
+    assert.equal(app.root.querySelector('.nb-views').hidden, false);
   });
   await test('pending bounty assets cannot mount after account or credential retirement', async () => {
     for (const change of ['rotate', 'revoke']) {

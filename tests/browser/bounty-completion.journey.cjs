@@ -24,7 +24,8 @@ test('a reviewed bounty spends explicit allowance and awards one independently a
     await expect(panel().getByRole('heading', {name:'Synthetic full bounty journey', exact:true})).toBeVisible();
   }
   await as('queueauthor');
-  await page.goto('/#notebook?view=bounties');
+  await page.locator('#nav-bounties').click();
+  await expect(page).toHaveURL(/#bounties$/);
   await panel().getByRole('button', {name:'Propose a bounty', exact:true}).click();
   for (const [label,value] of [
     ['The task','Synthetic full bounty journey'],

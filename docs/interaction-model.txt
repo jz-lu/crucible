@@ -206,6 +206,20 @@ Next, in priority order:
 Review evidence
 
 Each UI change should name the rule, affected journeys and remaining exceptions.
+The Bounties main tab follows rule 1 with a canonical #bounties destination.
+Existing #notebook bounty links retain their task, collection and form selections
+while redirecting there. Notes, Scheme map and Timeline remain notebook views;
+bounty drafts and pending receipts retain their account/session ownership in the
+existing controller. Exact passage citations keep their original query for
+validation. An explicit unavailable bounty release capability also hides the new
+tab and returns its routes to Notes; this navigation change does not select a
+different release policy.
+Bounty source citations use permission-checked, bounded server search rather
+than an approximation of notebook search. Selected ID tags retain exact revision
+and hash pins, including when a newer note revision exists. Search reads belong
+to the account, form route and current query; late replies cannot replace a new
+query or reopen a retired form. Selection and removal preserve pending-write
+freezes and the existing idempotent retry payload.
 Use the existing standalone JavaScript and disposable Chromium suites to cover
 slow/out-of-order reads, warm return, save/uncertain retry, focus and account
 changes as appropriate. Check desktop/mobile geometry where layout changes.

@@ -48,6 +48,15 @@ const button = (host, text) => host.querySelectorAll('button').find(node => node
 function click(host, text) {const node = button(host, text); assert.ok(node, text); node.click(); return node;}
 function fill(host, name, value) {const input = host.querySelector('[name="' + name + '"]'); assert.ok(input, name); input.value = value; input.dispatchEvent({type: 'input'}); return input;}
 const submit = host => host.querySelector('form').dispatchEvent({type: 'submit', preventDefault() {}});
+function sourceNote(identifier = note, number = 1, more = {}) {
+  const revision = more.revision || 2, digest = more.content_sha256 || hash;
+  return {id: identifier, number, revision, content_sha256: digest, publication_status: 'approved',
+    revisions: [{revision, content_sha256: digest, content: {title: more.title || 'Alpha source note', claim: 'A synthetic source.', tags: []}}], ...more};
+}
+const sourceOptions = f => f.host.querySelectorAll('[role="option"]');
+const sourceTags = f => f.host.querySelectorAll('.bty-source-id').map(node => node.textContent);
+function focusSources(f) { const input = f.host.querySelector('[name="bounty-sources"]'); input.focus(); input.dispatchEvent({type: 'focus'}); return input; }
+const searchPause = () => new Promise(resolve => setTimeout(resolve, 210));
 let passed = 0, complete = false;
 async function test(name, run) {await run(); console.log('PASS ' + name); passed++;}
 process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.error('Bounty checks did not finish'); process.exitCode = 1;}});
@@ -94,6 +103,129 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
       assert.throws(() => parse(JSON.stringify({...pin, revision: 1.5})), /revision/);
       assert.throws(() => parse('/#notebook?note=' + note), /pin a revision/);
     } finally {f.close();}
+  });
+  await test('the main page keeps Bounties as its title across collections', async () => {
+    const f = fixture();
+    try {
+      for (const status of ['open', 'mine', 'past']) {
+        await f.show('status=' + status);
+        assert.equal(f.host.querySelector('h1').textContent, 'Bounties');
+        assert.equal(f.host.querySelector('.bty-count').textContent, status === 'mine' ? 'Your activity' : status === 'past' ? 'Past bounties' : 'Open tasks');
+      }
+    } finally { f.close(); }
+  });
+  await test('the source picker opens on focus and adds, removes and saves multiple exact pins', async () => {
+    const alpha = sourceNote(), beta = sourceNote(second, 2, {title: 'Beta source note'});
+    let saved;
+    const f = fixture({responder: (url, body) => {
+      if (url.pathname === '/api/notebook/notes') return {notes: [alpha, beta], next_after: null};
+      if (url.pathname === '/api/bounties' && body) { saved = task(id, {...body.terms, terms: body.terms, status: 'draft'}); return {bounty: saved, policy}; }
+      if (url.pathname === '/api/bounties/' + id && saved) return {bounty: saved, policy};
+    }});
+    try {
+      await f.show('compose=bounty');
+      assert.equal(f.requests.some(r => r.url.pathname === '/api/notebook/notes'), false);
+      const input = focusSources(f); await flush();
+      assert.equal(input.getAttribute('role'), 'combobox'); assert.equal(input.getAttribute('aria-expanded'), 'true');
+      assert.equal(sourceOptions(f).length, 2);
+      sourceOptions(f)[0].click(); await flush();
+      sourceOptions(f)[0].click(); await flush();
+      assert.deepEqual(sourceTags(f), ['#0001', '#0002']);
+      assert.equal(sourceOptions(f).length, 0);
+      f.host.querySelectorAll('button').find(node => node.getAttribute('aria-label') === 'Remove source #0001, revision 2').click(); await flush();
+      assert.deepEqual(sourceTags(f), ['#0002']);
+      sourceOptions(f)[0].click(); await flush();
+      for (const [name, value] of [['bounty-title','A task'],['bounty-summary','A summary'],['bounty-completion','Criteria'],['bounty-verification','Verification']]) fill(f.host, name, value);
+      submit(f.host); await flush(); await f.routed();
+      const pins = JSON.parse(JSON.stringify(f.requests.find(r => r.body).body.terms.source_notes));
+      assert.deepEqual(pins, [{note_id: second, revision: 2, content_sha256: hash}, pin]);
+      const read = f.requests.find(r => r.url.pathname === '/api/notebook/notes');
+      assert.equal(read.url.searchParams.get('limit'), '25'); assert.equal(read.url.searchParams.get('include_curated'), 'true');
+    } finally { f.close(); }
+  });
+  await test('source search is server-owned, ignores an older response and supports keyboard selection', async () => {
+    const old = deferred(), beta = sourceNote(second, 2, {title: 'Beta source note'});
+    const f = fixture({responder: url => url.pathname === '/api/notebook/notes'
+      ? url.searchParams.get('q') === 'Beta' ? {notes: [beta], next_after: null} : old.promise : undefined});
+    try {
+      await f.show('compose=bounty'); const input = focusSources(f);
+      fill(f.host, 'bounty-sources', 'Beta'); await searchPause(); await flush();
+      assert.equal(sourceOptions(f).length, 1); assert.match(sourceOptions(f)[0].textContent, /Beta/);
+      old.resolve({notes: [sourceNote()], next_after: null}); await flush();
+      assert.equal(sourceOptions(f).length, 1); assert.match(sourceOptions(f)[0].textContent, /Beta/);
+      input.dispatchEvent({type: 'keydown', key: 'ArrowDown'});
+      assert.equal(input.getAttribute('aria-activedescendant'), sourceOptions(f)[0].id);
+      input.dispatchEvent({type: 'keydown', key: 'Enter'}); await flush();
+      assert.deepEqual(sourceTags(f), ['#0002']);
+      input.dispatchEvent({type: 'keydown', key: 'Escape'});
+      assert.equal(input.getAttribute('aria-expanded'), 'false');
+      assert.equal(f.requests.filter(r => r.body).length, 0);
+    } finally { f.close(); }
+  });
+  await test('note search failure has an explicit retry and preserves selected tags', async () => {
+    let fail = true;
+    const f = fixture({responder: url => {
+      if (url.pathname !== '/api/notebook/notes') return;
+      if (url.searchParams.get('q') === 'Beta') {
+        if (fail) return Promise.reject(Object.assign(Error('Search temporarily unavailable'), {status: 503}));
+        return {notes: [sourceNote(second, 2, {title: 'Beta source note'})], next_after: null};
+      }
+      return {notes: [sourceNote()], next_after: null};
+    }});
+    try {
+      await f.show('compose=bounty'); focusSources(f); await flush(); sourceOptions(f)[0].click(); await flush();
+      fill(f.host, 'bounty-sources', 'Beta'); await searchPause(); await flush();
+      assert.match(f.host.textContent, /Search temporarily unavailable/); assert.deepEqual(sourceTags(f), ['#0001']);
+      fail = false; click(f.host, 'Try note search again'); await flush();
+      assert.equal(sourceOptions(f).length, 1); sourceOptions(f)[0].click(); await flush();
+      assert.deepEqual(sourceTags(f), ['#0001', '#0002']);
+    } finally { f.close(); }
+  });
+  await test('source note paging appends results without duplicating notes', async () => {
+    const f = fixture({responder: url => url.pathname === '/api/notebook/notes' ? url.searchParams.has('after')
+      ? {notes: [sourceNote(), sourceNote(second, 2, {title: 'Beta source note'})], next_after: null}
+      : {notes: [sourceNote()], next_after: 'next-source-page'} : undefined});
+    try {
+      await f.show('compose=bounty'); focusSources(f); await flush(); click(f.host, 'Show more notes'); await flush();
+      assert.equal(sourceOptions(f).length, 2);
+      assert.equal(f.requests.filter(r => r.url.pathname === '/api/notebook/notes').at(-1).url.searchParams.get('after'), 'next-source-page');
+    } finally { f.close(); }
+  });
+  await test('editing resolves source ID labels without replacing an older selected revision', async () => {
+    const latest = sourceNote(note, 8, {revision: 3, content_sha256: 'b'.repeat(64)});
+    const f = fixture({responder: (url, body) => {
+      if (url.pathname === '/api/notebook/notes') return {format: 'crucible-notebook-summary-index-v1', scope: 'all', include_curated: true, complete: true, notes: [latest], next_after: null};
+      if (url.pathname === '/api/bounties/' + id || url.pathname.endsWith('/revisions')) return {bounty: task(id, {status: 'draft', capabilities: {edit: true}}), policy};
+    }});
+    try {
+      await f.show('bounty=' + id + '&compose=bounty'); await flush();
+      assert.deepEqual(sourceTags(f), ['#0008']);
+      submit(f.host); await flush(); await f.routed();
+      assert.deepEqual(JSON.parse(JSON.stringify(f.requests.find(r => r.body).body.terms.source_notes)), [pin]);
+    } finally { f.close(); }
+  });
+  await test('late note results cannot restore a revoked picker', async () => {
+    const pending = deferred();
+    const f = fixture({responder: url => url.pathname === '/api/notebook/notes' ? pending.promise : undefined});
+    await f.show('compose=bounty'); focusSources(f); await flush(); f.revoke();
+    pending.resolve({notes: [sourceNote()], next_after: null}); await flush();
+    assert.equal(f.host.textContent, ''); assert.equal(sourceOptions(f).length, 0);
+  });
+  await test('the picker enforces twelve sources and freezes tag removal for an uncertain save', async () => {
+    const notes = Array.from({length: 13}, (_, index) => sourceNote('source-' + index, index + 1, {title: 'Source ' + (index + 1)}));
+    const f = fixture({responder: (url, body) => url.pathname === '/api/notebook/notes' ? {notes, next_after: null}
+      : url.pathname === '/api/bounties' && body ? Promise.reject(Object.assign(Error('Save reply lost'), {status: 0})) : undefined});
+    try {
+      await f.show('compose=bounty'); focusSources(f); await flush();
+      for (let index = 0; index < 12; index++) { sourceOptions(f)[0].click(); await flush(); }
+      assert.equal(sourceTags(f).length, 12); assert.equal(sourceOptions(f).length, 0);
+      assert.match(f.host.textContent, /12 notes selected/);
+      fill(f.host, 'bounty-title', 'Task'); fill(f.host, 'bounty-summary', 'Summary'); fill(f.host, 'bounty-completion', 'Criteria'); fill(f.host, 'bounty-verification', 'Plan');
+      submit(f.host); await flush();
+      const remove = f.host.querySelector('.bty-source-remove'); assert.equal(remove.disabled, true); remove.click();
+      assert.equal(sourceTags(f).length, 12); assert.equal(f.host.querySelector('[name="bounty-sources"]').disabled, true);
+      assert.ok(button(f.host, 'Retry the same request'));
+    } finally { f.close(); }
   });
   await test('saving a private proposal makes no reservation; admission costs use a freshly confirmed version and policy', async () => {
     let draft;
@@ -230,7 +362,7 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
     const f = fixture();
     try {
       f.model.invalidateReads(); assert.equal(f.requests.length, 0);
-      assert.equal(f.model.route(), '#notebook?view=bounties');
+      assert.equal(f.model.route(), '#bounties');
       await f.show('view=bounties'); f.model.hide();
       const count = f.requests.length; f.model.invalidateReads(); await flush(); assert.equal(f.requests.length, count);
     } finally {f.close();}

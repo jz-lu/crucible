@@ -1,4 +1,4 @@
-const {test, expect, signIn, useDataSaver} = require('./helpers.cjs');
+const {test, expect, signIn, useDataSaver, holdResponse} = require('./helpers.cjs');
 
 // UI-only synthetic tasks follow the disposable app's real session. This does
 // not replace the backend lifecycle tests, publish tasks or award any points.
@@ -24,17 +24,28 @@ async function fixture(page, {review = false} = {}) {
 for (const width of [1440, 390]) test(`bounty board, exact detail and proposal retain a compact ${width}px layout`, async ({page}, testInfo) => {
   await page.setViewportSize({width,height:width === 390 ? 844 : 1000}); await useDataSaver(page);
   const reads = await fixture(page);
-  await signIn(page); await page.locator('[data-nb="bounties-view"]').click();
+  await signIn(page); await page.locator('#nav-bounties').click();
   const panel = page.locator('[data-nb="bounties"]');
+  await expect(page).toHaveURL(/#bounties$/);
+  await expect(page.locator('#nav-bounties')).toHaveAttribute('aria-current','page');
+  await expect(page.locator('#nav-notebook')).not.toHaveAttribute('aria-current','page');
+  await expect(page.locator('.primary-nav button:visible')).toHaveText(['Schemes','Bounties','Research notebook','About us']);
+  const schemesTab = await page.locator('#nav-challenge').boundingBox(), bountyTab = await page.locator('#nav-bounties').boundingBox();
+  expect(bountyTab.x).toBeGreaterThan(schemesTab.x);
+  expect(bountyTab.y).toBeCloseTo(schemesTab.y,0);
+  await expect(page.locator('#notebook-workspace > .nb-heading')).toBeHidden();
+  await expect(page.locator('#notebook-workspace > .nb-views')).toBeHidden();
+  await expect(page.locator('[data-nb="bounties-view"]')).toHaveCount(0);
   await expect(panel.locator('.bty-question')).toHaveCount(1);
   await expect(panel.locator('.bty-allowance')).toContainText('7 of 10 remaining');
-  await expect(panel.getByRole('heading', {name:'Research bounties',exact:true})).toBeVisible();
+  await expect(panel.getByRole('heading', {name:'Bounties',exact:true})).toBeVisible();
   await expect(panel.getByRole('searchbox')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({path:testInfo.outputPath('bounty-board-' + width + '.png'),fullPage:true});
   const before = reads.filter(path => path.startsWith('/api/bounties?')).length;
-  await page.locator('[data-nb="notes-view"]').click();
-  await page.locator('[data-nb="bounties-view"]').click();
+  await page.locator('#nav-notebook').click();
+  await expect(page.locator('#notebook-workspace > .nb-views')).toBeVisible();
+  await page.locator('#nav-bounties').click();
   await expect(panel.locator('.bty-question')).toHaveCount(1);
   expect(reads.filter(path => path.startsWith('/api/bounties?')).length).toBe(before);
   await panel.locator('.bty-question').click();
@@ -52,13 +63,81 @@ for (const width of [1440, 390]) test(`bounty board, exact detail and proposal r
   await expect(panel.locator('.bty-action-panel')).toContainText('100 reward points');
   await panel.getByRole('button',{name:'Cancel',exact:true}).click();
   await expect(boost).toBeFocused();
-  await panel.getByRole('button',{name:'← Research bounties',exact:true}).click();
+  await panel.getByRole('button',{name:'← Bounties',exact:true}).click();
   await panel.getByRole('button',{name:'Propose a bounty',exact:true}).click();
   await panel.getByLabel('The task',{exact:true}).fill('Unsaved local fixture');
-  await page.locator('[data-nb="notes-view"]').click(); await page.locator('[data-nb="bounties-view"]').click();
+  await page.locator('#nav-notebook').click(); await page.locator('#nav-bounties').click();
   await expect(panel.getByLabel('The task',{exact:true})).toHaveValue('Unsaved local fixture');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({path:testInfo.outputPath('bounty-proposal-' + width + '.png'),fullPage:true});
+});
+
+for (const width of [1440,390]) test(`cold bounty navigation reserves only its own ${width}px page before reads finish`, async ({page}) => {
+  await page.setViewportSize({width,height:width === 390 ? 844 : 1000}); await useDataSaver(page);
+  await signIn(page);
+  await expect(page.locator('#nb-note-list')).toContainText('Alice browser-only private note');
+  const script = await holdResponse(page,url => url.pathname === '/app.js');
+  const session = await holdResponse(page,url => url.pathname === '/api/session');
+  const board = await holdResponse(page,url => url.pathname === '/api/bounties');
+  let boardStarted = false;
+  board.arrived.then(() => { boardStarted = true; });
+  const reads = [];
+  page.on('request',request => reads.push(new URL(request.url()).pathname));
+  try {
+    await page.goto('/?bounty-cold=' + width + '#bounties',{waitUntil:'commit'});
+    await script.arrived; await session.arrived;
+    await expect(page.locator('#nav-bounties')).toHaveAttribute('aria-current','page');
+    const frame = page.locator('#notebook-frame-template');
+    await expect(frame.locator('.bty-shell-heading')).toBeVisible();
+    await expect(frame.locator('.nb-heading')).toBeHidden();
+    await expect(frame.locator('.nb-views')).toBeHidden();
+    const pendingHeading = await frame.locator('.bty-shell-heading h2').boundingBox();
+    expect(reads.filter(path => path.startsWith('/api/bounties') || path.startsWith('/api/notebook/notes'))).toEqual([]);
+    script.release(); session.release(); await board.arrived;
+    const panel = page.locator('[data-nb="bounties"]:visible');
+    await expect(panel.getByRole('heading',{name:'Bounties',level:1})).toBeVisible();
+    const heading = await panel.getByRole('heading',{name:'Bounties',level:1}).boundingBox();
+    for (const dimension of ['x','y']) expect(Math.abs(heading[dimension] - pendingHeading[dimension])).toBeLessThan(2);
+    await expect(panel).not.toContainText('No open bounties yet.');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  } finally {
+    script.release(); session.release(); board.release();
+    await script.delivered; await session.delivered; if (boardStarted) await board.delivered;
+    await script.remove(); await session.remove(); await board.remove();
+  }
+});
+
+test('old bounty deep links select the main tab and preserve the requested collection', async ({page}) => {
+  await useDataSaver(page); await fixture(page); await signIn(page);
+  await page.goto('/#notebook?view=bounties&status=mine');
+  await expect(page).toHaveURL(/#bounties\?status=mine$/);
+  await expect(page.locator('#nav-bounties')).toHaveAttribute('aria-current','page');
+  await expect(page.locator('[data-nb="bounties"]:visible .bty-management-row')).toHaveCount(1);
+});
+
+test('a server-provided unavailable capability hides the main tab and redirects its links to Notes', async ({page}) => {
+  await useDataSaver(page); await signIn(page);
+  await expect(page.locator('#nb-note-list')).toContainText('Alice browser-only private note');
+  // Exercise the explicit server flag used by the pending availability release.
+  await page.route(url => url.pathname === '/', async route => {
+    const response = await route.fetch();
+    await route.fulfill({response,body:(await response.text()).replace('<html','<html data-bounties-enabled="false"')});
+  });
+  const reads = []; page.on('request',request => reads.push(new URL(request.url()).pathname));
+  await page.goto('/?bounty-disabled=1#bounties?status=mine');
+  await expect(page).toHaveURL(/#notebook$/);
+  await expect(page.locator('#nav-bounties')).toBeHidden();
+  await expect(page.locator('#nav-notebook')).toHaveAttribute('aria-current','page');
+  await expect(page.locator('#nb-note-list')).toBeVisible();
+  expect(reads.filter(path => path.startsWith('/api/bounties') || path === '/api/me/bounty-allowance')).toEqual([]);
+});
+
+test('a signed-out main bounty link does not read private tasks', async ({page}) => {
+  const reads = []; page.on('request',request => reads.push(new URL(request.url()).pathname));
+  await page.goto('/#bounties?status=mine');
+  await expect(page.locator('#access-sign-in')).toBeVisible();
+  await expect(page.locator('#notebook-workspace')).toBeHidden();
+  expect(reads.filter(path => path.startsWith('/api/bounties') || path === '/api/me/bounty-allowance' || path === '/api/notebook/notes')).toEqual([]);
 });
 
 test('bounty admission decisions remain in the dedicated reviewer workspace', async ({page},testInfo) => {
