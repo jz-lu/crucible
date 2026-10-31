@@ -35,9 +35,18 @@ test('a reviewed bounty spends explicit allowance and awards one independently a
   const created = await write('/api/bounties', () => panel().getByRole('button', {name:'Save private draft',exact:true}).click());
   const id = created.bounty.id, base = '/api/bounties/' + id;
   expect(created.allowance.available_units).toBe(10);
+  await panel().getByRole('button', {name:'← Your activity',exact:true}).click();
+  const proposal = () => panel().locator('[data-bounty="' + id + '"]');
+  await expect(proposal()).toContainText('Draft');
+  await expect(proposal()).toBeFocused();
+  await proposal().click();
   await panel().getByRole('button', {name:'Submit for review',exact:true}).click();
   const pending = await write(base + '/admission-requests', () => panel().locator('.bty-action-panel').getByRole('button', {name:'Submit for review',exact:true}).click());
   expect(pending.bounty.status).toBe('pending'); expect(pending.allowance.available_units).toBe(9);
+  await panel().getByRole('button', {name:'← Your activity',exact:true}).click();
+  await expect(proposal()).toContainText('Submitted for review');
+  await page.reload();
+  await expect(proposal()).toContainText('Submitted for review');
 
   await as('queuereviewer'); await visit(id, true);
   for (const box of await panel().getByRole('checkbox').all()) await box.check();

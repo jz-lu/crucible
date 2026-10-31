@@ -407,6 +407,19 @@ def test_personal_activity_includes_contributions_but_not_other_private_tasks(sy
     assert private['bounty']['id'] not in {task['id'] for task in page}
 
 
+def test_proposal_stays_in_owner_activity_after_submission(system):
+    _,owner,reviewer,solver,*_=system
+    value=create(owner)
+    for status in ('draft','pending'):
+        activity=owner.client.get('/api/bounties?status=mine').json()['bounties']
+        assert [(task['id'],task['status']) for task in activity]==[(value['bounty']['id'],status)]
+        assert owner.client.get('/api/bounties').json()['bounties']==[]
+        assert solver.client.get('/api/bounties?status=mine').json()['bounties']==[]
+        if status=='draft':value=request(owner,value)
+    queue=reviewer.client.get('/api/bounties/review-queue').json()['bounties']
+    assert [(task['id'],task['status']) for task in queue]==[(value['bounty']['id'],'pending')]
+
+
 def test_rejected_earlier_claim_cannot_destroy_later_qualified_offer(system):
     app,owner,reviewer,solver,supporter,reviewer2,_=system
     value=submit(solver,opened(system),published(solver,reviewer));first=value['receipt']['submission_id']
