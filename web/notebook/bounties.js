@@ -93,6 +93,12 @@
       if (!present()) return;
       nextFocus = focus; action = null; navigate(route({...state, ...patch}));
     }
+    function receiptSelection(task) {
+      // Private proposals belong to the owner's activity, not the open board.
+      const collection = !reviewOnly && ['draft', 'pending', 'changes_requested', 'withdrawn', 'declined'].includes(task.status) && state.status !== 'mine'
+        ? {status: 'mine', page: 1} : {};
+      return {...collection, id: task.id, compose: false, detail: 'brief'};
+    }
     function focusAfter() {
       if (!nextFocus || !present()) return;
       const node = nextFocus === 'heading' ? title : root.querySelector('[data-bounty-focus="' + nextFocus + '"]') || root.querySelector('[name="' + nextFocus + '"]');
@@ -204,7 +210,7 @@
         const receipt = completedWrites.get(key);
         for (const input of form.querySelectorAll('input, textarea, select')) input.disabled = true;
         form.append(el('p', 'nb-notice', 'This request was saved while you were browsing.'), button('View bounty', () => {
-          completedWrites.delete(key); drafts.delete(key); change({id: receipt.bounty.id, compose: false, detail: 'brief'}, 'reader-title');
+          completedWrites.delete(key); drafts.delete(key); change(receiptSelection(receipt.bounty), 'reader-title');
         }));
         return;
       }
@@ -250,7 +256,7 @@
     }
     function saved(result, message) {
       selected = result.bounty; action = null; announce(message);
-      change({id: selected.id, compose: false, detail: 'brief'}, 'reader-title');
+      change(receiptSelection(selected), 'reader-title');
     }
     function proposalForm(task = null) {
       const key = task ? 'edit:' + task.id : 'new';

@@ -99,6 +99,7 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
     let draft;
     const f = fixture({responder: (url, body) => {
       if (url.pathname === '/api/bounties' && body) {draft = task(id, {...body.terms, terms: body.terms, status: 'draft', capabilities: {edit: true, request_admission: true, withdraw: true}}); return {bounty: draft, policy};}
+      if (url.pathname === '/api/bounties') return {bounties: draft && url.searchParams.get('status') === 'mine' ? [draft] : [], pagination: {offset: 0, limit: 6, has_more: false}, policy};
       if (url.pathname === '/api/bounties/' + id && draft) return {bounty: draft, policy};
       if (url.pathname.endsWith('/admission-requests')) {draft = {...draft, status: 'pending', version: 2, capabilities: {withdraw: true}}; return {bounty: draft, policy};}
     }});
@@ -109,6 +110,10 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
       assert.equal(f.requests.filter(r => r.body).length, 1);
       assert.equal(f.requests.find(r => r.body).path, '/api/bounties');
       assert.match(f.host.textContent, /Draft/);
+      click(f.host, '← Your activity'); await f.routed();
+      assert.match(f.host.querySelector('[data-bounty="' + id + '"]').textContent, /Draft/);
+      // A direct task link also starts on the default open collection.
+      await f.show('view=bounties&bounty=' + id + '&page=3');
       click(f.host, 'Submit for review'); await flush();
       assert.match(f.host.textContent, /Reserve 1 of your monthly bounty allowance/);
       assert.match(f.host.textContent, /original month/);
@@ -117,6 +122,9 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
       const request = f.requests.find(r => r.url.pathname.endsWith('/admission-requests'));
       assert.equal(request.body.policy_id, policy.id); assert.equal(request.body.confirm_cost_units, 1);
       assert.equal(request.body.expected_version, 1); assert.equal(request.body.terms_sha256, hash);
+      assert.equal(new URLSearchParams(f.model.route().split('?')[1]).get('page'), null);
+      click(f.host, '← Your activity'); await f.routed();
+      assert.match(f.host.querySelector('[data-bounty="' + id + '"]').textContent, /Submitted for review/);
     } finally {f.close();}
   });
   await test('uncertain boost retries its exact payload and cannot silently become a second spend', async () => {
@@ -133,6 +141,7 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
       assert.ok(button(f.host, 'Retry the same request'));
       submit(f.host); await flush(); await f.routed();
       const writes = f.requests.filter(r => r.url.pathname.endsWith('/boosts'));
+      assert.equal(new URLSearchParams(f.model.route().split('?')[1]).get('status'), null);
       assert.equal(writes.length, 2); assert.deepEqual(writes[0].body, writes[1].body);
       assert.equal(writes[0].body.units, 1); assert.equal(writes[0].body.policy_id, policy.id);
     } finally {f.close();}
@@ -255,6 +264,7 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
       assert.match(f.host.textContent, /saved while you were browsing/);
       assert.equal(button(f.host, 'Save private draft'), undefined);
       click(f.host, 'View bounty'); await f.routed();
+      assert.equal(new URLSearchParams(f.model.route().split('?')[1]).get('status'), 'mine');
       assert.equal(f.requests.filter(r => r.body).length, 1);
     } finally {f.close();}
   });
