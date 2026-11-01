@@ -37,6 +37,8 @@ for(const width of [1440,390]) {
    held.release();await held.delivered;
    await expect(page.locator('#home-schemes')).toContainText('Diffie');await expect(page.locator('#home-schemes .home-stage-strip')).toBeVisible();
    expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
+   const columns=await page.locator('.home-progress-panel').evaluateAll(elements=>elements.map(element=>element.getBoundingClientRect().width));
+   expect(columns).toHaveLength(2);expect(Math.abs(columns[0]-columns[1])).toBeLessThanOrEqual(1);
    await page.screenshot({path:testInfo.outputPath('welcome-member-'+width+'.png'),fullPage:true});
    await page.locator('#home-propose-scheme').click();await expect(page).toHaveURL(/#propose$/);await expect(page.locator('#proposal-workspace')).toBeVisible();
    await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(0);

@@ -590,7 +590,6 @@ function renderAccessGate() {
 }
 function clearProtectedState() {
   resetResearcherEditor();
-  renderProfileRank();
   invalidateReadViews();
   referenceTimings.clear(); window.CrucibleResources?.clear();
   assumptionsWorkspace?.clear();
@@ -817,8 +816,7 @@ function showRouteLoading() {
   }
   routeLoadingPanel.dataset.route = window.location.hash;
   if (profileRoute) {
-    const rank = node('span', 'Leaderboard', 'profile-rank'); rank.setAttribute('aria-hidden', 'true');
-    const titleRow = node('div', undefined, 'profile-title-row'); titleRow.append(node('h1', title), rank);
+    const titleRow = node('div', undefined, 'profile-title-row'); titleRow.append(node('h1', title));
     const heading = node('div', undefined, 'catalogue-heading profile-heading'); heading.append(titleRow);
     quietReadStatus(routeLoadingPanel, 'Loading profile…');
     routeLoadingPanel.append(heading, personPreview());
@@ -1566,7 +1564,6 @@ function setSession(data) {
     resetAgentSettings();
     resetAgentInstructions();
     resetProposalAccount(previousId);
-    renderProfileRank();
     state.historyRequest++;
     state.recoveryRequest++;
     state.challenge = null; state.generationAdmission = null;
@@ -2395,12 +2392,19 @@ function renderFirstRecords(person) {
 }
 function personStats(person) {
   const stats = node('dl', undefined, 'person-stats');
+  const place = profileRankParts(person), link = node('a', undefined, 'person-place-link');
+  link.id = 'person-leaderboard-rank'; link.href = '#people';
+  link.setAttribute('aria-label', place ? place.rank + place.suffix + ' on leaderboard' : 'Place unavailable. View leaderboard');
+  if (place) link.append(node('span', String(place.rank), 'person-rank-number'), node('sup', place.suffix, 'person-rank-suffix'));
+  else link.append(node('span', '—', 'person-rank-number'));
+  const rankValue = node('dd'); rankValue.append(link);
+  const rankStat = node('div', undefined, 'person-place-stat'); rankStat.append(node('dt', 'Place on leaderboard'), rankValue); stats.append(rankStat);
   for (const [label, key] of [['Points', 'points'], ['Accepted proposals', 'accepted_proposal_count']]) {
     const value = node('dd', person ? peopleNumber(person[key], key === 'points' ? 'Pending' : '—') : undefined);
     if (!person) value.append(node('span', undefined, 'catalogue-placeholder'));
     const term = node('dt', label);
     if (key === 'points' && person?.score_breakdown) term.append(personScoreBreakdown(person));
-    const stat = node('div'); stat.append(term, value); stats.append(stat);
+    const stat = node('div', undefined, key === 'points' ? 'person-points-stat' : 'person-proposals-stat'); stat.append(term, value); stats.append(stat);
   }
   return stats;
 }
@@ -2609,18 +2613,16 @@ $('#reload-researcher-profile').addEventListener('click', () => {
   void readResearcherProfile({replace: true});
 });
 
-function profileRankLabel(person) {
+function profileRankParts(person) {
   const rank = person?.rank;
-  if (!Number.isSafeInteger(rank) || rank <= 0 || !Number.isFinite(person.points) || person.score_status === 'pending') return 'Leaderboard';
+  if (!Number.isSafeInteger(rank) || rank <= 0 || !Number.isFinite(person.points) || person.score_status === 'pending') return null;
   const lastTwo = rank % 100;
   const suffix = lastTwo >= 11 && lastTwo <= 13 ? 'th' : ({1: 'st', 2: 'nd', 3: 'rd'})[rank % 10] || 'th';
-  return rank + suffix + ' on leaderboard';
+  return {rank, suffix};
 }
-function renderProfileRank(person = null) { setText('#person-leaderboard-rank', profileRankLabel(person)); }
 function renderPerson(person) {
   const target = $('#person-content');
   setText('#person-title', person.handle);
-  renderProfileRank(person);
   renderResearcherProfile(person.researcher_profile);
   target.replaceChildren(personStats(person));
   if (!Number.isFinite(person.points)) target.append(node('p', 'Scoring is being finalized. Verified results are recorded below.', 'people-score-note'));
@@ -2672,7 +2674,6 @@ async function loadPerson(handle, {preserve = false} = {}) {
     // Metadata has its own stable DOM outside the score reader. Restore it on
     // cached entry even when the unchanged score DOM does not need repainting.
     renderResearcherProfile(person.researcher_profile);
-    renderProfileRank(person);
     paintRead(key, target, person, renderPerson);
   };
   if (cached) { paint(cached); preserve = true; }
@@ -2680,7 +2681,6 @@ async function loadPerson(handle, {preserve = false} = {}) {
     renderResearcherProfile(null);
     state.personDataKey = null;
     setText('#person-title', handle);
-    renderProfileRank();
     quietReadStatus(target, 'Loading profile…'); target.append(personPreview());
   }
   target.setAttribute('aria-busy', 'true');
@@ -2691,7 +2691,6 @@ async function loadPerson(handle, {preserve = false} = {}) {
     // The server envelope changes on each poll; only actual public profile
     // changes should replace these sections and their focused controls.
     rememberRead(key, data.person);
-    renderProfileRank(data.person);
     if (preserve && state.personDataKey === JSON.stringify(data.person) && renderedReads.get(target)?.child === target.firstChild) return;
     const disclosureKey = element => element.id || element.className;
     const expanded = preserve ? new Set([...target.querySelectorAll('details')].filter(element => element.open).map(disclosureKey)) : new Set();
@@ -2713,6 +2712,7 @@ async function loadPerson(handle, {preserve = false} = {}) {
         .find(element => element.dataset.submissionId === detailsId && !element.disabled);
       dialogTriggers.set(recoveryDialog, replacement || section?.querySelector('summary') || $('#person-workspace'));
     }
+    if (focused?.id === 'person-leaderboard-rank') $('#person-leaderboard-rank').focus({preventScroll: true});
     if (focusKey) {
       const section = [...target.querySelectorAll('details')].find(element => disclosureKey(element) === focusKey);
       const receipt = focused.dataset.submissionId;
@@ -2724,7 +2724,7 @@ async function loadPerson(handle, {preserve = false} = {}) {
     }
   } catch (error) {
     if (current()) {
-      if (forbiddenRead(error)) { renderResearcherProfile(null); renderProfileRank(); }
+      if (forbiddenRead(error)) renderResearcherProfile(null);
       readRefreshError(key, target, error, () => loadPerson(handle), cached || preserve);
     }
   } finally {

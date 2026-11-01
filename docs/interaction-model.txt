@@ -304,8 +304,9 @@ entry and brand navigation start at the top, while Back/Forward keep native
 history. Existing #challenge links still identify the Schemes catalogue. OAuth
 accepts #home as a local return destination; callback authority stays unchanged.
 
-Profile headings place the participant's current ordinal rank beside the username
-as a regular-weight link to Leaderboard. Initial and catalogue-pending frames
-reserve the same title/rank geometry without guessing a private rank. Unranked
-or pending scores show a plain Leaderboard link; account/access changes and
-denied refreshes clear an earlier rank. Quiet refreshes retain the link and focus.
+Profile statistics begin with Place on leaderboard, followed by Points and
+Accepted proposals. The ordinal place links to Leaderboard and its suffix is
+smaller and regular weight. Missing/pending ranks show a dash. Rank now shares
+the account-owned profile summary and its existing invalidation/focus rules;
+no rank appears in the public or pending profile heading. Homepage scheme and
+bounty progress columns share equal widths and stack on narrow screens.
