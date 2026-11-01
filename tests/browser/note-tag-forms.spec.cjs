@@ -15,7 +15,9 @@ for(const width of [1440,390])test(`form placeholders and searchable note tags w
   }
   const input=dialog.getByRole('combobox',{name:'Tags',exact:true});
   await expect(input).toHaveAttribute('placeholder',/.+/);
-  await expect(dialog.locator('.nb-required-marker')).toHaveCount(4);
+  await expect(dialog.locator('.nb-required-marker:visible')).toHaveCount(5);
+  await expect(dialog.getByLabel('Note type',{exact:true})).toHaveValue('research-note');
+  await expect(dialog.locator('.nb-specification')).toBeHidden();
   await expect(dialog).not.toContainText('Enter chooses the first');
   await expect(dialog).not.toContainText('Optional, self-reported label; not verified');
   const bodyBox=await dialog.locator('[name="body"]').boundingBox(),evidenceBox=await dialog.locator('[name="kind"]').boundingBox(),tagsBox=await input.boundingBox();
@@ -43,7 +45,7 @@ for(const width of [1440,390])test(`form placeholders and searchable note tags w
   await dialog.getByRole('button',{name:'Remove tag human-written',exact:true}).click();
   await expect(dialog.getByLabel('Human-written',{exact:true})).not.toBeChecked();
   expect(posted).toEqual([]);await expect(dialog).toBeVisible();
-  await input.fill('autocomplete');await expect(dialog.getByRole('option').first()).toBeVisible();
+  await input.fill('autocomplete');await expect(dialog.getByRole('listbox',{name:'Matching tags'}).getByRole('option').first()).toBeVisible();
   await page.screenshot({path:testInfo.outputPath('note-tag-suggestions-'+width+'.png'),fullPage:true});
   await input.press('Escape');await expect(input).toHaveAttribute('aria-expanded','false');await expect(dialog).toBeVisible();
   await input.fill('');
@@ -62,7 +64,8 @@ for(const width of [1440,390])test(`form placeholders and searchable note tags w
   await page.locator('#nav-challenge').click();await page.locator('#propose-scheme-button').click();
   await page.getByRole('link',{name:'Write a proposal note →',exact:true}).click();
   await expect(dialog).toHaveAttribute('aria-label','New proposal note');
-  await expect(dialog.locator('.nb-required-marker')).toHaveCount(4);
+  await expect(dialog.locator('.nb-required-marker:visible')).toHaveCount(6);
+  await expect(dialog.getByLabel('Note type',{exact:true})).toHaveValue('scheme-proposal');
   await expect(dialog.locator('[name="title"]')).toHaveAttribute('placeholder',/KEM/);
   for(const name of ['title','claim','conditions','body'])await expect(dialog.locator('[name="'+name+'"]')).toHaveAttribute('placeholder',/.+/);
   await dialog.getByRole('button',{name:'Cancel',exact:true}).click();

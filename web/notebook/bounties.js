@@ -7,11 +7,12 @@
   function button(text, action, cls = 'nb-button') {
     const node = el('button', cls, text); node.type = 'button'; node.addEventListener('click', action); return node;
   }
+  let fieldNumber = 0;
   function field(label, name, value, {rows, options, max = 2000, required = true, placeholder} = {}) {
     const wrap = el('label', 'nb-field'), input = el(options ? 'select' : rows ? 'textarea' : 'input');
-    const caption = el('span', '', label);
-    if (required) { const mark = el('span', 'nb-required-marker', ' *'); mark.setAttribute('aria-hidden', 'true'); caption.append(mark); }
-    wrap.append(caption); input.name = name; input.required = required;
+    const labelRow = el('span'), caption = el('span', '', label); caption.id = 'bounty-field-' + ++fieldNumber; labelRow.append(caption);
+    if (required) { const mark = el('span', 'nb-required-marker', ' *'); mark.setAttribute('aria-hidden', 'true'); labelRow.append(mark); }
+    wrap.append(labelRow); input.name = name; input.required = required; input.setAttribute('aria-labelledby', caption.id);
     if (rows) input.rows = rows;
     if (!options) input.maxLength = max;
     if (placeholder) input.placeholder = placeholder;

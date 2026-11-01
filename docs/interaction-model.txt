@@ -65,6 +65,10 @@ Intentional differences
   rather than one downloaded page. Enter waits for that exact query before
   choosing a match or adding a new tag. Selected tags and unfinished input stay
   with the draft; an uncertain save freezes the chosen tags with its payload.
+- Note type is an author-chosen editor setting. Scheme proposal drafts show a
+  specification marked required for review and can be saved before attaching it.
+  The choice round-trips in extensions.note_type; it grants no review authority.
+  Switching type preserves the note's text, tags and existing attachments.
 - Optional warming is finite, account-bound and subordinate to foreground work,
   visibility and Save-Data. Prepare metadata and selected detail intent, not all
   private bodies or generated challenges. Caches remain bounded and in memory.
