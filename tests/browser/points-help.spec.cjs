@@ -33,7 +33,9 @@ for (const width of [1440,390]) {
     expect(writes).toEqual([]);
     await trigger.click(); await page.evaluate(() => {location.hash='#about';});
     await expect(dialog).toBeHidden(); await expect(page.locator('#about-title')).toBeVisible();
-    expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
+    // Native dialog.close() hides the dialog before its queued close event
+    // releases the shared scroll lock. Observe that event's completed effect.
+    await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('');
   });
 
   test(`the points explanation is available during a held Leaderboard read at ${width}px`, async ({page}) => {
