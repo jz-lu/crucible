@@ -540,6 +540,7 @@ function connectionCode(value) {
   const code = String(value || '').trim().toUpperCase().replace(/-/g, '');
   return /^[A-Z0-9]{8}$/.test(code) ? code.slice(0, 4) + '-' + code.slice(4) : null;
 }
+function isHomeRoute() { return ['', '#', '#home'].includes(window.location.hash.split('?')[0]); }
 function hasAccess() { return state.sessionResolved && state.access?.allowed === true; }
 function captureInvitation() {
   const [path, query = ''] = window.location.hash.split('?');
@@ -558,6 +559,7 @@ function captureInvitation() {
   }
 }
 function renderAccessGate() {
+  if (isHomeRoute()) { showHome(); return; }
   $('#access-workspace').removeAttribute('data-catalogue-pending');
   $('#access-loading-preview').hidden = true;
   $('#access-workspace').setAttribute('aria-busy', 'false');
@@ -610,7 +612,7 @@ function clearProtectedState() {
   state.canReviewProposals = false; state.canSelfReviewProposals = false; state.canManageBetaAccess = false;
   resetAgentSettings(); resetAgentInstructions(); resetProposalAccount(state.user?.id);
   research.request++; research.recoveriesRequest++; research.targets = []; research.target = null; research.findings = []; research.recoveries = [];
-  for (const selector of ['#kem-catalogue', '#people-content', '#person-content', '#leaderboard-content', '#history-content', '#activity-bounties', '#activity-notes', '#recovery-content', '#connect-content', '#overview-graphs', '#target-catalogue']) $(selector).replaceChildren();
+  for (const selector of ['#kem-catalogue', '#people-content', '#person-content', '#leaderboard-content', '#history-content', '#activity-bounties', '#activity-notes', '#recovery-content', '#connect-content', '#overview-graphs', '#target-catalogue', '#home-schemes', '#home-bounties']) $(selector).replaceChildren();
   for (const dialog of document.querySelectorAll('dialog')) if (dialog.open && dialog !== authDialog) dialog.close();
   resetSubmissionForm();
   // A fresh shell also releases notebook closures and private data held by the
@@ -837,7 +839,7 @@ function showRouteLoading() {
 function routeNeedsCatalogue() {
   const [path, query = ''] = window.location.hash.split('?');
   if (path === '#challenge' && new URLSearchParams(query).get('view') === 'map') return false;
-  if (['#about', '#people', '#activity', '#connect'].includes(path)) return false;
+  if (isHomeRoute() || ['#about', '#people', '#activity', '#connect'].includes(path)) return false;
   // Profile records still need the catalogue's mapping from native parameters
   // to human stage labels. Keep that dependency until the record API supplies it.
   // Notebook visualizations load their small release-link index independently.
@@ -1079,13 +1081,138 @@ $('#access-continue').addEventListener('click', async () => {
   try { await loadAuthorizedWorkspace(); }
   catch (error) { globalError(error.message); }
 });
+let homeSummaryRequest = 0;
+function renderHomeAccount() {
+  const member = hasAccess() && Boolean(state.user);
+  $('#home-workspace').classList.toggle('is-member', member);
+  const button = $('#home-primary');
+  button.disabled = !state.sessionResolved;
+  setText('#home-primary', member ? 'My activity →' : state.user ? 'Check your access →' : 'Sign in to Crucible →');
+  setText('#home-access-note', member ? 'Welcome back, ' + state.user.handle + '.' : state.user ?
+    'Your account needs active beta access. Open your invitation link or contact the person who invited you.' :
+    'Currently invitation-only. Open your invitation link to join.');
+  $('#home-progress').hidden = !member;
+  $('#home-bounties-panel').hidden = !bountyFeatureAvailable();
+  $('#home-bounty-guide').hidden = !bountyFeatureAvailable();
+}
+function showHome() {
+  if (['propose', 'reviews'].includes(state.screen)) leaveProposalPage();
+  if (recoveryDialog.open) recoveryDialog.close();
+  state.challengeStartIntent = null;
+  state.screen = 'home';
+  state.challengeRequest++; state.leaderboardRequest++; state.historyRequest++; state.peopleRequest++; state.personRequest++;
+  showWorkspace('home'); renderHomeAccount();
+  document.title = 'Crucible — shared cryptographic research';
+  if (hasAccess() && state.user && state.ready) void loadHomeProgress();
+}
+function homeSummaryPreview(target) {
+  quietReadStatus(target, 'Loading current progress');
+  const preview = node('div'); preview.setAttribute('aria-hidden', 'true');
+  for (let index = 0; index < 3; index++) {
+    const row = node('div', undefined, 'home-placeholder');
+    row.append(node('span', undefined, 'catalogue-placeholder'), node('span', undefined, 'catalogue-placeholder')); preview.append(row);
+  }
+  target.append(preview);
+}
+function summarizeHomeSchemes(data) {
+  if (!Array.isArray(data.schemes) || data.schemes.some(scheme => !scheme || typeof scheme.id !== 'string' || typeof scheme.name !== 'string' || scheme.version == null || !Array.isArray(scheme.profiles)))
+    throw new Error('Scheme progress could not be loaded.');
+  return {schemes: data.schemes.slice().sort((a, b) => (b.participant_count || 0) - (a.participant_count || 0)).slice(0, 6).map(scheme => ({
+    id: scheme.id, version: scheme.version, name: scheme.name,
+    profiles: orderedProfiles(scheme).map(profile => ({id: profileId(profile), label: profileLabel(profile, scheme)})),
+    recovered: recoveredProfileIds(scheme), largest: scheme.largest_recovered_profile_id || null
+  }))};
+}
+function renderHomeSummary(kind, key, data) {
+  const target = $('#home-' + kind), focused = document.activeElement?.closest('#home-' + kind) === target ? document.activeElement : null;
+  target.querySelector('.home-read-error')?.remove();
+  paintRead(key, target, data, data => {
+    const records = data[kind];
+    if (!records.length) return showEmpty(target, kind === 'schemes' ? 'No schemes have been published yet.' : 'No open bounties right now. Check back for new research tasks.');
+    const items = records.map(record => {
+      const link = node('a', undefined, kind === 'schemes' ? 'home-scheme-row' : 'home-bounty-row');
+      link.dataset.homeId = record.id;
+      if (kind === 'schemes') {
+        link.href = overviewRoute(record);
+        const largest = record.profiles.find(profile => profile.id === record.largest);
+        const copy = node('span', undefined, 'home-scheme-copy');
+        copy.append(node('span', record.name, 'home-scheme-name'), node('span', largest ? 'Largest recovery: ' + largest.label : record.largest ? 'Recovery recorded' : 'No recoveries yet', 'home-scheme-status'));
+        const strip = node('span', undefined, 'home-stage-strip'); strip.setAttribute('aria-hidden', 'true');
+        for (const profile of record.profiles) {
+          const segment = node('span', undefined, record.recovered.includes(profile.id) ? 'is-recovered' : ''); strip.append(segment);
+        }
+        link.setAttribute('aria-label', record.name + '. ' + (largest ? 'Largest recovery: ' + largest.label + '. ' : '') +
+          record.profiles.filter(profile => record.recovered.includes(profile.id)).length + ' of ' + record.profiles.length + ' configurations have a recorded recovery.');
+        link.append(copy, strip);
+      } else {
+        link.href = '#bounties?' + new URLSearchParams({bounty: record.id});
+        link.append(node('span', record.title, 'home-bounty-name'), node('span', Number(record.reward_points).toLocaleString() + ' points · ' + (record.status === 'frozen' ? 'Review in progress' : 'Open for contributions'), 'home-bounty-meta'));
+      }
+      return link;
+    });
+    if (kind === 'schemes') {
+      const key = node('div', undefined, 'home-stage-key'); key.append(node('span', 'Recovered'), node('span', 'Unrecovered')); items.push(key);
+    }
+    target.replaceChildren(...items);
+  });
+  if (focused && !focused.isConnected && ![...document.querySelectorAll('dialog')].some(dialog => dialog.open)) {
+    const replacement = [...target.querySelectorAll('[data-home-id]')].find(link => link.dataset.homeId === focused.dataset.homeId);
+    (replacement || $('#home-workspace')).focus({preventScroll: true});
+  }
+}
+async function loadHomeSummary(kind, request) {
+  const target = $('#home-' + kind), key = 'home:' + kind, cached = cachedRead(key);
+  const epoch = readViewEpoch, account = state.user?.id, csrf = state.csrf;
+  const current = () => hasAccess() && state.user?.id === account && state.csrf === csrf && readViewEpoch === epoch &&
+    request === homeSummaryRequest && state.screen === 'home';
+  if (cached) renderHomeSummary(kind, key, cached); else homeSummaryPreview(target);
+  target.setAttribute('aria-busy', 'true');
+  try {
+    const response = await readAgain(key, kind === 'schemes' ? '/api/schemes?projection=navigation' : '/api/bounties?status=open&sort=concrete&offset=0&limit=3');
+    if (!current()) return;
+    let data;
+    if (kind === 'schemes') data = summarizeHomeSchemes(response);
+    else {
+      if (!Array.isArray(response.bounties) || response.bounties.length > 3 || response.bounties.some(task => !task || typeof task.id !== 'string' || typeof task.title !== 'string' || !['open', 'frozen'].includes(task.status) || !Number.isSafeInteger(task.reward_points) || task.reward_points < 0))
+        throw new Error('Open bounties could not be loaded.');
+      data = {bounties: response.bounties.map(task => ({id: task.id, title: task.title, status: task.status, reward_points: task.reward_points}))};
+    }
+    rememberRead(key, data); renderHomeSummary(kind, key, data);
+  } catch (error) {
+    if (!current()) return;
+    if (cached && !forbiddenRead(error)) {
+      target.querySelector('.home-read-error')?.remove();
+      const notice = node('div', undefined, 'home-read-error');
+      showInlineError(notice, error.message, loadHomeProgress); target.append(notice);
+    } else readRefreshError(key, target, error, loadHomeProgress, null);
+  } finally { if (current()) target.setAttribute('aria-busy', 'false'); }
+}
+async function loadHomeProgress() {
+  if (!hasAccess() || !state.user || state.screen !== 'home') return;
+  const request = ++homeSummaryRequest;
+  $('#refresh-home').disabled = true;
+  try { await Promise.all([loadHomeSummary('schemes', request), ...(bountyFeatureAvailable() ? [loadHomeSummary('bounties', request)] : [])]); }
+  finally { if (request === homeSummaryRequest) $('#refresh-home').disabled = false; }
+}
+$('#home-primary').addEventListener('click', () => {
+  if (!state.sessionResolved) return;
+  if (hasAccess() && state.user) { navigateTop('#activity'); return; }
+  if (state.user) { navigateTop('#challenge'); return; }
+  state.returnRoute = '#home'; setAuthMode('login'); openAuth($('#home-primary'));
+});
+$('#refresh-home').addEventListener('click', loadHomeProgress);
 function workspaceSelector(screen) {
-  return {loading: '#route-loading', access: '#access-workspace', scheme: '#workspace', overview: '#overview-workspace', assumptions: '#assumptions-workspace', notebook: '#notebook-workspace', bounties: '#notebook-workspace', 'scheme-map': '#notebook-workspace', reviews: '#review-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', activity: '#activity-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
+  return {home: '#home-workspace', loading: '#route-loading', access: '#access-workspace', scheme: '#workspace', overview: '#overview-workspace', assumptions: '#assumptions-workspace', notebook: '#notebook-workspace', bounties: '#notebook-workspace', 'scheme-map': '#notebook-workspace', reviews: '#review-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', activity: '#activity-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
 }
 function applyRoute(focus = false) {
   if (documentRetired) return;
   const routeRequest = ++workspaceLoadRequest, lifecycle = documentEpoch;
   if (authenticationRoute() && state.sessionResolved) { void handleAuthenticationRoute().catch(error => globalError(error.message)); return; }
+  if (isHomeRoute()) {
+    const previous = state.screen; showHome();
+    if (focus && previous !== 'home') $('#home-workspace').focus({preventScroll: true});
+    return;
+  }
   captureInvitation();
   if (state.sessionResolved && (!hasAccess() || window.location.hash.split('?')[0] === '#join')) {
     renderAccessGate();
@@ -1452,7 +1579,7 @@ function setSession(data) {
     if (submissionDialog.open) submissionDialog.close();
     if (recoveryDialog.open) recoveryDialog.close();
     if (pointsHelpDialog.open) { dialogTriggers.delete(pointsHelpDialog); pointsHelpDialog.close(); }
-    for (const selector of ['#history-content', '#activity-bounties', '#activity-notes']) $(selector).replaceChildren();
+    for (const selector of ['#history-content', '#activity-bounties', '#activity-notes', '#home-schemes', '#home-bounties']) $(selector).replaceChildren();
     $('#recovery-content').replaceChildren();
     setText('#recovery-context', '');
     setText('#recovery-title', 'Submission details');
@@ -1472,6 +1599,7 @@ function setSession(data) {
   $('#history-button').hidden = !state.user || !hasAccess();
   $('#register-mode').hidden = state.access.mode === 'beta' && !state.invitationToken;
   renderAuthMethods();
+  renderHomeAccount();
   if (!hasAccess()) {
     clearProtectedState();
     renderAccessGate();
@@ -1492,6 +1620,8 @@ function setSession(data) {
       previousReview !== state.canReviewProposals || previousSelfReview !== state.canSelfReviewProposals)) loadPeople();
   if (state.ready && state.screen === 'activity' && (previousId !== state.user?.id || previousCsrf !== state.csrf ||
       previousReview !== state.canReviewProposals || previousSelfReview !== state.canSelfReviewProposals)) showActivity();
+  if (isHomeRoute() && state.ready && (previousId !== state.user?.id || previousCsrf !== state.csrf ||
+      previousReview !== state.canReviewProposals || previousSelfReview !== state.canSelfReviewProposals)) showHome();
   if (state.ready && navigationProjection && !state.catalogueLoaded && routeNeedsCatalogue()) applyRoute();
   scheduleBrowseWarmup();
 }
@@ -3976,7 +4106,7 @@ for (const dialog of document.querySelectorAll('dialog')) {
 }
 function safeAuthReturnRoute(value) {
   return typeof value === 'string' && value.length <= 2048 && !/[\u0000-\u0020\\]/.test(value) &&
-    /^#(?:challenge|scheme|assumptions|person|people|notebook|propose|reviews|about|connect)(?:[/?]|$)/.test(value) ? value : '#challenge';
+    /^#(?:home|challenge|scheme|assumptions|person|people|notebook|propose|reviews|about|connect)(?:[/?]|$)/.test(value) ? value : '#challenge';
 }
 function authenticationRoute() { return /^#(?:auth|reset-password)(?:\?|$)/.test(window.location.hash); }
 function renderAuthMethods() {
@@ -4266,7 +4396,7 @@ $('#auth-form').addEventListener('submit', async event => {
     $('#auth-form').reset();
     authDialog.close();
     if (!hasAccess()) { renderAccessGate(); return; }
-    if (!state.ready) { await loadAuthorizedWorkspace(); return; }
+    if (!state.ready || state.screen === 'home') { await loadAuthorizedWorkspace(); return; }
     await loadChallenge();
     if (state.screen === 'scheme' && state.view === 'leaderboard') await loadLeaderboard();
     toast('Signed in as ' + state.user.handle + '.');
@@ -5517,7 +5647,7 @@ $('#download-proposal').addEventListener('click', () => {
 
 // Research records keep claims and their conditions separate from hourly ranking.
 function showWorkspace(name) {
-  if (!hasAccess()) name = 'access';
+  if (!hasAccess() && name !== 'home') name = 'access';
   if (name !== 'people' && pointsHelpDialog.open) {
     dialogTriggers.delete(pointsHelpDialog); pointsHelpDialog.close();
   }
@@ -5535,13 +5665,14 @@ function showWorkspace(name) {
   if (name !== 'assumptions') assumptionsWorkspace?.clear();
   const enteringResearch = !research.visible && name === 'research';
   research.visible = name === 'research';
+  $('#home-workspace').hidden = name !== 'home';
   $('#access-workspace').hidden = name !== 'access';
   if (routeLoadingPanel) {
     routeLoadingPanel.hidden = name !== 'loading';
     if (name !== 'loading') routeLoadingPanel.setAttribute('aria-busy', 'false');
   }
   $('.primary-nav').hidden = name === 'access';
-  $('#nav-people').hidden = name === 'access';
+  $('#nav-people').hidden = name === 'access' || !hasAccess();
   $('#catalogue-workspace').hidden = name !== 'catalogue';
   $('#workspace').hidden = name !== 'scheme';
   $('#overview-workspace').hidden = name !== 'overview';
@@ -5981,9 +6112,9 @@ $('#finding-form').addEventListener('submit', async event => {
     setText('#save-finding', editing ? 'Publish revision →' : 'Publish finding →');
   }
 });
-$('.brand').addEventListener('click', event => {
+for (const brand of document.querySelectorAll('a.brand')) brand.addEventListener('click', event => {
   if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-  event.preventDefault(); navigateTop('#challenge');
+  event.preventDefault(); navigateTop('#home');
 });
 $('#nav-challenge').addEventListener('click', () => navigateTop('#challenge'));
 $('#scheme-map-button').addEventListener('click', () => navigateTop('#challenge?view=map'));
@@ -6055,6 +6186,7 @@ async function initialize() {
   let revision = state.sessionRevision;
   const current = () => !documentRetired && lifecycle === documentEpoch && token === initializationRequest && revision === state.sessionRevision;
   globalError('');
+  if (isHomeRoute()) showHome();
   if (!state.sessionResolved) {
     $('#access-loading-preview').hidden = false;
     $('#access-workspace').setAttribute('aria-busy', 'true');
@@ -6080,7 +6212,9 @@ async function initialize() {
     await loadAuthorizedWorkspace();
   } catch (error) {
     if (!current()) return;
-    if (hasAccess()) { showRouteLoading(); showInlineError(routeLoadingTarget(), error.message, initialize); }
+    if (isHomeRoute()) {
+      showHome(); globalError('Sign-in could not be checked. You can still read about Crucible below. Try again to sign in.');
+    } else if (hasAccess()) { showRouteLoading(); showInlineError(routeLoadingTarget(), error.message, initialize); }
     else {
       document.body.removeAttribute('data-access-pending');
       $('#access-loading-preview').hidden = true;

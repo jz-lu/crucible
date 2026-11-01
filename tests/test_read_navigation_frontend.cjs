@@ -14,8 +14,9 @@ let passed=0;async function test(name,run){await run();passed++;console.log('PAS
  await test('both home logos navigate within the authorized application',async()=>{
   const app=await boot();await app.navigate('#about');const reads=app.requests.length;
   const logos=app.document.querySelectorAll('a.brand');assert.equal(logos.length,2);
-  for(const logo of logos)assert.equal(logo.href,'#challenge');logos[0].click();await flush();
-  assert.equal(app.location.hash,'#challenge');assert.equal(app.requests.length,reads);
+  for(const logo of logos)assert.equal(logo.href,'#home');logos[0].click();await flush();
+  assert.equal(app.location.hash,'#home');assert.equal(app.$('#home-workspace').hidden,false);
+  assert.ok(app.requests.slice(reads).every(request=>request.options.method==='GET'));
  });
  await test('returning to People paints immediately, coalesces refreshes and preserves unchanged DOM',async()=>{
   const late=deferred();let slow=false;const app=await boot((url)=>url.pathname==='/api/people'&&slow?late.promise:undefined);

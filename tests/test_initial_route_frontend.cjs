@@ -121,7 +121,7 @@ test('DOM clones retain namespace and current form values without copying live o
 test('public route descriptions select bounded known layouts without querying account or catalogue data', () => {
   const f = fixture(), describe = f.window.CruciblePendingPage.describe;
   const examples = [
-    ['', 'catalogue', 'Schemes'], ['#', 'catalogue', 'Schemes'],
+    ['', 'home', 'Crucible'], ['#', 'home', 'Crucible'], ['#home', 'home', 'Crucible'],
     ['#challenge', 'catalogue', 'Schemes'], ['#challenge?view=map', 'notebook-map', 'Scheme map'], ['#people', 'people', 'Leaderboard'],
     ['#notebook', 'notebook-notes', 'Notes'], ['#bounties', 'notebook-bounties', 'Bounties'], ['#notebook?view=bounties', 'notebook-bounties', 'Bounties'], ['#notebook?view=guide', 'notebook-bounties', 'Bounties'], ['#notebook?view=timeline', 'notebook-timeline', 'Timeline'],
     ['#notebook?view=map', 'notebook-map', 'Scheme map'], ['#notebook?view=unknown', 'notebook-notes', 'Notes'],
@@ -238,10 +238,10 @@ test('app-first and repeated bootstrap execution preserve one-shot session owner
   assert.equal(f.window.CrucibleSessionBootstrap, boot);
 });
 
-test('fresh or unavailable-storage root stays neutral while the hint changes only public presentation', () => {
+test('the public home is independent of stored gate or workspace presentation hints', () => {
   for (const options of [{}, {storageBlocked: true}, {hint: 'unrecognized'}]) {
     const f = fixture(options);
-    assert.equal(f.root.getAttribute('data-pending-page'), 'neutral');
+    assert.equal(f.root.getAttribute('data-pending-page'), 'home');
     assert.equal(f.nodes.get('#access-title').textContent, 'Crucible');
     assert.equal(f.requests.length, 1);
   }
@@ -251,8 +251,8 @@ test('fresh or unavailable-storage root stays neutral while the hint changes onl
   assert.equal(gate.nodes.get('#nav-notebook').getAttribute('aria-current'), null);
   assert.deepEqual(gate.requests.map(item => item.url), ['/api/session']);
   const workspace = fixture({hint: 'workspace'});
-  assert.equal(workspace.root.getAttribute('data-pending-page'), 'catalogue');
-  assert.equal(workspace.nodes.get('#access-title').textContent, 'Schemes');
+  assert.equal(workspace.root.getAttribute('data-pending-page'), 'home');
+  assert.equal(workspace.nodes.get('#access-title').textContent, 'Crucible');
   assert.deepEqual(workspace.requests.map(item => item.url), ['/api/session']);
 });
 

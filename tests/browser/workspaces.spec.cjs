@@ -120,7 +120,7 @@ test('cached navigation paints while its fresh read is held; the brand never rel
   } finally {pending.release(); await pending.delivered; await pending.remove();}
   const catalogue = await holdResponse(page, url => url.pathname === '/api/schemes' && url.searchParams.get('projection') === 'navigation');
   try {
-    await page.getByRole('banner').getByRole('link', {name: 'Crucible home', exact: true}).click();
+    await page.locator('#nav-challenge').click();
     await catalogue.arrived;
     const preview = page.locator('#kem-catalogue .catalogue-preview');
     await expect(preview).toBeVisible();
@@ -135,6 +135,8 @@ test('cached navigation paints while its fresh read is held; the brand never rel
   } finally {catalogue.release(); await catalogue.delivered; await catalogue.remove();}
   await expect(page.locator('#catalogue-workspace')).toBeVisible();
   await expect(page.locator('#kem-catalogue')).toContainText('Diffie');
+  await page.getByRole('banner').getByRole('link', {name: 'Crucible home', exact: true}).click();
+  await expect(page.locator('#home-workspace')).toBeVisible();
   expect(reads.filter(read => read.type === 'document')).toEqual([]);
   expect(reads.filter(read => read.method !== 'GET')).toEqual([]);
 });

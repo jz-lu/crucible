@@ -62,7 +62,8 @@
     const [path, query = ''] = hash.split('?');
     const params = new URLSearchParams(query);
     if (path === '#challenge' && params.get('view') === 'map') return {page: 'notebook-map', title: 'Scheme map'};
-    if (['', '#', '#challenge'].includes(path)) return {page: 'catalogue', title: 'Schemes'};
+    if (['', '#', '#home'].includes(path)) return {page: 'home', title: 'Crucible'};
+    if (path === '#challenge') return {page: 'catalogue', title: 'Schemes'};
     if (path === '#activity') return {page: 'activity', title: 'My activity'};
     if (path === '#people') return {page: 'people', title: 'Leaderboard'};
     const legacyBounty = path === '#notebook' && !params.has('location') &&
@@ -101,7 +102,7 @@
     if (path === '#bounties' || path === '#notebook' && !params.has('location') &&
         (['bounties', 'guide'].includes(params.get('view')) || params.has('bounty') || params.get('compose') === 'bounty')) return bountyAvailable() ? 'bounties' : 'notebook';
     if (path === '#notebook' && params.get('view') === 'map' && !['location', 'note', 'research', 'research_request'].some(key => params.has(key))) return 'challenge';
-    if (['', '#', '#challenge', '#propose'].includes(path) || /^#(?:scheme|challenge)\//.test(path)) return 'challenge';
+    if (['#challenge', '#propose'].includes(path) || /^#(?:scheme|challenge)\//.test(path)) return 'challenge';
     return {'#people': 'people', '#notebook': 'notebook', '#about': 'about', '#research': 'research'}[path] || null;
   }
   function apply() {
@@ -122,9 +123,11 @@
     let hint;
     try { hint = window.sessionStorage.getItem(presentationKey); } catch {}
     const described = describe();
-    const route = hint === 'gate' ? {page: 'gate', title: 'Private beta'} :
+    const route = described.page === 'home' ? described : hint === 'gate' ? {page: 'gate', title: 'Private beta'} :
       hint !== 'workspace' && described.page === 'catalogue' ? {page: 'neutral', title: 'Crucible'} : described;
     root.setAttribute('data-pending-page', route.page);
+    const home = document.querySelector('#home-workspace');
+    if (home) home.hidden = route.page !== 'home';
     root.classList.toggle('pending-notebook', ['Notes', 'Scheme map', 'Timeline', 'Bounties'].includes(route.title));
     const title = document.querySelector('#access-title');
     if (title) { title.textContent = route.title; title.removeAttribute('aria-hidden'); }
