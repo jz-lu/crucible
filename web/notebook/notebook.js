@@ -411,7 +411,9 @@
       if (inShared || params.get('filter') === 'shared') { params.delete('shared'); params.delete('state'); params.delete('filter'); visibility = 'all'; filter.input.value = 'all'; }
       request++; timelineRequest++;
       q('map').hidden = !inMap; q('timeline').hidden = !inTimeline; q('bounties').hidden = !inBounties;
-      heading.hidden = !reviewOnly && inBounties;
+      const inNote = !inVisualization && Boolean(params.get('note'));
+      root.classList.toggle('nb-note-reader', !reviewOnly && inNote);
+      heading.hidden = !reviewOnly && (inBounties || inNote);
       pageTitle.textContent = inMap ? 'Scheme map' : inTimeline ? 'Timeline' : 'Notes';
       visualizationBack.hidden = !inMap && !inTimeline;
       visualizationBack.textContent = inMap ? '← Schemes' : '← Notes';
@@ -768,6 +770,7 @@
       for (const actions of q('list').querySelectorAll('.nb-card-actions')) {
         for (const control of actions.querySelectorAll('button')) control.disabled = disabled;
       }
+      for (const control of q('list').querySelectorAll('.nb-number-action')) control.disabled = disabled;
     }
     function updateList(update) {
       const focused = document.activeElement?.closest('.nb-list') === q('list');
@@ -1058,14 +1061,28 @@
       if (reviewMode) q('list').append(el('p', 'nb-hint', 'Publish requests · approve an exact revision for all approved participants to read. This does not publish it to the internet or certify its mathematics.'));
       if (!filtered.length) q('list').append(el('p', 'nb-empty', reviewMode ? 'No publish requests awaiting approval.' : search.trim() || tag || visibility !== 'all' ? 'No matching notes.' : 'No notes yet. Start with New note.'));
       filtered.forEach((note, index) => {
-        const shown = selectedRevision(note), proposal = reviewMode ? null : proposalRevision(note), r = shown.content, expanded = previewId === note.id + ':' + shown.revision, item = el('section', 'nb-entry'), heading = el('h2');
-        const title = button('', () => { previewId = expanded ? null : note.id + ':' + shown.revision; if (!expanded) prepareNote(note, visibility === 'proposals' && proposal ? proposal.revision : null); renderList(); root.querySelectorAll('.nb-title')[index]?.focus({preventScroll:true}); }, 'nb-title');
-        title.setAttribute('aria-expanded', String(expanded)); title.setAttribute('aria-controls', (reviewOnly ? 'nb-review-preview-' : 'nb-preview-') + index);
-        const marker = el('span', 'nb-marker', expanded ? '−' : '+'); marker.setAttribute('aria-hidden', 'true');
-        const trailing = el('span', 'nb-title-trailing'), number = noteNumber(note);
-        if (number) { const reference = el('span', 'nb-note-number', number); reference.title = 'Permanent note number. Search ' + number + ' to find this note.'; trailing.append(reference); }
-        trailing.append(marker);
-        const line = el('span', 'nb-title-line'); line.append(el('span', 'nb-title-text', r.title), trailing);
+        const shown = selectedRevision(note), proposal = reviewMode ? null : proposalRevision(note), r = shown.content, expanded = previewId === note.id + ':' + shown.revision, item = el('section', 'nb-entry'), heading = el('h2', 'nb-entry-title');
+        const previewIdValue = (reviewOnly ? 'nb-review-preview-' : 'nb-preview-') + index;
+        const togglePreview = source => {
+          previewId = expanded ? null : note.id + ':' + shown.revision;
+          if (!expanded) prepareNote(note, visibility === 'proposals' && proposal ? proposal.revision : null);
+          renderList(); q('list').querySelectorAll('.' + source)[index]?.focus({preventScroll:true});
+        };
+        const title = button('', () => togglePreview('nb-title'), 'nb-title');
+        const marker = button(expanded ? '−' : '+', () => togglePreview('nb-expand'), 'nb-marker nb-expand');
+        marker.setAttribute('aria-label', (expanded ? 'Collapse' : 'Expand') + ' note: ' + r.title);
+        for (const control of [marker, title]) {
+          control.setAttribute('aria-expanded', String(expanded)); control.setAttribute('aria-controls', previewIdValue);
+        }
+        heading.append(marker);
+        const number = noteNumber(note);
+        if (number) {
+          const reference = button(number, () => citeNote(note, shown), 'nb-note-number nb-number-action');
+          reference.title = 'Cite ' + number + ' · revision ' + shown.revision;
+          reference.setAttribute('aria-label', 'Cite note ' + number + ', revision ' + shown.revision);
+          reference.disabled = listRefreshing; heading.append(reference);
+        }
+        const line = el('span', 'nb-title-line'); line.append(el('span', 'nb-title-text', r.title));
         const copy = el('span', 'nb-title-copy'); copy.append(line, status(note, shown, proposal)); title.append(copy); heading.append(title);
         const headingRow = el('div', 'nb-entry-heading'), actions = el('div', 'nb-card-actions');
         const aside = el('div', 'nb-entry-aside');
@@ -1144,7 +1161,7 @@
     function focusReader() {
       const location = params.get('location');
       const passage = validLocation(location) ? q('full').querySelector('[data-nb-location="' + location + '"]') : null;
-      (passage || q('full').querySelector('h2'))?.focus({preventScroll:true});
+      (passage || q('full').querySelector('.nb-full-title'))?.focus({preventScroll:true});
       if (passage) passage.scrollIntoView({block:'center'});
     }
     async function loadNote(id) {
@@ -1257,7 +1274,7 @@
       if (pinError) { full.append(el('p', 'nb-error', pinError)); return; }
       const revision = requested ? note.revisions.find(r => String(r.revision) === requested) : note.revisions.find(r => r.revision === note.revision) || note.revisions[note.revisions.length - 1];
       if (!revision) { full.append(el('h2', 'nb-full-title', 'Revision not available')); return; }
-      const r = revision.content, heading = el('h2', 'nb-full-title', r.title); heading.tabIndex = -1;
+      const r = revision.content, heading = el(reviewOnly ? 'h2' : 'h1', 'nb-full-title', r.title); heading.tabIndex = -1;
       const body = bodyContent(r.body, location => citeNote(note, revision, location));
       const location = params.get('location');
       if (location) {

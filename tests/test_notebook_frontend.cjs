@@ -80,19 +80,29 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.equal(app.q('list').querySelector('.nb-note-votes'),null);
   assert.match(app.q('list').querySelector('time').title,/^Saved /);
  });
- await test('note numbers stay beside titles through expansion and identify exact revision citations',async()=>{
+ await test('list note numbers open the exact citation without expansion, reads or writes',async()=>{
   const saved=note({number:1042,content_sha256:'a'.repeat(64)});
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[saved],next_after:null}:url.startsWith('/api/notebook/notes/note-one')?{note:saved}:undefined});
   assert.equal(app.q('list').querySelector('.nb-note-number').textContent,'#1042');
+  const calls=app.requests.length,reference=app.q('list').querySelector('.nb-number-action');
+  reference.focus();reference.click();await flush();
+  assert.equal(app.q('dialog').getAttribute('aria-label'),'Cite this note');
+  assert.equal(app.q('list').querySelector('.nb-title').getAttribute('aria-expanded'),'false');
+  assert.equal(app.requests.length,calls);
+  const listCitation=app.q('dialog-body').querySelector('[name="citation-link"]').value;
+  app.q('close').click();await flush();assert.equal(app.document.activeElement,reference);
   app.q('list').querySelector('.nb-title').click();await flush();
   assert.equal(app.q('list').querySelector('.nb-note-number').textContent,'#1042');
   app.q('list').querySelector('.nb-title').click();await flush();
   assert.equal(app.q('list').querySelector('.nb-note-number').textContent,'#1042');
   await app.show('note-one',1);
+  assert.equal(app.root.querySelector('.nb-heading').hidden,true);
   app.q('full').querySelector('.nb-number-action').click();
   assert.equal(app.q('dialog-body').querySelector('.nb-citation-number').textContent,'#1042 · revision 1');
   assert.match(app.q('dialog-body').querySelector('.nb-prompt').textContent,/#1042/);
   assert.match(app.q('dialog-body').querySelector('[name="citation-link"]').value,/revision=1&sha256=a{64}/);
+  assert.equal(app.q('dialog-body').querySelector('[name="citation-link"]').value,listCitation);
+  app.q('close').click();await app.show();assert.equal(app.root.querySelector('.nb-heading').hidden,false);
  });
 
 
@@ -155,7 +165,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const app=await boot({respond:url=>url==='/api/notebook/notes/note-one'?(delay?late.promise:{note:note()}):undefined});
   await app.show('note-one');await app.show();delay=true;const loading=app.show('note-one');
   assert.match(app.q('full').textContent,/Argument as text/);assert.equal(byText(app.q('full'),'Edit').disabled,true);
-  assert.equal(app.document.activeElement,app.q('full').querySelector('h2'),'cached entry hands focus to the reader');
+  assert.equal(app.document.activeElement,app.q('full').querySelector('.nb-full-title'),'cached entry hands focus to the reader');
   const back=app.q('full').querySelector('.nb-back');back.focus();
   const body=app.q('full').querySelector('.nb-body');
   late.resolve({note:note()});await loading;

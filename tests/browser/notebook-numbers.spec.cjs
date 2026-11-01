@@ -21,21 +21,27 @@ for (const width of [1440, 390, 320]) {
     const row = workspace.locator('.nb-entry').filter({hasText: title});
     await expect(row).toHaveCount(1);
     await expect(row.locator('.nb-note-number')).toHaveText(label);
-    await row.locator('.nb-title').click();
+    const dialog = workspace.locator('dialog[data-nb="dialog"]');
+    await row.locator('.nb-number-action').click();
+    await expect(dialog).toHaveAttribute('aria-label','Cite this note');
+    await expect(row.locator('.nb-title')).toHaveAttribute('aria-expanded','false');
+    const listCitation=await dialog.locator('[name="citation-link"]').inputValue();
+    expect(listCitation).toContain('revision=1');expect(listCitation).toContain('sha256='+note.content_sha256);
+    await page.keyboard.press('Escape');await expect(row.locator('.nb-number-action')).toBeFocused();
+    await row.locator('.nb-expand').click();
+    await expect(row.locator('.nb-expand')).toHaveAttribute('aria-expanded','true');
+    await expect(row.locator('.nb-expand')).toBeFocused();
     await expect(row.locator('.nb-note-number')).toHaveText(label);
     const placement = await row.evaluate(element => {
-      const text=element.querySelector('.nb-title-text'),fragments=Array.from(text.getClientRects()),last=fragments.at(-1);
+      const text=element.querySelector('.nb-title-text').getBoundingClientRect();
       const reference=element.querySelector('.nb-note-number').getBoundingClientRect(),marker=element.querySelector('.nb-marker').getBoundingClientRect();
-      return {textLeft:text.getBoundingClientRect().left,textRight:last.right,textBottom:last.bottom,
-        referenceLeft:reference.left,referenceRight:reference.right,referenceTop:reference.top,markerLeft:marker.left,
+      return {textLeft:text.left,referenceLeft:reference.left,referenceRight:reference.right,markerRight:marker.right,
         referenceFont:parseFloat(getComputedStyle(element.querySelector('.nb-note-number')).fontSize)};
     });
-    if(placement.referenceTop<placement.textBottom){
-      expect(placement.referenceLeft-placement.textRight).toBeGreaterThanOrEqual(0);
-      expect(placement.referenceLeft-placement.textRight).toBeLessThanOrEqual(12);
-    } else expect(placement.referenceLeft-placement.textLeft).toBeLessThanOrEqual(12);
-    expect(placement.markerLeft-placement.referenceRight).toBeGreaterThanOrEqual(0);
-    expect(placement.markerLeft-placement.referenceRight).toBeLessThanOrEqual(10);
+    expect(placement.referenceLeft).toBeGreaterThan(placement.markerRight);
+    expect(placement.textLeft).toBeGreaterThan(placement.referenceRight);
+    expect(placement.referenceLeft-placement.markerRight).toBeLessThanOrEqual(12);
+    expect(placement.textLeft-placement.referenceRight).toBeLessThanOrEqual(12);
     expect(placement.referenceFont).toBeLessThanOrEqual(11);
     expect(await row.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -50,11 +56,15 @@ for (const width of [1440, 390, 320]) {
     await row.locator('.nb-read').click();
     const reader = workspace.locator('[data-nb="full"]');
     await expect(reader.locator('.nb-full-title')).toHaveText(title);
+    await expect(reader.getByRole('heading',{level:1,name:title,exact:true})).toBeVisible();
+    await expect(workspace.locator('.nb-heading')).toBeHidden();
+    for(const name of ['files','publish-all','new'])await expect(workspace.locator('[data-nb="'+name+'"]')).toBeHidden();
+    expect((await reader.boundingBox()).width).toBeGreaterThanOrEqual((await workspace.boundingBox()).width-2);
     await expect(reader.locator('.nb-number-action')).toHaveText(label);
     await reader.locator('.nb-number-action').click();
-    const dialog = workspace.locator('dialog[data-nb="dialog"]');
     await expect(dialog.locator('.nb-citation-number')).toHaveText(label + ' · revision 1');
     const citation = await dialog.locator('[name="citation-link"]').inputValue();
+    expect(citation).toBe(listCitation);
     expect(citation).toContain('note=' + encodeURIComponent(note.id));
     expect(citation).toContain('revision=1');
     expect(citation).toContain('sha256=' + note.content_sha256);
@@ -64,5 +74,6 @@ for (const width of [1440, 390, 320]) {
     await expect(reader.locator('.nb-number-action')).toHaveText(label);
     await expect(reader.locator('.nb-full-title')).toHaveText(title);
     await page.screenshot({path: testInfo.outputPath('reader-reference.png'), fullPage: true});
+    await reader.locator('.nb-back').click();await expect(workspace.locator('.nb-heading')).toBeVisible();
   });
 }

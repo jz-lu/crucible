@@ -83,7 +83,12 @@
 .nb-entry-heading>h2,.nb-reader-heading>.nb-full-title{min-width:0;overflow-wrap:anywhere}
 .nb-entry-heading .nb-title-copy{min-width:0;overflow-wrap:anywhere}
 .nb-title-line{display:block;min-width:0}
-.nb-title-trailing{display:inline-flex;align-items:baseline;gap:8px;margin-inline-start:10px;vertical-align:baseline;white-space:nowrap}
+.nb-entry-title{display:flex;align-items:baseline;gap:10px;min-width:0}
+.nb-entry-title .nb-title{min-width:0;flex:1}
+.nb-expand{border:0;background:none;padding:4px 0;min-width:16px;cursor:pointer;line-height:1.5}
+.nb-expand:hover,.nb-expand:focus-visible{color:var(--primary)}
+.nb-entry-title .nb-number-action{flex-shrink:0}
+.nb-root.nb-note-reader .nb-full{max-width:none;width:100%}
 .nb-note-number{font:400 11px/1.5 var(--mono);font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
 .nb-number-action{padding:4px 0;background:transparent;border:0;cursor:pointer}
 .nb-number-action:hover{color:var(--primary);text-decoration:underline;text-underline-offset:3px}
@@ -170,4 +175,4 @@
 @media(max-width:650px){.nb-root:not(.nb-review-workspace){--nb-list-title:500 16px/1.45 var(--sans)}.nb-root:not(.nb-review-workspace) .nb-entry-heading{gap:10px}}
 @media(max-width:430px){.nb-note-meta{gap:8px;font-size:11px}.nb-entry-aside .nb-card-actions{flex-wrap:wrap;max-width:124px}}
 
-@media(max-width:650px){.nb-title-trailing{gap:8px}.nb-note-number{font-size:10px}}
+@media(max-width:650px){.nb-entry-title{gap:8px}.nb-note-number{font-size:10px}}

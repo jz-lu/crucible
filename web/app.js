@@ -1019,7 +1019,7 @@ async function showNotebook(query, reviewing = false, page = 'notebook') {
     else if (params.has('note') || params.has('research_request') || params.has('research') || params.has('bounty') || params.get('compose') === 'bounty') {
       // A reader's private title and body remain unknown until its own read.
       const shell = node('div', undefined, 'notebook-shell-preview');
-      shell.append(node('h1', page === 'bounties' ? 'Bounties' : 'Notes'));
+      if (!params.has('note')) shell.append(node('h1', page === 'bounties' ? 'Bounties' : 'Notes'));
       const frame = node('div', undefined, 'loading-preview');
       frame.setAttribute('aria-hidden', 'true');
       for (let index = 0; index < 4; index++) {
