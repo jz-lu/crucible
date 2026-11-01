@@ -1516,7 +1516,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  await test('Human-written is unchecked by default and only explicit choices add the canonical tag',async()=>{
   for(const checked of [false,true]){
    let sent;const app=await boot({respond:(url,body)=>url==='/api/notebook/notes'&&body?(sent=body,{note:note()}):undefined});app.q('new').click();fill(app);
-   const human=app.root.querySelector('[name="human-written"]');assert.equal(human.checked,false);assert.match(app.q('dialog-body').textContent,/Optional, self-reported label; not verified/);
+   const human=app.root.querySelector('[name="human-written"]');assert.equal(human.checked,false);assert.equal(app.q('dialog-body').textContent.includes('Optional, self-reported label; not verified'),false);
    if(checked){human.checked=true;human.dispatchEvent({type:'change'});}app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();assert.equal(sent.content.tags.includes('human-written'),checked);assert.equal(Object.hasOwn(sent.content,'human-written'),false);
   }
  });

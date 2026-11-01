@@ -15,6 +15,14 @@ for(const width of [1440,390])test(`form placeholders and searchable note tags w
   }
   const input=dialog.getByRole('combobox',{name:'Tags',exact:true});
   await expect(input).toHaveAttribute('placeholder',/.+/);
+  await expect(dialog.locator('.nb-required-marker')).toHaveCount(4);
+  await expect(dialog).not.toContainText('Enter chooses the first');
+  await expect(dialog).not.toContainText('Optional, self-reported label; not verified');
+  const bodyBox=await dialog.locator('[name="body"]').boundingBox(),evidenceBox=await dialog.locator('[name="kind"]').boundingBox(),tagsBox=await input.boundingBox();
+  expect(Math.abs(bodyBox.width-evidenceBox.width)).toBeLessThanOrEqual(1);
+  expect(Math.abs(bodyBox.width-tagsBox.width)).toBeLessThanOrEqual(1);
+  expect(evidenceBox.y).toBeGreaterThan(bodyBox.y+bodyBox.height);
+  expect(tagsBox.y).toBeGreaterThan(evidenceBox.y+evidenceBox.height);
   const posted=[];page.on('request',request=>{
     if(request.method()==='POST'&&new URL(request.url()).pathname==='/api/notebook/notes')posted.push(request.postDataJSON());
   });
@@ -54,11 +62,13 @@ for(const width of [1440,390])test(`form placeholders and searchable note tags w
   await page.locator('#nav-challenge').click();await page.locator('#propose-scheme-button').click();
   await page.getByRole('link',{name:'Write a proposal note →',exact:true}).click();
   await expect(dialog).toHaveAttribute('aria-label','New proposal note');
+  await expect(dialog.locator('.nb-required-marker')).toHaveCount(4);
   await expect(dialog.locator('[name="title"]')).toHaveAttribute('placeholder',/KEM/);
   for(const name of ['title','claim','conditions','body'])await expect(dialog.locator('[name="'+name+'"]')).toHaveAttribute('placeholder',/.+/);
   await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
   await page.locator('#nav-bounties').click();
   const bounties=page.locator('[data-nb="bounties"]');await bounties.getByRole('button',{name:'Propose a bounty',exact:true}).click();
+  await expect(bounties.locator('.bty-form .nb-required-marker')).toHaveCount(5);
   for(const name of ['bounty-title','bounty-summary','bounty-completion','bounty-verification','bounty-tags']){
     await expect(bounties.locator('[name="'+name+'"]')).toHaveAttribute('placeholder',/.+/);
     await expect(bounties.locator('[name="'+name+'"]')).toHaveValue('');

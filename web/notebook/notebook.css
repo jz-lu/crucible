@@ -113,6 +113,7 @@
 .nb-human-option input{grid-column:1;grid-row:1;width:16px;height:16px;padding:0;accent-color:var(--primary)}
 .nb-human-option>span{grid-column:2;grid-row:1}.nb-human-option>small{grid-column:2}
 .nb-field input::placeholder,.nb-field textarea::placeholder{color:var(--muted);opacity:1}
+.nb-required-marker{color:var(--error);font-weight:500}
 .nb-tag-picker{min-width:0}
 .nb-tag-control{position:relative}
 .nb-selected-tags{display:flex;flex-wrap:wrap;gap:6px;min-width:0}

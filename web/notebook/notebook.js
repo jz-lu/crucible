@@ -1608,9 +1608,9 @@
         const editable = reference && typeof reference === 'object' && !Array.isArray(reference) && typeof reference.title === 'string' && typeof reference.url === 'string' && (reference.scope === undefined || typeof reference.scope === 'string');
         const entry = {reference, row, fields:[], removed:false};
         if (editable) {
-          const title = field('Source title', prefix + '-title', reference.title, {max:2000,placeholder:'e.g. Paper title or supporting note'});
-          const link = field('Source link', prefix + '-url', reference.url, {max:8000,placeholder:'https://… or an exact Crucible note link'});
-          const scope = field('What this supports', prefix + '-scope', reference.scope || '', {rows:2,max:10000,placeholder:'Claim, theorem, section or page; mention any limitation.'});
+          const title = field('Source title', prefix + '-title', reference.title, {requiredLabel:true,max:2000,placeholder:'e.g. Paper title or supporting note'});
+          const link = field('Source link', prefix + '-url', reference.url, {requiredLabel:true,max:8000,placeholder:'https://… or an exact Crucible note link'});
+          const scope = field('What this supports', prefix + '-scope', reference.scope || '', {requiredLabel:true,rows:2,max:10000,placeholder:'Claim, theorem, section or page; mention any limitation.'});
           const knownRelation = Object.hasOwn(relationLabels, reference.relation);
           const relation = field('This note…', prefix + '-relation', knownRelation ? reference.relation : 'cites', {options:Object.entries(relationLabels).map(([value,label]) => ({value,label:label + ' this source'}))});
           let relationChanged = false;
@@ -1914,9 +1914,11 @@
     function closeDialog(saved = false) { if (saved !== true && hasUnsavedDraft() && !window.confirm(discardMessage)) return; hasUnsavedDraft = () => false; suspendedDialog = false; dialogEpoch++; q('dialog').close(); }
     function field(label, name, value = '', options = {}) {
       const wrap = el('label', 'nb-field'), caption = el('span', '', label); caption.id = (reviewOnly ? 'nb-review-field-' : 'nb-field-') + name; wrap.append(caption); let input;
+      if (options.required || options.requiredLabel) { const mark = el('span', 'nb-required-marker', ' *'); mark.setAttribute('aria-hidden', 'true'); caption.append(mark); }
       if (options.options) { input = el('select'); options.options.forEach(o => { const n = el('option', '', o.label); n.value = o.value; input.append(n); }); }
       else if (options.rows) { input = el('textarea'); input.rows = options.rows; } else { input = el('input'); input.type = options.type || 'text'; }
       input.name = name; input.setAttribute('name', name); input.value = value ?? ''; input.setAttribute('aria-labelledby', caption.id);
+      if (options.requiredLabel) input.setAttribute('aria-required', 'true');
       if (options.required) input.required = true; if (options.max) input.maxLength = options.max; if (options.placeholder) input.placeholder = options.placeholder;
       wrap.append(input); if (options.help) { const hint = el('small', '', options.help); hint.id = (reviewOnly ? 'nb-review-hint-' : 'nb-hint-') + name; input.setAttribute('aria-describedby', hint.id); wrap.append(hint); } return {wrap, input};
     }
@@ -1972,8 +1974,7 @@
       const control = el('div', 'nb-tag-control'), popup = el('div', 'nb-tag-dropdown'), list = el('div'), status = el('p', 'nb-tag-search-status');
       popup.hidden = true; list.id = id + '-options'; list.setAttribute('role', 'listbox'); list.setAttribute('aria-label', 'Matching tags');
       input.setAttribute('aria-controls', list.id); status.setAttribute('role', 'status'); popup.append(list, status); control.append(input, popup);
-      const help = el('small', '', 'Enter chooses the first match, or adds a new tag if none match.'); help.id = id + '-help'; input.setAttribute('aria-describedby', help.id);
-      wrap.append(label, stored, selected, control, help);
+      wrap.append(label, stored, selected, control);
       const alive = dialogGuard(), credential = currentSession;
       let generation = 0, timer = null, lookup = null, activeIndex = 0, options = [], rows = [];
       const editable = () => alive() && active && q('dialog').open && wrap.isConnected &&
@@ -2089,8 +2090,8 @@
       const add = (label, name, value, options) => { const f = field(label, name, value, options); controls[name] = f.input; return f.wrap; };
       form.append(add('Title', 'title', r?.title, {required:true,max:240,placeholder:proposal ? 'e.g. A KEM based on structured lattices' : 'e.g. Testing a lattice parameter choice'}), add('Dropdown summary', 'claim', r?.claim, {required:true,rows:3,max:20000,placeholder:'What is the question or result, and why does it matter?',help:'Briefly explain the question or result, why it matters and any essential caveat for people browsing.'}), add('Conditions & scope', 'conditions', r?.conditions, {required:true,rows:2,max:20000,placeholder:'State the assumptions, parameters, and limits of the claim.'}), add('Technical body', 'body', r?.body, {required:true,rows:7,max:40000,placeholder:'Describe the construction, argument, calculations, or experiments in enough detail for someone else to check the work.',help:'Free-form research for agents and expert reviewers. LaTeX, prose, code and calculations are welcome; no required outline or brevity. The full source is preserved even when notation is not rendered.'}));
       const tagPicker = noteTagPicker(r?.tags || (proposal ? ['scheme-description', 'KEM', 'proposal'] : []), () => syncHumanWritten()); controls.tags = tagPicker.stored;
-      const row = el('div', 'nb-fields-row'); row.append(tagPicker.wrap, add('Evidence description', 'kind', r?.kind || (proposal ? 'Unreviewed construction' : ''), {max:100,placeholder:'e.g. Proof sketch, experiment, or open question'})); form.append(row);
-      const humanWritten = field('Human-written', 'human-written', '', {type:'checkbox',help:'Optional, self-reported label; not verified. Use only when this revision was written by a person.'});
+      form.append(add('Evidence description', 'kind', r?.kind || (proposal ? 'Unreviewed construction' : ''), {max:100,placeholder:'e.g. Proof sketch, experiment, or open question'}), tagPicker.wrap);
+      const humanWritten = field('Human-written', 'human-written', '', {type:'checkbox'});
       humanWritten.wrap.classList.add('nb-human-option');
       const tagValues = () => JSON.parse(controls.tags.value);
       const syncHumanWritten = () => { humanWritten.input.checked = tagValues().includes('human-written'); };

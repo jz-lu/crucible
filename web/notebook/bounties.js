@@ -9,7 +9,9 @@
   }
   function field(label, name, value, {rows, options, max = 2000, required = true, placeholder} = {}) {
     const wrap = el('label', 'nb-field'), input = el(options ? 'select' : rows ? 'textarea' : 'input');
-    wrap.append(el('span', '', label)); input.name = name; input.required = required;
+    const caption = el('span', '', label);
+    if (required) { const mark = el('span', 'nb-required-marker', ' *'); mark.setAttribute('aria-hidden', 'true'); caption.append(mark); }
+    wrap.append(caption); input.name = name; input.required = required;
     if (rows) input.rows = rows;
     if (!options) input.maxLength = max;
     if (placeholder) input.placeholder = placeholder;
@@ -48,7 +50,7 @@
     headingActions.append(allowanceNode, propose); heading.append(titleRow, headingActions);
     const notice = el('div', 'bty-notice'); notice.setAttribute('role', 'status');
     const board = el('section'), listHeading = el('div', 'bty-list-heading'), count = el('span', 'bty-count');
-    const sortField = field('Sort by', 'bounty-sort', 'concrete', {options: Object.entries(sorts)}); sortField.wrap.classList.add('bty-sort');
+    const sortField = field('Sort by', 'bounty-sort', 'concrete', {options: Object.entries(sorts), required:false}); sortField.wrap.classList.add('bty-sort');
     sortField.input.addEventListener('change', () => change({sort: sortField.input.value, page: 1}, 'bounty-sort'));
     listHeading.append(count, sortField.wrap);
     const entries = el('div', 'bty-grid'), pagination = el('nav', 'bty-pagination'); pagination.setAttribute('aria-label', 'Bounty pages');
