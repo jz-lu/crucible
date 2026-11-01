@@ -212,6 +212,18 @@ def test_modified_retry_tree_cannot_publish_unreviewed_files(prepared):
     assert not provider.pulls and len(provider.refs) == 1
 
 
+@pytest.mark.parametrize('destination', ['.github/workflows', 'contributions/another-receipt'])
+def test_saved_metadata_cannot_redirect_files_outside_the_verified_receipt_directory(prepared, destination):
+    site, args, _, provider, _ = prepared
+    path = Path(args.path) / cli.GITHUB_WORKSPACE
+    state = cli.load_json(path)
+    state['target']['directory'] = destination
+    state['sha256'] = cli.contribution_hash({key: value for key, value in state.items() if key != 'sha256'})
+    cli.save_json(path, state)
+    with pytest.raises(cli.ClientError): cli.github_publish(site, args)
+    assert not provider.calls and not provider.refs and not provider.pulls
+
+
 def test_cli_requires_explicit_publish_confirmation():
     parsed = cli.parser().parse_args(['github', 'publish', '--path', 'reviewed'])
     assert not parsed.confirm_publish

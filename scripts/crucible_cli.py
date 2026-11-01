@@ -1690,6 +1690,7 @@ def github_workspace(path):
     frozen = {key: item for key, item in value.items() if key != "sha256"}
     if value.get("format") != GITHUB_FORMAT or contribution_hash(frozen) != value.get("sha256"):
         raise ClientError("The prepared contribution changed. Prepare a fresh directory.")
+    contribution_target(value['target'])
     files, total, names = [], 0, set()
     for item in value.get("files", []):
         name = contribution_path(item["path"])
@@ -1709,6 +1710,18 @@ def github_workspace(path):
     return root, value, files
 
 
+def contribution_target(target):
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", target["repository"]):
+        raise ClientError("Choose a GitHub repository as owner/name.")
+    if (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_./-]{0,199}", target["base"]) or
+            '..' in target["base"] or '//' in target["base"] or target["base"].endswith('/')):
+        raise ClientError("Choose an unambiguous existing GitHub base branch.")
+    contribution_path(target["directory"])
+    if not target["directory"].startswith('contributions/'):
+        raise ClientError("Contribution exports must stay beneath contributions/.")
+    return target
+
+
 def github_prepare(client, args):
     identifier = str(UUID(args.submission_id))
     value = client.request('/api/submissions/' + identifier + '/github-export')
@@ -1718,14 +1731,7 @@ def github_prepare(client, args):
         raise ClientError("The server's contribution export could not be verified.")
     target = {**value["target"], **({"repository": args.repository} if args.repository else {}),
               **({"base": args.base} if args.base else {})}
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", target["repository"]):
-        raise ClientError("Choose a GitHub repository as owner/name.")
-    if (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_./-]{0,199}", target["base"]) or
-            '..' in target["base"] or '//' in target["base"] or target["base"].endswith('/')):
-        raise ClientError("Choose an unambiguous existing GitHub base branch.")
-    target["directory"] = contribution_path(target["directory"])
-    if not target["directory"].startswith('contributions/'):
-        raise ClientError("Contribution exports must stay beneath contributions/.")
+    contribution_target(target)
     files = list(value["files"])
     include_inputs = not args.without_inputs
     if include_inputs:
@@ -1823,6 +1829,8 @@ def github_publish(client, args):
     fresh = client.request('/api/submissions/' + str(UUID(state['submission_id'])) + '/github-export')
     if fresh.get('sha256') != state['export_sha256'] or fresh.get('owner') != state['owner']:
         raise ClientError("The contribution or author binding changed. Prepare a fresh directory.")
+    if fresh.get('target', {}).get('directory') != state['target']['directory']:
+        raise ClientError("The prepared directory differs from the verified receipt's contribution directory.")
     linked = state.get('github_identity')
     if not linked:
         raise ClientError("Link your GitHub account in your Crucible profile, then prepare a fresh contribution.", 'github_link_required')
