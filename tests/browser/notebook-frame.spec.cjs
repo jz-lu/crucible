@@ -3,7 +3,7 @@ const {test, expect, signIn, holdResponse, useDataSaver} = require('./helpers.cj
 const views = {
   notes: {route: '#notebook', body: '[data-nb="library"]',
     hold: url => url.pathname === '/api/notebook/notes' && url.searchParams.get('scope') === 'all' && url.searchParams.get('limit') === '25'},
-  map: {route: '#notebook?view=map', body: '[data-nb="map"]', hold: url => url.pathname === '/map/styles.css'},
+  map: {route: '#challenge?view=map', body: '[data-nb="map"]', hold: url => url.pathname === '/map/styles.css'},
   timeline: {route: '#notebook?view=timeline', body: '[data-nb="timeline"]', hold: url => url.pathname === '/api/notebook/timeline'},
 };
 
@@ -24,8 +24,9 @@ async function frameGeometry(root, view, pending) {
         font: style.font, letterSpacing: style.letterSpacing};
     };
     return {
-      heading: box('.nb-heading'), title: box('.nb-heading h1'), navigation: box('.nb-views'),
-      tab: box(pending ? `[data-notebook-tab="${view}"]` : `[data-nb="${view}-view"]`),
+      heading: box('.nb-heading'), title: box('.nb-heading h1'),
+      action: box(pending ? (view === 'notes' ? '[data-notebook-control="timeline"]' : `[data-notebook-back="${view}"]`) :
+        (view === 'notes' ? '[data-nb="timeline-view"]' : '[data-nb="visualization-back"]')),
       body: box(pending ? `[data-notebook-panel="${view}"]` :
         `[data-nb="${view === 'notes' ? 'library' : view}"]`),
     };
@@ -33,7 +34,7 @@ async function frameGeometry(root, view, pending) {
 }
 
 function sameFrame(actual, expected, phase) {
-  for (const part of ['heading', 'title', 'navigation', 'tab', 'body']) {
+  for (const part of ['heading', 'title', 'action', 'body']) {
     // Records and the real map may legitimately determine a different body
     // height. Their top edge and available width should not jump between frames.
     const coordinates = part === 'body' ? ['x', 'y', 'width'] : ['x', 'y', 'width', 'height'];
@@ -41,7 +42,7 @@ function sameFrame(actual, expected, phase) {
       expect(Math.abs(actual[part][coordinate] - expected[part][coordinate]),
         `${phase}: ${part} ${coordinate}`).toBeLessThanOrEqual(1);
     }
-    if (part === 'title' || part === 'tab') {
+    if (part === 'title' || part === 'action') {
       expect(actual[part].font, `${phase}: ${part} font`).toBe(expected[part].font);
       expect(actual[part].letterSpacing, `${phase}: ${part} spacing`).toBe(expected[part].letterSpacing);
     }
@@ -70,7 +71,7 @@ async function pendingFrameChecks(frame, view) {
   await expect(frame).toBeVisible();
   await expect(frame).toHaveAttribute('aria-hidden', 'true');
   await expect(frame).toHaveAttribute('inert', '');
-  await expect(frame.locator('.nb-heading h1')).toHaveText('Research notebook');
+  await expect(frame.locator('.nb-heading h1')).toHaveText(view === 'map' ? 'Scheme map' : view === 'timeline' ? 'Timeline' : 'Notes');
   expect(await frame.locator('button,input,select').evaluateAll(elements => elements.every(element => element.disabled))).toBe(true);
   expect(await frame.locator('[data-notebook-panel]').evaluateAll(elements => elements
     .filter(element => element.getClientRects().length && getComputedStyle(element).display !== 'none')
@@ -125,7 +126,7 @@ for (const width of [1440, 390]) for (const [view, config] of Object.entries(vie
       await page.screenshot({path: testInfo.outputPath('script-pending.png'), fullPage: true});
 
       script.release(); await script.delivered; await data.arrived;
-      await expect(workspace.locator('[data-nb="' + view + '-view"]')).toBeVisible();
+      await expect(workspace.locator('[data-nb="notes-title"]')).toHaveText(view === 'map' ? 'Scheme map' : view === 'timeline' ? 'Timeline' : 'Notes');
       await expect(workspace.locator(config.body)).toBeVisible();
       sameFrame(await frameGeometry(workspace, view, false), initial, 'selected data pending');
       await expect(workspace.locator('.nb-entry')).toHaveCount(0);
@@ -200,7 +201,7 @@ for (const width of [1440, 390]) {
     await page.evaluate(() => {scrollTo(0,150);return new Promise(requestAnimationFrame);});
     await workspace.locator('[data-nb="timeline-view"]').click();
     await expect(workspace.locator('[data-nb="timeline"] svg')).toBeVisible();
-    await workspace.locator('[data-nb="notes-view"]').click();
+    await workspace.locator('[data-nb="visualization-back"]').click();
     await expect(list.locator('.nb-entry')).toHaveCount(25);
     expect(await workspace.evaluate(element=>element.style.minHeight)).not.toBe('');
     const requests = [];

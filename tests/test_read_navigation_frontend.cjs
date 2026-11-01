@@ -34,10 +34,10 @@ let passed=0;async function test(name,run){await run();passed++;console.log('PAS
   late.resolve(app.envelope({person:person('alpha')}));await flush();assert.equal(app.$('#person-content').firstChild,first);
   await app.navigate('#person/beta');assert.equal(app.$('#person-title').textContent,'beta');
  });
- await test('My submissions reopen immediately but still revalidate before showing changed results',async()=>{
+ await test('My activity returns immediately but still revalidate before showing changed results',async()=>{
   const late=deferred();let slow=false;const app=await boot(url=>url.pathname==='/api/me/submissions'&&slow?late.promise:undefined);
-  await app.sandbox.showHistory();app.$('#history-dialog').close();slow=true;
-  const refresh=app.sandbox.showHistory();assert.match(app.$('#history-content').textContent,/Recorded method/);
+  await app.navigate('#activity');await app.navigate('#about');slow=true;await app.navigate('#activity');
+  const refresh=app.sandbox.showActivity();assert.match(app.$('#history-content').textContent,/Recorded method/);
   late.resolve(app.envelope({submissions:[]}));await refresh;assert.match(app.$('#history-content').textContent,/No submissions yet/);
  });
  await test('a previously read recovery record survives a same-stage revisit while its GET is pending',async()=>{

@@ -57,7 +57,7 @@ async function test(name, run) { await run(); passed++; console.log('PASS ' + na
     app.$('#nav-notebook').click(); await flush();
     assert.equal(app.location.hash, '#notebook');
     assert.equal(app.$('#nav-notebook').getAttribute('aria-current'), 'page');
-    assert.equal(app.$('#notebook-workspace').getAttribute('aria-label'), 'Research notebook');
+    assert.equal(app.$('#notebook-workspace').getAttribute('aria-label'), 'Notes');
     app.history.back(); await flush();
     assert.equal(app.location.hash, '#bounties?status=mine');
     assert.equal(app.$('#nav-bounties').getAttribute('aria-current'), 'page');
@@ -84,7 +84,7 @@ async function test(name, run) { await run(); passed++; console.log('PASS ' + na
       assert.equal(app.calls.filter(call => call.kind === 'show').at(-1).params.size, 0);
     }
     const preview = app.window.CruciblePendingPage.describe('#bounties');
-    assert.equal(preview.title, 'Research notebook');
+    assert.equal(preview.title, 'Notes');
     assert.equal(preview.page, 'notebook-notes');
   });
   await test('signed-out bounty routes preserve the destination without mounting private content', async () => {

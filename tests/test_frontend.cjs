@@ -84,7 +84,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     const app = await createApp({schemes});
     assert.equal(app.$('#catalogue-workspace').hidden, false);
     assert.equal(app.$('#workspace').hidden, true);
-    assert.equal(app.$('#catalogue-title').textContent.trim(), 'KEM Schemes');
+    assert.equal(app.$('#catalogue-title').textContent.trim(), 'Schemes');
     assert.equal(app.$('#nav-challenge').textContent.trim(), 'Schemes');
     assert.match(app.$('#kem-catalogue').textContent, /Alpha <KEM>/);
     assert.match(app.$('#kem-catalogue').textContent, /Beta KEM/);

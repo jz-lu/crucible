@@ -161,9 +161,9 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?(delay?late.promise:{notes:[note()]}):undefined});
   app.root.hidden=false;
   await app.show('note-one');const back=app.q('full').querySelector('.nb-back');back.focus();delay=true;back.click();await flush();
-  assert.equal(app.q('full').hidden,true);assert.equal(app.document.activeElement,app.q('notes-view'));
+  assert.equal(app.q('full').hidden,true);assert.equal(app.document.activeElement,app.q('notes-title'));
   assert.equal(Boolean(app.document.activeElement.closest('[hidden]')),false);
-  late.resolve({notes:[note()]});await app.whenNavigated();assert.equal(app.document.activeElement,app.q('notes-view'));
+  late.resolve({notes:[note()]});await app.whenNavigated();assert.equal(app.document.activeElement,app.q('notes-title'));
  });
  await test('changing a linked notebook filter updates its route and survives reentry',async()=>{
   const app=await boot({initialParams:new URLSearchParams('filter=proposals')});
@@ -223,7 +223,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   }
   const late=deferred();let delay=false;
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?(delay?late.promise:{notes:[note()]}):undefined});
-  delay=true;await filterNotes(app,'human');app.q('notes-view').focus();late.resolve({notes:[]});await flush();assert.equal(app.document.activeElement,app.q('notes-view'));
+  delay=true;await filterNotes(app,'human');app.q('notes-title').focus();late.resolve({notes:[]});await flush();assert.equal(app.document.activeElement,app.q('notes-title'));
  });
  await test('rapid filter and route changes cannot substitute a late page or clear the newer pending state',async()=>{
   const human=deferred(),mine=deferred();let delay=false;
@@ -517,62 +517,44 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.match(app.q('full').textContent,/Approved original.*Published/);assert.doesNotMatch(app.q('full').textContent,/PRIVATE FUTURE/);
  });
 
- await test('map preparation starts after the visible list and is reused without a second mount',async()=>{
-  let mounts=0,shows=0,hides=0;const late=deferred();
-  const app=await boot({mapFactory:()=>{mounts++;return late.promise;}});
-  assert.equal(mounts,0);await app.advanceTimers(299);assert.equal(mounts,0);
-  await app.advanceTimers(300);assert.equal(mounts,1);assert.equal(app.q('map').hidden,true);
-  app.q('map-view').dispatchEvent({type:'pointerenter'});app.q('map-view').dispatchEvent({type:'focus'});
-  assert.equal(mounts,1,'Intent shares the same preparation');
-  late.resolve({show:()=>shows++,hide:()=>hides++,destroy:()=>{}});await flush();
-  assert.equal(shows,0);assert.equal(hides,1);assert.equal(app.q('library').hidden,false);
-  app.q('map-view').click();await app.whenNavigated();
-  assert.equal(mounts,1);assert.equal(shows,1);assert.equal(app.q('map').hidden,false);
+ await test('Notes no longer prepares the scheme map in the background',async()=>{
+  let mounts=0;const app=await boot({mapFactory:async()=>{mounts++;return{show(){},hide(){},destroy(){}};}});
+  await app.advanceTimers(300);assert.equal(mounts,0);
+  assert.equal(app.q('map-view'),null);assert.equal(app.root.querySelector('.nb-views'),null);
+  await app.controller.show(new URLSearchParams('view=map'));
+  assert.equal(mounts,1);assert.equal(app.q('notes-title').textContent,'Scheme map');
+  assert.equal(app.q('visualization-back').textContent,'← Schemes');
+  await app.show();await app.controller.show(new URLSearchParams('view=map'));assert.equal(mounts,1);
  });
- await test('map intent prepares immediately, stays hidden and cannot outlive its account',async()=>{
-  let mounts=0,destroyed=0;const late=deferred();
-  const app=await boot({mapFactory:()=>{mounts++;return late.promise;}});
-  app.q('map-view').dispatchEvent({type:'focus'});assert.equal(mounts,1);
-  app.setAccount(null);late.resolve({show:()=>{throw Error('Revoked map shown');},hide:()=>{},destroy:()=>destroyed++});await flush();
+ await test('a map selection cannot outlive its account',async()=>{
+  let destroyed=0;const late=deferred();
+  const app=await boot({mapFactory:()=>late.promise});
+  const pending=app.controller.show(new URLSearchParams('view=map'));
+  app.setAccount(null);late.resolve({show:()=>{throw Error('Revoked map shown');},hide(){},destroy:()=>destroyed++});await pending;
   assert.equal(destroyed,1);assert.equal(app.q('map').textContent,'');
-  await app.advanceTimers(300);assert.equal(mounts,1);
- });
- await test('leaving the notebook cancels queued background preparation',async()=>{
-  let mounts=0;const app=await boot({mapFactory:async()=>{mounts++;return null;}});
-  app.controller.hide();await app.advanceTimers(300);assert.equal(mounts,0);
  });
  await test('review workspace never schedules or accepts map preparation',async()=>{
   let mounts=0;const app=await boot({reviewOnly:true,mapFactory:async()=>{mounts++;return null;},respond:url=>url.startsWith('/api/notebook/review-queue?')?{notes:[],next_after:null}:undefined});
   await app.advanceTimers(300);assert.equal(mounts,0);
  });
-
  await test('map receives a current catalogue callback rather than a frozen release snapshot',async()=>{
   let releases=[{id:'frodokem',version:'first'}],context;
   const app=await boot({currentReleases:()=>releases,mapFactory:async(_,current,options)=>{
-    assert.equal(current(),true);context=options;return{show:()=>{},hide:()=>{},destroy:()=>{}};
+    assert.equal(current(),true);context=options;return{show(){},hide(){},destroy(){}};
   }});
-  app.q('map-view').click();await flush();assert.equal(context.currentReleases(),releases);
+  await app.controller.show(new URLSearchParams('view=map'));assert.equal(context.currentReleases(),releases);
   releases=[{id:'frodokem',version:'next'}];assert.equal(context.currentReleases(),releases);
   assert.equal(app.requests.some(request=>request.url==='/api/schemes'),false);
  });
- await test('network visualization restores the filtered notes and revalidates their visibility quietly',async()=>{
-  let mounts=0,shows=0,hides=0;
-  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()],next_after:null}:undefined,mapFactory:async()=>{mounts++;return{show:()=>shows++,hide:()=>hides++,destroy:()=>{}};}});
-  const heading=app.root.querySelector('h1');
-  await searchNotes(app,'Private');
-  const before=app.requests.length;
-  app.q('map-view').click();await flush();
-  assert.equal(app.location.hash,'#notebook?view=map');
-  assert.equal(app.root.querySelector('h1'),heading);
+ await test('returning to Notes after a map visit restores its filters and quietly revalidates visibility',async()=>{
+  let mounts=0;const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()],next_after:null}:undefined,mapFactory:async()=>{mounts++;return{show(){},hide(){},destroy(){}};}});
+  await searchNotes(app,'Private');const before=app.requests.length;
+  await app.controller.show(new URLSearchParams('view=map'));
   assert.equal(app.q('library').hidden,true);assert.equal(app.q('map').hidden,false);
-  assert.equal(app.q('map-view').getAttribute('aria-current'),'page');
-  assert.equal(app.q('notes-view').getAttribute('aria-current'),null);
-  assert.equal(app.root.querySelector('.nb-visualizations').textContent,'VisualizationsScheme mapTimeline');
-  app.q('notes-view').click();await flush();
-  assert.equal(app.q('library').hidden,false);assert.equal(app.q('map').hidden,true);
+  assert.equal(app.q('timeline-view').hidden,true);assert.equal(app.root.querySelector('.nb-views'),null);
+  await app.show();assert.equal(app.q('library').hidden,false);assert.equal(app.q('map').hidden,true);
   assert.equal(app.q('search').value,'Private');assert.match(app.q('list').textContent,/Private claim/);
   assert.equal(app.requests.length,before+1);assert.equal(mounts,1);
-  app.q('map-view').click();await flush();assert.equal(mounts,1);assert.ok(shows>=2&&hides>=1);
  });
  await test('leaving the map during loading cannot replace the restored notebook',async()=>{
   const late=deferred();let disposed=0;
@@ -1251,13 +1233,13 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
    assert.ok(plot.querySelector('.nb-timeline-frame'));assert.equal(card.querySelector('.nb-timeline-total').textContent,'');
    assert.equal(plot.querySelector('svg'),null);assert.equal(plot.querySelector('.nb-timeline-line'),null);assert.equal(plot.querySelectorAll('text').length,0);
    assert.equal(card.getAttribute('aria-busy'),'true');assert.match(plot.querySelector('[role="status"]').textContent,/Loading/);
-   app.q('timeline-view').focus();
+   app.q('visualization-back').focus();
    if(outcome==='error')late.reject(Object.assign(Error('Unavailable'),{status:503}));
    else late.resolve(outcome==='empty'?timeline({total:0,points:[]}):timeline());
    await pending;
    assert.equal(app.q('timeline').querySelector('.nb-timeline-card')===card,true);
    assert.equal(card.querySelector('.nb-timeline-plot')===plot,true);assert.equal(card.querySelector('.nb-timeline-heading')===heading,true);assert.equal(card.querySelector('.nb-timeline-footnote')===footer,true);
-   assert.equal(app.document.activeElement,app.q('timeline-view'));assert.equal(card.getAttribute('aria-busy'),null);
+   assert.equal(app.document.activeElement,app.q('visualization-back'));assert.equal(card.getAttribute('aria-busy'),null);
    assert.equal(Boolean(plot.querySelector('.nb-timeline-line')),outcome==='curve');
    assert.equal(card.querySelector('.nb-timeline-total').textContent,outcome==='curve'?'3 notes':outcome==='empty'?'0 notes':'');
   }
@@ -1358,7 +1340,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const before=app.requests.length;app.q('timeline-view').click();await flush();
   assert.equal(app.location.hash,'#notebook?view=timeline');assert.equal(app.q('timeline').hidden,false);
   assert.equal(app.q('library').hidden,true);assert.equal(app.q('map').hidden,true);
-  assert.equal(app.q('timeline-view').getAttribute('aria-current'),'page');assert.equal(app.q('notes-view').getAttribute('aria-current'),null);
+  assert.equal(app.q('timeline-view').hidden,true);assert.equal(app.q('notes-title').textContent,'Timeline');assert.equal(app.q('visualization-back').hidden,false);
   assert.deepEqual(app.requests.slice(before).map(row=>row.url),['/api/notebook/timeline']);assert.ok(app.requests.every(row=>row.body===undefined));
   assert.ok(app.q('timeline').querySelector('svg'));assert.match(app.q('timeline').textContent,/3/);
   assert.equal(app.requests.some(row=>row.url==='/map/notes.json'),false);
@@ -1366,18 +1348,18 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  await test('Timeline deep links fetch no list or bodies and re-entry refreshes the visible corpus',async()=>{
   let visits=0;const app=await boot({initialParams:new URLSearchParams('view=timeline'),respond:url=>url==='/api/notebook/timeline'?(visits++,timeline()):undefined});
   assert.deepEqual(app.requests.map(row=>row.url),['/api/notebook/timeline']);assert.equal(visits,1);
-  app.q('notes-view').click();await flush();assert.equal(app.q('timeline').hidden,true);assert.equal(app.q('timeline').querySelector('svg'),null);
+  app.q('visualization-back').click();await flush();assert.equal(app.q('timeline').hidden,true);assert.equal(app.q('timeline').querySelector('svg'),null);
   await filterNotes(app,'mine');await searchNotes(app,'my research');app.q('timeline-view').click();await flush();
   assert.equal(visits,2);assert.equal(app.requests.at(-1).url,'/api/notebook/timeline');
-  app.q('notes-view').click();await flush();assert.equal(app.q('search').value,'my research');
+  app.q('visualization-back').click();await flush();assert.equal(app.q('search').value,'my research');
  });
  await test('a warm Timeline paints before its fresh read and unchanged aggregates preserve DOM and focus',async()=>{
   const late=deferred();let delay=false;
   const app=await boot({initialParams:new URLSearchParams('view=timeline'),respond:url=>url==='/api/notebook/timeline'?(delay?late.promise:timeline()):undefined});
   await app.show();delay=true;const pending=app.controller.show(new URLSearchParams('view=timeline'));
   const svg=app.q('timeline').querySelector('svg');assert.ok(svg);assert.equal(app.q('timeline').querySelector('.nb-reading'),null);assert.equal(app.q('timeline').getAttribute('aria-busy'),'true');
-  app.q('timeline-view').focus();late.resolve(timeline({server_time:99999999}));await pending;
-  assert.equal(app.q('timeline').querySelector('svg'),svg);assert.equal(app.document.activeElement,app.q('timeline-view'));assert.equal(app.q('timeline').getAttribute('aria-busy'),null);
+  app.q('visualization-back').focus();late.resolve(timeline({server_time:99999999}));await pending;
+  assert.equal(app.q('timeline').querySelector('svg'),svg);assert.equal(app.document.activeElement,app.q('visualization-back'));assert.equal(app.q('timeline').getAttribute('aria-busy'),null);
   assert.equal(app.requests.filter(row=>row.url==='/api/notebook/timeline').length,2);assert.equal(app.requests.some(row=>row.url==='/map/notes.json'),false);
  });
  await test('fresh Timeline changes replace cached counts only after the authoritative response',async()=>{

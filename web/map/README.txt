@@ -1,7 +1,9 @@
 Research map integration
 
-Open Research notebook, then Visualizations → Scheme map. Notes is the default.
-The map mounts inside the same notebook shell at /#notebook?view=map.
+Open Schemes, then choose Scheme map beside the page title.
+The map opens at /#challenge?view=map; ← Schemes returns to the catalogue.
+Existing /#notebook?view=map links redirect to that destination.
+Notes has its own main tab and a Timeline heading button, with no subtabs.
 Its shadow root contains styles without changing the surrounding site.
 Switching views preserves the notebook filters and map selection/filter state.
 Only the network visualization is offered. The old map URL redirects here.

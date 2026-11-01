@@ -1,0 +1,61 @@
+const {test, expect, signIn, notebookReady, useDataSaver} = require('./helpers.cjs');
+
+for (const width of [1440, 390]) test(`visualizations open from their parent pages and return at ${width}px`, async ({page}, testInfo) => {
+  await page.setViewportSize({width, height: 1000}); await useDataSaver(page);
+  await signIn(page); await notebookReady(page);
+  await expect(page.locator('#nav-notebook')).toHaveText('Notes');
+  await expect(page.locator('#notebook-workspace .nb-views')).toHaveCount(0);
+  const notesTitle = page.locator('[data-nb="notes-title"]');
+  const timeline = page.locator('[data-nb="timeline-view"]');
+  await expect(notesTitle).toHaveText('Notes');
+  const countBox = await page.locator('[data-nb="count"]').boundingBox(), timelineBox = await timeline.boundingBox();
+  expect(timelineBox.x).toBeGreaterThan(countBox.x + countBox.width);
+  expect(Math.abs(timelineBox.y + timelineBox.height / 2 - countBox.y - countBox.height / 2)).toBeLessThan(2);
+  await page.locator('[data-nb="search"]').fill('Alice');
+  await expect(page.locator('#nb-note-list')).toContainText('Alice browser-only private note');
+  await timeline.click();
+  await expect(notesTitle).toHaveText('Timeline');
+  await expect(page.locator('[data-nb="timeline"] svg')).toBeVisible();
+  await page.getByRole('button', {name: '← Notes', exact: true}).click();
+  await expect(notesTitle).toHaveText('Notes'); await expect(notesTitle).toBeFocused();
+  await expect(page.locator('[data-nb="search"]')).toHaveValue('Alice');
+
+  await page.locator('#nav-challenge').click();
+  const schemesTitle = page.locator('#catalogue-title'), map = page.locator('#scheme-map-button');
+  await expect(schemesTitle).toHaveText('Schemes'); await expect(schemesTitle).toBeVisible(); await expect(map).toBeVisible();
+  const schemesBox = await schemesTitle.boundingBox(), mapBox = await map.boundingBox();
+  expect(mapBox.x).toBeGreaterThan(schemesBox.x + schemesBox.width);
+  expect(Math.abs(mapBox.y + mapBox.height / 2 - schemesBox.y - schemesBox.height / 2)).toBeLessThan(2);
+  await page.screenshot({path: testInfo.outputPath(`schemes-${width}.png`), fullPage: true});
+  const propose = page.locator('#propose-scheme-button');
+  await expect(propose).toHaveText('Propose a scheme');
+  expect((await propose.boundingBox()).x).toBeGreaterThan(schemesBox.x + schemesBox.width);
+  await propose.click();
+  await expect(page).toHaveURL(/#propose$/);
+  await expect(page.locator('#proposal-title')).toHaveText('Propose a scheme');
+  await expect(page.locator('#proposal-use-agent')).toBeVisible();
+  await page.locator('#proposal-page-back').click();
+  await expect(schemesTitle).toBeVisible();
+  await map.click();
+  await expect(page).toHaveURL(/#challenge\?view=map$/);
+  await expect(page.locator('#nav-challenge')).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('#nav-notebook')).not.toHaveAttribute('aria-current', 'page');
+  await expect(notesTitle).toHaveText('Scheme map');
+  await expect(page.locator('#landscape svg')).toBeVisible();
+  await page.getByRole('button', {name: '← Schemes', exact: true}).click();
+  await expect(page).toHaveURL(/#challenge$/); await expect(schemesTitle).toBeVisible();
+  await page.goBack(); await expect(notesTitle).toHaveText('Scheme map');
+  await page.locator('#nav-notebook').click();
+  await expect(notesTitle).toHaveText('Notes');
+  await expect(page.locator('[data-nb="search"]')).toHaveValue('Alice');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({path: testInfo.outputPath(`notes-${width}.png`), fullPage: true});
+});
+
+test('an old map link keeps its visualization under Schemes', async ({page}) => {
+  await useDataSaver(page); await signIn(page);
+  await page.goto('/#notebook?view=map');
+  await expect(page).toHaveURL(/#challenge\?view=map$/);
+  await expect(page.locator('#nav-challenge')).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('button', {name: '← Schemes', exact: true})).toBeVisible();
+});

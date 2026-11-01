@@ -179,7 +179,7 @@
     let accountId = currentAccount?.id == null ? null : String(currentAccount.id);
     let active = false, epoch = 0, request = 0, dialogEpoch = 0, notes = [], nextAfter = null;
     let params = new URLSearchParams(), search = '', tag = '', visibility = 'all', previewId = null;
-    let mapController = null, mapPreparation = null, mapIdle = null, mapRequest = 0, timelineRequest = 0, listLoaded = false, cardAction = 0;
+    let mapController = null, mapPreparation = null, mapRequest = 0, timelineRequest = 0, listLoaded = false, cardAction = 0;
     let bountyController = null, bountyPreparation = null;
     let curatedNotes = [], curatedLoaded = false, curatedPromise = null, timelinePreparation = null, indexPreparation = null;
     let pageCursors = [null], pageIndex = 0, knownPageCount = null, searchTimer = null;
@@ -308,34 +308,15 @@
     const mark = (name, node) => { node.setAttribute('data-nb', name); nodes[name] = node; return node; };
     const q = name => nodes[name];
     root.classList.add('nb-root');
-    const heading = el('div', 'nb-heading'); heading.append(el('h1', '', 'Research notebook'));
+    const heading = el('div', 'nb-heading'), titleRow = el('div', 'nb-title-row');
+    const pageTitle = mark('notes-title', el('h1', '', 'Notes')); pageTitle.tabIndex = -1;
+    const visualizationBack = mark('visualization-back', button('← Notes', () => navigateView(params.get('view') === 'map' ? '#challenge' : '#notebook'), 'nb-link nb-page-back'));
+    visualizationBack.hidden = true;
     const headingActions = el('div', 'nb-heading-actions');
     headingActions.append(mark('files', button('Agent files', agentFiles)), mark('publish-all', button('Publish all', publishAllDialog, 'nb-button')), mark('new', button('New note', () => editNote(), 'nb-button nb-primary'))); heading.append(headingActions);
-    const views = el('nav', 'nb-views'); views.setAttribute('aria-label', 'Notebook views');
-    const notesView = mark('notes-view', button('Notes', () => navigateView('#notebook'), 'nb-view nb-notes-view'));
-    notesView.setAttribute('aria-current', 'page');
-    const visualizations = el('div', 'nb-visualizations');
-    visualizations.append(el('span', 'nb-view-label', 'Visualizations'));
-    const mapView = mark('map-view', button('Scheme map', () => navigateView('#notebook?view=map'), 'nb-view nb-visualization-view'));
-    for (const event of ['pointerenter', 'focus']) mapView.addEventListener(event, () => { void prepareMap().catch(() => {}); });
-    const timelineView = mark('timeline-view', button('Timeline', () => navigateView('#notebook?view=timeline'), 'nb-view nb-visualization-view'));
+    const timelineView = mark('timeline-view', button('Timeline', () => navigateView('#notebook?view=timeline'), 'nb-button nb-visualization-button'));
     for (const event of ['pointerenter', 'focus']) timelineView.addEventListener(event, prepareTimeline);
-    function viewIcon(parts) {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      for (const [name, value] of Object.entries({viewBox:'0 0 24 24', fill:'none', stroke:'currentColor', 'stroke-width':'1.6', 'stroke-linecap':'round', 'stroke-linejoin':'round', 'aria-hidden':'true', focusable:'false'})) svg.setAttribute(name, value);
-      for (const [tag, attributes] of parts) {
-        const shape = document.createElementNS('http://www.w3.org/2000/svg', tag);
-        for (const [name, value] of Object.entries(attributes)) shape.setAttribute(name, value);
-        svg.append(shape);
-      }
-      return svg;
-    }
-    notesView.prepend(viewIcon([['rect',{x:5,y:3,width:14,height:18,rx:2}],['path',{d:'M9 8h6M9 12h6M9 16h4'}]]));
-    mapView.prepend(viewIcon([['path',{d:'m7.7 6.2 8.6 4.6m0 2.4-8.6 4.6M6 8v8'}],['circle',{cx:6,cy:6,r:2}],['circle',{cx:18,cy:12,r:2}],['circle',{cx:6,cy:18,r:2}]]));
-    timelineView.prepend(viewIcon([['path',{d:'M4 4v16h16M5 16h5v-5h5V6h5'}]]));
-    const visualizationTabs = el('div', 'nb-visualization-tabs');
-    visualizationTabs.append(mapView, timelineView);
-    visualizations.append(visualizationTabs); views.append(notesView, visualizations);
+    titleRow.append(pageTitle); heading.prepend(titleRow);
     const mapPanel = mark('map', el('section', 'nb-map-panel')); mapPanel.hidden = true;
     mapPanel.setAttribute('aria-label', 'Scheme map');
     const timelinePanel = mark('timeline', el('section', 'nb-timeline-panel')); timelinePanel.hidden = true;
@@ -348,7 +329,12 @@
     const searchInput = mark('search', el('input')); searchInput.type = 'search'; searchInput.maxLength = 200; searchInput.placeholder = 'Search titles, tags or #number…'; searchLabel.append(searchInput);
     const filter = field('Show', 'visibility', 'all', {options: [{value:'all', label:'All notes'}, {value:'mine', label:'My notes'}, {value:'human', label:'Human-written'}, {value:'proposals', label:'Proposals'}, {value:'research', label:'Literature'}, {value:'trash', label:'Trash'}]}); filter.wrap.classList.add('nb-visibility-filter');
     filter.input.addEventListener('change', () => { visibility = filter.input.value; changeQuery(); });
-    toolbar.append(searchLabel, filter.wrap, mark('filter', el('span')), mark('count', el('span', 'nb-count')));
+    const noteCount = mark('count', el('span', 'nb-count'));
+    toolbar.append(searchLabel, filter.wrap, mark('filter', el('span')));
+    if (reviewOnly) toolbar.append(noteCount);
+    else {
+      const summary = el('div', 'nb-toolbar-summary'); summary.append(noteCount, timelineView); toolbar.append(summary);
+    }
     const list = mark('list', el('div', 'nb-list')); list.id = reviewOnly ? 'nb-review-note-list' : 'nb-note-list';
     list.tabIndex = -1; list.setAttribute('aria-label', reviewOnly ? 'Publish requests' : 'Research notes');
     const pagination = mark('pagination', el('nav', 'nb-pagination')); pagination.setAttribute('aria-label', 'Note pages');
@@ -369,7 +355,7 @@
     const dialogHeading = el('div', 'nb-dialog-heading'); dialogHeading.append(mark('dialog-title', el('h2')), mark('close', button('×', () => closeDialog(), 'nb-close'))); q('close').setAttribute('aria-label', 'Close notebook editor');
     dialog.append(dialogHeading, mark('dialog-body', el('div')));
     if (reviewOnly) { root.classList.add('nb-review-workspace'); root.replaceChildren(noticeNode, library, full, bountyPanel, dialog); }
-    else root.replaceChildren(heading, views, noticeNode, library, full, mapPanel, timelinePanel, bountyPanel, dialog);
+    else root.replaceChildren(visualizationBack, heading, noticeNode, library, full, mapPanel, timelinePanel, bountyPanel, dialog);
     q('pagination').hidden = true;
 
     function notice(text, error = false) { q('notice').textContent = text; q('notice').hidden = !text; q('notice').classList.toggle('nb-error', error); }
@@ -407,13 +393,15 @@
     function hide() { captureReviewDraft(); captureReviewDraft = () => {}; bountyController?.hide(); cancelReviewPagePreparation(); clearPageSpace(); clearViewSpace(); timelinePreparation = null; cancelMapPreparation(); clearTimeout(searchTimer); searchTimer = null; active = false; request++; mapRequest++; timelineRequest++; q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy'); q('timeline').replaceChildren(); mapController?.hide(); if (q('dialog').open) { suspendedDialog = true; q('dialog').close(); } }
     const reviewUrl = (section, extra = {}) => '#reviews?' + new URLSearchParams({section, ...extra});
     function pageGuard() { const current = guard(), token = request; return () => current() && token === request; }
-    function backToNotes() { return button(reviewOnly ? '← Publish requests' : '← Research notebook', () => navigate(reviewOnly ? reviewUrl('publication') : '#notebook'), 'nb-link nb-back'); }
+    function backToNotes() { return button(reviewOnly ? '← Publish requests' : '← Notes', () => navigate(reviewOnly ? reviewUrl('publication') : '#notebook'), 'nb-link nb-back'); }
     function url(id, revision) { return '#notebook?' + new URLSearchParams({note:id, ...(revision ? {revision:String(revision)} : {})}); }
     function openNote(id, revision) { navigate(reviewOnly ? reviewUrl('publication', {note:id, ...(revision ? {revision:String(revision)} : {})}) : url(id, revision)); }
     async function show(nextParams = new URLSearchParams()) {
       captureReviewDraft(); captureReviewDraft = () => {};
       cancelReviewPagePreparation();
       const readerHadFocus = !q('full').hidden && document.activeElement?.closest('.nb-full') === q('full');
+      const visualizationHadFocus = !visualizationBack.hidden && document.activeElement === visualizationBack;
+      const timelineHadFocus = !timelineView.hidden && document.activeElement === timelineView;
       if (typeof account === 'function') setAccount(account());
       active = true; params = new URLSearchParams(nextParams);
       if (reviewOnly && params.get('section') !== 'bounties') { params.delete('view'); if (params.get('section') === 'research' || params.has('research') || params.has('research_request')) { params.set('research', '1'); params.set('research_review', '1'); params.delete('review'); } else params.set('review', '1'); }
@@ -422,11 +410,13 @@
       const inShared = !inVisualization && params.get('shared') === '1' && !params.has('note');
       if (inShared || params.get('filter') === 'shared') { params.delete('shared'); params.delete('state'); params.delete('filter'); visibility = 'all'; filter.input.value = 'all'; }
       request++; timelineRequest++;
-      for (const [control, selected] of [[notesView, !inVisualization], [mapView, inMap], [timelineView, inTimeline]]) {
-        if (selected) control.setAttribute('aria-current', 'page'); else control.removeAttribute('aria-current');
-      }
       q('map').hidden = !inMap; q('timeline').hidden = !inTimeline; q('bounties').hidden = !inBounties;
-      heading.hidden = views.hidden = !reviewOnly && inBounties;
+      heading.hidden = !reviewOnly && inBounties;
+      pageTitle.textContent = inMap ? 'Scheme map' : inTimeline ? 'Timeline' : 'Notes';
+      visualizationBack.hidden = !inMap && !inTimeline;
+      visualizationBack.textContent = inMap ? '← Schemes' : '← Notes';
+      timelineView.hidden = headingActions.hidden = inVisualization;
+      if (inTimeline && timelineHadFocus) visualizationBack.focus({preventScroll:true});
       if (!inBounties) bountyController?.hide();
       if (!inTimeline) q('timeline').replaceChildren();
       if (!inMap) mapController?.hide();
@@ -454,7 +444,7 @@
       if (inResearch) { if (params.has('research_request')) await readResearchRequest(params.get('research_request')); else await listResearchRequests(); return; }
       // A reader's Back control is now hidden. Move keyboard focus to a stable
       // visible control before any background list refresh can complete.
-      if (!id && readerHadFocus && !q('dialog').open) (reviewOnly ? list : notesView).focus({preventScroll:true});
+      if (!id && (readerHadFocus || visualizationHadFocus) && !q('dialog').open) (reviewOnly ? list : pageTitle).focus({preventScroll:true});
       if (id) await loadNote(id); else await loadList();
       if (!id && !reviewOnly && warmEnabled && cachedRead('summary-index')) {
         const current = pageGuard(), before = readCache.get('summary-index');
@@ -494,24 +484,13 @@
       }
     }
     function cancelMapPreparation() {
-      if (mapIdle !== null) clearTimeout(mapIdle);
-      mapIdle = null; mapRequest++; mapPreparation = null;
+      mapRequest++; mapPreparation = null;
       if (!mapController) q('map').replaceChildren();
-    }
-    function scheduleMap() {
-      if (reviewOnly || mapController || mapPreparation || mapIdle !== null || !accountId) return;
-      // One small background preparation after the visible list has arrived.
-      // No full note bodies, challenge instances or participant data are read.
-      mapIdle = setTimeout(() => {
-        mapIdle = null;
-        if (active && identity() === accountId && document.visibilityState !== 'hidden' && !window.navigator?.connection?.saveData && !params.has('note') && !params.has('view')) void prepareMap().catch(() => {});
-      }, 300);
     }
     function prepareMap() {
       if (reviewOnly || !active || !accountId || identity() !== accountId) return Promise.resolve(null);
       if (mapController) return Promise.resolve(mapController);
       if (mapPreparation) return mapPreparation;
-      if (mapIdle !== null) clearTimeout(mapIdle); mapIdle = null;
       const owner = accountId, generation = epoch, token = ++mapRequest;
       const current = () => active && accountId === owner && identity() === owner && epoch === generation && token === mapRequest;
       // Resolve action links through the small identity index, independently of
@@ -958,7 +937,6 @@
         const page = reviewMode ? reviewPage(result, cursor) : {notes: result.notes, next_after: result.next_after || null};
         if (visibility !== 'trash') rememberRead(key, page, indexed ? readCache.get('summary-index').at : preparedReview?.at);
         listRefreshing = false; paint(page);
-        if (!reviewOnly && visibility !== 'trash') scheduleMap();
         setListActionsDisabled(false);
         if (reviewMode) prepareNextReviewPage(query, nextAfter);
         else if (!indexed) prepareNextPage(query, nextAfter);
@@ -1445,7 +1423,7 @@
     }
     async function listResearchRequests() {
       const current=guard(),token=++request,full=q('full'),review=reviewOnly;
-      full.replaceChildren(...(reviewOnly ? [] : [button('← Research notebook',()=>navigate('#notebook'),'nb-link nb-back')]),el('h2','nb-full-title',reviewOnly ? 'Research changes' : 'Research requests'));
+      full.replaceChildren(...(reviewOnly ? [] : [button('← Notes',()=>navigate('#notebook'),'nb-link nb-back')]),el('h2','nb-full-title',reviewOnly ? 'Research changes' : 'Research requests'));
       try{
         const result=await api('/api/notebook/research-requests?review='+review+(params.get('after')?'&after='+encodeURIComponent(params.get('after')):''));if(!current()||token!==request)return;
         full.append(el('p','nb-hint',review?'Pending requests for configured reviewers.':'Your requests and their assessments. Start from Proposals & reviews in any note.'));

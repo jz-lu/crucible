@@ -9,7 +9,7 @@ notes now also include release/display evidence; read notes.json for membership.
 
 SCOPE
 
-The map is available at /map/index.html through Research notebook → Scheme map.
+The map is available at /#challenge?view=map through Schemes → Scheme map.
 It uses the existing beta admission boundary. Its curated, read-only research
 notes are kept in this directory in the global notebook format; they are not
 inserted into anyone's private notebook. Scoring and accounts are unchanged.

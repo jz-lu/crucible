@@ -11,7 +11,7 @@ or an existing scoped connection and does not grant notebook or review authority
 A private research beta for shared-secret recovery challenges. The app has
 accounts, durable records, a server-owned hourly deadline, and exact answer
 verification. The numerical challenge interface is joined by an account-backed
-Research notebook with private revisions and reviewed sharing. The older research
+Notes workspace with private revisions and reviewed sharing. The older research
 records and API remain available for future work. Source is shared for collaboration.
 The app also includes versioned KEM specifications, private proposal intake,
 immutable revisions, and manual review before trusted integration. New approvals
@@ -58,7 +58,7 @@ distribution. This restricted model is not a best-known attack estimate or a
 security guarantee. Existing releases, records, accounts and sign-ins remain
 unchanged; old recoveries do not automatically qualify for the new ladder.
 
-The KEM Schemes catalogue orders schemes by participant count, not security.
+The Schemes catalogue orders schemes by participant count, not security.
 Each scheme opens four graphs. Public-key and ciphertext sizes are fixed; the
 lower cards switch among computation costs and classical/quantum estimates.
 Retained local benchmark reports cover the 379 current configurations, but a
@@ -101,7 +101,13 @@ required. See [the agent workflow](docs/agent-workflow.txt). Code is stored as
 evidence and never executed by the server; reported compute is not independently
 verified. The browser profile lets participants revoke connected agents.
 
-## Research notebook
+Leaderboard has a **How points work** button beside its title. It explains
+Record breakthroughs, Admitted schemes, Research bounties, Research notes,
+and the separate bounty allowance. See the
+[points verification and reward-presentation plan](docs/points-testing-and-ui-plan.txt)
+for completed scoring rehearsals and proposed clearer award displays.
+
+## Notes
 
 Bounties has its own main-navigation tab immediately after Schemes
 (`/#bounties`). Private drafts and submitted proposals appear in **Your activity**.
@@ -109,8 +115,13 @@ Existing notebook bounty links redirect to the same task or collection there.
 The bounty composer offers searchable source notes; select a result to add its
 ID tag, or remove a tag with ×. Each selection keeps its exact note revision.
 
-Open **Research notebook** in the main navigation (`/#notebook`). Titles expand
-into tags and a claim; **Read full note** opens the conditions and full argument.
+Open **Notes** in the main navigation (`/#notebook`). The **Timeline** button
+to the right of the note count opens the note timeline; **← Notes** returns to the list.
+The **Scheme map** button on the **Schemes** page opens `/#challenge?view=map`;
+**← Schemes** returns to the catalogue. Existing notebook map links redirect
+there. Notes has no secondary tabs.
+
+Titles expand into tags and a claim; **Read full note** opens the conditions and full argument.
 Saved notes now belong to your account and persist in the server database. Each
 edit appends an immutable revision. New notes and revisions are private; request
 sharing review to let a configured reviewer consider the exact revision. Approval
@@ -241,7 +252,7 @@ from other releases. This is participation, not a count of verified independent
 people or successful attacks. Recorded recovery stages do not determine order;
 each scheme retains its own recovery leaderboards. Largest recovery shows Stage N.
 Its question-mark button explains the stage reference and its limits; it is no
-longer beside the challenge selector or below the KEM Schemes title. The
+longer beside the challenge selector or below the Schemes title. The
 Participants explanation is available in its header tooltip, without an extra
 paragraph below the table.
 Within a profile, Time to submit measures instance issue to answer receipt,

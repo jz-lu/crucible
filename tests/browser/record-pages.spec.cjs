@@ -1,8 +1,8 @@
 const {test, expect, signIn, useDataSaver, gate, holdResponse} = require('./helpers.cjs');
 
-const history = page => page.locator('#history-dialog');
+const history = page => page.locator('#activity-workspace');
 const historyContent = page => page.locator('#history-content');
-const historyClose = page => history(page).getByRole('button', {name: 'Close submissions dialog'});
+const activityRefresh = page => page.locator('#refresh-activity');
 
 async function startAtAbout(page) {
   // These cases establish cold geometry then exercise foreground-cache reuse.
@@ -40,14 +40,14 @@ async function peopleGeometry(page) {
 }
 
 async function historyGeometry(page) {
-  return history(page).evaluate(dialog => {
+  return history(page).evaluate(root => {
     const rect = element => {const b = element.getBoundingClientRect(); return {x:b.x, y:b.y, width:b.width, height:b.height};};
-    return {frame:rect(dialog), title:rect(dialog.querySelector('h2')), close:rect(dialog.querySelector('[data-close]')),
-      viewport:innerHeight, overflow:document.documentElement.scrollWidth > innerWidth};
+    return {title:rect(root.querySelector('h1')), refresh:rect(root.querySelector('#refresh-activity')),
+      overflow:document.documentElement.scrollWidth > innerWidth};
   });
 }
 
-// Render-only rows exercise modal sizing without solving or submitting any
+// Render-only rows exercise page layout without solving or submitting any
 // challenge. Every history read first goes through the real fixture's access
 // checks; denied responses are never changed into successful fixture data.
 async function historyFixture(page, count = 30) {
@@ -138,128 +138,113 @@ for (const width of [1440, 390]) {
     } finally {changed.resolve(); await delivered.promise; await page.unroute(matcher);}
   });
 
-  test('My submissions keeps its ' + width + 'px dialog frame through cold, cached, many and empty results', async ({page}, testInfo) => {
-    await page.setViewportSize({width, height:1000}); await startAtAbout(page);
+  test('My activity keeps its ' + width + 'px heading and page layout through cold, cached, many and empty results', async ({page}, testInfo) => {
+    await page.setViewportSize({width,height:1000}); await startAtAbout(page);
     const fixture = await historyFixture(page), pending = fixture.holdNext();
     let before;
     try {
       await page.locator('#history-button').click(); await pending.arrived;
-      await expect(page.locator('.history-preview')).toBeVisible();
-      await expect(page.locator('.history-preview')).toHaveAttribute('aria-hidden', 'true');
-      await noVisibleLoading(page, '#history-dialog');
+      await expect(page).toHaveURL(/#activity$/);
+      await expect(page.locator('#history-content .history-preview')).toBeVisible();
+      await noVisibleLoading(page, '#activity-workspace');
       before = await historyGeometry(page);
-      await page.screenshot({path:testInfo.outputPath('submissions-cold-' + width + '.png')});
-      expect(before.frame.y).toBeGreaterThanOrEqual(0);
-      expect(before.frame.y + before.frame.height).toBeLessThanOrEqual(before.viewport);
       expect(before.overflow).toBe(false);
+      await page.screenshot({path:testInfo.outputPath('activity-cold-' + width + '.png')});
     } finally {pending.release(); await pending.delivered;}
     await expect(historyContent(page).locator('button.history-item')).toHaveCount(30);
+    await expect(page.locator('#activity-notes')).not.toHaveAttribute('aria-busy','true');
     const many = await historyGeometry(page);
-    await page.screenshot({path:testInfo.outputPath('submissions-many-' + width + '.png')});
-    for (const key of ['frame','title','close']) sameRect(many[key], before[key], key);
-    expect(await historyContent(page).evaluate(element => element.scrollHeight > element.clientHeight &&
-      ['auto','scroll'].includes(getComputedStyle(element).overflowY))).toBe(true);
-    await page.keyboard.press('Escape'); await expect(page.locator('#history-button')).toBeFocused();
-
-    fixture.rows = []; const empty = fixture.holdNext();
+    for (const key of ['title','refresh']) sameRect(many[key],before[key],key);
+    expect(many.overflow).toBe(false);
+    expect(await historyContent(page).evaluate(element => getComputedStyle(element).overflowY)).toBe('visible');
+    await page.screenshot({path:testInfo.outputPath('activity-many-' + width + '.png'),fullPage:true});
+    await expect(page.locator('#activity-workspace h2')).toHaveText(['Schemes','Bounties','Notes']);
+    fixture.rows=[];await page.locator('#nav-about').click();const empty=fixture.holdNext();
     try {
-      await page.locator('#history-button').click(); await empty.arrived;
+      await page.locator('#history-button').click();await empty.arrived;
       await expect(historyContent(page).locator('button.history-item')).toHaveCount(30);
-      const cached = await historyGeometry(page);
-      for (const key of ['frame','title','close']) sameRect(cached[key], before[key], 'cached ' + key);
-      await historyClose(page).focus(); empty.release(); await empty.delivered;
+      empty.release();await empty.delivered;
       await expect(historyContent(page)).toContainText('No submissions yet.');
-      await expect(historyClose(page)).toBeFocused();
-      const absent = await historyGeometry(page);
-      for (const key of ['frame','title','close']) sameRect(absent[key], before[key], 'empty ' + key);
-      expect(fixture.reads).toBe(2);
-    } finally {empty.release(); await empty.delivered;}
-    await page.keyboard.press('Escape'); await expect(page.locator('#history-button')).toBeFocused();
+      const after=await historyGeometry(page);for(const key of ['title','refresh'])sameRect(after[key],before[key],key);
+    } finally {empty.release();await empty.delivered;}
+    await page.reload();await expect(history(page)).toBeVisible();
+    await expect(page.locator('#activity-title')).toHaveText('My activity');
+    await expect(historyContent(page)).toContainText('No submissions yet.');
+  });
 
-    // A fresh page has no memory cache. Failed-read Retry must not close/reopen
-    // the modal or leave focus on its replaced error button while pending.
-    await page.reload(); await expect(page.locator('#about-workspace')).toBeVisible();
-    fixture.failNext = true; await page.locator('#history-button').click();
-    const retry = historyContent(page).getByRole('button', {name:'Try again'});
-    await expect(retry).toBeVisible(); const failed = await historyGeometry(page);
-    const retried = fixture.holdNext();
-    try {
-      await retry.focus(); await retry.click(); await retried.arrived;
-      await expect(historyClose(page)).toBeFocused();
-      await expect(page.locator('.history-preview')).toBeVisible();
-      const held = await historyGeometry(page);
-      for (const key of ['frame','title','close']) sameRect(held[key], failed[key], 'retry ' + key);
-      retried.release(); await retried.delivered;
-      await expect(historyContent(page)).toContainText('No submissions yet.');
-      await expect(historyClose(page)).toBeFocused();
-      expect(fixture.reads).toBe(4);
-    } finally {retried.release(); await retried.delivered;}
-    await page.keyboard.press('Escape'); await expect(page.locator('#history-button')).toBeFocused();
+  test('populated activity includes attacks, proposed schemes and bounty participation at ' + width + 'px',async({page},testInfo)=>{
+    await page.setViewportSize({width,height:1000});await startAtAbout(page);await historyFixture(page,2);
+    const session=await (await page.request.get('/api/session')).json();
+    await page.route('**/api/notebook/notes?*',async route=>{
+      const url=new URL(route.request().url());if(url.searchParams.get('scope')!=='mine')return route.fallback();
+      const response=await route.fetch();if(response.status()!==200)return route.fulfill({response});
+      const make=(id,title,tags)=>({id,revision:1,created_at:1700000000,publication_status:'private',revisions:[{revision:1,created_at:1700000000,content:{title,tags}}]});
+      await route.fulfill({response,json:{notes:[make('fixture-attack','Investigating a reduced parameter attack',['attack-analysis']),make('fixture-proposal','A proposed construction for review',['scheme-description','proposal'])],next_after:null}});
+    });
+    await page.route('**/api/bounties?*',async route=>{
+      const url=new URL(route.request().url());if(url.searchParams.get('status')!=='mine')return route.fallback();
+      const response=await route.fetch();if(response.status()!==200)return route.fulfill({response});
+      await route.fulfill({response,json:{bounties:[{id:'fixture-own',title:'Document the scheme assumptions',status:'pending',owner:session.user,created_at:1700000000},{id:'fixture-contribution',title:'Reproduce the reference analysis',status:'open',owner:{id:'other'},created_at:1700000000}],pagination:{offset:0,limit:25,has_more:false}}});
+    });
+    await page.locator('#history-button').click();
+    await expect(page.locator('#activity-notes')).toContainText('Proposed scheme');await expect(page.locator('#activity-notes')).toContainText('Attack');
+    await expect(page.locator('#activity-notes .activity-scheme-tag')).toHaveText('Proposed scheme');
+    await expect(page.locator('#activity-bounties')).toContainText('Proposed by you');await expect(page.locator('#activity-bounties')).toContainText('You contributed');
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
+    await page.screenshot({path:testInfo.outputPath('activity-populated-'+width+'.png'),fullPage:true});
+  });
+
+  test('activity and leaderboard titles match Schemes, Bounties and Notes at ' + width + 'px',async({page})=>{
+    await page.setViewportSize({width,height:1000});await startAtAbout(page);
+    const styles=[];
+    for(const [button,selector] of [['#nav-challenge','#catalogue-title'],['#nav-bounties','.bty-title-row h1'],['#nav-notebook','#notebook-workspace .nb-title-row h1'],['#nav-people','#people-title'],['#history-button','#activity-title']]){
+      await page.locator(button).click();const heading=page.locator(selector);await expect(heading).toBeVisible();
+      styles.push(await heading.evaluate(element=>{const style=getComputedStyle(element);return {family:style.fontFamily,size:style.fontSize,weight:style.fontWeight,line:style.lineHeight,spacing:style.letterSpacing,height:element.getBoundingClientRect().height};}));
+    }
+    for(const style of styles.slice(1))expect(style).toEqual(styles[0]);
   });
 }
 
-test('nested submission details return focus to their history row and a closed dialog ignores late history data', async ({page}) => {
-  await startAtAbout(page); const fixture = await historyFixture(page, 1);
-  await page.route('**/api/submissions/browser-layout-0', async route => {
-    // The route is authorized by the real boundary, but this deliberately
-    // nonexistent UI-only record must not pretend to be a persisted receipt.
-    const response = await route.fetch();
-    expect(response.status()).toBe(404);
-    await route.fulfill({response,status:200,json:{submission:{...fixture.rows[0],handle:'browser_alice',
-      elapsed_seconds:1,method:{name:'Synthetic detail fixture',pseudocode:'Display-only fixture; no attack executed.'},compute:{}}}});
+test('submission details return to activity and late reads cannot restore a departed page',async({page})=>{
+  await startAtAbout(page);const fixture=await historyFixture(page,1);
+  await page.route('**/api/submissions/browser-layout-0',async route=>{
+    const response=await route.fetch();expect(response.status()).toBe(404);
+    await route.fulfill({response,status:200,json:{submission:{...fixture.rows[0],handle:'browser_alice',elapsed_seconds:1,
+      method:{name:'Synthetic detail fixture',pseudocode:'Display-only fixture; no attack executed.'},compute:{}}}});
   });
-  await page.locator('#history-button').click();
-  await expect(historyContent(page).locator('button.history-item')).toBeVisible();
-  await page.keyboard.press('Escape');
-  fixture.rows = [{...fixture.rows[0],method_name:'Updated synthetic layout method'}];
-  const refreshed = fixture.holdNext();
+  await page.locator('#history-button').click();const row=historyContent(page).locator('button.history-item').first();await expect(row).toBeVisible();
+  await row.click();await expect(page.locator('#recovery-title')).toHaveText('Synthetic detail fixture');
+  await page.keyboard.press('Escape');await expect(row).toBeFocused();await expect(history(page)).toBeVisible();
+  fixture.rows=[{...fixture.rows[0],method_name:'Updated synthetic method'}];
+  const refreshed=fixture.holdNext();
   try {
-    await page.locator('#history-button').click(); await refreshed.arrived;
-    const row = historyContent(page).locator('button.history-item').first();
-    const oldRow = await row.elementHandle(), before = await historyGeometry(page);
-    await row.click();
-    await expect(page.locator('#recovery-title')).toHaveText('Synthetic detail fixture');
-    const closeDetails = page.locator('#recovery-dialog [data-close]'); await closeDetails.focus();
-    refreshed.release(); await refreshed.delivered;
-    await expect(historyContent(page)).toContainText('Updated synthetic layout method');
-    expect(await oldRow.evaluate(element => element.isConnected)).toBe(false);
-    await expect(closeDetails).toBeFocused();
-    await page.keyboard.press('Escape');
-    await expect(page.locator('#recovery-dialog')).toBeHidden(); await expect(row).toBeFocused();
-    const after = await historyGeometry(page);
-    for (const key of ['frame','title','close']) sameRect(after[key], before[key], key);
-  } finally {refreshed.release(); await refreshed.delivered;}
-  await page.keyboard.press('Escape'); await expect(page.locator('#history-button')).toBeFocused();
-  const pending = fixture.holdNext();
+    await activityRefresh(page).click();await refreshed.arrived;await row.click();
+    const close=page.locator('#recovery-dialog [data-close]');await close.focus();
+    refreshed.release();await refreshed.delivered;
+    await expect(historyContent(page)).toContainText('Updated synthetic method');await expect(close).toBeFocused();
+    await page.keyboard.press('Escape');await expect(row).toBeFocused();
+  } finally {refreshed.release();await refreshed.delivered;}
+  await page.locator('#nav-about').click();const pending=fixture.holdNext();
   try {
-    await page.locator('#history-button').click(); await pending.arrived;
-    await page.keyboard.press('Escape'); await expect(page.locator('#history-button')).toBeFocused();
-    pending.release(); await pending.delivered;
-    await expect(history(page)).toBeHidden(); await expect(historyContent(page)).toBeEmpty();
-    await expect(page.locator('#history-button')).toBeFocused();
-  } finally {pending.release(); await pending.delivered;}
+    await page.locator('#history-button').click();await pending.arrived;await page.locator('#nav-about').click();
+    const before=await historyContent(page).textContent();fixture.rows=[];
+    pending.release();await pending.delivered;await expect(history(page)).toBeHidden();await expect(historyContent(page)).toHaveText(before);
+  } finally {pending.release();await pending.delivered;}
+  await page.goBack();await expect(history(page)).toBeVisible();await expect(historyContent(page)).toContainText('No submissions yet.');
 });
 
-test('revoked access removes cached submissions and a formerly authorized pending read cannot restore them', async ({page,context}) => {
-  await startAtAbout(page); const fixture = await historyFixture(page, 1);
-  await page.locator('#history-button').click();
+test('revoked access clears every activity section and retires pending reads',async({page,context})=>{
+  await startAtAbout(page);const fixture=await historyFixture(page,1);await page.locator('#history-button').click();
   await expect(historyContent(page)).toContainText('Synthetic layout method 0');
-  await page.keyboard.press('Escape');
-  const pending = fixture.holdNext();
+  const pending=fixture.holdNext();
   try {
-    await page.locator('#history-button').click(); await pending.arrived;
-    await expect(historyContent(page)).toContainText('Synthetic layout method 0');
-    await context.addCookies([{name:'crucible_session',value:'synthetic-revoked-browser-cookie',
-      url:'http://127.0.0.1:8029',sameSite:'Strict'}]);
-    await page.keyboard.press('Escape');
-    await page.locator('#nav-people').click();
-    await expect(page.locator('#access-workspace')).toBeVisible();
-    await expect(page.locator('#access-description')).toContainText('Your beta access is not active');
-    pending.release(); await pending.delivered;
-    await expect(history(page)).toBeHidden(); await expect(historyContent(page)).toBeEmpty();
-    await expect(page.locator('body')).not.toContainText('Synthetic layout method 0');
-    await expect(page.locator('#history-button')).toBeHidden();
-  } finally {pending.release(); await pending.delivered;}
+    await activityRefresh(page).click();await pending.arrived;
+    await context.addCookies([{name:'crucible_session',value:'synthetic-revoked-browser-cookie',url:'http://127.0.0.1:8029',sameSite:'Strict'}]);
+    await page.locator('#nav-people').click();await expect(page.locator('#access-workspace')).toBeVisible();
+    pending.release();await pending.delivered;
+    for(const selector of ['#history-content','#activity-bounties','#activity-notes'])await expect(page.locator(selector)).toBeEmpty();
+    await expect(history(page)).toBeHidden();await expect(page.locator('#history-button')).toBeHidden();
+  } finally {pending.release();await pending.delivered;}
 });
 
 test('a legacy-server record reserves its heading without an interim label before the real result', async ({page}) => {

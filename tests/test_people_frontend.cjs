@@ -13,7 +13,7 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
 (async () => {
   await test('Leaderboard precedes My submissions in account navigation and loads only on demand', async () => {
     const app = await createApp({schemes, responder: baseResponder});
-    assert.deepEqual(app.$('.primary-nav').children.filter(e => !e.hidden).map(e => e.textContent.trim()), ['Schemes', 'Bounties', 'Research notebook', 'About us']);
+    assert.deepEqual(app.$('.primary-nav').children.filter(e => !e.hidden).map(e => e.textContent.trim()), ['Schemes', 'Bounties', 'Notes', 'About us']);
     const accountActions = app.$('.account-actions').children;
     assert.equal(accountActions.indexOf(app.$('#nav-people')), accountActions.indexOf(app.$('#history-button')) - 1);
     assert.equal(app.$('#history-button').hidden, true);
@@ -35,6 +35,24 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
     assert.equal(app.$('#nav-people').hidden, true);
     app.sandbox.showWorkspace('people');
     assert.equal(app.$('#nav-people').hidden, false);
+  });
+  await test('How points work opens without a read, uses profile category names and restores its trigger on close', async () => {
+    const app = await createApp({schemes, hash: '#people', responder: baseResponder});
+    const trigger = app.$('#points-help-button'), dialog = app.$('#points-help-dialog');
+    const before = app.requests.length; trigger.click();
+    assert.equal(dialog.open, true); assert.equal(app.document.body.style.overflow, 'hidden');
+    assert.equal(app.requests.length, before);
+    for (const label of ['Record breakthroughs','Admitted schemes','Research bounties','Research notes','Bounty allowance']) assert.ok(dialog.textContent.includes(label));
+    assert.match(dialog.textContent, /2,000 points/); assert.match(dialog.textContent, /100 points per completed active week/);
+    assert.match(dialog.textContent, /review approval alone earns 0 points/);
+    assert.match(dialog.textContent, /task poster and an independent reviewer both approve/);
+    assert.match(dialog.textContent, /release marked Not scored earns 0 points/);
+    dialog.querySelector('[data-close]').click();
+    assert.equal(dialog.open, false); assert.equal(app.document.activeElement, trigger);
+    assert.equal(app.document.body.style.overflow, '');
+    trigger.click(); await app.navigate('#about');
+    assert.equal(dialog.open, false); assert.notEqual(app.document.activeElement, trigger);
+    trigger.click(); assert.equal(dialog.open, false, 'A hidden Leaderboard trigger cannot open its dialog');
   });
   await test('Recovered by and the signed-in handle lead to real profiles; Back returns to the catalogue', async () => {
     const app = await createApp({schemes, user: {id: 'a', handle: 'alpha'}, responder: baseResponder});

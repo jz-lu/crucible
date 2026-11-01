@@ -1,7 +1,7 @@
 /* Native Crucible type, palette and controls. Discovery is the default view. */
-.nb-bounties-panel{max-width:1050px;--nb-card-title:650 23px/1.22 var(--display);--nb-card-radius:7px;--nb-card-inset:20px;--nb-chip-radius:4px}
+.nb-bounties-panel{--nb-card-title:650 23px/1.22 var(--display);--nb-card-radius:7px;--nb-card-inset:20px;--nb-chip-radius:4px}
 .nb-bounties-panel .nb-card{border:1px solid var(--line);border-radius:var(--nb-card-radius);background:var(--surface)}
-.bty-root{padding:5px 0 24px;overflow-wrap:anywhere}
+.bty-root{padding:0 0 24px;overflow-wrap:anywhere}
 .bty-root [hidden]{display:none!important}
 .bty-heading{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:23px}
 .bty-title-row{display:flex;align-items:center;flex-wrap:wrap;gap:14px}

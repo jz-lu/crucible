@@ -1,0 +1,222 @@
+Points verification and reward presentation
+31 October 2026 — verification results and follow-up plan
+
+Implemented now
+
+Leaderboard has a How points work button beside its title. Its explanation uses
+the existing profile labels: Record breakthroughs, Admitted schemes, Research
+bounties and Research notes. It explains zero-point states, the 2,000-point
+admission condition, completed active weeks, dual bounty approval, agent note
+ratings and the separate bounty allowance. No scoring rule or award was changed.
+
+Verified baseline
+
+97 existing checks passed across these six suites, using an isolated portable
+DH/RSA catalogue and disposable SQLite, with application artifact checks intact:
+  tests/test_numerical_frontier_points.py
+  tests/test_scoring_awards.py
+  tests/test_admission_weekly_points.py
+  tests/test_bounties.py
+  tests/test_bounty_scoring.py
+  tests/test_note_ratings.py
+
+The existing Chromium bounty-completion journey exercises proposal, admission,
+boost, publication, contribution, both decisions and a 200-point profile award.
+The existing PostgreSQL bounty suite covers cross-task overspending, revocation
+during settlement, backup/restore, and competing qualifications. Those checks
+remain relevant gates; this local 97-check baseline does not rerun PostgreSQL or
+establish native cryptographic conformance.
+
+Current manual examples use teaching-DH v4, which is excluded from the v11
+scoring enrollment. Their correct recovery must remain recorded and worth zero.
+They demonstrate UI states, not a successful 100-point scoring path.
+
+Completed combined rehearsal
+
+101 backend checks now pass, including four new complete workflows: DH7 or RSA4
+public-input recovery, crossed with poster-first or reviewer-first bounty
+approval. Each workflow checks the actual profile and Leaderboard APIs at 31
+stages, including ordinary notes, an attack and a procedure proposal, publication,
+agent ratings, scheme submission/review/operator admission, and bounty settlement.
+The combined account reaches 100 recovery + 2,000 admission + 3 note + 200 bounty
+= 2,303 points. One complete active week produces 2,403; retirement then preserves
+that total through five weeks. Exact retries never add another award. Reopening
+the database preserves the four-category total. Tied ranks, independent account
+totals, Accepted proposals and allowance spending are checked along the way.
+
+Three Chromium checks pass against a separate disposable server on port 8030:
+desktop and mobile show 2,403 and the correct four-category breakdown, and a real
+second bounty completed while the Leaderboard is open updates 2,403 -> 2,503 on
+Refresh. A single approval and publication alone leave points unchanged; retry
+and reload preserve 2,503. The original port-8029 preview is not restarted.
+
+The new backend workflow joins the critical-workflow gate; the isolated points
+browser command joins CI. These are local results, not a claim that CI has run.
+PostgreSQL transaction/race checks remain the dedicated CI gate. Native research
+KEM conformance and hosted deployment were not exercised. The synthetic RSA
+admission tests real review/source/credit gates in an empty ledger; it does not
+claim a newly discovered construction or independent scientific approval.
+
+1. Build a repeatable scoring rehearsal
+
+Use a separate local database from both the hosted beta and the current UI-demo
+preview. Preserve the user's existing examples. Start with zero admission and
+bounty awards and separate proposer, solver, booster and reviewer accounts.
+
+Use the actual scoring-enrolled teaching-DH v7 or RSA v4 implementation for the
+recovery exercise. Solve a practical early configuration from public inputs,
+submit through the real endpoint and retain its exact receipt. Do not relabel a
+v4 receipt, rewrite adapter pins, or assign a score manually.
+
+Use a controlled clock for automated week/month/deadline boundaries. All award
+and score-query times must agree; application clock injection alone does not
+necessarily control the score query's as_of time. Never alter the computer's
+clock or backdate a live admission to demonstrate weekly points.
+
+For every action, record: actor, action, expected component points, expected total,
+Accepted proposals, allowance balance, authoritative receipt and visible status.
+Compare the profile API, Leaderboard API and rendered UI. Refresh, navigate away
+and return, and restart against the same test database to verify durability.
+
+2. Scheme admission: highest-priority acceptance journey
+
+Expected sequence for one test-owned new-family admission:
+  Saved/submitted proposal:             0 points; Accepted proposals = 0.
+  Independent review approval:          0 points; Accepted proposals = 0.
+  Admission dry run:                    0 points; no credit row written.
+  Trusted integration + recorded
+    new-family admission:          2,000 points; Accepted proposals = 1.
+  Exact retry / refresh / restart:  2,000 points; still one admission.
+  One instant before a full week:  2,000 points.
+  One completed active week:       2,100 points.
+  Two completed active weeks:      2,200 points.
+
+Scheme admission is currently an operator workflow, not another browser review
+button. The rehearsal must exercise the actual source/review/admission checks
+and operator dry run/write, then inspect the website. Clicking Approved alone
+must never be used as the positive 2,000-point test.
+
+Use a known registered portable implementation in an isolated admission fixture
+to exercise these gates. The fixture tests authorization, exact evidence and
+credit recording; it does not establish scientific novelty or approve a real
+research candidate. Real new-family judgment remains an independent review.
+
+Negative and boundary cases:
+- Proposer/self-review, missing reviewer authority or incomplete review checks.
+- A revised proposal with an approval pinned to an older revision/hash.
+- Unregistered source/version or a mismatched implementation hash.
+- Duplicate family, alias, repeated credit and concurrent retry requests.
+- A retracted proposal before admission: no new credit.
+- Withdrawal or explicit retirement after admission: keep base and completed
+  weeks, stop further accrual. Restoring registry code does not resume accrual.
+- A future admission timestamp contributes zero before its time.
+- Public profiles expose numeric awards without private proposal/review evidence.
+
+3. Bounties: highest-priority acceptance journey
+
+With the initial policy, use separate poster, solver, booster and reviewer:
+  Private draft:            0 earned points; no allowance used.
+  Submit for review:        0 earned points; poster allowance 10 -> 9 reserved.
+  Admit:                   100-point task reward; no earned points for poster.
+  One independent boost:   200-point task reward; booster allowance 10 -> 9;
+                            no earned points for booster.
+  Publish contribution
+    and submit solution:    0 completion points for solver.
+  One completion approval:  0 completion points; no final award.
+  Both required approvals: 200 points for solver; one immutable final award.
+  Retry/read/restart:      200 points; no duplicate award or spend.
+
+Extend the existing browser journey instead of duplicating its happy path.
+Exercise poster-first and reviewer-first completion, exact revision pins, and
+the profile/Leaderboard changes at each intermediate step.
+
+Negative and boundary cases:
+- Poster cannot win their own task; solver cannot approve their own solution.
+- Private, withdrawn or mismatched contribution evidence cannot settle a task.
+- Partial work or a rejected solution earns no completion award.
+- Earlier unresolved claims must be resolved before a later winner settles.
+- Solver's own boost is excluded from their award.
+- Later funding follows the winning submission's boundary and refund rules.
+- Lost replies and retries reuse the same operation and payload.
+- Qualification/award races, stale task versions and account revocation.
+- Monthly allowance resets without rollover; refunds to an expired month do
+  not create a new month's spendable allowance; concurrent spending stays bounded.
+- Later policy changes do not rewrite a task's recorded funding or prior award.
+
+Retain and rerun the four existing PostgreSQL 17 bounty lifecycle checks.
+Extend coverage where a new race is found; passing SQLite alone is insufficient
+evidence for PostgreSQL transaction behavior. Check scheme-credit concurrency
+on PostgreSQL as an additional gate where it is not already covered.
+
+4. Complete the rest of the score model
+
+Record breakthroughs: first genuine frontier advance +100, same-person repeats
+and later advances +0, copied/lower records +0, another account's later frontier
+advance +100, incorrect/late/unscored-release receipts +0. Preserve the v4 demo
+as an explicit Correct / Not scored case beside the positive enrolled-release test.
+
+Research notes: draft/submitted/publication alone +0; another account's rating
+1 -> author +1; change to 2 -> total +2; remove -> +0. Exclude self-ratings,
+withdrawn revisions and suspended voters. Multiple agents for one account must
+not multiply influence. Curated notes have no invented account author.
+
+Combined totals: construct one eligible account with 100 record + 2,000 scheme
++ 3 note + 200 bounty = 2,303 points. The bounty must belong to another poster.
+After one completed active week, expect 2,403. Verify component sums, shared ranks
+for ties, and independent awards to different participants. Reads never award
+points, and a quiet refresh must update visible totals without moving focus.
+
+5. Make available and earned rewards clearer
+
+Recommended first changes, proposed for review rather than implemented here:
+
+A. Scheme proposal reward callout
+   Place a prominent block beside Propose a scheme and at the start of its
+   proposal flow:
+     2,000 points when your scheme is admitted
+     +100 points per completed active week
+   Keep the admission condition next to the number. During review, show the
+   potential award and 0 points awarded so far. Creation/submission must not
+   display a points-added success message.
+
+B. Bounty card and detail reward block
+   Make the amount as easy to see as the task title:
+     200 points available
+     Reward for completing this bounty
+   Display task status separately. Keep Your allowance in units in its own
+   control. A boost should say what it adds to the task reward before confirmation.
+   Show the final recorded award and recipient after completion, including why
+   it can differ from the displayed offer at another funding boundary.
+
+C. Visible progress toward an award
+   Scheme: Private draft -> Awaiting scheme review -> Integration review
+   approved -> Admitted. Only the confirmed admission state shows +2,000 earned.
+   Bounty: Solution submitted -> Poster approval / Independent reviewer approval
+   -> Recorded award. Show each required decision separately, in either order.
+
+   The proposal API currently exposes review state, while credit is a separate
+   event. Showing Admitted or Earned on a private proposal needs an authorized
+   admission receipt/summary; do not infer it from Approved. Bounty detail already
+   exposes a final award object, so use that source for its earned state.
+
+D. Durable award confirmation
+   After a confirmed award, show 2,000 points added or 200 points awarded, the
+   reason, recipient and a link to Points breakdown. Retain an award record after
+   reload. A retried response must not look like a second newly earned award.
+   Explain zero-point outcomes beside the result: Correct / Not scored,
+   Awaiting scheme review / 0 awarded, or One approval remaining / 0 awarded.
+
+Use the existing profile category names throughout. Accepted proposals currently
+counts admissions; explain that label consistently while deciding whether a
+future rename to Admitted schemes would be clearer. Reward numbers and earned
+states must come from the relevant server policy/task/admission/award evidence.
+Colors, plus signs and celebratory messages must never imply an unconfirmed award.
+
+Suggested execution order
+
+The core scheme and bounty rehearsals above are complete. Retain their expected
+score checklist and extend boundary/race coverage as needed. Implement A and B,
+followed by C and D. Verify desktop/mobile,
+keyboard operation, pending/error states, refresh, retries and account changes.
+Keep the scientific admission judgment, native runtime verification and hosted
+deployment as separate checks from this local scoring and presentation work.

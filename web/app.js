@@ -246,9 +246,9 @@ const browsingRequests = new Set();
 const dialogTriggers = new WeakMap();
 const authDialog = $('#auth-dialog');
 const submissionDialog = $('#submission-dialog');
-const historyDialog = $('#history-dialog');
 const recoveryDialog = $('#recovery-dialog');
 const findingDialog = $('#finding-dialog');
+const pointsHelpDialog = $('#points-help-dialog');
 const research = {
   visible: false, targets: [], target: null, kind: 'scheme', findings: [],
   nextBefore: null, request: 0, editing: null, followup: null, saving: false, recoveries: [], recoveriesRequest: 0
@@ -530,6 +530,10 @@ function navigate(hash) {
   if (window.location.hash === hash) applyRoute();
   else window.location.hash = hash;
 }
+function navigateTop(hash) {
+  navigate(hash);
+  window.scrollTo({top: 0, left: 0, behavior: 'instant'});
+}
 function personRoute(handle) { return '#person/' + encodeURIComponent(handle); }
 function siteOrigin() { return new URL(window.location.href).origin; }
 function connectionCode(value) {
@@ -606,7 +610,7 @@ function clearProtectedState() {
   state.canReviewProposals = false; state.canSelfReviewProposals = false; state.canManageBetaAccess = false;
   resetAgentSettings(); resetAgentInstructions(); resetProposalAccount(state.user?.id);
   research.request++; research.recoveriesRequest++; research.targets = []; research.target = null; research.findings = []; research.recoveries = [];
-  for (const selector of ['#kem-catalogue', '#people-content', '#person-content', '#leaderboard-content', '#history-content', '#recovery-content', '#connect-content', '#overview-graphs', '#target-catalogue']) $(selector).replaceChildren();
+  for (const selector of ['#kem-catalogue', '#people-content', '#person-content', '#leaderboard-content', '#history-content', '#activity-bounties', '#activity-notes', '#recovery-content', '#connect-content', '#overview-graphs', '#target-catalogue']) $(selector).replaceChildren();
   for (const dialog of document.querySelectorAll('dialog')) if (dialog.open && dialog !== authDialog) dialog.close();
   resetSubmissionForm();
   // A fresh shell also releases notebook closures and private data held by the
@@ -783,7 +787,7 @@ function showRouteLoading() {
     const decoded = handle && decodeURIComponent(handle);
     if (decoded && decoded.length <= 100 && !/[\u0000-\u001f\u007f]/.test(decoded)) profileName = decoded;
   } catch { /* Malformed profile URLs never become display markup. */ }
-  const title = known?.name || (release ? 'Scheme' : path.startsWith('#person/') ? profileName : path === '#bounties' ? 'Bounties' : path === '#notebook' ? 'Research notebook' : path === '#reviews' ? 'Review center' : path === '#propose' ? 'Propose a scheme' : 'KEM Schemes');
+  const title = known?.name || (release ? 'Scheme' : path.startsWith('#person/') ? profileName : path === '#bounties' ? 'Bounties' : path === '#notebook' ? 'Notes' : path === '#reviews' ? 'Review center' : path === '#propose' ? 'Propose a scheme' : 'Schemes');
   const profileRoute = path.startsWith('#person/');
   routeLoadingPanel.classList.toggle('profile-route-preview', profileRoute);
   state.screen = 'loading';
@@ -831,8 +835,9 @@ function showRouteLoading() {
   document.title = title + ' — Crucible';
 }
 function routeNeedsCatalogue() {
-  const path = window.location.hash.split('?')[0];
-  if (['#about', '#people', '#connect'].includes(path)) return false;
+  const [path, query = ''] = window.location.hash.split('?');
+  if (path === '#challenge' && new URLSearchParams(query).get('view') === 'map') return false;
+  if (['#about', '#people', '#activity', '#connect'].includes(path)) return false;
   // Profile records still need the catalogue's mapping from native parameters
   // to human stage labels. Keep that dependency until the record API supplies it.
   // Notebook visualizations load their small release-link index independently.
@@ -981,19 +986,17 @@ function notebookPendingFrame(params) {
   const requestedView = params.get('view') === 'guide' ? 'bounties' : params.get('view');
   const view = ['map', 'timeline', 'bounties'].includes(requestedView) ? requestedView : 'notes';
   frame.setAttribute('data-notebook-view', view);
-  for (const tab of frame.querySelectorAll('[data-notebook-tab]')) {
-    if (tab.getAttribute('data-notebook-tab') === view) tab.setAttribute('aria-current', 'page');
-    else tab.removeAttribute('aria-current');
-  }
+  frame.querySelector('.nb-heading h1').textContent = view === 'map' ? 'Scheme map' : view === 'timeline' ? 'Timeline' : 'Notes';
   return frame;
 }
-async function showNotebook(query, reviewing = false, bountyPage = false) {
+async function showNotebook(query, reviewing = false, page = 'notebook') {
   const account = state.user?.id, csrf = state.csrf, section = state.reviewSection, request = ++notebookShowRequest, lifecycle = documentEpoch;
   const params = new URLSearchParams(query || window.location.hash.split('?')[1] || '');
-  if (bountyPage) params.set('view', 'bounties');
+  if (page === 'bounties') params.set('view', 'bounties');
+  if (page === 'scheme-map') params.set('view', 'map');
   const target = $(reviewing ? '#review-notebook-workspace' : '#notebook-workspace');
   const current = () => ownsDocument(lifecycle) && request === notebookShowRequest && hasAccess() && account === state.user?.id && csrf === state.csrf &&
-    (reviewing ? state.screen === 'reviews' && state.canReviewProposals && state.reviewSection === section && section !== 'schemes' : state.screen === (bountyPage ? 'bounties' : 'notebook'));
+    (reviewing ? state.screen === 'reviews' && state.canReviewProposals && state.reviewSection === section && section !== 'schemes' : state.screen === page);
   if (!current()) return;
   // Resolve the tiny action-link index alongside notebook assets, rather than
   // competing with the map's six assets after its controller becomes available.
@@ -1015,7 +1018,7 @@ async function showNotebook(query, reviewing = false, bountyPage = false) {
     else if (params.has('note') || params.has('research_request') || params.has('research') || params.has('bounty') || params.get('compose') === 'bounty') {
       // A reader's private title and body remain unknown until its own read.
       const shell = node('div', undefined, 'notebook-shell-preview');
-      shell.append(node('h1', bountyPage ? 'Bounties' : 'Research notebook'));
+      shell.append(node('h1', page === 'bounties' ? 'Bounties' : 'Notes'));
       const frame = node('div', undefined, 'loading-preview');
       frame.setAttribute('aria-hidden', 'true');
       for (let index = 0; index < 4; index++) {
@@ -1029,7 +1032,7 @@ async function showNotebook(query, reviewing = false, bountyPage = false) {
       quietReadStatus(target, 'Loading notebook…'); target.append(notebookPendingFrame(params));
     }
     try { await ensureNotebookAssets(); }
-    catch (error) { if (current()) showInlineError(target, error.message, () => showNotebook(query, reviewing)); return; }
+    catch (error) { if (current()) showInlineError(target, error.message, () => showNotebook(query, reviewing, page)); return; }
   }
   if (!current()) return;
   await getNotebookWorkspace(reviewing).show(params);
@@ -1077,7 +1080,7 @@ $('#access-continue').addEventListener('click', async () => {
   catch (error) { globalError(error.message); }
 });
 function workspaceSelector(screen) {
-  return {loading: '#route-loading', access: '#access-workspace', scheme: '#workspace', overview: '#overview-workspace', assumptions: '#assumptions-workspace', notebook: '#notebook-workspace', bounties: '#notebook-workspace', reviews: '#review-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
+  return {loading: '#route-loading', access: '#access-workspace', scheme: '#workspace', overview: '#overview-workspace', assumptions: '#assumptions-workspace', notebook: '#notebook-workspace', bounties: '#notebook-workspace', 'scheme-map': '#notebook-workspace', reviews: '#review-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', activity: '#activity-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
 }
 function applyRoute(focus = false) {
   if (documentRetired) return;
@@ -1139,6 +1142,11 @@ function applyRoute(focus = false) {
     path = '#notebook'; query = '';
     window.history.replaceState(null, '', path);
   }
+  if (path === '#notebook' && legacyParams.get('view') === 'map' &&
+      !['location', 'note', 'research', 'research_request'].some(key => legacyParams.has(key))) {
+    path = '#challenge'; query = legacyParams.toString();
+    window.history.replaceState(null, '', path + '?' + query);
+  }
   const reviewParams = new URLSearchParams(query);
   if (path === '#reviews') {
     const section = reviewParams.get('section');
@@ -1146,8 +1154,9 @@ function applyRoute(focus = false) {
     if (section !== state.reviewSection) { reviewParams.set('section', state.reviewSection); query = reviewParams.toString(); window.history.replaceState(null, '', '#reviews?' + query); }
   }
   let scheme, profile, handle, view = 'leaderboard';
-  let screen = path === '#connect' ? 'connect' : path === '#people' ? 'people' : path === '#propose' ? 'propose' : path === '#reviews' ? 'reviews' : path === '#about' ? 'about' : path === '#bounties' ? 'bounties' : path === '#notebook' ? 'notebook' : path === '#research' ? 'research' : 'catalogue';
-  let invalid = !['#challenge', '#notebook', '#bounties', '#research', '#about', '#propose', '#reviews', '#people', '#connect'].includes(path);
+  let screen = path === '#connect' ? 'connect' : path === '#people' ? 'people' : path === '#activity' ? 'activity' : path === '#propose' ? 'propose' : path === '#reviews' ? 'reviews' : path === '#about' ? 'about' : path === '#bounties' ? 'bounties' : path === '#notebook' ? 'notebook' : path === '#research' ? 'research' : 'catalogue';
+  if (path === '#challenge' && new URLSearchParams(query).get('view') === 'map') screen = 'scheme-map';
+  let invalid = !['#challenge', '#notebook', '#bounties', '#research', '#about', '#propose', '#reviews', '#people', '#activity', '#connect'].includes(path);
   const personMatch = path.match(/^#person\/([^/]+)$/);
   if (personMatch) {
     try {
@@ -1186,6 +1195,8 @@ function applyRoute(focus = false) {
   state.screen = screen;
   state.personHandle = screen === 'person' ? handle : null;
   state.peopleRequest++;
+  state.historyRequest++;
+  if (previousScreen === 'activity' && screen !== 'activity' && recoveryDialog.open) recoveryDialog.close();
   state.personRequest++;
   state.connectRequest++;
   state.connection = null;
@@ -1225,20 +1236,24 @@ function applyRoute(focus = false) {
   if (screen === 'overview') renderOverview(scheme, profile);
   if (screen === 'assumptions') renderAssumptions(scheme, profile, new URLSearchParams(query));
   if (screen === 'people') loadPeople();
+  if (screen === 'activity') showActivity();
   if (screen === 'person') loadPerson(handle);
   if (screen === 'connect') loadConnection();
   if (screen === 'notebook') {
     showNotebook(query);
   }
-  if (screen === 'bounties') showNotebook(query, false, true);
+  if (screen === 'bounties') showNotebook(query, false, 'bounties');
+  if (screen === 'scheme-map') showNotebook(query, false, 'scheme-map');
   document.title = ['scheme', 'overview'].includes(screen) ? scheme.name + (screen === 'overview' ? ' overview' : '') + ' — Crucible' : screen === 'person' ? handle + ' — Crucible' : screen === 'people' ? 'Leaderboard — Crucible' : screen === 'research' ? 'Research — Crucible' : screen === 'about' ? 'About us — Crucible' : screen === 'propose' ? 'Propose a scheme — Crucible' : 'Schemes — Crucible';
   if (screen === 'assumptions') document.title = `Assumptions · ${scheme.name} — Crucible`;
+  if (screen === 'activity') document.title = 'My activity — Crucible';
   if (screen === 'connect') document.title = 'Connect an agent — Crucible';
-  if (screen === 'notebook') document.title = 'Research notebook — Crucible';
+  if (screen === 'notebook') document.title = (new URLSearchParams(query).get('view') === 'timeline' ? 'Timeline' : 'Notes') + ' — Crucible';
+  if (screen === 'scheme-map') document.title = 'Scheme map — Crucible';
   if (screen === 'bounties') document.title = 'Bounties — Crucible';
   if (screen === 'reviews') document.title = 'Review center — Crucible';
   renderReviewAccountLink();
-  if (focus && previousScreen !== screen) $(workspaceSelector(screen)).focus({preventScroll: ['catalogue', 'people'].includes(screen)});
+  if (focus && previousScreen !== screen) $(workspaceSelector(screen)).focus({preventScroll: ['catalogue', 'people', 'activity', 'notebook', 'bounties', 'about', 'scheme-map'].includes(screen)});
   scheduleBrowseWarmup();
 }
 function sharedKeyBytes(challenge) {
@@ -1436,8 +1451,8 @@ function setSession(data) {
     $('#recovery-file-status').hidden = true;
     if (submissionDialog.open) submissionDialog.close();
     if (recoveryDialog.open) recoveryDialog.close();
-    if (historyDialog.open) historyDialog.close();
-    $('#history-content').replaceChildren();
+    if (pointsHelpDialog.open) { dialogTriggers.delete(pointsHelpDialog); pointsHelpDialog.close(); }
+    for (const selector of ['#history-content', '#activity-bounties', '#activity-notes']) $(selector).replaceChildren();
     $('#recovery-content').replaceChildren();
     setText('#recovery-context', '');
     setText('#recovery-title', 'Submission details');
@@ -1475,6 +1490,8 @@ function setSession(data) {
   // page must start its replacement itself; catalogue routing will not do it.
   if (state.ready && state.screen === 'people' && (previousId !== state.user?.id || previousCsrf !== state.csrf ||
       previousReview !== state.canReviewProposals || previousSelfReview !== state.canSelfReviewProposals)) loadPeople();
+  if (state.ready && state.screen === 'activity' && (previousId !== state.user?.id || previousCsrf !== state.csrf ||
+      previousReview !== state.canReviewProposals || previousSelfReview !== state.canSelfReviewProposals)) showActivity();
   if (state.ready && navigationProjection && !state.catalogueLoaded && routeNeedsCatalogue()) applyRoute();
   scheduleBrowseWarmup();
 }
@@ -3929,18 +3946,11 @@ for (const dialog of document.querySelectorAll('dialog')) {
     if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
   });
   dialog.addEventListener('close', () => {
-    // A queued close from the previous opening must not clear a reopened list.
-    if (dialog === historyDialog && dialog.open) return;
     document.body.style.overflow = [...document.querySelectorAll('dialog')].some(item => item.open) ? 'hidden' : '';
     const trigger = dialogTriggers.get(dialog);
     const parentDialog = trigger?.closest('dialog');
     if (trigger?.isConnected && !trigger.hidden && !trigger.disabled &&
         !trigger.closest('[hidden]') && (!parentDialog || parentDialog.open)) trigger.focus();
-    if (dialog === historyDialog) {
-      state.historyRequest++;
-      $('#history-content').replaceChildren();
-      $('#history-content').setAttribute('aria-busy', 'false');
-    }
     if (dialog === recoveryDialog) {
       state.recoveryRequest++;
       $('#recovery-content').replaceChildren();
@@ -4558,15 +4568,19 @@ function historyPreview() {
   }
   return preview;
 }
-async function showHistory() {
-  if (!hasAccess() || !state.user) return;
+function activityFocusTarget() {
+  return $('#refresh-activity').disabled ? $('#activity-workspace') : $('#refresh-activity');
+}
+async function loadActivityHistory() {
+  if (!hasAccess() || !state.user || state.screen !== 'activity') return;
   const request = ++state.historyRequest;
   const accountId = state.user?.id, epoch = readViewEpoch;
-  const current = () => hasAccess() && epoch === readViewEpoch && request === state.historyRequest && historyDialog.open && state.user?.id === accountId;
+  const current = () => hasAccess() && epoch === readViewEpoch && request === state.historyRequest && state.screen === 'activity' && state.user?.id === accountId;
   const target = $('#history-content');
   const key = 'history:' + (state.catalogueRevision || ''), cached = cachedRead(key);
   const paint = data => {
     const focused = document.activeElement?.closest('#history-content') === target ? document.activeElement : null;
+    target.querySelector('.activity-read-error')?.remove();
     const detailsTrigger = dialogTriggers.get(recoveryDialog);
     const detailsId = detailsTrigger?.closest('#history-content') === target ? detailsTrigger.dataset.submissionId : null;
     paintRead(key, target, data, data => {
@@ -4591,20 +4605,17 @@ async function showHistory() {
       }
       target.replaceChildren(...items);
     });
-    const replacement = id => [...target.querySelectorAll('[data-submission-id]')].find(item => item.dataset.submissionId === id) || historyDialog.querySelector('[data-close]');
+    const replacement = id => [...target.querySelectorAll('[data-submission-id]')].find(item => item.dataset.submissionId === id) || activityFocusTarget();
     if (focused && !focused.isConnected && !recoveryDialog.open) replacement(focused.dataset.submissionId).focus({preventScroll: true});
     if (detailsId && !detailsTrigger.isConnected) dialogTriggers.set(recoveryDialog, replacement(detailsId));
   };
-  // Populate the first frame before opening the dialog. Its scroll viewport is
-  // fixed independently of the number of results, including empty/error states.
   if (cached) paint(cached);
   else {
     const focused = document.activeElement?.closest('#history-content') === target ? document.activeElement : null;
     quietReadStatus(target, 'Loading your submissions…'); target.append(historyPreview());
-    if (focused && historyDialog.open && !recoveryDialog.open) historyDialog.querySelector('[data-close]').focus({preventScroll: true});
+    if (focused && !recoveryDialog.open) activityFocusTarget().focus({preventScroll: true});
   }
   target.setAttribute('aria-busy', 'true');
-  if (!historyDialog.open) openDialog(historyDialog, $('#history-button'));
   try {
     const data = await readAgain(key, '/api/me/submissions');
     if (!current()) return;
@@ -4612,9 +4623,140 @@ async function showHistory() {
     rememberRead(key, {submissions: data.submissions});
     paint({submissions: data.submissions});
   } catch (error) {
-    if (current()) readRefreshError(key, target, error, () => showHistory(), cached);
+    if (current()) {
+      if (cached && !forbiddenRead(error)) {
+        target.querySelector('.activity-read-error')?.remove();
+        const notice = node('div', undefined, 'activity-read-error');
+        showInlineError(notice, error.message, loadActivityHistory); target.append(notice);
+      } else readRefreshError(key, target, error, loadActivityHistory, null);
+    }
   } finally {
     if (current()) target.setAttribute('aria-busy', 'false');
+  }
+}
+const activityRequests = {bounties: 0, notes: 0};
+let activityRefreshRequest = 0;
+async function showActivity() {
+  if (!hasAccess() || !state.user || state.screen !== 'activity') return;
+  const request = ++activityRefreshRequest;
+  $('#refresh-activity').disabled = true;
+  try {
+    await Promise.all([loadActivityHistory(), loadActivityCollection('notes'),
+      ...(bountyFeatureAvailable() ? [loadActivityCollection('bounties')] : [])]);
+  } finally {
+    if (request === activityRefreshRequest) $('#refresh-activity').disabled = false;
+  }
+}
+function activityNoteRevision(note) {
+  return note.revisions?.find(revision => revision.revision === note.revision);
+}
+function activityNoteType(note) {
+  const revision = activityNoteRevision(note), content = revision?.content || {};
+  const requests = [...(note.proposal_revision?.requests || []), ...(revision?.requests || [])];
+  if (requests.some(request => request.kind === 'scheme_admission') ||
+      (content.tags?.includes('scheme-description') && content.tags?.includes('proposal'))) return 'Proposed scheme';
+  return content.tags?.includes('attack-analysis') ? 'Attack' : 'Note';
+}
+function activityCollectionPage(kind, data, path) {
+  const records = data?.[kind];
+  if (!Array.isArray(records) || records.length > 25 || records.some(item => !item || typeof item.id !== 'string' || !item.id))
+    throw new Error('Your ' + kind + ' could not be loaded. Please try again.');
+  let next = null;
+  if (kind === 'notes') {
+    if (data.next_after !== null && (typeof data.next_after !== 'string' || !data.next_after || data.next_after.length > 768) ||
+        records.some(note => typeof activityNoteRevision(note)?.content?.title !== 'string')) throw new Error('Your notes could not be loaded. Please try again.');
+    if (data.next_after) next = '/api/notebook/notes?' + new URLSearchParams({scope: 'mine', limit: '25', after: data.next_after});
+  } else {
+    const pagination = data.pagination, offset = Number(new URL(path, window.location.href).searchParams.get('offset'));
+    if (!pagination || pagination.offset !== offset || pagination.limit !== 25 || typeof pagination.has_more !== 'boolean' ||
+        records.some(task => typeof task.title !== 'string')) throw new Error('Your bounties could not be loaded. Please try again.');
+    if (pagination.has_more) next = '/api/bounties?' + new URLSearchParams({status: 'mine', sort: 'concrete', offset: String(offset + 25), limit: '25'});
+  }
+  if (next && !records.length) throw new Error('Your ' + kind + ' could not be loaded. Please try again.');
+  return {path, records, next};
+}
+function paintActivityCollection(kind, key, data) {
+  const target = $('#activity-' + kind), more = $('#more-activity-' + kind);
+  const focused = document.activeElement?.closest('#activity-' + kind) === target ? document.activeElement : null;
+  target.querySelector('.activity-read-error')?.remove();
+  paintRead(key, target, data, data => {
+    const records = [...new Map(data.pages.flatMap(page => page.records).map(record => [record.id, record])).values()];
+    if (!records.length) return showEmpty(target, kind === 'notes' ? 'No notes yet. Your attacks, proposed schemes and other notes will appear here.' : 'No bounty activity yet. Bounties you propose or contribute to will appear here.');
+    const items = records.map(record => {
+      const item = node('a', undefined, 'history-item activity-item');
+      item.dataset.activityId = record.id;
+      const copy = node('span', undefined, 'history-item-copy');
+      let title, meta, status, schemeProposal = false;
+      if (kind === 'notes') {
+        const revision = activityNoteRevision(record);
+        const type = activityNoteType(record);
+        schemeProposal = type === 'Proposed scheme';
+        title = revision.content.title;
+        meta = (schemeProposal ? '' : type + ' · ') + 'Revision ' + record.revision + ' · ' + utcDate(revision.created_at || record.created_at);
+        status = record.publication_status === 'accepted' ? 'Published' : record.publication_status === 'submitted' ? 'Awaiting review' : record.publication_status === 'private' ? 'Private' : (record.publication_status || 'Private').replaceAll('_', ' ');
+        item.href = '#notebook?' + new URLSearchParams({note: record.id, revision: String(record.revision)});
+      } else {
+        title = record.title;
+        meta = (record.owner?.id === state.user?.id ? 'Proposed by you' : 'You contributed') + ' · ' + utcDate(record.updated_at || record.created_at);
+        status = ({pending: 'Awaiting review', changes_requested: 'Changes requested'})[record.status] || (record.status || 'Draft').replaceAll('_', ' ');
+        status = status.charAt(0).toUpperCase() + status.slice(1);
+        item.href = '#bounties?' + new URLSearchParams({status: 'mine', bounty: record.id});
+      }
+      const titleLine = node('span', undefined, 'activity-item-heading');
+      titleLine.append(node('span', title, 'history-item-title'));
+      if (schemeProposal) titleLine.append(node('span', 'Proposed scheme', 'status-tag activity-scheme-tag'));
+      copy.append(titleLine, node('span', meta, 'history-item-meta'));
+      item.append(copy, node('span', status, 'status-tag'));
+      return item;
+    });
+    target.replaceChildren(...items);
+  });
+  more.hidden = !data.pages.at(-1)?.next;
+  if (focused && !focused.isConnected) {
+    const replacement = [...target.querySelectorAll('[data-activity-id]')].find(item => item.dataset.activityId === focused.dataset.activityId);
+    (replacement || activityFocusTarget()).focus({preventScroll: true});
+  }
+}
+async function loadActivityCollection(kind, more = false) {
+  if (!hasAccess() || !state.user || state.screen !== 'activity') return;
+  const request = ++activityRequests[kind], account = state.user.id, epoch = readViewEpoch;
+  const current = () => hasAccess() && state.user?.id === account && epoch === readViewEpoch &&
+    request === activityRequests[kind] && state.screen === 'activity';
+  const target = $('#activity-' + kind), button = $('#more-activity-' + kind), key = 'activity:' + kind;
+  const cached = cachedRead(key), ownedMoreFocus = more && document.activeElement === button;
+  const first = kind === 'notes' ? '/api/notebook/notes?scope=mine&limit=25' : '/api/bounties?status=mine&sort=concrete&offset=0&limit=25';
+  if (more && !cached) more = false;
+  else if (more && !cached.pages.at(-1)?.next) return;
+  if (cached) paintActivityCollection(kind, key, cached);
+  else {
+    if (document.activeElement?.closest('#activity-' + kind) === target) activityFocusTarget().focus({preventScroll: true});
+    quietReadStatus(target, 'Loading your ' + kind + '…'); target.append(historyPreview()); button.hidden = true;
+  }
+  target.setAttribute('aria-busy', 'true'); button.disabled = true;
+  try {
+    const paths = more ? [cached.pages.at(-1).next] : (cached?.pages.map(page => page.path) || [first]);
+    const pages = await Promise.all(paths.map(async path => activityCollectionPage(kind, await readAgain(key + ':' + path, path), path)));
+    if (!current()) return;
+    const data = {pages: more ? [...cached.pages, ...pages] : pages};
+    // A repeated cursor must never make Load more loop over the same page.
+    if (data.pages.at(-1).next && data.pages.some(page => page.path === data.pages.at(-1).next)) data.pages.at(-1).next = null;
+    rememberRead(key, data); paintActivityCollection(kind, key, data);
+    if (ownedMoreFocus && more) {
+      const nextRow = target.querySelectorAll('[data-activity-id]')[cached.pages.reduce((count, page) => count + page.records.length, 0)];
+      (nextRow || activityFocusTarget()).focus({preventScroll: true});
+    }
+  } catch (error) {
+    if (current()) {
+      if (cached && !forbiddenRead(error)) {
+        const old = target.querySelector('.activity-read-error'); old?.remove();
+        const notice = node('div', undefined, 'activity-read-error');
+        showInlineError(notice, error.message, () => loadActivityCollection(kind, more)); target.append(notice);
+      } else {
+        readRefreshError(key, target, error, () => loadActivityCollection(kind), null); button.hidden = true;
+      }
+    }
+  } finally {
+    if (current()) { target.setAttribute('aria-busy', 'false'); button.disabled = false; }
   }
 }
 async function copyInstance() {
@@ -4708,7 +4850,9 @@ $('#copy-agent-instructions').addEventListener('click', copyAgentInstructions);
 $('#use-agent').addEventListener('click', toggleAgentInstructions);
 $('#method-select').addEventListener('change', updateMethodFields);
 $('#refresh-leaderboard').addEventListener('click', refreshLeaderboard);
-$('#history-button').addEventListener('click', showHistory);
+$('#history-button').addEventListener('click', () => navigateTop('#activity'));
+$('#refresh-activity').addEventListener('click', showActivity);
+for (const kind of ['bounties', 'notes']) $('#more-activity-' + kind).addEventListener('click', () => loadActivityCollection(kind, true));
 $('#retry-button').addEventListener('click', () => state.ready ? synchronizeSession() : initialize());
 $('#refresh-catalogue').addEventListener('click', async () => {
   $('#refresh-catalogue').disabled = true;
@@ -5374,16 +5518,19 @@ $('#download-proposal').addEventListener('click', () => {
 // Research records keep claims and their conditions separate from hourly ranking.
 function showWorkspace(name) {
   if (!hasAccess()) name = 'access';
+  if (name !== 'people' && pointsHelpDialog.open) {
+    dialogTriggers.delete(pointsHelpDialog); pointsHelpDialog.close();
+  }
   if (!ownResearcherProfile() && researcherEditor.open) suspendResearcherEditor();
   if (name !== 'person') renderResearcherProfile(null);
   researcherEditorControls();
   const transferLoadingFocus = name !== 'loading' && document.activeElement?.closest?.('#route-loading') === routeLoadingPanel;
   if (!RESEARCH_ENABLED && name === 'research') name = 'catalogue';
   const [pendingPath, pendingQuery = ''] = window.location.hash.split('?');
-  const preparingMap = name === 'loading' && hasAccess() && pendingPath === '#notebook' && new URLSearchParams(pendingQuery).get('view') === 'map';
+  const preparingMap = name === 'loading' && hasAccess() && ['#notebook', '#challenge'].includes(pendingPath) && new URLSearchParams(pendingQuery).get('view') === 'map';
   // Catalogue arrival must not detach the connected map being prepared for
   // this same destination. Other routes and access loss still cancel it.
-  if (!['notebook', 'bounties'].includes(name) && !preparingMap) notebookWorkspace?.hide();
+  if (!['notebook', 'bounties', 'scheme-map'].includes(name) && !preparingMap) notebookWorkspace?.hide();
   if (name !== 'reviews' || state.reviewSection === 'schemes') reviewNotebookWorkspace?.hide();
   if (name !== 'assumptions') assumptionsWorkspace?.clear();
   const enteringResearch = !research.visible && name === 'research';
@@ -5399,8 +5546,8 @@ function showWorkspace(name) {
   $('#workspace').hidden = name !== 'scheme';
   $('#overview-workspace').hidden = name !== 'overview';
   $('#assumptions-workspace').hidden = name !== 'assumptions';
-  $('#notebook-workspace').hidden = !['notebook', 'bounties'].includes(name);
-  $('#notebook-workspace').setAttribute('aria-label', name === 'bounties' ? 'Bounties' : 'Research notebook');
+  $('#notebook-workspace').hidden = !['notebook', 'bounties', 'scheme-map'].includes(name);
+  $('#notebook-workspace').setAttribute('aria-label', name === 'bounties' ? 'Bounties' : name === 'scheme-map' ? 'Scheme map' : 'Notes');
   $('#nav-bounties').hidden = !bountyFeatureAvailable();
   $('#review-workspace').hidden = name !== 'reviews';
   $('#review-notebook-workspace').hidden = name !== 'reviews' || state.reviewSection === 'schemes' || !state.canReviewProposals;
@@ -5408,10 +5555,15 @@ function showWorkspace(name) {
   $('#about-workspace').hidden = name !== 'about';
   $('#proposal-workspace').hidden = name !== 'propose' && !(name === 'reviews' && state.reviewSection === 'schemes' && state.canReviewProposals);
   $('#people-workspace').hidden = name !== 'people';
+  $('#activity-workspace').hidden = name !== 'activity';
+  $('#activity-bounties-section').hidden = !bountyFeatureAvailable();
+  $('#history-button').classList.toggle('selected', name === 'activity');
+  if (name === 'activity') $('#history-button').setAttribute('aria-current', 'page');
+  else $('#history-button').removeAttribute('aria-current');
   $('#person-workspace').hidden = name !== 'person';
   $('#connect-workspace').hidden = name !== 'connect';
   const navigationSection = name === 'loading' ? window.CruciblePendingPage?.section?.() :
-    ['catalogue', 'scheme', 'overview', 'assumptions', 'propose'].includes(name) ? 'challenge' : name;
+    ['catalogue', 'scheme', 'scheme-map', 'overview', 'assumptions', 'propose'].includes(name) ? 'challenge' : name;
   for (const kind of ['challenge', 'bounties', 'people', 'notebook', 'research', 'about']) {
     const button = $('#nav-' + kind);
     const selected = kind === navigationSection;
@@ -5829,15 +5981,24 @@ $('#finding-form').addEventListener('submit', async event => {
     setText('#save-finding', editing ? 'Publish revision →' : 'Publish finding →');
   }
 });
-$('#nav-challenge').addEventListener('click', () => navigate('#challenge'));
-$('#nav-people').addEventListener('click', () => navigate('#people'));
-$('#nav-notebook').addEventListener('click', () => navigate('#notebook'));
-$('#nav-bounties').addEventListener('click', () => navigate(notebookWorkspace?.bountyRoute?.() || '#bounties'));
+$('.brand').addEventListener('click', event => {
+  if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  event.preventDefault(); navigateTop('#challenge');
+});
+$('#nav-challenge').addEventListener('click', () => navigateTop('#challenge'));
+$('#scheme-map-button').addEventListener('click', () => navigateTop('#challenge?view=map'));
+$('#propose-scheme-button').addEventListener('click', () => navigateTop('#propose'));
+$('#nav-people').addEventListener('click', () => navigateTop('#people'));
+$('#points-help-button').addEventListener('click', () => {
+  if (hasAccess() && state.screen === 'people' && !pointsHelpDialog.open) openDialog(pointsHelpDialog, $('#points-help-button'));
+});
+$('#nav-notebook').addEventListener('click', () => navigateTop('#notebook'));
+$('#nav-bounties').addEventListener('click', () => navigateTop(notebookWorkspace?.bountyRoute?.() || '#bounties'));
 $('#refresh-people').addEventListener('click', () => loadPeople());
 $('#more-people').addEventListener('click', () => loadPeople(true));
-$('#nav-about').addEventListener('click', () => navigate('#about'));
+$('#nav-about').addEventListener('click', () => navigateTop('#about'));
 $('#nav-research').hidden = !RESEARCH_ENABLED;
-$('#nav-research').addEventListener('click', () => { if (RESEARCH_ENABLED) navigate('#research'); });
+$('#nav-research').addEventListener('click', () => { if (RESEARCH_ENABLED) navigateTop('#research'); });
 $('#retry-research').addEventListener('click', loadResearch);
 $('#add-finding').addEventListener('click', () => openFinding());
 $('#more-findings').addEventListener('click', () => loadFindings(true));
@@ -5879,6 +6040,13 @@ for (const event of ['pointerenter', 'focus']) {
       if (ownsDocument(lifecycle) && hasAccess() && state.user?.id === owner && state.csrf === csrf) return getNotebookWorkspace().warm('bounties');
     }).catch(() => {});
   });
+  $('#scheme-map-button').addEventListener(event, () => {
+    if (!browseWarmAllowed() || navigator.connection?.saveData) return;
+    const owner = state.user?.id, csrf = state.csrf, lifecycle = documentEpoch;
+    void ensureNotebookAssets().then(() => {
+      if (ownsDocument(lifecycle) && hasAccess() && state.user?.id === owner && state.csrf === csrf) return getNotebookWorkspace().warm('map');
+    }).catch(() => {});
+  });
 }
 async function initialize() {
   if (documentRetired) return;
@@ -5892,7 +6060,7 @@ async function initialize() {
     $('#access-workspace').setAttribute('aria-busy', 'true');
     $('#access-workspace').removeAttribute('data-catalogue-pending');
     const path = window.location.hash.split('?')[0];
-    setText('#access-title', path === '#bounties' ? 'Bounties' : path === '#notebook' ? 'Research notebook' : path === '#about' ? 'About us' : path === '#people' ? 'Leaderboard' : 'Crucible');
+    setText('#access-title', path === '#bounties' ? 'Bounties' : path === '#notebook' ? 'Notes' : path === '#about' ? 'About us' : path === '#people' ? 'Leaderboard' : path === '#activity' ? 'My activity' : 'Crucible');
     $('#access-title').removeAttribute('aria-hidden');
     window.CruciblePendingPage?.apply();
     setText('#access-description', 'Checking access…');

@@ -21,6 +21,7 @@ Run from the repository with the existing Python dependencies installed:
   npx --no-install playwright install --with-deps chromium
   npm test
   npx --no-install playwright test --config participant.config.cjs
+  npx --no-install playwright test --config points.config.cjs
 
 Playwright 1.62.1 and its transitive packages are pinned in package-lock.json.
 They are development-only dependencies. CI installs the matching browser. For a
@@ -28,6 +29,20 @@ local existing Chromium, CRUCIBLE_BROWSER_EXECUTABLE may name its executable;
 CRUCIBLE_BROWSER_PYTHON may name the Python interpreter with requirements.lock
 installed. Neither option changes the fixed loopback origin or accepts a hosted
 target. The runner refuses to reuse an existing server on port 8029.
+
+The separate points.config.cjs command uses port 8030 and points_server.py,
+preserving an already running local preview on port 8029. Its temporary SQLite
+database and portable DH7/RSA4 catalogue run the real submission/review/rating
+and operator-credit handlers, checking profiles and ranking at 31 stages before
+serving the actual UI. It does not inject points or replace API responses.
+Registered RSA source stands in for a new-family admission only inside the empty
+synthetic ledger; this verifies the gates, not scientific novelty. The browser
+checks desktop/mobile totals and all four breakdown categories, then completes
+an additional real bounty and verifies that an open Leaderboard refreshes exactly
+once. Week boundaries use a consistent test clock, without changing the OS clock.
+The synthetic evidence is written to .local/points-rehearsal-evidence.json.
+Both servers refuse to reuse their own fixed port and delete their temporary
+databases on exit. The points command is a separate required browser-job step.
 
 server.py creates an ephemeral SQLite database, random test application key and
 synthetic accounts/notes. It passes explicit Settings, never loads an .env or

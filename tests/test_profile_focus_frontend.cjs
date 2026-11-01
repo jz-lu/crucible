@@ -86,7 +86,7 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
     const {app, hold, refresh} = await boot();
     app.$('#personal-records').querySelector('summary').focus();
     const pending = hold(), request = refresh();
-    const dialog = app.$('#history-dialog'); dialog.showModal();
+    const dialog = app.$('#recovery-dialog'); dialog.showModal();
     const close = dialog.querySelector('[data-close]'); close.focus();
     pending.resolve(app.envelope({person: {...profile(), points: 25}})); await request;
     assert.equal(dialog.open, true); assert.ok(app.document.activeElement === close);

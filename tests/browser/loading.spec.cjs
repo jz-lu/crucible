@@ -80,9 +80,9 @@ for (const [name, width] of [['desktop', 1440], ['mobile', 390]]) {
 const pendingRoutes = [
   ['#challenge', 'neutral', 'Crucible'],
   ['#people', 'people', 'Leaderboard'],
-  ['#notebook', 'notebook-notes', 'Research notebook'],
-  ['#notebook?view=map', 'notebook-map', 'Research notebook'],
-  ['#notebook?view=timeline', 'notebook-timeline', 'Research notebook'],
+  ['#notebook', 'notebook-notes', 'Notes'],
+  ['#notebook?view=map', 'notebook-map', 'Scheme map'],
+  ['#notebook?view=timeline', 'notebook-timeline', 'Timeline'],
   ['#person/browser_alice', 'profile', 'browser_alice'],
   ['#about', 'neutral', 'About us'],
   ['#scheme/teaching-dh-kem/4', 'chart', 'Scheme'],
@@ -107,7 +107,7 @@ for (const [route, layout, title] of pendingRoutes) {
       if (!notebook) await expect(heading).not.toHaveAttribute('aria-hidden','true');
       await expect(page.locator('html')).toHaveAttribute('data-pending-page', layout);
       await expect(primary).toBeVisible(); await expect(primary).toHaveAttribute('inert', '');
-      await expect(primary).toContainText('Schemes'); await expect(primary).toContainText('Research notebook');
+      await expect(primary).toContainText('Schemes'); await expect(primary).toContainText('Notes');
       await expect(page.locator('#account-handle')).toBeHidden();
       await expect(page.locator('#account-handle')).toBeEmpty();
       await page.locator('#nav-about').evaluate(element => element.focus());

@@ -61,20 +61,22 @@
     if (typeof hash !== 'string' || hash.length > 4096) return {page: 'neutral', title: 'Crucible'};
     const [path, query = ''] = hash.split('?');
     const params = new URLSearchParams(query);
-    if (['', '#', '#challenge'].includes(path)) return {page: 'catalogue', title: 'KEM Schemes'};
+    if (path === '#challenge' && params.get('view') === 'map') return {page: 'notebook-map', title: 'Scheme map'};
+    if (['', '#', '#challenge'].includes(path)) return {page: 'catalogue', title: 'Schemes'};
+    if (path === '#activity') return {page: 'activity', title: 'My activity'};
     if (path === '#people') return {page: 'people', title: 'Leaderboard'};
     const legacyBounty = path === '#notebook' && !params.has('location') &&
       params.get('review') !== '1' && params.get('research_review') !== '1' &&
       (['bounties', 'guide'].includes(params.get('view')) || params.has('bounty') || params.get('compose') === 'bounty');
     if (path === '#bounties' || legacyBounty) {
-      if (!bountyAvailable()) return {page: 'notebook-notes', title: 'Research notebook'};
+      if (!bountyAvailable()) return {page: 'notebook-notes', title: 'Notes'};
       return {page: params.has('bounty') || params.get('compose') === 'bounty' ? 'list' : 'notebook-bounties', title: 'Bounties'};
     }
     if (path === '#notebook') {
       if (params.get('review') === '1' || params.get('research_review') === '1') return {page: 'list', title: 'Review center'};
-      if (params.has('note') || params.has('research_request') || params.has('research') || params.has('bounty') || params.get('compose') === 'bounty') return {page: 'list', title: 'Research notebook'};
+      if (params.has('note') || params.has('research_request') || params.has('research') || params.has('bounty') || params.get('compose') === 'bounty') return {page: 'list', title: 'Notes'};
       const view = params.get('view');
-      return {page: ['bounties', 'guide'].includes(view) ? 'notebook-bounties' : view === 'timeline' ? 'notebook-timeline' : view === 'map' ? 'notebook-map' : 'notebook-notes', title: 'Research notebook'};
+      return {page: ['bounties', 'guide'].includes(view) ? 'notebook-bounties' : view === 'timeline' ? 'notebook-timeline' : view === 'map' ? 'notebook-map' : 'notebook-notes', title: view === 'map' ? 'Scheme map' : view === 'timeline' ? 'Timeline' : 'Notes'};
     }
     if (path.startsWith('#person/')) {
       let title = 'Profile';
@@ -98,6 +100,7 @@
     if (path === '#reviews' || params.get('review') === '1' || params.get('research_review') === '1') return null;
     if (path === '#bounties' || path === '#notebook' && !params.has('location') &&
         (['bounties', 'guide'].includes(params.get('view')) || params.has('bounty') || params.get('compose') === 'bounty')) return bountyAvailable() ? 'bounties' : 'notebook';
+    if (path === '#notebook' && params.get('view') === 'map' && !['location', 'note', 'research', 'research_request'].some(key => params.has(key))) return 'challenge';
     if (['', '#', '#challenge', '#propose'].includes(path) || /^#(?:scheme|challenge)\//.test(path)) return 'challenge';
     return {'#people': 'people', '#notebook': 'notebook', '#about': 'about', '#research': 'research'}[path] || null;
   }
@@ -122,9 +125,11 @@
     const route = hint === 'gate' ? {page: 'gate', title: 'Private beta'} :
       hint !== 'workspace' && described.page === 'catalogue' ? {page: 'neutral', title: 'Crucible'} : described;
     root.setAttribute('data-pending-page', route.page);
-    root.classList.toggle('pending-notebook', ['Research notebook', 'Bounties'].includes(route.title));
+    root.classList.toggle('pending-notebook', ['Notes', 'Scheme map', 'Timeline', 'Bounties'].includes(route.title));
     const title = document.querySelector('#access-title');
     if (title) { title.textContent = route.title; title.removeAttribute('aria-hidden'); }
+    const notebookTitle = document.querySelector('#notebook-frame-template .nb-heading h1');
+    if (notebookTitle) notebookTitle.textContent = route.title;
     const selected = route.page === 'gate' ? null : section();
     for (const kind of ['challenge', 'bounties', 'people', 'notebook', 'research', 'about']) {
       const selector = '#nav-' + kind;

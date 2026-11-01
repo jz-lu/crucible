@@ -4,6 +4,12 @@ for (const [width, actor] of [[1440, 'bulkdesktop'], [390, 'bulkmobile']]) {
   test(`Publish all confirms exact revisions and renders compact receipts at ${width}px`, async ({page}, testInfo) => {
     await page.setViewportSize({width, height:1000});
     await signIn(page, actor);
+    // Map preparation is now explicit. Visit it once so the publication flow
+    // still exercises a retained map dialog beside its own notebook dialog.
+    await page.locator('#nav-challenge').click();
+    await page.locator('#scheme-map-button').click();
+    await expect(page.locator('#landscape svg')).toBeVisible();
+    await page.locator('#nav-notebook').click();
     const dialog = page.locator('#notebook-workspace dialog[data-nb="dialog"]');
     const individual = page.locator('.nb-card-actions').getByRole('button', {name:'Publish', exact:true}).first();
     await individual.click();
@@ -30,8 +36,8 @@ for (const [width, actor] of [[1440, 'bulkdesktop'], [390, 'bulkmobile']]) {
     page.on('response', response => {
       if (new URL(response.url()).pathname.endsWith('/publication-requests')) receipts.push(response.json());
     });
-    // Normal preparation also installs a hidden dialog inside the map's shadow
-    // root. Exercise that state while targeting only this flow's notebook dialog.
+    // The earlier map visit leaves its shadow-root dialog mounted and hidden.
+    // Target only this flow's notebook dialog when confirming publication.
     const mapDialog = page.locator('#notebook-workspace #mobile-details');
     await expect(mapDialog).toBeAttached();
     await expect(mapDialog).not.toBeVisible();

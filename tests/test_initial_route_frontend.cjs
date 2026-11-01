@@ -121,15 +121,15 @@ test('DOM clones retain namespace and current form values without copying live o
 test('public route descriptions select bounded known layouts without querying account or catalogue data', () => {
   const f = fixture(), describe = f.window.CruciblePendingPage.describe;
   const examples = [
-    ['', 'catalogue', 'KEM Schemes'], ['#', 'catalogue', 'KEM Schemes'],
-    ['#challenge', 'catalogue', 'KEM Schemes'], ['#people', 'people', 'Leaderboard'],
-    ['#notebook', 'notebook-notes', 'Research notebook'], ['#bounties', 'notebook-bounties', 'Bounties'], ['#notebook?view=bounties', 'notebook-bounties', 'Bounties'], ['#notebook?view=guide', 'notebook-bounties', 'Bounties'], ['#notebook?view=timeline', 'notebook-timeline', 'Research notebook'],
-    ['#notebook?view=map', 'notebook-map', 'Research notebook'], ['#notebook?view=unknown', 'notebook-notes', 'Research notebook'],
-    ['#notebook?filter=mine&tag=private-looking-label', 'notebook-notes', 'Research notebook'],
-    ['#notebook?note=private-id', 'list', 'Research notebook'],
-    ['#notebook?note=private-id&view=timeline', 'list', 'Research notebook'],
-    ['#notebook?research=1', 'list', 'Research notebook'],
-    ['#notebook?research_request=private-request&view=map', 'list', 'Research notebook'],
+    ['', 'catalogue', 'Schemes'], ['#', 'catalogue', 'Schemes'],
+    ['#challenge', 'catalogue', 'Schemes'], ['#challenge?view=map', 'notebook-map', 'Scheme map'], ['#people', 'people', 'Leaderboard'],
+    ['#notebook', 'notebook-notes', 'Notes'], ['#bounties', 'notebook-bounties', 'Bounties'], ['#notebook?view=bounties', 'notebook-bounties', 'Bounties'], ['#notebook?view=guide', 'notebook-bounties', 'Bounties'], ['#notebook?view=timeline', 'notebook-timeline', 'Timeline'],
+    ['#notebook?view=map', 'notebook-map', 'Scheme map'], ['#notebook?view=unknown', 'notebook-notes', 'Notes'],
+    ['#notebook?filter=mine&tag=private-looking-label', 'notebook-notes', 'Notes'],
+    ['#notebook?note=private-id', 'list', 'Notes'],
+    ['#notebook?note=private-id&view=timeline', 'list', 'Notes'],
+    ['#notebook?research=1', 'list', 'Notes'],
+    ['#notebook?research_request=private-request&view=map', 'list', 'Notes'],
     ['#notebook?review=1', 'list', 'Review center'], ['#notebook?research_review=1', 'list', 'Review center'],
     ['#scheme/test/v1', 'chart', 'Scheme'], ['#scheme/test/v1/assumptions', 'list', 'Assumptions'],
     ['#challenge/test/v1', 'list', 'Challenge'], ['#reviews', 'list', 'Review center'],
@@ -181,7 +181,7 @@ test('head execution applies the route before body parsing and fills its heading
   // enough for the public shell and does not authorize any private work.
   f.document.readyState = 'interactive';
   f.document.dispatch('readystatechange');
-  assert.equal(f.nodes.get('#access-title').textContent, 'Research notebook');
+  assert.equal(f.nodes.get('#access-title').textContent, 'Timeline');
   assert.equal(f.nodes.get('#access-title').getAttribute('aria-hidden'), null);
   assert.equal(f.nodes.get('#nav-notebook').getAttribute('aria-current'), 'page');
   assert.deepEqual(f.requests.map(item => item.url), ['/api/session']);
@@ -192,9 +192,9 @@ test('head execution applies the route before body parsing and fills its heading
 test('pending hash changes update only public geometry and navigation without additional requests', () => {
   const f = fixture({hash: '#notebook'});
   for (const [hash, page, title, selected] of [
-    ['#notebook?view=timeline', 'notebook-timeline', 'Research notebook', 'notebook'],
-    ['#notebook?view=map', 'notebook-map', 'Research notebook', 'notebook'],
-    ['#notebook?view=unknown', 'notebook-notes', 'Research notebook', 'notebook'],
+    ['#notebook?view=timeline', 'notebook-timeline', 'Timeline', 'notebook'],
+    ['#notebook?view=map', 'notebook-map', 'Scheme map', 'challenge'],
+    ['#notebook?view=unknown', 'notebook-notes', 'Notes', 'notebook'],
     ['#about', 'neutral', 'About us', 'about'], ['#scheme/test/v1', 'chart', 'Scheme', 'challenge'],
     ['#people', 'people', 'Leaderboard', 'people'], ['#person/alice', 'profile', 'alice', null],
     ['#propose', 'neutral', 'Propose a scheme', 'challenge'], ['#reviews', 'list', 'Review center', null],
@@ -252,7 +252,7 @@ test('fresh or unavailable-storage root stays neutral while the hint changes onl
   assert.deepEqual(gate.requests.map(item => item.url), ['/api/session']);
   const workspace = fixture({hint: 'workspace'});
   assert.equal(workspace.root.getAttribute('data-pending-page'), 'catalogue');
-  assert.equal(workspace.nodes.get('#access-title').textContent, 'KEM Schemes');
+  assert.equal(workspace.nodes.get('#access-title').textContent, 'Schemes');
   assert.deepEqual(workspace.requests.map(item => item.url), ['/api/session']);
 });
 
@@ -305,7 +305,9 @@ test('unexecuted HTML starts neutral with inert decorative variants and no fabri
       assert.ok(controls.every(control => control.disabled), 'Every pre-access control is disabled');
     } else assert.equal(controls.length, 0, 'Other decorative layouts remain noninteractive');
   }
-  assert.deepEqual(frame.querySelectorAll('[data-notebook-tab]').map(node => node.getAttribute('data-notebook-tab')), ['notes', 'map', 'timeline']);
+  assert.equal(frame.querySelectorAll('[data-notebook-tab], .nb-views').length, 0);
+  assert.deepEqual(frame.querySelectorAll('[data-notebook-control]').map(node => node.getAttribute('data-notebook-control')), ['timeline']);
+  assert.deepEqual(frame.querySelectorAll('[data-notebook-back]').map(node => node.getAttribute('data-notebook-back')), ['map', 'timeline']);
   assert.deepEqual(frame.querySelectorAll('[data-notebook-panel]').map(node => node.getAttribute('data-notebook-panel')), ['notes', 'map', 'bounties', 'timeline']);
   assert.equal(frame.querySelector('.nb-count').textContent, '');
   assert.equal(frame.querySelector('.nb-timeline-total').textContent, '');

@@ -29,7 +29,7 @@ for (const width of [1440, 390]) test(`bounty board, exact detail and proposal r
   await expect(page).toHaveURL(/#bounties$/);
   await expect(page.locator('#nav-bounties')).toHaveAttribute('aria-current','page');
   await expect(page.locator('#nav-notebook')).not.toHaveAttribute('aria-current','page');
-  await expect(page.locator('.primary-nav button:visible')).toHaveText(['Schemes','Bounties','Research notebook','About us']);
+  await expect(page.locator('.primary-nav button:visible')).toHaveText(['Schemes','Bounties','Notes','About us']);
   const schemesTab = await page.locator('#nav-challenge').boundingBox(), bountyTab = await page.locator('#nav-bounties').boundingBox();
   expect(bountyTab.x).toBeGreaterThan(schemesTab.x);
   expect(bountyTab.y).toBeCloseTo(schemesTab.y,0);
@@ -44,7 +44,7 @@ for (const width of [1440, 390]) test(`bounty board, exact detail and proposal r
   await page.screenshot({path:testInfo.outputPath('bounty-board-' + width + '.png'),fullPage:true});
   const before = reads.filter(path => path.startsWith('/api/bounties?')).length;
   await page.locator('#nav-notebook').click();
-  await expect(page.locator('#notebook-workspace > .nb-views')).toBeVisible();
+  await expect(page.locator('#notebook-workspace > .nb-views')).toHaveCount(0);
   await page.locator('#nav-bounties').click();
   await expect(panel.locator('.bty-question')).toHaveCount(1);
   expect(reads.filter(path => path.startsWith('/api/bounties?')).length).toBe(before);

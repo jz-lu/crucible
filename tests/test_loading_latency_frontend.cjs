@@ -25,7 +25,7 @@ async function test(name, run) {await run(); passed++; console.log('PASS '+name)
       session.resolve(app.envelope({user, csrf_token:'first', access:{mode:'beta', allowed:true, status:'active'}})); await flush();
       assert.equal(assets().length, 4);
       assert.equal(app.requests.filter(item => item.url.pathname === path).length, 1);
-      assert.match(app.$('#notebook-workspace').textContent, /Research notebook/);
+      assert.match(app.$('#notebook-workspace').textContent, /Notes/);
       app.window.CrucibleNotebook = {mount(target, options) { return {show:async () => {
         const request = app.requests.find(item => item.url.pathname === path);
         received = await options.api(request.url.pathname + request.url.search);

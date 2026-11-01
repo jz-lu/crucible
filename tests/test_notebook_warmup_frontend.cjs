@@ -132,7 +132,7 @@ const lists=app=>app.requests.filter(row=>row.url.startsWith('/api/notebook/note
   app.root.hidden=false;app.sandbox.window.scrollY=180;app.sandbox.window.innerHeight=900;
   app.root.getBoundingClientRect=()=>({top:-40,height:9000});
   app.q('timeline-view').click();await flush();assert.equal(app.root.style.minHeight,'940px');
-  app.q('notes-view').click();await flush();assert.equal(app.root.style.minHeight,'940px','The view switch keeps its own viewport reservation');
+  app.q('visualization-back').click();await flush();assert.equal(app.root.style.minHeight,'940px','The view switch keeps its own viewport reservation');
   const beforePaging=app.requests.length;
   app.q('list').getBoundingClientRect=()=>({height:Math.max(app.q('list').querySelectorAll('.nb-entry').length*35,parseFloat(app.q('list').style.minHeight)||0)});app.sandbox.window.scrollY=400;
   let scrolls=0;app.sandbox.window.scrollTo=()=>{scrolls++;};
