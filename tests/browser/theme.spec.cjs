@@ -95,5 +95,5 @@ test('denied browser storage keeps the theme control usable without promising re
   // Storage denial removes the persistence mechanism. The OS preference is the
   // documented fallback, without crashing access or introducing other storage.
   await expectTheme(page, 'light');
-  await expect(page.locator('#access-sign-in')).toBeEnabled();
+  await expect(page.locator('#home-primary')).toBeEnabled();
 });

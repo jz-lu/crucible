@@ -430,7 +430,7 @@ def test_configuration_requires_explicit_enable_credentials_and_one_canonical_or
             replace(system.settings, **changes)
 
 
-@pytest.mark.parametrize("route", ["#challenge", "#challenge/teaching-dh-kem/7?profile=dh-v7-tier-1",
+@pytest.mark.parametrize("route", ["#home", "#challenge", "#challenge/teaching-dh-kem/7?profile=dh-v7-tier-1",
     "#scheme/ml-kem/compressed-v4/assumptions", "#assumptions", "#person/countableclouds", "#people",
     "#notebook?note=fixture", "#propose", "#reviews?section=schemes", "#about", "#connect?code=ABCD-EFGH"])
 def test_actual_frontend_routes_can_be_preserved_through_oauth(system, route):

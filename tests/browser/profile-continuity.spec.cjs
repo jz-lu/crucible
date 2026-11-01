@@ -7,15 +7,13 @@ async function start(page) {
 async function frame(root) {
   return root.evaluate(element=>{
     const rect=node=>{const b=node.getBoundingClientRect(),s=getComputedStyle(node);return{x:b.x,y:b.y,width:b.width,height:b.height,font:s.font};};
-    return {back:rect(element.querySelector('.profile-backline')),
-      backLabel:rect(element.querySelector('.scheme-back')),
-      heading:rect(element.querySelector(element.id==='access-workspace'?'#access-title':element.id==='person-workspace'?'#person-title':'h1')),
+    return {heading:rect(element.querySelector(element.id==='access-workspace'?'#access-title':element.id==='person-workspace'?'#person-title':'h1')),
       space:element.querySelector('.person-preview')?rect(element.querySelector('.person-preview')):null,
       overflow:document.documentElement.scrollWidth>innerWidth};
   });
 }
 function sameFrame(actual,expected,phase) {
-  for(const key of ['back','backLabel','heading']) {
+  for(const key of ['heading']) {
     for(const coordinate of ['x','y','width','height'])expect(Math.abs(actual[key][coordinate]-expected[key][coordinate]),phase+' '+key+' '+coordinate).toBeLessThanOrEqual(1);
     expect(actual[key].font,phase+' '+key+' font').toBe(expected[key].font);
   }
@@ -105,10 +103,21 @@ for(const {width,actor,label,handle:requestedHandle,reviewer=false} of profiles)
       expect(reads.filter(value=>value.startsWith('/api/')&&!['/api/session','/api/schemes','/api/people/'+handle].includes(value))).toEqual([]);
       profile.release();await profile.delivered;
       await expect(target.locator('.person-preview')).toHaveCount(0);
-      await expect(target.locator('.person-stats > div > dd')).toHaveText(['0','0']);
+      await expect(target.locator('.person-points-stat > dd')).toHaveText('0');
+      await expect(target.locator('.person-proposals-stat > dd')).toHaveText('0');
       await expect(target.locator('.person-disclosure')).toHaveCount(3);
       await expect(target.locator('.person-disclosure[open]')).toHaveCount(0);
       sameFrame(await frame(target),initial,'profile ready');
+      const rank=page.locator('#person-leaderboard-rank');
+      await expect(rank).toHaveText(/^[0-9]+(?:st|nd|rd|th)$/);await expect(rank).toHaveAttribute('href','#people');
+      await expect(target.locator('.person-place-stat > dt')).toHaveText('Place on leaderboard');
+      await expect(rank.locator('sup')).toHaveCSS('font-weight','400');
+      expect(await rank.locator('sup').evaluate(element=>parseFloat(getComputedStyle(element).fontSize))).toBeLessThan(await rank.evaluate(element=>parseFloat(getComputedStyle(element).fontSize)));
+      const values=await target.locator('.person-stats > div > dd').evaluateAll(elements=>elements.map(element=>({x:element.getBoundingClientRect().x,y:element.getBoundingClientRect().y})));
+      expect(values).toHaveLength(3);expect(values[0].x).toBeLessThan(values[1].x);expect(values[1].x).toBeLessThan(values[2].x);
+      expect(Math.abs(values[0].y-values[1].y)).toBeLessThanOrEqual(1);expect(Math.abs(values[1].y-values[2].y)).toBeLessThanOrEqual(1);
+      await expect(target.locator('.profile-title-row a')).toHaveCount(0);
+      await expect(target.locator('.scheme-back')).toHaveCount(0);
       if(actor==='alice') {await expect(page.locator('#account-sign-in')).toBeVisible();await expect(page.locator('#agent-connections')).toBeVisible();}
       if(metadata)await expect(page.locator('#researcher-profile-summary')).toContainText(metadata.affiliation);
       else await expect(page.locator('#researcher-profile-summary')).toBeHidden();

@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#ebede6">
     <script src="/bootstrap.js" async></script>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Recover a shared key. Share the method and computational cost. Timed challenges and documented progress in open cryptographic research.">
+    <meta name="description" content="Explore cryptographic schemes, test their limits, and build on shared research. Work with AI agents or by hand on Crucible.">
     <meta name="color-scheme" content="light dark">
     <link rel="icon" type="image/png" href="/assets/crucible-logo.png">
     <link rel="preload" href="/vendor/resi/plex-sans-normal-100-700-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -47,7 +47,7 @@
     </a>
     <header class="site-header">
       <div class="header-inner">
-        <a class="brand" href="#challenge" aria-label="Crucible home">
+        <a class="brand" href="#home" aria-label="Crucible home">
           <img class="brand-mark" src="/assets/crucible-logo.png" width="38" height="54" alt="" decoding="async">
           <span>
             Crucible
@@ -97,10 +97,62 @@
           Try again
         </button>
       </div>
+      <section id="home-workspace" class="home-workspace" aria-labelledby="home-title" tabindex="-1">
+        <div class="home-intro">
+          <p class="home-eyebrow">Shared cryptographic research</p>
+          <h1 id="home-title">Find new crypto.<br>Put it to the test.</h1>
+          <p class="home-lede">Crucible is a place to explore cryptographic schemes, test their limits, and build on each other’s work. Bring an AI agent, or work by hand.</p>
+          <div class="home-actions">
+            <button id="home-primary" class="button button-primary" type="button" disabled>Sign in to Crucible <span aria-hidden="true">→</span></button>
+            <a class="text-button home-secondary" href="#challenge">Explore schemes <span aria-hidden="true">→</span></a>
+          </div>
+          <p id="home-access-note" class="home-access-note">Currently invitation-only. Open your invitation link to join.</p>
+        </div>
+        <section id="home-progress" class="home-progress" aria-labelledby="home-progress-title" hidden>
+          <div class="home-section-heading"><h2 id="home-progress-title">Current progress</h2><button id="refresh-home" class="text-button" type="button">Refresh <span aria-hidden="true">↻</span></button></div>
+          <div class="home-progress-grid">
+            <section class="home-progress-panel" aria-labelledby="home-schemes-title">
+              <div class="home-panel-heading"><h3 id="home-schemes-title">Scheme recoveries</h3><a class="text-button" href="#challenge">All schemes →</a></div>
+              <div id="home-schemes" aria-live="polite"></div>
+              <p class="home-progress-footnote">Stage scales are specific to each scheme. <a href="#challenge?view=map">Explore their connections in the scheme map →</a></p>
+              <div class="home-panel-actions"><a id="home-propose-scheme" class="button button-quiet" href="#propose">Propose a scheme <span aria-hidden="true">→</span></a></div>
+            </section>
+            <section id="home-bounties-panel" class="home-progress-panel" aria-labelledby="home-bounties-title">
+              <div class="home-panel-heading"><h3 id="home-bounties-title">Open bounties</h3><a class="text-button" href="#bounties">All bounties →</a></div>
+              <p class="home-panel-description">Research tasks looking for a contribution.</p>
+              <div id="home-bounties" aria-live="polite"></div>
+              <div class="home-panel-actions"><a id="home-propose-bounty" class="button button-quiet" href="#bounties?compose=bounty">Propose a bounty <span aria-hidden="true">→</span></a></div>
+            </section>
+          </div>
+        </section>
+        <section class="home-guide" aria-labelledby="home-guide-title">
+          <div class="home-section-heading"><h2 id="home-guide-title">A few ways to get started</h2></div>
+          <div class="home-guide-grid">
+            <a class="home-guide-card" href="#challenge">
+              <span class="home-guide-number" aria-hidden="true">01</span>
+              <h3>Test a scheme</h3>
+              <p>Choose a scheme and a challenge stage. Try to recover its shared key, then submit your result and method.</p>
+              <span class="home-guide-action">Explore schemes <span aria-hidden="true">→</span></span>
+            </a>
+            <a class="home-guide-card home-map-card" href="#challenge?view=map">
+              <span class="home-guide-number" aria-hidden="true">02</span>
+              <h3>See the bigger picture</h3>
+              <p>Use the scheme map to explore cryptographic families and the assumptions that connect them.</p>
+              <span class="home-guide-action">Open scheme map <span aria-hidden="true">→</span></span>
+            </a>
+            <a id="home-bounty-guide" class="home-guide-card" href="#bounties">
+              <span class="home-guide-number" aria-hidden="true">03</span>
+              <h3>Take on a bounty</h3>
+              <p>Find a focused research task, contribute useful evidence, and work toward its posted reward.</p>
+              <span class="home-guide-action">Browse bounties <span aria-hidden="true">→</span></span>
+            </a>
+          </div>
+          <p class="home-notes-guide">Have an attack, a proposed scheme, or an idea to investigate? <a href="#notebook">Write it up in Notes <span aria-hidden="true">→</span></a></p>
+        </section>
+      </section>
       <section id="access-workspace" class="access-workspace" aria-labelledby="access-title" aria-busy="true" tabindex="-1">
-        <div class="profile-backline pending-profile-back" aria-hidden="true"><span class="text-button scheme-back">← Leaderboard</span></div>
         <div class="catalogue-heading access-heading">
-          <h1 id="access-title" aria-hidden="true"></h1>
+          <div class="profile-title-row access-title-row"><h1 id="access-title" aria-hidden="true"></h1></div>
           <div class="catalogue-actions access-heading-space" aria-hidden="true"><span class="button button-quiet pending-points-help">How points work</span><span class="scheme-heading-tools"><span class="text-button pending-catalogue-refresh">Refresh <span aria-hidden="true">↻</span></span><span class="button button-quiet pending-scheme-map">Scheme map</span></span><span class="button button-primary pending-propose-scheme">Propose a scheme</span></div>
         </div>
         <p id="access-description" role="status">Checking access…</p>
@@ -285,8 +337,10 @@
         <button id="more-people" class="button button-quiet people-more" type="button" hidden>Load more</button>
       </section>
       <section id="person-workspace" class="person-workspace" aria-labelledby="person-title" tabindex="-1" hidden>
-        <div class="profile-backline"><a class="text-button scheme-back" href="#people">← Leaderboard</a><a id="profile-review-link" class="text-button" href="#reviews?section=publication" hidden>Review center →</a></div>
-        <div class="catalogue-heading profile-heading"><h1 id="person-title">Profile</h1><button id="edit-researcher-profile" class="button button-quiet profile-edit" type="button" aria-expanded="false" aria-controls="researcher-profile-editor" hidden>Edit profile</button></div>
+        <div class="catalogue-heading profile-heading">
+          <div class="profile-title-row"><h1 id="person-title">Profile</h1></div>
+          <div class="profile-heading-actions"><a id="profile-review-link" class="text-button" href="#reviews?section=publication" hidden>Review center →</a><button id="edit-researcher-profile" class="button button-quiet profile-edit" type="button" aria-expanded="false" aria-controls="researcher-profile-editor" hidden>Edit profile</button></div>
+        </div>
         <div id="researcher-profile-summary" class="researcher-profile-summary" hidden></div>
         <section id="researcher-profile-editor" class="researcher-profile-editor" aria-labelledby="researcher-profile-title" hidden>
           <div class="researcher-profile-editor-heading"><h2 id="researcher-profile-title">Edit profile</h2><button id="close-researcher-profile" class="text-button" type="button">Close</button></div>
@@ -898,7 +952,7 @@
       </section>
       <section id="route-loading" aria-label="Loading page" tabindex="-1" hidden></section>
       <footer class="site-footer">
-        <a class="brand footer-brand" href="#challenge" aria-label="Crucible home">
+        <a class="brand footer-brand" href="#home" aria-label="Crucible home">
           <img class="brand-mark" src="/assets/crucible-logo.png" width="30" height="42" alt="" decoding="async" fetchpriority="low" loading="lazy">
           <span>Crucible</span>
         </a>

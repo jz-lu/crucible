@@ -23,7 +23,7 @@ test('the complete decoded logo fills its reserved frame without partial paint o
     expect(await logo.boundingBox()).toEqual(before);
     expect(await logo.evaluate(img => ({complete: img.complete, width: img.naturalWidth, height: img.naturalHeight})))
       .toEqual({complete: true, width: 189, height: 192});
-    await expect(page.locator('#access-title')).toHaveText('Private beta');
+    await expect(page.locator('#home-workspace')).toBeVisible();
   } finally {image.release(); await image.delivered; await image.remove();}
 });
 
@@ -34,7 +34,7 @@ test('an interrupted image leaves a usable wordmark and a reload recovers normal
   const logo = page.locator('.site-header .brand-mark');
   await expect(logo).toBeHidden();
   await expect(page.locator('.site-header .brand > span')).toBeVisible();
-  await expect(page.locator('#access-sign-in')).toBeEnabled();
+  await expect(page.locator('#home-primary')).toBeEnabled();
   const before = await logo.boundingBox();
   await page.unroute(matcher); await page.reload();
   await expect(logo).toHaveAttribute('data-logo-ready', 'true');
@@ -152,20 +152,16 @@ test('the public shell is fully styled before access resolves without requesting
   try {
     const response = await page.goto('/', {waitUntil: 'domcontentloaded'}); await session.arrived;
     await assertInlineMainStyle(page, response);
-    await expect(page.locator('#access-workspace')).toHaveAttribute('aria-busy', 'true');
+    await expect(page.locator('#home-workspace')).toBeVisible();
+    await expect(page.locator('#home-progress')).toBeHidden();
     expect(await page.locator('body').evaluate(bodyStyle)).toEqual(expectedBodyStyle);
     expect(await page.locator('.site-header .brand-mark').boundingBox()).toMatchObject({width: 38, height: 54});
     await expect(page.locator('#catalogue-workspace')).toBeHidden();
     await expect(page.locator('#notebook-workspace')).toBeHidden();
     await expect(page.locator('body')).not.toContainText('ALICE_PRIVATE_BROWSER_BODY');
     session.release(); await session.delivered;
-    await expect(page.locator('#access-title')).toHaveText('Private beta');
-    expect(await page.locator('#access-workspace').evaluate(element => ({
-      width: element.getBoundingClientRect().width,
-      background: getComputedStyle(element).backgroundColor,
-      padding: getComputedStyle(element).padding,
-      radius: getComputedStyle(element).borderRadius,
-    }))).toEqual({width: 520, background: 'rgb(248, 249, 244)', padding: '32px', radius: '12px'});
+    await expect(page.locator('#home-primary')).toBeEnabled();
+    await expect(page.locator('#home-workspace')).toBeVisible();
     expect(attempted).toEqual([]);
     expect(await page.evaluate(() => window.fixtureCspViolations)).toEqual([]);
   } finally {session.release(); await session.delivered; await session.remove();}

@@ -71,6 +71,27 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
     app.history.back(); await flush();
     assert.equal(app.$('#catalogue-workspace').hidden, false);
   });
+  await test('profile stats begin with an ordinal leaderboard place and a separate suffix', async () => {
+    for (const [rank, expected] of [[1,'1st'],[2,'2nd'],[3,'3rd'],[5,'5th'],[11,'11th'],[12,'12th'],[13,'13th'],[21,'21st'],[22,'22nd'],[23,'23rd'],[111,'111th']]) {
+      const app = await createApp({schemes, hash:'#person/alpha', responder:(url, opts, envelope)=>url.pathname==='/api/people/alpha' ? envelope({person:{...person('alpha'),rank},scoring}) : baseResponder(url,opts,envelope)});
+      const link = app.$('#person-leaderboard-rank'), stats=app.$('#person-content').querySelector('.person-stats');
+      assert.equal(link.textContent,expected);assert.equal(link.href,'#people');
+      assert.equal(link.querySelector('.person-rank-number').textContent,String(rank));assert.equal(link.querySelector('sup').textContent,expected.slice(String(rank).length));
+      assert.equal(stats.children[0].querySelector('dt').textContent,'Place on leaderboard');
+      assert.ok(stats.children[1].classList.contains('person-points-stat'));assert.equal(stats.children[2].querySelector('dt').textContent,'Accepted proposals');
+      assert.equal(app.$('#person-workspace').querySelector('.profile-title-row').querySelector('a'),null);assert.equal(app.$('#person-workspace').querySelector('.scheme-back'),null);
+      link.click();await flush();assert.equal(app.location.hash,'#people');assert.equal(app.$('#people-workspace').hidden,false);
+    }
+  });
+  await test('rank refresh preserves the focused stat link and unavailable places show a dash', async () => {
+    let data = {...person('alpha'),rank:5};
+    const app = await createApp({schemes,hash:'#person/alpha',responder:(url,opts,envelope)=>url.pathname==='/api/people/alpha'?envelope({person:data,scoring}):baseResponder(url,opts,envelope)});
+    const link=()=>app.$('#person-leaderboard-rank');link().focus();data={...data,rank:11};await app.sandbox.loadPerson('alpha',{preserve:true});
+    assert.equal(link().textContent,'11th');assert.equal(app.document.activeElement,link());
+    const stable=link();await app.sandbox.loadPerson('alpha',{preserve:true});assert.equal(link(),stable);
+    for(const rank of [null,0,-1,1.5,'5']) {data={...data,rank};await app.sandbox.loadPerson('alpha',{preserve:true});assert.equal(link().textContent,'—');assert.equal(link().querySelector('sup'),null);}
+    data={...data,rank:5,points:null};await app.sandbox.loadPerson('alpha',{preserve:true});assert.equal(link().textContent,'—');
+  });
   await test('profile recovery buttons preserve the archived receipt and show method details', async () => {
     const archived = {...record, scheme_version: '1', is_current: false, scoring_eligible: false, score: null};
     const entry = {id: 'receipt-a', handle: 'alpha', status: 'correct', scheme_id: 'fixture', scheme_version: '1', profile_id: 'tier-4', instance_size: 4, received_at: 100, elapsed_seconds: 1, method: {name: 'Original method', pseudocode: 'Original steps'}, compute: {hardware: 'CPU'}};

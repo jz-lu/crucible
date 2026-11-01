@@ -290,3 +290,23 @@ first page. The existing submission endpoint retains its latest-50 limit. Note
 links pin the displayed revision, and recovery details return focus to their row
 on the activity page. Departing the page retires its pending paints; account or
 access changes clear every private section. No scoring or write policy changes.
+
+The root and #home now show a public welcome page. It follows rules 1–3 and 6:
+static guidance renders independently of session/network readiness; signed-out
+visitors make no protected summary reads. Sign-in is the visitor's main action,
+with existing invitation-only enrollment and deep-link admission checks. Admitted
+members get a My activity shortcut plus independent, bounded scheme-progress
+and open-bounty summaries. Current-release strips mark exact recovered profiles;
+scales belong to each scheme. The map remains its existing authenticated view.
+Summary revisits retain valid rows during quiet refresh and preserve row focus;
+account/access changes clear both panels and retire pending completions. Home
+entry and brand navigation start at the top, while Back/Forward keep native
+history. Existing #challenge links still identify the Schemes catalogue. OAuth
+accepts #home as a local return destination; callback authority stays unchanged.
+
+Profile statistics begin with Place on leaderboard, followed by Points and
+Accepted proposals. The ordinal place links to Leaderboard and its suffix is
+smaller and regular weight. Missing/pending ranks show a dash. Rank now shares
+the account-owned profile summary and its existing invalidation/focus rules;
+no rank appears in the public or pending profile heading. Homepage scheme and
+bounty progress columns share equal widths and stack on narrow screens.

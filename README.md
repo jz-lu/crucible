@@ -20,6 +20,11 @@ costs, fixed correctness, endpoint evidence and useful intermediate steps. They
 also require an explicit parameter-selection objective, candidate domain, attack
 model and alternatives, with a separate manual assessment. See
 [the admission requirements](docs/protocol-admission.txt).
+The root opens a public welcome page with sign-in and a brief guide to Schemes,
+the scheme map, Bounties and Notes. Admitted members also see live recovery and
+open-bounty highlights, with a shortcut to My activity. Research summaries remain
+behind membership; existing scheme and note deep links keep their destinations.
+
 The invitation-only beta is hosted at https://crucible.fail. Local development
 and hosted beta data are separate. It is not open for public registration. See
 [the release workflow](docs/releasing-beta.txt) for tested updates and rollback.

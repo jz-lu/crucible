@@ -35,7 +35,7 @@ from .security import mac, token_hash, verify_password
 
 FLOW_SECONDS = 600
 _TOKEN = re.compile(r"[A-Za-z0-9_-]{43}\Z")
-_RETURN_PATHS = {"#challenge", "#scheme", "#assumptions", "#person", "#people", "#notebook",
+_RETURN_PATHS = {"#home", "#challenge", "#scheme", "#assumptions", "#person", "#people", "#notebook",
                  "#propose", "#reviews", "#about", "#connect"}
 
 
