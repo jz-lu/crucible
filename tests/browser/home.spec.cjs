@@ -38,6 +38,12 @@ for(const width of [1440,390]) {
    await expect(page.locator('#home-schemes')).toContainText('Diffie');await expect(page.locator('#home-schemes .home-stage-strip')).toBeVisible();
    expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
    await page.screenshot({path:testInfo.outputPath('welcome-member-'+width+'.png'),fullPage:true});
+   await page.locator('#home-propose-scheme').click();await expect(page).toHaveURL(/#propose$/);await expect(page.locator('#proposal-workspace')).toBeVisible();
+   await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(0);
+   await page.goBack();await expect(page.locator('#home-workspace')).toBeVisible();
+   await page.locator('#home-propose-bounty').click();await expect(page).toHaveURL(/#bounties\?compose=bounty$/);
+   await expect(page.getByRole('heading',{name:'Propose a bounty',exact:true})).toBeVisible();await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(0);
+   await page.goBack();await expect(page.locator('#home-workspace')).toBeVisible();
    await page.locator('.home-map-card').click();await expect(page).toHaveURL(/#challenge\?view=map$/);await expect(page.locator('#notebook-workspace')).toBeVisible();
    await page.goBack();await expect(page.locator('#home-workspace')).toBeVisible();
    await page.locator('#home-primary').click();await expect(page.locator('#activity-workspace')).toBeVisible();

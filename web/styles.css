@@ -4328,7 +4328,9 @@ html[data-pending-page=activity] #access-title { display:flex;align-items:center
 .home-section-heading h2 { font:700 28px/1.25 var(--display); color:var(--ink); }
 .home-progress { border-top:1px solid var(--line); padding:32px 0 40px; }
 .home-progress-grid { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); gap:40px; }
-.home-progress-panel { min-width:0; }
+.home-progress-panel { display:flex; flex-direction:column; min-width:0; }
+.home-panel-actions { padding-top:20px; margin-top:auto; }
+.home-panel-actions .button { font-size:13px; }
 .home-panel-heading { margin-bottom:16px; }
 .home-panel-heading h3 { font:600 17px/1.4 var(--sans); color:var(--ink); }
 .home-panel-description,.home-progress-footnote { color:var(--muted); font-size:12px; line-height:1.7; }

@@ -1201,6 +1201,10 @@ $('#home-primary').addEventListener('click', () => {
   state.returnRoute = '#home'; setAuthMode('login'); openAuth($('#home-primary'));
 });
 $('#refresh-home').addEventListener('click', loadHomeProgress);
+for (const selector of ['#home-propose-scheme', '#home-propose-bounty']) $(selector).addEventListener('click', event => {
+  if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  event.preventDefault(); navigateTop($(selector).getAttribute('href'));
+});
 function workspaceSelector(screen) {
   return {home: '#home-workspace', loading: '#route-loading', access: '#access-workspace', scheme: '#workspace', overview: '#overview-workspace', assumptions: '#assumptions-workspace', notebook: '#notebook-workspace', bounties: '#notebook-workspace', 'scheme-map': '#notebook-workspace', reviews: '#review-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', activity: '#activity-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
 }
