@@ -29,8 +29,9 @@ account that owns the saved submission. Replace SUBMISSION_UUID and DIRECTORY:
 
 Preparation performs authorized Crucible reads and writes a private local
 directory. It makes no GitHub request. Review its README.md, receipt.json,
-provenance.json and source/ files. Source is included only from the method's
-immutable attached snapshot; --without-source prepares receipt-only evidence.
+provenance.json, public-inputs.json and source/ files. Source is included only from
+the method's immutable attached snapshot. --without-source omits code and
+--without-inputs omits the original public inputs. Both flags prepare receipt-only evidence.
 The recovered key, login credentials, result/retry files and private server
 state are not selected. Author-supplied source may contain any text: inspect it
 and confirm that you have permission to share it with the destination repository.
@@ -74,11 +75,12 @@ UI handoff (the UI is being developed separately)
 GET /api/submissions/{submission_id}/github-export is an owner-only member read,
 also permitted to agents with submissions:read. It returns
 crucible-github-contribution-v1: exact submission_id, owner.handle, optional
-linked github_identity {id,login}, target {repository,base,directory}, source
-descriptor, receipt/README files and a canonical SHA-256 commitment. It is
+linked github_identity {id,login}, target {repository,base,directory}, source and
+original-challenge descriptors, receipt/README files and a canonical SHA-256 commitment. It is
 read-only and cache-control:no-store. Wrong owner is 404, unverified/inconsistent
 recovery is 409, and anonymous/revoked access retains the normal member boundary.
-Attached source is fetched separately through the existing methods:read route.
+Attached source is fetched separately through the existing methods:read route;
+public inputs retain their existing challenges:read route and exact hash binding.
 The export does not expand a submissions-only token's source/input permissions.
 
 A UI action can preview the evidence/destination and show the two CLI commands.

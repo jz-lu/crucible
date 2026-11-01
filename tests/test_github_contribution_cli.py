@@ -110,7 +110,7 @@ class GitHub:
 
 
 def arguments(path, **changes):
-    return SimpleNamespace(path=str(path), repository=None, base=None, without_source=False,
+    return SimpleNamespace(path=str(path), repository=None, base=None, without_source=False, without_inputs=False,
                            confirm_publish=True, **changes)
 
 
@@ -133,12 +133,12 @@ def prepared(system, tmp_path, monkeypatch):
 def test_prepare_has_no_github_effect_and_only_contains_bound_evidence(prepared):
     site, args, receipt, provider, candidate = prepared
     root, state, files = cli.github_workspace(args.path)
-    assert receipt['status'] == 'prepared' and len(files) == 4 and not provider.calls
-    assert {item['path'] for item in files} == {'README.md', 'receipt.json', 'provenance.json', 'source/attack/solve.py'}
+    assert receipt['status'] == 'prepared' and len(files) == 5 and not provider.calls
+    assert {item['path'] for item in files} == {'README.md', 'receipt.json', 'provenance.json', 'public-inputs.json', 'source/attack/solve.py'}
     assert all(path.stat().st_mode & 0o777 == 0o600 for path in root.rglob('*') if path.is_file())
     assert root.stat().st_mode & 0o777 == 0o700
     assert candidate not in json.dumps(files)
-    assert all('/challenges/' not in path for path in site.calls)
+    assert sum('/challenges/' in path for path in site.calls) == 1
     assert 'must never execute' in next(item['content'] for item in files if item['path'].endswith('.py'))
 
 
@@ -216,3 +216,31 @@ def test_cli_requires_explicit_publish_confirmation():
     parsed = cli.parser().parse_args(['github', 'publish', '--path', 'reviewed'])
     assert not parsed.confirm_publish
     assert cli.parser().parse_args(['github', 'prepare', str(__import__('uuid').uuid4()), '--path', 'reviewed']).github_action == 'prepare'
+
+
+def test_receipt_only_preparation_does_not_fetch_source_or_public_inputs(system, tmp_path):
+    result, *_ = submitted(system)
+    site = Site(system[1])
+    args = arguments(tmp_path / 'receipt-only', submission_id=result['id'])
+    args.without_source = args.without_inputs = True
+    cli.github_prepare(site, args)
+    _, _, files = cli.github_workspace(args.path)
+    assert site.calls == ['/api/submissions/' + result['id'] + '/github-export']
+    assert {item['path'] for item in files} == {'README.md', 'receipt.json', 'provenance.json'}
+
+
+@pytest.mark.parametrize('part', ['public', 'manifest'])
+def test_changed_original_inputs_cannot_enter_prepared_evidence(system, tmp_path, part):
+    result, *_ = submitted(system)
+    site = Site(system[1])
+    request = site.request
+    def changed(path):
+        value = request(path)
+        if path.endswith('/download'):
+            if part == 'public': value['challenge']['public']['ciphertext'] = '00'
+            else: value['scheme_manifest']['id'] = 'another-configuration'
+        return value
+    site.request = changed
+    args = arguments(tmp_path / 'changed-inputs', submission_id=result['id'])
+    with pytest.raises(cli.ClientError, match='do not match'): cli.github_prepare(site, args)
+    assert not Path(args.path).exists()

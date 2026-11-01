@@ -1727,6 +1727,22 @@ def github_prepare(client, args):
     if not target["directory"].startswith('contributions/'):
         raise ClientError("Contribution exports must stay beneath contributions/.")
     files = list(value["files"])
+    include_inputs = not args.without_inputs
+    if include_inputs:
+        reference = value['challenge']
+        challenge_id = str(UUID(reference['id']))
+        if reference['download_url'] != '/api/challenges/' + challenge_id + '/download':
+            raise ClientError('The original challenge reference could not be confirmed.')
+        package = client.request(reference['download_url'])
+        public = package.get('challenge', {}).get('public')
+        manifest = package.get('scheme_manifest')
+        if (package.get('format') != 'crucible-challenge-v1' or package.get('challenge', {}).get('id') != challenge_id or
+                contribution_hash(public) != reference['public_sha256'] or
+                contribution_hash(manifest) != reference['manifest_sha256']):
+            raise ClientError('The original public inputs do not match the contribution commitment.')
+        files.append({'path': 'public-inputs.json', 'content': json.dumps({
+            'format': 'crucible-public-recovery-inputs-v1', 'challenge_id': challenge_id,
+            'public': public, 'scheme_manifest': manifest}, ensure_ascii=False, indent=2, allow_nan=False) + '\n'})
     source = value.get("source")
     if source and not args.without_source:
         method = json.loads(next(item['content'] for item in files if item['path'] == 'receipt.json'))['method']['id']
@@ -1741,6 +1757,7 @@ def github_prepare(client, args):
     files.append({'path': 'provenance.json', 'content': json.dumps({
         'format': 'crucible-github-provenance-v1', 'server': client.server, 'receipt_url': receipt_url,
         'export_sha256': value['sha256'], 'source_included': bool(source and not args.without_source),
+        'public_inputs_included': include_inputs,
         'source_sha256': source['sha256'] if source else None}, indent=2) + '\n'})
     root = Path(args.path).expanduser().absolute()
     if any(part.is_symlink() for part in (root, *root.parents)) or root.exists() and (not root.is_dir() or any(root.iterdir())):
@@ -1941,6 +1958,7 @@ def parser():
             action.add_argument('--repository', help='Explicit GitHub destination override as owner/name')
             action.add_argument('--base', help='Explicit existing GitHub base branch override')
             action.add_argument('--without-source', action='store_true', help='Export the verified receipt without attached source files')
+            action.add_argument('--without-inputs', action='store_true', help='Omit the original public challenge inputs')
         else:
             action.add_argument('--confirm-publish', action='store_true', help='Confirm you reviewed these files and intend to publish them to GitHub')
     for name in ("login", "guide", "schemes", "init", "get", "run", "submit"):

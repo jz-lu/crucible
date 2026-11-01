@@ -57,7 +57,7 @@ def export(session, user, identifier):
     source = source_descriptor(session, method.id)
     manifest = challenge.manifest if isinstance(challenge.manifest, dict) else {}
     record = {
-        "format": "crucible-recovery-evidence-v1", "submission_id": result.id,
+        "format": "crucible-recovery-evidence-v1", "submission_id": result.id, "challenge_id": challenge.id,
         "receipt_path": f"/api/submissions/{result.id}", "crucible_handle": user.handle,
         "scheme_id": scheme, "scheme_version": release, "profile_id": challenge.profile_id,
         "manifest_sha256": digest(manifest), "received_at": result.received_at,
@@ -84,6 +84,8 @@ def export(session, user, identifier):
              "github_identity": {"id": identity.github_user_id, "login": identity.github_login} if identity else None,
              "target": {"repository": REPOSITORY, "base": "main",
                         "directory": f"contributions/{scheme}/{release}/{result.id}"},
+             "challenge": {"id": challenge.id, "download_url": f"/api/challenges/{challenge.id}/download",
+                           "public_sha256": digest(challenge.public_data), "manifest_sha256": digest(manifest)},
              "source": source, "files": files}
     return {**value, "sha256": digest(value)}
 

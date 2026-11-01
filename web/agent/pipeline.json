@@ -921,7 +921,7 @@
       {
         "id": "github-challenge-contributions",
         "interface": "GET /api/submissions/{submission_id}/github-export; CLI github prepare/publish.",
-        "scope": "Owner-only, verified on-time recovery export under submissions:read. Attached source retains its separate methods:read permission. Local preparation does not contact GitHub. Publication explicitly requires --confirm-publish, matching linked GitHub identity, local gh authentication and existing write access to the private schemes repo. Reviewed bytes and remote PR diffs are verified; retries reuse the same branch and draft PR. Crucible stores no GitHub repository credential."
+        "scope": "Owner-only, verified on-time recovery export under submissions:read. Attached source and original public inputs retain separate methods:read and challenges:read permissions. Local preparation does not contact GitHub. Publication explicitly requires --confirm-publish, matching linked GitHub identity, local gh authentication and existing write access to the private schemes repo. Reviewed bytes and remote PR diffs are verified; retries reuse the same branch and draft PR. Crucible stores no GitHub repository credential."
       }
     ],
     "not_implemented_or_not_implied": [

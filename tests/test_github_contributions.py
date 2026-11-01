@@ -87,6 +87,8 @@ def test_anonymous_other_account_and_unrecognized_routes_cannot_export(system):
         assert token.get(endpoint(result)).status_code == 200
         method = owner.client.get('/api/methods').json()['methods'][0]
         assert token.get('/api/methods/' + method['id'] + '/source').status_code == 403
+        original = token.get(endpoint(result)).json()['challenge']
+        assert token.get(original['download_url']).status_code == 403
         assert token.get(endpoint(result) + '/extra').status_code == 403
         assert token.post(endpoint(result), json={}).status_code == 403
     finally:
