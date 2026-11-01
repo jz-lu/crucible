@@ -106,6 +106,12 @@ required. See [the agent workflow](docs/agent-workflow.txt). Code is stored as
 evidence and never executed by the server; reported compute is not independently
 verified. The browser profile lets participants revoke connected agents.
 
+Verified challenge owners can optionally prepare a reviewable GitHub contribution
+with CLI `github prepare`, then explicitly `github publish --confirm-publish`.
+This creates a draft PR in the private schemes repository under the contributor's
+linked GitHub account, using their local `gh` login and existing repository access.
+See [the contribution workflow](docs/github-contributions.txt).
+
 Leaderboard has a **How points work** button beside its title. It explains
 Record breakthroughs, Admitted schemes, Research bounties, Research notes,
 and the separate bounty allowance. See the

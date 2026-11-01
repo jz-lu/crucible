@@ -361,8 +361,23 @@ the local folder, inspect its receipt on the site.
 
 Privacy follows the configured server's access policy. Private credential storage
 and selected-file uploads are not a claim that currently public leaderboard or
-source endpoints have become private. Submitted evidence goes to the server;
-opening a GitHub PR or publishing an external repository is not part of this CLI.
+source endpoints have become private. Ordinary submission stores evidence on
+Crucible. GitHub publication is a separate, explicitly confirmed command:
+
+  python3 crucible_cli.py github prepare SUBMISSION_UUID --path DIRECTORY
+  python3 crucible_cli.py github publish --path DIRECTORY --confirm-publish
+
+Use the recorded submission UUID, not a challenge ID. Preparation writes an
+inspectable private receipt/source package and makes no GitHub request. Review
+the exact files and repository before authorizing publication. Publishing needs
+the owner's linked GitHub identity, gh auth login as that same user, and existing
+write access to countableclouds/crucible-schemes. It opens a draft PR in a
+dedicated contributions/ directory, without changing live implementations or
+awarding more points. --without-source omits attached method code; --repository
+and --base are explicit preparation-time destination overrides. Keep the hidden
+retry files and repeat the identical publish command after an uncertain reply.
+Never silently publish a result as a consequence of solve/run/submit, or use an
+agent operator's GitHub account in place of the participant's linked account.
 
 PROPOSAL NOTES
 Proposal submit and revise now create a durable private research note containing

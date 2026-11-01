@@ -41,6 +41,7 @@ MEMBER_PATHS = {
     "/api/challenges/{challenge_id}/download", "/api/challenges/{challenge_id}/submit",
     "/api/methods", "/api/methods/{method_id}/source", "/api/methods/{method_id}/source/download",
     "/api/leaderboard", "/api/submissions/{submission_id}", "/api/me/submissions",
+    "/api/submissions/{submission_id}/github-export",
     "/map/{asset_name}",
     "/notebook/{asset_name}", "/api/protocol/source", "/api/protocol/artifacts",
     "/api/notebook/research-requests", "/api/notebook/research-requests/{request_id}",
