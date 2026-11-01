@@ -8,7 +8,7 @@ const list = page => page.locator('#nb-note-list');
 const filter = page => page.locator('#notebook-workspace [name="visibility"]');
 const timeline = page => page.locator('#notebook-workspace [data-nb="timeline"]');
 const timelineTab = page => page.locator('#notebook-workspace [data-nb="timeline-view"]');
-const notesTab = page => page.locator('#notebook-workspace [data-nb="notes-view"]');
+const notesTab = page => page.locator('#notebook-workspace [data-nb="visualization-back"]');
 const listRequest = scope => url => url.pathname === '/api/notebook/notes' && url.searchParams.get('scope') === scope;
 
 test('rapid filters keep admitted rows stable until only the newest real response arrives', async ({page}) => {

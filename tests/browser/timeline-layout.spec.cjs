@@ -20,9 +20,9 @@ for (const width of [1440,390]) {
       await page.goto('/#about'); await signIn(page,'alice',{navigate:false});
       await page.evaluate(()=>{location.hash='#notebook?view=timeline';});
       await asset.arrived;await aggregate.arrived;
-      await expect(page.locator('#notebook-workspace .notebook-frame .nb-views')).toBeVisible();
+      await expect(page.locator('#notebook-workspace .notebook-frame .nb-heading')).toBeVisible();
       await expect(page.locator('#notebook-workspace .notebook-frame [data-notebook-panel="timeline"]')).toBeVisible();
-      await expect(page.locator('#notebook-workspace')).toContainText('Research notebook');
+      await expect(page.locator('#notebook-workspace')).toContainText('Timeline');
       expect(reads.filter(read=>read.path==='/api/notebook/timeline')).toHaveLength(1);
       expect(reads.filter(read=>read.path==='/api/notebook/notes')).toEqual([]);
       asset.release();await asset.delivered;
@@ -35,7 +35,7 @@ for (const width of [1440,390]) {
       expect(before.plot.height).toBe(width<=650?280:340);expect(before.overflow).toBe(false);
       await page.screenshot({path:testInfo.outputPath('timeline-cold-'+width+'.png')});
       // User focus elsewhere must survive replacement of only the plot contents.
-      await page.locator('#notebook-workspace [data-nb="notes-view"]').focus();
+      await page.locator('#notebook-workspace [data-nb="visualization-back"]').focus();
     } finally {
       asset.release();aggregate.release();await asset.delivered;await aggregate.delivered;
       await asset.remove();await aggregate.remove();
@@ -49,7 +49,7 @@ for (const width of [1440,390]) {
       expect(Math.abs(after[part][coordinate]-before[part][coordinate]),part+' '+coordinate).toBeLessThanOrEqual(1);
     }
     expect(after.overflow).toBe(false);
-    await expect(page.locator('#notebook-workspace [data-nb="notes-view"]')).toBeFocused();
+    await expect(page.locator('#notebook-workspace [data-nb="visualization-back"]')).toBeFocused();
     expect(reads.filter(read=>read.path==='/api/notebook/timeline')).toHaveLength(1);
     // The optional queue may proceed to its compact index after the aggregate
     // is released. Timeline itself never loads a note page or a note body.
@@ -60,13 +60,13 @@ for (const width of [1440,390]) {
 }
 
 for (const width of [1440,390]) {
-  test('the Timeline tab preserves the actual ' + width + 'px Notes scroll position through a held first read', async ({page}) => {
+  test('the Timeline button preserves the actual ' + width + 'px Notes scroll position through a held first read', async ({page}) => {
     await page.setViewportSize({width,height:1000});
     const pending=await holdResponse(page,url=>url.pathname==='/api/notebook/timeline');
     await signIn(page);await notebookReady(page);
     expect(await page.locator('#nb-note-list .nb-entry').count()).toBeGreaterThan(5);
-    await page.evaluate(()=>{scrollTo(0,150);return new Promise(requestAnimationFrame);});
-    const before=await page.evaluate(()=>scrollY);expect(before).toBe(150);
+    await page.evaluate(()=>{scrollTo(0,50);return new Promise(requestAnimationFrame);});
+    const before=await page.evaluate(()=>scrollY);expect(before).toBe(50);
     const tab=page.locator('#notebook-workspace [data-nb="timeline-view"]');
     const bounds=await tab.boundingBox();expect(bounds.y).toBeGreaterThan(0);expect(bounds.y+bounds.height).toBeLessThan(1000);
     try {
@@ -77,6 +77,6 @@ for (const width of [1440,390]) {
     await expect(page.locator('#notebook-workspace [data-nb="timeline"] svg')).toBeVisible();
     await expect(page.locator('#notebook-workspace [data-nb="timeline"]')).not.toHaveAttribute('aria-busy','true');
     expect(await page.evaluate(()=>scrollY)).toBe(before);
-    await expect(tab).toBeFocused();
+    await expect(page.locator('#notebook-workspace [data-nb="visualization-back"]')).toBeFocused();
   });
 }

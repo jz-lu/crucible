@@ -208,7 +208,7 @@ Review evidence
 Each UI change should name the rule, affected journeys and remaining exceptions.
 The Bounties main tab follows rule 1 with a canonical #bounties destination.
 Existing #notebook bounty links retain their task, collection and form selections
-while redirecting there. Notes, Scheme map and Timeline remain notebook views;
+while redirecting there. Notes, Scheme map and Timeline share the notebook controller;
 bounty drafts and pending receipts retain their account/session ownership in the
 existing controller. Exact passage citations keep their original query for
 validation. An explicit unavailable bounty release capability also hides the new
@@ -220,6 +220,26 @@ and hash pins, including when a newer note revision exists. Search reads belong
 to the account, form route and current query; late replies cannot replace a new
 query or reopen a retired form. Selection and removal preserve pending-write
 freezes and the existing idempotent retry payload.
+Scheme map now opens from the Schemes heading at #challenge?view=map, with
+Schemes selected in main navigation and an explicit parent button.
+The Propose a scheme heading action opens #propose at the top and reserves matching space in
+the public loading frame; on narrow screens it stays on the right below Scheme map.
+Old map links redirect without rewriting exact passage citation queries. Timeline opens
+to the right of the note count and has an explicit Notes parent button. No secondary
+notebook tabs remain. Shared public frames reserve the new heading/actions in
+each loading phase, and returning to Notes preserves filters and draft ownership.
+Notes no longer schedules a hidden map mount; map-button intent may prepare
+static assets while graph mounting remains owned by the selected map route.
+Explicit main-navigation clicks start at the document top, including a click on
+the already selected tab. Route focus must not then scroll the header away.
+Browser Back/Forward retains its native scroll restoration. Main page headings
+share their type and position, and selected navigation labels retain stable
+widths so changing pages does not move adjacent tabs.
+Leaderboard's How points work dialog is static policy guidance and opens while
+the participant list is still loading, without another read or any write. It
+uses the same category labels as Points breakdown. Closing restores the trigger;
+leaving Leaderboard or retiring its account closes the dialog without returning
+focus to a hidden page. Its public loading frame reserves the heading actions.
 Use the existing standalone JavaScript and disposable Chromium suites to cover
 slow/out-of-order reads, warm return, save/uncertain retry, focus and account
 changes as appropriate. Check desktop/mobile geometry where layout changes.
@@ -259,3 +279,14 @@ still clear the resource cache. Catalogue identity changes, account/session or
 capability changes, and denied access retain unconditional invalidation. Cached
 measurements do not authorize any action. A hard reload still requires a fresh
 session and authorized reads; background preparation reduces subsequent waits.
+
+My activity replaces the submissions dialog with the canonical #activity page.
+It applies rules 1–3 and 6 to three independent sections: recent scheme answer
+receipts, owned/contributed bounties, then owned notes (including attacks and
+scheme proposals). Each section paints bounded session-owned summaries before
+quiet revalidation, with independent errors/retries. Bounties and notes retain
+explicitly loaded pages within the normal cache lifetime; reload begins at the
+first page. The existing submission endpoint retains its latest-50 limit. Note
+links pin the displayed revision, and recovery details return focus to their row
+on the activity page. Departing the page retires its pending paints; account or
+access changes clear every private section. No scoring or write policy changes.

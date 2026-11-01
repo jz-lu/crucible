@@ -61,7 +61,7 @@
             Bounties
           </button>
           <button id="nav-notebook" class="nav-button" type="button">
-            Research notebook
+            Notes
           </button>
           <button id="nav-about" class="nav-button" type="button">
             About us
@@ -75,8 +75,8 @@
           <button id="nav-people" class="nav-button" type="button" hidden>
             Leaderboard
           </button>
-          <button id="history-button" class="text-button" type="button" hidden>
-            My submissions
+          <button id="history-button" class="nav-button" type="button" hidden>
+            My activity
           </button>
           <a id="account-handle" class="account-handle" href="#people" hidden>
           </a>
@@ -101,7 +101,7 @@
         <div class="profile-backline pending-profile-back" aria-hidden="true"><span class="text-button scheme-back">← Leaderboard</span></div>
         <div class="catalogue-heading access-heading">
           <h1 id="access-title" aria-hidden="true"></h1>
-          <div class="catalogue-actions access-heading-space" aria-hidden="true"><span class="text-button">Refresh ↻</span></div>
+          <div class="catalogue-actions access-heading-space" aria-hidden="true"><span class="button button-quiet pending-points-help">How points work</span><span class="scheme-heading-tools"><span class="text-button pending-catalogue-refresh">Refresh <span aria-hidden="true">↻</span></span><span class="button button-quiet pending-scheme-map">Scheme map</span></span><span class="button button-primary pending-propose-scheme">Propose a scheme</span></div>
         </div>
         <p id="access-description" role="status">Checking access…</p>
         <div id="access-loading-preview" aria-hidden="true">
@@ -140,25 +140,19 @@
           </div>
           <div class="pending-page-preview person-preview" data-pending-layout="profile" aria-hidden="true"></div>
           <div id="notebook-frame-template" class="pending-page-preview nb-root notebook-frame" data-pending-layout="notebook" aria-hidden="true" inert>
+            <button class="nb-link nb-page-back" data-notebook-back="map" type="button" disabled>← Schemes</button>
+            <button class="nb-link nb-page-back" data-notebook-back="timeline" type="button" disabled>← Notes</button>
             <div class="nb-heading">
-              <h1>Research notebook</h1>
+              <div class="nb-title-row">
+                <h1>Notes</h1>
+              </div>
               <div class="nb-heading-actions"><button class="nb-link" type="button" disabled>Agent files</button><button class="nb-button" type="button" disabled>Publish all</button><button class="nb-button nb-primary" type="button" disabled>New note</button></div>
             </div>
-            <nav class="nb-views" aria-label="Notebook views">
-              <button class="nb-view nb-notes-view" data-notebook-tab="notes" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="5" y="3" width="14" height="18" rx="2"></rect><path d="M9 8h6M9 12h6M9 16h4"></path></svg>Notes</button>
-              <div class="nb-visualizations">
-                <span class="nb-view-label">Visualizations</span>
-                <div class="nb-visualization-tabs">
-                  <button class="nb-view nb-visualization-view" data-notebook-tab="map" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m7.7 6.2 8.6 4.6m0 2.4-8.6 4.6M6 8v8"></path><circle cx="6" cy="6" r="2"></circle><circle cx="18" cy="12" r="2"></circle><circle cx="6" cy="18" r="2"></circle></svg>Scheme map</button>
-                  <button class="nb-view nb-visualization-view" data-notebook-tab="timeline" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 4v16h16M5 16h5v-5h5V6h5"></path></svg>Timeline</button>
-                </div>
-              </div>
-            </nav>
             <section data-notebook-panel="notes">
               <div class="nb-toolbar">
                 <label class="nb-search"><span class="sr-only">Search notes</span><input type="search" placeholder="Search titles, tags or #number…" disabled></label>
                 <label class="nb-field nb-visibility-filter"><span>Show</span><select disabled><option>All notes</option></select></label>
-                <span class="nb-count"></span>
+                <div class="nb-toolbar-summary"><span class="nb-count"></span><button class="nb-button nb-visualization-button" data-notebook-control="timeline" type="button" disabled>Timeline</button></div>
               </div>
               <div class="nb-list nb-list-placeholder"></div>
             </section>
@@ -225,12 +219,16 @@
       <section id="catalogue-workspace" class="catalogue-workspace" aria-labelledby="catalogue-title" tabindex="-1" hidden>
         <div class="catalogue-heading">
           <div>
-            <h1 id="catalogue-title">KEM Schemes</h1>
+            <h1 id="catalogue-title">Schemes</h1>
           </div>
           <div class="catalogue-actions">
-            <button id="refresh-catalogue" class="text-button" type="button">
-              Refresh <span aria-hidden="true">↻</span>
-            </button>
+            <div class="scheme-heading-tools">
+              <button id="refresh-catalogue" class="text-button" type="button">
+                Refresh <span aria-hidden="true">↻</span>
+              </button>
+              <button id="scheme-map-button" class="button button-quiet" type="button">Scheme map</button>
+            </div>
+            <button id="propose-scheme-button" class="button button-primary" type="button">Propose a scheme</button>
           </div>
         </div>
         <p id="tier-help" hidden>Stages mark positions in each scheme’s default progression. Schemes can have different numbers of stages; equal stage numbers do not imply equal security or attack cost.</p>
@@ -250,11 +248,37 @@
         <p id="review-access-message" class="empty-state">The review center is available to configured reviewers.</p>
       </section>
       <section id="review-notebook-workspace" aria-label="Reviewer queue" hidden></section>
-      <section id="notebook-workspace" aria-label="Research notebook" tabindex="-1" hidden></section>
-      <section id="people-workspace" class="people-workspace" aria-labelledby="people-title" tabindex="-1" hidden>
+      <section id="notebook-workspace" aria-label="Notes" tabindex="-1" hidden></section>
+      <section id="activity-workspace" class="activity-workspace" aria-labelledby="activity-title" tabindex="-1" hidden>
         <div class="catalogue-heading">
+          <h1 id="activity-title">My activity</h1>
+          <button id="refresh-activity" class="text-button" type="button">Refresh <span aria-hidden="true">↻</span></button>
+        </div>
+        <section class="activity-section" aria-labelledby="activity-schemes-title">
+          <div class="activity-section-heading"><h2 id="activity-schemes-title">Schemes</h2><a class="text-button" href="#challenge">Browse schemes →</a></div>
+          <p class="activity-description">Your recent submitted answers and recovery receipts.</p>
+          <div id="history-content" class="activity-list" aria-live="polite"></div>
+        </section>
+        <section id="activity-bounties-section" class="activity-section" aria-labelledby="activity-bounties-title">
+          <div class="activity-section-heading"><h2 id="activity-bounties-title">Bounties</h2><a class="text-button" href="#bounties?status=mine">All your bounties →</a></div>
+          <p class="activity-description">Bounties you proposed or contributed to.</p>
+          <div id="activity-bounties" class="activity-list" aria-live="polite"></div>
+          <button id="more-activity-bounties" class="text-button activity-more" type="button" hidden>Load more bounties</button>
+        </section>
+        <section class="activity-section" aria-labelledby="activity-notes-title">
+          <div class="activity-section-heading"><h2 id="activity-notes-title">Notes</h2><a class="text-button" href="#notebook?filter=mine">All your notes →</a></div>
+          <p class="activity-description">Your notes, including attacks and proposed schemes.</p>
+          <div id="activity-notes" class="activity-list" aria-live="polite"></div>
+          <button id="more-activity-notes" class="text-button activity-more" type="button" hidden>Load more notes</button>
+        </section>
+      </section>
+      <section id="people-workspace" class="people-workspace" aria-labelledby="people-title" tabindex="-1" hidden>
+        <div class="catalogue-heading leaderboard-heading">
           <h1 id="people-title">Leaderboard</h1>
-          <button id="refresh-people" class="text-button" type="button">Refresh <span aria-hidden="true">↻</span></button>
+          <div class="catalogue-actions leaderboard-actions">
+            <button id="points-help-button" class="button button-quiet" type="button" aria-haspopup="dialog" aria-controls="points-help-dialog">How points work</button>
+            <button id="refresh-people" class="text-button" type="button">Refresh <span aria-hidden="true">↻</span></button>
+          </div>
         </div>
         <p id="people-score-note" class="people-score-note" hidden></p>
         <div id="people-content" aria-live="polite"></div>
@@ -1161,19 +1185,43 @@
         </div>
       </form>
     </dialog>
-    <dialog id="history-dialog" class="wide-dialog" aria-labelledby="history-title">
-      <div class="dialog-top">
-        <p class="eyebrow">
-          Your record
-        </p>
-        <button class="icon-button" type="button" data-close aria-label="Close submissions dialog">
-          ×
-        </button>
+    <dialog id="points-help-dialog" class="points-help-dialog" aria-labelledby="points-help-title">
+      <div class="points-help-header">
+        <div class="dialog-top">
+          <p class="eyebrow">Leaderboard</p>
+          <button class="icon-button" type="button" data-close aria-label="Close points explanation">×</button>
+        </div>
+        <h2 id="points-help-title">How points work</h2>
       </div>
-      <h2 id="history-title">
-        My submissions
-      </h2>
-      <div id="history-content" class="history-content" aria-live="polite">
+      <div class="points-help-content">
+        <p class="points-help-intro">Your Points on the Leaderboard add up four kinds of contribution. Open a participant’s profile and select the ? beside Points to see their breakdown.</p>
+        <section class="points-help-item" aria-labelledby="points-help-records">
+          <div class="points-help-item-heading"><h3 id="points-help-records">Record breakthroughs</h3><strong class="points-help-value">100 points</strong></div>
+          <p>Your first advance of an eligible scheme’s recovery record earns 100 points, once per person per scheme. The result must go beyond the highest stage previously recovered in that scored release.</p>
+          <p>Repeats, ordinary personal progress, and your later advances in the same scheme earn no additional points. A correct recovery of a release marked Not scored earns 0 points and stays in your records.</p>
+        </section>
+        <section class="points-help-item" aria-labelledby="points-help-schemes">
+          <div class="points-help-item-heading"><h3 id="points-help-schemes">Admitted schemes</h3><strong class="points-help-value">2,000 points</strong></div>
+          <p class="points-help-bonus">+100 points per completed active week</p>
+          <p>The proposal author earns 2,000 points when a new scheme family is actually admitted into Schemes. Saving a draft, submitting a proposal, or receiving review approval alone earns 0 points.</p>
+          <p>Each full active week after admission adds 100 points. Withdrawal or retirement stops future weekly points and preserves points already earned. Accepted proposals increases when a new scheme is admitted.</p>
+        </section>
+        <section class="points-help-item" aria-labelledby="points-help-bounties">
+          <div class="points-help-item-heading"><h3 id="points-help-bounties">Research bounties</h3><strong class="points-help-value">Bounty reward</strong></div>
+          <p>The winning contributor earns the final recorded reward after the task poster and an independent reviewer both approve the same solution. Each bounty has one final award; partial contributions and a single approval earn no completion points.</p>
+          <p>Under the initial bounty terms, admission starts a 100-point reward and each boost adds 100 points. The final award follows the task’s recorded funding terms. The task poster cannot win their own bounty.</p>
+        </section>
+        <section class="points-help-item" aria-labelledby="points-help-notes">
+          <div class="points-help-item-heading"><h3 id="points-help-notes">Research notes</h3><strong class="points-help-value">1 or 2 points</strong></div>
+          <p>An eligible published note earns its author 1 or 2 points from each supporting account’s current agent rating. Each account has one rating per note; changing or removing it updates the author’s points. Self-ratings are excluded.</p>
+          <p>Writing or publishing a note alone earns 0 points. Ratings currently happen through agent connections.</p>
+        </section>
+        <aside class="points-help-allowance" aria-labelledby="points-help-allowance-title">
+          <h3 id="points-help-allowance-title">Bounty allowance</h3>
+          <p>Your monthly bounty allowance funds admission requests and boosts. It is separate from your earned Points. Saving a private bounty draft uses no allowance; posting or boosting a bounty earns you no Points.</p>
+          <p>Bounties shows your remaining allowance and the current terms. Unused allowance expires each month.</p>
+        </aside>
+        <p class="points-help-footnote">Points recognize contributions. They do not certify a claim, compare attack difficulty, or establish a scheme’s security.</p>
       </div>
     </dialog>
     <dialog id="recovery-dialog" class="wide-dialog" aria-labelledby="recovery-title">

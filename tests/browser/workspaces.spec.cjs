@@ -153,7 +153,7 @@ test('initial notebook access has its inert public frame without revealing priva
     await expect(page.locator('#access-description')).toHaveText('Checking access…');
     const bounds = await preview.boundingBox();
     expect(bounds.width).toBeGreaterThan(50); expect(bounds.height).toBeGreaterThan(20);
-    await expect(page.locator('#notebook-frame-template .nb-heading h1')).toHaveText('Research notebook');
+    await expect(page.locator('#notebook-frame-template .nb-heading h1')).toHaveText('Notes');
     await expect(page.locator('#notebook-frame-template')).toHaveAttribute('inert', '');
     await expect(page.locator('#notebook-frame-template [data-notebook-panel="notes"]')).toBeVisible();
     await expect(page.locator('body')).not.toContainText('ALICE_PRIVATE_BROWSER_BODY');
@@ -209,9 +209,9 @@ test('notebook Back restores visible focus and changing linked filters survives 
   await signIn(page); await notebookReady(page);
   await page.locator('#nb-note-list .nb-title').filter({hasText: 'Alice browser-only private note'}).click();
   await page.getByRole('button', {name: 'Read full note →', exact: true}).click();
-  const back = page.getByRole('button', {name: '← Research notebook', exact: true});
+  const back = page.getByRole('button', {name: '← Notes', exact: true});
   await back.focus(); await back.press('Enter');
-  await expect(page.locator('[data-nb="notes-view"]')).toBeFocused();
+  await expect(page.locator('[data-nb="notes-title"]')).toBeFocused();
   await expect(page.locator('[data-nb="full"]')).toBeHidden();
   await page.goto('/#notebook?filter=proposals');
   const filter = page.locator('#notebook-workspace [name="visibility"]');
@@ -237,7 +237,8 @@ test('the map downloads concurrently, keeps one stylesheet, and supports a nativ
   });
   try {
     await signIn(page); await notebookReady(page);
-    await page.getByRole('button', {name: 'Scheme map', exact: true}).click();
+    await page.locator('#nav-challenge').click();
+    await page.locator('#scheme-map-button').click();
     // All requests must be started before any response is released. This fails
     // the old serial waterfall without relying on a fragile millisecond budget.
     await expect.poll(() => new Set(started).size).toBe(6);
@@ -267,7 +268,8 @@ test('the map downloads concurrently, keeps one stylesheet, and supports a nativ
   await page.getByRole('button', {name: 'Notes', exact: true}).click();
   await notebookReady(page);
   const count = started.length;
-  await page.getByRole('button', {name: 'Scheme map', exact: true}).click();
+  await page.locator('#nav-challenge').click();
+    await page.locator('#scheme-map-button').click();
   await expect(graph).toBeVisible();
   expect(started).toHaveLength(count);
 });
@@ -284,7 +286,7 @@ test('the scheme map paints while its small release-link index is held, without 
   });
   try {
     await signIn(page); await notebookReady(page);
-    await page.getByRole('button', {name: 'Scheme map', exact: true}).click();
+    await page.goto('/#challenge?view=map');
     await metadata.arrived;
     await expect(page.locator('#landscape svg')).toBeVisible();
     expect(unwanted).toEqual([]);
@@ -339,7 +341,7 @@ test('mobile note navigation fits the viewport and moves keyboard focus into the
   await read.focus(); await page.keyboard.press('Enter');
   await expect(page.locator('.nb-full-title')).toHaveText('Alice browser-only private note');
   await expect(page.locator('.nb-full-title')).toBeFocused();
-  await page.getByRole('button', {name: '← Research notebook', exact: true}).click();
+  await page.getByRole('button', {name: '← Notes', exact: true}).click();
   await notebookReady(page);
   if (!await read.isVisible()) await title.click();
   await read.focus(); await page.keyboard.press('Enter');
@@ -361,7 +363,8 @@ for (const workspace of ['notebook', 'map']) test(`a stalled ${workspace} script
     await signIn(page, 'alice', {navigate: false});
     if (workspace === 'map') {
       await page.locator('#nav-notebook').click(); await notebookReady(page);
-      await page.getByRole('button', {name: 'Scheme map', exact: true}).click();
+      await page.locator('#nav-challenge').click();
+      await page.locator('#scheme-map-button').click();
     }
     else await page.locator('#nav-notebook').click();
     await seen.promise;

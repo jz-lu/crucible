@@ -174,6 +174,9 @@ jobs:
       - name: Verify the complete participant recovery journey in isolation
         working-directory: tests/browser
         run: npx --no-install playwright test --config participant.config.cjs
+      - name: Verify combined points and Leaderboard in isolation
+        working-directory: tests/browser
+        run: npx --no-install playwright test --config points.config.cjs
       - name: Retain synthetic browser failure evidence
         if: failure()
         uses: actions/upload-artifact@v5
@@ -184,6 +187,9 @@ jobs:
             tests/browser/test-results
             tests/browser/participant-report
             tests/browser/participant-results
+            tests/browser/points-report
+            tests/browser/points-results
+            .local/points-rehearsal-evidence.json
           retention-days: 7
       - name: State browser verification boundary
         if: always()
@@ -191,7 +197,9 @@ jobs:
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
           Browser checks use the actual app, static assets, session/membership
           checks and notebook handlers on disposable SQLite. A test-only portable
-          DH catalogue avoids native build dependencies. This does not test the
+          DH/RSA catalogue avoids native build dependencies. The isolated points
+          rehearsal verifies all four award categories and Leaderboard refresh.
+          This does not test the
           hosted beta, PostgreSQL, OAuth/mail providers or native KEM workers.
           There are no test retries or skips. Only synthetic failure traces are saved.
           EOF

@@ -38,13 +38,13 @@ async function test(name, work) {await work(); passed++; console.log('PASS ' + n
     await app.controller.show(new URLSearchParams('view=bounties'));
     assert.equal(app.q('library').hidden, true); assert.equal(app.q('bounties').hidden, false);
     assert.equal(app.calls.at(-1).params.get('view'), 'bounties');
-    assert.equal(app.root.querySelector('.nb-visualization-tabs').textContent, 'Scheme mapTimeline');
+    assert.equal(app.root.querySelector('.nb-visualization-tabs'), null);
     assert.equal(app.root.querySelector('.nb-heading').hidden, true);
-    assert.equal(app.root.querySelector('.nb-views').hidden, true);
+    assert.equal(app.root.querySelector('.nb-views'), null);
     assert.equal(app.controller.bountyRoute(), '#bounties');
     await app.controller.show();
     assert.equal(app.root.querySelector('.nb-heading').hidden, false);
-    assert.equal(app.root.querySelector('.nb-views').hidden, false);
+    assert.equal(app.root.querySelector('.nb-views'), null);
   });
   await test('pending bounty assets cannot mount after account or credential retirement', async () => {
     for (const change of ['rotate', 'revoke']) {

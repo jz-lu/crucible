@@ -90,7 +90,7 @@ test('ordinary background preparation makes the first People and submissions vis
   await expect(page.locator('#about-workspace')).toBeVisible();
   await expect(page.locator('#people-workspace')).toBeHidden();
   await expect(page.locator('#people-content .person-link')).toHaveCount(0);
-  await expect(page.locator('#history-dialog')).toBeHidden();
+  await expect(page.locator('#activity-workspace')).toBeHidden();
   const peopleBefore=reads.filter(path=>path==='/api/people').length;
   const historyBefore=reads.filter(path=>path==='/api/me/submissions').length;
   expect(peopleBefore).toBe(1);expect(historyBefore).toBe(1);
@@ -102,7 +102,7 @@ test('ordinary background preparation makes the first People and submissions vis
   await expect(page.locator('#history-content')).toContainText('No submissions yet.');
   await expect(page.locator('#history-content .history-preview')).toHaveCount(0);
   expect(reads.filter(path=>path==='/api/me/submissions')).toHaveLength(historyBefore);
-  await page.getByRole('button',{name:'Close submissions dialog',exact:true}).click();
+  await page.locator('#nav-about').click();
   await page.locator('#logout-button').click();
   await expect(page.locator('#access-workspace')).toBeVisible();
   await expect(page.locator('#people-content')).toBeEmpty();

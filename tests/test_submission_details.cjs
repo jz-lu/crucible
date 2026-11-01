@@ -90,18 +90,18 @@ async function test(name,run) {await run();console.log('PASS '+name);passed++;}
       assert.match(app.$('#recovery-content').textContent, /unreported model does not establish that no AI was used/);
     }
   });
-  await test('history entries are whole keyboard buttons and owner-only incorrect details keep history beneath',async()=>{
+  await test('activity entries are keyboard buttons and owner-only incorrect details return to the page',async()=>{
     const app=await boot();
     const historyTrigger=app.$('#history-button');
     historyTrigger.focus();historyTrigger.click();await flush();
-    const history=app.$('#history-dialog');
+    const history=app.$('#activity-workspace');
     const row=app.$('#history-content').querySelector('.history-item');
     assert.equal(row.tagName,'BUTTON');
     assert.equal(row.type,'button');
     assert.equal(row.getAttribute('aria-haspopup'),'dialog');
     assert.match(row.querySelector('.history-item-title').textContent,/Original Alpha.*Stage 20/);
     row.focus();row.click();await flush();
-    assert.equal(history.open,true);
+    assert.equal(history.hidden,false);
     assert.equal(app.$('#recovery-dialog').open,true);
     assert.equal(detailCalls(app).at(-1).url.pathname,'/api/submissions/owner-incorrect');
     assert.equal(app.$('#recovery-eyebrow').textContent,'Recorded submission');
@@ -110,14 +110,14 @@ async function test(name,run) {await run();console.log('PASS '+name);passed++;}
     assert.doesNotMatch(app.$('#recovery-content').textContent,/accepted key/i);
     assert.equal(app.document.body.style.overflow,'hidden');
     closeDetails(app);await flush();
-    assert.equal(history.open,true);
-    assert.equal(app.document.body.style.overflow,'hidden');
+    assert.equal(history.hidden,false);
+    assert.equal(app.document.body.style.overflow,'');
     assert.equal(app.document.activeElement===row,true,'Focus returns to the history row');
     assert.equal(app.$('#recovery-content').textContent,'');
-    history.querySelector('[data-close]').click();await flush();
-    assert.equal(app.document.body.style.overflow,'');
-    assert.equal(app.document.activeElement===historyTrigger,true,'Focus returns to My submissions');
-    assert.equal(app.$('#history-content').textContent,'');
+    await app.navigate('#about');
+    app.history.back();await flush();
+    assert.equal(app.location.hash,'#activity');
+    assert.equal(history.hidden,false);
     assertReadOnly(app);
   });
   await test('missing and malformed detail responses replace previous content with a recoverable error',async()=>{
@@ -179,17 +179,17 @@ async function test(name,run) {await run();console.log('PASS '+name);passed++;}
     assert.equal(app.$('#recovery-title').textContent,'Private unsuccessful method');
     assert.equal(fact(app,'Result'),'Incorrect');
   });
-  await test('account changes discard pending detail fetches and clear both private dialogs',async()=>{
+  await test('account changes discard pending detail fetches and clear private activity and details',async()=>{
     for (const nextUser of [null,{id:99,handle:'another-account'}]) {
+      let changed=false;
       const pending=deferred();
-      const app=await boot({hook:(url,options,envelope)=>url.pathname==='/api/submissions/owner-incorrect' ? pending.promise.then(()=>envelope({submission:receipt(privateReceipt)})) : undefined});
+      const app=await boot({hook:(url,options,envelope)=>url.pathname==='/api/me/submissions' && changed ? envelope({submissions:[]}) : url.pathname==='/api/submissions/owner-incorrect' ? pending.promise.then(()=>envelope({submission:receipt(privateReceipt)})) : undefined});
       app.$('#history-button').click();await flush();
       app.$('#history-content').querySelector('.history-item').click();await flush();
-      app.sandbox.setSession(app.envelope({user:nextUser,csrf_token:'new-session'}));
+      changed=true;app.sandbox.setSession(app.envelope({user:nextUser,csrf_token:'new-session'}));
       pending.resolve();await flush();
-      assert.equal(app.$('#history-dialog').open,false);
       assert.equal(app.$('#recovery-dialog').open,false);
-      assert.equal(app.$('#history-content').textContent,'');
+      assert.doesNotMatch(app.$('#history-content').textContent,/Private unsuccessful method/);
       assert.equal(app.$('#recovery-content').textContent,'');
       assert.equal(app.$('#recovery-context').textContent,'');
       assert.doesNotMatch(app.document.body.textContent,/PRIVATE_PSEUDOCODE|PRIVATE_HARDWARE|PRIVATE_NOTES/);
@@ -201,21 +201,20 @@ async function test(name,run) {await run();console.log('PASS '+name);passed++;}
     app.$('#history-content').querySelector('.history-item').click();await flush();
     assert.match(app.$('#recovery-content').textContent,/PRIVATE_PSEUDOCODE/);
     app.sandbox.setSession(app.envelope({user:null,csrf_token:'signed-out'}));
-    assert.equal(app.$('#history-dialog').open,false);
     assert.equal(app.$('#recovery-dialog').open,false);
     assert.doesNotMatch(app.document.body.textContent,/PRIVATE_PSEUDOCODE|PRIVATE_HARDWARE|PRIVATE_NOTES|Private unsuccessful method/);
     assert.equal(app.document.body.style.overflow,'');
   });
-  await test('late history responses cannot populate a closed dialog or a different account',async()=>{
+  await test('late activity responses cannot populate a departed page or a different account',async()=>{
     for (const switchAccount of [false,true]) {
       const pending=deferred();
-      const app=await boot({hook:(url,options,envelope)=>url.pathname==='/api/me/submissions' ? pending.promise.then(()=>envelope({submissions:[summary(privateReceipt)]})) : undefined});
+      let reads=0;
+      const app=await boot({hook:(url,options,envelope)=>url.pathname==='/api/me/submissions' ? ++reads===1 ? pending.promise.then(()=>envelope({submissions:[summary(privateReceipt)]})) : envelope({submissions:[]}) : undefined});
       app.$('#history-button').click();await flush();
       if(switchAccount) app.sandbox.setSession(app.envelope({user:{id:99,handle:'other'},csrf_token:'other'}));
-      else app.$('#history-dialog').close();
+      else await app.navigate('#about');
       pending.resolve();await flush();
-      assert.equal(app.$('#history-dialog').open,false);
-      assert.equal(app.$('#history-content').textContent,'');
+      assert.doesNotMatch(app.$('#history-content').textContent,/Private unsuccessful method/);
       assert.doesNotMatch(app.document.body.textContent,/Private unsuccessful method/);
     }
   });
