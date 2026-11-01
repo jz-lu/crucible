@@ -1074,7 +1074,6 @@
         for (const control of [marker, title]) {
           control.setAttribute('aria-expanded', String(expanded)); control.setAttribute('aria-controls', previewIdValue);
         }
-        heading.append(marker);
         const number = noteNumber(note);
         if (number) {
           const reference = button(number, () => citeNote(note, shown), 'nb-note-number nb-number-action');
@@ -1083,7 +1082,7 @@
           reference.disabled = listRefreshing; heading.append(reference);
         }
         const line = el('span', 'nb-title-line'); line.append(el('span', 'nb-title-text', r.title));
-        const copy = el('span', 'nb-title-copy'); copy.append(line, status(note, shown, proposal)); title.append(copy); heading.append(title);
+        const copy = el('span', 'nb-title-copy'); copy.append(line, status(note, shown, proposal)); title.append(copy); heading.append(title, marker);
         const headingRow = el('div', 'nb-entry-heading'), actions = el('div', 'nb-card-actions');
         const aside = el('div', 'nb-entry-aside');
         if (!reviewOnly && !reviewMode) aside.append(noteMetadata(note, shown));

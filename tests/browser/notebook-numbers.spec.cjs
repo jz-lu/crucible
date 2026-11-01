@@ -35,12 +35,12 @@ for (const width of [1440, 390, 320]) {
     const placement = await row.evaluate(element => {
       const text=element.querySelector('.nb-title-text').getBoundingClientRect();
       const reference=element.querySelector('.nb-note-number').getBoundingClientRect(),marker=element.querySelector('.nb-marker').getBoundingClientRect();
-      return {textLeft:text.left,referenceLeft:reference.left,referenceRight:reference.right,markerRight:marker.right,
+      return {textLeft:text.left,textRight:text.right,titleRight:element.querySelector('.nb-title').getBoundingClientRect().right,referenceRight:reference.right,markerLeft:marker.left,
         referenceFont:parseFloat(getComputedStyle(element.querySelector('.nb-note-number')).fontSize)};
     });
-    expect(placement.referenceLeft).toBeGreaterThan(placement.markerRight);
     expect(placement.textLeft).toBeGreaterThan(placement.referenceRight);
-    expect(placement.referenceLeft-placement.markerRight).toBeLessThanOrEqual(12);
+    expect(placement.markerLeft).toBeGreaterThan(placement.textRight);
+    expect(placement.markerLeft-placement.titleRight).toBeLessThanOrEqual(12);
     expect(placement.textLeft-placement.referenceRight).toBeLessThanOrEqual(12);
     expect(placement.referenceFont).toBeLessThanOrEqual(11);
     expect(await row.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);

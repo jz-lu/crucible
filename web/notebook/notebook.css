@@ -84,7 +84,7 @@
 .nb-entry-heading .nb-title-copy{min-width:0;overflow-wrap:anywhere}
 .nb-title-line{display:block;min-width:0}
 .nb-entry-title{display:flex;align-items:baseline;gap:10px;min-width:0}
-.nb-entry-title .nb-title{min-width:0;flex:1}
+.nb-entry-title .nb-title{min-width:0;width:auto;flex:0 1 auto}
 .nb-expand{border:0;background:none;padding:4px 0;min-width:16px;cursor:pointer;line-height:1.5}
 .nb-expand:hover,.nb-expand:focus-visible{color:var(--primary)}
 .nb-entry-title .nb-number-action{flex-shrink:0}
