@@ -60,7 +60,7 @@ async function boot({account=user,respond,stored=null,mapFactory,currentReleases
   await controller.show(initialParams);
   return{...app,root,controller,q,requests,storage,advanceTimers,whenNavigated:()=>navigationTask,setAccount:value=>{current=value;controller.setAccount(value);},show:async(id,rev)=>controller.show(new URLSearchParams(id?{note:id,...(rev?{revision:String(rev)}:{})}:{}))};
 }
-function fill(app,title='New mathematical claim'){for(const [key,value]of Object.entries(content(title)))if(key!=='tags')app.root.querySelector(`[name="${key}"]`).value=value;app.root.querySelector('[name="tags"]').value='algebra';}
+function fill(app,title='New mathematical claim'){for(const [key,value]of Object.entries(content(title)))if(key!=='tags')app.root.querySelector(`[name="${key}"]`).value=value;app.root.querySelector('[name="tags"]').value=JSON.stringify(['algebra']);}
 const byText=(root,label)=>root.querySelectorAll('button').find(n=>n.textContent===label);
 let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
 

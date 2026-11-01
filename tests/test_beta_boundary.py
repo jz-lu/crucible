@@ -53,7 +53,7 @@ def private_app(tmp_path):
  '/api/protocol/correctness','/api/protocol/example','/api/contributions','/api/targets',
  '/api/submissions/00000000-0000-0000-0000-000000000000',
  '/api/methods/00000000-0000-0000-0000-000000000000/source/download',
- '/notebook/seed.js','/notebook/store.js','/openapi.json',
+ '/notebook/seed.js','/notebook/store.js','/api/notebook/tags','/openapi.json',
 ])
 def test_private_reads_and_head_are_not_anonymous(private_app,path):
     with TestClient(private_app) as client:

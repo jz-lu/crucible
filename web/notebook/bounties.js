@@ -7,11 +7,12 @@
   function button(text, action, cls = 'nb-button') {
     const node = el('button', cls, text); node.type = 'button'; node.addEventListener('click', action); return node;
   }
-  function field(label, name, value, {rows, options, max = 2000, required = true} = {}) {
+  function field(label, name, value, {rows, options, max = 2000, required = true, placeholder} = {}) {
     const wrap = el('label', 'nb-field'), input = el(options ? 'select' : rows ? 'textarea' : 'input');
     wrap.append(el('span', '', label)); input.name = name; input.required = required;
     if (rows) input.rows = rows;
     if (!options) input.maxLength = max;
+    if (placeholder) input.placeholder = placeholder;
     if (options) for (const [key, text] of options) { const option = el('option', '', text); option.value = key; input.append(option); }
     input.value = value ?? ''; wrap.append(input); return {wrap, input};
   }
@@ -414,11 +415,11 @@
       }
       const form = el('form', 'nb-form bty-form'), v = draft.values;
       const fields = {
-        title: field('The task', 'bounty-title', v.title, {max: 160}),
-        summary: field('A short description', 'bounty-summary', v.summary, {rows: 3, max: 1200}),
-        completion: field('What counts as completion?', 'bounty-completion', v.completion, {rows: 4, max: 6000}),
-        verification: field('How will it be verified?', 'bounty-verification', v.verification, {rows: 4, max: 6000}),
-        tags: field('Useful background', 'bounty-tags', v.tags, {max: 300, required: false}),
+        title: field('The task', 'bounty-title', v.title, {max: 160, placeholder:'e.g. Reproduce the reference attack for a scheme'}),
+        summary: field('A short description', 'bounty-summary', v.summary, {rows: 3, max: 1200, placeholder:'What should someone investigate, and why is it useful?'}),
+        completion: field('What counts as completion?', 'bounty-completion', v.completion, {rows: 4, max: 6000, placeholder:'Describe the result, evidence, or artifact that would complete this task.'}),
+        verification: field('How will it be verified?', 'bounty-verification', v.verification, {rows: 4, max: 6000, placeholder:'Explain how someone else can check the result or reproduce the work.'}),
+        tags: field('Useful background', 'bounty-tags', v.tags, {max: 300, required: false, placeholder:'e.g. lattices, probability, Python'}),
         scope: field('Open-ended → Concrete', 'bounty-scope', v.scope, {options: [1, 2, 3, 4, 5].map(n => [String(n), n + ' / 5'])})
       };
       attachForm(form, {title: fields.title, summary: fields.summary, completion: fields.completion, verification: fields.verification}, draft, key);

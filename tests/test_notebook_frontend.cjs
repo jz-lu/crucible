@@ -59,10 +59,52 @@ async function boot({account=user,respond,stored=null,mapFactory,currentReleases
   await controller.show(initialParams);
   return{...app,root,controller,q,requests,storage,advanceTimers,whenNavigated:()=>navigationTask,setAccount:value=>{current=value;controller.setAccount(value);},show:async(id,rev)=>controller.show(new URLSearchParams(id?{note:id,...(rev?{revision:String(rev)}:{})}:{}))};
 }
-function fill(app,title='New mathematical claim'){for(const [key,value]of Object.entries(content(title)))if(key!=='tags')app.root.querySelector(`[name="${key}"]`).value=value;app.root.querySelector('[name="tags"]').value='algebra';}
+function fill(app,title='New mathematical claim'){for(const [key,value]of Object.entries(content(title)))if(key!=='tags')app.root.querySelector(`[name="${key}"]`).value=value;app.root.querySelector('[name="tags"]').value=JSON.stringify(['algebra']);}
 const byText=(root,label)=>root.querySelectorAll('button').find(n=>n.textContent===label);
 let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
 (async()=>{
+ await test('tag Enter selects the first current match, creates unmatched tags and supports keyboard selection',async()=>{
+  const vocabulary=['lattice','lattice attacks'];
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/tags?')?{tags:vocabulary.filter(tag=>tag.includes(new URLSearchParams(url.split('?')[1]).get('q').toLowerCase()))}:undefined});
+  app.q('new').click();const input=app.root.querySelector('[name="tag-search"]'),stored=app.root.querySelector('[name="tags"]');
+  input.value='lat';input.dispatchEvent({type:'input'});input.dispatchEvent({type:'keydown',key:'Enter'});await flush();
+  assert.deepEqual(JSON.parse(stored.value),['lattice']);assert.equal(input.value,'');
+  input.value='new subject';input.dispatchEvent({type:'input'});input.dispatchEvent({type:'keydown',key:'Enter'});await flush();
+  assert.deepEqual(JSON.parse(stored.value),['lattice','new subject']);
+  input.value='LATTICE';input.dispatchEvent({type:'input'});await app.advanceTimers(180);
+  input.dispatchEvent({type:'keydown',key:'Enter'});await flush();
+  assert.deepEqual(JSON.parse(stored.value),['lattice','new subject','lattice attacks']);
+  app.root.querySelector('.nb-tag-remove').click();assert.deepEqual(JSON.parse(stored.value),['new subject','lattice attacks']);
+  assert.equal(app.requests.some(request=>request.body),false);
+ });
+ await test('failed or obsolete tag searches cannot create a tag or replace a newer choice',async()=>{
+  const late=deferred();let fail=true;
+  const app=await boot({respond:url=>{
+   if(!url.startsWith('/api/notebook/tags?'))return;
+   const query=new URLSearchParams(url.split('?')[1]).get('q');
+   if(query==='old')return late.promise;
+   if(query==='retry'&&fail)throw Object.assign(Error('Search unavailable.'),{status:503});
+   return{tags:query==='new'?['newer tag']:[]};
+  }});
+  app.q('new').click();const input=app.root.querySelector('[name="tag-search"]'),stored=app.root.querySelector('[name="tags"]');
+  input.value='old';input.dispatchEvent({type:'input'});await app.advanceTimers(180);
+  input.value='new';input.dispatchEvent({type:'input'});input.dispatchEvent({type:'keydown',key:'Enter'});await flush();
+  late.resolve({tags:['old secret']});await flush();assert.deepEqual(JSON.parse(stored.value),['newer tag']);
+  input.value='retry';input.dispatchEvent({type:'input'});input.dispatchEvent({type:'keydown',key:'Enter'});await flush();
+  assert.deepEqual(JSON.parse(stored.value),['newer tag']);assert.match(app.root.querySelector('.nb-tag-search-status').textContent,/unavailable/);
+  fail=false;input.dispatchEvent({type:'keydown',key:'Enter'});await flush();assert.deepEqual(JSON.parse(stored.value),['newer tag','retry']);
+ });
+ await test('tag chips preserve comma-containing tags and pending search belongs to its account',async()=>{
+  const late=deferred();let saved;
+  const app=await boot({respond:(url,body)=>url.startsWith('/api/notebook/tags?')?{tags:['probability, statistics']}:url==='/api/notebook/notes'&&body?(saved=body,{note:note()}):undefined});
+  app.q('new').click();fill(app);const input=app.root.querySelector('[name="tag-search"]');input.value='probability';input.dispatchEvent({type:'input'});input.dispatchEvent({type:'keydown',key:'Enter'});await flush();
+  app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
+  assert.deepEqual(Array.from(saved.content.tags),['algebra','probability, statistics']);
+  const other=await boot({respond:url=>url.startsWith('/api/notebook/tags?')?late.promise:undefined});other.q('new').click();
+  const search=other.root.querySelector('[name="tag-search"]');search.value='secret';search.dispatchEvent({type:'input'});await other.advanceTimers(180);
+  other.setAccount({id:2,handle:'bob'});late.resolve({tags:['private-secret']});await flush();
+  assert.equal(other.q('dialog').open,false);assert.equal(other.root.textContent.includes('private-secret'),false);
+ });
  await test('note rows and readers show public vote totals and relative publication time with an exact tooltip',async()=>{
   const timestamp=Date.now()/1000-3660;
   const saved=note({published_at:timestamp,rating:{score:4,raters:3,upvotes:2,double_upvotes:1}});
@@ -1480,10 +1522,10 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  });
  await test('Human-written and freeform tags stay synchronized and changes count as an unsaved draft',async()=>{
   const app=await boot();app.q('new').click();const human=app.root.querySelector('[name="human-written"]'),tags=app.root.querySelector('[name="tags"]');
-  tags.value='algebra, human-written';tags.dispatchEvent({type:'input'});assert.equal(human.checked,true);
-  human.checked=false;human.dispatchEvent({type:'change'});assert.equal(tags.value,'algebra');
-  human.checked=true;human.dispatchEvent({type:'change'});assert.equal(tags.value,'algebra, human-written');human.dispatchEvent({type:'change'});assert.equal(tags.value,'algebra, human-written');
-  tags.value='algebra';tags.dispatchEvent({type:'input'});assert.equal(human.checked,false);
+  tags.value=JSON.stringify(['algebra','human-written']);tags.dispatchEvent({type:'input'});assert.equal(human.checked,true);
+  human.checked=false;human.dispatchEvent({type:'change'});assert.equal(tags.value,JSON.stringify(['algebra']));
+  human.checked=true;human.dispatchEvent({type:'change'});assert.equal(tags.value,JSON.stringify(['algebra','human-written']));human.dispatchEvent({type:'change'});assert.equal(tags.value,JSON.stringify(['algebra','human-written']));
+  tags.value=JSON.stringify(['algebra']);tags.dispatchEvent({type:'input'});assert.equal(human.checked,false);
   let warned=false;app.sandbox.window.confirm=()=>{warned=true;return false;};app.q('close').click();assert.equal(warned,true);assert.equal(app.q('dialog').open,true);
  });
  await test('editing explicitly tagged content preserves or removes Human-written on the new revision',async()=>{
@@ -1494,7 +1536,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  });
  await test('an uncertain save freezes Human-written and retries the original tag choice',async()=>{
   const writes=[];const app=await boot({respond:(url,body)=>{if(url==='/api/notebook/notes'&&body){writes.push(JSON.parse(JSON.stringify(body)));if(writes.length===1)throw Object.assign(Error('Lost response'),{status:0});return{note:note()};}}});app.q('new').click();fill(app);const human=app.root.querySelector('[name="human-written"]');human.checked=true;human.dispatchEvent({type:'change'});const form=app.root.querySelector('.nb-form');form.dispatchEvent({type:'submit'});await flush();assert.equal(human.disabled,true);assert.equal(app.root.querySelector('[name="tags"]').disabled,true);
-  human.checked=false;human.dispatchEvent({type:'change'});app.root.querySelector('[name="tags"]').value='tampered';form.dispatchEvent({type:'submit'});await flush();assert.deepEqual(writes[0],writes[1]);assert.ok(writes[1].content.tags.includes('human-written'));
+  human.checked=false;human.dispatchEvent({type:'change'});app.root.querySelector('[name="tags"]').value=JSON.stringify(['tampered']);form.dispatchEvent({type:'submit'});await flush();assert.deepEqual(writes[0],writes[1]);assert.ok(writes[1].content.tags.includes('human-written'));
  });
  await test('Human-written badges follow the displayed revision across accounts and support ordinary tag filtering',async()=>{
   const tagged=note({owner:{id:2,handle:'bob'},can_edit:false,...revision(1,'Human note','approved'),content:{...content('Human note'),tags:['algebra','human-written']}}),untagged=note({id:'other',owner:{id:2,handle:'bob'},can_edit:false,...revision(1,'Other note','approved')});

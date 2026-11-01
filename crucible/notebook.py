@@ -16,7 +16,7 @@ from uuid import UUID, uuid4
 
 from fastapi import HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, and_, case, cast, event, func, literal, or_, select, tuple_
+from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, and_, case, cast, event, func, literal, or_, select, tuple_, union_all
 from sqlalchemy.orm import Mapped, aliased, load_only, mapped_column
 
 from .db import Base, User
@@ -780,6 +780,46 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             return {"numbers": notebook_numbers.ensure(session.connection(), [note["id"] for note in collection]),
                 "metadata": {note["id"]: {"rating": totals.get(note["id"], note_ratings.empty_score()),
                     "published_at": note["created_at"]} for note in collection}}
+
+    @app.get("/api/notebook/tags")
+    def list_tags(request: Request, q: str = Query(default="", max_length=100)):
+        try:
+            _inspect(q)
+        except (ValueError, UnicodeError):
+            raise HTTPException(422, "Use valid text for tag search.") from None
+        term = q.strip()
+        escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        with db.transaction() as session:
+            user = account(request, session)
+            newest = visible(session, user).with_only_columns(NotebookRevision.note_id,
+                func.max(NotebookRevision.revision).label("revision")).group_by(NotebookRevision.note_id).cte("tag_latest")
+            sources = select(NotebookRevision.content["tags"].label("tags")).join(newest,
+                and_(newest.c.note_id == NotebookRevision.note_id,
+                     newest.c.revision == NotebookRevision.revision)).cte("tag_sources")
+            # Forty scalar JSON paths preserve SQLite/PostgreSQL parity and
+            # never hydrate bodies or truncate the search to a notebook page.
+            candidates = union_all(*(select(sources.c.tags[index].as_string().label("tag"))
+                for index in range(40))).subquery()
+            tag = candidates.c.tag
+            canonical = func.min(tag)
+            query = select(canonical).where(tag.is_not(None), tag != "")
+            if term:
+                query = query.where(tag.ilike("%" + escaped + "%", escape="\\"))
+            query = query.group_by(func.lower(tag)).order_by(
+                case((func.lower(canonical) == term.lower(), 0),
+                     (canonical.ilike(escaped + "%", escape="\\"), 1), else_=2),
+                func.lower(canonical), canonical).limit(50)
+            found = list(session.scalars(query))
+            for note in curated_collection():
+                found.extend(tag for tag in note["revisions"][-1]["content"].get("tags", [])
+                             if term.lower() in tag.lower())
+            unique = {}
+            for tag in sorted(found):
+                unique.setdefault(tag.lower(), tag)
+            ordered = sorted(unique.values(), key=lambda tag:
+                (0 if tag.lower() == term.lower() else 1 if tag.lower().startswith(term.lower()) else 2,
+                 tag.lower(), tag))
+            return {"tags": ordered[:50]}
 
     @app.get("/api/notebook/notes")
     def list_notes(request: Request, after: str | None = Query(default=None, max_length=768),

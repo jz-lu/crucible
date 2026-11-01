@@ -61,6 +61,10 @@ Intentional differences
 - A complete notebook summary index permits local category/tag filtering and
   pagination. Typed search retains server matching; incomplete indexes, Trash
   and review queues use server reads. Do not approximate SQL Unicode semantics.
+- Note tag suggestions search the latest visible revisions and curated tags,
+  rather than one downloaded page. Enter waits for that exact query before
+  choosing a match or adding a new tag. Selected tags and unfinished input stay
+  with the draft; an uncertain save freezes the chosen tags with its payload.
 - Optional warming is finite, account-bound and subordinate to foreground work,
   visibility and Save-Data. Prepare metadata and selected detail intent, not all
   private bodies or generated challenges. Caches remain bounded and in memory.
