@@ -109,9 +109,9 @@
 .nb-note-actions .nb-button,.nb-card-actions .nb-button{white-space:nowrap}
 .nb-note-actions .nb-button{font-size:12px;padding:6px 12px}
 .nb-human-written{color:var(--muted);background:var(--light)}
-.nb-human-option{display:grid;grid-template-columns:18px 1fr;gap:6px 9px;align-items:center}
-.nb-human-option input{grid-column:1;grid-row:1;width:16px;height:16px;padding:0;accent-color:var(--primary)}
-.nb-human-option>span{grid-column:2;grid-row:1}.nb-human-option>small{grid-column:2}
+.nb-human-option,.nb-proposal-option{display:grid;grid-template-columns:18px 1fr;gap:6px 9px;align-items:center}
+.nb-human-option input,.nb-proposal-option input{grid-column:1;grid-row:1;width:16px;height:16px;padding:0;accent-color:var(--primary)}
+.nb-human-option>span,.nb-proposal-option>span{grid-column:2;grid-row:1}.nb-human-option>small{grid-column:2}
 .nb-field input::placeholder,.nb-field textarea::placeholder{color:var(--muted);opacity:1}
 .nb-required-marker{color:var(--error);font-weight:500}
 .nb-tag-picker{min-width:0}

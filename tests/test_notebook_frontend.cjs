@@ -67,17 +67,17 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   let saved;
   const app=await boot({respond:(url,body)=>url==='/api/notebook/notes'&&body?(saved=JSON.parse(JSON.stringify(body)),{note:note()}):undefined});
   app.q('new').click();fill(app,'My new construction');
-  const type=app.root.querySelector('[name="note-type"]'),attachment=app.root.querySelector('.nb-specification');
-  assert.equal(type.value,'research-note');assert.equal(attachment.hidden,true);
-  assert.deepEqual(type.querySelectorAll('option').map(option=>option.textContent),['Research note','Scheme proposal']);
-  type.value='scheme-proposal';type.dispatchEvent({type:'change'});
-  assert.equal(attachment.hidden,false);assert.match(attachment.querySelector('summary').textContent,/KEM specification \*/);
+  const type=app.root.querySelector('[name="scheme-proposal"]'),attachment=app.root.querySelector('.nb-specification');
+  assert.equal(type.checked,false);assert.equal(attachment.hidden,true);
+  assert.equal(type.type,'checkbox');assert.equal(app.root.querySelector('select[name="note-type"]'),null);
+  type.checked=true;type.dispatchEvent({type:'change'});
+  assert.equal(attachment.hidden,false);assert.match(attachment.querySelector('summary').textContent,/Scheme specification \*/);
   assert.match(attachment.textContent,/Required for scheme review.*save a draft/);
   assert.equal(app.root.querySelector('[name="title"]').value,'My new construction');
   assert.ok(byText(app.q('dialog-body'),'Save proposal draft'));
   app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
   assert.equal(saved.content.extensions.note_type,'scheme-proposal');assert.equal(saved.content.title,'My new construction');
-  assert.equal(saved.content.extensions.kem_specification,undefined);assert.equal(saved.content['note-type'],undefined);
+  assert.equal(saved.content.extensions.kem_specification,undefined);assert.equal(saved.content['scheme-proposal'],undefined);
   assert.equal(app.requests.some(request=>request.url.endsWith('/proposal-submissions')),false);
  });
  await test('proposal draft type reopens and switching to research preserves attachments and other metadata',async()=>{
@@ -87,8 +87,8 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const app=await boot({respond:(url,body)=>url.endsWith('/revisions')&&body?(saved=JSON.parse(JSON.stringify(body)),{note:stored}):url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});
   stored=vm.runInContext('('+JSON.stringify(stored)+')',app.sandbox);
   await app.show('note-one');byText(app.q('full'),'Edit').click();
-  const type=app.root.querySelector('[name="note-type"]');assert.equal(type.value,'scheme-proposal');
-  type.value='research-note';type.dispatchEvent({type:'change'});assert.equal(app.root.querySelector('.nb-specification').hidden,true);
+  const type=app.root.querySelector('[name="scheme-proposal"]');assert.equal(type.checked,true);
+  type.checked=false;type.dispatchEvent({type:'change'});assert.equal(app.root.querySelector('.nb-specification').hidden,true);
   app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
   assert.ok(saved,app.q('dialog-body').textContent);
   assert.equal(saved.content.extensions.note_type,'research-note');assert.deepEqual(saved.content.extensions.kem_specification,specification);
@@ -96,18 +96,18 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.equal(metadata.note_type,'scheme-proposal','editing does not mutate the saved source revision');
   const draft={...content('Unfinished proposal'),extensions:{note_type:'scheme-proposal'}};
   const reopened=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:note({content:draft})}:undefined});
-  await reopened.show('note-one');assert.match(reopened.q('full').textContent,/Attach KEM specification/);
+  await reopened.show('note-one');assert.match(reopened.q('full').textContent,/Attach scheme specification/);
   assert.equal(byText(reopened.q('full'),'Submit for scheme review'),undefined);
-  byText(reopened.q('full'),'Edit').click();assert.equal(reopened.root.querySelector('[name="note-type"]').value,'scheme-proposal');
+  byText(reopened.q('full'),'Edit').click();assert.equal(reopened.root.querySelector('[name="scheme-proposal"]').checked,true);
  });
  await test('note type is part of the unsaved draft and freezes with an uncertain save',async()=>{
   const writes=[];const app=await boot({respond:(url,body)=>{
    if(url==='/api/notebook/notes'&&body){writes.push(JSON.parse(JSON.stringify(body)));if(writes.length===1)throw Object.assign(Error('Lost reply'),{status:0});return{note:note()};}
   }});
-  app.q('new').click();const type=app.root.querySelector('[name="note-type"]');type.value='scheme-proposal';type.dispatchEvent({type:'change'});
+  app.q('new').click();const type=app.root.querySelector('[name="scheme-proposal"]');type.checked=true;type.dispatchEvent({type:'change'});
   let warned=false;app.window.confirm=()=>{warned=true;return false;};app.q('close').click();assert.equal(warned,true);assert.equal(app.q('dialog').open,true);
   fill(app);app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();assert.equal(type.disabled,true);
-  type.value='research-note';type.dispatchEvent({type:'change'});assert.equal(type.value,'scheme-proposal');
+  type.checked=false;type.dispatchEvent({type:'change'});assert.equal(type.checked,true);
   app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();assert.deepEqual(writes[0],writes[1]);
  });
  await test('tag Enter selects the first current match, creates unmatched tags and supports keyboard selection',async()=>{
@@ -751,6 +751,9 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
     if(url==='/api/notebook/notes'&&body){saved=body;return{note:note()};}
   }});
   assert.equal(app.q('dialog').open,true);
+  assert.equal(app.root.querySelector('[name="scheme-proposal"]'),null);
+  assert.equal(app.root.querySelector('select[name="note-type"]'),null);
+  assert.equal(JSON.parse(app.root.querySelector('[name="tags"]').value).includes('KEM'),false);
   const file=app.root.querySelector('[name="kem-specification"]');file.files=[{size:30,text:async()=>JSON.stringify(spec)}];file.dispatchEvent({type:'change'});await flush();
   assert.equal(app.root.querySelector('[name="title"]').value,'Candidate KEM');
   app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();

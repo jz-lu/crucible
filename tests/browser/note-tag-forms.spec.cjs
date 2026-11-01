@@ -15,8 +15,8 @@ for(const width of [1440,390])test(`form placeholders and searchable note tags w
   }
   const input=dialog.getByRole('combobox',{name:'Tags',exact:true});
   await expect(input).toHaveAttribute('placeholder',/.+/);
-  await expect(dialog.locator('.nb-required-marker:visible')).toHaveCount(5);
-  await expect(dialog.getByLabel('Note type',{exact:true})).toHaveValue('research-note');
+  await expect(dialog.locator('.nb-required-marker:visible')).toHaveCount(4);
+  await expect(dialog.getByRole('checkbox',{name:'Scheme proposal',exact:true})).not.toBeChecked();
   await expect(dialog.locator('.nb-specification')).toBeHidden();
   await expect(dialog).not.toContainText('Enter chooses the first');
   await expect(dialog).not.toContainText('Optional, self-reported label; not verified');
@@ -64,9 +64,11 @@ for(const width of [1440,390])test(`form placeholders and searchable note tags w
   await page.locator('#nav-challenge').click();await page.locator('#propose-scheme-button').click();
   await page.getByRole('link',{name:'Write a proposal note →',exact:true}).click();
   await expect(dialog).toHaveAttribute('aria-label','New proposal note');
-  await expect(dialog.locator('.nb-required-marker:visible')).toHaveCount(6);
-  await expect(dialog.getByLabel('Note type',{exact:true})).toHaveValue('scheme-proposal');
-  await expect(dialog.locator('[name="title"]')).toHaveAttribute('placeholder',/KEM/);
+  await expect(dialog.locator('.nb-required-marker:visible')).toHaveCount(5);
+  await expect(dialog.getByRole('checkbox',{name:'Scheme proposal',exact:true})).toHaveCount(0);
+  await expect(dialog.locator('select[name="note-type"]')).toHaveCount(0);
+  await expect(dialog.locator('.nb-specification')).toBeVisible();
+  await expect(dialog.locator('[name="title"]')).toHaveAttribute('placeholder',/scheme/);
   for(const name of ['title','claim','conditions','body'])await expect(dialog.locator('[name="'+name+'"]')).toHaveAttribute('placeholder',/.+/);
   await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
   await page.locator('#nav-bounties').click();

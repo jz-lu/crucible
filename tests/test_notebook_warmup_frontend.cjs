@@ -90,7 +90,7 @@ const lists=app=>app.requests.filter(row=>row.url.startsWith('/api/notebook/note
   }});
   await app.controller.warm('list');await app.controller.warm('timeline');
   const listBefore=lists(app).length,timelineBefore=app.requests.filter(row=>row.url==='/api/notebook/timeline').length;
-  app.q('new').click();const type=app.root.querySelector('[name="note-type"]');type.value='scheme-proposal';type.dispatchEvent({type:'change'});const file=app.root.querySelector('[name="kem-specification"]');
+  app.q('new').click();const type=app.root.querySelector('[name="scheme-proposal"]');type.checked=true;type.dispatchEvent({type:'change'});const file=app.root.querySelector('[name="kem-specification"]');
   file.files=[{size:30,text:async()=>JSON.stringify(spec)}];file.dispatchEvent({type:'change'});await flush();
   assert.equal(app.root.querySelector('[name="title"]').value,'Candidate KEM');
   app.q('close').click();assert.equal(app.q('dialog').open,false);

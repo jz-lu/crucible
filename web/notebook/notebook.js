@@ -1938,7 +1938,7 @@
       if (revision.content.extensions?.kem_specification) actions.append(button('Download specification ↓', () => download('crucible-kem-spec.json', revision.content.extensions.kem_specification)));
       if (review && !requestRecords(revision).some(record => record.kind === 'scheme_admission') && (note.can_edit || note.can_review)) actions.append(button('Review & history →', () => navigate(note.can_review ? reviewUrl('schemes', {proposal:review.id}) : '#propose?proposal=' + encodeURIComponent(review.id))));
       if (note.can_edit) {
-        actions.append(button(revision.content.extensions?.kem_specification ? 'Edit note' : 'Attach KEM specification', () => editNote(note, true)));
+        actions.append(button(revision.content.extensions?.kem_specification ? 'Edit note' : 'Attach scheme specification', () => editNote(note, true)));
         const withdrawnScheme = (note.revisions || []).some(row => row.scheme_review?.retracted || requestRecords(row).some(value => value.kind === 'scheme_admission' && value.retracted));
         if (!review && revision.revision === latestRevision(note).revision) {
           if (withdrawnScheme) actions.append(el('p', 'nb-hint', 'The earlier scheme proposal was retracted. Start a new proposal note to pursue a revised idea.'));
@@ -2092,13 +2092,15 @@
       guide.href = '/api/protocol/proposal-guide'; guide.target = '_blank'; guide.rel = 'noopener noreferrer';
       guidance.append(guide, el('span', '', ' · Algorithms, claims, assumptions and configuration choices.')); container.append(guidance);
       const form = el('form', 'nb-form'), error = el('p', 'nb-error'); error.setAttribute('role', 'alert'); const controls = {};
-      const type = field('Note type', 'note-type', initialType, {required:true,options:[
-        {value:'research-note',label:'Research note'}, {value:'scheme-proposal',label:'Scheme proposal'}]});
-      const retainedAttachment = el('p', 'nb-hint', 'The attached KEM specification will be kept with this research note.');
-      form.append(type.wrap, retainedAttachment);
+      const type = field('Scheme proposal', 'scheme-proposal', '', {type:'checkbox'});
+      type.input.checked = initialType === 'scheme-proposal'; type.wrap.classList.add('nb-proposal-option');
+      const selectedType = () => (proposal || type.input.checked) ? 'scheme-proposal' : 'research-note';
+      const retainedAttachment = el('p', 'nb-hint', 'The attached scheme specification will be kept with this research note.');
+      if (!proposal) form.append(type.wrap);
+      form.append(retainedAttachment);
       const add = (label, name, value, options) => { const f = field(label, name, value, options); controls[name] = f.input; return f.wrap; };
-      form.append(add('Title', 'title', r?.title, {required:true,max:240,placeholder:proposal ? 'e.g. A KEM based on structured lattices' : 'e.g. Testing a lattice parameter choice'}), add('Dropdown summary', 'claim', r?.claim, {required:true,rows:3,max:20000,placeholder:'What is the question or result, and why does it matter?',help:'Briefly explain the question or result, why it matters and any essential caveat for people browsing.'}), add('Conditions & scope', 'conditions', r?.conditions, {required:true,rows:2,max:20000,placeholder:'State the assumptions, parameters, and limits of the claim.'}), add('Technical body', 'body', r?.body, {required:true,rows:7,max:40000,placeholder:'Describe the construction, argument, calculations, or experiments in enough detail for someone else to check the work.',help:'Free-form research for agents and expert reviewers. LaTeX, prose, code and calculations are welcome; no required outline or brevity. The full source is preserved even when notation is not rendered.'}));
-      const tagPicker = noteTagPicker(r?.tags || (initialType === 'scheme-proposal' ? ['scheme-description', 'KEM', 'proposal'] : []), () => syncHumanWritten()); controls.tags = tagPicker.stored;
+      form.append(add('Title', 'title', r?.title, {required:true,max:240,placeholder:proposal ? 'e.g. A scheme based on structured lattices' : 'e.g. Testing a lattice parameter choice'}), add('Dropdown summary', 'claim', r?.claim, {required:true,rows:3,max:20000,placeholder:'What is the question or result, and why does it matter?',help:'Briefly explain the question or result, why it matters and any essential caveat for people browsing.'}), add('Conditions & scope', 'conditions', r?.conditions, {required:true,rows:2,max:20000,placeholder:'State the assumptions, parameters, and limits of the claim.'}), add('Technical body', 'body', r?.body, {required:true,rows:7,max:40000,placeholder:'Describe the construction, argument, calculations, or experiments in enough detail for someone else to check the work.',help:'Free-form research for agents and expert reviewers. LaTeX, prose, code and calculations are welcome; no required outline or brevity. The full source is preserved even when notation is not rendered.'}));
+      const tagPicker = noteTagPicker(r?.tags || (initialType === 'scheme-proposal' ? ['scheme-description', 'proposal'] : []), () => syncHumanWritten()); controls.tags = tagPicker.stored;
       form.append(add('Evidence description', 'kind', r?.kind ?? (initialType === 'scheme-proposal' ? 'Unreviewed construction' : ''), {max:100,placeholder:'e.g. Proof sketch, experiment, or open question'}), tagPicker.wrap);
       const humanWritten = field('Human-written', 'human-written', '', {type:'checkbox'});
       humanWritten.wrap.classList.add('nb-human-option');
@@ -2118,7 +2120,7 @@
       form.append(citations.section);
       let specification = r?.extensions?.kem_specification, attachmentChanged = false, reading = false, fileToken = 0;
       const attachment = el('details', 'nb-details nb-specification'); attachment.open = true;
-      const attachmentTitle = el('summary', '', 'KEM specification'), requiredMark = el('span', 'nb-required-marker', ' *');
+      const attachmentTitle = el('summary', '', 'Scheme specification'), requiredMark = el('span', 'nb-required-marker', ' *');
       requiredMark.setAttribute('aria-hidden', 'true'); attachmentTitle.append(requiredMark); attachment.append(attachmentTitle);
       const attachmentHint = el('p', 'nb-hint', specification ? 'Exact specification attached. Replace it to propose a change.' : 'Required for scheme review. You can save a draft before attaching it. JSON, up to 48 KiB.');
       const file = field('Attach specification', 'kem-specification', '', {type:'file'}); file.input.accept = '.json,application/json';
@@ -2131,30 +2133,30 @@
         closeDialog();
         if (!q('dialog').open) trashDialog(note);
       }, 'nb-button nb-remove-note') : null;
-      const saveLabel = () => note ? 'Save new revision' : type.input.value === 'scheme-proposal' ? 'Save proposal draft' : 'Save private note';
+      const saveLabel = () => note ? 'Save new revision' : selectedType() === 'scheme-proposal' ? 'Save proposal draft' : 'Save private note';
       const cancel = button('Cancel', () => closeDialog(), 'nb-button'), save = el('button', 'nb-button nb-primary', saveLabel());
       save.type = 'submit';
       if (remove) actions.append(remove);
       actions.append(cancel, save); form.append(actions); container.append(form);
-      const values = () => Object.fromEntries(Object.entries(controls).map(([k,v]) => [k,v.value])); const original = canonical(values()); hasUnsavedDraft = () => type.input.value !== initialType || attachmentChanged || citations.dirty() || tagPicker.dirty() || canonical(values()) !== original;
+      const values = () => Object.fromEntries(Object.entries(controls).map(([k,v]) => [k,v.value])); const original = canonical(values()); hasUnsavedDraft = () => selectedType() !== initialType || attachmentChanged || citations.dirty() || tagPicker.dirty() || canonical(values()) !== original;
       const present = dialogGuard();
       let busy = false, pending = null;
       let currentType = initialType;
       function renderType() {
-        const scheme = type.input.value === 'scheme-proposal';
+        const scheme = selectedType() === 'scheme-proposal';
         guidance.hidden = !scheme; attachment.hidden = !scheme;
         retainedAttachment.hidden = scheme || !specification;
-        controls.title.placeholder = scheme ? 'e.g. A KEM based on structured lattices' : 'e.g. Testing a lattice parameter choice';
+        controls.title.placeholder = scheme ? 'e.g. A scheme based on structured lattices' : 'e.g. Testing a lattice parameter choice';
         if (!note) { const title = scheme ? 'New proposal note' : 'New private note'; q('dialog-title').textContent = title; q('dialog').setAttribute('aria-label', title); }
         save.textContent = pending ? 'Retry the same save' : saveLabel();
       }
       type.input.addEventListener('change', () => {
-        if (busy || reading || pending || !present() || !['research-note','scheme-proposal'].includes(type.input.value)) { type.input.value = currentType; return; }
-        currentType = type.input.value; renderType();
+        if (proposal || busy || reading || pending || !present()) { type.input.checked = currentType === 'scheme-proposal'; return; }
+        currentType = selectedType(); renderType();
       });
       renderType();
       file.input.addEventListener('change', async () => {
-        if (busy || pending || !present() || type.input.value !== 'scheme-proposal') return;
+        if (busy || pending || !present() || selectedType() !== 'scheme-proposal') return;
         const selected = file.input.files?.[0], token = ++fileToken;
         if (!selected) return;
         reading = true; type.input.disabled = true; save.disabled = true; if (remove) remove.disabled = true; error.textContent = '';
@@ -2183,10 +2185,10 @@
             syncHumanWritten(); citations.validate();
             const f = values(), content = {...window.TheoryStore.authoredMetadata(r), ...f, tags:JSON.parse(f.tags)};
             if (citations.value() !== undefined) content.references = citations.value();
-            if (specification || type.input.value === 'scheme-proposal' || type.input.value !== initialType || ['research-note','scheme-proposal'].includes(r?.extensions?.note_type)) {
+            if (specification || selectedType() === 'scheme-proposal' || selectedType() !== initialType || ['research-note','scheme-proposal'].includes(r?.extensions?.note_type)) {
               const previous = content.extensions;
               const extensions = previous && typeof previous === 'object' && !Array.isArray(previous) ? previous : previous === undefined ? {} : {previous_metadata:previous};
-              content.extensions = {...extensions, note_type:type.input.value, ...(specification ? {kem_specification:specification} : {})};
+              content.extensions = {...extensions, note_type:selectedType(), ...(specification ? {kem_specification:specification} : {})};
               if (!content.references && specification?.references) content.references = specification.references;
             }
             pending = {content, idempotency_key:crypto.randomUUID(), ...(note ? {expected_revision:latest.revision, content_sha256:latest.content_sha256} : {})};
