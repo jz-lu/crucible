@@ -1087,7 +1087,10 @@ function renderHomeAccount() {
   const button = $('#home-primary');
   button.disabled = !state.sessionResolved;
   setText('#home-primary', member ? 'My activity →' : state.user ? 'Check your access →' : 'Sign in to Crucible →');
-  setText('#home-access-note', member ? 'Welcome back, ' + state.user.handle + '.' : state.user ?
+  setText('#home-welcome', member ? 'Welcome back, ' + state.user.handle + '.' : '');
+  $('#home-welcome').hidden = !member;
+  $('#home-access-note').hidden = member;
+  setText('#home-access-note', state.user ?
     'Your account needs active beta access. Open your invitation link or contact the person who invited you.' :
     'Currently invitation-only. Open your invitation link to join.');
   $('#home-progress').hidden = !member;
@@ -1101,7 +1104,7 @@ function showHome() {
   state.screen = 'home';
   state.challengeRequest++; state.leaderboardRequest++; state.historyRequest++; state.peopleRequest++; state.personRequest++;
   showWorkspace('home'); renderHomeAccount();
-  document.title = 'Crucible — shared cryptographic research';
+  document.title = 'Crucible — Cryptography 2.0';
   if (hasAccess() && state.user && state.ready) void loadHomeProgress();
 }
 function homeSummaryPreview(target) {

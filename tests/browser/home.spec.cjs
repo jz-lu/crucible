@@ -7,6 +7,7 @@ for(const width of [1440,390]) {
   try{
    await page.goto('/',{waitUntil:'domcontentloaded'});await pending.arrived;
    await expect(page.locator('#home-title')).toContainText('Put it to the test.');await expect(page.locator('#home-workspace')).toBeVisible();
+   await expect(page.locator('.home-eyebrow')).toHaveText('Cryptography 2.0');await expect(page.locator('#home-welcome')).toBeHidden();
    await expect(page.locator('#home-progress')).toBeHidden();await expect(page.locator('#access-workspace')).toBeHidden();
    expect(protectedReads).toEqual([]);pending.release();await pending.delivered;
    await expect(page.locator('#home-primary')).toBeEnabled();await expect(page.locator('#home-primary')).toHaveText('Sign in to Crucible →');
@@ -33,6 +34,10 @@ for(const width of [1440,390]) {
   try{
    await page.getByRole('banner').getByRole('link',{name:'Crucible home',exact:true}).click();await held.arrived;
    await expect(page.locator('#home-primary')).toHaveText('My activity →');await expect(page.locator('#home-bounties')).toContainText('300 points');
+   await expect(page.locator('#home-welcome')).toHaveText('Welcome back, browser_alice.');
+   const welcome=await page.locator('#home-welcome').boundingBox(),activity=await page.locator('#home-primary').boundingBox();
+   expect(welcome.y+welcome.height).toBeLessThan(activity.y);
+   expect(await page.locator('#home-welcome').evaluate(element=>parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(18);
    await expect(page.locator('#home-schemes .home-placeholder')).toHaveCount(3);
    held.release();await held.delivered;
    await expect(page.locator('#home-schemes')).toContainText('Diffie');await expect(page.locator('#home-schemes .home-stage-strip')).toBeVisible();

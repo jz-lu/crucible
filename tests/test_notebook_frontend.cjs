@@ -63,6 +63,23 @@ function fill(app,title='New mathematical claim'){for(const [key,value]of Object
 const byText=(root,label)=>root.querySelectorAll('button').find(n=>n.textContent===label);
 let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
 (async()=>{
+ await test('note rows and readers show public vote totals and relative publication time with an exact tooltip',async()=>{
+  const timestamp=Date.now()/1000-3660;
+  const saved=note({published_at:timestamp,rating:{score:4,raters:3,upvotes:2,double_upvotes:1}});
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[saved]}:url==='/api/notebook/notes/note-one'?{note:saved}:undefined});
+  await app.show();
+  const aside=app.q('list').querySelector('.nb-entry-aside'),time=aside.querySelector('time');
+  assert.match(aside.querySelector('.nb-note-votes').textContent,/4/);
+  assert.match(aside.querySelector('.nb-note-votes').title,/2 upvotes \(\+1\).*1 double upvotes \(\+2\)/);
+  assert.equal(time.textContent,'1 hr ago');assert.match(time.title,/^Published /);
+  assert.equal(time.getAttribute('datetime'),new Date(timestamp*1000).toISOString());
+  await app.show('note-one');assert.match(app.q('full').querySelector('.nb-note-votes').textContent,/4/);
+ });
+ await test('unpublished notes display saved age without inventing public votes',async()=>{
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()]}:undefined});await app.show();
+  assert.equal(app.q('list').querySelector('.nb-note-votes'),null);
+  assert.match(app.q('list').querySelector('time').title,/^Saved /);
+ });
  await test('note numbers appear only after expansion and identify exact revision citations',async()=>{
   const saved=note({number:1042,content_sha256:'a'.repeat(64)});
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[saved],next_after:null}:url.startsWith('/api/notebook/notes/note-one')?{note:saved}:undefined});

@@ -4335,6 +4335,8 @@ html[data-pending-page=activity] #access-title { display:flex;align-items:center
 .home-actions .button { min-height:46px; font-size:14px; }
 .home-secondary { font-size:14px; }
 .home-access-note { margin-top:15px; font-size:12px; color:var(--muted); line-height:1.6; }
+.home-welcome { margin:28px 0 12px; font-size:18px; line-height:1.5; color:var(--ink); }
+.home-welcome:not([hidden]) + .home-actions { margin-top:0; }
 .home-section-heading,.home-panel-heading { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px 20px; }
 .home-section-heading { margin-bottom:24px; }
 .home-section-heading h2 { font:700 28px/1.25 var(--display); color:var(--ink); }

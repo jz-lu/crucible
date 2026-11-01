@@ -16,7 +16,7 @@ from uuid import UUID, uuid4
 
 from fastapi import HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, and_, case, cast, event, func, or_, select, tuple_
+from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, and_, case, cast, event, func, literal, or_, select, tuple_
 from sqlalchemy.orm import Mapped, aliased, load_only, mapped_column
 
 from .db import Base, User
@@ -505,18 +505,26 @@ def _search_clause(value):
     return or_(*(field.ilike(pattern, escape="\\") for field in fields))
 
 
-def _browse_cursor(created_at, identifier):
-    payload = _bytes([1, created_at, identifier])
+def _browse_rank(score, created_at, snapshot):
+    # One-day age decay: equal support favors newer work, and old support
+    # cannot permanently crowd out new notes. Keep SQL and curated math equal.
+    return (score + 1.0) / (1.0 + max(0.0, (snapshot - created_at) / 86400.0))
+
+
+def _browse_cursor(snapshot, rank, created_at, identifier, order="hot"):
+    payload = _bytes([2, order, snapshot, rank, created_at, identifier])
     return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
 
 
-def _read_browse_cursor(value):
-    """Decode a versioned, canonical boundary for the recent-first ordering."""
+def _read_browse_cursor(value, order="hot"):
+    """Freeze age at the first page so time passing cannot skip/repeat rows."""
     try:
         payload = base64.b64decode(value + "=" * (-len(value) % 4), altchars=b"-_", validate=True)
-        version, created_at, identifier = json.loads(payload)
-        if (type(version) is not int or version != 1 or type(created_at) not in (int, float)
-                or not math.isfinite(created_at) or not 0 <= created_at <= 9007199254740991
+        version, ordering, snapshot, rank, created_at, identifier = json.loads(payload)
+        if (type(version) is not int or version != 2 or ordering != order
+                or any(type(number) not in (int, float) or not math.isfinite(number)
+                       or not 0 <= number <= 9007199254740991 for number in (snapshot, rank, created_at))
+                or (order == "recent" and rank != 0)
                 or type(identifier) is not str or not identifier or len(identifier) > 108):
             raise ValueError
         _inspect(identifier)
@@ -525,9 +533,9 @@ def _read_browse_cursor(value):
                 raise ValueError
         elif str(UUID(identifier)) != identifier:
             raise ValueError
-        if _browse_cursor(created_at, identifier) != value:
+        if _browse_cursor(snapshot, rank, created_at, identifier, order) != value:
             raise ValueError
-        return created_at, identifier
+        return snapshot, rank, created_at, identifier
     except (ValueError, TypeError, OverflowError, UnicodeError, binascii.Error):
         raise HTTPException(422, "Invalid notebook page cursor. Restart the notebook list.") from None
 
@@ -767,8 +775,11 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             account(request, session)
             if "authorization" in request.headers:
                 raise HTTPException(403, "Use the community research interface for curated notes.")
-            return {"numbers": notebook_numbers.ensure(session.connection(),
-                [note["id"] for note in curated_collection()])}
+            collection = curated_collection()
+            totals = note_ratings.curated_scores(session, collection)
+            return {"numbers": notebook_numbers.ensure(session.connection(), [note["id"] for note in collection]),
+                "metadata": {note["id"]: {"rating": totals.get(note["id"], note_ratings.empty_score()),
+                    "published_at": note["created_at"]} for note in collection}}
 
     @app.get("/api/notebook/notes")
     def list_notes(request: Request, after: str | None = Query(default=None, max_length=768),
@@ -776,7 +787,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                    include_curated: bool = False, q: str = Query(default="", max_length=200),
                    scope: Literal["all", "mine", "shared", "literature", "human", "trash"] = "all",
                    tag: str | None = Query(default=None, min_length=1, max_length=100),
-                   projection: Literal["index"] | None = None):
+                   projection: Literal["index"] | None = None,
+                   order: Literal["hot", "recent"] = "hot"):
         indexed = projection == "index"
         if indexed:
             # An index is complete for one ordinary visibility domain, never a
@@ -794,7 +806,6 @@ def register_routes(app, db, settings, clock, user_for, throttle):
         term = q.strip()
         reference_number = notebook_numbers.search_number(term)
         scope_tag = {"literature": "literature", "human": "human-written"}.get(scope)
-        cursor = _read_browse_cursor(after) if after is not None else None
         # Only bundled catalogue discovery can allocate aliases on a read.
         # SQLite needs its write lock before reading to avoid upgrade races.
         with db.transaction(write=include_curated and scope not in {"mine", "trash"}) as session:
@@ -809,6 +820,10 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                     scope = "mine"
             if scope == "shared":
                 raise HTTPException(410, notebook_sharing.RETIRED)
+            if agent or scope == "trash":
+                order = "recent"
+            cursor = _read_browse_cursor(after, order) if after is not None else None
+            snapshot = cursor[0] if cursor else clock()
             capabilities = {"review_publication": not agent and protocol_proposals.is_reviewer(settings, user),
                             "self_review_publication": not agent and protocol_proposals.can_self_review(settings, user)}
 
@@ -832,6 +847,15 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             if proposals_only:
                 grouped = grouped.having(newest_proposal.is_not(None))
             latest_visible = grouped.group_by(NotebookRevision.note_id).subquery()
+            totals = note_ratings.scores().subquery()
+            publication_times = note_ratings.publication_times().subquery()
+            sort_time = (func.coalesce(publication_times.c.published_at, NotebookRevision.created_at)
+                         if order == "hot" else NotebookRevision.created_at)
+            rank = ((func.coalesce(totals.c.score, 0) + 1.0) / (1.0 + case(
+                (sort_time < snapshot, (snapshot - sort_time) / 86400.0), else_=0.0))) if order == "hot" else 0.0
+            # Select the computed key once and reuse it in SQL and the merged
+            # curated page, without loading bodies or sorting a partial page.
+            rank = literal(rank) if order == "recent" else rank
             proposed = aliased(NotebookRevision)
             withdrawal = notebook_moderation.PublicationWithdrawal
             deletion = notebook_trash.NotebookDeletion
@@ -841,10 +865,15 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 NotebookRevision.content["tags"], NotebookRevision.content["kind"].as_string(),
                 latest_visible.c.revision_count, latest_visible.c.proposal_revision,
                 proposed.content_sha256, NotebookPublication.id, NotebookPublication.decision,
-                withdrawal.revision_id, deletion, notebook_numbers.NotebookNumber.number).join(latest_visible, latest_visible.c.note_id == NotebookNote.id)
+                withdrawal.revision_id, deletion, notebook_numbers.NotebookNumber.number,
+                publication_times.c.published_at, sort_time.label("sort_time"), rank.label("browse_rank"),
+                *(func.coalesce(totals.c[key], 0).label("rating_" + key) for key in note_ratings.empty_score()))
+                .join(latest_visible, latest_visible.c.note_id == NotebookNote.id)
                 .join(NotebookRevision, and_(NotebookRevision.note_id == NotebookNote.id,
                     NotebookRevision.revision == latest_visible.c.latest))
                 .join(User, User.id == NotebookNote.author_id)
+                .outerjoin(totals, totals.c.note_id == NotebookNote.id)
+                .outerjoin(publication_times, publication_times.c.note_id == NotebookNote.id)
                 .outerjoin(proposed, and_(proposed.note_id == NotebookNote.id,
                     proposed.revision == latest_visible.c.proposal_revision))
                 # Each join has at most one row: publication/withdrawal are
@@ -859,9 +888,9 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                          load_only(deletion.id, deletion.note_id, deletion.revision, deletion.content_sha256,
                                    deletion.deleted_at, deletion.restored_at, raiseload=True)))
             if cursor:
-                created_at, identifier = cursor
-                query = query.where(or_(NotebookRevision.created_at < created_at,
-                    and_(NotebookRevision.created_at == created_at, NotebookNote.id > identifier)))
+                _, boundary_rank, created_at, identifier = cursor
+                rest = or_(sort_time < created_at, and_(sort_time == created_at, NotebookNote.id > identifier))
+                query = query.where(or_(rank < boundary_rank, and_(rank == boundary_rank, rest)))
             if reference_number is not None:
                 query = query.where(notebook_numbers.NotebookNumber.number == reference_number)
             elif term:
@@ -870,18 +899,25 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 query = query.where(_tag_clause(tag))
             if scope_tag:
                 query = query.where(_tag_clause(scope_tag))
-            rows = session.execute(query.order_by(NotebookRevision.created_at.desc(), NotebookNote.id).limit(limit + 1)).all()
+            rows = session.execute(query.order_by(rank.desc(), sort_time.desc(), NotebookNote.id).limit(limit + 1)).all()
 
             curated, curated_requests = [], {}
+            curated_totals = {}
             if include_curated and scope not in {"mine", "trash"}:
                 collection = curated_collection()
+                curated_totals = note_ratings.curated_scores(session, collection)
                 numbers = notebook_numbers.ensure(session.connection(), [note["id"] for note in collection])
                 for source in collection:
                     note = {**source, "number": numbers[source["id"]]}
                     latest = note["revisions"][-1]
                     content = latest["content"]
                     tags = content.get("tags", [])
-                    if cursor and (-latest["created_at"], note["id"]) <= (-cursor[0], cursor[1]):
+                    created = note["created_at"] if order == "hot" else latest["created_at"]
+                    rating = curated_totals.get(note["id"], note_ratings.empty_score())
+                    note = {**note, "rating": rating, "published_at": note["created_at"],
+                        "browse_key": (-_browse_rank(rating["score"], created, snapshot) if order == "hot" else 0.0,
+                                       -created, note["id"])}
+                    if cursor and note["browse_key"] <= (-cursor[1], -cursor[2], cursor[3]):
                         continue
                     if ((scope_tag is not None and scope_tag not in tags)
                             or (tag is not None and tag not in tags)):
@@ -897,12 +933,12 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                                  for note in curated}
             if proposals_only:
                 curated = [note for note in curated if curated_proposals[note["id"]] is not None]
-            curated = sorted(curated, key=lambda note: (-note["revisions"][-1]["created_at"], note["id"]))[:limit + 1]
+            curated = sorted(curated, key=lambda note: note["browse_key"])[:limit + 1]
             # Each collection contributes at most its first limit+1 matches.
             # Merge identities before hydration so summaries are fetched only
             # for the returned account notes, with no per-note requests.
-            candidates = sorted([((-row[4], row[0].id), "account", row) for row in rows] +
-                                [((-note["revisions"][-1]["created_at"], note["id"]), "curated", note) for note in curated],
+            candidates = sorted([((-row.browse_rank, -row.sort_time, row[0].id), "account", row) for row in rows] +
+                                [(note["browse_key"], "curated", note) for note in curated],
                                 key=lambda item: item[0])
             if indexed and len(candidates) > limit:
                 return index_result([], overflow_reason="count_limit")
@@ -920,7 +956,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 if source_kind == "curated":
                     latest = row["revisions"][-1]
                     content = {key: value for key, value in latest["content"].items() if key in {"title", "claim", "tags", "kind"}}
-                    records.append({key: value for key, value in row.items() if key != "revisions"} | {
+                    records.append({key: value for key, value in row.items() if key not in {"revisions", "browse_key"}} | {
                         "revision": latest["revision"], "content_sha256": latest["content_sha256"],
                         "publication_status": "curated", "shared_revision": None,
                         "proposal_revision": curated_proposals[row["id"]],
@@ -929,7 +965,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                             "requests": curated_requests.get((row["id"], latest["revision"], latest["content_sha256"]), [])}]})
                     continue
                 (note, handle, revision_id, number, created, digest, title, claim, tags, kind, count,
-                 proposed_number, proposed_digest, publication_id, decision, withdrawn_id, deleted, note_number) = row
+                 proposed_number, proposed_digest, publication_id, decision, withdrawn_id, deleted, note_number) = row[:18]
                 status = "withdrawn" if withdrawn_id is not None else (decision or "submitted") if publication_id else "private"
                 content = {"title": title, "claim": claim, "tags": tags or []}
                 if kind is not None:
@@ -941,6 +977,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                     "can_review": not agent and protocol_proposals.is_reviewer(settings, user) and (user.id != note.author_id or protocol_proposals.can_self_review(settings, user)),
                     "can_self_review": not agent and protocol_proposals.can_self_review(settings, user),
                     "created_at": note.created_at, "revision": number, "content_sha256": digest,
+                    "published_at": row.published_at,
+                    "rating": {key: getattr(row, "rating_" + key) for key in note_ratings.empty_score()},
                     "publication_status": status, "revision_count": count, "imported": note.source_id is not None,
                     "shared_revision": shared.get(note.id),
                     "proposal_revision": {"revision": proposed_number, "content_sha256": proposed_digest,
@@ -954,7 +992,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 if len(_bytes(result)) > SUMMARY_INDEX_MAX_BYTES:
                     return index_result([], overflow_reason="byte_limit")
                 return result
-            return {"notes": records, "next_after": _browse_cursor(-page[-1][0][0], page[-1][0][1])
+            return {"notes": records, "next_after": _browse_cursor(snapshot, -page[-1][0][0], -page[-1][0][1], page[-1][0][2], order)
                     if len(candidates) > limit else None,
                     "capabilities": capabilities, "server_time": clock()}
 
@@ -990,7 +1028,10 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                     raise HTTPException(410, notebook_moderation.NOTICE)
             if not revisions:
                 raise HTTPException(404, "Note not found.")
-            return {"note": note_data(session, note, user, revisions, selected=revision, agent=agent)}
+            result = note_data(session, note, user, revisions, selected=revision, agent=agent)
+            if not agent:
+                result.update(note_ratings.notebook_metadata(session, [note.id])[note.id])
+            return {"note": result}
 
     @app.post("/api/notebook/notes")
     def create_note(body: CreateInput, request: Request):

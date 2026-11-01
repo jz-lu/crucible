@@ -681,7 +681,8 @@
           // submission or a fabricated sharing approval.
           return {id:'curated:' + source.id, number:references.numbers?.['curated:' + source.id], source_id:source.id, source_kind:'curated-research',
             owner:null, can_edit:false, can_review:false, created_at:revisions[0].created_at,
-            ...latest, revisions, revision_count:revisions.length};
+            ...latest, revisions, revision_count:revisions.length,
+            ...references.metadata?.['curated:' + source.id]};
         }));
         if (epoch !== generation || accountId !== owner || identity() !== owner) throw new Error('Notebook account changed.');
         curatedNotes = records; curatedLoaded = true; return records;
@@ -1015,6 +1016,35 @@
         rememberRead(key, result.note);
       }, forget);
     }
+    function noteMetadata(note, revision) {
+      const meta = el('div', 'nb-note-meta');
+      const published = Number.isFinite(note.published_at) ? note.published_at :
+        note.source_kind === 'curated-research' ? note.created_at : null;
+      if (published !== null) {
+        const rating = note.rating, score = Number.isSafeInteger(rating?.score) && rating.score >= 0 ? rating.score : 0;
+        const votes = el('span', 'nb-note-votes');
+        const arrow = el('span', 'nb-vote-arrow', '▲'); arrow.setAttribute('aria-hidden', 'true');
+        votes.append(arrow, el('span', '', String(score)));
+        const description = `${score} vote ${score === 1 ? 'point' : 'points'} · ${rating?.upvotes || 0} upvotes (+1) · ${rating?.double_upvotes || 0} double upvotes (+2). Votes support published revisions.`;
+        votes.title = description; votes.setAttribute('aria-label', description); meta.append(votes);
+      }
+      const timestamp = published ?? revision.created_at;
+      if (Number.isFinite(timestamp)) {
+        const date = new Date(timestamp * 1000);
+        if (!Number.isNaN(date.getTime())) {
+          const age = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+          const [size, singular, plural] = age < 60 ? [1, 'sec', 'sec'] : age < 3600 ? [60, 'min', 'min'] :
+            age < 86400 ? [3600, 'hr', 'hrs'] : age < 604800 ? [86400, 'day', 'days'] :
+            age < 31536000 ? [604800, 'wk', 'wks'] : [31536000, 'yr', 'yrs'];
+          const count = Math.floor(age / size);
+          const time = el('time', 'nb-note-time', `${count} ${count === 1 ? singular : plural} ago`);
+          time.setAttribute('datetime', date.toISOString());
+          time.title = (published !== null ? 'Published ' : 'Saved ') + date.toLocaleString(undefined, {dateStyle:'full', timeStyle:'long'});
+          time.setAttribute('aria-label', time.title); meta.append(time);
+        }
+      }
+      return meta;
+    }
     function renderList() {
       q('search').value = search; q('filter').replaceChildren();
       if (tag) q('filter').append(button(tagLabel(tag) + ' ×', () => { tag = ''; changeQuery(); }, 'nb-tag'));
@@ -1035,7 +1065,9 @@
         trailing.append(marker);
         const copy = el('span', 'nb-title-copy'); copy.append(el('span', '', r.title), status(note, shown, proposal)); title.append(copy, trailing); heading.append(title);
         const headingRow = el('div', 'nb-entry-heading'), actions = el('div', 'nb-card-actions');
-        headingRow.append(heading, actions); item.append(headingRow);
+        const aside = el('div', 'nb-entry-aside');
+        if (!reviewOnly && !reviewMode) aside.append(noteMetadata(note, shown));
+        aside.append(actions); headingRow.append(heading, aside); item.append(headingRow);
         if (!reviewOnly && ownsNote(note)) {
           actions.append(button('Edit', () => openCardAction(note, 'edit', actions), 'nb-button'));
           if (canPublish(note, shown)) actions.append(button('Publish', () => openCardAction(note, 'publish', actions), 'nb-button'));
@@ -1236,6 +1268,7 @@
       }
       const headingRow = el('div', 'nb-reader-heading');
       const noteActions = el('div', 'nb-note-actions');
+      if (!reviewOnly && !reviewMode) noteActions.append(noteMetadata(note, revision));
       const number = noteNumber(note);
       if (number) {
         const reference = button(number, () => citeNote(note, revision), 'nb-note-number nb-number-action');

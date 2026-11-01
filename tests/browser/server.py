@@ -51,7 +51,8 @@ def main():
             session.add(BountyPolicy(id=bounty_allowance.INITIAL_ID,
                 effective_month=bounty_allowance.INITIAL_MONTH,
                 configuration=dict(bounty_allowance.INITIAL_CONFIGURATION), created_at=now))
-            for actor in ("alice", "bob", "revoked", "bulkdesktop", "bulkmobile", "queueauthor", "queuereviewer", "numbers"):
+            for actor in ("alice", "bob", "revoked", "bulkdesktop", "bulkmobile", "queueauthor", "queuereviewer", "numbers",
+                          "discoverydesktop", "discoverymobile"):
                 user = User(id=queue_reviewer_id if actor == "queuereviewer" else str(uuid4()), handle="browser_" + actor,
                             password_hash=encoded, created_at=now)
                 session.add(user)
