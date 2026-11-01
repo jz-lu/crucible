@@ -39,7 +39,8 @@ test('participant downloads public inputs, submits a real recovery and finds its
   await page.locator('#use-agent').click();
   await expect(page.locator('#agent-instructions-text')).toContainText('cannot accept a new answer');
 
-  await page.getByRole('button', {name:'My submissions', exact:true}).click();
+  await page.getByRole('button', {name:'My activity', exact:true}).click();
+  await expect(page).toHaveURL(/#activity$/);
   const record = page.locator('#history-content [data-submission-id]').filter({hasText:'Disposable browser recovery journey'});
   await expect(record).toHaveCount(1); await record.click();
   await expect(page.locator('#recovery-dialog')).toBeVisible();
