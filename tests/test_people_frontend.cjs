@@ -71,6 +71,25 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
     app.history.back(); await flush();
     assert.equal(app.$('#catalogue-workspace').hidden, false);
   });
+  await test('profile heading links its current ordinal place to the leaderboard', async () => {
+    for (const [rank, expected] of [[1,'1st'],[2,'2nd'],[3,'3rd'],[5,'5th'],[11,'11th'],[12,'12th'],[13,'13th'],[21,'21st'],[22,'22nd'],[23,'23rd'],[111,'111th']]) {
+      const app = await createApp({schemes, hash:'#person/alpha', responder:(url, opts, envelope)=>url.pathname==='/api/people/alpha' ? envelope({person:{...person('alpha'),rank},scoring}) : baseResponder(url,opts,envelope)});
+      const link = app.$('#person-leaderboard-rank');
+      assert.equal(link.textContent,expected+' on leaderboard');assert.equal(link.href,'#people');
+      assert.ok(link.closest('.profile-title-row'));assert.equal(app.$('#person-workspace').querySelector('.scheme-back'),null);
+      link.click();await flush();assert.equal(app.location.hash,'#people');assert.equal(app.$('#people-workspace').hidden,false);
+    }
+  });
+  await test('rank changes revalidate in place and unavailable ranks never invent a place', async () => {
+    let data = {...person('alpha'),rank:5};
+    const app = await createApp({schemes,hash:'#person/alpha',responder:(url,opts,envelope)=>url.pathname==='/api/people/alpha'?envelope({person:data,scoring}):baseResponder(url,opts,envelope)});
+    const link=app.$('#person-leaderboard-rank');link.focus();data={...data,rank:11};await app.sandbox.loadPerson('alpha',{preserve:true});
+    assert.equal(link.textContent,'11th on leaderboard');assert.equal(app.document.activeElement,link);
+    app.sandbox.renderProfileRank();assert.equal(link.textContent,'Leaderboard');
+    await app.sandbox.loadPerson('alpha',{preserve:true});assert.equal(link.textContent,'11th on leaderboard');
+    for(const rank of [null,0,-1,1.5,'5']) {data={...data,rank};await app.sandbox.loadPerson('alpha',{preserve:true});assert.equal(link.textContent,'Leaderboard');}
+    data={...data,rank:5,points:null};await app.sandbox.loadPerson('alpha',{preserve:true});assert.equal(link.textContent,'Leaderboard');
+  });
   await test('profile recovery buttons preserve the archived receipt and show method details', async () => {
     const archived = {...record, scheme_version: '1', is_current: false, scoring_eligible: false, score: null};
     const entry = {id: 'receipt-a', handle: 'alpha', status: 'correct', scheme_id: 'fixture', scheme_version: '1', profile_id: 'tier-4', instance_size: 4, received_at: 100, elapsed_seconds: 1, method: {name: 'Original method', pseudocode: 'Original steps'}, compute: {hardware: 'CPU'}};

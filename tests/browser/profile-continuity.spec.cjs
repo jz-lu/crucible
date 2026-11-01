@@ -7,15 +7,14 @@ async function start(page) {
 async function frame(root) {
   return root.evaluate(element=>{
     const rect=node=>{const b=node.getBoundingClientRect(),s=getComputedStyle(node);return{x:b.x,y:b.y,width:b.width,height:b.height,font:s.font};};
-    return {back:rect(element.querySelector('.profile-backline')),
-      backLabel:rect(element.querySelector('.scheme-back')),
+    return {rank:rect(element.querySelector('.profile-rank')),
       heading:rect(element.querySelector(element.id==='access-workspace'?'#access-title':element.id==='person-workspace'?'#person-title':'h1')),
       space:element.querySelector('.person-preview')?rect(element.querySelector('.person-preview')):null,
       overflow:document.documentElement.scrollWidth>innerWidth};
   });
 }
 function sameFrame(actual,expected,phase) {
-  for(const key of ['back','backLabel','heading']) {
+  for(const key of ['rank','heading']) {
     for(const coordinate of ['x','y','width','height'])expect(Math.abs(actual[key][coordinate]-expected[key][coordinate]),phase+' '+key+' '+coordinate).toBeLessThanOrEqual(1);
     expect(actual[key].font,phase+' '+key+' font').toBe(expected[key].font);
   }
@@ -109,6 +108,11 @@ for(const {width,actor,label,handle:requestedHandle,reviewer=false} of profiles)
       await expect(target.locator('.person-disclosure')).toHaveCount(3);
       await expect(target.locator('.person-disclosure[open]')).toHaveCount(0);
       sameFrame(await frame(target),initial,'profile ready');
+      const rank=page.locator('#person-leaderboard-rank');
+      await expect(rank).toHaveText(/^[0-9]+(?:st|nd|rd|th) on leaderboard$/);await expect(rank).toHaveAttribute('href','#people');
+      await expect(rank).toHaveCSS('font-weight','400');
+      expect(await rank.evaluate(element=>parseFloat(getComputedStyle(element).fontSize))).toBeLessThan(await page.locator('#person-title').evaluate(element=>parseFloat(getComputedStyle(element).fontSize)));
+      await expect(target.locator('.scheme-back')).toHaveCount(0);
       if(actor==='alice') {await expect(page.locator('#account-sign-in')).toBeVisible();await expect(page.locator('#agent-connections')).toBeVisible();}
       if(metadata)await expect(page.locator('#researcher-profile-summary')).toContainText(metadata.affiliation);
       else await expect(page.locator('#researcher-profile-summary')).toBeHidden();

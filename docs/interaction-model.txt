@@ -303,3 +303,9 @@ account/access changes clear both panels and retire pending completions. Home
 entry and brand navigation start at the top, while Back/Forward keep native
 history. Existing #challenge links still identify the Schemes catalogue. OAuth
 accepts #home as a local return destination; callback authority stays unchanged.
+
+Profile headings place the participant's current ordinal rank beside the username
+as a regular-weight link to Leaderboard. Initial and catalogue-pending frames
+reserve the same title/rank geometry without guessing a private rank. Unranked
+or pending scores show a plain Leaderboard link; account/access changes and
+denied refreshes clear an earlier rank. Quiet refreshes retain the link and focus.
