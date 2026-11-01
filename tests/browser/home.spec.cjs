@@ -37,7 +37,9 @@ for(const width of [1440,390]) {
    await expect(page.locator('#home-welcome')).toHaveText('Welcome back, browser_alice.');
    const welcome=await page.locator('#home-welcome').boundingBox(),activity=await page.locator('#home-primary').boundingBox();
    expect(welcome.y+welcome.height).toBeLessThan(activity.y);
-   expect(await page.locator('#home-welcome').evaluate(element=>parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(18);
+   expect(await page.locator('#home-welcome').evaluate(element=>parseFloat(getComputedStyle(element).fontSize))).toBe(16);
+   expect(await page.locator('#home-welcome').evaluate(element=>getComputedStyle(element).color)).toBe(
+    await page.locator('#home-primary').evaluate(element=>getComputedStyle(element).backgroundColor));
    await expect(page.locator('#home-schemes .home-placeholder')).toHaveCount(3);
    held.release();await held.delivered;
    await expect(page.locator('#home-schemes')).toContainText('Diffie');await expect(page.locator('#home-schemes .home-stage-strip')).toBeVisible();

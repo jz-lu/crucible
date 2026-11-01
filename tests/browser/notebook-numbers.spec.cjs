@@ -20,18 +20,29 @@ for (const width of [1440, 390, 320]) {
     await workspace.locator('[name="visibility"]').selectOption('mine');
     const row = workspace.locator('.nb-entry').filter({hasText: title});
     await expect(row).toHaveCount(1);
-    await expect(row.locator('.nb-note-number')).toHaveCount(0);
+    await expect(row.locator('.nb-note-number')).toHaveText(label);
     await row.locator('.nb-title').click();
     await expect(row.locator('.nb-note-number')).toHaveText(label);
-    const titleBox = await row.locator('.nb-title').boundingBox();
-    const referenceBox = await row.locator('.nb-note-number').boundingBox();
-    expect(referenceBox.x).toBeGreaterThan(titleBox.x + titleBox.width / 2);
+    const placement = await row.evaluate(element => {
+      const text=element.querySelector('.nb-title-text'),fragments=Array.from(text.getClientRects()),last=fragments.at(-1);
+      const reference=element.querySelector('.nb-note-number').getBoundingClientRect(),marker=element.querySelector('.nb-marker').getBoundingClientRect();
+      return {textLeft:text.getBoundingClientRect().left,textRight:last.right,textBottom:last.bottom,
+        referenceLeft:reference.left,referenceRight:reference.right,referenceTop:reference.top,markerLeft:marker.left,
+        referenceFont:parseFloat(getComputedStyle(element.querySelector('.nb-note-number')).fontSize)};
+    });
+    if(placement.referenceTop<placement.textBottom){
+      expect(placement.referenceLeft-placement.textRight).toBeGreaterThanOrEqual(0);
+      expect(placement.referenceLeft-placement.textRight).toBeLessThanOrEqual(12);
+    } else expect(placement.referenceLeft-placement.textLeft).toBeLessThanOrEqual(12);
+    expect(placement.markerLeft-placement.referenceRight).toBeGreaterThanOrEqual(0);
+    expect(placement.markerLeft-placement.referenceRight).toBeLessThanOrEqual(10);
+    expect(placement.referenceFont).toBeLessThanOrEqual(11);
     expect(await row.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({path: testInfo.outputPath('expanded-reference.png'), fullPage: true});
 
     await row.locator('.nb-title').click();
-    await expect(row.locator('.nb-note-number')).toHaveCount(0);
+    await expect(row.locator('.nb-note-number')).toHaveText(label);
     await workspace.locator('[data-nb="search"]').fill(label);
     await expect(workspace.locator('.nb-entry')).toHaveCount(1);
     await expect(row).toContainText(title);

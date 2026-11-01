@@ -1018,15 +1018,16 @@
     }
     function noteMetadata(note, revision) {
       const meta = el('div', 'nb-note-meta');
+      let votes = null;
       const published = Number.isFinite(note.published_at) ? note.published_at :
         note.source_kind === 'curated-research' ? note.created_at : null;
       if (published !== null) {
         const rating = note.rating, score = Number.isSafeInteger(rating?.score) && rating.score >= 0 ? rating.score : 0;
-        const votes = el('span', 'nb-note-votes');
+        votes = el('span', 'nb-note-votes');
         const arrow = el('span', 'nb-vote-arrow', '▲'); arrow.setAttribute('aria-hidden', 'true');
         votes.append(arrow, el('span', '', String(score)));
         const description = `${score} vote ${score === 1 ? 'point' : 'points'} · ${rating?.upvotes || 0} upvotes (+1) · ${rating?.double_upvotes || 0} double upvotes (+2). Votes support published revisions.`;
-        votes.title = description; votes.setAttribute('aria-label', description); meta.append(votes);
+        votes.title = description; votes.setAttribute('aria-label', description);
       }
       const timestamp = published ?? revision.created_at;
       if (Number.isFinite(timestamp)) {
@@ -1043,6 +1044,7 @@
           time.setAttribute('aria-label', time.title); meta.append(time);
         }
       }
+      if (votes) meta.append(votes);
       return meta;
     }
     function renderList() {
@@ -1061,9 +1063,10 @@
         title.setAttribute('aria-expanded', String(expanded)); title.setAttribute('aria-controls', (reviewOnly ? 'nb-review-preview-' : 'nb-preview-') + index);
         const marker = el('span', 'nb-marker', expanded ? '−' : '+'); marker.setAttribute('aria-hidden', 'true');
         const trailing = el('span', 'nb-title-trailing'), number = noteNumber(note);
-        if (expanded && number) { const reference = el('span', 'nb-note-number', number); reference.title = 'Permanent note number. Search ' + number + ' to find this note.'; trailing.append(reference); }
+        if (number) { const reference = el('span', 'nb-note-number', number); reference.title = 'Permanent note number. Search ' + number + ' to find this note.'; trailing.append(reference); }
         trailing.append(marker);
-        const copy = el('span', 'nb-title-copy'); copy.append(el('span', '', r.title), status(note, shown, proposal)); title.append(copy, trailing); heading.append(title);
+        const line = el('span', 'nb-title-line'); line.append(el('span', 'nb-title-text', r.title), trailing);
+        const copy = el('span', 'nb-title-copy'); copy.append(line, status(note, shown, proposal)); title.append(copy); heading.append(title);
         const headingRow = el('div', 'nb-entry-heading'), actions = el('div', 'nb-card-actions');
         const aside = el('div', 'nb-entry-aside');
         if (!reviewOnly && !reviewMode) aside.append(noteMetadata(note, shown));

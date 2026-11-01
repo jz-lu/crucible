@@ -25,6 +25,8 @@ for (const width of [1440,390]) test(`note votes and publication age fit beside 
   await expect(row.locator('time')).toHaveText('1 hr ago');
   await expect(row.locator('time')).toHaveAttribute('datetime',new Date(timestamp*1000).toISOString());
   await expect(row.locator('time')).toHaveAttribute('title',/^Published /);
+  const time=await row.locator('time').boundingBox(),votes=await row.locator('.nb-note-votes').boundingBox();
+  expect(time.x+time.width).toBeLessThanOrEqual(votes.x);
   const bounds=await row.evaluate(element=>{
     const title=element.querySelector('h2').getBoundingClientRect(),aside=element.querySelector('.nb-entry-aside').getBoundingClientRect();
     return {titleRight:title.right,asideLeft:aside.left,right:aside.right,rowRight:element.getBoundingClientRect().right};

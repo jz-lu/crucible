@@ -80,14 +80,14 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.equal(app.q('list').querySelector('.nb-note-votes'),null);
   assert.match(app.q('list').querySelector('time').title,/^Saved /);
  });
- await test('note numbers appear only after expansion and identify exact revision citations',async()=>{
+ await test('note numbers stay beside titles through expansion and identify exact revision citations',async()=>{
   const saved=note({number:1042,content_sha256:'a'.repeat(64)});
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[saved],next_after:null}:url.startsWith('/api/notebook/notes/note-one')?{note:saved}:undefined});
-  assert.equal(app.q('list').querySelector('.nb-note-number'),null);
+  assert.equal(app.q('list').querySelector('.nb-note-number').textContent,'#1042');
   app.q('list').querySelector('.nb-title').click();await flush();
   assert.equal(app.q('list').querySelector('.nb-note-number').textContent,'#1042');
   app.q('list').querySelector('.nb-title').click();await flush();
-  assert.equal(app.q('list').querySelector('.nb-note-number'),null);
+  assert.equal(app.q('list').querySelector('.nb-note-number').textContent,'#1042');
   await app.show('note-one',1);
   app.q('full').querySelector('.nb-number-action').click();
   assert.equal(app.q('dialog-body').querySelector('.nb-citation-number').textContent,'#1042 · revision 1');

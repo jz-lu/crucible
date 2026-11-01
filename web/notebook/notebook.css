@@ -82,7 +82,8 @@
 .nb-entry-heading,.nb-reader-heading{display:grid;grid-template-columns:minmax(0,1fr) 136px;align-items:center;gap:12px}
 .nb-entry-heading>h2,.nb-reader-heading>.nb-full-title{min-width:0;overflow-wrap:anywhere}
 .nb-entry-heading .nb-title-copy{min-width:0;overflow-wrap:anywhere}
-.nb-title-trailing{display:flex;align-items:center;align-self:flex-start;gap:14px;flex-shrink:0;min-height:1.45em}
+.nb-title-line{display:block;min-width:0}
+.nb-title-trailing{display:inline-flex;align-items:baseline;gap:8px;margin-inline-start:10px;vertical-align:baseline;white-space:nowrap}
 .nb-note-number{font:400 11px/1.5 var(--mono);font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
 .nb-number-action{padding:4px 0;background:transparent;border:0;cursor:pointer}
 .nb-number-action:hover{color:var(--primary);text-decoration:underline;text-underline-offset:3px}
