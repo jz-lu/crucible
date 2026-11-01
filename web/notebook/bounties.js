@@ -43,7 +43,7 @@
     const heading = el('div', 'bty-heading'), title = el(reviewOnly ? 'h2' : 'h1', '', 'Bounties'); title.tabIndex = -1;
     const titleRow = el('div', 'bty-title-row'); titleRow.append(title);
     const headingActions = el('div', 'bty-heading-actions'), allowanceNode = el('span', 'bty-allowance');
-    const propose = button('Propose a bounty', () => change({compose: true, id: ''}, 'bounty-title'));
+    const propose = button('Propose a bounty', () => change({compose: true, id: ''}, 'bounty-title'), 'nb-button nb-primary');
     headingActions.append(allowanceNode, propose); heading.append(titleRow, headingActions);
     const notice = el('div', 'bty-notice'); notice.setAttribute('role', 'status');
     const board = el('section'), listHeading = el('div', 'bty-list-heading'), count = el('span', 'bty-count');
