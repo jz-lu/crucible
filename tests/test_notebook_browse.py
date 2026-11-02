@@ -165,7 +165,8 @@ def test_equal_time_order_is_stable_across_multiple_pages(system):
     assert [item['id'] for item in found] == [item['id'] for item in records]
     first = page(owner, limit=25)
     assert first['next_after'] != first['notes'][-1]['id']
-    assert notebook._read_browse_cursor(first['next_after']) == (123.25, records[24]['id'])
+    assert notebook._read_browse_cursor(first['next_after']) == (
+        app.state.clock(), notebook._browse_rank(0, 123.25, app.state.clock()), 123.25, records[24]['id'])
 
 
 def test_private_edits_do_not_change_readers_order_timestamps_or_cursor(system):
@@ -187,7 +188,8 @@ def test_private_edits_do_not_change_readers_order_timestamps_or_cursor(system):
         assert [item['revisions'][0]['created_at'] for item in listed] == [
             item['revisions'][0]['created_at'] for item in before]
         assert all(item['revision'] == 1 and item['revision_count'] == 1 for item in listed)
-        assert page(actor, limit=1)['next_after'] == first['next_after']
+        assert notebook._read_browse_cursor(page(actor, limit=1)['next_after'])[2:] == (
+            notebook._read_browse_cursor(first['next_after'])[2:])
         next_page = page(actor, limit=1, after=first['next_after'])
         assert [item['id'] for item in next_page['notes']] == [older['id']]
         assert next_page['next_after'] is None
@@ -203,7 +205,7 @@ def test_curated_recent_order_uses_latest_revision_and_unicode_cursor(system, cu
     value['notes'][0]['revisions'].append(dict(content(title='Current curated summary'),
         revision=2, createdAt=23000))
     path.write_text(json.dumps(value))
-    records, sizes = browse(owner, include_curated='true', limit=1)
+    records, sizes = browse(owner, include_curated='true', limit=1, order='recent')
     expected = sorted(value['notes'], key=lambda item: (-item['revisions'][-1]['createdAt'], item['id']))
     assert [item['id'] for item in records] == ['curated:' + item['id'] for item in expected]
     assert sizes == [1] * 7
@@ -341,12 +343,12 @@ def test_browse_queries_remain_scalar_batched_and_portable(system, curated):
             event.remove(app.state.db.engine, 'before_cursor_execute', sql)
             event.remove(app.state.db.engine, 'before_execute', expr)
         main = [statement for statement in expressions if
-                'ORDER BY notebook_revisions.created_at DESC, notebook_notes.id' in str(statement)]
+                ' AS browse_rank' in str(statement) and statement._limit_clause is not None]
         assert len(main) == 1
         assert main[0]._limit_clause.value == limit + 1
         assert main[0]._offset_clause is None
         if after:
-            assert 'notebook_revisions.created_at <' in str(main[0])
+            assert 'published_at' in str(main[0].whereclause) and ' < ' in str(main[0].whereclause)
             assert 'notebook_notes.id >' in str(main[0])
         return queries, expressions
     small, _ = capture(1)

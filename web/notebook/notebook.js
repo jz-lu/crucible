@@ -411,7 +411,9 @@
       if (inShared || params.get('filter') === 'shared') { params.delete('shared'); params.delete('state'); params.delete('filter'); visibility = 'all'; filter.input.value = 'all'; }
       request++; timelineRequest++;
       q('map').hidden = !inMap; q('timeline').hidden = !inTimeline; q('bounties').hidden = !inBounties;
-      heading.hidden = !reviewOnly && inBounties;
+      const inNote = !inVisualization && Boolean(params.get('note'));
+      root.classList.toggle('nb-note-reader', !reviewOnly && inNote);
+      heading.hidden = !reviewOnly && (inBounties || inNote);
       pageTitle.textContent = inMap ? 'Scheme map' : inTimeline ? 'Timeline' : 'Notes';
       visualizationBack.hidden = !inMap && !inTimeline;
       visualizationBack.textContent = inMap ? '← Schemes' : '← Notes';
@@ -681,7 +683,8 @@
           // submission or a fabricated sharing approval.
           return {id:'curated:' + source.id, number:references.numbers?.['curated:' + source.id], source_id:source.id, source_kind:'curated-research',
             owner:null, can_edit:false, can_review:false, created_at:revisions[0].created_at,
-            ...latest, revisions, revision_count:revisions.length};
+            ...latest, revisions, revision_count:revisions.length,
+            ...references.metadata?.['curated:' + source.id]};
         }));
         if (epoch !== generation || accountId !== owner || identity() !== owner) throw new Error('Notebook account changed.');
         curatedNotes = records; curatedLoaded = true; return records;
@@ -767,6 +770,7 @@
       for (const actions of q('list').querySelectorAll('.nb-card-actions')) {
         for (const control of actions.querySelectorAll('button')) control.disabled = disabled;
       }
+      for (const control of q('list').querySelectorAll('.nb-number-action')) control.disabled = disabled;
     }
     function updateList(update) {
       const focused = document.activeElement?.closest('.nb-list') === q('list');
@@ -1015,6 +1019,37 @@
         rememberRead(key, result.note);
       }, forget);
     }
+    function noteMetadata(note, revision) {
+      const meta = el('div', 'nb-note-meta');
+      let votes = null;
+      const published = Number.isFinite(note.published_at) ? note.published_at :
+        note.source_kind === 'curated-research' ? note.created_at : null;
+      if (published !== null) {
+        const rating = note.rating, score = Number.isSafeInteger(rating?.score) && rating.score >= 0 ? rating.score : 0;
+        votes = el('span', 'nb-note-votes');
+        const arrow = el('span', 'nb-vote-arrow', '▲'); arrow.setAttribute('aria-hidden', 'true');
+        votes.append(arrow, el('span', '', String(score)));
+        const description = `${score} vote ${score === 1 ? 'point' : 'points'} · ${rating?.upvotes || 0} upvotes (+1) · ${rating?.double_upvotes || 0} double upvotes (+2). Votes support published revisions.`;
+        votes.title = description; votes.setAttribute('aria-label', description);
+      }
+      const timestamp = published ?? revision.created_at;
+      if (Number.isFinite(timestamp)) {
+        const date = new Date(timestamp * 1000);
+        if (!Number.isNaN(date.getTime())) {
+          const age = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+          const [size, singular, plural] = age < 60 ? [1, 'sec', 'sec'] : age < 3600 ? [60, 'min', 'min'] :
+            age < 86400 ? [3600, 'hr', 'hrs'] : age < 604800 ? [86400, 'day', 'days'] :
+            age < 31536000 ? [604800, 'wk', 'wks'] : [31536000, 'yr', 'yrs'];
+          const count = Math.floor(age / size);
+          const time = el('time', 'nb-note-time', `${count} ${count === 1 ? singular : plural} ago`);
+          time.setAttribute('datetime', date.toISOString());
+          time.title = (published !== null ? 'Published ' : 'Saved ') + date.toLocaleString(undefined, {dateStyle:'full', timeStyle:'long'});
+          time.setAttribute('aria-label', time.title); meta.append(time);
+        }
+      }
+      if (votes) meta.append(votes);
+      return meta;
+    }
     function renderList() {
       q('search').value = search; q('filter').replaceChildren();
       if (tag) q('filter').append(button(tagLabel(tag) + ' ×', () => { tag = ''; changeQuery(); }, 'nb-tag'));
@@ -1026,16 +1061,32 @@
       if (reviewMode) q('list').append(el('p', 'nb-hint', 'Publish requests · approve an exact revision for all approved participants to read. This does not publish it to the internet or certify its mathematics.'));
       if (!filtered.length) q('list').append(el('p', 'nb-empty', reviewMode ? 'No publish requests awaiting approval.' : search.trim() || tag || visibility !== 'all' ? 'No matching notes.' : 'No notes yet. Start with New note.'));
       filtered.forEach((note, index) => {
-        const shown = selectedRevision(note), proposal = reviewMode ? null : proposalRevision(note), r = shown.content, expanded = previewId === note.id + ':' + shown.revision, item = el('section', 'nb-entry'), heading = el('h2');
-        const title = button('', () => { previewId = expanded ? null : note.id + ':' + shown.revision; if (!expanded) prepareNote(note, visibility === 'proposals' && proposal ? proposal.revision : null); renderList(); root.querySelectorAll('.nb-title')[index]?.focus({preventScroll:true}); }, 'nb-title');
-        title.setAttribute('aria-expanded', String(expanded)); title.setAttribute('aria-controls', (reviewOnly ? 'nb-review-preview-' : 'nb-preview-') + index);
-        const marker = el('span', 'nb-marker', expanded ? '−' : '+'); marker.setAttribute('aria-hidden', 'true');
-        const trailing = el('span', 'nb-title-trailing'), number = noteNumber(note);
-        if (expanded && number) { const reference = el('span', 'nb-note-number', number); reference.title = 'Permanent note number. Search ' + number + ' to find this note.'; trailing.append(reference); }
-        trailing.append(marker);
-        const copy = el('span', 'nb-title-copy'); copy.append(el('span', '', r.title), status(note, shown, proposal)); title.append(copy, trailing); heading.append(title);
+        const shown = selectedRevision(note), proposal = reviewMode ? null : proposalRevision(note), r = shown.content, expanded = previewId === note.id + ':' + shown.revision, item = el('section', 'nb-entry'), heading = el('h2', 'nb-entry-title');
+        const previewIdValue = (reviewOnly ? 'nb-review-preview-' : 'nb-preview-') + index;
+        const togglePreview = source => {
+          previewId = expanded ? null : note.id + ':' + shown.revision;
+          if (!expanded) prepareNote(note, visibility === 'proposals' && proposal ? proposal.revision : null);
+          renderList(); q('list').querySelectorAll('.' + source)[index]?.focus({preventScroll:true});
+        };
+        const title = button('', () => togglePreview('nb-title'), 'nb-title');
+        const marker = button(expanded ? '−' : '+', () => togglePreview('nb-expand'), 'nb-marker nb-expand');
+        marker.setAttribute('aria-label', (expanded ? 'Collapse' : 'Expand') + ' note: ' + r.title);
+        for (const control of [marker, title]) {
+          control.setAttribute('aria-expanded', String(expanded)); control.setAttribute('aria-controls', previewIdValue);
+        }
+        const number = noteNumber(note);
+        if (number) {
+          const reference = button(number, () => citeNote(note, shown), 'nb-note-number nb-number-action');
+          reference.title = 'Cite ' + number + ' · revision ' + shown.revision;
+          reference.setAttribute('aria-label', 'Cite note ' + number + ', revision ' + shown.revision);
+          reference.disabled = listRefreshing; heading.append(reference);
+        }
+        const line = el('span', 'nb-title-line'); line.append(el('span', 'nb-title-text', r.title));
+        const copy = el('span', 'nb-title-copy'); copy.append(line, status(note, shown, proposal)); title.append(copy); heading.append(title, marker);
         const headingRow = el('div', 'nb-entry-heading'), actions = el('div', 'nb-card-actions');
-        headingRow.append(heading, actions); item.append(headingRow);
+        const aside = el('div', 'nb-entry-aside');
+        if (!reviewOnly && !reviewMode) aside.append(noteMetadata(note, shown));
+        aside.append(actions); headingRow.append(heading, aside); item.append(headingRow);
         if (!reviewOnly && ownsNote(note)) {
           actions.append(button('Edit', () => openCardAction(note, 'edit', actions), 'nb-button'));
           if (canPublish(note, shown)) actions.append(button('Publish', () => openCardAction(note, 'publish', actions), 'nb-button'));
@@ -1109,7 +1160,7 @@
     function focusReader() {
       const location = params.get('location');
       const passage = validLocation(location) ? q('full').querySelector('[data-nb-location="' + location + '"]') : null;
-      (passage || q('full').querySelector('h2'))?.focus({preventScroll:true});
+      (passage || q('full').querySelector('.nb-full-title'))?.focus({preventScroll:true});
       if (passage) passage.scrollIntoView({block:'center'});
     }
     async function loadNote(id) {
@@ -1222,7 +1273,7 @@
       if (pinError) { full.append(el('p', 'nb-error', pinError)); return; }
       const revision = requested ? note.revisions.find(r => String(r.revision) === requested) : note.revisions.find(r => r.revision === note.revision) || note.revisions[note.revisions.length - 1];
       if (!revision) { full.append(el('h2', 'nb-full-title', 'Revision not available')); return; }
-      const r = revision.content, heading = el('h2', 'nb-full-title', r.title); heading.tabIndex = -1;
+      const r = revision.content, heading = el(reviewOnly ? 'h2' : 'h1', 'nb-full-title', r.title); heading.tabIndex = -1;
       const body = bodyContent(r.body, location => citeNote(note, revision, location));
       const location = params.get('location');
       if (location) {
@@ -1236,6 +1287,7 @@
       }
       const headingRow = el('div', 'nb-reader-heading');
       const noteActions = el('div', 'nb-note-actions');
+      if (!reviewOnly && !reviewMode) noteActions.append(noteMetadata(note, revision));
       const number = noteNumber(note);
       if (number) {
         const reference = button(number, () => citeNote(note, revision), 'nb-note-number nb-number-action');
@@ -1347,7 +1399,7 @@
         content.append(actions);
       }
       if (note.can_edit) content.append(button('My research requests', () => navigate('#notebook?research=1')));
-      if (revision.content.extensions?.kem_specification || revision.scheme_review) content.append(schemePanel(note, revision));
+      if (noteType(revision.content) === 'scheme-proposal' || revision.scheme_review) content.append(schemePanel(note, revision));
       else if (note.can_edit) content.append(button('Propose a scheme or parameter update', () => editNote(note, true)));
       if (!records.length) content.append(el('p', 'nb-hint', 'A proposal asks for a concrete change, supported by this saved note. Ordinary research notes do not need to make a proposal.'));
       panel.append(content); return panel;
@@ -1556,9 +1608,9 @@
         const editable = reference && typeof reference === 'object' && !Array.isArray(reference) && typeof reference.title === 'string' && typeof reference.url === 'string' && (reference.scope === undefined || typeof reference.scope === 'string');
         const entry = {reference, row, fields:[], removed:false};
         if (editable) {
-          const title = field('Source title', prefix + '-title', reference.title, {max:2000});
-          const link = field('Source link', prefix + '-url', reference.url, {max:8000,placeholder:'https://… or an exact Crucible note link'});
-          const scope = field('What this supports', prefix + '-scope', reference.scope || '', {rows:2,max:10000,placeholder:'Claim, theorem, section or page; mention any limitation.'});
+          const title = field('Source title', prefix + '-title', reference.title, {requiredLabel:true,max:2000,placeholder:'e.g. Paper title or supporting note'});
+          const link = field('Source link', prefix + '-url', reference.url, {requiredLabel:true,max:8000,placeholder:'https://… or an exact Crucible note link'});
+          const scope = field('What this supports', prefix + '-scope', reference.scope || '', {requiredLabel:true,rows:2,max:10000,placeholder:'Claim, theorem, section or page; mention any limitation.'});
           const knownRelation = Object.hasOwn(relationLabels, reference.relation);
           const relation = field('This note…', prefix + '-relation', knownRelation ? reference.relation : 'cites', {options:Object.entries(relationLabels).map(([value,label]) => ({value,label:label + ' this source'}))});
           let relationChanged = false;
@@ -1861,12 +1913,21 @@
     function openDialog(title, variant = '') { returnFocus = document.activeElement; hasUnsavedDraft = () => false; discardMessage = 'Discard the unsaved changes to this note?'; suspendedDialog = false; dialogEpoch++; q('dialog-title').textContent = title; q('dialog').setAttribute('aria-label', title); q('dialog').classList.toggle('nb-publish-dialog', variant === 'publication'); q('close').setAttribute('aria-label', 'Close dialog'); q('dialog-body').replaceChildren(); q('dialog').showModal(); return q('dialog-body'); }
     function closeDialog(saved = false) { if (saved !== true && hasUnsavedDraft() && !window.confirm(discardMessage)) return; hasUnsavedDraft = () => false; suspendedDialog = false; dialogEpoch++; q('dialog').close(); }
     function field(label, name, value = '', options = {}) {
-      const wrap = el('label', 'nb-field'), caption = el('span', '', label); caption.id = (reviewOnly ? 'nb-review-field-' : 'nb-field-') + name; wrap.append(caption); let input;
+      const wrap = el('label', 'nb-field'), labelRow = el('span'), caption = el('span', '', label); caption.id = (reviewOnly ? 'nb-review-field-' : 'nb-field-') + name; labelRow.append(caption); wrap.append(labelRow); let input;
+      if (options.required || options.requiredLabel) { const mark = el('span', 'nb-required-marker', ' *'); mark.setAttribute('aria-hidden', 'true'); labelRow.append(mark); }
       if (options.options) { input = el('select'); options.options.forEach(o => { const n = el('option', '', o.label); n.value = o.value; input.append(n); }); }
       else if (options.rows) { input = el('textarea'); input.rows = options.rows; } else { input = el('input'); input.type = options.type || 'text'; }
       input.name = name; input.setAttribute('name', name); input.value = value ?? ''; input.setAttribute('aria-labelledby', caption.id);
+      if (options.requiredLabel) input.setAttribute('aria-required', 'true');
       if (options.required) input.required = true; if (options.max) input.maxLength = options.max; if (options.placeholder) input.placeholder = options.placeholder;
       wrap.append(input); if (options.help) { const hint = el('small', '', options.help); hint.id = (reviewOnly ? 'nb-review-hint-' : 'nb-hint-') + name; input.setAttribute('aria-describedby', hint.id); wrap.append(hint); } return {wrap, input};
+    }
+    function noteType(content) {
+      // Authored editor intent only; permissions and scheme admission remain
+      // tied to the server's exact saved revision and review records.
+      const chosen = content?.extensions?.note_type;
+      return ['research-note', 'scheme-proposal'].includes(chosen) ? chosen :
+        content?.extensions?.kem_specification ? 'scheme-proposal' : 'research-note';
     }
     function schemePanel(note, revision) {
       const panel = el('section', 'nb-scheme-panel'), review = revision.scheme_review;
@@ -1877,11 +1938,11 @@
       if (revision.content.extensions?.kem_specification) actions.append(button('Download specification ↓', () => download('crucible-kem-spec.json', revision.content.extensions.kem_specification)));
       if (review && !requestRecords(revision).some(record => record.kind === 'scheme_admission') && (note.can_edit || note.can_review)) actions.append(button('Review & history →', () => navigate(note.can_review ? reviewUrl('schemes', {proposal:review.id}) : '#propose?proposal=' + encodeURIComponent(review.id))));
       if (note.can_edit) {
-        actions.append(button('Edit note', () => editNote(note, true)));
+        actions.append(button(revision.content.extensions?.kem_specification ? 'Edit note' : 'Attach scheme specification', () => editNote(note, true)));
         const withdrawnScheme = (note.revisions || []).some(row => row.scheme_review?.retracted || requestRecords(row).some(value => value.kind === 'scheme_admission' && value.retracted));
         if (!review && revision.revision === latestRevision(note).revision) {
           if (withdrawnScheme) actions.append(el('p', 'nb-hint', 'The earlier scheme proposal was retracted. Start a new proposal note to pursue a revised idea.'));
-          else actions.append(button('Submit for scheme review', () => schemeSubmissionDialog(note, revision), 'nb-button nb-primary'));
+          else if (revision.content.extensions?.kem_specification) actions.append(button('Submit for scheme review', () => schemeSubmissionDialog(note, revision), 'nb-button nb-primary'));
         }
       }
       panel.append(actions, el('p', 'nb-hint', review ? 'Review is tied to this exact note and specification. Publication for all approved participants is a separate decision.' : 'Save your research here. Submit a saved revision when it is ready for reviewers.'));
@@ -1908,41 +1969,160 @@
       container.append(guidance, error, submit);
       requestGuidance(guidance, 'scheme_admission', present, ready => { guidanceReady = ready; submit.disabled = !ready || busy; });
     }
+    function noteTagPicker(initial, changed) {
+      const wrap = el('div', 'nb-field nb-tag-picker'), label = el('label', '', 'Tags');
+      const stored = el('input'); stored.type = 'hidden'; stored.name = 'tags'; stored.setAttribute('name', 'tags'); stored.value = JSON.stringify(initial);
+      const input = el('input'), id = (reviewOnly ? 'nb-review-' : 'nb-') + 'tag-search-' + dialogEpoch;
+      input.id = id; input.name = 'tag-search'; input.setAttribute('name', 'tag-search'); input.type = 'text'; input.maxLength = 100;
+      input.placeholder = 'Search existing tags or add a new one'; input.setAttribute('autocomplete', 'off');
+      input.setAttribute('role', 'combobox'); input.setAttribute('aria-autocomplete', 'list');
+      input.setAttribute('aria-haspopup', 'listbox'); input.setAttribute('aria-expanded', 'false'); label.setAttribute('for', id);
+      const selected = el('div', 'nb-selected-tags'); selected.setAttribute('role', 'list'); selected.setAttribute('aria-label', 'Selected tags');
+      const control = el('div', 'nb-tag-control'), popup = el('div', 'nb-tag-dropdown'), list = el('div'), status = el('p', 'nb-tag-search-status');
+      popup.hidden = true; list.id = id + '-options'; list.setAttribute('role', 'listbox'); list.setAttribute('aria-label', 'Matching tags');
+      input.setAttribute('aria-controls', list.id); status.setAttribute('role', 'status'); popup.append(list, status); control.append(input, popup);
+      wrap.append(label, stored, selected, control);
+      const alive = dialogGuard(), credential = currentSession;
+      let generation = 0, timer = null, lookup = null, activeIndex = 0, options = [], rows = [];
+      const editable = () => alive() && active && q('dialog').open && wrap.isConnected &&
+        currentSession === credential && session() === credential && !input.disabled;
+      const values = () => JSON.parse(stored.value);
+      const candidates = () => (lookup?.tags || []).filter(tag => !values().some(value => value.toLowerCase() === tag.toLowerCase()));
+      function close() { generation++; clearTimeout(timer); timer = null; lookup = null; rows = []; options = []; popup.hidden = true; list.setAttribute('aria-busy', 'false'); input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); }
+      function highlight(index) {
+        activeIndex = index;
+        rows.forEach((row, position) => row.setAttribute('aria-selected', String(position === index)));
+        if (rows[index]) input.setAttribute('aria-activedescendant', rows[index].id);
+        else input.removeAttribute('aria-activedescendant');
+      }
+      function paintSelected() {
+        selected.replaceChildren();
+        for (const tag of values()) {
+          const chip = el('span', 'nb-selected-tag'); chip.setAttribute('role', 'listitem');
+          const remove = button('×', () => {
+            if (!editable() || !remove.isConnected) return;
+            stored.value = JSON.stringify(values().filter(value => value !== tag)); paintSelected(); changed(); input.focus();
+          }, 'nb-tag-remove');
+          remove.setAttribute('aria-label', 'Remove tag ' + tag); remove.disabled = input.disabled;
+          chip.append(el('span', '', tag), remove); selected.append(chip);
+        }
+        selected.hidden = !values().length;
+      }
+      function choose(value) {
+        if (!editable()) return false;
+        const tags = values(), tag = value.trim();
+        if (!tag || tag.length > 100 || (tags.length >= 40 && !tags.some(value => value.toLowerCase() === tag.toLowerCase()))) {
+          status.textContent = 'Use up to 40 tags, each at most 100 characters.'; popup.hidden = false; input.setAttribute('aria-expanded', 'true'); return false;
+        }
+        if (!tags.some(value => value.toLowerCase() === tag.toLowerCase())) tags.push(tag);
+        stored.value = JSON.stringify(tags); input.value = ''; close(); paintSelected(); changed(); input.focus(); return true;
+      }
+      function paint() {
+        options = candidates(); rows = []; list.replaceChildren(); input.removeAttribute('aria-activedescendant');
+        options.forEach(tag => {
+          const row = button(tag, () => { if (editable() && !popup.hidden && row.isConnected && lookup?.done && !lookup.error) choose(tag); }, 'nb-tag-option');
+          row.id = id + '-option-' + rows.length; row.tabIndex = -1; row.setAttribute('role', 'option');
+          row.addEventListener('pointerdown', event => event.preventDefault());
+          row.addEventListener('pointermove', () => highlight(rows.indexOf(row))); rows.push(row); list.append(row);
+        });
+        list.setAttribute('aria-busy', String(Boolean(lookup && !lookup.done)));
+        status.textContent = lookup?.error || (lookup && !lookup.done ? 'Searching tags…' : options.length ? '' :
+          input.value.trim() ? 'No matching tags. Press Enter to add “' + input.value.trim() + '”.' : 'Type a tag to search.');
+        highlight(Math.min(activeIndex, Math.max(0, rows.length - 1)));
+      }
+      function load() {
+        clearTimeout(timer); timer = null;
+        const query = input.value.trim(), entry = {query, token:++generation, done:false, tags:[], error:''}, reads = readEpoch;
+        lookup = entry; popup.hidden = false; input.setAttribute('aria-expanded', 'true'); activeIndex = 0; paint();
+        entry.promise = (async () => {
+          try {
+            const data = await api('/api/notebook/tags?' + new URLSearchParams({q:query}));
+            if (!editable() || lookup !== entry || entry.token !== generation || input.value.trim() !== query) return null;
+            if (reads !== readEpoch) throw Error('Tags changed. Type again to refresh the suggestions.');
+            if (!Array.isArray(data.tags) || data.tags.length > 50 || data.tags.some(tag => typeof tag !== 'string' || !tag.trim() || tag.length > 100)) throw Error('Tag suggestions could not be verified.');
+            entry.tags = data.tags; entry.done = true; paint(); return candidates();
+          } catch (error) {
+            if (editable() && lookup === entry && entry.token === generation) {
+              entry.done = true; entry.tags = []; entry.error = error.message + ' Press Enter to retry.'; paint();
+            }
+            return null;
+          }
+        })();
+        return entry;
+      }
+      async function commit(useSuggestion = false) {
+        const query = input.value.trim(); if (!query && (!useSuggestion || popup.hidden)) return true;
+        if (!editable()) return false;
+        const entry = lookup?.query === query && !lookup.error ? lookup : load();
+        const matches = await entry.promise;
+        if (!matches || !editable() || lookup !== entry || input.value.trim() !== query) return false;
+        const value = matches[activeIndex] || matches[0] || query;
+        return value ? choose(value) : true;
+      }
+      const open = () => { if (editable() && popup.hidden && input.value.trim()) load(); };
+      input.addEventListener('focus', open); input.addEventListener('click', open);
+      input.addEventListener('blur', close);
+      input.addEventListener('input', () => {
+        if (!editable()) return;
+        close(); list.replaceChildren(); if (!input.value.trim()) return;
+        popup.hidden = false; input.setAttribute('aria-expanded', 'true'); list.setAttribute('aria-busy', 'true'); status.textContent = 'Searching tags…';
+        timer = setTimeout(() => { if (editable()) load(); }, 180);
+      });
+      input.addEventListener('keydown', event => {
+        if (!editable() || event.isComposing) return;
+        if (event.key === 'Enter') { event.preventDefault(); void commit(true); }
+        else if (event.key === 'Escape' && !popup.hidden) { event.preventDefault(); event.stopPropagation(); close(); }
+        else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          if (popup.hidden) load();
+          else if (rows.length) { highlight((activeIndex + (event.key === 'ArrowDown' ? 1 : rows.length - 1)) % rows.length); rows[activeIndex]?.scrollIntoView({block:'nearest'}); }
+        }
+      });
+      paintSelected();
+      return {wrap, stored, commit, refresh:paintSelected, dirty:() => Boolean(input.value.trim()),
+        disable(disabled) { input.disabled = disabled; if (disabled) close(); paintSelected(); }};
+    }
     function editNote(note = null, proposal = false, sourceReference = null) {
       if (!accountId || (note && !note.can_edit)) return;
       const latest = note ? latestRevision(note) : null;
-      const r = latest?.content, container = openDialog(note ? 'Revise note' : proposal ? 'New proposal note' : 'New private note');
+      const r = latest?.content, initialType = proposal ? 'scheme-proposal' : noteType(r);
+      const container = openDialog(note ? 'Revise note' : initialType === 'scheme-proposal' ? 'New proposal note' : 'New private note');
       container.append(el('p', 'nb-hint', 'Saved to your account as a private revision. Earlier revisions and their publication decisions remain unchanged.'));
-      if (proposal || r?.extensions?.kem_specification) {
-        const guidance = el('p', 'nb-hint'), guide = el('a', 'nb-link', 'Proposal guidelines ↗');
-        guide.href = '/api/protocol/proposal-guide'; guide.target = '_blank'; guide.rel = 'noopener noreferrer';
-        guidance.append(guide, el('span', '', ' · Algorithms, claims, assumptions and configuration choices.'));
-        container.append(guidance);
-      }
+      const guidance = el('p', 'nb-hint'), guide = el('a', 'nb-link', 'Proposal guidelines ↗');
+      guide.href = '/api/protocol/proposal-guide'; guide.target = '_blank'; guide.rel = 'noopener noreferrer';
+      guidance.append(guide, el('span', '', ' · Algorithms, claims, assumptions and configuration choices.')); container.append(guidance);
       const form = el('form', 'nb-form'), error = el('p', 'nb-error'); error.setAttribute('role', 'alert'); const controls = {};
+      const type = field('Scheme proposal', 'scheme-proposal', '', {type:'checkbox'});
+      type.input.checked = initialType === 'scheme-proposal'; type.wrap.classList.add('nb-proposal-option');
+      const selectedType = () => (proposal || type.input.checked) ? 'scheme-proposal' : 'research-note';
+      const retainedAttachment = el('p', 'nb-hint', 'The attached scheme specification will be kept with this research note.');
+      if (!proposal) form.append(type.wrap);
+      form.append(retainedAttachment);
       const add = (label, name, value, options) => { const f = field(label, name, value, options); controls[name] = f.input; return f.wrap; };
-      form.append(add('Title', 'title', r?.title, {required:true,max:240}), add('Dropdown summary', 'claim', r?.claim, {required:true,rows:3,max:20000,help:'Briefly explain the question or result, why it matters and any essential caveat for people browsing.'}), add('Conditions & scope', 'conditions', r?.conditions, {required:true,rows:2,max:20000}), add('Technical body', 'body', r?.body, {required:true,rows:7,max:40000,help:'Free-form research for agents and expert reviewers. LaTeX, prose, code and calculations are welcome; no required outline or brevity. The full source is preserved even when notation is not rendered.'}));
-      const row = el('div', 'nb-fields-row'); row.append(add('Tags', 'tags', r?.tags.join(', ') || (proposal ? 'scheme-description, KEM, proposal' : ''), {max:4000,placeholder:'Comma-separated subjects'}), add('Evidence description', 'kind', r?.kind || (proposal ? 'Unreviewed construction' : ''), {max:100,placeholder:'Conjecture, proof supplied…'})); form.append(row);
-      const humanWritten = field('Human-written', 'human-written', '', {type:'checkbox',help:'Optional, self-reported label; not verified. Use only when this revision was written by a person.'});
+      form.append(add('Title', 'title', r?.title, {required:true,max:240,placeholder:proposal ? 'e.g. A scheme based on structured lattices' : 'e.g. Testing a lattice parameter choice'}), add('Dropdown summary', 'claim', r?.claim, {required:true,rows:3,max:20000,placeholder:'What is the question or result, and why does it matter?',help:'Briefly explain the question or result, why it matters and any essential caveat for people browsing.'}), add('Conditions & scope', 'conditions', r?.conditions, {required:true,rows:2,max:20000,placeholder:'State the assumptions, parameters, and limits of the claim.'}), add('Technical body', 'body', r?.body, {required:true,rows:7,max:40000,placeholder:'Describe the construction, argument, calculations, or experiments in enough detail for someone else to check the work.',help:'Free-form research for agents and expert reviewers. LaTeX, prose, code and calculations are welcome; no required outline or brevity. The full source is preserved even when notation is not rendered.'}));
+      const tagPicker = noteTagPicker(r?.tags || (initialType === 'scheme-proposal' ? ['scheme-description', 'proposal'] : []), () => syncHumanWritten()); controls.tags = tagPicker.stored;
+      form.append(add('Evidence description', 'kind', r?.kind ?? (initialType === 'scheme-proposal' ? 'Unreviewed construction' : ''), {max:100,placeholder:'e.g. Proof sketch, experiment, or open question'}), tagPicker.wrap);
+      const humanWritten = field('Human-written', 'human-written', '', {type:'checkbox'});
       humanWritten.wrap.classList.add('nb-human-option');
-      const tagValues = () => controls.tags.value.split(',').map(value => value.trim()).filter(Boolean);
+      const tagValues = () => JSON.parse(controls.tags.value);
       const syncHumanWritten = () => { humanWritten.input.checked = tagValues().includes('human-written'); };
       syncHumanWritten();
-      controls.tags.addEventListener('input', syncHumanWritten);
+      controls.tags.addEventListener('input', () => { syncHumanWritten(); tagPicker.refresh(); });
       humanWritten.input.addEventListener('change', () => {
         if (humanWritten.input.disabled) return;
         const tags = tagValues().filter(value => value !== 'human-written');
         if (humanWritten.input.checked) tags.push('human-written');
-        controls.tags.value = tags.join(', ');
+        controls.tags.value = JSON.stringify(tags); tagPicker.refresh();
       });
       form.append(humanWritten.wrap);
       const citations = citationEditor(r?.references);
       if (sourceReference) citations.loadIfEmpty([sourceReference]);
       form.append(citations.section);
       let specification = r?.extensions?.kem_specification, attachmentChanged = false, reading = false, fileToken = 0;
-      const attachment = el('details', 'nb-details nb-specification'); attachment.open = proposal || Boolean(specification);
-      attachment.append(el('summary', '', 'KEM specification'));
-      const attachmentHint = el('p', 'nb-hint', specification ? 'Exact specification attached. Replace it to propose a change.' : 'Optional for a research note; required for scheme review. JSON, up to 48 KiB.');
+      const attachment = el('details', 'nb-details nb-specification'); attachment.open = true;
+      const attachmentTitle = el('summary', '', 'Scheme specification'), requiredMark = el('span', 'nb-required-marker', ' *');
+      requiredMark.setAttribute('aria-hidden', 'true'); attachmentTitle.append(requiredMark); attachment.append(attachmentTitle);
+      const attachmentHint = el('p', 'nb-hint', specification ? 'Exact specification attached. Replace it to propose a change.' : 'Required for scheme review. You can save a draft before attaching it. JSON, up to 48 KiB.');
       const file = field('Attach specification', 'kem-specification', '', {type:'file'}); file.input.accept = '.json,application/json';
       const links = el('div', 'nb-scheme-actions'), template = el('a', 'nb-link', 'Download template ↓'); template.href = '/api/protocol/spec-template'; template.download = 'crucible-kem-spec.json';
       links.append(template, button('Prepare with an agent →', () => navigate('#propose?agent=1')));
@@ -1953,18 +2133,33 @@
         closeDialog();
         if (!q('dialog').open) trashDialog(note);
       }, 'nb-button nb-remove-note') : null;
-      const cancel = button('Cancel', () => closeDialog(), 'nb-button'), save = el('button', 'nb-button nb-primary', note ? 'Save new revision' : 'Save private note');
+      const saveLabel = () => note ? 'Save new revision' : selectedType() === 'scheme-proposal' ? 'Save proposal draft' : 'Save private note';
+      const cancel = button('Cancel', () => closeDialog(), 'nb-button'), save = el('button', 'nb-button nb-primary', saveLabel());
       save.type = 'submit';
       if (remove) actions.append(remove);
       actions.append(cancel, save); form.append(actions); container.append(form);
-      const values = () => Object.fromEntries(Object.entries(controls).map(([k,v]) => [k,v.value])); const original = canonical(values()); hasUnsavedDraft = () => attachmentChanged || citations.dirty() || canonical(values()) !== original;
+      const values = () => Object.fromEntries(Object.entries(controls).map(([k,v]) => [k,v.value])); const original = canonical(values()); hasUnsavedDraft = () => selectedType() !== initialType || attachmentChanged || citations.dirty() || tagPicker.dirty() || canonical(values()) !== original;
       const present = dialogGuard();
       let busy = false, pending = null;
+      let currentType = initialType;
+      function renderType() {
+        const scheme = selectedType() === 'scheme-proposal';
+        guidance.hidden = !scheme; attachment.hidden = !scheme;
+        retainedAttachment.hidden = scheme || !specification;
+        controls.title.placeholder = scheme ? 'e.g. A scheme based on structured lattices' : 'e.g. Testing a lattice parameter choice';
+        if (!note) { const title = scheme ? 'New proposal note' : 'New private note'; q('dialog-title').textContent = title; q('dialog').setAttribute('aria-label', title); }
+        save.textContent = pending ? 'Retry the same save' : saveLabel();
+      }
+      type.input.addEventListener('change', () => {
+        if (proposal || busy || reading || pending || !present()) { type.input.checked = currentType === 'scheme-proposal'; return; }
+        currentType = selectedType(); renderType();
+      });
+      renderType();
       file.input.addEventListener('change', async () => {
-        if (busy || pending || !present()) return;
+        if (busy || pending || !present() || selectedType() !== 'scheme-proposal') return;
         const selected = file.input.files?.[0], token = ++fileToken;
         if (!selected) return;
-        reading = true; save.disabled = true; if (remove) remove.disabled = true; error.textContent = '';
+        reading = true; type.input.disabled = true; save.disabled = true; if (remove) remove.disabled = true; error.textContent = '';
         try {
           if (selected.size > 48 * 1024) throw new Error('Choose a specification no larger than 48 KiB.');
           const text = await selected.text();
@@ -1976,28 +2171,29 @@
           specification = result.specification; attachmentChanged = true;
           citations.loadIfEmpty(result.note_content.references);
           for (const key of ['title','claim','conditions','body','kind']) if (!controls[key].value.trim()) controls[key].value = result.note_content[key] || '';
-          const tags = new Set(controls.tags.value.split(',').map(value => value.trim()).filter(Boolean));
-          for (const value of ['scheme-description','KEM','proposal']) tags.add(value); controls.tags.value = [...tags].join(', ');
+          const tags = new Set(tagValues());
+          for (const value of ['scheme-description','KEM','proposal']) tags.add(value); controls.tags.value = JSON.stringify([...tags]); tagPicker.refresh();
           attachmentHint.textContent = specification.name + ' · format checked. Save the note before requesting scheme review.';
         } catch (err) { if (present() && token === fileToken) error.textContent = err.message; }
-        finally { if (present() && token === fileToken) { reading = false; save.disabled = busy; if (remove) remove.disabled = busy || Boolean(pending); } }
+        finally { if (present() && token === fileToken) { reading = false; type.input.disabled = busy || Boolean(pending); save.disabled = busy; if (remove) remove.disabled = busy || Boolean(pending); } }
       });
       form.addEventListener('submit', async event => {
         event.preventDefault(); if (busy || reading || !present()) return; busy = true; save.disabled = true; if (remove) remove.disabled = true; error.textContent = '';
         try {
           if (!pending) {
+            if (!await tagPicker.commit() || !present()) return;
             syncHumanWritten(); citations.validate();
-            const f = values(), content = {...window.TheoryStore.authoredMetadata(r), ...f, tags:f.tags.split(',').map(t => t.trim()).filter(Boolean)};
+            const f = values(), content = {...window.TheoryStore.authoredMetadata(r), ...f, tags:JSON.parse(f.tags)};
             if (citations.value() !== undefined) content.references = citations.value();
-            if (specification) {
+            if (specification || selectedType() === 'scheme-proposal' || selectedType() !== initialType || ['research-note','scheme-proposal'].includes(r?.extensions?.note_type)) {
               const previous = content.extensions;
               const extensions = previous && typeof previous === 'object' && !Array.isArray(previous) ? previous : previous === undefined ? {} : {previous_metadata:previous};
-              content.extensions = {...extensions, kem_specification:specification};
-              if (!content.references && specification.references) content.references = specification.references;
+              content.extensions = {...extensions, note_type:selectedType(), ...(specification ? {kem_specification:specification} : {})};
+              if (!content.references && specification?.references) content.references = specification.references;
             }
             pending = {content, idempotency_key:crypto.randomUUID(), ...(note ? {expected_revision:latest.revision, content_sha256:latest.content_sha256} : {})};
           }
-          Object.values(controls).forEach(control => { control.disabled = true; }); file.input.disabled = true; humanWritten.input.disabled = true; citations.disable(true);
+          Object.values(controls).forEach(control => { control.disabled = true; }); type.input.disabled = true; file.input.disabled = true; humanWritten.input.disabled = true; citations.disable(true); tagPicker.disable(true);
           const result = await api(note ? '/api/notebook/notes/' + encodeURIComponent(note.id) + '/revisions' : '/api/notebook/notes', pending);
           if (!present()) return;
           if (!result.note?.id) throw new Error('The save has no confirmed receipt. Retry the same draft.');
@@ -2008,7 +2204,7 @@
           error.textContent = err.message + (pending ? ' Retry to check the same save; your draft is preserved.' : ' Your draft is still here.');
           if (err.status === 409 && note) { const link = el('a', 'nb-link', 'Open the latest saved revision in another tab'); link.href = url(note.id); link.target = '_blank'; link.rel = 'noopener'; error.append(el('br'), link); }
         } finally {
-          if (present()) { busy = false; save.disabled = false; if (remove) remove.disabled = Boolean(pending); Object.values(controls).forEach(control => { control.disabled = Boolean(pending); }); file.input.disabled = Boolean(pending); humanWritten.input.disabled = Boolean(pending); citations.disable(Boolean(pending)); save.textContent = pending ? 'Retry the same save' : note ? 'Save new revision' : 'Save private note'; }
+          if (present()) { busy = false; save.disabled = false; if (remove) remove.disabled = Boolean(pending); Object.values(controls).forEach(control => { control.disabled = Boolean(pending); }); type.input.disabled = Boolean(pending); file.input.disabled = Boolean(pending); humanWritten.input.disabled = Boolean(pending); citations.disable(Boolean(pending)); tagPicker.disable(Boolean(pending)); save.textContent = pending ? 'Retry the same save' : saveLabel(); }
         }
       });
     }

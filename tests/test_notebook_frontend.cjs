@@ -59,23 +59,139 @@ async function boot({account=user,respond,stored=null,mapFactory,currentReleases
   await controller.show(initialParams);
   return{...app,root,controller,q,requests,storage,advanceTimers,whenNavigated:()=>navigationTask,setAccount:value=>{current=value;controller.setAccount(value);},show:async(id,rev)=>controller.show(new URLSearchParams(id?{note:id,...(rev?{revision:String(rev)}:{})}:{}))};
 }
-function fill(app,title='New mathematical claim'){for(const [key,value]of Object.entries(content(title)))if(key!=='tags')app.root.querySelector(`[name="${key}"]`).value=value;app.root.querySelector('[name="tags"]').value='algebra';}
+function fill(app,title='New mathematical claim'){for(const [key,value]of Object.entries(content(title)))if(key!=='tags')app.root.querySelector(`[name="${key}"]`).value=value;app.root.querySelector('[name="tags"]').value=JSON.stringify(['algebra']);}
 const byText=(root,label)=>root.querySelectorAll('button').find(n=>n.textContent===label);
 let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
 (async()=>{
- await test('note numbers appear only after expansion and identify exact revision citations',async()=>{
+ await test('new notes choose a type, preserve entered text and save proposal intent without submitting for review',async()=>{
+  let saved;
+  const app=await boot({respond:(url,body)=>url==='/api/notebook/notes'&&body?(saved=JSON.parse(JSON.stringify(body)),{note:note()}):undefined});
+  app.q('new').click();fill(app,'My new construction');
+  const type=app.root.querySelector('[name="scheme-proposal"]'),attachment=app.root.querySelector('.nb-specification');
+  assert.equal(type.checked,false);assert.equal(attachment.hidden,true);
+  assert.equal(type.type,'checkbox');assert.equal(app.root.querySelector('select[name="note-type"]'),null);
+  type.checked=true;type.dispatchEvent({type:'change'});
+  assert.equal(attachment.hidden,false);assert.match(attachment.querySelector('summary').textContent,/Scheme specification \*/);
+  assert.match(attachment.textContent,/Required for scheme review.*save a draft/);
+  assert.equal(app.root.querySelector('[name="title"]').value,'My new construction');
+  assert.ok(byText(app.q('dialog-body'),'Save proposal draft'));
+  app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
+  assert.equal(saved.content.extensions.note_type,'scheme-proposal');assert.equal(saved.content.title,'My new construction');
+  assert.equal(saved.content.extensions.kem_specification,undefined);assert.equal(saved.content['scheme-proposal'],undefined);
+  assert.equal(app.requests.some(request=>request.url.endsWith('/proposal-submissions')),false);
+ });
+ await test('proposal draft type reopens and switching to research preserves attachments and other metadata',async()=>{
+  const specification={name:'Existing construction',format:'crucible-kem-spec-v1'},metadata={note_type:'scheme-proposal',kem_specification:specification,custom:{keep:'exact'}};
+  let saved;
+  let stored=note({content:{...content('Existing proposal'),extensions:metadata}});
+  const app=await boot({respond:(url,body)=>url.endsWith('/revisions')&&body?(saved=JSON.parse(JSON.stringify(body)),{note:stored}):url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});
+  stored=vm.runInContext('('+JSON.stringify(stored)+')',app.sandbox);
+  await app.show('note-one');byText(app.q('full'),'Edit').click();
+  const type=app.root.querySelector('[name="scheme-proposal"]');assert.equal(type.checked,true);
+  type.checked=false;type.dispatchEvent({type:'change'});assert.equal(app.root.querySelector('.nb-specification').hidden,true);
+  app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
+  assert.ok(saved,app.q('dialog-body').textContent);
+  assert.equal(saved.content.extensions.note_type,'research-note');assert.deepEqual(saved.content.extensions.kem_specification,specification);
+  assert.deepEqual(saved.content.extensions.custom,{keep:'exact'});assert.equal(saved.content.title,'Existing proposal');
+  assert.equal(metadata.note_type,'scheme-proposal','editing does not mutate the saved source revision');
+  const draft={...content('Unfinished proposal'),extensions:{note_type:'scheme-proposal'}};
+  const reopened=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:note({content:draft})}:undefined});
+  await reopened.show('note-one');assert.match(reopened.q('full').textContent,/Attach scheme specification/);
+  assert.equal(byText(reopened.q('full'),'Submit for scheme review'),undefined);
+  byText(reopened.q('full'),'Edit').click();assert.equal(reopened.root.querySelector('[name="scheme-proposal"]').checked,true);
+ });
+ await test('note type is part of the unsaved draft and freezes with an uncertain save',async()=>{
+  const writes=[];const app=await boot({respond:(url,body)=>{
+   if(url==='/api/notebook/notes'&&body){writes.push(JSON.parse(JSON.stringify(body)));if(writes.length===1)throw Object.assign(Error('Lost reply'),{status:0});return{note:note()};}
+  }});
+  app.q('new').click();const type=app.root.querySelector('[name="scheme-proposal"]');type.checked=true;type.dispatchEvent({type:'change'});
+  let warned=false;app.window.confirm=()=>{warned=true;return false;};app.q('close').click();assert.equal(warned,true);assert.equal(app.q('dialog').open,true);
+  fill(app);app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();assert.equal(type.disabled,true);
+  type.checked=false;type.dispatchEvent({type:'change'});assert.equal(type.checked,true);
+  app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();assert.deepEqual(writes[0],writes[1]);
+ });
+ await test('tag Enter selects the first current match, creates unmatched tags and supports keyboard selection',async()=>{
+  const vocabulary=['lattice','lattice attacks'];
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/tags?')?{tags:vocabulary.filter(tag=>tag.includes(new URLSearchParams(url.split('?')[1]).get('q').toLowerCase()))}:undefined});
+  app.q('new').click();const input=app.root.querySelector('[name="tag-search"]'),stored=app.root.querySelector('[name="tags"]');
+  input.value='lat';input.dispatchEvent({type:'input'});input.dispatchEvent({type:'keydown',key:'Enter'});await flush();
+  assert.deepEqual(JSON.parse(stored.value),['lattice']);assert.equal(input.value,'');
+  input.value='new subject';input.dispatchEvent({type:'input'});input.dispatchEvent({type:'keydown',key:'Enter'});await flush();
+  assert.deepEqual(JSON.parse(stored.value),['lattice','new subject']);
+  input.value='LATTICE';input.dispatchEvent({type:'input'});await app.advanceTimers(180);
+  input.dispatchEvent({type:'keydown',key:'Enter'});await flush();
+  assert.deepEqual(JSON.parse(stored.value),['lattice','new subject','lattice attacks']);
+  app.root.querySelector('.nb-tag-remove').click();assert.deepEqual(JSON.parse(stored.value),['new subject','lattice attacks']);
+  assert.equal(app.requests.some(request=>request.body),false);
+ });
+ await test('failed or obsolete tag searches cannot create a tag or replace a newer choice',async()=>{
+  const late=deferred();let fail=true;
+  const app=await boot({respond:url=>{
+   if(!url.startsWith('/api/notebook/tags?'))return;
+   const query=new URLSearchParams(url.split('?')[1]).get('q');
+   if(query==='old')return late.promise;
+   if(query==='retry'&&fail)throw Object.assign(Error('Search unavailable.'),{status:503});
+   return{tags:query==='new'?['newer tag']:[]};
+  }});
+  app.q('new').click();const input=app.root.querySelector('[name="tag-search"]'),stored=app.root.querySelector('[name="tags"]');
+  input.value='old';input.dispatchEvent({type:'input'});await app.advanceTimers(180);
+  input.value='new';input.dispatchEvent({type:'input'});input.dispatchEvent({type:'keydown',key:'Enter'});await flush();
+  late.resolve({tags:['old secret']});await flush();assert.deepEqual(JSON.parse(stored.value),['newer tag']);
+  input.value='retry';input.dispatchEvent({type:'input'});input.dispatchEvent({type:'keydown',key:'Enter'});await flush();
+  assert.deepEqual(JSON.parse(stored.value),['newer tag']);assert.match(app.root.querySelector('.nb-tag-search-status').textContent,/unavailable/);
+  fail=false;input.dispatchEvent({type:'keydown',key:'Enter'});await flush();assert.deepEqual(JSON.parse(stored.value),['newer tag','retry']);
+ });
+ await test('tag chips preserve comma-containing tags and pending search belongs to its account',async()=>{
+  const late=deferred();let saved;
+  const app=await boot({respond:(url,body)=>url.startsWith('/api/notebook/tags?')?{tags:['probability, statistics']}:url==='/api/notebook/notes'&&body?(saved=body,{note:note()}):undefined});
+  app.q('new').click();fill(app);const input=app.root.querySelector('[name="tag-search"]');input.value='probability';input.dispatchEvent({type:'input'});input.dispatchEvent({type:'keydown',key:'Enter'});await flush();
+  app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
+  assert.deepEqual(Array.from(saved.content.tags),['algebra','probability, statistics']);
+  const other=await boot({respond:url=>url.startsWith('/api/notebook/tags?')?late.promise:undefined});other.q('new').click();
+  const search=other.root.querySelector('[name="tag-search"]');search.value='secret';search.dispatchEvent({type:'input'});await other.advanceTimers(180);
+  other.setAccount({id:2,handle:'bob'});late.resolve({tags:['private-secret']});await flush();
+  assert.equal(other.q('dialog').open,false);assert.equal(other.root.textContent.includes('private-secret'),false);
+ });
+ await test('note rows and readers show public vote totals and relative publication time with an exact tooltip',async()=>{
+  const timestamp=Date.now()/1000-3660;
+  const saved=note({published_at:timestamp,rating:{score:4,raters:3,upvotes:2,double_upvotes:1}});
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[saved]}:url==='/api/notebook/notes/note-one'?{note:saved}:undefined});
+  await app.show();
+  const aside=app.q('list').querySelector('.nb-entry-aside'),time=aside.querySelector('time');
+  assert.match(aside.querySelector('.nb-note-votes').textContent,/4/);
+  assert.match(aside.querySelector('.nb-note-votes').title,/2 upvotes \(\+1\).*1 double upvotes \(\+2\)/);
+  assert.equal(time.textContent,'1 hr ago');assert.match(time.title,/^Published /);
+  assert.equal(time.getAttribute('datetime'),new Date(timestamp*1000).toISOString());
+  await app.show('note-one');assert.match(app.q('full').querySelector('.nb-note-votes').textContent,/4/);
+ });
+ await test('unpublished notes display saved age without inventing public votes',async()=>{
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()]}:undefined});await app.show();
+  assert.equal(app.q('list').querySelector('.nb-note-votes'),null);
+  assert.match(app.q('list').querySelector('time').title,/^Saved /);
+ });
+ await test('list note numbers open the exact citation without expansion, reads or writes',async()=>{
   const saved=note({number:1042,content_sha256:'a'.repeat(64)});
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[saved],next_after:null}:url.startsWith('/api/notebook/notes/note-one')?{note:saved}:undefined});
-  assert.equal(app.q('list').querySelector('.nb-note-number'),null);
+  assert.equal(app.q('list').querySelector('.nb-note-number').textContent,'#1042');
+  const calls=app.requests.length,reference=app.q('list').querySelector('.nb-number-action');
+  reference.focus();reference.click();await flush();
+  assert.equal(app.q('dialog').getAttribute('aria-label'),'Cite this note');
+  assert.equal(app.q('list').querySelector('.nb-title').getAttribute('aria-expanded'),'false');
+  assert.equal(app.requests.length,calls);
+  const listCitation=app.q('dialog-body').querySelector('[name="citation-link"]').value;
+  app.q('close').click();await flush();assert.equal(app.document.activeElement,reference);
   app.q('list').querySelector('.nb-title').click();await flush();
   assert.equal(app.q('list').querySelector('.nb-note-number').textContent,'#1042');
   app.q('list').querySelector('.nb-title').click();await flush();
-  assert.equal(app.q('list').querySelector('.nb-note-number'),null);
+  assert.equal(app.q('list').querySelector('.nb-note-number').textContent,'#1042');
   await app.show('note-one',1);
+  assert.equal(app.root.querySelector('.nb-heading').hidden,true);
   app.q('full').querySelector('.nb-number-action').click();
   assert.equal(app.q('dialog-body').querySelector('.nb-citation-number').textContent,'#1042 · revision 1');
   assert.match(app.q('dialog-body').querySelector('.nb-prompt').textContent,/#1042/);
   assert.match(app.q('dialog-body').querySelector('[name="citation-link"]').value,/revision=1&sha256=a{64}/);
+  assert.equal(app.q('dialog-body').querySelector('[name="citation-link"]').value,listCitation);
+  app.q('close').click();await app.show();assert.equal(app.root.querySelector('.nb-heading').hidden,false);
  });
 
 
@@ -138,7 +254,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const app=await boot({respond:url=>url==='/api/notebook/notes/note-one'?(delay?late.promise:{note:note()}):undefined});
   await app.show('note-one');await app.show();delay=true;const loading=app.show('note-one');
   assert.match(app.q('full').textContent,/Argument as text/);assert.equal(byText(app.q('full'),'Edit').disabled,true);
-  assert.equal(app.document.activeElement,app.q('full').querySelector('h2'),'cached entry hands focus to the reader');
+  assert.equal(app.document.activeElement,app.q('full').querySelector('.nb-full-title'),'cached entry hands focus to the reader');
   const back=app.q('full').querySelector('.nb-back');back.focus();
   const body=app.q('full').querySelector('.nb-body');
   late.resolve({note:note()});await loading;
@@ -635,6 +751,9 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
     if(url==='/api/notebook/notes'&&body){saved=body;return{note:note()};}
   }});
   assert.equal(app.q('dialog').open,true);
+  assert.equal(app.root.querySelector('[name="scheme-proposal"]'),null);
+  assert.equal(app.root.querySelector('select[name="note-type"]'),null);
+  assert.equal(JSON.parse(app.root.querySelector('[name="tags"]').value).includes('KEM'),false);
   const file=app.root.querySelector('[name="kem-specification"]');file.files=[{size:30,text:async()=>JSON.stringify(spec)}];file.dispatchEvent({type:'change'});await flush();
   assert.equal(app.root.querySelector('[name="title"]').value,'Candidate KEM');
   app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
@@ -1447,16 +1566,16 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  await test('Human-written is unchecked by default and only explicit choices add the canonical tag',async()=>{
   for(const checked of [false,true]){
    let sent;const app=await boot({respond:(url,body)=>url==='/api/notebook/notes'&&body?(sent=body,{note:note()}):undefined});app.q('new').click();fill(app);
-   const human=app.root.querySelector('[name="human-written"]');assert.equal(human.checked,false);assert.match(app.q('dialog-body').textContent,/Optional, self-reported label; not verified/);
+   const human=app.root.querySelector('[name="human-written"]');assert.equal(human.checked,false);assert.equal(app.q('dialog-body').textContent.includes('Optional, self-reported label; not verified'),false);
    if(checked){human.checked=true;human.dispatchEvent({type:'change'});}app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();assert.equal(sent.content.tags.includes('human-written'),checked);assert.equal(Object.hasOwn(sent.content,'human-written'),false);
   }
  });
  await test('Human-written and freeform tags stay synchronized and changes count as an unsaved draft',async()=>{
   const app=await boot();app.q('new').click();const human=app.root.querySelector('[name="human-written"]'),tags=app.root.querySelector('[name="tags"]');
-  tags.value='algebra, human-written';tags.dispatchEvent({type:'input'});assert.equal(human.checked,true);
-  human.checked=false;human.dispatchEvent({type:'change'});assert.equal(tags.value,'algebra');
-  human.checked=true;human.dispatchEvent({type:'change'});assert.equal(tags.value,'algebra, human-written');human.dispatchEvent({type:'change'});assert.equal(tags.value,'algebra, human-written');
-  tags.value='algebra';tags.dispatchEvent({type:'input'});assert.equal(human.checked,false);
+  tags.value=JSON.stringify(['algebra','human-written']);tags.dispatchEvent({type:'input'});assert.equal(human.checked,true);
+  human.checked=false;human.dispatchEvent({type:'change'});assert.equal(tags.value,JSON.stringify(['algebra']));
+  human.checked=true;human.dispatchEvent({type:'change'});assert.equal(tags.value,JSON.stringify(['algebra','human-written']));human.dispatchEvent({type:'change'});assert.equal(tags.value,JSON.stringify(['algebra','human-written']));
+  tags.value=JSON.stringify(['algebra']);tags.dispatchEvent({type:'input'});assert.equal(human.checked,false);
   let warned=false;app.sandbox.window.confirm=()=>{warned=true;return false;};app.q('close').click();assert.equal(warned,true);assert.equal(app.q('dialog').open,true);
  });
  await test('editing explicitly tagged content preserves or removes Human-written on the new revision',async()=>{
@@ -1467,7 +1586,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  });
  await test('an uncertain save freezes Human-written and retries the original tag choice',async()=>{
   const writes=[];const app=await boot({respond:(url,body)=>{if(url==='/api/notebook/notes'&&body){writes.push(JSON.parse(JSON.stringify(body)));if(writes.length===1)throw Object.assign(Error('Lost response'),{status:0});return{note:note()};}}});app.q('new').click();fill(app);const human=app.root.querySelector('[name="human-written"]');human.checked=true;human.dispatchEvent({type:'change'});const form=app.root.querySelector('.nb-form');form.dispatchEvent({type:'submit'});await flush();assert.equal(human.disabled,true);assert.equal(app.root.querySelector('[name="tags"]').disabled,true);
-  human.checked=false;human.dispatchEvent({type:'change'});app.root.querySelector('[name="tags"]').value='tampered';form.dispatchEvent({type:'submit'});await flush();assert.deepEqual(writes[0],writes[1]);assert.ok(writes[1].content.tags.includes('human-written'));
+  human.checked=false;human.dispatchEvent({type:'change'});app.root.querySelector('[name="tags"]').value=JSON.stringify(['tampered']);form.dispatchEvent({type:'submit'});await flush();assert.deepEqual(writes[0],writes[1]);assert.ok(writes[1].content.tags.includes('human-written'));
  });
  await test('Human-written badges follow the displayed revision across accounts and support ordinary tag filtering',async()=>{
   const tagged=note({owner:{id:2,handle:'bob'},can_edit:false,...revision(1,'Human note','approved'),content:{...content('Human note'),tags:['algebra','human-written']}}),untagged=note({id:'other',owner:{id:2,handle:'bob'},can_edit:false,...revision(1,'Other note','approved')});

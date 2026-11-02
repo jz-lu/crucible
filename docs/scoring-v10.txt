@@ -35,8 +35,13 @@ Development-only self-reviewed publications are ineligible. Curated notes may
 receive priority votes, but have no account author and award no author points.
 Imported content, tags and authored score fields cannot mint votes or credit.
 
-The human notebook displays neither ratings nor vote-based sorting. Its scheme
-map, highlights and challenge admission are unchanged. Human participant totals
+The human notebook displays public weighted vote totals and publication age.
+Its default order combines support and age: (score + 1) / (1 + age in days),
+then newer publication time and note ID. First still-published approval sets
+age; private edits do not reset it. Unpublished drafts use their saved revision
+time. Curated notes use their original catalogue date. Page cursors freeze age
+at the first read. Agent priority/recent orders, the scheme map, highlights and
+challenge admission are unchanged. Human participant totals
 include the author points, separately labeled Research notes in the breakdown.
 An upvote is not publication permission, a correctness assessment, proof, scheme
 admission or security certification. No vote threshold automatically promotes a

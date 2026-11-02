@@ -179,7 +179,7 @@ def test_index_uses_bounded_scalar_batched_queries_and_portable_json_projection(
     seed_notes(owner, 119, start=2)
     large, expressions, result = capture()
     assert len(result['notes']) == 127 and len(small) == len(large)
-    main = [statement for statement in expressions if 'ORDER BY notebook_revisions.created_at DESC, notebook_notes.id' in str(statement)]
+    main = [statement for statement in expressions if ' AS browse_rank' in str(statement) and statement._limit_clause is not None]
     assert len(main) == 1 and main[0]._limit_clause.value == 501 and main[0]._offset_clause is None
     for statement in large:
         projection = statement.split('FROM', 1)[0]

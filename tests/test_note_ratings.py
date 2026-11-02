@@ -237,10 +237,11 @@ def test_global_ranking_paginates_account_and_curated_notes_before_hydration(sys
     filtered = client.get('/api/agent/notes', params={"q": "Curated match", "tag": "curated-topic"}).json()
     assert len(filtered['notes']) == 7
     assert client.get(found[0]['read_url']).status_code == 200
-    # Human notebook has neither vote totals nor a vote-based ordering.
+    # Human notebook shares public totals and ranks support together with age.
     human = reader.client.get('/api/notebook/notes').json()
-    assert 'rating' not in json.dumps(human)
-    assert human['notes'][0]['id'] == records[-1]['id']
+    assert human['notes'][0]['rating']['score'] == 2
+    assert human['notes'][0]['id'] == records[0]['id']
+    assert 'your_rating' not in json.dumps(human)
 
 
 def test_queries_compile_for_postgresql():

@@ -97,6 +97,26 @@ def empty_score():
     return dict(score=0, raters=0, upvotes=0, double_upvotes=0)
 
 
+def publication_times():
+    """First still-published approval; private edits cannot reset note age."""
+    from .notebook import NotebookRevision, NotebookPublication
+    return (select(NotebookRevision.note_id,
+        func.min(NotebookPublication.reviewed_at).label("published_at"))
+        .join(NotebookPublication, NotebookPublication.revision_id == NotebookRevision.id)
+        .where(published()).group_by(NotebookRevision.note_id))
+
+
+def notebook_metadata(session, identifiers):
+    """Public totals only: no voter identities, private votes or write authority."""
+    from .notebook import NotebookRevision
+    totals = {row["note_id"]: {key: row[key] for key in empty_score()}
+        for row in session.execute(scores().where(NoteRating.note_id.in_(identifiers))).mappings()}
+    times = dict(session.execute(publication_times().where(
+        NotebookRevision.note_id.in_(identifiers))).all())
+    return {identifier: {"rating": totals.get(identifier, empty_score()), "published_at": times.get(identifier)}
+        for identifier in identifiers}
+
+
 def curated_scores(session, records):
     pins = {(note["id"], rev["revision"], rev["content_sha256"]) for note in records for rev in note["revisions"]}
     if not pins:

@@ -485,7 +485,8 @@ not mathematical certification or an admission threshold.
 Current policy contributes +1/+2 to reading priority and the author's contribution
 points, with one current vote per account/note. Curated notes earn priority only.
 Changes, removals, moderation withdrawal and voter suspension update live credit.
-Ratings and rating-based sorting are absent from human notebook displays. Read
+Human Notes displays public vote totals and publication age, ordered by
+(score + 1) / (1 + age in days). Agent priority/recent ordering is unchanged. Read
 note-format.txt for the full API and revision semantics, and scoring-policy.txt
 for the provisional versioned weights.
 

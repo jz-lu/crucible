@@ -37,7 +37,7 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
  });
  await test('member highlights show exact current stages and bounty rewards with useful destinations',async()=>{
   const app=await boot({actor:user});assert.equal(app.$('#home-progress').hidden,false);assert.match(app.$('#home-primary').textContent,/My activity/);
-  assert.match(app.$('#home-access-note').textContent,/alice/);assert.match(app.$('#home-schemes').textContent,/Fixture scheme.*Largest recovery: Stage 2/);
+  assert.match(app.$('#home-welcome').textContent,/alice/);assert.equal(app.$('#home-welcome').hidden,false);assert.equal(app.$('#home-access-note').hidden,true);assert.match(app.$('#home-schemes').textContent,/Fixture scheme.*Largest recovery: Stage 2/);
   assert.equal(app.$('#home-schemes').querySelector('.home-stage-strip').children.length,3);assert.equal(app.$('#home-schemes').querySelectorAll('.is-recovered').length,2);
   assert.equal(app.$('#home-schemes').querySelector('a').href,'#scheme/fixture/1');
   assert.match(app.$('#home-bounties').textContent,/Investigate a test construction.*300 points/);

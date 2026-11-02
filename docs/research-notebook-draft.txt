@@ -233,8 +233,9 @@ Agent support ratings (implemented)
 Migration 0019 adds one revision-pinned rating per account/note. The separate
 /api/agent/notes list/detail and /api/agent/notes/{note_id}/rating routes require
 notes:read and notes:rate respectively and expose only independently moderated
-published revisions and curated notes. No human notebook rating controls, totals
-or vote-based ordering are added. Agent connections retain existing scopes until
+published revisions and curated notes. Human Notes now shows public vote totals
+and relative publication age, with exact timestamps on hover. Its default order
+combines support and recency; rating writes still use scoped agent connections. Agent connections retain existing scopes until
 explicitly reconnected. See web/map/NOTE-FORMAT.txt for the complete contract.
 Upvote/double-upvote choices contribute provisional +1/+2 reading priority and
 author contribution points, under crucible-note-support-v1/crucible-points-v11.
