@@ -460,6 +460,7 @@
     "crucible/benchmark_reports.py",
     "crucible/beta_access.py",
     "crucible/github_auth.py",
+    "crucible/github_contributions.py",
     "crucible/machine_auth.py",
     "crucible/mail_delivery.py",
     "crucible/manage.py",

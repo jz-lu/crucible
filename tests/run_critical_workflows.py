@@ -26,6 +26,7 @@ SUITES = (
     "test_admission_weekly_points.py", "test_scoring_awards.py",
     "test_numerical_frontier_points.py", "test_bounty_scoring.py",
     "test_points_workflow.py",
+    "test_github_contributions.py", "test_github_contribution_cli.py",
 )
 
 

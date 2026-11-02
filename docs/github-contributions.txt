@@ -1,0 +1,103 @@
+Challenge contributions to GitHub
+================================
+
+Use a draft pull request in countableclouds/crucible-schemes. That private
+repository already contains the scheme implementations, research and attack
+artifacts. jz-lu/crucible contains the website application. An issue can discuss
+a result, but a PR preserves its exact write-up, code and recorded evidence for
+review. A contribution is represented by files and a commit on a dedicated
+branch; maintainers choose whether to merge it. Nothing commits directly to main.
+
+Initial private-beta policy
+
+- The participant must already have write access to the private schemes repo.
+  This integration does not invite collaborators or grant repository access.
+- Link the participant's GitHub account through the existing Crucible profile
+  Sign-in settings. Website GitHub OAuth remains identity-only.
+- Install GitHub CLI and run gh auth login as that same account. GitHub tokens
+  stay with gh; Crucible does not request repository scopes or store those tokens.
+- Challenge submission and GitHub publication are separate explicit actions.
+  The result must be an on-time, server-verified correct recovery. An unscored
+  release may still contribute evidence; GitHub publication earns no new points.
+
+Prepare, review, publish
+
+Use the current downloaded crucible_cli.py, connected to the same Crucible
+account that owns the saved submission. Replace SUBMISSION_UUID and DIRECTORY:
+
+  python3 crucible_cli.py github prepare SUBMISSION_UUID --path DIRECTORY
+
+Preparation performs authorized Crucible reads and writes a private local
+directory. It makes no GitHub request. Review its README.md, receipt.json,
+provenance.json, public-inputs.json and source/ files. Source is included only from
+the method's immutable attached snapshot. --without-source omits code and
+--without-inputs omits the original public inputs. Both flags prepare receipt-only evidence.
+The recovered key, login credentials, result/retry files and private server
+state are not selected. Author-supplied source may contain any text: inspect it
+and confirm that you have permission to share it with the destination repository.
+Missing source is stated in provenance; no implementation or scientific review
+is invented. All local files are written privately with permissions 0600.
+
+After reviewing the exact files and destination:
+
+  python3 crucible_cli.py github publish --path DIRECTORY --confirm-publish
+
+This verifies the current Crucible owner/export, the linked numeric GitHub
+identity, the active gh user and write permission. It creates one dedicated
+branch and draft PR under the contributor's authenticated GitHub identity.
+The PR contains only contributions/SCHEME/RELEASE/SUBMISSION_UUID/ files. The
+existing scheme source, publication registry, measurements and workflows are
+not changed. Participant code is stored as inert evidence and never executed
+by this integration. Repository review and independent reproduction remain
+separate from the server's verification of one recovered key.
+
+--repository owner/name and --base BRANCH are explicit destination overrides
+at preparation time. They are frozen in the reviewable workspace; publishing
+never silently selects another repository, account, origin or branch.
+
+Retries and attribution
+
+Keep the prepared directory and its hidden .crucible-github*.json files. They
+contain bindings, fingerprints, resumable Git object/ref state and the PR
+receipt, not credentials. Repeat the identical publish command after a lost
+reply. It reads the existing deterministic branch/PR and verifies the exact
+file diff; it does not overwrite a branch, reopen a closed PR, or create another
+PR for the same contribution. Modified local files, a changed remote diff,
+conflicting retry state or rewritten base history require a fresh review.
+
+The PR is attributed to the authenticated contributor, and GitHub creates the
+commit using that account's identity. GitHub's own contribution-graph criteria
+and private-activity visibility settings determine what appears on the profile.
+Creating the PR does not imply it was accepted or grant more Crucible points.
+
+UI handoff (the UI is being developed separately)
+
+GET /api/submissions/{submission_id}/github-export is an owner-only member read,
+also permitted to agents with submissions:read. It returns
+crucible-github-contribution-v1: exact submission_id, owner.handle, optional
+linked github_identity {id,login}, target {repository,base,directory}, source and
+original-challenge descriptors, receipt/README files and a canonical SHA-256 commitment. It is
+read-only and cache-control:no-store. Wrong owner is 404, unverified/inconsistent
+recovery is 409, and anonymous/revoked access retains the normal member boundary.
+Attached source is fetched separately through the existing methods:read route;
+public inputs retain their existing challenges:read route and exact hash binding.
+The export does not expand a submissions-only token's source/input permissions.
+
+A UI action can preview the evidence/destination and show the two CLI commands.
+It must not label normal answer submission as GitHub publication or call this
+read endpoint a successful PR. There is no browser/server GitHub write token or
+publish endpoint in this first version. Use the CLI's confirmed PR receipt as
+the publication result. Existing GitHub login alone cannot authorize repo writes.
+
+Deployment: the new HTTP export module is explicitly listed with the mutable
+application modules in deploy/release-runtime.json. Cryptographic sources,
+runtime dependencies, migrations and their pinned hashes remain unchanged.
+
+References
+
+https://docs.github.com/en/rest/git/trees
+https://docs.github.com/en/rest/git/commits
+https://docs.github.com/en/rest/git/refs
+https://docs.github.com/en/rest/pulls/pulls
+https://docs.github.com/en/account-and-profile/reference/profile-contributions-reference
+https://cli.github.com/manual/gh_api

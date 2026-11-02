@@ -228,6 +228,8 @@ class Client:
             response_limit = MAX_PROPOSAL_GUIDE
         elif parts.path == AGENT_PIPELINE or parts.path.startswith(AGENT_GUIDANCE):
             response_limit = MAX_AGENT_PIPELINE
+        elif re.fullmatch(r"/api/methods/[0-9a-f-]{36}/source", parts.path):
+            response_limit = MAX_CHALLENGE_RESPONSE
         elif parts.path == "/api/challenges" or re.fullmatch(r"/api/challenges/[A-Za-z0-9_-]+(?:/(?:download|submit))?", parts.path):
             # Submission receipts include the complete public challenge too.
             response_limit = MAX_CHALLENGE_RESPONSE
@@ -1660,6 +1662,290 @@ def bounty_command(client, args):
     return bounty_write(client, args, root, metadata, action, semantic, endpoint, body, owner, scopes)
 
 
+GITHUB_WORKSPACE = ".crucible-github.json"
+GITHUB_PLAN = ".crucible-github-publish.json"
+GITHUB_FORMAT = "crucible-github-workspace-v1"
+
+
+def contribution_hash(value):
+    return hashlib.sha256(encode(value)).hexdigest()
+
+
+def contribution_path(value):
+    if (not isinstance(value, str) or len(value) > 300 or
+            not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_./ -]*", value) or
+            any(not part or len(part) > 100 or part.startswith('.') or part.endswith(('.', ' ')) or
+                part.split('.')[0].upper() in {'CON', 'PRN', 'AUX', 'NUL',
+                    *['COM' + str(i) for i in range(1, 10)], *['LPT' + str(i) for i in range(1, 10)]}
+                for part in value.split('/'))):
+        raise ClientError("The contribution contains an unsafe file path.")
+    return value
+
+
+def github_workspace(path):
+    root = Path(path).expanduser().absolute()
+    if any(part.is_symlink() for part in (root, *root.parents)):
+        raise ClientError("Contribution workspaces cannot use symbolic links.")
+    value = load_json(root / GITHUB_WORKSPACE)
+    frozen = {key: item for key, item in value.items() if key != "sha256"}
+    if value.get("format") != GITHUB_FORMAT or contribution_hash(frozen) != value.get("sha256"):
+        raise ClientError("The prepared contribution changed. Prepare a fresh directory.")
+    contribution_target(value['target'])
+    files, total, names = [], 0, set()
+    for item in value.get("files", []):
+        name = contribution_path(item["path"])
+        local = root.joinpath(*name.split('/'))
+        if any(part.is_symlink() for part in (local, *local.parents)) or not local.is_file():
+            raise ClientError("A contribution file is missing or uses a symbolic link.")
+        with local.open('rb') as stream:
+            raw = stream.read(2 * MAX_RESPONSE + 1)
+        total += len(raw)
+        if (name.casefold() in names or len(raw) != item["bytes"] or
+                hashlib.sha256(raw).hexdigest() != item["sha256"] or total > 2 * MAX_RESPONSE):
+            raise ClientError("A prepared contribution file changed. Prepare a fresh directory.")
+        names.add(name.casefold())
+        files.append({"path": name, "content": raw.decode('utf-8')})
+    if not 2 <= len(files) <= 104:
+        raise ClientError("The prepared contribution has an invalid file inventory.")
+    return root, value, files
+
+
+def contribution_target(target):
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", target["repository"]):
+        raise ClientError("Choose a GitHub repository as owner/name.")
+    if (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_./-]{0,199}", target["base"]) or
+            '..' in target["base"] or '//' in target["base"] or target["base"].endswith('/')):
+        raise ClientError("Choose an unambiguous existing GitHub base branch.")
+    contribution_path(target["directory"])
+    if not target["directory"].startswith('contributions/'):
+        raise ClientError("Contribution exports must stay beneath contributions/.")
+    return target
+
+
+def github_prepare(client, args):
+    identifier = str(UUID(args.submission_id))
+    value = client.request('/api/submissions/' + identifier + '/github-export')
+    frozen = {key: item for key, item in value.items() if key != "sha256"}
+    if (value.get("format") != "crucible-github-contribution-v1" or value.get("submission_id") != identifier or
+            contribution_hash(frozen) != value.get("sha256")):
+        raise ClientError("The server's contribution export could not be verified.")
+    target = {**value["target"], **({"repository": args.repository} if args.repository else {}),
+              **({"base": args.base} if args.base else {})}
+    contribution_target(target)
+    files = list(value["files"])
+    include_inputs = not args.without_inputs
+    if include_inputs:
+        reference = value['challenge']
+        challenge_id = str(UUID(reference['id']))
+        if reference['download_url'] != '/api/challenges/' + challenge_id + '/download':
+            raise ClientError('The original challenge reference could not be confirmed.')
+        package = client.request(reference['download_url'])
+        public = package.get('challenge', {}).get('public')
+        manifest = package.get('scheme_manifest')
+        if (package.get('format') != 'crucible-challenge-v1' or package.get('challenge', {}).get('id') != challenge_id or
+                contribution_hash(public) != reference['public_sha256'] or
+                contribution_hash(manifest) != reference['manifest_sha256']):
+            raise ClientError('The original public inputs do not match the contribution commitment.')
+        files.append({'path': 'public-inputs.json', 'content': json.dumps({
+            'format': 'crucible-public-recovery-inputs-v1', 'challenge_id': challenge_id,
+            'public': public, 'scheme_manifest': manifest}, ensure_ascii=False, indent=2, allow_nan=False) + '\n'})
+    source = value.get("source")
+    if source and not args.without_source:
+        method = json.loads(next(item['content'] for item in files if item['path'] == 'receipt.json'))['method']['id']
+        if source.get('url') != '/api/methods/' + str(UUID(method)) + '/source':
+            raise ClientError("The source reference does not match the contribution method.")
+        snapshot = client.request(source['url'])
+        if (snapshot.get('format') != 'crucible-source-v1' or not isinstance(snapshot.get('files'), list) or
+                not 1 <= len(snapshot['files']) <= 100 or contribution_hash(snapshot) != source['sha256']):
+            raise ClientError("The source snapshot does not match its immutable commitment.")
+        files.extend({'path': 'source/' + item['path'], 'content': item['content']} for item in snapshot['files'])
+    receipt_url = client.server + '/api/submissions/' + identifier
+    files.append({'path': 'provenance.json', 'content': json.dumps({
+        'format': 'crucible-github-provenance-v1', 'server': client.server, 'receipt_url': receipt_url,
+        'export_sha256': value['sha256'], 'source_included': bool(source and not args.without_source),
+        'public_inputs_included': include_inputs,
+        'source_sha256': source['sha256'] if source else None}, indent=2) + '\n'})
+    root = Path(args.path).expanduser().absolute()
+    if any(part.is_symlink() for part in (root, *root.parents)) or root.exists() and (not root.is_dir() or any(root.iterdir())):
+        raise ClientError("Choose an empty contribution directory without symbolic links.")
+    inventory, names, total = [], set(), 0
+    for item in files:
+        name, raw = contribution_path(item['path']), item['content'].encode('utf-8')
+        names.add(name.casefold()); total += len(raw)
+        inventory.append({'path': name, 'sha256': hashlib.sha256(raw).hexdigest(), 'bytes': len(raw)})
+    if len(names) != len(files) or total > 2 * MAX_RESPONSE or len(files) > 104:
+        raise ClientError("The contribution exceeds its bounded file inventory.")
+    for name in names:
+        if any('/'.join(name.split('/')[:index]) in names for index in range(1, len(name.split('/')))):
+            raise ClientError("A contribution file conflicts with another file's directory.")
+    for item in files:
+        private_write(root / item['path'], item['content'])
+    state = {'format': GITHUB_FORMAT, 'server': client.server, 'submission_id': identifier,
+             'owner': value['owner'], 'github_identity': value.get('github_identity'),
+             'export_sha256': value['sha256'], 'target': target, 'files': inventory}
+    state['sha256'] = contribution_hash(state)
+    save_json(root / GITHUB_WORKSPACE, state)
+    return {'status': 'prepared', 'path': str(root), 'repository': target['repository'],
+            'base': target['base'], 'directory': target['directory'], 'files': len(files),
+            'sha256': state['sha256'], 'github_linked': bool(state['github_identity']),
+            'next': 'Review the files, then run github publish --path DIRECTORY --confirm-publish.'}
+
+
+def github_api(method, path, body=None, *, allow_status=()):
+    """Use the contributor's local gh credential; never read or store its token."""
+    command = ['gh', 'api', '--hostname', 'github.com', '--include', '--method', method, path]
+    if body is not None:
+        command += ['--input', '-']
+    environment = dict(os.environ)
+    environment.pop('GH_DEBUG', None)
+    environment.update(GH_PROMPT_DISABLED='1', GH_NO_UPDATE_NOTIFIER='1', GH_PAGER='cat')
+    try:
+        result = subprocess.run(command, input=encode(body) if body is not None else None,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60, env=environment)
+    except FileNotFoundError:
+        raise ClientError("Install GitHub CLI and run gh auth login before publishing.", 'github_login_required') from None
+    except (OSError, subprocess.TimeoutExpired):
+        raise ClientError("GitHub's response is uncertain. Retry the same prepared directory.", 'github_uncertain') from None
+    if len(result.stdout) > 8 * MAX_RESPONSE:
+        raise ClientError("GitHub returned an oversized response.")
+    raw = result.stdout.decode('utf-8').replace('\r\n', '\n')
+    header, separator, data = raw.partition('\n\n')
+    match = re.match(r'HTTP/\S+ (\d{3})\b', header)
+    status = int(match.group(1)) if match else 0
+    if status in allow_status:
+        return None
+    if not separator or result.returncode or not 200 <= status < 300:
+        raise ClientError("GitHub could not confirm the operation. Check gh auth login and repository access; retry the same directory.", 'github_request_failed')
+    return json.loads(data) if data.strip() else {}
+
+
+def github_publish(client, args):
+    if not args.confirm_publish:
+        raise ClientError("Review the prepared files and add --confirm-publish to create a GitHub contribution.", 'publication_confirmation_required')
+    root, state, files = github_workspace(args.path)
+    if state['server'] != client.server:
+        raise ClientError("This contribution belongs to another Crucible server.")
+    client.expected_handle = state['owner']['handle']
+    fresh = client.request('/api/submissions/' + str(UUID(state['submission_id'])) + '/github-export')
+    if fresh.get('sha256') != state['export_sha256'] or fresh.get('owner') != state['owner']:
+        raise ClientError("The contribution or author binding changed. Prepare a fresh directory.")
+    if fresh.get('target', {}).get('directory') != state['target']['directory']:
+        raise ClientError("The prepared directory differs from the verified receipt's contribution directory.")
+    linked = state.get('github_identity')
+    if not linked:
+        raise ClientError("Link your GitHub account in your Crucible profile, then prepare a fresh contribution.", 'github_link_required')
+    actor = github_api('GET', 'user')
+    if str(actor.get('id')) != linked.get('id'):
+        raise ClientError("The active gh account differs from your linked Crucible GitHub identity.", 'github_account_changed')
+    target = state['target']; repository = target['repository']; api = 'repos/' + repository
+    repo = github_api('GET', api)
+    if (repo.get('full_name', '').casefold() != repository.casefold() or repo.get('archived') or
+            repo.get('fork') or repo.get('permissions', {}).get('push') is not True):
+        raise ClientError("Publishing requires write access to the selected standalone repository. Ask its maintainer for access.", 'github_repository_access')
+    branch = 'crucible/recoveries/' + hashlib.sha256(client.server.encode()).hexdigest()[:12] + '/' + state['submission_id']
+    marker = '<!-- crucible-contribution:' + state['sha256'] + ' -->'
+    owner = repo['owner']['login']
+
+    def existing_pr():
+        pulls = github_api('GET', api + '/pulls?' + urlencode({'state': 'all', 'head': owner + ':' + branch, 'base': target['base'], 'per_page': 100}))
+        matches = [pull for pull in pulls if pull.get('head', {}).get('ref') == branch and
+                   pull.get('base', {}).get('ref') == target['base']]
+        if not matches:
+            return None
+        if (len(matches) != 1 or str(matches[0].get('user', {}).get('id')) != linked['id'] or
+                not isinstance(matches[0].get('body'), str) or marker not in matches[0]['body'] or
+                matches[0].get('head', {}).get('repo', {}).get('id') != repo['id'] or
+                matches[0].get('base', {}).get('repo', {}).get('id') != repo['id']):
+            raise ClientError("The contribution branch already has a different pull request. No new request was created.")
+        pull = matches[0]
+        if not re.fullmatch(r'https://github\.com/' + re.escape(repo['full_name']) + r'/pull/[1-9][0-9]*', pull.get('html_url', '')):
+            raise ClientError("GitHub's pull request reference could not be confirmed.")
+        # Verify the complete PR diff, including retries after a lost reply or
+        # after merge. A body marker alone is not proof of the exported files.
+        remote_files = []
+        for page in (1, 2):
+            entries = github_api('GET', api + '/pulls/' + str(pull['number']) + '/files?' + urlencode({'per_page': 100, 'page': page}))
+            remote_files.extend(entries)
+            if len(entries) < 100:
+                break
+        expected_files = {}
+        for item in files:
+            raw = item['content'].encode('utf-8')
+            expected_files[target['directory'] + '/' + item['path']] = hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+        if (len(remote_files) != len(expected_files) or any(item.get('status') != 'added' or
+                expected_files.get(item.get('filename')) != item.get('sha') for item in remote_files)):
+            raise ClientError("The remote pull request does not contain exactly the reviewed contribution files.")
+        return {'status': 'published', 'repository': repo['full_name'], 'pull_request_url': pull['html_url'],
+                'number': pull['number'], 'state': 'merged' if pull.get('merged_at') else pull['state'],
+                'sha256': state['sha256']}
+
+    previous = existing_pr()
+    if previous:
+        save_json(root / '.crucible-github-receipt.json', previous)
+        return previous
+    plan_path = root / GITHUB_PLAN
+    if plan_path.exists():
+        plan = load_json(plan_path)
+        if (plan.get('sha256') != state['sha256'] or plan.get('repository_id') != repo['id'] or
+                plan.get('github_id') != linked['id'] or plan.get('branch') != branch):
+            raise ClientError("The frozen GitHub publication belongs to another account or contribution.")
+    else:
+        base = github_api('GET', api + '/git/ref/heads/' + quote(target['base'], safe=''))['object']['sha']
+        commit = github_api('GET', api + '/git/commits/' + base)
+        exists = github_api('GET', api + '/contents/' + quote(target['directory'], safe='/') + '?ref=' + base, allow_status=(404,))
+        if exists is not None:
+            raise ClientError("The destination already contains this contribution. No files were overwritten.")
+        plan = {'sha256': state['sha256'], 'repository_id': repo['id'], 'github_id': linked['id'],
+                'branch': branch, 'base_sha': base, 'base_tree': commit['tree']['sha']}
+        save_json(plan_path, plan)
+    base_commit = github_api('GET', api + '/git/commits/' + plan['base_sha'])
+    if base_commit.get('tree', {}).get('sha') != plan['base_tree']:
+        raise ClientError("The frozen base commit does not match its tree.")
+    current_base = github_api('GET', api + '/git/ref/heads/' + quote(target['base'], safe=''))['object']['sha']
+    comparison = github_api('GET', api + '/compare/' + plan['base_sha'] + '...' + current_base + '?per_page=1')
+    if comparison.get('status') not in {'identical', 'ahead'}:
+        raise ClientError("The repository base history changed. No contribution branch was overwritten.")
+    exists = github_api('GET', api + '/contents/' + quote(target['directory'], safe='/') + '?ref=' + current_base, allow_status=(404,))
+    if exists is not None:
+        raise ClientError("This destination already exists on the base branch. No files were overwritten.")
+    # Reconstruct from reviewed bytes on every retry. A modified local retry
+    # plan must never select an arbitrary pre-existing remote tree or commit.
+    tree = github_api('POST', api + '/git/trees', {'base_tree': plan['base_tree'], 'tree': [
+        {'path': target['directory'] + '/' + item['path'], 'type': 'blob', 'mode': '100644', 'content': item['content']} for item in files]})
+    if plan.get('tree_sha') and plan['tree_sha'] != tree['sha']:
+        raise ClientError("The frozen contribution tree differs from the reviewed files.")
+    plan['tree_sha'] = tree['sha']; save_json(plan_path, plan)
+
+    def valid_commit(commit):
+        return (commit.get('tree', {}).get('sha') == plan['tree_sha'] and
+                [parent.get('sha') for parent in commit.get('parents', [])] == [plan['base_sha']] and
+                marker in commit.get('message', ''))
+    reference = github_api('GET', api + '/git/ref/heads/' + quote(branch, safe=''), allow_status=(404,))
+    if reference is None:
+        if not plan.get('commit_sha'):
+            commit = github_api('POST', api + '/git/commits', {
+                'message': 'Add verified Crucible recovery ' + state['submission_id'] + '\n\n' + marker,
+                'tree': plan['tree_sha'], 'parents': [plan['base_sha']]})
+            plan['commit_sha'] = commit['sha']; save_json(plan_path, plan)
+        if not valid_commit(github_api('GET', api + '/git/commits/' + plan['commit_sha'])):
+            raise ClientError("The frozen commit differs from the reviewed contribution. No branch was created.")
+        github_api('POST', api + '/git/refs', {'ref': 'refs/heads/' + branch, 'sha': plan['commit_sha']}, allow_status=(422,))
+        reference = github_api('GET', api + '/git/ref/heads/' + quote(branch, safe=''))
+    commit = github_api('GET', api + '/git/commits/' + reference['object']['sha'])
+    if not valid_commit(commit):
+        raise ClientError("The remote contribution branch changed. No branch was overwritten or pull request created.")
+    github_api('POST', api + '/pulls', {'title': 'Crucible verified challenge recovery ' + state['submission_id'][:8],
+        'head': branch, 'base': target['base'], 'draft': True, 'maintainer_can_modify': True,
+        'body': 'Verified recovery evidence from Crucible.\n\nReceipt: ' + client.server + '/api/submissions/' + state['submission_id'] +
+                '\n\nReview the submitted method, source and contributor-reported compute before accepting. '
+                'This PR does not change scheme implementations or award additional Crucible points.\n\n' + marker}, allow_status=(422,))
+    receipt = existing_pr()
+    if receipt is None:
+        raise ClientError("The GitHub result is uncertain. Retry the same prepared directory; do not create another contribution.", 'github_uncertain')
+    save_json(root / '.crucible-github-receipt.json', receipt)
+    return receipt
+
+
 def parser():
     command = argparse.ArgumentParser(description=__doc__)
     def common(target, suppress=False):
@@ -1669,6 +1955,20 @@ def parser():
         target.add_argument("--json", action="store_true", default=argparse.SUPPRESS if suppress else False, help="Print one machine-readable record")
     common(command)
     commands = command.add_subparsers(dest="action", required=True)
+    github = commands.add_parser('github', help='Prepare and explicitly publish verified recovery evidence as a GitHub draft PR')
+    common(github, True)
+    github_actions = github.add_subparsers(dest='github_action', required=True)
+    for name in ('prepare', 'publish'):
+        action = github_actions.add_parser(name); common(action, True)
+        action.add_argument('--path', required=True, help='Private, reviewable contribution directory')
+        if name == 'prepare':
+            action.add_argument('submission_id')
+            action.add_argument('--repository', help='Explicit GitHub destination override as owner/name')
+            action.add_argument('--base', help='Explicit existing GitHub base branch override')
+            action.add_argument('--without-source', action='store_true', help='Export the verified receipt without attached source files')
+            action.add_argument('--without-inputs', action='store_true', help='Omit the original public challenge inputs')
+        else:
+            action.add_argument('--confirm-publish', action='store_true', help='Confirm you reviewed these files and intend to publish them to GitHub')
     for name in ("login", "guide", "schemes", "init", "get", "run", "submit"):
         item = commands.add_parser(name)
         common(item, True)
@@ -1789,6 +2089,11 @@ def main(argv=None):
             server = origin(metadata["server"])
             if args.server and origin(args.server) != server:
                 raise ClientError("The selected server differs from this workspace's bound server.")
+        elif args.action == 'github' and args.github_action == 'publish':
+            _, metadata, _ = github_workspace(args.path)
+            server = origin(metadata['server'])
+            if args.server and origin(args.server) != server:
+                raise ClientError('The selected server differs from this prepared contribution.')
         elif args.action == "bounty" and args.bounty_action in {"save", "request", "boost", "submit", "status"}:
             _, metadata = bounty_metadata(args.path)
             server = metadata["server"]
@@ -1809,6 +2114,7 @@ def main(argv=None):
         elif args.action == "notes": result = notes_command(client, args)
         elif args.action == "notebook": result = notebook_command(client, args)
         elif args.action == "bounty": result = bounty_command(client, args)
+        elif args.action == 'github': result = github_prepare(client, args) if args.github_action == 'prepare' else github_publish(client, args)
         elif args.action == "init": result = init_workspace(client, args)
         elif args.action == "get": result = workspace(client, download_challenge(client, args.challenge_id), args.path)
         elif args.action == "run": result = run_solver(args)

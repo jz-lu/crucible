@@ -118,7 +118,7 @@ def required_scope(method, path):
             return "challenges:read"
         if path == "/api/methods" or re.fullmatch(rf"/api/methods/{_UUID}/source(?:/download)?", path):
             return "methods:read"
-        if path == "/api/me/submissions" or re.fullmatch(rf"/api/submissions/{_UUID}", path):
+        if path == "/api/me/submissions" or re.fullmatch(rf"/api/submissions/{_UUID}(?:/github-export)?", path):
             return "submissions:read"
         if path in {"/api/protocol/spec-schema", "/api/protocol/spec-template", "/api/protocol/proposal-guide",
                     "/api/me/protocol-proposals"} or re.fullmatch(
