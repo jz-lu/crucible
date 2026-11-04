@@ -34,7 +34,7 @@ jobs:
       contents: read
       actions: read
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 45
     env:
       IMAGE: crucible-beta-check:${{ github.sha }}
       PYTHONDONTWRITEBYTECODE: '1'
@@ -86,6 +86,11 @@ jobs:
         run: >-
           python3 -B deploy/release.py promote --output "$RELEASE_OUTPUT"
           --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT"
+      - name: Verify live source and private access
+        if: success() && github.ref == 'refs/heads/main' && inputs.publish && inputs.promote
+        run: >-
+          python3 -B deploy/verify_deployment.py --revision "$GITHUB_SHA"
+          --output "$RELEASE_OUTPUT/rollout.json"
       - name: Release summary
         if: always()
         env:
@@ -117,7 +122,13 @@ jobs:
               value = json.loads(promotion.read_text())
               if value['status'] == 'passed':
                   print('\nVerified beta channel: `' + value['channel_reference'] + '` → `' + value['observed_digest'] + '`')
-                  print('\nAn existing App Platform Autodeploy subscription may now deploy this image. Live deployment has not been verified.')
+                  rollout = root / 'rollout.json'
+                  live = json.loads(rollout.read_text()) if rollout.exists() else {}
+                  if live.get('status') == 'passed':
+                      print('\nLive source passed on both domains and anonymous private-route denial passed on the public domain in three consecutive samples.')
+                  else:
+                      print('\nLive deployment is unverified. Inspect rollout.json and provider status before retrying; beta has already been updated.')
+                  print('\nThese probes do not certify every replica or authenticated user flow.')
               elif value['promotion_attempted']:
                   print('\n**Beta promotion needs inspection: a tag update may already have triggered deployment.**')
                   print('\nObserved channel digest: `' + str(value['observed_digest']) + '`')
@@ -147,6 +158,7 @@ jobs:
             ${{ runner.temp }}/crucible-release/verified.json
             ${{ runner.temp }}/crucible-release/published.json
             ${{ runner.temp }}/crucible-release/promotion.json
+            ${{ runner.temp }}/crucible-release/rollout.json
             ${{ runner.temp }}/crucible-release/context/metadata/
             ${{ runner.temp }}/crucible-release/evidence/
       - name: Remove temporary registry authentication

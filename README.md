@@ -520,6 +520,8 @@ readiness**: identity/recovery policy, abuse/moderation, hosting limits, proxy
 trust, monitoring, backups, and independent admission/security review remain.
 
 - [Architecture and API](docs/architecture.txt)
+- [Operating budget and funding thresholds](docs/operating-budget.txt)
+- [Operations, release trial and maintenance procedures](docs/operations.txt)
 - [Pipeline and mission audit, 18 October 2026](docs/pipeline-audit-20261018.txt)
 - [Private beta setup and release gates](docs/private-beta-setup.txt)
 - [Private beta and public hosting direction](docs/hosting-plan.txt)
