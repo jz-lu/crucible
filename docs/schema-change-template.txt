@@ -1,0 +1,38 @@
+SCHEMA CHANGE RECORD — COPY INTO THE MIGRATION PR
+================================================
+Use only for a schema change. Ordinary UI/API releases do not need this record.
+Link executable tests/evidence; do not repeat them as prose or mark untested claims
+as safe. Unknown compatibility means the rolling path is not yet established.
+
+Purpose and exact versions
+  User-visible change:
+  Previous schema -> expanded schema -> eventual contracted schema:
+  Old image digest / new image digest / rollback image digest:
+
+Compatibility decision
+  Can old and new app/worker versions start on the expanded schema?
+  Can old code read records written by new code (including new NULL/enum values)?
+  What defaults, dual reads/writes or feature switches make that true?
+  Link the tested finite schema acceptance list and actual image startup evidence.
+
+Database operation
+  Exact migration(s), single executor, lock/statement timeout and expected runtime:
+  Backfill batching, resumability and progress query, if needed:
+  Rolling deployment or required maintenance; explain any remaining interruption:
+
+Recovery
+  Private reference to fresh backup + original key/config + successful restore proof:
+  Last safe rollback point; what happens to writes made by the new version:
+  Forward-fix or data-recovery procedure if app rollback is incompatible:
+
+Verification
+  Disposable PostgreSQL version/data shape and old/new read/write race tests:
+  Deployment overlap/restart/worker tests and post-migration checks:
+  Publication run/artifact, expected source SHA and rollout receipt:
+
+Contract/removal
+  When old fields/behavior may be removed and who confirms the rollback window closed:
+  Follow-up issue/PR, if the contraction belongs to a later release:
+
+Do not bypass the existing exact-head gate using this template. The operations
+trial has not yet implemented or proven general rolling schema compatibility.

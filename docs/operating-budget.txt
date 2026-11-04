@@ -1,0 +1,205 @@
+CRUCIBLE OPERATING BUDGET
+=======================
+Last reviewed: 2026-11-04. Currency: USD, before tax and credits.
+Planning scale: hundreds of active researchers, with occasional bursts.
+Next review: first full month after screening is enabled, or 2026-12-04,
+whichever comes first. Review immediately when a plan, model or workload changes.
+
+This is the maintained home for costs, funding assumptions and upgrade triggers.
+Update this file in the same PR that introduces a paid dependency or changes a
+limit. Keep monthly actuals below; Git preserves previous assumptions. The release
+operator updates usage, and the billing-account owner confirms invoices. Never
+put credentials, private invoices, account numbers or submitted note text here.
+
+Funding decision
+----------------
+Reserve $125-175/month initially ($1,500-2,100/year), including a proposed $10/month
+model-screening pilot envelope. This is an engineering planning allowance, not
+an observed bill or an enabled spending limit. A retained helper server and paid
+email would add about $44/month. Sustained growth, stronger review models or an
+availability requirement should be a deliberate new budget decision.
+
+The core baseline is approximately $77.03-92.03/month:
+  $49 app + $15.15 database + $5 Spaces + $5/$20 registry + $34.50/12 domain.
+Add actual CI, backup execution, model usage, optional services and tax. The range
+comes from the unconfirmed registry tier, not two alternative hosting designs.
+No new paid resource, model credential or deployment is created by this document.
+
+Researchers' own agents/attack compute are outside this budget. Crucible does not
+run uploaded attack code. Human scientific review, maintenance time and any future
+cash prizes need separate funding; current bounty rewards are participation points.
+
+Cost register and where charges arise
+------------------------------------
+Item                  Baseline / charging point             Evidence on 2026-11-04
+Application           $49/month, 1 dedicated CPU / 4 GiB      Observed in DO dashboard
+Managed PostgreSQL    $15.15/month, entry Standard plan      Prior handoff + public rate
+Container Registry    Basic $5 or Professional $20/month     Actual tier to confirm
+Spaces                $5/month base                          Recovery configuration
+Domain                .fail $34.50/year standard renewal      Public rate; invoice unknown
+Transactional email   Resend Free $0; Pro $20/month            Actual account usage unknown
+GitHub Actions        Standard Linux 2-core $0.006/min         Plan/allowance to reconcile
+Backup job compute    Chosen job rate x running time           Schedule/runtime unverified
+Helper/recovery VM    About $24/month if retained              Oct 29 handoff; inventory due
+Note screening API    Usage per submitted revision/attempt    Separate work in progress
+
+Application: charged while the service exists. CPU/memory or replica changes
+change this fixed cost. Challenge generation, HTTP traffic and background work
+share its capacity; researcher count alone does not identify an upgrade need.
+
+Database: accounts, sessions, notes, challenges, submissions, reviews and evidence
+archives live here. Storage growth, connections and slow queries can require a
+larger plan. Adding an app replica also increases potential DB connections.
+
+Registry: CI publishes images and retains runtime/rollback images. Storage grows
+with retained unique layers. Preserve the reviewed base, recovery images and
+required scientific provenance before defining deletion policies.
+
+Spaces: encrypted recovery sets consume storage and restore/download transfer.
+Future large evidence blobs could use the same service, with separate access and
+retention rules. They are currently in PostgreSQL; do not count a migration as done.
+
+Email: invitation/account-recovery events consume quota; visits do not. CI:
+pull requests/main checks, deliberate native releases and separate measurement
+workflows consume runner time. Backup jobs charge for execution, not a permanently
+running duplicate web service. Retained VMs continue billing when powered off.
+
+Price steps and review triggers
+------------------------------
+These thresholds are planning prompts, not automatic upgrades or configured alerts.
+
+* App: current $49; 2 CPU / 4 GiB $78; 2 CPU / 8 GiB $98. Two current containers
+  cost $98 in app compute alone. Measure mixed-load latency, CPU/memory and 429/503
+  rates first. A second app instance does not create database high availability.
+  Current plan includes 400 GiB outbound; overage $0.02/GiB, pooled at team level. [1]
+* DB: 1 GiB $15.15, 2 GiB $30.45, 4 GiB $60.90. Published backend connection
+  allowances are 22 / 47 / 97. Code currently allows five connections per process;
+  old/new deployment overlap can double app demand. Leave room for backup and
+  migration connections. Review at sustained 70% disk/connection use or a forecast
+  of reaching the limit within 30 days. Additional disk is $0.215/GiB/month in
+  10 GiB increments. HA/Advanced needs a separate quote; availability and Standard
+  edition restrictions depend on cluster/account creation date. [2,3]
+* Registry: Basic includes 5 GiB, Professional 100 GiB. Extra storage is listed
+  at $0.02/GiB/month on either plan; crossing 5 GiB does not force a $20 plan. [4]
+* Spaces: $5 includes 250 GiB storage and 1,024 GiB outbound. Additional storage
+  $0.02/GiB/month, outbound $0.01/GiB. Include recovery sets and restore exercises. [5]
+* Email: Free has 3,000/month AND 100/day. Check an invitation wave against the
+  daily allowance. Pro $20/month includes 50,000 with no daily cap; additional
+  email is listed at $0.90/1,000. [6]
+* CI: Linux 2-core $0.006/min, rounded per job. Included compute is dollar-based:
+  Free $12/month; Pro/Team $18/month, shared with other account activity. Standard
+  public-repository runners have different billing. Check actual repository and
+  account billing before applying these numbers. Artifact storage is separate.
+  A 24-runner-minute CI execution is $0.144 gross, so 100 are $14.40. The retained
+  Oct 12-29 usage audit counted 4,677 rounded minutes: $28.06 gross at this rate,
+  before allowance, not a monthly invoice. Review duplicate runs first. [7,8]
+* Model API: review at 50% and 80% of the agreed monthly envelope. At the local
+  cap, keep submitted notes and route to human review; do not buy more usage or
+  retry indefinitely. These alerts are proposed, not verified as configured.
+
+Automated first-pass note review
+-------------------------------
+The new expense belongs to the publication-request path, not normal saving,
+reading, search, login, ratings or researchers using their own agents. A requested
+exact revision creates durable work. One bounded worker call evaluates that
+revision; a transient retry can create a second billable call. Approval of sharing
+does not certify the mathematics, admit a scheme or award a bounty.
+
+Read-only inspection of the parallel screening work on 2026-11-04 found proposed
+defaults of gpt-6-luna, a $10/month local budget, at most two attempts, one global
+lease, 128,000 input-token allowance and 1,500 output-token ceiling. That work is
+unmerged and not verified live by this operations trial. Its earlier design draft
+mentions smaller input/two-worker proposals; use the final tested implementation
+when merging, and update this section then. No model-quality recommendation is
+implied by its current default. Evaluate representative research notes first.
+
+Cost formula, with all rates expressed per million tokens:
+  per attempt = (input_tokens x input_rate + output_tokens x output_rate) / 1e6
+  monthly = submitted_revisions x average_attempts x average_cost_per_attempt
+
+Include prompt/policy/serialization in input and all billed output, including
+reasoning. Reasoning is already part of the output total: do not add it twice. [10]
+For varying note lengths, sum actual attempt usage rather than multiplying two
+independently averaged figures. Retries, shadow evaluations and deliberate policy
+rechecks are usage too. An ambiguous timeout may still be billable.
+
+Illustrative standard rates, verified against official pricing on 2026-11-04 [9]:
+Model              Input $/1M   Output $/1M
+gpt-6-luna              0.10          0.50
+gpt-5.4-mini            0.75          4.50
+gpt-6.1-sol             2.00         10.00
+
+Example: 8,000 input + 1,000 total output tokens, averaging 1.2 calls/revision.
+This models a retry/evaluation allowance; it is not measured Crucible usage.
+Monthly revisions      Luna           5.4 mini       6.1 Sol
+500                    $0.78          $6.30          $15.60
+2,000                  $3.12          $25.20         $62.40
+10,000                 $15.60         $126.00        $312.00
+
+Conservative reservation at the draft's full 128,000 input + 1,500 output limit:
+Model              One attempt       Two attempts / revision
+gpt-6-luna         $0.01355           $0.02710
+gpt-5.4-mini       $0.10275           $0.20550
+gpt-6.1-sol        $0.27100           $0.54200
+A $10 allowance therefore covers 369 / 48 / 18 full-size, two-attempt revisions,
+respectively, under these assumptions; short one-attempt notes cost much less.
+Quota can pause earlier because in-flight work reserves its maximum cost.
+
+Examples assume ordinary standard processing, no cache discounts/writes, tools,
+regional premium, tax or special pricing. Explicit cache writes, tools, a pricing
+change or a different service tier need a revised reservation policy before use.
+Do not treat the local ledger as a guarantee of the provider's final invoice.
+
+Budget controls to verify before enabling automatic publication:
+* Reserve the worst allowed cost atomically in PostgreSQL before each attempt,
+  across workers/restarts/deployment overlap. Count unknown usage conservatively.
+* Persist actual token usage, model/policy version and retry identity. Reconcile
+  local totals against provider billing; never log note bodies or API keys.
+* Keep network calls outside web requests and database transactions. Leases,
+  bounded retries and an operator disable switch let pending work survive releases.
+* Use a dedicated API project/credential, and provider alerts as a second signal.
+  A dashboard alert is not an application-enforced spending stop.
+* Include a worker hosting line only if a separate component is actually deployed.
+  The database queue itself requires no Redis subscription. Measure backlog and
+  shared CPU/connection impact before paying for another service.
+
+Monthly update worksheet
+------------------------
+Period | Actual total | Fixed | CI/jobs | Model | Other/tax | Forecast | Evidence
+2026-11 | Not reconciled | -- | -- | Not enabled/verified | -- | $125-175 reserve | Audit + public rates
+
+For each review:
+1. Record invoices/usage totals and credit/tax treatment in the row above. Keep
+   private invoice links in the private operator store, not this public ledger.
+2. Record active app replicas/size, DB tier/GB/connections, registry plan/GB,
+   Spaces GB/transfer, email daily peak, rounded CI minutes and backup runtime.
+3. For screening, record requested revisions, total attempts, tokens, unknown-cost
+   attempts, queue wait, human fallback rate and actual invoice cost. Distinguish
+   disabled/shadow/automatic mode. Check the agreed cap and pricing against code.
+4. Explain the largest change and the next price step. Update the rate-check date,
+   planning allowance and any configuration PR together. No silent limit increases.
+
+Open confirmations
+------------------
+Reconcile registry tier, DB allocation, auxiliary VM inventory, billing credits,
+domain renewal invoice, current CI allowance and usage. Confirm the backup/cleanup
+schedules and their alerts actually run. Confirm screening model/limits/hosting
+after its own implementation and evaluation land. Hundreds of users remains a
+load-test target, not a demonstrated capacity result.
+
+References (public rates checked 2026-11-04)
+------------------------------------------
+[1] https://docs.digitalocean.com/products/app-platform/details/pricing/
+[2] https://www.digitalocean.com/pricing/managed-databases
+[3] https://docs.digitalocean.com/products/databases/postgresql/details/limits/
+[4] https://docs.digitalocean.com/products/container-registry/details/pricing/
+[5] https://docs.digitalocean.com/products/spaces/details/pricing/
+[6] https://resend.com/pricing
+[7] https://docs.github.com/en/billing/reference/actions-runner-pricing
+[8] https://docs.github.com/en/billing/reference/product-usage-included
+[9] https://developers.openai.com/api/docs/pricing
+[10] https://developers.openai.com/api/docs/guides/reasoning#how-reasoning-works
+Helper VM: https://www.digitalocean.com/pricing/droplets
+Domain: https://porkbun.com/products/domains/tld_pricing
+
+Operational entry point: docs/operations.txt. Release detail: docs/releasing-beta.txt.

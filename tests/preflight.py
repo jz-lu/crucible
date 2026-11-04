@@ -23,6 +23,7 @@ PROFILES = {
     )],
     'release': [('python', '-B', '-m', 'pytest', '-q',
                  'tests/test_source_ci.py', 'tests/test_release_pipeline.py',
+                 'tests/test_reuse_release.py', 'tests/test_verify_deployment.py',
                  'tests/test_dev_preflight.py')],
 }
 BOUNDARY = 'Focused preflight only; required CI, browser, native and hosted checks still apply.'

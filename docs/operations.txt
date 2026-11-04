@@ -1,0 +1,202 @@
+CRUCIBLE OPERATIONS
+==================
+Maintained entry point, 2026-11-04. Target: hundreds of active researchers with
+occasional bursts. Budget and upgrade thresholds: docs/operating-budget.txt.
+
+Keep the architecture small: one modular web application, managed PostgreSQL,
+private recovery storage, email and hosted CI. Durable background work can use
+PostgreSQL jobs/leases. Add dedicated workers or replicas when measurements justify
+them. Normal code releases should require one deliberate action and a recorded
+result, with existing configuration reused.
+
+Current evidence and limits
+---------------------------
+The Nov 4 audit observed the beta tag on a single $49/month 4 GiB / one dedicated
+CPU App Platform service, Autodeploy enabled. Provider health reported source
+00e3878990d9ebc8546d49030f3c156b409d7687, while repository main was f9a9d22.
+This is dated evidence, not a promise that either remains current.
+
+App ID: 3926868a-afad-4b2b-a7d8-5cf3dfaec214
+Public origin: https://crucible.fail
+Provider origin: https://crucible-beta-z7znj.ondigitalocean.app
+Delivery channel: registry.digitalocean.com/crucible-beta/app:beta
+Provider console: https://cloud.digitalocean.com/apps/3926868a-afad-4b2b-a7d8-5cf3dfaec214
+
+The operations trial adds a publish-once/promote-later workflow and anonymous
+rollout verification. It does not migrate the database, change hosting, change
+startup schema acceptance, enable screening, or prove uninterrupted deployments.
+Its first hosted use still needs a deliberate reviewed release after required CI.
+Current backup scheduling, failure alerts, branch protection and live DB timeouts
+have not been established by this audit; successful historical restores do not
+prove that unattended recovery is running today.
+
+Routine release
+---------------
+1. Review the PR, pass required CI and merge. Merging does not deploy.
+2. Run GitHub Actions -> Release beta on main with Publish and Promote enabled.
+   It verifies source CI and the native image, publishes it once, promotes its
+   exact digest and probes the live website. Ordinary releases need no provider
+   environment edits, server login, custom migration packet or site shutdown.
+3. Inspect the workflow summary. Retain the immutable image and release artifact.
+   Three consecutive samples on BOTH domains must show the expected source SHA.
+   The public domain must also return application-level 401 denial for an anonymous
+   private Notes request. The provider hostname intentionally serves only health
+   probes; ordinary application routes there fail the trusted-host check.
+   Then check the changed authenticated journey. Anonymous probes cannot do that.
+
+For a deliberate gap between build and deployment, run Release beta with Publish
+enabled and Promote disabled. Later, run Promote published beta on main and give
+the original Release beta run ID (the number in its Actions URL). It resolves the
+original attempt and artifact itself, rechecks trusted GitHub provenance and current
+source CI, then uses the same immutable image and existing promotion guard.
+There is no rebuild and no app/database credential. Both workflows share one
+concurrency group. Artifact expiry, a newer main commit, candidate-branch output,
+incomplete evidence or a promotion attempted in the original build run blocks
+this reuse path. Separate promotion runs do not consume the original artifact;
+inspect their receipts before dispatching another run for the same publication.
+If only live verification needs repeating, use the read-only command below.
+
+This is not a rollback command or a schema-compatibility decision. If main has
+advanced, release the newer tested main or use a separately reviewed recovery
+procedure; never forge receipts or bypass the current-main check.
+
+Interpreting failures
+--------------------
+* Source/build/test failure: inspect that stage before publication. No successful
+  image evidence is implied by a partially completed workflow.
+* Publication failure: the registry upload may have partly succeeded. Inspect
+  its receipt/logs; a new run has a new unique publication tag.
+* Promotion failure/cancellation: beta may already have moved and triggered a
+  deployment. Preserve promotion.json. Do not blindly retry or roll back over
+  another operator's action.
+* Rollout failure: the tag update already passed, but public service verification
+  did not. rollout.json records whether the source was still old, a request
+  failed, or the private-route check failed. The workflow does not rewrite beta,
+  migrate data, restart the service or roll back automatically.
+
+The probe waits up to ten minutes (plus an in-flight bounded HTTP request), avoids
+redirects, sends no credentials and retains no response bodies. Readiness checks
+include a DB read. These are samples of served source and access policy, not a
+proof that every replica serves the same image digest or that all product flows
+work. A failure from only one network can be DNS/TLS/connectivity; compare the
+public/provider results and provider status before declaring a server outage.
+
+To repeat only the read-only verification from a trusted checkout:
+  python -B deploy/verify_deployment.py --revision FULL_RELEASE_SHA --output NEW_RECEIPT_PATH
+Use the full SHA from the publication receipt and a fresh output file. This
+command cannot redeploy anything. Keep its output with the original release.
+
+Migration design: remove avoidable shutdowns without guessing
+-----------------------------------------------------------
+Classify a change when designing it, before a release window:
+
+Change                       Usual path
+UI/API, unchanged schema     Ordinary immutable-image release
+Additive schema              Expand/deploy/contract, after compatibility proof
+Destructive/semantic schema  Staged conversion or explicit maintenance plan
+Native/runtime dependency   Reviewed runtime admission and exact native evidence
+Provider configuration      One reviewed change, export/diff/readback once
+
+For an additive change, prefer a sequence old and new application versions can
+both tolerate: add nullable fields/tables or safe defaults; deploy code that can
+read old/new representations; backfill in bounded resumable batches; only remove
+the old representation after the rollback window closes. "Additive" alone does
+not prove safety: DDL lock duration, old readers, new values and workers matter.
+
+Use docs/schema-change-template.txt in the migration PR instead of inventing a
+fresh operator packet. Rehearse on disposable PostgreSQL with representative data:
+old runtime on expanded schema, new runtime on expanded schema, writes from both,
+restart/deployment overlap, and old runtime reading records produced by new code.
+Test worker leases and policy switches too when automated screening is involved.
+Run the final images' actual startup path, not just ORM unit tests.
+
+CURRENT LIMIT: beta preflight and the retained startup path use exact migration
+heads. This trial does not relax them. A future reviewed runtime should accept an
+explicit finite set of tested schema versions, with a documented expiry for the
+older compatibility window. Do not replace this with "any newer schema is okay."
+Until that change and old/new image tests exist, an additive migration can still
+need a compatibility image or a maintenance window. A foreign-key/nullability
+change can be behaviorally incompatible even when its SQL upgrade succeeds.
+
+Run migrations once as a deliberate release operation, not on every web replica
+startup. Set appropriate lock/statement timeouts, preserve pre-migration recovery
+evidence and verify post-migration state. Roll back the app only when it is proven
+to understand new records. Restoring a pre-migration DB can discard newer writes;
+it is a data recovery decision, never an automatic response to a failed probe.
+
+Provider configuration and recovery
+----------------------------------
+Normal releases use the watched beta tag and preserve all environment values.
+Before changing instance size, health checks, workers or schedules, export the
+existing app spec to the private operator store. Produce a reviewed diff there,
+apply the intended change once and record a sanitized readback. Do not construct
+a partial replacement spec from memory: provider updates can replace unrelated
+settings. Retain secrets privately; Git gets nonsecret topology and secret names.
+Keep any repeatable configuration code beside this runbook once actual settings
+are verified. A speculative Terraform rewrite would add machinery at this stage.
+
+Recovery tooling already exists in deploy/backup-beta.py and
+deploy/backup-app-platform.py; see deploy/app-platform-backup.md. Preserve the
+original server verification key, encrypted database backup, image and paired
+configuration. Never print or commit their values. A web-only release does not
+require rebinding the backup job to the new web image.
+
+Next operational checks, in order
+--------------------------------
+1. Establish the actual backup and cleanup schedules, backup freshness alert and
+   last successful restore. Record owner, schedule and evidence here. Test the
+   failure signal. Follow with a periodic disposable restore rehearsal.
+2. Confirm readiness /health and separate liveness settings. Record uptime,
+   error rate, latency, generation saturation, DB pool waits/storage and backup
+   age without private data. Add minimal alerts with a named recipient.
+3. Rehearse mixed reader/write/generation bursts and rollout overlap on disposable
+   production-like hosting. This determines whether current compute is adequate.
+4. Trial one genuinely additive migration end to end, including startup acceptance
+   and rollback reads. Then promote the reusable compatibility procedure to policy.
+5. Enable model screening through its own evaluated rollout. Verify durable work,
+   bounded budget, disable/fallback behavior and human decisions winning over late
+   results. Budget and queue delay belong in the same operational review.
+
+Do not mark these done from documentation alone. Link evidence and its date when
+each is verified. After the first three ordinary releases, check that they needed
+one dispatch, no manual provider edits, no unnecessary rebuild and useful automatic
+failure reporting. Fix recurring exceptions in the tooling rather than growing
+an ever-longer checklist.
+
+Trial validation, 2026-11-04
+---------------------------
+The focused release suite passed 270 checks locally. actionlint 1.7.12 accepted
+the modified CI/release workflows and the new promotion workflow. The existing
+runtime source contract passed without changing its policy or native pins.
+
+Read-only GitHub rehearsal selected publish-only run 40957698274, artifact
+12934019627, and staged its four expected JSON receipts using the real archive
+layout. The already-promoted companion run 40961101079 was rejected. No registry
+credential was obtained and no historical image was promoted.
+
+At 21:36 UTC, the corrected live checker passed three consecutive samples of
+source 00e3878990d9ebc8546d49030f3c156b409d7687 on both domains and anonymous
+private-note denial on crucible.fail. The initial rehearsal exposed the provider
+hostname's intentional rejection of non-health routes; the checker now respects
+that boundary and has a regression test. These read-only samples exercised the
+currently deployed app, not a deployment of this branch. The new GitHub workflow
+still needs its first deliberate hosted execution after merge.
+
+Maintenance locations
+---------------------
+docs/operating-budget.txt             cost register and funding assumptions
+docs/releasing-beta.txt               release identity, guards and recovery detail
+docs/schema-change-template.txt       reusable migration PR evidence
+.github/workflows/release-beta.yml    build/test/publish/promote and probe
+.github/workflows/promote-beta.yml    reuse a successful publish-only main run
+deploy/reuse_release.py               trusted artifact selection; data-only staging
+deploy/release.py                     immutable manifest and current-main guards
+deploy/verify_deployment.py           bounded anonymous rollout verification
+tests/preflight.py release            local release guard regression suite
+
+Platform references
+-------------------
+https://github.com/actions/download-artifact/tree/v4
+https://docs.github.com/en/rest/actions/artifacts
+https://docs.digitalocean.com/products/app-platform/how-to/manage-health-checks/
+https://docs.digitalocean.com/products/app-platform/how-to/update-app-spec/
