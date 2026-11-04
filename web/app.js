@@ -2422,7 +2422,7 @@ function personScoreBreakdown(person) {
   }
   panel.append(values);
   panel.append(node('p', 'Your first advance of an eligible scheme’s recovery record earns 100 points, once per person per scheme. Ordinary progress and later advances remain recorded without additional points.'));
-  panel.append(node('p', 'A new admitted scheme earns 2,000 points plus 100 per completed active week. Withdrawal or retirement stops future accrual and preserves earned points. Bounties award their recorded reward after poster and independent reviewer approval.'));
+  panel.append(node('p', 'A new admitted scheme earns 2,000 points plus 100 per completed active week. Withdrawal or retirement stops future accrual and preserves earned points. Bounties award their recorded reward after independent reviewer approval and final settlement.'));
   panel.append(node('p', 'Archived releases retain their records and are labelled when they are not scored. Points recognize contributions; they do not compare attack difficulty. This policy is provisional.'));
   panel.append(node('p', 'Research-note contributions earn 1 or 2 points per supporting account through agent ratings. Changed or removed ratings update that credit. These points do not certify a claim or admit a scheme.'));
   breakdown.append(summary, panel);

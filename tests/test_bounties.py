@@ -133,11 +133,12 @@ def test_reserve_admit_boost_and_independent_single_award(system):
     assert value['bounty']['status']=='open' # A claim is not qualification.
     sid=value['receipt']['submission_id']
     value=assess(reviewer,value,'pipeline',submission_id=sid)
-    assert value['bounty']['status']=='frozen' and value['bounty']['award'] is None
-    value=assess(owner,value,'poster',submission_id=sid)
     assert value['bounty']['status']=='completed' and value['bounty']['award']['points']==200
     with app.state.db.transaction() as session:
         assert session.scalar(select(func.count()).select_from(BountyAward))==1
+        award=session.get(BountyAward,value['bounty']['id'])
+        assert award.poster_decision_id is None
+        assert award.pipeline_decision_id==value['receipt']['decision_id']
         points=session.execute(allowance.bounty_points_relation()).one()
         assert points.user_id==solver.identifier and points.bounty_points==200
         assert session.scalar(select(func.sum(Event.available_delta)).where(Event.user_id==owner.identifier))==9
@@ -180,17 +181,17 @@ def test_revision_feedback_keeps_one_reservation_and_frozen_terms_do_not_edit(sy
     post(owner,'/api/bounties/'+value['bounty']['id']+'/revisions',body(value,terms=terms()),409)
 
 
-def test_qualification_freezes_offer_but_only_final_award_refunds_later_boosts(system):
+def test_review_completes_and_refunds_boosts_after_the_claim_boundary(system):
     _,owner,reviewer,solver,supporter,*_=system
     value=boost(supporter,opened(system))
     value=submit(solver,value,published(solver,reviewer));sid=value['receipt']['submission_id']
     value=boost(supporter,value)
     assert value['bounty']['reward_points']==300 and available(supporter)==8
     value=assess(reviewer,value,'pipeline',submission_id=sid)
-    assert value['bounty']['reward_points']==200 and available(supporter)==8
+    assert value['bounty']['status']=='completed'
+    assert value['bounty']['reward_points']==200 and available(supporter)==9
     post(supporter,'/api/bounties/'+value['bounty']['id']+'/boosts',body(value,
         terms_sha256=value['bounty']['terms_sha256'],policy_id=value['policy']['id'],units=1,confirm_cost_units=1),409)
-    value=assess(owner,value,'poster',submission_id=sid)
     assert value['bounty']['award']['points']==200 and available(supporter)==9
 
 
@@ -199,7 +200,6 @@ def test_winner_cannot_convert_their_own_boost_to_score(system):
     value=boost(solver,opened(system),2)
     assert available(solver)==8
     value=submit(solver,value,published(solver,reviewer));sid=value['receipt']['submission_id']
-    value=assess(owner,value,'poster',submission_id=sid)
     value=assess(reviewer,value,'pipeline',submission_id=sid)
     assert value['bounty']['award']['points']==100 and available(solver)==10
 
@@ -208,7 +208,6 @@ def test_earlier_unresolved_claim_blocks_later_award_until_recorded_rejection(sy
     _,owner,reviewer,solver,supporter,*_=system
     value=submit(solver,opened(system),published(solver,reviewer));first=value['receipt']['submission_id']
     value=submit(supporter,value,published(supporter,reviewer));second=value['receipt']['submission_id']
-    value=assess(owner,value,'poster',submission_id=second)
     value=assess(reviewer,value,'pipeline',submission_id=second)
     assert value['bounty']['status']=='frozen' and value['bounty']['award'] is None
     value=assess(reviewer,value,'pipeline','declined',submission_id=first)
@@ -231,7 +230,21 @@ def test_proposal_owner_and_solver_cannot_supply_pipeline_approval(system):
     value=submit(solver,opened(system),published(solver,reviewer));sid=value['receipt']['submission_id']
     path='/api/bounties/'+value['bounty']['id']+'/submissions/'+sid+'/decisions'
     for actor in (owner,solver):post(actor,path,body(value,kind='pipeline',decision='approved',reason='Self review.'),403)
-    post(reviewer,path,body(value,kind='poster',decision='approved',reason='Not the poster.'),403)
+
+
+def test_retired_poster_decisions_do_not_change_the_task_or_journal(system):
+    app,owner,reviewer,solver,*_=system
+    value=submit(solver,opened(system),published(solver,reviewer));sid=value['receipt']['submission_id']
+    path='/api/bounties/'+value['bounty']['id']+'/submissions/'+sid+'/decisions'
+    for choice in ('approved','declined'):
+        post(owner,path,body(value,kind='poster',decision=choice,reason='Legacy poster action.'),410)
+    detail=owner.client.get('/api/bounties/'+value['bounty']['id']).json()['bounty']
+    assert detail['version']==value['bounty']['version'] and detail['status']=='open'
+    assert detail['award'] is None
+    with app.state.db.transaction() as session:
+        assert session.scalar(select(func.count()).select_from(BountyDecision).where(
+            BountyDecision.submission_id==sid))==0
+    assert assess(reviewer,value,'pipeline',submission_id=sid)['bounty']['status']=='completed'
 
 
 def test_month_boundary_refunds_stay_expired_and_grants_do_not_accumulate(system):
@@ -322,17 +335,20 @@ def test_partial_work_and_declined_claim_never_lock_or_award(system):
 
 def test_withdrawn_exact_evidence_prevents_award_without_substituting_latest_revision(system):
     from crucible import notebook,notebook_moderation
-    app,owner,reviewer,solver,*_=system
+    app,owner,reviewer,solver,supporter,*_=system
     pin=published(solver,reviewer)
-    value=submit(solver,opened(system),pin);sid=value['receipt']['submission_id']
+    value=submit(supporter,opened(system),published(supporter,reviewer));earlier=value['receipt']['submission_id']
+    value=submit(solver,value,pin);sid=value['receipt']['submission_id']
     value=assess(reviewer,value,'pipeline',submission_id=sid)
+    assert value['bounty']['status']=='frozen' and value['bounty']['award'] is None
     post(reviewer,'/api/notebook/notes/'+pin['note_id']+'/publication-withdrawals',{
         'revision':pin['revision'],'content_sha256':pin['content_sha256'],'reason':'The source claim needs correction.',
         'idempotency_key':str(uuid4())})
-    path='/api/bounties/'+value['bounty']['id']+'/submissions/'+sid+'/decisions'
-    post(owner,path,body(value,kind='poster',decision='approved',reason='Trying to accept withdrawn evidence.'),409)
+    path='/api/bounties/'+value['bounty']['id']+'/submissions/'+earlier+'/decisions'
+    post(reviewer,path,body(value,kind='pipeline',decision='declined',reason='Earlier claim does not meet the criteria.'),409)
     detail=owner.client.get('/api/bounties/'+value['bounty']['id']).json()
-    assert detail['bounty']['submissions'][0]['contribution_note']['unavailable']
+    claim=next(row for row in detail['bounty']['submissions'] if row['id']==sid)
+    assert claim['contribution_note']['unavailable']
     with app.state.db.transaction() as session:assert session.scalar(select(func.count()).select_from(BountyAward))==0
 
 
@@ -422,17 +438,22 @@ def test_proposal_stays_in_owner_activity_after_submission(system):
 
 def test_rejected_earlier_claim_cannot_destroy_later_qualified_offer(system):
     app,owner,reviewer,solver,supporter,reviewer2,_=system
-    value=submit(solver,opened(system),published(solver,reviewer));first=value['receipt']['submission_id']
+    # An unresolved first claim keeps the two later approvals reviewable before
+    # settlement, so a rejection can change the frozen offer without a refund.
+    value=submit(reviewer2,opened(system),published(reviewer2,reviewer));blocker=value['receipt']['submission_id']
+    value=submit(solver,value,published(solver,reviewer));first=value['receipt']['submission_id']
     value=boost(reviewer2,value,3)
     value=submit(supporter,value,published(supporter,reviewer));second=value['receipt']['submission_id']
-    assert value['bounty']['submissions'][1]['offered_reward_points']==400
+    assert value['bounty']['submissions'][2]['offered_reward_points']==400
     value=assess(reviewer,value,'pipeline',submission_id=second)
     assert value['bounty']['reward_points']==400 and available(reviewer2)==7
     value=assess(reviewer,value,'pipeline',submission_id=first)
     assert value['bounty']['reward_points']==100 and available(reviewer2)==7
-    value=assess(owner,value,'poster','declined',submission_id=first)
+    value=assess(reviewer,value,'pipeline','declined',submission_id=first)
     assert value['bounty']['reward_points']==400 and available(reviewer2)==7
-    value=assess(owner,value,'poster',submission_id=second)
+    assert value['bounty']['award'] is None
+    value=assess(reviewer,value,'pipeline','declined',submission_id=blocker)
     assert value['bounty']['award']['points']==400 and available(reviewer2)==7
+    assert value['bounty']['award']['submission_id']==second
     with app.state.db.transaction() as session:
         assert session.scalar(select(func.count()).select_from(Event).where(Event.kind=='refund'))==0

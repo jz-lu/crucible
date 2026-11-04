@@ -358,6 +358,64 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
     const f = fixture({reviewOnly: true, responder: url => url.pathname === '/api/bounties/' + id ? {bounty: task(id, {status: 'pending', capabilities: {review_admission: true}}), policy} : undefined});
     try {await f.show('section=bounties&bounty=' + id); assert.match(f.host.textContent, /Admission review/); assert.equal(f.host.querySelector('[name="admission-base"]'), null); assert.equal(button(f.host, 'Boost this bounty'), undefined);} finally {f.close();}
   });
+  await test('completion has no proposer action or pending signoff, while historical assessments remain readable', async () => {
+    const submission = {id: second, claim: 'solution', status: 'pending', author: {handle: 'solver'}, contribution_note: pin,
+      poster_decision: 'approved', capabilities: {accept: true, reject: true, qualify: true}};
+    const f = fixture({responder: url => url.pathname === '/api/bounties/' + id ? {bounty: task(id, {
+      submissions: [submission], decisions: [{kind: 'poster', decision: 'approved', reason: 'An earlier recorded assessment.'}]}), policy} : undefined});
+    try {
+      await f.show('bounty=' + id + '&detail=contributions');
+      assert.match(f.host.textContent, /Awaiting independent review/);
+      assert.doesNotMatch(f.host.textContent, /Poster ·|Pipeline ·|pending|Record .* decision/);
+      assert.equal(f.host.querySelector('form'), null, 'Legacy proposer capabilities must not restore an action.');
+      await f.show('bounty=' + id);
+      assert.match(f.host.querySelector('.bty-decision-history').textContent, /Historical proposer assessment · approvedAn earlier recorded assessment\./);
+      assert.equal(f.requests.filter(r => r.body).length, 0);
+    } finally {f.close();}
+  });
+  await test('only the review workspace submits a pipeline decision and shows the resulting award without proposer approval', async () => {
+    let current = task(id, {submissions: [{id: second, claim: 'solution', status: 'pending', author: {handle: 'solver'},
+      contribution_note: pin, capabilities: {qualify: true}}]});
+    const f = fixture({reviewOnly: true, responder: (url, body) => {
+      if (url.pathname.endsWith('/decisions')) {
+        current = {...current, status: 'completed', version: 2, award: {submission_id: second, points: 100},
+          submissions: [{...current.submissions[0], status: 'awarded', pipeline_decision: 'approved', capabilities: {qualify: false}}]};
+        return {bounty: current, policy};
+      }
+      if (url.pathname === '/api/bounties/' + id) return {bounty: current, policy};
+    }});
+    try {
+      await f.show('bounty=' + id + '&detail=contributions');
+      assert.ok(button(f.host, 'Record reviewer decision'));
+      fill(f.host, 'bounty-decision-reason', 'Exact criteria and cited evidence verified.');
+      submit(f.host); await flush(); await f.routed();
+      const writes = f.requests.filter(r => r.body);
+      assert.equal(writes.length, 1);
+      assert.equal(writes[0].path, '/api/bounties/' + id + '/submissions/' + second + '/decisions');
+      assert.equal(writes[0].body.kind, 'pipeline');
+      assert.equal(writes[0].body.expected_version, 1);
+      assert.equal(writes[0].body.decision, 'approved');
+      await f.show('bounty=' + id + '&detail=contributions');
+      assert.match(f.host.textContent, /Awarded/);
+      assert.match(f.host.textContent, /Independent reviewer · approved/);
+      assert.doesNotMatch(f.host.textContent, /pending|Awaiting|Poster ·|Record reviewer decision/);
+      assert.equal(f.host.querySelector('form'), null);
+    } finally {f.close();}
+  });
+  await test('partial contributions have no pending approval and qualified claims show settlement separately', async () => {
+    const f = fixture({responder: url => url.pathname === '/api/bounties/' + id ? {bounty: task(id, {status: 'frozen', submissions: [
+      {id: second, claim: 'partial', status: 'partial', contribution_note: pin},
+      {id: note, claim: 'solution', status: 'qualified', contribution_note: pin, pipeline_decision: {decision: 'approved'}}]}), policy} : undefined});
+    try {
+      await f.show('bounty=' + id + '&detail=contributions');
+      const rows = f.host.querySelectorAll('.bty-progress-item');
+      assert.equal(rows[0].querySelector('.bty-approvals'), null);
+      assert.doesNotMatch(rows[0].textContent, /pending|Awaiting|review/i);
+      assert.match(rows[1].textContent, /Approved; awaiting settlement/);
+      assert.match(rows[1].textContent, /Independent reviewer · approved/);
+      assert.doesNotMatch(rows[1].textContent, /Poster|Qualified for completion review/);
+    } finally {f.close();}
+  });
   await test('invalidation stays passive before selection and after hiding; warming never shows a board', async () => {
     const f = fixture();
     try {

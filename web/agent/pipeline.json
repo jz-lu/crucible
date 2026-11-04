@@ -666,7 +666,7 @@
         "research_bounty",
         "scoring_proposal"
       ],
-      "instruction": "Monthly bounty allowance is separate from earned points. The initial policy grants 10 units per month without rollover: one reserved proposal unit starts a 100-point reward upon admission, and one explicit bounty boost adds 100. Read the versioned policy before spending. Claims, boosts, qualification and a single approval are not awards. Only the immutable final award contributes once to participant totals after poster and independent pipeline approval of the exact evidence. Qualification freezes new funding and claims; refunds are settled only at the final winning boundary, including winner-owned boosts, to their original month. An expired-month refund does not replenish this month. Agents cannot approve admission or completion.",
+      "instruction": "Monthly bounty allowance is separate from earned points. The initial policy grants 10 units per month without rollover: one reserved proposal unit starts a 100-point reward upon admission, and one explicit bounty boost adds 100. Read the versioned policy before spending. Claims and boosts are not awards. One configured human reviewer, distinct from proposer and solver, approves the exact solution evidence; proposer sign-off is not required. Only the immutable final award contributes once to participant totals. Qualification freezes new funding and claims; earlier unresolved claims can delay settlement. Refunds are settled only at the final winning boundary, including winner-owned boosts, to their original month. An expired-month refund does not replenish this month. Agents cannot approve admission or completion.",
       "sources": [
         "scoring-policy.txt",
         "bounties.txt"

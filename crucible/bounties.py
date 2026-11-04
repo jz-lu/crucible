@@ -209,20 +209,21 @@ def refresh_outcome(session, task, settings, now):
     # A later approval never jumps an earlier unresolved solution claim.
     if claims[0].id != qualified.id:
         return
-    decisions = current_decisions(session, qualified)
-    poster, pipeline = decisions.get('poster'), decisions.get('pipeline')
-    if poster is None or pipeline is None or poster.decision != 'approved' or pipeline.decision != 'approved':
+    # Historical poster decisions remain evidence in the journal, but neither
+    # their presence nor their conclusion controls new settlement.
+    pipeline = current_decisions(session, qualified).get('pipeline')
+    if pipeline is None or pipeline.decision != 'approved':
         return
-    if len({task.owner_id, qualified.author_id, pipeline.actor_id}) != 3 or poster.actor_id != task.owner_id:
-        raise HTTPException(409, 'Distinct poster, solver and independent pipeline approval are required.')
+    if len({task.owner_id, qualified.author_id, pipeline.actor_id}) != 3:
+        raise HTTPException(409, 'Completion requires a reviewer independent of the poster and solver.')
     if pipeline.actor_id not in settings.reviewer_ids:
         raise HTTPException(409, 'An active configured reviewer must approve this exact contribution.')
     for identifier in (task.owner_id, qualified.author_id, pipeline.actor_id):
         if not allowance.eligible(session, settings, identifier, now):
             raise HTTPException(409, 'An approval participant no longer has active site access.')
     terms = terms_for(session, task)
-    if any(d.terms_id != terms.id or d.evidence_sha256 != qualified.note_sha256 for d in (poster, pipeline)):
-        raise HTTPException(409, 'Approvals must match the exact terms and contribution evidence.')
+    if pipeline.terms_id != terms.id or pipeline.evidence_sha256 != qualified.note_sha256:
+        raise HTTPException(409, 'Reviewer approval must match the exact terms and contribution evidence.')
     # Lock every potentially refunded wallet as one set before note locks and
     # before applying any compensation. Oppositely ordered subsets can deadlock.
     funding_accounts = sorted({e.user_id for e in live_boosts(session, task)})
@@ -246,7 +247,7 @@ def refresh_outcome(session, task, settings, now):
     if session.get(BountyAward, task.id):
         raise HTTPException(409, 'This task already has its single recorded award.')
     session.add(BountyAward(task_id=task.id, submission_id=qualified.id, user_id=qualified.author_id,
-                           policy_id=task.policy_id, terms_id=terms.id, poster_decision_id=poster.id,
+                           policy_id=task.policy_id, terms_id=terms.id, poster_decision_id=None,
                            pipeline_decision_id=pipeline.id, reward_boundary=qualified.reward_boundary,
                            points=points, created_at=now))
     task.status, task.reward_points, qualified.status = 'completed', points, 'awarded'
@@ -333,10 +334,10 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 'offered_reward_points': row.offered_reward_points, 'reward_boundary': row.reward_boundary,
                 'poster_decision': decisions_data(decisions['poster']) if 'poster' in decisions else None,
                 'pipeline_decision': decisions_data(decisions['pipeline']) if 'pipeline' in decisions else None,
-                'capabilities': {'accept': human and own and row.author_id != user.id and task.status in ('open', 'frozen') and row.claim == 'solution',
-                                 'reject': human and own and row.author_id != user.id and task.status in ('open', 'frozen') and row.claim == 'solution',
+                'capabilities': {'accept': False, 'reject': False,
                                  'qualify': human and protocol_proposals.is_reviewer(settings, user) and user.id not in (task.owner_id, row.author_id)
-                                            and task.status in ('open', 'frozen') and row.claim == 'solution'}})
+                                            and task.status in ('open', 'frozen') and row.claim == 'solution'
+                                            and row.status in ('pending', 'qualified')}})
         result['decisions'] = [decisions_data(row) for row in session.scalars(select(BountyDecision)
                                .where(BountyDecision.task_id == task.id).order_by(BountyDecision.task_version, BountyDecision.id).limit(200))]
         award = session.get(BountyAward, task.id)
@@ -597,19 +598,17 @@ def register_routes(app, db, settings, clock, user_for, throttle):
     @app.post('/api/bounties/{task_id}/submissions/{submission_id}/decisions')
     def assess(task_id: UUID, submission_id: UUID, body: DecisionInput, request: Request):
         def apply(session, user, task, now):
+            if body.kind == 'poster':
+                raise HTTPException(410, 'Poster completion decisions are retired. An independent reviewer evaluates the contribution.')
             if task.status not in ('open', 'frozen'): raise HTTPException(409, 'This bounty cannot receive completion decisions.')
             record = session.get(BountySubmission, str(submission_id))
             if record is None or record.task_id != task.id: raise HTTPException(404, 'Contribution not found.')
             if record.claim != 'solution': raise HTTPException(409, 'A partial contribution does not request the completion award.')
             if record.status == 'declined' and body.decision == 'approved':
                 raise HTTPException(409, 'A declined contribution needs a new exact evidence submission.')
-            if body.kind == 'poster':
-                if task.owner_id != user.id or record.author_id == user.id:
-                    raise HTTPException(403, 'Only the distinct named poster may make this decision.')
-            else:
-                reviewer(user)
-                if user.id in (task.owner_id, record.author_id):
-                    raise HTTPException(403, 'Pipeline approval requires a reviewer independent of poster and solver.')
+            reviewer(user)
+            if user.id in (task.owner_id, record.author_id):
+                raise HTTPException(403, 'Pipeline approval requires a reviewer independent of poster and solver.')
             terms = terms_for(session, task)
             if terms.id != record.terms_id: raise HTTPException(409, 'The contribution refers to different task terms.')
             if body.decision == 'approved':
@@ -622,7 +621,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                        decision=body.decision, reason=body.reason, checks={}, task_version=task.version, created_at=now)
             session.add(decision)
             if body.decision == 'declined': record.status = 'declined'
-            elif body.kind == 'pipeline': record.status = 'qualified'
+            else: record.status = 'qualified'
             session.flush()
             refresh_outcome(session, task, settings, now)
             return task, {'decision_id': decision.id, 'submission_id': record.id}

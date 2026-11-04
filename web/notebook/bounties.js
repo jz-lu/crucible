@@ -497,12 +497,13 @@
       formActions(form, key, cancellation ? 'Confirm cancellation' : 'Confirm withdrawal', () => mutate(key, () => ({expected_version: task.version, reason: draft.values.reason.trim()}), body => cancellation ? client.cancel(task.id, body) : client.withdraw(task.id, body), result => { drafts.delete(key); saved(result, cancellation ? 'Bounty cancelled.' : 'Bounty proposal withdrawn.'); }));
       panel.append(button('Cancel', () => closeAction(task, cancellation ? 'cancel' : 'withdraw')), form); return panel;
     }
-    function decisionForm(task, submission, kind) {
+    function decisionForm(task, submission) {
+      const kind = 'pipeline';
       const key = 'decision:' + task.id + ':' + submission.id + ':' + kind;
       const draft = draftFor(key, {decision: 'approved', reason: ''}), form = el('form', 'nb-form bty-form');
       const fields = {decision: field('Decision', 'bounty-decision', draft.values.decision, {options: [['approved', 'Approve'], ['declined', 'Decline']]}), reason: field('Reason and evidence', 'bounty-decision-reason', draft.values.reason, {rows: 4, max: 6000})};
       attachForm(form, fields, draft, key);
-      formActions(form, key, 'Record ' + (kind === 'poster' ? 'poster' : 'pipeline') + ' decision', () => mutate(key, () => ({expected_version: task.version, kind, decision: draft.values.decision, reason: draft.values.reason.trim()}), body => client.decision(task.id, submission.id, body), result => { drafts.delete(key); saved(result, 'Decision recorded.'); }));
+      formActions(form, key, 'Record reviewer decision', () => mutate(key, () => ({expected_version: task.version, kind, decision: draft.values.decision, reason: draft.values.reason.trim()}), body => client.decision(task.id, submission.id, body), result => { drafts.delete(key); saved(result, 'Decision recorded.'); }));
       return form;
     }
     function paintContributions(body, task) {
@@ -511,15 +512,14 @@
       for (const item of submissions) {
         const row = el('article', 'bty-progress-item'); row.append(el('h3', '', item.claim === 'solution' ? 'Claimed solution' : 'Partial progress'));
         const author = el('a', 'bty-byline', item.author?.handle || 'Participant'); author.href = '#person/' + encodeURIComponent(item.author?.handle || '');
-        row.append(author, el('p', 'bty-meta', ({pending:'Awaiting assessment', qualified:'Qualified for completion review', declined:'Not accepted', awarded:'Awarded', partial:'Partial progress'})[item.status] || item.status || ''), reference(item.contribution_note), el('p', 'bty-progress-summary', item.explanation || ''));
-        const decisions = el('div', 'bty-approvals');
-        for (const [kind, label] of [['poster', 'Poster'], ['pipeline', 'Pipeline']]) {
-          const value = item[kind + '_decision']; const status = typeof value === 'string' ? value : value?.decision;
-          decisions.append(el('span', status === 'approved' ? 'bty-approved' : '', label + ' · ' + (status || 'pending')));
+        row.append(author, el('p', 'bty-meta', ({pending:'Awaiting independent review', qualified:'Approved; awaiting settlement', declined:'Not accepted', awarded:'Awarded', partial:'Partial progress'})[item.status] || item.status || ''), reference(item.contribution_note), el('p', 'bty-progress-summary', item.explanation || ''));
+        const value = item.pipeline_decision; const status = typeof value === 'string' ? value : value?.decision;
+        if (status) {
+          const decisions = el('div', 'bty-approvals');
+          decisions.append(el('span', status === 'approved' ? 'bty-approved' : '', 'Independent reviewer · ' + status));
+          row.append(decisions);
         }
-        row.append(decisions);
-        if (item.capabilities?.accept || item.capabilities?.reject) row.append(decisionForm(task, item, 'poster'));
-        if (reviewOnly && item.capabilities?.qualify) row.append(decisionForm(task, item, 'pipeline'));
+        if (reviewOnly && item.capabilities?.qualify) row.append(decisionForm(task, item));
         body.append(row);
       }
     }
@@ -578,7 +578,7 @@
         if (reviewOnly && task.capabilities.review_admission) body.append(admissionReview(task));
         if (task.decisions?.length) {
           const history = el('details', 'bty-decision-history'); history.append(el('summary', '', 'Review history'));
-          for (const decision of task.decisions) history.append(section((({admission:'Admission', poster:'Poster', pipeline:'Pipeline'})[decision.kind] || 'Review') + ' · ' + decision.decision.replaceAll('_', ' '), decision.reason));
+          for (const decision of task.decisions) history.append(section((({admission:'Admission', poster:'Historical proposer assessment', pipeline:'Independent reviewer'})[decision.kind] || 'Review') + ' · ' + decision.decision.replaceAll('_', ' '), decision.reason));
           body.append(history);
         }
         if (task.award) {

@@ -22,14 +22,14 @@ from proposal_fixtures import correctness_review_spec, tier_design
 from scripts.solve_rsa_frontier import recover as recover_rsa
 from scripts.solve_teaching_frontier import recover as recover_dh
 from test_bounties import (make_system, create as create_bounty, request, decision,
-                          body, post, boost, submit as contribute, assess, available)
+                          body, post, boost, submit as contribute, available)
 from test_notebook import Actor, create as create_note, content, request_publication, approve
 from test_note_ratings import agent, vote
 from test_protocol_proposals import submit as propose_scheme, review
 from test_research_reviews import submit as propose_research
 
 
-def rehearse(system, monkeypatch, *, recovery="teaching-dh-kem", first_approval="poster"):
+def rehearse(system, monkeypatch, *, recovery="teaching-dh-kem"):
     """Return durable evidence for every checked step, also used by browser QA."""
     app, poster, reviewer, solver, supporter, other_reviewer, now = system
     monkeypatch.setattr(scoring, "time", SimpleNamespace(time=lambda: now[0]))
@@ -177,23 +177,21 @@ def rehearse(system, monkeypatch, *, recovery="teaching-dh-kem", first_approval=
     bounty = contribute(solver, bounty, pin)
     submission_id = bounty["receipt"]["submission_id"]
     assert bounty["bounty"]["award"] is None
-    check("submitted bounty solution earns zero pending both decisions")
-    first_actor, last_actor = (poster, reviewer) if first_approval == "poster" else (reviewer, poster)
-    last_kind = "pipeline" if first_approval == "poster" else "poster"
-    bounty = assess(first_actor, bounty, first_approval, submission_id=submission_id)
-    assert bounty["bounty"]["award"] is None
-    check("one bounty approval earns zero")
-    final_body = body(bounty, kind=last_kind, decision="approved", reason="Synthetic exact contribution meets the disposable criteria.")
+    check("submitted bounty solution earns zero pending independent review")
+    final_body = body(bounty, kind="pipeline", decision="approved", reason="Synthetic exact contribution meets the disposable criteria.")
     final_path = f'/api/bounties/{bounty["bounty"]["id"]}/submissions/{submission_id}/decisions'
-    bounty = post(last_actor, final_path, final_body)
+    bounty = post(reviewer, final_path, final_body)
     assert bounty["bounty"]["award"]["points"] == 200
     expected["solver"]["bounty_points"] = 200
-    check("both bounty approvals add two hundred; combined total is 2303")
-    assert post(last_actor, final_path, final_body)["receipt"] == bounty["receipt"]
+    check("independent bounty approval adds two hundred; combined total is 2303")
+    assert post(reviewer, final_path, final_body)["receipt"] == bounty["receipt"]
     check("completion retry and repeated reads do not duplicate the award")
     with app.state.db.transaction() as session:
         assert session.scalar(select(func.count()).select_from(SchemeAdmissionCredit)) == 1
         assert session.scalar(select(func.count()).select_from(BountyAward)) == 1
+        award = session.get(BountyAward, bounty["bounty"]["id"])
+        assert award.poster_decision_id is None
+        assert award.pipeline_decision_id == bounty["receipt"]["decision_id"]
 
     # Reopen the same database through a fresh application, not a cached score.
     restarted = create_app(settings, clock=lambda: now[0])
@@ -234,11 +232,10 @@ def rehearse(system, monkeypatch, *, recovery="teaching-dh-kem", first_approval=
 
 
 @pytest.mark.parametrize("recovery", ["teaching-dh-kem", "rsa-kem"])
-@pytest.mark.parametrize("first_approval", ["poster", "pipeline"])
-def test_every_points_category_combines_through_real_workflows(tmp_path, monkeypatch, recovery, first_approval):
+def test_every_points_category_combines_through_real_workflows(tmp_path, monkeypatch, recovery):
     system = make_system(f"sqlite:///{tmp_path / 'points.db'}", monkeypatch)
     try:
-        evidence = rehearse(system, monkeypatch, recovery=recovery, first_approval=first_approval)
+        evidence = rehearse(system, monkeypatch, recovery=recovery)
         assert len(evidence["checkpoints"]) >= 30
     finally:
         for actor in system[1:-1]:

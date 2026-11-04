@@ -497,6 +497,15 @@
       "test_browser_admission.py",
       "test_catalogue_progress_access.py"
     ],
+    "bounties": [
+      "test_bounties.py",
+      "test_bounties_migration.py",
+      "test_bounty_independent_completion.py",
+      "test_bounty_completion_migration.py",
+      "test_bounty_agents.py",
+      "test_bounty_cli.py",
+      "test_bounty_scoring.py"
+    ],
     "catalogue": [
       "test_catalogue_progress.py",
       "test_recovery_summary.py",
@@ -535,13 +544,6 @@
     "session-notebook": [
       "test_session_read_performance.py",
       "test_notebook_read_performance.py"
-    ],
-    "bounties": [
-      "test_bounties.py",
-      "test_bounties_migration.py",
-      "test_bounty_agents.py",
-      "test_bounty_cli.py",
-      "test_bounty_scoring.py"
     ]
   },
   "python_version": "3.13.17",
@@ -742,9 +744,9 @@
   "retained_backup_config": "sha256:5bbaba546a20bbcf8aae1e6efe000d6b22cad6cef9775b8092abfaa7afa8deee",
   "retained_backup_image": "registry.digitalocean.com/crucible-beta/backup@sha256:491572468a1654fb241ab50d2c36f0b34bfb685df308104739dd8fd7ff1b9ac7",
   "reviewed_overlay_files": {
-    "crucible/bounties.py": "d346caedf0a95c67c065158744b723c96fa68131b5a85268a02354f217dc2783",
+    "crucible/bounties.py": "63945b4754e991d73e8c6437cc66b8e2fcca6dd0c0531f522930c3c051320ddc",
     "crucible/bounty_allowance.py": "854d9edd06704daed73233868913232f68556c0f4163da0e601be0a261675d0b",
-    "crucible/bounty_models.py": "623f61a7904cd7fc21857ec5da7825f8823c600063d8994a5b3b35c900a19de4",
+    "crucible/bounty_models.py": "78af4ef87fcef3644435c38fcef583af55bc937e89f6d61652327e6ba3d30fc0",
     "crucible/config.py": "52a7f6dc13967a47ebac54bb7c1919215ce746b63d73c5be10f3b6dde42d5ce9",
     "crucible/data/approved_beta_releases.json": "d866a822cb468ac8284a941ba797ac1c87a2d94175c305dca08af41ebd67fe0a",
     "crucible/data/display_evidence/1810c55c7d211c5cc364341589a5375903ee7de41f4d990d76326eac1ab19af7.json": "1810c55c7d211c5cc364341589a5375903ee7de41f4d990d76326eac1ab19af7",
@@ -765,6 +767,7 @@
     "migrations/versions/0027_resource_lifecycle.py": "77d8428a7c2a591e0d3013b8e53c57569fafed4130c209d8d821ee310a810dfe",
     "migrations/versions/0028_research_bounties.py": "7de1421919557084f2d5d8cfc1d48a17695fdf0021cc4247e310098873bf0da9",
     "migrations/versions/0029_admission_lifecycle.py": "6b5397f000a1da985a2022ccfa6cf69490dedc5af1544686dda3ba67202b5c61",
+    "migrations/versions/0030_bounty_independent_completion.py": "e56d6579437914073e5e11ab85d8b2743ca9cbc3734e13800d9ff25be40e80e4",
     "scripts/beta_preflight.py": "8511519397e79bbfc0e179b77a670507a19c4a558c46a75cd4de80880ed404d3",
     "scripts/beta_transfer.py": "fc4a208bb85d4f36fb191e39643863c07ff980decb730ef3b1e1c64b8e3cb735",
     "scripts/estimate_mceliece_candidates.py": "4400bcd8b1113d9d16754c64186e8387e8b70a05280005e4975d959e8fd4e441",

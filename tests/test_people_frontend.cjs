@@ -45,7 +45,8 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
     for (const label of ['Record breakthroughs','Admitted schemes','Research bounties','Research notes','Bounty allowance']) assert.ok(dialog.textContent.includes(label));
     assert.match(dialog.textContent, /2,000 points/); assert.match(dialog.textContent, /100 points per completed active week/);
     assert.match(dialog.textContent, /review approval alone earns 0 points/);
-    assert.match(dialog.textContent, /task poster and an independent reviewer both approve/);
+    assert.match(dialog.textContent, /independent reviewer approves the exact solution evidence/);
+    assert.match(dialog.textContent, /proposer sign-off is not required/);
     assert.match(dialog.textContent, /release marked Not scored earns 0 points/);
     dialog.querySelector('[data-close]').click();
     assert.equal(dialog.open, false); assert.equal(app.document.activeElement, trigger);
