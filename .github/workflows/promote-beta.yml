@@ -1,0 +1,104 @@
+name: Promote published beta
+
+# Promote a successful publish-only run of current main without rebuilding it.
+on:
+  workflow_dispatch:
+    inputs:
+      release_run_id:
+        description: Successful publish-only Release beta run ID for this exact main commit
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: crucible-beta-release
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      ORIGINAL_RUN_ID: ${{ inputs.release_run_id }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set isolated release directories
+        run: |
+          printf '%s\n' "RELEASE_OUTPUT=$RUNNER_TEMP/crucible-release" "DOCKER_CONFIG=$RUNNER_TEMP/crucible-registry-auth" >> "$GITHUB_ENV"
+      - name: Require current exact main source CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -B deploy/source_ci.py --revision "$GITHUB_SHA" --output "$RUNNER_TEMP/crucible-source-ci.json"
+      - name: Identify trusted publish-only release
+        id: original
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 -B -m deploy.reuse_release select --run-id "$ORIGINAL_RUN_ID"
+          --revision "$GITHUB_SHA" --selection "$RUNNER_TEMP/reused-release.json"
+      - name: Download only the verified artifact
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ steps.original.outputs.artifact_id }}
+          github-token: ${{ github.token }}
+          repository: jz-lu/crucible
+          run-id: ${{ steps.original.outputs.run_id }}
+          path: ${{ runner.temp }}/original-artifact
+          merge-multiple: true
+      - name: Recheck provenance and stage data receipts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 -B -m deploy.reuse_release stage --run-id "$ORIGINAL_RUN_ID"
+          --revision "$GITHUB_SHA" --selection "$RUNNER_TEMP/reused-release.json"
+          --artifact "$RUNNER_TEMP/original-artifact" --output "$RELEASE_OUTPUT"
+      - name: Obtain one-hour private registry credential
+        env:
+          DIGITALOCEAN_REGISTRY_TOKEN: ${{ secrets.DIGITALOCEAN_REGISTRY_TOKEN }}
+        run: python3 -B deploy/release.py authenticate --output "$DOCKER_CONFIG"
+      - name: Promote the original tested immutable image
+        env:
+          ORIGINAL_ATTEMPT: ${{ steps.original.outputs.run_attempt }}
+        run: >-
+          python3 -B deploy/release.py promote --output "$RELEASE_OUTPUT"
+          --run-id "$ORIGINAL_RUN_ID" --attempt "$ORIGINAL_ATTEMPT"
+      - name: Verify live source and private access
+        run: >-
+          python3 -B deploy/verify_deployment.py --revision "$GITHUB_SHA"
+          --output "$RELEASE_OUTPUT/rollout.json"
+      - name: Promotion summary
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, os, pathlib
+          root = pathlib.Path(os.environ['RELEASE_OUTPUT'])
+          print('## Promotion of an existing beta image')
+          for name in ('reused-release.json', 'promotion.json', 'rollout.json'):
+              path = root / name
+              if path.exists():
+                  value = json.loads(path.read_text())
+                  print('\n' + name + ':')
+                  print('```json\n' + json.dumps(value, indent=2, sort_keys=True) + '\n```')
+          print('\nA failed or interrupted promotion can already have updated beta. Inspect evidence before retrying.')
+          print('\nNo rebuild, provider configuration edit, database migration or automatic rollback was performed.')
+          print('\nLive probes establish the sampled source and anonymous denial, not every user flow or replica.')
+          PY
+      - name: Retain promotion and rollout evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beta-promotion-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/crucible-source-ci.json
+            ${{ runner.temp }}/reused-release.json
+            ${{ runner.temp }}/crucible-release/*.json
+      - name: Remove temporary registry authentication
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/crucible-registry-auth"

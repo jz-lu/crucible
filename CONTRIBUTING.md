@@ -15,12 +15,23 @@ Actions workflow builds and tests an image from a commit on `main`, then publish
 that exact image and its immutable tag, then promotes the verified image to the
 `beta` channel. The existing DigitalOcean service watches that channel through
 Autodeploy. Ordinary releases need no environment-variable edits or manual tag
-selection; the hosted database and configuration stay in place. Verify the live
-source revision after deployment. Merging a PR alone never promotes the channel.
+selection; the hosted database and configuration stay in place. The workflow
+checks the live source and anonymous private-route denial; also check the changed
+authenticated journey. To deploy an existing successful publish-only main run,
+use **Promote published beta** with its original run ID. This reuses the tested
+image and rechecks provenance without rebuilding. Merging a PR alone never promotes
+the channel.
 See [the release instructions](docs/releasing-beta.txt) for setup, verification,
 and rollback. The release checks preserve reviewed native artifacts; changing a
 KEM implementation, runtime dependency, or database schema requires the separate
 review and migration process described there.
+
+Use [the operations entry point](docs/operations.txt) for current procedures and
+remaining reliability work. Keep [the operating budget](docs/operating-budget.txt)
+up to date when adding a paid dependency, changing a plan/model or increasing a
+usage limit. Schema PRs should use [the migration record](docs/schema-change-template.txt)
+and prove old/new compatibility before claiming uninterrupted rollout; the current
+exact-head startup gate has not been relaxed.
 
 ## Start locally
 
@@ -60,8 +71,9 @@ its reviewed Linux native runtime. The critical-workflow gate separately covers
 research, publication, permissions, ratings and scoped agents with disposable
 SQLite and a portable test catalogue. Its exact suite list is in
 `tests/run_critical_workflows.py`; skipped checks fail that gate. A dedicated
-PostgreSQL 17 job checks metadata/scoring query parity. These checks do not imply
-complete native coverage or PostgreSQL lifecycle-race verification.
+PostgreSQL 17 job checks metadata/scoring query parity, profile locks, note-number
+allocation, resource-publication and bounty races, and selected restore behavior.
+These checks do not imply complete native coverage or every PostgreSQL lifecycle race.
 Add a reviewed migration for schema changes.
 Browser changes should be checked at desktop and mobile widths, including errors,
 empty states, keyboard use, and the affected interaction. Measure both first visits
