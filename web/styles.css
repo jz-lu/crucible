@@ -231,6 +231,10 @@ body[data-access-pending=true] .primary-nav { display: flex!important; visibilit
 body[data-access-pending=true] .account-actions { display: flex!important; visibility: hidden; }
 body[data-access-pending=true] .account-actions > [hidden]:not(#auth-button) { display: block!important; }
 .pending-page-preview { display: none; }
+/* About is static content already delivered in this public document. Keep its
+   actual layout during the session check; the resolved app still owns access. */
+html[data-pending-page=about] body[data-access-pending=true] #about-workspace { display:block!important; }
+html[data-pending-page=about] body[data-access-pending=true] #access-workspace { display:none!important; }
 html:not([data-pending-page]) .pending-page-preview[data-pending-layout=neutral],
 html[data-pending-page=neutral] .pending-page-preview[data-pending-layout=neutral],
 html[data-pending-page=catalogue] .pending-page-preview[data-pending-layout=catalogue],
@@ -4566,7 +4570,7 @@ html[data-beta-landing=left] .access-heading { align-items:flex-start; }
 .brand-ember-effect { display:none; }
 .site-header .brand-ember-effect {
   display:block;position:absolute;top:0;left:0;width:38px;height:54px;overflow:visible;pointer-events:none;z-index:1;
-  opacity:1;
+  opacity:.5625;
 }
 .site-header .brand > span,.site-header .brand > .brand-wordmark { position:relative;z-index:2; }
 .brand-flame-pigment { stop-color:var(--primary); }
