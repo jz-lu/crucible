@@ -111,6 +111,34 @@ contain disposable fixture credentials and notes, never participant information.
 There is no production URL, provider credential, database connection or login in
 this suite. Tests and browser packages are not included in the release image.
 
+For a person reviewing the local UI, start the disposable server:
+
+  .venv/bin/python -B tests/browser/server.py
+
+The UI is the same as the deployed application, including Continue with GitHub.
+This fixture has a synthetic OAuth client, so real GitHub authorization cannot
+complete here. Automated tests intercept only the provider exchange and exercise
+the application's state, binding, session and invitation checks. Real GitHub
+sign-in requires a configured OAuth application and matching callback URL; there
+is no local provider screen or alternate navigation allowance. Password sign-in
+is available with browser_alice / Synthetic browser fixture password. This server
+uses disposable data and never connects to hosted accounts or the hosted database.
+The fixture enables the existing local mail transport. Its startup output gives
+the outbox directory; invitation.json there contains a fresh seven-day invitation
+for preview@example.invalid. Verification messages are ordinary .eml files in the
+same directory, with real, account-bound test codes. Set CRUCIBLE_BROWSER_OUTBOX
+to choose a private directory. The signup suite completes mailbox verification
+with a separate fixture invitation, leaving the manual invitation unused.
+Links belong to the database/site that issued them: a production invitation
+pasted into localhost gets a clear site-mismatch message rather than a syntax
+error. Use a local invitation for a local preview.
+
+Landing comparisons use /#home?layout=centered and /#home?layout=left. The
+landing-variants suite checks the actual alignment of brand, tagline, beta label,
+description and actions on desktop/mobile in both themes. It captures both
+compositions, verifies the absence of header/card borders and horizontal overflow,
+and checks that the sign-in dialog and focus return still work.
+
 Scope: Chromium at desktop and mobile viewport sizes, real ASGI/SQLite HTTP and
 browser behavior. This is not hosted performance/capacity evidence, a complete
 accessibility audit, native cryptographic verification or PostgreSQL integration.

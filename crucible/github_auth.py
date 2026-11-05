@@ -220,8 +220,11 @@ def _invitation_available(session, settings, flow, now, *, lock=False):
     if lock:
         query = query.with_for_update()
     invitation = session.scalar(query.execution_options(populate_existing=True))
-    if invitation is None or beta_access.invitation_status(invitation, now) != "available":
-        raise HTTPException(403, "An active beta invitation is required.")
+    if invitation is None:
+        raise beta_access.invitation_error()
+    status = beta_access.invitation_status(invitation, now)
+    if status != "available":
+        raise beta_access.invitation_error(status)
 
 
 def register_routes(app, db, settings, clock, identity, issue_session, session_payload, password_operation, throttle):
@@ -263,7 +266,17 @@ def register_routes(app, db, settings, clock, identity, issue_session, session_p
                 if user.id != expected_user_id or user.password_hash != expected_password:
                     raise HTTPException(409, "Your credentials changed. Restart GitHub linking.")
                 previous = identity(request, session, mutation=True)
-            invitation = beta_access.validate_registration_invitation(session, body.invitation_token, clock()) if body.invitation_token else None
+            # Invitation context must not block authentication of an existing
+            # GitHub identity. Creation still validates it after OAuth and again
+            # in the account-creation transaction. Merely opening/signing in
+            # never consumes or renews an invitation.
+            invitation, invitation_token = None, None
+            if body.mode == "login" and body.invitation_token and beta_access._INVITATION.fullmatch(body.invitation_token):
+                invitation_token = body.invitation_token
+                try:
+                    invitation = beta_access._find_invitation(session, invitation_token)
+                except HTTPException:
+                    pass
             # One active authorization attempt per original browser session.
             # A second start invalidates stale tabs without storing raw state.
             session.execute(delete(GitHubFlow).where(GitHubFlow.original_session_hash == previous.token_hash))
@@ -273,7 +286,7 @@ def register_routes(app, db, settings, clock, identity, issue_session, session_p
                 mode=body.mode, created_at=clock(), expires_at=clock() + FLOW_SECONDS,
                 consumed_at=None, status="started", github_user_id=None, github_login=None,
                 invitation_id=invitation.id if invitation else None,
-                invitation_encrypted=_encrypt_invitation(settings, identifier, body.invitation_token) if invitation else None,
+                invitation_encrypted=_encrypt_invitation(settings, identifier, invitation_token) if invitation_token else None,
                 return_route=body.return_route, result_session_hash=None))
         query = {"client_id": settings.github_client_id, "redirect_uri": settings.github_callback_url,
                  "scope": "", "state": state, "code_challenge": _b64(hashlib.sha256(_verifier(settings, state).encode()).digest()),
@@ -339,8 +352,12 @@ def register_routes(app, db, settings, clock, identity, issue_session, session_p
                 elif linked is None:
                     try:
                         _invitation_available(session, settings, flow, clock())
-                    except HTTPException:
+                    except HTTPException as error:
                         flow.status = "failed"
+                        if flow.invitation_encrypted:
+                            code = error.detail.get("code") if isinstance(error.detail, dict) else None
+                            if code in {"invitation_redeemed", "invitation_expired", "invitation_unavailable"}:
+                                return redirect(code)
                         return redirect("invite-required")
                     flow.github_user_id, flow.github_login, flow.status = github_id, github_login, "pending"
                     return redirect("choose-handle")
@@ -348,7 +365,8 @@ def register_routes(app, db, settings, clock, identity, issue_session, session_p
                     flow.status = "complete"
                 linked.github_login, linked.last_login_at = github_login, clock()
                 flow.github_user_id, flow.github_login = github_id, github_login
-                if flow.invitation_id is None and flow.invitation_encrypted is None:
+                if ((flow.invitation_id is None and flow.invitation_encrypted is None)
+                        or beta_access.access_payload(session, settings, user)["allowed"]):
                     # Successful existing-account sign-in can enter its page
                     # immediately. Invitation flows still use the continuation
                     # endpoint to recover their browser-bound invitation token.

@@ -12,7 +12,7 @@ for (const width of [1440, 390]) test(`real awards agree on Leaderboard and prof
   await page.setViewportSize({width, height: 1000});
   await page.goto('/#people');
   await page.locator('#access-sign-in').click();
-  await page.locator('#auth-form').getByLabel('Public handle', {exact: true}).fill('solver');
+  await page.locator('#auth-form').getByLabel('Crucible username', {exact: true}).fill('solver');
   await page.locator('#auth-form').getByLabel('Password', {exact: true}).fill('Synthetic points fixture password');
   await page.locator('#auth-submit').click();
   await expect(page.locator('#account-handle')).toHaveText('solver');

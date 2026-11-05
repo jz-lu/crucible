@@ -119,6 +119,37 @@ def status(response):
     return response.headers["location"].split("=", 1)[1]
 
 
+def test_invitation_inspection_is_read_only_and_discloses_no_recipient(system):
+    identifier, token = invitation(system)
+    actor = Actor(system.app)
+    for _ in range(2):
+        response = actor.post('/api/access/invitations/inspect', {'token': token})
+        assert response.status_code == 200
+        assert set(response.json()) == {'status', 'expires_at'}
+        assert response.json()['status'] == 'available'
+        assert token not in response.text and 'new@example.org' not in response.text
+    with system.db.transaction() as session:
+        row = session.get(beta.BetaInvitation, identifier)
+        assert row.redeemed_at is None and row.redeemed_by is None
+        assert row.send_count == row.failed_attempts == 0
+        assert session.get(beta.MailboxVerification, identifier) is None
+        expiry = row.expires_at
+    system.now[0] = expiry
+    actor = Actor(system.app)  # The original browser session also expired.
+    expired = actor.post('/api/access/invitations/inspect', {'token': token})
+    assert expired.status_code == 403
+    assert expired.json()['detail']['code'] == 'invitation_expired'
+    with system.db.transaction() as session:
+        assert session.get(beta.BetaInvitation, identifier).expires_at == expiry
+
+
+def test_invitation_inspection_requires_browser_csrf(system):
+    _, token = invitation(system)
+    actor = Actor(system.app)
+    rejected = actor.client.post('/api/access/invitations/inspect', json={'token': token})
+    assert rejected.status_code == 403
+
+
 def test_invited_provider_signup_chooses_handle_then_still_requires_mailbox_redemption(system):
     actor = Actor(system.app)
     invite_id, invite_token = invitation(system)
@@ -163,6 +194,47 @@ def test_invited_provider_signup_chooses_handle_then_still_requires_mailbox_rede
     assert len(system.calls) == 2
 
 
+def test_password_signup_with_github_enabled_preserves_existing_accounts(system):
+    local_user(system, "password_member")
+    local_user(system, "linked_member", linked_id="123456")
+    invite_id, invite_token = invitation(system)
+    actor = Actor(system.app)
+    with system.db.transaction() as session:
+        before = session.execute(select(User.id, User.handle, User.password_hash, User.created_at).order_by(User.id)).all()
+        links = session.execute(select(github.GitHubIdentity.__table__)).all()
+    response = actor.post("/api/auth/register", {"handle": "new_person", "password": PASSWORD, "invitation_token": invite_token})
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    user_id = payload["user"]["id"]
+    assert payload["auth"]["password_enabled"] and not payload["auth"]["github_linked"]
+    assert payload["access"]["status"] == "pending" and not payload["access"]["allowed"]
+    assert actor.client.get("/api/schemes").status_code == 403
+    with system.db.transaction() as session:
+        assert session.execute(select(User.id, User.handle, User.password_hash, User.created_at)
+            .where(User.id != user_id).order_by(User.id)).all() == before
+        assert session.execute(select(github.GitHubIdentity.__table__)).all() == links
+        assert session.get(beta.BetaInvitation, invite_id).redeemed_at is None
+    assert login(system, "new_person").client.get("/api/session").json()["user"]["id"] == user_id
+
+
+def test_production_allows_password_signup_alongside_github(system):
+    _, invite_token = invitation(system)
+    settings = replace(system.settings, production=True,
+        origins=("https://testserver",), mail_backend="disabled")
+    app = create_app(settings, clock=lambda: system.now[0])
+    try:
+        with TestClient(app, base_url="https://testserver") as client:
+            payload = client.get("/api/session").json()
+            assert payload["auth"]["github_enabled"] is True
+            response = client.post("/api/auth/register", json={"handle": "new_person", "password": PASSWORD, "invitation_token": invite_token},
+                headers={"Origin": "https://testserver", "X-CSRF-Token": payload["csrf_token"]})
+            assert response.status_code == 200, response.text
+            assert response.json()["auth"]["password_enabled"] is True
+            assert response.json()["access"]["allowed"] is False
+    finally:
+        app.state.db.engine.dispose()
+
+
 def test_existing_linked_account_uses_numeric_id_despite_provider_rename(system):
     user_id = local_user(system, linked_id="123456")
     actor = Actor(system.app)
@@ -192,6 +264,75 @@ def test_existing_linked_invitee_keeps_browser_bound_invitation_continuation(sys
     assert pending["invitation_token"] == token and pending["return_route"] == "#notebook"
     assert actor.client.get("/api/session").json()["access"]["allowed"] is False
     assert actor.client.get("/api/schemes").status_code == 403
+
+
+def unavailable_invitation(system, kind, user_id=None):
+    identifier, token = invitation(system)
+    with system.db.transaction(write=True) as session:
+        record = session.get(beta.BetaInvitation, identifier)
+        if kind.startswith("redeemed"):
+            record.redeemed_at, record.redeemed_by = system.now[0] - 30, user_id
+        if kind in {"expired", "redeemed_expired"}:
+            record.expires_at = system.now[0] - 1
+        if kind == "revoked":
+            record.revoked_at = system.now[0]
+        if kind == "locked":
+            record.failed_attempts = beta.MAX_CODE_FAILURES
+    if kind == "unknown":
+        token = "cri_" + "z" * 43
+    if kind == "malformed":
+        token = "☃" * 47
+    return identifier, token
+
+
+@pytest.mark.parametrize("kind", ["redeemed", "redeemed_expired", "expired", "revoked", "locked", "unknown", "malformed"])
+def test_existing_github_member_can_sign_in_through_an_unavailable_invite(system, kind):
+    user_id = local_user(system, linked_id="123456")
+    identifier, token = unavailable_invitation(system, kind, user_id)
+    with system.db.transaction() as session:
+        before_user = session.execute(select(User.id, User.handle, User.password_hash)).one()
+        before_invite = dict(session.execute(select(beta.BetaInvitation.__table__).where(beta.BetaInvitation.id == identifier)).mappings().one())
+    actor = Actor(system.app)
+    query = start(system, actor, invitation_token=token, return_route="#notebook")
+    response = callback(system, actor, query)
+    assert response.status_code == 303 and response.headers["location"] == "/#notebook"
+    payload = actor.client.get("/api/session").json()
+    assert payload["user"]["id"] == user_id and payload["access"]["allowed"]
+    assert login(system).client.get("/api/session").json()["user"]["id"] == user_id
+    with system.db.transaction() as session:
+        assert session.execute(select(User.id, User.handle, User.password_hash)).one() == before_user
+        assert dict(session.execute(select(beta.BetaInvitation.__table__).where(beta.BetaInvitation.id == identifier)).mappings().one()) == before_invite
+
+
+@pytest.mark.parametrize("kind", ["redeemed", "redeemed_expired", "expired", "revoked", "locked", "unknown"])
+def test_unavailable_invite_cannot_create_an_account_by_either_method(system, kind):
+    existing_id = local_user(system, "original")
+    identifier, token = unavailable_invitation(system, kind, existing_id)
+    actor = Actor(system.app)
+    query = start(system, actor, invitation_token=token)
+    expected = "invitation_redeemed" if kind.startswith("redeemed") else "invitation_expired" if kind == "expired" else "invitation_unavailable"
+    assert status(callback(system, actor, query)) == expected
+    assert actor.post("/api/auth/github/complete", {"handle": "duplicate"}).status_code == 409
+    rejected = actor.post("/api/auth/register", {"handle": "duplicate", "password": PASSWORD, "invitation_token": token})
+    assert rejected.status_code == 403 and rejected.json()["detail"]["code"] == expected
+    assert actor.client.get("/api/session").json()["user"] is None
+    with system.db.transaction() as session:
+        assert session.scalars(select(User.id)).all() == [existing_id]
+        assert session.scalars(select(github.GitHubIdentity)).all() == []
+
+
+def test_old_invite_does_not_regrant_revoked_existing_membership(system):
+    user_id = local_user(system, linked_id="123456")
+    _, token = unavailable_invitation(system, "redeemed", user_id)
+    with system.db.transaction(write=True) as session:
+        beta.set_membership(session, user_id, "revoked", system.now[0])
+    actor = Actor(system.app)
+    query = start(system, actor, invitation_token=token)
+    assert status(callback(system, actor, query)) == "complete"
+    assert actor.client.get("/api/session").json()["user"]["id"] == user_id
+    assert actor.client.get("/api/schemes").status_code == 403
+    with system.db.transaction() as session:
+        assert session.get(beta.BetaMembership, user_id).status == "revoked"
 
 
 @pytest.mark.parametrize("stored_route", ["https://evil.invalid", "//evil.invalid", "#challenge\r\nLocation: https://evil.invalid"])
@@ -225,6 +366,12 @@ def test_no_email_or_handle_merge_and_no_new_account_without_invitation(system):
 def test_existing_account_links_explicitly_without_changing_password_or_account(system):
     user_id = local_user(system)
     actor = login(system)
+    content = {"title": "Existing private note", "claim": "Synthetic account continuity check.",
+        "conditions": "Disposable test database only.", "body": "Keep this note under the original account.", "tags": []}
+    saved = actor.post("/api/notebook/notes", {"content": content, "idempotency_key": str(uuid4())})
+    assert saved.status_code == 200, saved.text
+    note_id = saved.json()["note"]["id"]
+    note_before = actor.client.get("/api/notebook/notes/" + note_id).json()
     assert actor.post("/api/auth/github/start", {"mode": "login"}).status_code == 409
     with system.db.transaction() as session:
         before = session.get(User, user_id).password_hash
@@ -233,6 +380,16 @@ def test_existing_account_links_explicitly_without_changing_password_or_account(
     assert response.status_code == 303 and response.headers["location"] == "/#person/existing"
     payload = actor.client.get("/api/session").json()
     assert payload["user"]["id"] == user_id and payload["auth"]["github_linked"]
+    assert actor.client.get("/api/notebook/notes/" + note_id).json() == note_before
+    password_actor = login(system)
+    assert password_actor.client.get("/api/session").json()["user"]["id"] == user_id
+    assert password_actor.client.get("/api/notebook/notes/" + note_id).json() == note_before
+    github_actor = Actor(system.app)
+    query = start(system, github_actor, return_route="#notebook")
+    response = callback(system, github_actor, query)
+    assert response.status_code == 303 and response.headers["location"] == "/#notebook"
+    assert github_actor.client.get("/api/session").json()["user"]["id"] == user_id
+    assert github_actor.client.get("/api/notebook/notes/" + note_id).json() == note_before
     with system.db.transaction() as session:
         assert session.get(User, user_id).password_hash == before
         assert session.get(github.GitHubIdentity, "123456").user_id == user_id

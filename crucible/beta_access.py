@@ -187,23 +187,33 @@ def _event(session, user_id, actor_id, action, now, **details):
                             action=action, created_at=now, details=details))
 
 
+def invitation_error(status="unavailable"):
+    messages = {
+        "redeemed": "This invitation has already been used. Sign in to your existing account.",
+        "expired": "This invitation has expired. Sign in if you have already joined, or contact your inviter for a new link.",
+    }
+    code = status if status in messages else "unavailable"
+    return HTTPException(403, {"code": "invitation_" + code,
+        "message": messages.get(code, "This invitation is unavailable. Sign in if you have already joined, or contact your inviter for a new link.")})
+
+
 def _find_invitation(session, token, *, lock=False):
     if not isinstance(token, str) or not _INVITATION.fullmatch(token):
-        raise HTTPException(403, "This invitation is invalid or unavailable.")
+        raise invitation_error()
     query = select(BetaInvitation).where(BetaInvitation.token_hash == token_hash(token))
     if lock:
         query = query.with_for_update().execution_options(populate_existing=True)
     invitation = session.scalar(query)
     if invitation is None:
-        raise HTTPException(403, "This invitation is invalid or unavailable.")
+        raise invitation_error()
     return invitation
 
 
 def validate_registration_invitation(session, token, now, *, lock=False):
     invitation = _find_invitation(session, token, lock=lock)
-    if (invitation.expires_at <= now or invitation.revoked_at is not None
-            or invitation.redeemed_at is not None or invitation.failed_attempts >= MAX_CODE_FAILURES):
-        raise HTTPException(403, "This invitation is invalid or unavailable.")
+    status = invitation_status(invitation, now)
+    if status != "available":
+        raise invitation_error(status)
     return invitation
 
 
@@ -315,7 +325,18 @@ class ReasonInput(BaseModel):
     reason: str = Field(default="", max_length=500)
 
 
-def register_routes(app, db, settings, clock, account_for, throttle, issue_session=None, session_payload=None):
+def register_routes(app, db, settings, clock, account_for, throttle, issue_session=None, session_payload=None, identity=None):
+    @app.post("/api/access/invitations/inspect")
+    def inspect_invitation(body: TokenInput, request: Request):
+        throttle(request, "invite-inspect", 120, 900)
+        with db.transaction() as session:
+            # A browser can inspect its bearer invitation before creating an
+            # account. Inspection neither claims nor extends the invitation,
+            # and returns no recipient or account information.
+            (identity or account_for)(request, session, mutation=True)
+            invitation = validate_registration_invitation(session, body.token, clock())
+            return {"status": "available", "expires_at": invitation.expires_at}
+
     @app.get("/api/access/status")
     def status(request: Request):
         with db.transaction() as session:
@@ -402,7 +423,7 @@ def register_routes(app, db, settings, clock, account_for, throttle, issue_sessi
                             verification.code_mac, _code_mac(settings, invitation.id, user.id, body.code))):
                     return {"status": "accepted", "replayed": True,
                             "access": access_payload(session, settings, user)}
-                raise HTTPException(403, "This invitation is invalid or unavailable.")
+                raise invitation_error(invitation_status(invitation, now))
             invitation = validate_registration_invitation(session, body.token, now, lock=True)
             _check_regrant(session, user, invitation)
             valid = (verification is not None and verification.user_id == user.id

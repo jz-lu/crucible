@@ -20,7 +20,8 @@ def send_verification(settings, recipient, code):
         f"Your Crucible verification code is: {code}\n\n"
         "This code expires in 10 minutes and confirms the email address on your invitation. "
         "Enter it only in the Crucible page where you requested it. "
-        "If you did not request this code, ignore this message.\n"
+        "If you did not request this code, ignore this message.\n\n"
+        "Already have beta access? Sign in: " + settings.origins[0] + "/#auth\n"
     )
     _deliver(settings, message)
 
