@@ -1,4 +1,4 @@
-const {test,expect,signIn}=require('./helpers.cjs');
+const {test,expect,signIn,holdResponse}=require('./helpers.cjs');
 const token=letter=>'cri_'+letter.repeat(43);
 const password='Synthetic browser fixture password';
 async function provider(page,code='synthetic-browser-code'){
@@ -41,17 +41,31 @@ for(const width of [1440,390]){
   expect(posts).toEqual([]);
  });
  test('an unused invitation creates and resumes one password account at '+width+'px',async({page},testInfo)=>{
-  await page.setViewportSize({width,height:1000});const invitation=token(width===1440?'p':'q'),origin='http://127.0.0.1:8029';
+  await page.setViewportSize({width,height:1000});const invitation=token(width===1440?'p':'q');
   await page.goto('/#join?token='+invitation);await expect(page.locator('#auth-title')).toHaveText('Create an account');await page.locator('#auth-password-summary').click();
   await expect(page.locator('#auth-github')).toBeHidden();await page.locator('#auth-handle').fill('new_password_'+width);await page.locator('#auth-password').fill(password);
+  const delivery=await holdResponse(page,url=>url.pathname==='/api/access/invitations/verify/start');
+  try {
   const registered=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/auth/register');await page.locator('#auth-submit').click();const saved=await(await registered).json();
   await expect(page.locator('#auth-title')).toHaveText('Verify your email');await expect(page.locator('#access-code')).toBeVisible();await expect(page.locator('#catalogue-workspace')).toBeHidden();
-  await page.keyboard.press('Escape');await page.locator('#access-pending-signout').click();await page.locator('#access-sign-in').click();await page.locator('#auth-password-summary').click();
+  await delivery.arrived;
+  // Mail delivery may finish after logout. It must not hold the sign-in UI
+  // busy or mutate a later session, even when the same account returns.
+  await page.keyboard.press('Escape');await page.locator('#access-pending-signout').click();await page.locator('#access-sign-in').click();
+  await expect(page.locator('#auth-dialog')).toBeVisible();await expect(page.locator('#auth-title')).toHaveText('Welcome back');
+  await page.locator('#auth-password-summary').click();
   await page.locator('#auth-handle').fill('new_password_'+width);await page.locator('#auth-password').fill(password);
   const loggedIn=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/auth/login');await page.locator('#auth-submit').click();expect((await(await loggedIn).json()).user.id).toBe(saved.user.id);
   await expect(page.locator('#auth-title')).toHaveText('Finish joining Crucible');
   await page.locator('#auth-invitation-link').fill(new URL(page.url()).origin+'/#join?token='+invitation);await page.locator('#auth-invitation-form button[type=submit]').click();
   await expect(page.locator('#auth-title')).toHaveText('Verify your email');await expect(page.locator('#access-code')).toBeVisible();
+  await page.locator('#access-code').fill('12345678');
+  const description=await page.locator('#auth-description').textContent();
+  const completedDelivery=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/access/invitations/verify/start');
+  delivery.release();await (await completedDelivery).finished();await delivery.delivered;
+  await expect(page.locator('#access-code')).toHaveValue('12345678');await expect(page.locator('#access-code')).toBeEnabled();
+  await expect(page.locator('#auth-description')).toHaveText(description);
+  } finally {delivery.release();await delivery.delivered;await delivery.remove();}
  });
  test('an unused invitation creates a GitHub account before mailbox verification at '+width+'px',async({page})=>{
   await page.setViewportSize({width,height:1000});await page.goto('/#join?token='+token(width===1440?'g':'h'));await provider(page,'synthetic-new-'+width);

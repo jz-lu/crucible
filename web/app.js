@@ -9,7 +9,7 @@ const bountyFeatureAvailable = () => window.CrucibleFeatures?.bounties !== false
 const state = {
   auth: {}, authPanel: 'signin', githubBusy: false, githubPending: false, githubCompleteBusy: false, authCallbackBusy: false, githubLinkContext: null,
   passwordResetToken: null, passwordResetBusy: false, passwordRecoveryBusy: false, authRecoveryEntry: false,
-  invitationPresented: null, invitationInspection: 0, invitationResendAt: 0,
+  invitationPresented: null, invitationInspection: 0, invitationRequest: 0, invitationResendAt: 0,
   access: null, sessionResolved: false, invitationToken: null, invitationBusy: false, invitationDelivery: null, invitationIssue: null,
   returnRoute: null, protectedLoaded: false, canManageBetaAccess: false,
   user: null, csrf: '', canReviewProposals: false, canSelfReviewProposals: false, schemes: [], profile: null, challenge: null,
@@ -553,9 +553,15 @@ const invitationMessages = {
   invitation_unavailable: 'This invitation is unavailable. Sign in if you have already joined, or contact your inviter for a new link.'
 };
 function clearInvitation() {
+  resetInvitationRequest();
   state.invitationToken = null; state.invitationDelivery = null; state.invitationIssue = null;
   state.invitationPresented = null;state.invitationInspection++;state.invitationResendAt = 0;
   $('#access-code').value = '';
+}
+function resetInvitationRequest() {
+  // An old delivery/redeem response must not own controls in a later session,
+  // including a logout followed by a return to the same account and link.
+  state.invitationRequest++;state.invitationBusy = false;
 }
 function clearAcceptedInvitation() {
   if (!hasAccess()) return false;
@@ -613,6 +619,7 @@ function captureInvitation() {
     return;
   }
   if (token && token.length <= 512 && /^[A-Za-z0-9_-]+$/.test(token) && token !== state.invitationToken) {
+    resetInvitationRequest();
     state.invitationToken = token;
     state.invitationIssue = null;
     state.invitationDelivery = null;
@@ -1254,18 +1261,18 @@ function renderVerificationControls() {
 }
 async function sendVerificationCode() {
   if (!state.user || !state.invitationToken || state.invitationBusy) return;
-  const account = state.user.id, token = state.invitationToken;
+  const account = state.user.id, token = state.invitationToken, request = ++state.invitationRequest;
   state.invitationBusy = true;setError('#auth-verify-error', '');setError('#access-code-error', '');renderVerificationControls();
   try {
     const data = await api('/api/access/invitations/verify/start', {token});
-    if (state.user?.id !== account || state.invitationToken !== token) return;
+    if (request !== state.invitationRequest || state.user?.id !== account || state.invitationToken !== token) return;
     state.invitationDelivery = data;state.invitationResendAt = Date.now() + Number(data.resend_after_seconds || 60) * 1000;
     $('#access-code').value = '';
     if (state.authPanel === 'verification') setText('#auth-description', 'Enter the code sent to ' + data.masked_recipient + '.');
   } catch (error) {
-    if (state.user?.id === account && state.invitationToken === token && !showInvitationIssue(error)) setError('#auth-verify-error', error.message);
+    if (request === state.invitationRequest && state.user?.id === account && state.invitationToken === token && !showInvitationIssue(error)) setError('#auth-verify-error', error.message);
   } finally {
-    state.invitationBusy = false;renderVerificationControls();
+    if (request === state.invitationRequest) { state.invitationBusy = false;renderVerificationControls(); }
   }
 }
 $('#access-send-code').addEventListener('click', sendVerificationCode);
@@ -1275,13 +1282,13 @@ $('#access-code-form').addEventListener('submit', async event => {
   const code = $('#access-code').value.trim();
   setError('#access-code-error', '');setError('#auth-verify-error', '');
   if (!/^\d{8}$/.test(code)) { authFieldError('#access-code', '#access-code-error', 'Enter the 8-digit code from your email.');return; }
-  const account = state.user.id, token = state.invitationToken, dialogWasOpen = authDialog.open;
+  const account = state.user.id, token = state.invitationToken, dialogWasOpen = authDialog.open, request = ++state.invitationRequest;
   state.invitationBusy = true;renderVerificationControls();
   try {
     await api('/api/access/invitations/redeem', {token, code});
-    if (state.user?.id !== account || state.invitationToken !== token) return;
+    if (request !== state.invitationRequest || state.user?.id !== account || state.invitationToken !== token) return;
     const session = await api('/api/session');
-    if (state.user?.id !== account) return;
+    if (request !== state.invitationRequest || state.user?.id !== account) return;
     setSession(session);
     if (!hasAccess()) throw new Error('Your access is not active yet. Please try again.');
     clearInvitation();window.history.replaceState(null, '', state.returnRoute || '#home');
@@ -1290,11 +1297,11 @@ $('#access-code-form').addEventListener('submit', async event => {
       setText('#auth-title', "You're in.");setText('#auth-description', '');showAuthPanel('joined');
     }
   } catch (error) {
-    if (state.user?.id === account && state.invitationToken === token && !showInvitationIssue(error)) {
+    if (request === state.invitationRequest && state.user?.id === account && state.invitationToken === token && !showInvitationIssue(error)) {
       if (error.status === 403) authFieldError('#access-code', '#access-code-error', 'That code is incorrect or has expired. Try again or request a new code.');
       else setError('#auth-verify-error', error.message);
     }
-  } finally { state.invitationBusy = false;renderVerificationControls(); }
+  } finally { if (request === state.invitationRequest) { state.invitationBusy = false;renderVerificationControls(); } }
 });
 $('#auth-enter').addEventListener('click', () => authDialog.close());
 $('#access-continue').addEventListener('click', async () => {
@@ -1783,6 +1790,7 @@ function setSession(data) {
   if (previousId !== state.user?.id) {
     referenceTimings.clear(); window.CrucibleResources?.clear();
     assumptionsWorkspace?.clear();
+    resetInvitationRequest();
     state.invitationDelivery = null;
     $('#access-code').value = '';
     state.challengeStartIntent = null;
@@ -4722,7 +4730,9 @@ $('#auth-form').addEventListener('submit', async event => {
       csrf: state.csrf, awaitingSignIn: false};
     const wasRegistration = state.authMode === 'register';
     $('#auth-form').reset();
-    if (!hasAccess()) { renderAccessGate();if (dialogStillOpen) await openPendingVerification(wasRegistration);return; }
+    // Authentication is complete. Mail dispatch owns its own pending state;
+    // it must not keep password sign-in disabled after a later logout.
+    if (!hasAccess()) { renderAccessGate();if (dialogStillOpen) void openPendingVerification(wasRegistration);return; }
     authDialog.close();
     if (!state.ready || state.screen === 'home') { await loadAuthorizedWorkspace(); return; }
     await loadChallenge();
