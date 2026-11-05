@@ -50,13 +50,9 @@ def policy():
 
 
 def published():
-    from .notebook import NotebookPublication
-    from .notebook_moderation import withdrawn_ids
-    # Development self-review must never earn contribution points or enter the
-    # agent recommendation pool as if independently moderated.
-    return and_(NotebookPublication.decision == "approved",
-                NotebookPublication.test_only_self_review.is_(False),
-                NotebookPublication.revision_id.not_in(withdrawn_ids()))
+    from .publication_screening import approved_clause
+    # Publication eligibility does not itself confer rating or research credit.
+    return approved_clause()
 
 
 def eligible_voters():

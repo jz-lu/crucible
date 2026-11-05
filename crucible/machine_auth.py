@@ -105,7 +105,7 @@ def required_scope(method, path):
     if method == "GET":
         if path in {"/api/bounties", "/api/me/bounty-allowance"} or re.fullmatch(rf"/api/bounties/{_UUID}", path):
             return "bounties:read"
-        if path in {"/api/notebook/notes", "/api/notebook/export"} or re.fullmatch(
+        if path in {"/api/notebook/notes", "/api/notebook/export", "/api/notebook/publication-policy", "/api/notebook/publication-status"} or re.fullmatch(
                 rf"/api/notebook/(?:notes|imports)/{_UUID}", path):
             return "notebook:read"
         if path == "/api/agent/notes" or re.fullmatch(r"/api/agent/notes/[^/]{1,108}", path):

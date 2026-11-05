@@ -92,11 +92,11 @@ def test_list_reads_current_status_with_summary_and_never_hydrates_import_metada
 
 def test_summary_status_join_keeps_one_row_across_deletion_and_restore_history(system):
     app, owner, _, reader, _ = system
-    from test_notebook_trash import delete, restore
+    from test_notebook_trash import legacy_delete, restore
     saved = create(owner)
-    first = delete(owner, saved).json()['deletion']
+    first = legacy_delete(owner, saved)
     assert restore(owner, first).status_code == 200
-    second = delete(owner, saved).json()['deletion']
+    second = legacy_delete(owner, saved)
     with selects(app) as queries:
         response = owner.client.get('/api/notebook/notes?scope=trash&limit=1')
     assert response.status_code == 200

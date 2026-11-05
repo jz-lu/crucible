@@ -31,7 +31,7 @@ const receipt = (url, body, changes={}) => ({format:'crucible-publication-reques
   id:'30000000-0000-4000-8000-000000000001',note_id:url.pathname.split('/')[4],
   revision:body.revision,content_sha256:body.content_sha256,requested_at:100,status:'submitted',...changes}});
 
-async function fixture({rows=[summary(1),summary(2)], inspect}={}) {
+async function fixture({rows=[summary(1),summary(2)], inspect, policy}={}) {
   const shell=await createApp({schemes:[],hash:'#about'});
   let account=owner, credential='session-one', sequence=0;
   const requests=[];
@@ -46,8 +46,9 @@ async function fixture({rows=[summary(1),summary(2)], inspect}={}) {
     const call={raw,url,body:body===undefined?undefined:clone(body)};requests.push(call);
     if (inspect) {const result=await inspect(call,requests);if(result!==undefined)return result;}
     if (url.pathname==='/api/notebook/notes' && body===undefined) {
-      if(url.searchParams.get('projection')==='index')return index(rows);
-      return {notes:rows,next_after:null,capabilities:{}};
+      const capabilities=policy?{publication_policy:policy}:{};
+      if(url.searchParams.get('projection')==='index')return index(rows,{capabilities});
+      return {notes:rows,next_after:null,capabilities};
     }
     if (url.pathname.endsWith('/publication-requests') && body!==undefined) {
       assert.equal(url.searchParams.get('summary'),'true','Bulk requests must use compact receipts');
@@ -91,6 +92,24 @@ async function test(name,run){
 }
 
 (async()=>{
+  const policy={mode:'automatic',screening_required:true,policy_id:'a'.repeat(64),processor:'OpenAI',model:'gpt-6-luna',
+    notice:'Selected exact revisions are sent to OpenAI. Private drafts are not sent. Standard monitoring retention applies.',privacy_url:'https://developers.openai.com/api/docs/guides/your-data'};
+  await test('bulk confirmation discloses processing and binds every compact request to the fresh policy',async()=>{
+    const app=await fixture({policy});await app.open();
+    await until(()=>app.findButton('Send 2 publish requests'),'Selection complete');
+    assert.equal(app.writes().length,0);assert.match(app.q('dialog-body').textContent,/sent to OpenAI.*Private drafts/);
+    assert.match(app.q('dialog-body').textContent,/after a passing automated check/);
+    await app.confirm(2);await until(()=>app.writes().length===2,'Both requests sent');
+    assert.ok(app.writes().every(call=>call.body.screening_consent===true&&call.body.screening_policy_id===policy.policy_id));
+    assertNoBodyReads(app);
+  });
+  for(const previousPolicy of [policy,undefined]) await test('changed '+(previousPolicy?'enabled':'disabled')+' screening policy stops a bulk batch before later submissions',async()=>{
+    const app=await fixture({policy:previousPolicy,inspect:call=>{if(call.body!==undefined)throw failure(422,'Policy changed.');}});
+    await app.open();await app.confirm(2);await until(()=>app.q('dialog-body').querySelector('.nb-error').textContent,'Stale policy surfaced');
+    assert.equal(app.writes().length,1);assert.match(app.q('dialog-body').textContent,/Close and reopen Publish all to read the current notice/);
+    if(!previousPolicy)assert.equal(app.writes()[0].body.screening_consent,undefined);
+    assert.equal(app.available(/Continue|Retry/),false);assertNoBodyReads(app);
+  });
   await test('fresh owned-summary preparation and cancellation never write or fetch bodies',async()=>{
     const entered=deferred(), held=deferred();
     const app=await fixture({inspect:call=>{if(call.url.searchParams.get('projection')==='index'){entered.resolve();return held.promise;}}});
@@ -232,6 +251,28 @@ async function test(name,run){
     page2.resolve({notes:[summary(2)],next_after:null});
     await until(()=>app.findButton('Send 2 publish requests'),'Only complete enumeration allows confirmation');
     app.q('close').click();assert.equal(app.writes().length,0);assertNoBodyReads(app);
+  });
+
+  for(const [name,initial,changed] of [
+    ['policy ID',policy,{...policy,policy_id:'b'.repeat(64)}],
+    ['mode',policy,{...policy,mode:'shadow'}],
+    ['newly enabled',null,policy],
+    ['newly disabled',policy,{mode:'disabled'}],
+  ]) await test('overflow selection aborts when a later page changes the '+name,async()=>{
+    let preparing=false,pages=0;
+    const capabilities=value=>value?{publication_policy:value}:{};
+    const app=await fixture({inspect:call=>{
+      if(call.url.searchParams.get('projection')==='index'){
+        preparing=true;return index([],{complete:false,overflow_reason:'count_limit',capabilities:capabilities(initial)});
+      }
+      if(preparing&&call.body===undefined&&call.url.pathname==='/api/notebook/notes'){
+        pages++;
+        return {notes:[summary(pages)],next_after:pages===1?'cursor-two':null,capabilities:capabilities(pages===1?initial:changed)};
+      }
+    }});
+    await app.open();await until(()=>app.q('dialog-body').querySelector('.nb-error').textContent,'Changed page policy blocks preparation');
+    assert.equal(pages,2);assert.equal(app.writes().length,0);assert.equal(app.available(/^Send /),false);
+    assert.match(app.q('dialog-body').textContent,/policy changed.*Close and reopen.*No requests were sent/);assertNoBodyReads(app);
   });
 
   for(const [name,invalid] of [

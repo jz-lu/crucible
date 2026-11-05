@@ -1,0 +1,303 @@
+"""Worker checks with synthetic notes/responses; no keys or network are used."""
+from dataclasses import replace
+import json
+from uuid import uuid4
+
+import pytest
+from sqlalchemy import select
+
+from crucible import beta_access, publication_screening_jobs as jobs, publication_screening_worker as worker
+from crucible.app import create_app
+from crucible.notebook import NotebookRevision
+from crucible.notebook_trash import NotebookDeletion
+from crucible.publication_screening_models import AutomaticPublication, ScreeningAttempt, ScreeningControl, ScreeningJob
+from crucible.publication_screening_provider import ProviderResult, ScreeningProviderError
+from test_notebook import Actor, create
+from test_publication_screening_integration import (
+    SyntheticProvider, configure, counts, publication, request, run, screened,
+)
+
+
+@pytest.mark.parametrize('model,reserve,reasoning', [
+    ('gpt-6-luna', 13550, 'none'), ('gpt-5.4-mini', 102750, 'none'), ('gpt-6.1-sol', 271000, 'low'),
+])
+def test_policy_pins_cost_model_schema_and_publication_consent(screened, model, reserve, reasoning):
+    settings = replace(screened.app.state.settings, publication_screening_model=model)
+    policy = worker.policy_for(settings)
+    assert policy.max_input_tokens == 128000 and policy.max_output_tokens == 1500
+    assert policy.reserve_micro_usd == reserve
+    configuration = policy.configuration['model_configuration']
+    assert configuration['reasoning_effort'] == reasoning
+    assert configuration['publication_mode'] == 'automatic'
+    assert configuration['store'] is False and configuration['tools'] == []
+    assert configuration['output_schema_sha256'] == worker.OUTPUT_SCHEMA_SHA256
+    assert configuration['timeout_seconds'] < worker.LEASE_SECONDS
+    shadow = worker.policy_for(replace(settings, publication_screening_mode='shadow'))
+    assert shadow.id != policy.id
+
+
+def shadow_request(screened):
+    settings = replace(screened.app.state.settings, publication_screening_mode='shadow')
+    app = create_app(settings, clock=lambda: screened.now[0])
+    author = Actor(app, screened.owner.identifier)
+    try:
+        saved = create(author)
+        assert request(author, saved).status_code == 200
+    finally:
+        author.client.close()
+        app.state.db.engine.dispose()
+    return settings, saved
+
+
+def test_shadow_consent_cannot_be_promoted_by_later_automatic_configuration(screened):
+    shadow, saved = shadow_request(screened)
+    configure(screened)  # Current automatic policy cannot reinterpret shadow consent.
+    provider = SyntheticProvider()
+    run(screened, provider)
+    assert provider.inputs == [] and publication(screened, saved)['decision'] is None
+    with screened.app.state.db.transaction() as session:
+        job = session.scalar(select(ScreeningJob))
+        assert job.status == 'human_review' and job.error_code == 'policy_changed'
+    assert counts(screened, (AutomaticPublication,)) == {'notebook_automatic_publications': 0}
+
+
+def test_inflight_shadow_pass_cannot_publish_after_operator_switch(screened):
+    shadow, saved = shadow_request(screened)
+    jobs.configure(screened.app.state.db, policy=worker.policy_for(shadow), mode='shadow',
+        monthly_budget_micro_usd=shadow.publication_screening_monthly_budget_micro_usd, now=screened.now[0])
+    provider = SyntheticProvider(callback=lambda: configure(screened))
+    worker.run_once(screened.app.state.db, shadow, provider, clock=lambda: screened.now[0])
+    assert len(provider.inputs) == 1 and publication(screened, saved)['decision'] is None
+    assert counts(screened, (AutomaticPublication,)) == {'notebook_automatic_publications': 0}
+
+
+@pytest.mark.parametrize('change', ['revoke', 'suspend', 'trash', 'hash'])
+@pytest.mark.parametrize('when', ['before_send', 'during_preparation', 'during_call'])
+def test_author_and_exact_revision_are_rechecked_at_both_boundaries(screened, change, when, monkeypatch):
+    configure(screened)
+    saved = create(screened.owner)
+    assert request(screened.owner, saved).status_code == 200
+    def mutate():
+        with screened.app.state.db.transaction(write=True) as session:
+            if change == 'revoke':
+                beta_access.set_membership(session, screened.owner.identifier, 'revoked', screened.now[0])
+            elif change == 'suspend':
+                beta_access.set_suspension(session, screened.owner.identifier, True, screened.now[0])
+            elif change == 'trash':
+                # An operator/legacy trash record must still be respected even
+                # though the current normal UI prevents trashing pending work.
+                session.add(NotebookDeletion(id=str(uuid4()), note_id=saved['id'],
+                    author_id=screened.owner.identifier, revision=saved['revision'],
+                    content_sha256=saved['content_sha256'], deleted_at=screened.now[0],
+                    idempotency_key=str(uuid4())))
+            else:
+                revision = session.scalar(select(NotebookRevision).where(NotebookRevision.note_id == saved['id']))
+                # Preserve the hash field to prove actual content is rehashed.
+                revision.content = {**revision.content, 'body': 'Changed exact data without matching hash.'}
+    if when == 'before_send':
+        mutate()
+    elif when == 'during_preparation':
+        prepare = worker.prepare_input
+        def changed_during_preparation(content, **kwargs):
+            prepared = prepare(content, **kwargs)
+            mutate()
+            return prepared
+        monkeypatch.setattr(worker, 'prepare_input', changed_during_preparation)
+    provider = SyntheticProvider(callback=mutate if when == 'during_call' else None)
+    run(screened, provider)
+    assert len(provider.inputs) == (1 if when == 'during_call' else 0)
+    assert publication(screened, saved)['decision'] is None
+    assert counts(screened, (AutomaticPublication,)) == {'notebook_automatic_publications': 0}
+
+
+@pytest.mark.parametrize('code', ['provider_authentication_failed', 'provider_access_denied',
+    'provider_quota_exhausted', 'provider_configuration_error'])
+def test_permanent_provider_errors_are_distinct_human_fallbacks_without_retry(screened, code):
+    configure(screened)
+    saved = create(screened.owner)
+    assert request(screened.owner, saved).status_code == 200
+    class Failed(SyntheticProvider):
+        def screen(self, prepared):
+            raise ScreeningProviderError(code, retryable=True)
+    result = run(screened, Failed())
+    assert result['status'] == 'human_review' and result['error_code'] == code
+    assert publication(screened, saved)['decision'] is None
+    screened.now[0] += 120
+    assert run(screened, Failed()) == {'status': 'idle'}
+    with screened.app.state.db.transaction() as session:
+        job = session.scalar(select(ScreeningJob))
+        assert job.attempt_count == 1 and job.error_code == code
+
+
+def test_worker_callback_lock_delay_cannot_commit_an_expired_publication(screened, monkeypatch):
+    configure(screened)
+    saved = create(screened.owner)
+    assert request(screened.owner, saved).status_code == 200
+    original = worker._publish
+    def delayed(session, job, receipt, now):
+        result = original(session, job, receipt, now)
+        screened.now[0] += worker.LEASE_SECONDS
+        return result
+    monkeypatch.setattr(worker, '_publish', delayed)
+    assert run(screened, SyntheticProvider())['status'] == 'human_review'
+    assert publication(screened, saved)['decision'] is None
+    assert counts(screened, (AutomaticPublication,)) == {'notebook_automatic_publications': 0}
+
+
+@pytest.mark.parametrize('kind', ['input_cap', 'output_cap', 'negative', 'boolean', 'cached', 'reasoning', 'model', 'verdict'])
+def test_invalid_provider_usage_identity_and_verdict_cannot_publish(screened, kind):
+    configure(screened)
+    saved = create(screened.owner)
+    assert request(screened.owner, saved).status_code == 200
+    class Invalid(SyntheticProvider):
+        def screen(self, prepared):
+            result = super().screen(prepared)
+            usage = dict(result.usage)
+            field_value = {'input_cap': ('input_tokens', 128001), 'output_cap': ('output_tokens', 1501),
+                'negative': ('input_tokens', -1), 'boolean': ('input_tokens', True),
+                'cached': ('cached_input_tokens', 101), 'reasoning': ('reasoning_tokens', 31)}.get(kind)
+            if field_value:
+                usage[field_value[0]] = field_value[1]
+                return replace(result, usage=usage)
+            if kind == 'model':
+                return replace(result, model='other-provider-model')
+            return replace(result, verdict={'outcome': 'no_concern_found', 'concerns': [],
+                                          'limitations': [], 'publish': True})
+    run(screened, Invalid())
+    assert publication(screened, saved)['decision'] is None
+    assert counts(screened, (AutomaticPublication,)) == {'notebook_automatic_publications': 0}
+    with screened.app.state.db.transaction() as session:
+        assert session.scalar(select(ScreeningJob.status)) == 'human_review'
+
+
+def test_actual_snapshot_and_bounded_audit_metadata_retained_without_input_body(screened):
+    configure(screened)
+    saved = create(screened.owner)
+    assert request(screened.owner, saved).status_code == 200
+    class Snapshot(SyntheticProvider):
+        def screen(self, prepared):
+            # Checked-out SQLAlchemy connections prove the call holds no DB txn.
+            assert screened.app.state.db.engine.pool.checkedout() == 0
+            return replace(super().screen(prepared), model='gpt-6-luna-2026-11-01')
+    provider = Snapshot()
+    assert run(screened, provider)['status'] == 'published'
+    with screened.app.state.db.transaction() as session:
+        attempt = session.scalar(select(ScreeningAttempt))
+        assert attempt.model_id == 'gpt-6-luna-2026-11-01'
+        assert attempt.charged_micro_usd == 25  # 100×0.1 + 30×0.5 micro-USD.
+        assert attempt.result['input_sha256'] == provider.inputs[0].input_sha256
+        assert attempt.result['provider_response_id'] == 'synthetic-response'
+        assert attempt.result['full_coverage'] is True
+        assert 'input_json' not in attempt.result and 'content' not in attempt.result
+        assert 'fields' not in attempt.result
+
+
+def test_cli_status_configure_and_idle_run_do_not_load_key(screened, monkeypatch, capsys):
+    from crucible import config
+    monkeypatch.setattr(config, 'load_settings', lambda: screened.app.state.settings)
+    def forbidden(**kwargs):
+        pytest.fail('An idle/configuration command must not resolve a provider key.')
+    monkeypatch.setattr(worker.OpenAIResponsesProvider, 'from_env', forbidden)
+    assert worker.main(['status']) == 0
+    assert json.loads(capsys.readouterr().out)['attempt_count'] == 0
+    assert worker.main(['configure', '--mode', 'shadow', '--monthly-budget-micro-usd', '5000000']) == 0
+    configured = json.loads(capsys.readouterr().out)
+    assert configured['mode'] == 'shadow'
+    assert configured['policy_id'] == worker.policy_for(replace(screened.app.state.settings,
+        publication_screening_mode='shadow')).id
+    assert worker.main(['run', '--once']) == 0
+    assert json.loads(capsys.readouterr().out) == {'status': 'idle'}
+
+
+def test_cli_failure_reports_only_fixed_code_not_exception_values(screened, monkeypatch, capsys):
+    from crucible import config
+    def bad_settings():
+        raise RuntimeError('SYNTHETIC_PASSWORD_MUST_NOT_APPEAR')
+    monkeypatch.setattr(config, 'load_settings', bad_settings)
+    assert worker.main(['status']) == 1
+    output = capsys.readouterr().out
+    assert 'SYNTHETIC_PASSWORD' not in output
+    assert json.loads(output) == {'status': 'error', 'error_code': 'screening_worker_failed'}
+
+
+def test_cli_loop_drains_work_immediately_and_polls_idle_quietly(screened, monkeypatch, capsys):
+    from crucible import config
+    monkeypatch.setattr(config, 'load_settings', lambda: screened.app.state.settings)
+    results = iter([{'status': 'published'}, {'status': 'idle'}, {'status': 'idle'},
+                    {'status': 'human_review'}])
+    calls, sleeps = [], []
+    def fake_run(*args, **kwargs):
+        calls.append(len(sleeps))
+        try:
+            return next(results)
+        except StopIteration:
+            raise KeyboardInterrupt
+    monkeypatch.setattr(worker, 'run_once', fake_run)
+    monkeypatch.setattr(worker.time, 'sleep', sleeps.append)
+    assert worker.main(['run', '--loop']) == 130
+    assert sleeps == [1, 1]
+    assert calls == [0, 0, 1, 2, 2]
+    assert [json.loads(line) for line in capsys.readouterr().out.splitlines()] == [
+        {'status': 'published'}, {'status': 'human_review'}]
+
+
+def test_lazy_cli_provider_uses_only_named_key_and_pinned_configuration(screened, monkeypatch):
+    policy = worker.policy_for(screened.app.state.settings)
+    observed = []
+    def fake_env(**kwargs):
+        observed.append(kwargs)
+        return SyntheticProvider()
+    monkeypatch.setattr(worker.OpenAIResponsesProvider, 'from_env', fake_env)
+    provider = worker._EnvironmentProvider(policy, 'CRUCIBLE_PUBLICATION_SCREENING_API_KEY')
+    assert observed == []
+    from crucible.publication_screening_policy import prepare_input
+    provider.screen(prepare_input({'body': 'Only synthetic data.'}))
+    assert observed == [{'model': 'gpt-6-luna', 'key_env': 'CRUCIBLE_PUBLICATION_SCREENING_API_KEY',
+        'timeout_seconds': 45, 'max_output_tokens': 1500, 'reasoning_effort': 'none'}]
+
+
+def test_preflight_refusal_spends_zero_and_never_resolves_provider_key(screened, monkeypatch):
+    configure(screened)
+    saved = create(screened.owner)
+    assert request(screened.owner, saved).status_code == 200
+    with screened.app.state.db.transaction(write=True) as session:
+        beta_access.set_membership(session, screened.owner.identifier, 'revoked', screened.now[0])
+    def forbidden(**kwargs):
+        pytest.fail('Unavailable notes must never resolve a provider key.')
+    monkeypatch.setattr(worker.OpenAIResponsesProvider, 'from_env', forbidden)
+    provider = worker._EnvironmentProvider(worker.policy_for(screened.app.state.settings), 'SYNTHETIC_KEY')
+    run(screened, provider)
+    with screened.app.state.db.transaction() as session:
+        attempt = session.scalar(select(ScreeningAttempt))
+        assert attempt.charged_micro_usd == 0 and attempt.usage_known is True
+
+
+def test_preparation_delay_cannot_dispatch_an_expired_lease(screened, monkeypatch):
+    configure(screened)
+    saved = create(screened.owner)
+    assert request(screened.owner, saved).status_code == 200
+    prepare = worker.prepare_input
+    def delayed(content, **kwargs):
+        prepared = prepare(content, **kwargs)
+        screened.now[0] += worker.LEASE_SECONDS
+        return prepared
+    monkeypatch.setattr(worker, 'prepare_input', delayed)
+    provider = SyntheticProvider()
+    assert run(screened, provider)['status'] == 'stale_lease'
+    assert provider.inputs == []
+    assert publication(screened, saved)['decision'] is None
+
+
+def test_policy_change_during_input_preparation_prevents_send(screened, monkeypatch):
+    configure(screened)
+    saved = create(screened.owner)
+    assert request(screened.owner, saved).status_code == 200
+    prepare = worker.prepare_input
+    def disabled(content, **kwargs):
+        prepared = prepare(content, **kwargs)
+        configure(screened, mode='disabled')
+        return prepared
+    monkeypatch.setattr(worker, 'prepare_input', disabled)
+    provider = SyntheticProvider()
+    assert run(screened, provider)['status'] == 'human_review'
+    assert provider.inputs == []

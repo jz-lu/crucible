@@ -13,7 +13,7 @@ async function boot({hash='#notebook',respond}={}){
   return createApp({schemes:[],hash,responder:(url,options,envelope)=>{
     const value=respond?.(url,options,envelope);if(value!==undefined)return value;
     if(url.pathname==='/api/session')return active(envelope);
-    if(url.pathname==='/api/notebook/notes'||url.pathname==='/api/notebook/review-queue')return{notes:[],next_after:null};
+    if(url.pathname==='/api/notebook/notes'||url.pathname==='/api/notebook/review-queue')return{notes:[],next_after:null,screening:url.searchParams.get('screening')};
   }});
 }
 async function finishAssets(app){
@@ -40,10 +40,12 @@ async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
     assert.match(app.$('#nb-note-list').textContent,/No notes/);assert.equal(lists(app).length,1);
   });
   await test('filtered and reviewer entry do not speculate the ordinary first page',async()=>{
-    for(const hash of ['#notebook?tag=algebra','#notebook?filter=proposals','#reviews?section=publication']){
+    for(const hash of ['#notebook?tag=algebra','#notebook?filter=proposals','#reviews?section=publication','#reviews?section=flagged']){
       const app=await boot({hash});assert.equal(lists(app).length,0);await finishAssets(app);
       if(hash.startsWith('#reviews')){
         assert.equal(lists(app).length,0);assert.equal(app.requests.filter(row=>row.url.pathname==='/api/notebook/review-queue').length,1);
+        assert.equal(app.requests.find(row=>row.url.pathname==='/api/notebook/review-queue').url.searchParams.get('screening'),'attention');
+        assert.match(app.$('#nb-review-note-list').textContent,/No flagged requests/);
       }else{
         assert.equal(lists(app).length,1);
         assert.equal(lists(app)[0].url.searchParams.get(hash.includes('tag=')?'tag':'proposals_only'),hash.includes('tag=')?'algebra':'true');

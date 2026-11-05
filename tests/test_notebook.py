@@ -348,7 +348,7 @@ def test_compact_publication_preserves_owner_csrf_latest_revision_and_existing_r
     assert owner.post(path, publication_body(first)).status_code == 409
     assert owner.post(path, {**body, "content_sha256": "0" * 64}).status_code == 409
     trashed = create(owner, content(title="Deleted private draft"))
-    assert owner.post(f'/api/notebook/notes/{trashed["id"]}/delete', publication_body(trashed)).status_code == 200
+    assert owner.post(f'/api/notebook/notes/{trashed["id"]}/delete', publication_body(trashed, permanent=True)).status_code == 200
     assert owner.post(f'/api/notebook/notes/{trashed["id"]}/publication-requests?summary=true',
         publication_body(trashed)).status_code == 410
     assert count(app, notebook.NotebookPublication) == 0

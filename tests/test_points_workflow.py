@@ -22,19 +22,22 @@ from proposal_fixtures import correctness_review_spec, tier_design
 from scripts.solve_rsa_frontier import recover as recover_rsa
 from scripts.solve_teaching_frontier import recover as recover_dh
 from test_bounties import (make_system, create as create_bounty, request, decision,
-                          body, post, boost, submit as contribute, assess, available)
+                          body, post, boost, submit as contribute, available)
 from test_notebook import Actor, create as create_note, content, request_publication, approve
 from test_note_ratings import agent, vote
 from test_protocol_proposals import submit as propose_scheme, review
 from test_research_reviews import submit as propose_research
 
 
-def rehearse(system, monkeypatch, *, recovery="teaching-dh-kem", first_approval="poster"):
+def rehearse(system, monkeypatch, *, recovery="teaching-dh-kem"):
     """Return durable evidence for every checked step, also used by browser QA."""
     app, poster, reviewer, solver, supporter, other_reviewer, now = system
     monkeypatch.setattr(scoring, "time", SimpleNamespace(time=lambda: now[0]))
     actors = (poster, reviewer, solver, supporter, other_reviewer)
     handles = ("poster", "reviewer", "solver", "supporter", "reviewer2")
+    reviewer_handles = {handle for actor, handle in zip(actors, handles, strict=True)
+                        if actor.identifier in app.state.settings.reviewer_ids}
+    ranked_handles = tuple(handle for handle in handles if handle not in reviewer_handles)
     expected = {handle: dict(progress=0, early_recovery=0, scheme_contributions=0,
                              note_contributions=0, bounty_points=0) for handle in handles}
     accepted = {handle: 0 for handle in handles}
@@ -44,18 +47,29 @@ def rehearse(system, monkeypatch, *, recovery="teaching-dh-kem", first_approval=
         response = solver.client.get("/api/people?include_records=false")
         assert response.status_code == 200, response.text
         board = response.json()["people"]
-        assert len(board) == len(handles)
-        for row in board:
-            handle = row["handle"]
+        assert response.json()["pagination"]["total"] == len(ranked_handles)
+        assert len(board) == len(ranked_handles)
+        assert {row["handle"] for row in board} == set(ranked_handles)
+        rows = {row["handle"]: row for row in board}
+        for handle in handles:
             profile = solver.client.get(f"/api/people/{handle}?include_milestones=false").json()["person"]
-            for actual in (row, profile):
+            if handle in reviewer_handles:
+                assert profile["score_status"] == "reviewer", (label, handle, profile)
+                assert profile["rank"] is None and profile["points"] == 0, (label, handle, profile)
+                checked = (profile,)
+            else:
+                checked = (rows[handle], profile)
+            for actual in checked:
                 assert actual["score_breakdown"] == expected[handle], (label, handle, actual)
                 assert actual["points"] == sum(expected[handle].values()), (label, handle, actual)
                 assert actual["accepted_proposal_count"] == accepted[handle], (label, handle, actual)
-                assert actual["rank"] == 1 + sum(sum(parts.values()) > actual["points"]
-                                                for parts in expected.values()), (label, handle, actual)
+                if handle not in reviewer_handles:
+                    assert actual["score_status"] == "active", (label, handle, actual)
+                    assert actual["rank"] == 1 + sum(sum(expected[other].values()) > actual["points"]
+                                                    for other in ranked_handles), (label, handle, actual)
         assert [(row["points"], row["handle"]) for row in board] == sorted(
-            [(sum(parts.values()), handle) for handle, parts in expected.items()], key=lambda item: (-item[0], item[1]))
+            [(sum(expected[handle].values()), handle) for handle in ranked_handles],
+            key=lambda item: (-item[0], item[1]))
         checkpoints.append({"step": label, "points": {row["handle"]: row["points"] for row in board},
                             "solver_breakdown": deepcopy(expected["solver"]), "accepted_proposals": accepted["solver"]})
 
@@ -177,23 +191,21 @@ def rehearse(system, monkeypatch, *, recovery="teaching-dh-kem", first_approval=
     bounty = contribute(solver, bounty, pin)
     submission_id = bounty["receipt"]["submission_id"]
     assert bounty["bounty"]["award"] is None
-    check("submitted bounty solution earns zero pending both decisions")
-    first_actor, last_actor = (poster, reviewer) if first_approval == "poster" else (reviewer, poster)
-    last_kind = "pipeline" if first_approval == "poster" else "poster"
-    bounty = assess(first_actor, bounty, first_approval, submission_id=submission_id)
-    assert bounty["bounty"]["award"] is None
-    check("one bounty approval earns zero")
-    final_body = body(bounty, kind=last_kind, decision="approved", reason="Synthetic exact contribution meets the disposable criteria.")
+    check("submitted bounty solution earns zero pending independent review")
+    final_body = body(bounty, kind="pipeline", decision="approved", reason="Synthetic exact contribution meets the disposable criteria.")
     final_path = f'/api/bounties/{bounty["bounty"]["id"]}/submissions/{submission_id}/decisions'
-    bounty = post(last_actor, final_path, final_body)
+    bounty = post(reviewer, final_path, final_body)
     assert bounty["bounty"]["award"]["points"] == 200
     expected["solver"]["bounty_points"] = 200
-    check("both bounty approvals add two hundred; combined total is 2303")
-    assert post(last_actor, final_path, final_body)["receipt"] == bounty["receipt"]
+    check("independent bounty approval adds two hundred; combined total is 2303")
+    assert post(reviewer, final_path, final_body)["receipt"] == bounty["receipt"]
     check("completion retry and repeated reads do not duplicate the award")
     with app.state.db.transaction() as session:
         assert session.scalar(select(func.count()).select_from(SchemeAdmissionCredit)) == 1
         assert session.scalar(select(func.count()).select_from(BountyAward)) == 1
+        award = session.get(BountyAward, bounty["bounty"]["id"])
+        assert award.poster_decision_id is None
+        assert award.pipeline_decision_id == bounty["receipt"]["decision_id"]
 
     # Reopen the same database through a fresh application, not a cached score.
     restarted = create_app(settings, clock=lambda: now[0])
@@ -234,11 +246,10 @@ def rehearse(system, monkeypatch, *, recovery="teaching-dh-kem", first_approval=
 
 
 @pytest.mark.parametrize("recovery", ["teaching-dh-kem", "rsa-kem"])
-@pytest.mark.parametrize("first_approval", ["poster", "pipeline"])
-def test_every_points_category_combines_through_real_workflows(tmp_path, monkeypatch, recovery, first_approval):
+def test_every_points_category_combines_through_real_workflows(tmp_path, monkeypatch, recovery):
     system = make_system(f"sqlite:///{tmp_path / 'points.db'}", monkeypatch)
     try:
-        evidence = rehearse(system, monkeypatch, recovery=recovery, first_approval=first_approval)
+        evidence = rehearse(system, monkeypatch, recovery=recovery)
         assert len(evidence["checkpoints"]) >= 30
     finally:
         for actor in system[1:-1]:

@@ -1,14 +1,24 @@
-"""Reversible removal of owned drafts; submitted evidence is never erased."""
+"""Permanent draft deletion with content-free receipts and legacy recovery."""
+import json
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, Request
-from pydantic import BaseModel, ConfigDict
-from sqlalchemy import Float, ForeignKey, Index, Integer, String, UniqueConstraint, or_, select, text
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import Float, ForeignKey, Index, Integer, String, UniqueConstraint, delete, or_, select, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base
 
-NOTICE = "This private note is in Trash. Its author can restore it."
+NOTICE = "This private draft was previously removed."
+PERMANENT_NOTICE = "This private note was permanently deleted."
+
+
+class DeleteInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    revision: int = Field(strict=True, ge=1, le=100)
+    content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    idempotency_key: UUID
+    permanent: bool = Field(strict=True)
 
 
 class NotebookDeletion(Base):
@@ -47,7 +57,9 @@ def active(session, note_id):
 
 def require_active(session, note_id):
     if active(session, note_id):
-        raise HTTPException(410, NOTICE)
+        from .notebook import NotebookNote
+        note = session.get(NotebookNote, note_id)
+        raise HTTPException(410, PERMANENT_NOTICE if note and note.latest_revision == 0 else NOTICE)
 
 
 def records(session, note_ids):
@@ -78,6 +90,39 @@ def has_review_history(session, note_id):
     return bool(session.scalar(select(or_(publication, proposal, request))))
 
 
+def purge_content(session, note):
+    """Erase stored revisions and their import copies; keep identity/retry receipts.
+
+    The caller holds the account and note write locks. All notebook imports and
+    revisions serialize through the same account lock. Content from somebody
+    else's authored citation, external exports and backup retention is outside
+    this operation's scope; this is not a promise of physical media erasure.
+    """
+    from . import notebook, notebook_graph
+
+    revision_ids = select(notebook.NotebookRevision.id).where(notebook.NotebookRevision.note_id == note.id)
+    session.execute(delete(notebook_graph.NotebookReference).where(
+        notebook_graph.NotebookReference.source_revision_id.in_(revision_ids)))
+    session.execute(delete(notebook.NotebookRevision).where(notebook.NotebookRevision.note_id == note.id))
+    for record in session.scalars(select(notebook.NotebookImport).where(
+            notebook.NotebookImport.author_id == note.author_id)):
+        identifiers = {key for key, value in record.id_map.items() if value == note.id} | {note.id}
+        workspace = json.loads(json.dumps(record.workspace))
+        workspace["notes"] = [item for item in workspace.get("notes", []) if item.get("id") not in identifiers]
+        for view in workspace.get("views", []):
+            if isinstance(view, dict):
+                view["bindings"] = [item for item in view.get("bindings", [])
+                                    if not isinstance(item, dict) or item.get("noteId") not in identifiers]
+        if workspace != record.workspace:
+            record.workspace = workspace
+            record.byte_size = len(notebook._bytes(workspace))
+    note.source_metadata = None
+    # Zero is reserved for a permanent tombstone after an active deletion.
+    # New import rows also start at zero, but acquire revisions in the same
+    # transaction and have no deletion receipt. No note content survives here.
+    note.latest_revision = 0
+
+
 def register_routes(app, db, clock, account, throttle):
     from . import notebook
 
@@ -90,11 +135,15 @@ def register_routes(app, db, clock, account, throttle):
         return note
 
     def receipt(session, row):
-        return {"deletion": data(row), "deleted": active(session, row.note_id) is not None}
+        note = session.get(notebook.NotebookNote, row.note_id)
+        return {"deletion": data(row), "deleted": active(session, row.note_id) is not None,
+                "permanent": note is not None and note.latest_revision == 0}
 
     @app.post("/api/notebook/notes/{note_id}/delete")
-    def delete_note(note_id: UUID, body: notebook.PublicationInput, request: Request):
+    def delete_note(note_id: UUID, body: DeleteInput, request: Request):
         throttle(request, "notebook-write", 120, 3600)
+        if not body.permanent:
+            raise HTTPException(422, "Confirm permanent deletion explicitly.")
         with db.transaction(write=True) as session:
             user = account(request, session, True)
             note = owned(session, user, note_id)
@@ -104,20 +153,33 @@ def register_routes(app, db, clock, account, throttle):
                 if (replay.note_id, replay.revision, replay.content_sha256) != (
                         note.id, body.revision, body.content_sha256):
                     raise HTTPException(409, "This delete identifier was already used for another request.")
+                if note.latest_revision != 0 or active(session, note.id).id != replay.id:
+                    raise HTTPException(409, "This identifier belongs to a previous removal. Use a new confirmed deletion request.")
                 return receipt(session, replay)
+            if note.latest_revision == 0:
+                raise HTTPException(410, PERMANENT_NOTICE)
             target = session.scalar(select(notebook.NotebookRevision).where(
                 notebook.NotebookRevision.note_id == note.id,
                 notebook.NotebookRevision.revision == note.latest_revision))
             if (target.revision, target.content_sha256) != (body.revision, body.content_sha256):
                 raise HTTPException(409, "This note changed. Read its latest revision before deleting it.")
-            if active(session, note.id):
-                raise HTTPException(409, "This note is already in Trash. Use its existing deletion receipt.")
             if has_review_history(session, note.id):
                 raise HTTPException(409, "Only unsubmitted private drafts can be deleted. Publication and review evidence remains in its recorded history.")
+            now = clock()
+            previous = active(session, note.id)
+            if previous is not None:
+                # Retire the former soft-removal receipt to satisfy its active
+                # uniqueness constraint. This legacy column is a closure time
+                # here, not a restoration: the same transaction purges content
+                # and the permanent tombstone makes every restore fail.
+                previous.restored_at = now
+                session.flush()
             row = NotebookDeletion(id=str(uuid4()), note_id=note.id, author_id=user.id,
                 revision=target.revision, content_sha256=target.content_sha256,
-                deleted_at=clock(), idempotency_key=str(body.idempotency_key))
+                deleted_at=now, idempotency_key=str(body.idempotency_key))
             session.add(row)
+            session.flush()
+            purge_content(session, note)
             session.flush()
             return receipt(session, row)
 
@@ -127,6 +189,8 @@ def register_routes(app, db, clock, account, throttle):
         with db.transaction(write=True) as session:
             user = account(request, session, True)
             note = owned(session, user, note_id)
+            if note.latest_revision == 0:
+                raise HTTPException(409, "Permanently deleted notes cannot be restored.")
             row = session.scalar(select(NotebookDeletion).where(
                 NotebookDeletion.id == str(body.deletion_id),
                 NotebookDeletion.note_id == note.id, NotebookDeletion.author_id == user.id).with_for_update())

@@ -111,8 +111,8 @@ def winning_keys(records):
             and (score := record.get("score")) and score.get("early_recovery", 0) > 0}
 
 
-def winning_keys_for_user(session, user_id):
-    _, families = scoring.score_relations(session.get_bind().dialect.name)
+def winning_keys_for_user(session, user_id, *, reviewer_ids=()):
+    _, families = scoring.score_relations(session.get_bind().dialect.name, reviewer_ids=reviewer_ids)
     rows = session.execute(select(families).where(families.c.user_id == user_id,
                                                  families.c.early_recovery > 0)).all()
     return {(row.scheme_id, scoring.FAMILY_RELEASES[row.scheme_id]["version"],

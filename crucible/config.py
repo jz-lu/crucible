@@ -87,8 +87,18 @@ class Settings:
     github_login_enabled: bool = False
     github_client_id: str = ""
     github_client_secret: str = field(default="", repr=False)
+    publication_screening_mode: str = "disabled"
+    publication_screening_model: str = "gpt-6-luna"
+    publication_screening_monthly_budget_micro_usd: int = 10_000_000
 
     def __post_init__(self):
+        if self.publication_screening_mode not in {"disabled", "shadow", "automatic"}:
+            raise RuntimeError("Publication screening must be disabled, shadow, or automatic.")
+        if self.publication_screening_model not in {"gpt-6-luna", "gpt-5.4-mini", "gpt-6.1-sol"}:
+            raise RuntimeError("Use an explicitly supported publication-screening model.")
+        if (type(self.publication_screening_monthly_budget_micro_usd) is not int or
+                not 0 <= self.publication_screening_monthly_budget_micro_usd <= 100_000_000):
+            raise RuntimeError("The publication-screening monthly budget must be 0–100000000 micro-USD.")
         if type(self.github_login_enabled) is not bool:
             raise RuntimeError("GitHub sign-in must be explicitly enabled or disabled.")
         if self.github_login_enabled:
@@ -261,4 +271,7 @@ def load_settings() -> Settings:
                     smtp_password=os.getenv("CRUCIBLE_SMTP_PASSWORD", ""), smtp_starttls=tls == "true",
                     github_login_enabled=github_enabled == "true",
                     github_client_id=os.getenv("CRUCIBLE_GITHUB_CLIENT_ID", ""),
-                    github_client_secret=os.getenv("CRUCIBLE_GITHUB_CLIENT_SECRET", ""))
+                    github_client_secret=os.getenv("CRUCIBLE_GITHUB_CLIENT_SECRET", ""),
+                    publication_screening_mode=os.getenv("CRUCIBLE_PUBLICATION_SCREENING_MODE", "disabled"),
+                    publication_screening_model=os.getenv("CRUCIBLE_PUBLICATION_SCREENING_MODEL", "gpt-6-luna"),
+                    publication_screening_monthly_budget_micro_usd=number("CRUCIBLE_PUBLICATION_SCREENING_BUDGET_MICRO_USD", 10_000_000))

@@ -1,5 +1,8 @@
 CURRENT POLICY — 29 October 2026
 
+Eligibility update, 5 November: reviewers are unscored and excluded from the
+participant leaderboard; historical evidence remains. See reviewer-scoring.txt.
+
 Policy v11 awards 100 once per account per enrolled scheme for a genuine recovery
 frontier advance, with no ordinary personal-progress points. Later advances remain
 visible records. It also uses admitted-scheme component v2: 2,000 base plus 100 per

@@ -133,7 +133,7 @@ test('public route descriptions select bounded known layouts without querying ac
     ['#notebook?review=1', 'list', 'Review center'], ['#notebook?research_review=1', 'list', 'Review center'],
     ['#scheme/test/v1', 'chart', 'Scheme'], ['#scheme/test/v1/assumptions', 'list', 'Assumptions'],
     ['#challenge/test/v1', 'list', 'Challenge'], ['#reviews', 'list', 'Review center'],
-    ['#propose?review=1', 'list', 'Review center'], ['#about', 'neutral', 'About us'],
+    ['#propose?review=1', 'list', 'Review center'], ['#about', 'about', 'About us'],
     ['#propose', 'neutral', 'Propose a scheme'], ['#connect', 'neutral', 'Connect an agent'],
     ['#join?token=synthetic-never-rendered', 'neutral', 'Private beta'], ['#auth?github=failed', 'neutral', 'Sign in'],
     ['#reset-password?token=synthetic-never-rendered', 'neutral', 'Reset password'],
@@ -195,7 +195,7 @@ test('pending hash changes update only public geometry and navigation without ad
     ['#notebook?view=timeline', 'notebook-timeline', 'Timeline', 'notebook'],
     ['#notebook?view=map', 'notebook-map', 'Scheme map', 'challenge'],
     ['#notebook?view=unknown', 'notebook-notes', 'Notes', 'notebook'],
-    ['#about', 'neutral', 'About us', 'about'], ['#scheme/test/v1', 'chart', 'Scheme', 'challenge'],
+    ['#about', 'about', 'About us', 'about'], ['#scheme/test/v1', 'chart', 'Scheme', 'challenge'],
     ['#people', 'people', 'Leaderboard', 'people'], ['#person/alice', 'profile', 'alice', null],
     ['#propose', 'neutral', 'Propose a scheme', 'challenge'], ['#reviews', 'list', 'Review center', null],
     ['#notebook?review=1', 'list', 'Review center', null]

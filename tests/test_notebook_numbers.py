@@ -16,7 +16,7 @@ from crucible.db import Database, User
 from test_notebook import (system, content, create, revise, request_publication,
                            approve, workspace, import_workspace)
 from test_notebook_browse import curated, page
-from test_notebook_trash import delete, restore
+from test_notebook_trash import delete, restore, legacy_delete
 from test_notebook_agents import agent
 from test_beta_boundary import private_app
 from test_researcher_profiles_migration import migration_config, snapshot
@@ -37,7 +37,7 @@ def test_numbers_survive_edits_retries_search_and_deletion(system):
     assert page(reader, q=term)['notes'] == []
     for invalid in ('#0', '#' + '9' * 190):
         assert page(owner, q=invalid)['notes'] == []
-    deletion = delete(owner, latest).json()['deletion']
+    deletion = legacy_delete(owner, latest)
     assert page(owner, q=term)['notes'] == []
     assert page(owner, q=term, scope='trash')['notes'][0]['number'] == first['number']
     third = create(owner)

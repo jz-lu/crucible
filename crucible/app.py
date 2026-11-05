@@ -1231,7 +1231,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
 
     machine_auth.register_routes(app, db, settings, clock, user_for, throttle)
     method_sources.register_routes(app, db, user_for, clock, throttle)
-    people.register_routes(app, db, envelope)
+    people.register_routes(app, db, envelope, settings)
     researcher_profiles.register_routes(app, db, clock, user_for, envelope, throttle)
     research.register_routes(app, db, settings, clock, user_for, throttle)
     protocol_proposals.register_routes(app, db, settings, clock, user_for, throttle)

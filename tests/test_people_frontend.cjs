@@ -45,7 +45,8 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
     for (const label of ['Record breakthroughs','Admitted schemes','Research bounties','Research notes','Bounty allowance']) assert.ok(dialog.textContent.includes(label));
     assert.match(dialog.textContent, /2,000 points/); assert.match(dialog.textContent, /100 points per completed active week/);
     assert.match(dialog.textContent, /review approval alone earns 0 points/);
-    assert.match(dialog.textContent, /task poster and an independent reviewer both approve/);
+    assert.match(dialog.textContent, /independent reviewer approves the exact solution evidence/);
+    assert.match(dialog.textContent, /proposer sign-off is not required/);
     assert.match(dialog.textContent, /release marked Not scored earns 0 points/);
     dialog.querySelector('[data-close]').click();
     assert.equal(dialog.open, false); assert.equal(app.document.activeElement, trigger);
@@ -108,6 +109,25 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
     app.$('#recovery-dialog').close();
     app.$('#person-content').querySelector('.history-item').click(); await flush();
     assert.equal(app.$('#recovery-dialog').open, true);
+  });
+  await test('reviewer profiles show their role without points or rank and retain research records', async () => {
+    const reviewer = {...person('reviewer'), score_status:'reviewer', accepted_proposal_count:3,
+      records:[{...record, scoring_eligible:false, score:null}], first_records:[{...record, place:1}]};
+    // Role status is authoritative even if an old score projection remains in
+    // an intermediate response. It must never render as an active competitor.
+    const app = await createApp({schemes, hash:'#person/reviewer', responder:(url,opts,envelope) =>
+      url.pathname === '/api/people/reviewer' ? envelope({person:reviewer,scoring}) : baseResponder(url,opts,envelope)});
+    const content = app.$('#person-content'), stats = content.querySelector('.person-stats');
+    assert.deepEqual(stats.querySelectorAll('dt').map(element => element.textContent), ['Role','Accepted proposals']);
+    assert.deepEqual(stats.querySelectorAll('dd').map(element => element.textContent), ['Reviewer','3']);
+    assert.equal(content.querySelector('#person-leaderboard-rank'), null);
+    assert.equal(content.querySelector('.person-points-stat'), null);
+    assert.equal(content.querySelector('.person-score-breakdown'), null);
+    assert.equal(content.querySelector('.person-record-points'), null);
+    assert.doesNotMatch(content.textContent, /Pending|Scoring is being finalized|Place on leaderboard|Points/);
+    assert.equal(app.$('#personal-records').querySelector('.person-record-result').dataset.submissionId, record.submission_id);
+    assert.equal(app.$('#first-records').querySelector('.milestone-result').dataset.submissionId, record.submission_id);
+    assert.equal(app.$('#recent-solves').querySelector('.history-item').dataset.submissionId, record.submission_id);
   });
   await test('profile deep links encode handles and render content as text', async () => {
     const handle = '<test>/name?';

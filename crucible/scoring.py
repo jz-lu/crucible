@@ -46,6 +46,8 @@ FAMILY_RELEASES = {
     "classic-mceliece": {"version": "length-research-v1", "profile_prefix": "classic-mceliece-length-research-v1-tier-", "max_tier": 50, "progress_weights": _WEIGHTS_50, "record_inheritance": False},
 }
 SCORING = {"status": "active", "policy_id": POLICY_ID, "ordering": "points_desc_handle",
+           "eligibility_policy_id": "crucible-reviewer-exclusion-v1",
+           "reviewers_eligible": False,
            "scheme_admissions": {"policy_id": ADMISSION_POLICY_ID, "admission_points": ADMISSION_POINTS,
                                  "completed_active_week_points": ACTIVE_WEEK_POINTS}}
 
@@ -134,7 +136,7 @@ def metadata_relation(name, columns, rows, dialect):
     raise ValueError("Unsupported metadata database dialect")
 
 
-def score_relations(dialect="sqlite", *, as_of=None):
+def score_relations(dialect="sqlite", *, as_of=None, reviewer_ids=()):
     """Build portable SQL aggregates; never load all receipts into Python.
 
     Only a strict advance beyond the prior exact-release recovery frontier can
@@ -144,6 +146,7 @@ def score_relations(dialect="sqlite", *, as_of=None):
     inherited lower-profile records never change that comparison.
     """
     as_of = time.time() if as_of is None else as_of
+    reviewer_ids = tuple(sorted(set(reviewer_ids)))
     profile_rows = []
     for family, release in FAMILY_RELEASES.items():
         profile_rows.extend((family, release["version"], f'{release["profile_prefix"]}{tier}', tier,
@@ -195,11 +198,15 @@ def score_relations(dialect="sqlite", *, as_of=None):
     first = select(ranked).where(ranked.c.award_position == 1).cte("score_first_advance")
     highest = select(ranked).where(ranked.c.record_position == 1).cte("score_highest_advance")
     participants_by_family = select(achievements.c.user_id, achievements.c.scheme_id).distinct().cte("score_family_participants")
+    # Keep reviewers' actual recoveries in the frontier scan. Excluding them
+    # earlier would turn a later copy of an existing result into a new advance.
+    earning = and_(first.c.submission_id.is_not(None),
+                   participants_by_family.c.user_id.not_in(reviewer_ids))
     families = select(participants_by_family, literal(0).label("progress"),
-                      case((first.c.submission_id.is_not(None), FRONTIER_POINTS), else_=0).label("early_recovery"),
-                      first.c.tier.label("early_recovery_tier"),
-                      case((first.c.submission_id.is_not(None), 1), else_=None).label("early_recovery_rank"),
-                      first.c.submission_id.label("early_recovery_submission_id"),
+                      case((earning, FRONTIER_POINTS), else_=0).label("early_recovery"),
+                      case((earning, first.c.tier), else_=None).label("early_recovery_tier"),
+                      case((earning, 1), else_=None).label("early_recovery_rank"),
+                      case((earning, first.c.submission_id), else_=None).label("early_recovery_submission_id"),
                       highest.c.submission_id.label("highest_frontier_submission_id")).outerjoin(
                           first, and_(participants_by_family.c.user_id == first.c.user_id,
                                       participants_by_family.c.scheme_id == first.c.scheme_id)).outerjoin(
@@ -209,24 +216,29 @@ def score_relations(dialect="sqlite", *, as_of=None):
                         func.sum(families.c.early_recovery).label("early_recovery")).group_by(
                             families.c.user_id).cte("score_recoveries")
     admissions = admission_points_relation(as_of).cte("score_admissions")
-    progress_total = func.coalesce(recoveries.c.progress, 0)
-    early_total = func.coalesce(recoveries.c.early_recovery, 0)
-    scheme_total = func.coalesce(admissions.c.scheme_contributions, 0)
+    is_reviewer = User.id.in_(reviewer_ids)
+    def eligible_points(value):
+        return case((is_reviewer, 0), else_=func.coalesce(value, 0))
+    progress_total = eligible_points(recoveries.c.progress)
+    early_total = eligible_points(recoveries.c.early_recovery)
+    scheme_total = eligible_points(admissions.c.scheme_contributions)
     from .note_ratings import author_points
     notes = author_points().cte("score_notes")
-    note_total = func.coalesce(notes.c.note_contributions, 0)
+    note_total = eligible_points(notes.c.note_contributions)
     from .bounty_allowance import bounty_points_relation
     bounties = bounty_points_relation().cte("score_bounties")
-    bounty_total = func.coalesce(bounties.c.bounty_points, 0)
+    bounty_total = eligible_points(bounties.c.bounty_points)
     points = progress_total + early_total + scheme_total + note_total + bounty_total
     participants = (select(User.id.label("id"), User.handle, User.created_at,
+                           is_reviewer.label("is_reviewer"),
                            progress_total.label("progress"), early_total.label("early_recovery"),
                            scheme_total.label("scheme_contributions"),
-                           func.coalesce(admissions.c.admission_points, 0).label("admission_points"),
+                           eligible_points(admissions.c.admission_points).label("admission_points"),
                            func.coalesce(admissions.c.active_weeks, 0).label("admission_active_weeks"),
-                           func.coalesce(admissions.c.weekly_points, 0).label("admission_weekly_points"),
+                           eligible_points(admissions.c.weekly_points).label("admission_weekly_points"),
                            note_total.label("note_contributions"), bounty_total.label("bounty_points"), points.label("points"),
-                           func.rank().over(order_by=points.desc()).label("rank"))
+                           case((is_reviewer, None), else_=func.rank().over(
+                               partition_by=is_reviewer, order_by=points.desc())).label("rank"))
                     .outerjoin(recoveries, recoveries.c.user_id == User.id)
                     .outerjoin(admissions, admissions.c.user_id == User.id)
                     .outerjoin(notes, notes.c.user_id == User.id)

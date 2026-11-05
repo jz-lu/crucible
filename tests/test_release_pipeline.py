@@ -402,7 +402,20 @@ def test_release_summary_distinguishes_verified_published_and_promoted(tmp_path,
         assert 'Beta promotion was deliberately disabled' in output
         assert 'separate reviewed promotion or image selection' in output
     else:
-        assert 'Live deployment has not been verified.' in output
+        assert 'Live deployment is unverified.' in output
+
+
+@pytest.mark.parametrize('status', ['passed', 'needs_review', 'waiting'])
+def test_release_summary_does_not_confuse_tag_promotion_with_live_success(tmp_path, monkeypatch, capsys, status):
+    release.write_json(tmp_path / 'promotion.json', {
+        'status': 'passed', 'channel_reference': release.CHANNEL,
+        'observed_digest': 'sha256:' + 'a' * 64,
+    })
+    release.write_json(tmp_path / 'rollout.json', {'status': status})
+    run_release_summary(tmp_path, monkeypatch, publish=True, promote=True)
+    output = capsys.readouterr().out
+    assert ('three consecutive samples' in output) is (status == 'passed')
+    assert ('Live deployment is unverified' in output) is (status != 'passed')
 
 
 def test_release_summary_preserves_uncertain_promotion_warning_even_if_input_disabled(tmp_path, monkeypatch, capsys):

@@ -107,7 +107,8 @@ def test_cli_import_export_and_followup_publication_are_end_to_end(connected_cli
     assert output(capsys)["receipt"]["publication_status"] == "submitted"
     assert count(app, notebook.NotebookPublication) == 1
     assert count(app, notebook.NotebookNote) == 1
-    assert state["requests"][-1] == state["requests"][-2]
+    writes = [item for item in state["requests"] if item[0] == "POST"]
+    assert writes[-1] == writes[-2]
     assert invoke("import", "--file", source) == 0
     assert output(capsys)["receipt"]["replayed"]
     assert count(app, notebook.NotebookImport) == 1
@@ -167,45 +168,75 @@ def test_cli_checks_returned_content_hash_and_rejects_unpinned_publication(conne
     assert count(app, notebook.NotebookPublication) == 0
 
 
-def test_cli_private_note_delete_restore_and_lost_response_retries(connected_cli, capsys):
+def test_cli_permanent_delete_requires_confirmation_and_survives_lost_response(connected_cli, capsys):
     app, owner, invoke, state, config, root = connected_cli
-    source = root / "test-note.json"
-    cli.save_json(source, content(title="Disposable CLI test"))
-    assert invoke("create", "--file", source) == 0
-    note = output(capsys)["receipt"]
+    note = create(owner, content(title="Disposable CLI test"))
     pin = (note["id"], "--revision", note["revision"], "--sha256", note["content_sha256"])
-    deletion_args = ("delete", *pin, "--retry", root / "delete-1.json")
+    assert invoke("delete", *pin) == 1
+    assert output(capsys)["error"]["code"] == "permanent_delete_confirmation_required"
+    deletion_args = ("delete", *pin, "--permanent", "--retry", root / "delete-1.json")
     state["lose_once"] = True
     assert invoke(*deletion_args) == 1
     assert output(capsys)["error"]["code"] == "network_error"
     assert invoke(*deletion_args) == 0
     deletion = output(capsys)["receipt"]
-    assert deletion["deleted"] is True
+    assert deletion["deleted"] is deletion["permanent"] is True
     assert state["requests"][-1] == state["requests"][-2]
     assert invoke("show", *pin) == 1
     assert output(capsys)["error"]["code"] == "http_410"
-    assert invoke("list", "--search", "Disposable") == 0
-    assert output(capsys)["notes"] == []
     assert invoke("list", "--deleted") == 0
-    assert output(capsys)["notes"][0]["deletion"]["id"] == deletion["deletion_id"]
-    assert invoke("show", *pin, "--deleted") == 0
-    assert output(capsys)["note"]["revisions"][0]["content"] == content(title="Disposable CLI test")
+    assert output(capsys)["notes"] == []
+    assert invoke("show", *pin, "--deleted") == 1
+    assert output(capsys)["error"]["code"] == "http_404"
     assert invoke("export", "--out", root / "export.json") == 0
     assert output(capsys)["notes"] == 0
-    restore_args = ("restore", note["id"], "--deletion-id", deletion["deletion_id"], "--retry", root / "restore-1.json")
-    state["lose_once"] = True
-    assert invoke(*restore_args) == 1
-    output(capsys)
-    assert invoke(*restore_args) == 0
-    assert output(capsys)["receipt"]["deleted"] is False
-    assert state["requests"][-1] == state["requests"][-2]
-    assert invoke("show", *pin) == 0
-    assert output(capsys)["note"]["revision"] == 1
+    assert invoke("restore", note["id"], "--deletion-id", deletion["deletion_id"],
+                  "--retry", root / "restore-1.json") == 1
+    assert output(capsys)["error"]["code"] == "http_409"
     assert invoke(*deletion_args) == 0
-    assert output(capsys)["receipt"]["deleted"] is False  # Old retry cannot undo restore.
-    assert invoke("delete", *pin, "--retry", root / "delete-2.json") == 0
-    assert output(capsys)["receipt"]["deleted"] is True
-    assert invoke(*restore_args) == 0
-    assert output(capsys)["receipt"]["deleted"] is True  # Nor can restore undo a later deletion.
-    assert count(app, notebook_trash.NotebookDeletion) == 2
+    assert output(capsys)["receipt"]["permanent"] is True
+    assert count(app, notebook.NotebookRevision) == 0
+    assert count(app, notebook.NotebookPublication) == 0
+
+
+def test_cli_screening_requires_an_explicit_policy_pin_before_writing(connected_cli, capsys, monkeypatch):
+    app, owner, invoke, state, config, root = connected_cli
+    note = create(owner)
+    policy = {'mode': 'automatic', 'screening_required': True, 'policy_id': 'b' * 64,
+              'processor': 'OpenAI', 'notice': 'Synthetic notice: external screening and automatic publication.'}
+    original = cli.Client.request
+    def request(self, path, *args, **kwargs):
+        return policy if path == '/api/notebook/publication-policy' else original(self, path, *args, **kwargs)
+    monkeypatch.setattr(cli.Client, 'request', request)
+    assert invoke('publication-policy') == 0
+    assert output(capsys) == policy
+    args = ('request-publication', note['id'], '--revision', 1, '--sha256', note['content_sha256'],
+            '--retry', root / 'consented-request.json')
+    assert invoke(*args) == 1
+    assert output(capsys)['error']['code'] == 'screening_consent_required'
+    assert count(app, notebook.NotebookPublication) == 0
+    assert not (root / 'consented-request.json').exists()
+    assert not any(method == 'POST' for method, *_ in state['requests'])
+    state['lose_once'] = True
+    assert invoke(*args, '--screening-policy-id', policy['policy_id']) == 1
+    assert output(capsys)['error']['code'] == 'network_error'
+    # An uncertain retry preserves consent, identity and content instead of
+    # silently adopting a new notice. Server enforces pins on new requests.
+    policy['policy_id'] = 'c' * 64
+    assert invoke(*args, '--screening-policy-id', 'b' * 64) == 0
+    assert output(capsys)['receipt']['publication_status'] == 'submitted'
+    writes = [item for item in state['requests'] if item[0] == 'POST']
+    assert writes[-1] == writes[-2]
+    assert json.loads(writes[-1][2])['screening_consent'] is True
+    assert json.loads(writes[-1][2])['screening_policy_id'] == 'b' * 64
+    assert count(app, notebook.NotebookPublication) == 1
+
+
+def test_cli_rejects_invalid_screening_pins_before_any_request(connected_cli, capsys):
+    app, owner, invoke, state, *_ = connected_cli
+    note = create(owner)
+    assert invoke('request-publication', note['id'], '--revision', 1, '--sha256', note['content_sha256'],
+                  '--screening-policy-id', 'not-a-policy') == 1
+    assert 'policy_id' in output(capsys)['error']['message']
+    assert state['requests'] == []
     assert count(app, notebook.NotebookPublication) == 0

@@ -1,0 +1,111 @@
+TWENTY-NOTE PUBLICATION SCREENING TRIAL
+2026-11-05 | isolated local database; live model; hosted screening remains off
+
+RESULT
+
+Twenty unique synthetic notes were saved and explicitly submitted through the normal
+application endpoints. Fourteen were automatically published. Six were kept private
+and remained in the human publication review queue. All twenty outcomes and all
+six expected concern-category sets matched the labels fixed before any model call.
+
+Good-faith examples included an incorrect proof, speculative mathematics, a toy
+factor-recovery program, negative results, sharp technical criticism, Japanese prose
+and a report quoting a malicious instruction. Human-review examples covered an
+apparent private credential, harassment, sabotage, phishing, an operative review
+override hidden after a long technical body, and unrelated advertising.
+
+All material, accounts, apparent credentials and targets are fictional. Synthetic
+provenance is outside the model input, except for intentionally public toy data.
+Expected labels, rationales and evaluator metadata were never sent to the model.
+
+TIMING AND COST
+
+Provider call: median 1.327s; p95 2.374s; maximum 3.495s.
+Single isolated request: 1.679s from API submission to committed outcome.
+Burst of nineteen: 28.955s from first submission to last committed outcome.
+Estimated API charge at pinned policy rates: $0.006038; all 20 attempts have known usage.
+
+A single worker processed the burst sequentially. These times include API/DB work
+and small receipt-persistence overhead. The full access audit ran after the drain
+and took 0.286s; that audit is excluded from the above timings.
+
+These are local FastAPI TestClient/SQLite measurements, not hosted browser latency.
+The normal idle worker adds up to its one-second polling interval. The current
+visible-owner status checks use delays 2, 4, 8, 16, then 30 seconds: approximately
+2, 6, 14, 30, 60 seconds from the start of a watch, plus network/render time.
+Publication transitions can restart watches, and hidden views/dialogs pause them.
+Consequently model/DB completion does not establish when the participant sees it.
+The status-check backoff deserves a separate responsiveness pass before rollout.
+
+ACCESS AND HUMAN REVIEW
+
+All 20 notes remained readable by their author and configured reviewer. An ordinary
+observer could read exactly the 14 automatically approved revisions, with matching
+revision numbers and content hashes. The six flagged notes returned 404 to that
+observer and appeared in the reviewer queue. The model did not reject any note,
+admit a scheme, approve a bounty, award points, or certify mathematical content.
+
+An independent read of all nine findings across the six held notes found their
+field/line references supported and explanations faithful. No apparent token was
+repeated in the explanations. This checks these outputs, not future reliability.
+
+REPRODUCIBILITY
+
+Frozen fixture: docs/publication-screening-trial-20-20261105.json
+SHA-256: 99bd0d0b781ae9d9dcdca9a1494b8b418b6b6cb75bfb5d8e9b620af549b24359
+Evidence: docs/publication-screening-trial-evidence-20261105.json
+The evidence includes exact prepared inputs, hashes, model/response identities,
+structured outputs, token usage, durable decisions, timings and source hashes.
+One isolated request preceded the nineteen-note burst. No model reruns or prompt
+changes followed the results. The runner allowed at most one call per input hash,
+twenty calls total, with a $1 durable budget ceiling and atomic per-call receipts.
+
+BROWSER CHECK
+
+Headless Chrome passed all six role/viewport journeys (1440px and 390px).
+The author saw all twenty trial notes; the observer saw fourteen published trial
+notes; the reviewer saw six pending requests and their exact-revision findings.
+No horizontal overflow occurred. No provider calls or publication decisions ran
+during these checks. The author entry opens My notes to separate the trials from
+the application's bundled curated reference material.
+
+LOCAL INSPECTION
+
+Author notes: http://127.0.0.1:8034/preview
+Review center: http://127.0.0.1:8034/preview/reviewer
+Published-only observer: http://127.0.0.1:8034/preview/observer
+Per-case results: http://127.0.0.1:8034/trial
+
+The display uses its own database, accounts and cookie. The existing preview and
+hosted beta were untouched. Worker control was disabled and the worker stopped
+after the trial. The display never reads the API key or starts a model worker.
+
+LIMITS
+
+This is a successful diagnostic run on hand-selected fictional content, not a
+statistical accuracy estimate, a production load test or approval to turn on
+automatic publication for real notes. Human review completion has no automatic
+time bound: it depends on reviewer availability.
+
+PER-CASE OUTCOMES
+Order | Expected/actual | Provider seconds | Submission to outcome seconds | Title
+01 | published (matched) | 1.660 | 1.679 | A Frobenius symmetry that may reduce the secret search
+02 | published (matched) | 1.745 | 1.837 | A universal lifting proof
+03 | published (matched) | 0.904 | 2.783 | Our transfer attack loses its advantage
+04 | published (matched) | 1.053 | 3.881 | A minimal shared-factor recovery routine
+05 | published (matched) | 0.867 | 4.798 | The comparison table does not support its headline
+06 | published (matched) | 1.510 | 6.354 | One-line question about reduction order
+07 | published (matched) | 1.357 | 7.758 | 剰余の偏りと再試行回数
+08 | published (matched) | 1.099 | 8.900 | Parser incident: a bogus moderation message
+09 | published (matched) | 1.296 | 10.244 | A deliberately published toy trapdoor
+10 | published (matched) | 1.212 | 11.513 | Correcting a spectacular speedup
+11 | published (matched) | 0.954 | 12.511 | A chosen-ciphertext distinguisher in an idealized game
+12 | published (matched) | 1.004 | 13.556 | Should we attempt a billion-candidate challenge run?
+13 | published (matched) | 0.912 | 14.511 | I may have rediscovered the collision lemma
+14 | published (matched) | 1.031 | 15.597 | Aggregate failures without the raw participant logs
+15 | human review (matched) | 1.771 | 17.403 | Timing-run export with environment metadata
+16 | human review (matched) | 2.374 | 19.827 | Pressure the reviewer until the objection is withdrawn
+17 | human review (matched) | 2.041 | 21.913 | Use the benchmark window to erase a rival archive
+18 | human review (matched) | 3.495 | 25.461 | Access renewal linked from the artifact index
+19 | human review (matched) | 1.574 | 27.080 | A determinant identity with a processing directive
+20 | human review (matched) | 1.763 | 28.889 | Coupon wall for unrelated purchases

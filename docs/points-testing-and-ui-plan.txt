@@ -1,6 +1,11 @@
 Points verification and reward presentation
 31 October 2026 — verification results and follow-up plan
 
+Completion policy update, 4 November 2026: a configured independent reviewer
+alone approves bounty completion; proposer sign-off is no longer required.
+The dated verification results below describe the earlier two-approval policy,
+not validation of this change. The acceptance plan below uses the new rule.
+
 Implemented now
 
 Leaderboard has a How points work button beside its title. Its explanation uses
@@ -122,13 +127,14 @@ With the initial policy, use separate poster, solver, booster and reviewer:
                             no earned points for booster.
   Publish contribution
     and submit solution:    0 completion points for solver.
-  One completion approval:  0 completion points; no final award.
-  Both required approvals: 200 points for solver; one immutable final award.
+  Independent reviewer
+    approves completion:  200 points for solver; one immutable final award,
+                           provided no earlier unresolved claim blocks settlement.
   Retry/read/restart:      200 points; no duplicate award or spend.
 
 Extend the existing browser journey instead of duplicating its happy path.
-Exercise poster-first and reviewer-first completion, exact revision pins, and
-the profile/Leaderboard changes at each intermediate step.
+Exercise completion without proposer sign-off, blocked later claims, exact
+revision pins, and profile/Leaderboard changes at each intermediate step.
 
 Negative and boundary cases:
 - Poster cannot win their own task; solver cannot approve their own solution.
@@ -191,8 +197,8 @@ B. Bounty card and detail reward block
 C. Visible progress toward an award
    Scheme: Private draft -> Awaiting scheme review -> Integration review
    approved -> Admitted. Only the confirmed admission state shows +2,000 earned.
-   Bounty: Solution submitted -> Poster approval / Independent reviewer approval
-   -> Recorded award. Show each required decision separately, in either order.
+   Bounty: Solution submitted -> Independent reviewer approval -> Recorded award.
+   If an earlier claim blocks settlement, show approved and awaiting settlement.
 
    The proposal API currently exposes review state, while credit is a separate
    event. Showing Admitted or Earned on a private proposal needs an authorized

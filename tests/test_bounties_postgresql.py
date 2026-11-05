@@ -54,7 +54,6 @@ def test_revocation_serializes_before_award_when_account_lock_is_held(pg_system)
     _,system=pg_system
     app,owner,reviewer,solver,*_=system
     value=submit(solver,opened(system),published(solver,reviewer));sid=value['receipt']['submission_id']
-    value=assess(owner,value,'poster',submission_id=sid)
     attempting=ThreadEvent()
     def before(connection,cursor,statement,parameters,context,many):
         if 'FROM users' in statement and 'FOR UPDATE' in statement and solver.identifier in repr(parameters):
@@ -83,9 +82,12 @@ def test_exact_award_and_allowance_survive_readonly_backup_restore(pg_system):
     app,owner,reviewer,solver,supporter,*_=system
     value=boost(supporter,opened(system))
     value=submit(solver,value,published(solver,reviewer));sid=value['receipt']['submission_id']
-    value=assess(owner,value,'poster',submission_id=sid)
     value=assess(reviewer,value,'pipeline',submission_id=sid)
     assert value['bounty']['award']['points']==200
+    with app.state.db.transaction() as session:
+        award=session.get(BountyAward,value['bounty']['id'])
+        assert award.poster_decision_id is None
+        assert award.pipeline_decision_id==value['receipt']['decision_id']
     metadata=MetaData();metadata.reflect(bind=fixture.owner_engine,only=sorted(TABLES))
     with fixture.backup_engine.connect() as connection:
         before=snapshot(connection,metadata)
@@ -93,7 +95,7 @@ def test_exact_award_and_allowance_survive_readonly_backup_restore(pg_system):
             assert connection.scalar(text('SELECT has_table_privilege(current_user,:t,:p)'),{'t':name,'p':'SELECT'})
             for privilege in ('INSERT','UPDATE','DELETE'):
                 assert not connection.scalar(text('SELECT has_table_privilege(current_user,:t,:p)'),{'t':name,'p':privilege})
-    with pytest.raises(RuntimeError,match='Preserve bounty'):
+    with pytest.raises(RuntimeError,match='Preserve independent-reviewer bounty awards before downgrading schema0030'):
         command.downgrade(fixture.config,'0027')
     dumped=pg_tool(fixture.service_container,'pg_dump',fixture.backup,'--format=custom','--no-owner','--no-privileges',
                    *[f'--table={fixture.schema}.{table}' for table in sorted(TABLES)],'crucible_metadata_test')

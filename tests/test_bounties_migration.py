@@ -31,6 +31,9 @@ def test_populated_upgrade_is_additive_and_seeds_only_the_reviewed_policy(tmp_pa
         expected=MetaData()
         for table in metadata.sorted_tables:table.to_metadata(expected)
         for name in TABLES:Base.metadata.tables[name].to_metadata(expected)
+        # The original schema required both signoffs; 0030 relaxes this only
+        # for future independent-reviewer awards.
+        expected.tables['bounty_awards'].c.poster_decision_id.nullable = False
         with db.engine.connect() as connection:
             assert compare_metadata(MigrationContext.configure(connection),expected)==[]
         with db.engine.connect() as connection:

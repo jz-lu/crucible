@@ -57,9 +57,9 @@ async function test(name, run) { await run(); passed++; console.log('PASS ' + na
     }
     const before = scrolls.length; app.history.back(); await flush();
     assert.equal(scrolls.length, before);
-    app.$('.brand').dispatchEvent({type: 'click', ctrlKey: true, button: 0}); await flush();
+    app.$('.brand-wordmark').dispatchEvent({type: 'click', ctrlKey: true, button: 0}); await flush();
     assert.equal(scrolls.length, before, 'Modified home links keep their native behavior');
-    app.$('.brand').click(); await flush(); assert.equal(scrolls.length, before + 1);
+    app.$('.brand-wordmark').click(); await flush(); assert.equal(scrolls.length, before + 1);
   });
   console.log(passed + ' visualization navigation checks passed');
 })().catch(error => { console.error(error); process.exitCode = 1; });

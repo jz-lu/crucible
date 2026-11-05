@@ -9,7 +9,7 @@ const bountyFeatureAvailable = () => window.CrucibleFeatures?.bounties !== false
 const state = {
   auth: {}, authPanel: 'signin', githubBusy: false, githubPending: false, githubCompleteBusy: false, authCallbackBusy: false, githubLinkContext: null,
   passwordResetToken: null, passwordResetBusy: false, passwordRecoveryBusy: false, authRecoveryEntry: false,
-  invitationPresented: null, invitationInspection: 0, invitationResendAt: 0,
+  invitationPresented: null, invitationInspection: 0, invitationRequest: 0, invitationResendAt: 0,
   access: null, sessionResolved: false, invitationToken: null, invitationBusy: false, invitationDelivery: null, invitationIssue: null,
   returnRoute: null, protectedLoaded: false, canManageBetaAccess: false,
   user: null, csrf: '', canReviewProposals: false, canSelfReviewProposals: false, schemes: [], profile: null, challenge: null,
@@ -25,7 +25,7 @@ const state = {
   agentTokenRequest: 0,
   agentTokens: [], agentTokenPagination: null,
   agentInstructionsKey: null, challengeStartIntent: null, profileMetadataPending: null,
-  screen: 'catalogue', reviewSection: 'publication', schemeId: null, schemeVersion: null,
+  screen: 'catalogue', reviewSection: 'flagged', schemeId: null, schemeVersion: null,
   overviewMetrics: {computation: 'keygen', security: 'classical'},
   importBusy: false, recoveryImportRequest: 0, submissionFormRevision: 0, submissionDraftBaseline: null,
 };
@@ -88,7 +88,7 @@ let readViewEpoch = 0;
 let renderedReads = new WeakMap();
 function invalidateReadViews({resourceReports = true} = {}) {
   readViews.clear(); pendingReads.clear(); intendedReads.clear(); renderedReads = new WeakMap(); readViewEpoch++;
-  warmedReads.clear(); notebookEarlyReads.clear(); referenceTimings.clear();
+  warmedReads.clear(); notebookEarlyReads.clear(); referenceTimings.clear(); clearReviewProposals();
   if (resourceReports) window.CrucibleResources?.clear();
   browseWarmScheduled = null; browseWarmIntent = null;
 }
@@ -183,7 +183,8 @@ function browseWarmJobs() {
   add('notebook:setup', async () => { await ensureNotebookAssets(); if (browseWarmAllowed()) getNotebookWorkspace(); return 0; });
   for (const kind of ['timeline', 'list']) add('notebook:' + kind, () => notebookWorkspace?.warm?.(kind));
   if (state.canReviewProposals) for (const kind of ['list', 'next']) {
-    add('publication:' + kind, () => window.CrucibleNotebook && getNotebookWorkspace(true).warm(kind));
+    const section = 'flagged';
+    add(section + ':' + kind, () => window.CrucibleNotebook && getNotebookWorkspace(true).warm(kind, section));
   }
   add('navigation', async () => {
     if (state.catalogueLoaded) return 0;
@@ -552,9 +553,15 @@ const invitationMessages = {
   invitation_unavailable: 'This invitation is unavailable. Sign in if you have already joined, or contact your inviter for a new link.'
 };
 function clearInvitation() {
+  resetInvitationRequest();
   state.invitationToken = null; state.invitationDelivery = null; state.invitationIssue = null;
   state.invitationPresented = null;state.invitationInspection++;state.invitationResendAt = 0;
   $('#access-code').value = '';
+}
+function resetInvitationRequest() {
+  // An old delivery/redeem response must not own controls in a later session,
+  // including a logout followed by a return to the same account and link.
+  state.invitationRequest++;state.invitationBusy = false;
 }
 function clearAcceptedInvitation() {
   if (!hasAccess()) return false;
@@ -612,6 +619,7 @@ function captureInvitation() {
     return;
   }
   if (token && token.length <= 512 && /^[A-Za-z0-9_-]+$/.test(token) && token !== state.invitationToken) {
+    resetInvitationRequest();
     state.invitationToken = token;
     state.invitationIssue = null;
     state.invitationDelivery = null;
@@ -925,46 +933,137 @@ async function loadAuthorizedWorkspace() {
   applyRoute();
   return true;
 }
-function reviewerRoute(section = 'publication', values = {}) {
+function reviewerRoute(section = 'flagged', values = {}) {
+  section = ['schemes', 'research'].includes(section) ? 'proposals' : section === 'publication' ? 'flagged' : section;
   return '#reviews?' + new URLSearchParams({section, ...values});
 }
+function reviewSurface() {
+  if (state.reviewSection !== 'proposals') return state.reviewSection;
+  const query = new URLSearchParams(window.location.hash.split('?')[1] || '');
+  return query.has('proposal') ? 'scheme-detail' : query.has('research_request') ? 'change-detail' : 'proposals';
+}
 function proposalPageActive() {
-  return state.screen === 'propose' || (state.screen === 'reviews' && state.reviewSection === 'schemes' && state.canReviewProposals);
+  return state.screen === 'propose' || (state.screen === 'reviews' && reviewSurface() === 'scheme-detail' && state.canReviewProposals);
 }
 function renderReviewAccountLink() {
   $('#profile-review-link').hidden = !ownsViewedProfile() || !state.canReviewProposals || !hasAccess();
   renderAccountSignIn();
 }
+let reviewProposalsGeneration = 0;
+function clearReviewProposals() {
+  reviewProposalsGeneration++;
+  for (const kind of ['schemes', 'changes']) {
+    $('#review-' + kind + '-list').replaceChildren();
+    $('#review-' + kind + '-list').removeAttribute('aria-busy');
+    $('#review-' + kind + '-pages').replaceChildren();
+  }
+}
+function showReviewProposals() {
+  clearReviewProposals();
+  const generation = reviewProposalsGeneration, account = state.user?.id, credential = state.csrf, lifecycle = documentEpoch, reads = readViewEpoch;
+  const owns = () => ownsDocument(lifecycle) && state.user?.id === account && state.csrf === credential && reads === readViewEpoch;
+  const current = () => generation === reviewProposalsGeneration && ownsDocument(lifecycle) && hasAccess() &&
+    state.canReviewProposals && state.user?.id === account && state.csrf === credential && state.screen === 'reviews' && reviewSurface() === 'proposals';
+  const changeTypes = {visualization_nomination:'Content or visualization change', procedure:'Pipeline or process change',
+    scoring_nomination:'Challenge scoring', map_nomination:'Scheme map inclusion', highlight_nomination:'Highlight a result', source_check:'Source check'};
+  for (const kind of ['schemes', 'changes']) {
+    const target = $('#review-' + kind + '-list'), pages = $('#review-' + kind + '-pages');
+    let cursors = [null], page = 0, request = 0;
+    const load = async () => {
+      const token = ++request, cursor = cursors[page], key = 'review-proposals:' + kind + ':' + (cursor || '');
+      const present = () => current() && request === token;
+      if (!current()) return;
+      const paint = data => {
+        paintRead(key, target, data, result => {
+          target.replaceChildren();
+          for (const record of result.records) {
+            const link = node('a', undefined, 'proposal-list-entry');
+            link.href = reviewerRoute('proposals', kind === 'schemes' ? {proposal:record.id} : {research_request:record.id});
+            link.append(node('span', record.title, 'proposal-list-name'), node('span', record.meta, 'proposal-list-meta')); target.append(link);
+          }
+          if (!result.records.length) showEmpty(target, kind === 'schemes' ? 'No scheme proposals awaiting review.' : 'No proposed changes awaiting review.');
+        });
+        pages.replaceChildren();
+        if (page || data.next_after) {
+          const previous = node('button', 'Previous page', 'text-button'); previous.type = 'button'; previous.disabled = page === 0;
+          previous.addEventListener('click', () => { if (present() && page) { page--; void load(); } });
+          const next = node('button', 'Next page', 'text-button'); next.type = 'button'; next.disabled = !data.next_after;
+          next.addEventListener('click', () => { if (present() && data.next_after) { cursors = [...cursors.slice(0, page + 1), data.next_after]; page++; void load(); } });
+          pages.append(previous, node('span', 'Page ' + (page + 1)), next);
+        }
+      };
+      const cached = cachedRead(key);
+      if (cached) paint(cached);
+      else { setLoading(target, kind === 'schemes' ? 'Loading scheme proposals…' : 'Loading proposed changes…'); pages.replaceChildren(); }
+      target.setAttribute('aria-busy', 'true');
+      for (const control of pages.querySelectorAll('button')) control.disabled = true;
+      const query = new URLSearchParams({limit:'25'});
+      if (kind === 'changes') query.set('review', 'true');
+      if (cursor) query.set('after', cursor);
+      try {
+        const data = await readAgain(key, (kind === 'schemes' ? '/api/protocol/review-queue?' : '/api/notebook/research-requests?') + query);
+        if (!present()) return;
+        const records = kind === 'schemes' ? data.proposals : data.requests;
+        if (!Array.isArray(records) || records.length > 25 || records.some(record => kind === 'schemes' ? !validProposal(record) :
+            !record || typeof record.id !== 'string' || !record.id || typeof record.title !== 'string' || !Object.hasOwn(changeTypes, record.purpose)) ||
+            data.next_after != null && (typeof data.next_after !== 'string' || !data.next_after || data.next_after === cursor || cursors.slice(0, page + 1).includes(data.next_after))) {
+          throw Error('This proposal group could not be loaded.');
+        }
+        const compact = {records:records.map(record => ({id:record.id, title:kind === 'schemes' ? record.specification.name : record.title,
+          meta:(kind === 'schemes' ? 'Scheme proposal · Revision ' + record.revision + ' · ' + proposalStatusLabel(record.status) : changeTypes[record.purpose] + ' · Awaiting assessment') +
+            (typeof record.author?.handle === 'string' ? ' · ' + record.author.handle : '')})), next_after:data.next_after || null};
+        rememberRead(key, compact); paint(compact);
+      } catch (error) {
+        if (owns() && forbiddenRead(error)) {
+          invalidateReadViews();
+          reviewNotebookWorkspace?.setAccount(null); reviewNotebookWorkspace?.hide();
+          proposals.detailRequest++; proposals.listRequest++; clearProposalReview();
+          $('#proposal-detail-content').replaceChildren(); $('#proposal-list').replaceChildren();
+          if (state.screen === 'reviews' && reviewSurface() === 'proposals') {
+            for (const group of ['schemes', 'changes']) showInlineError($('#review-' + group + '-list'), error.message, showReviewProposals);
+          }
+          return;
+        }
+        if (!present()) return;
+        const expired = error.status === 422 && cursor;
+        if (expired) { readViews.delete(key); cursors = [null]; page = 0; }
+        if (cached && !expired) {
+          renderedReads.delete(target);
+          const retry = node('button', 'Try again', 'text-button'); retry.type = 'button'; retry.addEventListener('click', load);
+          target.append(node('p', 'This group could not be refreshed. ' + error.message, 'error-message'), retry);
+        } else showInlineError(target, error.message, load);
+      } finally { if (present()) target.removeAttribute('aria-busy'); }
+    };
+    void load();
+  }
+}
 function renderReviewPage(query) {
-  const params = new URLSearchParams(query);
+  const params = new URLSearchParams(query), surface = reviewSurface();
   const allowed = hasAccess() && Boolean(state.user) && state.canReviewProposals;
+  clearReviewProposals();
   $('#review-account-back').href = state.user ? personRoute(state.user.handle) : '#people';
   $('#review-navigation').hidden = !allowed;
   $('#review-access-message').hidden = allowed;
-  for (const section of ['publication', 'schemes', 'research', 'bounties']) {
+  for (const section of ['flagged', 'proposals', 'bounties']) {
     const link = $('#review-nav-' + section), selected = state.reviewSection === section;
     if (selected) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
   }
-  $('#review-notebook-workspace').hidden = !allowed || state.reviewSection === 'schemes';
-  $('#proposal-workspace').hidden = !allowed || state.reviewSection !== 'schemes';
+  $('#review-proposals-workspace').hidden = !allowed || surface !== 'proposals';
+  $('#review-notebook-workspace').hidden = !allowed || ['scheme-detail', 'proposals'].includes(surface);
+  $('#proposal-workspace').hidden = !allowed || surface !== 'scheme-detail';
   if (!allowed) {
-    reviewNotebookWorkspace?.setAccount(null);
-    reviewNotebookWorkspace?.hide();
-    return;
+    reviewNotebookWorkspace?.setAccount(null); reviewNotebookWorkspace?.hide(); return;
   }
-  if (state.reviewSection === 'schemes') {
+  if (surface === 'proposals') { showReviewProposals(); return; }
+  if (surface === 'scheme-detail') { params.set('review', '1'); enterProposalPage(params, true); return; }
+  if (surface === 'flagged') {
     params.set('review', '1');
-    enterProposalPage(params, true);
-  } else {
-    if (state.reviewSection === 'publication') {
-      params.set('review', '1');
-      for (const key of ['research', 'research_review', 'research_request']) params.delete(key);
-    } else if (state.reviewSection === 'research') {
-      params.set('research', '1'); params.set('research_review', '1');
-      for (const key of ['review', 'note', 'revision']) params.delete(key);
-    }
-    showNotebook(params, true);
+    for (const key of ['research', 'research_review', 'research_request']) params.delete(key);
+  } else if (surface === 'change-detail') {
+    params.set('research', '1'); params.set('research_review', '1');
+    for (const key of ['review', 'note', 'revision']) params.delete(key);
   }
+  showNotebook(params, true);
 }
 function loadNotebookAsset(path, stylesheet = false) {
   if (notebookAssetLoads.has(path)) return notebookAssetLoads.get(path);
@@ -1046,13 +1145,13 @@ function notebookPendingFrame(params) {
   return frame;
 }
 async function showNotebook(query, reviewing = false, page = 'notebook') {
-  const account = state.user?.id, csrf = state.csrf, section = state.reviewSection, request = ++notebookShowRequest, lifecycle = documentEpoch;
+  const account = state.user?.id, csrf = state.csrf, section = state.reviewSection, surface = reviewSurface(), request = ++notebookShowRequest, lifecycle = documentEpoch;
   const params = new URLSearchParams(query || window.location.hash.split('?')[1] || '');
   if (page === 'bounties') params.set('view', 'bounties');
   if (page === 'scheme-map') params.set('view', 'map');
   const target = $(reviewing ? '#review-notebook-workspace' : '#notebook-workspace');
   const current = () => ownsDocument(lifecycle) && request === notebookShowRequest && hasAccess() && account === state.user?.id && csrf === state.csrf &&
-    (reviewing ? state.screen === 'reviews' && state.canReviewProposals && state.reviewSection === section && section !== 'schemes' : state.screen === page);
+    (reviewing ? state.screen === 'reviews' && state.canReviewProposals && state.reviewSection === section && reviewSurface() === surface && !['scheme-detail', 'proposals'].includes(surface) : state.screen === page);
   if (!current()) return;
   // Resolve the tiny action-link index alongside notebook assets, rather than
   // competing with the map's six assets after its controller becomes available.
@@ -1162,18 +1261,18 @@ function renderVerificationControls() {
 }
 async function sendVerificationCode() {
   if (!state.user || !state.invitationToken || state.invitationBusy) return;
-  const account = state.user.id, token = state.invitationToken;
+  const account = state.user.id, token = state.invitationToken, request = ++state.invitationRequest;
   state.invitationBusy = true;setError('#auth-verify-error', '');setError('#access-code-error', '');renderVerificationControls();
   try {
     const data = await api('/api/access/invitations/verify/start', {token});
-    if (state.user?.id !== account || state.invitationToken !== token) return;
+    if (request !== state.invitationRequest || state.user?.id !== account || state.invitationToken !== token) return;
     state.invitationDelivery = data;state.invitationResendAt = Date.now() + Number(data.resend_after_seconds || 60) * 1000;
     $('#access-code').value = '';
     if (state.authPanel === 'verification') setText('#auth-description', 'Enter the code sent to ' + data.masked_recipient + '.');
   } catch (error) {
-    if (state.user?.id === account && state.invitationToken === token && !showInvitationIssue(error)) setError('#auth-verify-error', error.message);
+    if (request === state.invitationRequest && state.user?.id === account && state.invitationToken === token && !showInvitationIssue(error)) setError('#auth-verify-error', error.message);
   } finally {
-    state.invitationBusy = false;renderVerificationControls();
+    if (request === state.invitationRequest) { state.invitationBusy = false;renderVerificationControls(); }
   }
 }
 $('#access-send-code').addEventListener('click', sendVerificationCode);
@@ -1183,13 +1282,13 @@ $('#access-code-form').addEventListener('submit', async event => {
   const code = $('#access-code').value.trim();
   setError('#access-code-error', '');setError('#auth-verify-error', '');
   if (!/^\d{8}$/.test(code)) { authFieldError('#access-code', '#access-code-error', 'Enter the 8-digit code from your email.');return; }
-  const account = state.user.id, token = state.invitationToken, dialogWasOpen = authDialog.open;
+  const account = state.user.id, token = state.invitationToken, dialogWasOpen = authDialog.open, request = ++state.invitationRequest;
   state.invitationBusy = true;renderVerificationControls();
   try {
     await api('/api/access/invitations/redeem', {token, code});
-    if (state.user?.id !== account || state.invitationToken !== token) return;
+    if (request !== state.invitationRequest || state.user?.id !== account || state.invitationToken !== token) return;
     const session = await api('/api/session');
-    if (state.user?.id !== account) return;
+    if (request !== state.invitationRequest || state.user?.id !== account) return;
     setSession(session);
     if (!hasAccess()) throw new Error('Your access is not active yet. Please try again.');
     clearInvitation();window.history.replaceState(null, '', state.returnRoute || '#home');
@@ -1198,11 +1297,11 @@ $('#access-code-form').addEventListener('submit', async event => {
       setText('#auth-title', "You're in.");setText('#auth-description', '');showAuthPanel('joined');
     }
   } catch (error) {
-    if (state.user?.id === account && state.invitationToken === token && !showInvitationIssue(error)) {
+    if (request === state.invitationRequest && state.user?.id === account && state.invitationToken === token && !showInvitationIssue(error)) {
       if (error.status === 403) authFieldError('#access-code', '#access-code-error', 'That code is incorrect or has expired. Try again or request a new code.');
       else setError('#auth-verify-error', error.message);
     }
-  } finally { state.invitationBusy = false;renderVerificationControls(); }
+  } finally { if (request === state.invitationRequest) { state.invitationBusy = false;renderVerificationControls(); } }
 });
 $('#auth-enter').addEventListener('click', () => authDialog.close());
 $('#access-continue').addEventListener('click', async () => {
@@ -1390,7 +1489,7 @@ function applyRoute(focus = false) {
   const legacyParams = new URLSearchParams(query);
   if ((path === '#propose' && legacyParams.get('review') === '1') ||
       (path === '#notebook' && (legacyParams.get('review') === '1' || legacyParams.get('research_review') === '1'))) {
-    const section = path === '#propose' ? 'schemes' : legacyParams.get('research_review') === '1' ? 'research' : 'publication';
+    const section = path === '#propose' || legacyParams.get('research_review') === '1' ? 'proposals' : 'flagged';
     legacyParams.delete('review'); legacyParams.delete('research'); legacyParams.delete('research_review');
     legacyParams.set('section', section); path = '#reviews'; query = legacyParams.toString();
     window.history.replaceState(null, '', path + '?' + query);
@@ -1414,7 +1513,7 @@ function applyRoute(focus = false) {
   const reviewParams = new URLSearchParams(query);
   if (path === '#reviews') {
     const section = reviewParams.get('section');
-    state.reviewSection = ['publication', 'schemes', 'research', 'bounties'].includes(section) ? section : 'publication';
+    state.reviewSection = ['schemes', 'research'].includes(section) ? 'proposals' : ['flagged', 'proposals', 'bounties'].includes(section) ? section : 'flagged';
     if (section !== state.reviewSection) { reviewParams.set('section', state.reviewSection); query = reviewParams.toString(); window.history.replaceState(null, '', '#reviews?' + query); }
   }
   let scheme, profile, handle, view = 'leaderboard';
@@ -1691,6 +1790,7 @@ function setSession(data) {
   if (previousId !== state.user?.id) {
     referenceTimings.clear(); window.CrucibleResources?.clear();
     assumptionsWorkspace?.clear();
+    resetInvitationRequest();
     state.invitationDelivery = null;
     $('#access-code').value = '';
     state.challengeStartIntent = null;
@@ -2467,10 +2567,10 @@ function recoveryRecordLabel(record) {
 function exactRecord(record) {
   return exactProfileRecords(availableReleases().find(scheme => scheme.id === record.scheme_id && String(scheme.version) === String(record.scheme_version)), record);
 }
-function personalRecordTable(records) {
+function personalRecordTable(records, {showPoints = true} = {}) {
   const includesNamed = records.some(record => namedParameters(availableReleases().find(scheme =>
     scheme.id === record.scheme_id && String(scheme.version) === String(record.scheme_version)), record));
-  return peopleTable(['Scheme', includesNamed ? 'Stage / parameter set' : 'Highest stage', 'Points', 'Solved'], records.map(record => {
+  return peopleTable(['Scheme', includesNamed ? 'Stage / parameter set' : 'Highest stage', ...(showPoints ? ['Points'] : []), 'Solved'], records.map(record => {
     const name = node('span', undefined, 'person-record-scheme');
     const link = node('a', record.scheme_name || record.scheme_id, 'person-scheme-link');
     link.href = overviewRoute({id: record.scheme_id, version: record.scheme_version});
@@ -2484,7 +2584,7 @@ function personalRecordTable(records) {
     result.setAttribute('aria-haspopup', 'dialog');
     result.addEventListener('click', () => openSubmissionDetails(record.submission_id, result));
     const points = node('span', record.scoring_eligible ? peopleNumber(record.score?.total) : 'Not scored', 'person-record-points');
-    return [name, result, points, node('span', utcDate(record.received_at), 'person-record-date')];
+    return [name, result, ...(showPoints ? [points] : []), node('span', utcDate(record.received_at), 'person-record-date')];
   }));
 }
 function validFirstRecord(record) {
@@ -2528,14 +2628,22 @@ function renderFirstRecords(person) {
 }
 function personStats(person) {
   const stats = node('dl', undefined, 'person-stats');
-  const place = profileRankParts(person), link = node('a', undefined, 'person-place-link');
-  link.id = 'person-leaderboard-rank'; link.href = '#people';
-  link.setAttribute('aria-label', place ? place.rank + place.suffix + ' on leaderboard' : 'Place unavailable. View leaderboard');
-  if (place) link.append(node('span', String(place.rank), 'person-rank-number'), node('sup', place.suffix, 'person-rank-suffix'));
-  else link.append(node('span', '—', 'person-rank-number'));
-  const rankValue = node('dd'); rankValue.append(link);
-  const rankStat = node('div', undefined, 'person-place-stat'); rankStat.append(node('dt', 'Place on leaderboard'), rankValue); stats.append(rankStat);
-  for (const [label, key] of [['Points', 'points'], ['Accepted proposals', 'accepted_proposal_count']]) {
+  const reviewer = person?.score_status === 'reviewer';
+  if (reviewer) {
+    stats.classList.add('person-reviewer-stats');
+    const role = node('div', undefined, 'person-role-stat');
+    role.append(node('dt', 'Role'), node('dd', 'Reviewer'));
+    stats.append(role);
+  } else {
+    const place = profileRankParts(person), link = node('a', undefined, 'person-place-link');
+    link.id = 'person-leaderboard-rank'; link.href = '#people';
+    link.setAttribute('aria-label', place ? place.rank + place.suffix + ' on leaderboard' : 'Place unavailable. View leaderboard');
+    if (place) link.append(node('span', String(place.rank), 'person-rank-number'), node('sup', place.suffix, 'person-rank-suffix'));
+    else link.append(node('span', '—', 'person-rank-number'));
+    const rankValue = node('dd'); rankValue.append(link);
+    const rankStat = node('div', undefined, 'person-place-stat'); rankStat.append(node('dt', 'Place on leaderboard'), rankValue); stats.append(rankStat);
+  }
+  for (const [label, key] of [...(reviewer ? [] : [['Points', 'points']]), ['Accepted proposals', 'accepted_proposal_count']]) {
     const value = node('dd', person ? peopleNumber(person[key], key === 'points' ? 'Pending' : '—') : undefined);
     if (!person) value.append(node('span', undefined, 'catalogue-placeholder'));
     const term = node('dt', label);
@@ -2555,7 +2663,7 @@ function personScoreBreakdown(person) {
   }
   panel.append(values);
   panel.append(node('p', 'Your first advance of an eligible scheme’s recovery record earns 100 points, once per person per scheme. Ordinary progress and later advances remain recorded without additional points.'));
-  panel.append(node('p', 'A new admitted scheme earns 2,000 points plus 100 per completed active week. Withdrawal or retirement stops future accrual and preserves earned points. Bounties award their recorded reward after poster and independent reviewer approval.'));
+  panel.append(node('p', 'A new admitted scheme earns 2,000 points plus 100 per completed active week. Withdrawal or retirement stops future accrual and preserves earned points. Bounties award their recorded reward after independent reviewer approval and final settlement.'));
   panel.append(node('p', 'Archived releases retain their records and are labelled when they are not scored. Points recognize contributions; they do not compare attack difficulty. This policy is provisional.'));
   panel.append(node('p', 'Research-note contributions earn 1 or 2 points per supporting account through agent ratings. Changed or removed ratings update that credit. These points do not certify a claim or admit a scheme.'));
   breakdown.append(summary, panel);
@@ -2751,7 +2859,7 @@ $('#reload-researcher-profile').addEventListener('click', () => {
 
 function profileRankParts(person) {
   const rank = person?.rank;
-  if (!Number.isSafeInteger(rank) || rank <= 0 || !Number.isFinite(person.points) || person.score_status === 'pending') return null;
+  if (!Number.isSafeInteger(rank) || rank <= 0 || !Number.isFinite(person.points) || ['pending', 'reviewer'].includes(person.score_status)) return null;
   const lastTwo = rank % 100;
   const suffix = lastTwo >= 11 && lastTwo <= 13 ? 'th' : ({1: 'st', 2: 'nd', 3: 'rd'})[rank % 10] || 'th';
   return {rank, suffix};
@@ -2761,12 +2869,12 @@ function renderPerson(person) {
   setText('#person-title', person.handle);
   renderResearcherProfile(person.researcher_profile);
   target.replaceChildren(personStats(person));
-  if (!Number.isFinite(person.points)) target.append(node('p', 'Scoring is being finalized. Verified results are recorded below.', 'people-score-note'));
+  if (person.score_status !== 'reviewer' && !Number.isFinite(person.points)) target.append(node('p', 'Scoring is being finalized. Verified results are recorded below.', 'people-score-note'));
   target.append(renderFirstRecords(person));
   const {section: records, content: recordContent} = personDisclosure('Personal records',
     `${peopleNumber(person.records?.length || 0)} scheme${person.records?.length === 1 ? '' : 's'}`);
   records.id = 'personal-records';
-  if (person.records?.length) recordContent.append(personalRecordTable(person.records));
+  if (person.records?.length) recordContent.append(personalRecordTable(person.records, {showPoints: person.score_status !== 'reviewer'}));
   else recordContent.append(node('div', 'No solved challenges yet.', 'empty-state'));
   target.append(records);
   const {section: recent, content: recentContent} = personDisclosure('Recent solves',
@@ -2848,7 +2956,7 @@ async function loadPerson(handle, {preserve = false} = {}) {
         .find(element => element.dataset.submissionId === detailsId && !element.disabled);
       dialogTriggers.set(recoveryDialog, replacement || section?.querySelector('summary') || $('#person-workspace'));
     }
-    if (focused?.id === 'person-leaderboard-rank') $('#person-leaderboard-rank').focus({preventScroll: true});
+    if (focused?.id === 'person-leaderboard-rank') ($('#person-leaderboard-rank') || $('#person-workspace')).focus({preventScroll: true});
     if (focusKey) {
       const section = [...target.querySelectorAll('details')].find(element => disclosureKey(element) === focusKey);
       const receipt = focused.dataset.submissionId;
@@ -4622,7 +4730,9 @@ $('#auth-form').addEventListener('submit', async event => {
       csrf: state.csrf, awaitingSignIn: false};
     const wasRegistration = state.authMode === 'register';
     $('#auth-form').reset();
-    if (!hasAccess()) { renderAccessGate();if (dialogStillOpen) await openPendingVerification(wasRegistration);return; }
+    // Authentication is complete. Mail dispatch owns its own pending state;
+    // it must not keep password sign-in disabled after a later logout.
+    if (!hasAccess()) { renderAccessGate();if (dialogStillOpen) void openPendingVerification(wasRegistration);return; }
     authDialog.close();
     if (!state.ready || state.screen === 'home') { await loadAuthorizedWorkspace(); return; }
     await loadChallenge();
@@ -5495,7 +5605,7 @@ function enterProposalPage(params, entering) {
   $('#proposal-page-back').hidden = reviewMode;
   $('#proposal-context').hidden = reviewMode;
   $('#proposal-detail-back').href = reviewMode ? reviewerRoute('schemes') : '#notebook?compose=proposal';
-  setText('#proposal-detail-back', reviewMode ? '← Scheme proposals' : '← New proposal note');
+  setText('#proposal-detail-back', reviewMode ? '← Proposals' : '← New proposal note');
   $('#proposal-workspace').classList.toggle('proposal-review-workspace', reviewMode);
   $('#proposal-draft').hidden = Boolean(id) || reviewMode;
   $('#proposal-detail').hidden = !id;
@@ -5761,7 +5871,7 @@ function clearProposalReview() {
   $('#proposal-review-status').hidden = true;
 }
 function showProposalReview(record, initialize = false) {
-  if (state.screen !== 'reviews' || state.reviewSection !== 'schemes' || !proposals.reviewMode || !state.canReviewProposals) return;
+  if (state.screen !== 'reviews' || reviewSurface() !== 'scheme-detail' || !proposals.reviewMode || !state.canReviewProposals) return;
   $('#proposal-review-form').hidden = false;
   $('#proposal-self-review-notice').hidden = !proposals.detailOwn;
   const approvalOption = $('#proposal-decision').querySelector('[value="approved"]');
@@ -5895,14 +6005,13 @@ function showWorkspace(name) {
   // Catalogue arrival must not detach the connected map being prepared for
   // this same destination. Other routes and access loss still cancel it.
   if (!['notebook', 'bounties', 'scheme-map'].includes(name) && !preparingMap) notebookWorkspace?.hide();
-  if (name !== 'reviews' || state.reviewSection === 'schemes') reviewNotebookWorkspace?.hide();
+  if (name !== 'reviews' || ['scheme-detail', 'proposals'].includes(reviewSurface())) reviewNotebookWorkspace?.hide();
   if (name !== 'assumptions') assumptionsWorkspace?.clear();
   const enteringResearch = !research.visible && name === 'research';
   research.visible = name === 'research';
   $('#home-workspace').hidden = name !== 'home';
   $('#access-workspace').hidden = name !== 'access';
   $('#access-branding').hidden = name !== 'access';
-  if (name === 'home' || name === 'access') window.requestAnimationFrame?.(syncTypingKeyGlow);
   if (routeLoadingPanel) {
     routeLoadingPanel.hidden = name !== 'loading';
     if (name !== 'loading') routeLoadingPanel.setAttribute('aria-busy', 'false');
@@ -5917,10 +6026,11 @@ function showWorkspace(name) {
   $('#notebook-workspace').setAttribute('aria-label', name === 'bounties' ? 'Bounties' : name === 'scheme-map' ? 'Scheme map' : 'Notes');
   $('#nav-bounties').hidden = !bountyFeatureAvailable();
   $('#review-workspace').hidden = name !== 'reviews';
-  $('#review-notebook-workspace').hidden = name !== 'reviews' || state.reviewSection === 'schemes' || !state.canReviewProposals;
+  $('#review-notebook-workspace').hidden = name !== 'reviews' || ['scheme-detail', 'proposals'].includes(reviewSurface()) || !state.canReviewProposals;
+  $('#review-proposals-workspace').hidden = name !== 'reviews' || reviewSurface() !== 'proposals' || !state.canReviewProposals;
   $('#research-workspace').hidden = !research.visible;
   $('#about-workspace').hidden = name !== 'about';
-  $('#proposal-workspace').hidden = name !== 'propose' && !(name === 'reviews' && state.reviewSection === 'schemes' && state.canReviewProposals);
+  $('#proposal-workspace').hidden = name !== 'propose' && !(name === 'reviews' && reviewSurface() === 'scheme-detail' && state.canReviewProposals);
   $('#people-workspace').hidden = name !== 'people';
   $('#activity-workspace').hidden = name !== 'activity';
   $('#activity-bounties-section').hidden = !bountyFeatureAvailable();
@@ -6394,61 +6504,45 @@ function clearTaglinePointer() { taglinePointer = null; requestTaglineFrame(); }
 window.addEventListener('pointerout', event => { if (!event.relatedTarget) clearTaglinePointer(); });
 window.addEventListener('pointercancel', clearTaglinePointer);
 window.addEventListener('blur', clearTaglinePointer);
-const landingBrand = $('#site-brand'), landingMark = landingBrand.querySelector('.brand-mark'), landingFire = landingBrand.querySelector('.brand-fire-ghost'), landingEffect = landingBrand.querySelector('.brand-ember-effect');
-const typingGlowAnimations = new WeakSet();
-function syncTypingKeyGlow() {
-  if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches || landingBrand.classList.contains('brand-ignited')) return;
-  for (const {element} of taglineSpots) {
-    if (!element.getBoundingClientRect().width) continue;
-    for (const animation of element.getAnimations()) {
-      if (animation.animationName !== 'scrutiny-reveal' || typingGlowAnimations.has(animation)) continue;
-      typingGlowAnimations.add(animation);
-      const timing = animation.effect.getTiming();
-      const delay = Math.max(0, Number(timing.delay) + Number(timing.duration) / 2 - Number(animation.currentTime || 0));
-      landingBrand.style.setProperty('--typing-glow-delay', delay + 'ms');
-      landingBrand.classList.remove('brand-typing');
-      void landingBrand.offsetWidth;
-      landingBrand.classList.add('brand-typing');
-    }
-  }
-}
-for (const {element} of taglineSpots) element.addEventListener('animationstart', event => {
-  if (event.animationName === 'scrutiny-reveal') syncTypingKeyGlow();
-});
-landingBrand.querySelector('.brand-key-sun').addEventListener('animationend', event => {
-  if (event.animationName === 'key-typing-glow') landingBrand.classList.remove('brand-typing');
-});
-window.requestAnimationFrame?.(syncTypingKeyGlow);
-function igniteLandingLogo() {
-  if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
-  landingBrand.classList.remove('brand-typing');
-  landingBrand.classList.remove('brand-cooling');
-  landingBrand.classList.add('brand-ignited');
-}
-landingMark.addEventListener('pointerenter', event => {
-  if (event.pointerType !== 'touch') igniteLandingLogo();
-});
-landingBrand.addEventListener('focus', igniteLandingLogo);
-function finishLandingLogo() {
+const landingBrand = $('#site-brand'), landingMark = landingBrand.querySelector('.brand-mark'), landingFire = landingBrand.querySelector('.brand-fire-ghost');
+const logoMotionPreference = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+let logoAnimationRun = 0, logoStartupTimer = null;
+function stopLogoAnimation() {
+  clearTimeout(logoStartupTimer); logoStartupTimer = null;
+  logoAnimationRun++;
   landingBrand.classList.remove('brand-ignited');
-  landingBrand.classList.remove('brand-cooling');
 }
-function coolLandingLogo() {
-  if (!landingBrand.classList.contains('brand-ignited')) return;
-  if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) finishLandingLogo();
-  else landingBrand.classList.add('brand-cooling');
+function igniteLandingLogo() {
+  stopLogoAnimation();
+  if (logoMotionPreference?.matches) return;
+  // Commit the reset before starting a new CSS animation, even on rapid clicks.
+  void landingBrand.offsetWidth;
+  landingBrand.classList.add('brand-ignited');
+  const run = logoAnimationRun;
+  const animation = landingFire.getAnimations?.().find(item => item.animationName === 'flame-visit');
+  const finish = () => { if (run === logoAnimationRun) landingBrand.classList.remove('brand-ignited'); };
+  // Own the exact animation: a cancelled earlier run must not finish this one.
+  if (animation) animation.finished.then(finish, finish);
+  else finish();
 }
-landingMark.addEventListener('pointerleave', coolLandingLogo);
-landingBrand.addEventListener('blur', coolLandingLogo);
-landingEffect.addEventListener('transitionend', event => {
-  if (event.target === landingEffect && event.propertyName === 'opacity' && landingBrand.classList.contains('brand-cooling')) finishLandingLogo();
-});
-for (const type of ['animationend', 'animationcancel']) landingFire.addEventListener(type, event => {
-  if (event.target === landingFire && event.animationName === 'flame-visit') finishLandingLogo();
-});
-for (const brand of document.querySelectorAll('a.brand')) brand.addEventListener('click', event => {
+logoMotionPreference?.addEventListener?.('change', event => { if (event.matches) stopLogoAnimation(); });
+const startLogoAnimation = () => {
+  if (logoAnimationRun !== 0 || logoStartupTimer !== null) return;
+  logoStartupTimer = setTimeout(() => {
+    logoStartupTimer = null;
+    if (logoAnimationRun === 0) igniteLandingLogo();
+  }, 500);
+};
+// Pause briefly after decoding, once per document. Routes never replay it;
+// clicking the icon starts immediately and cancels any pending startup animation.
+if (typeof landingMark.decode === 'function') landingMark.decode().then(startLogoAnimation, () => {});
+else if (landingMark.complete) startLogoAnimation();
+else landingMark.addEventListener('load', startLogoAnimation, {once: true});
+$('#brand-animate').addEventListener('click', igniteLandingLogo);
+for (const brand of document.querySelectorAll('a.brand, a.brand-wordmark')) brand.addEventListener('click', event => {
   if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-  event.preventDefault(); navigateTop('#home');
+  event.preventDefault();
+  navigateTop('#home');
 });
 $('#nav-challenge').addEventListener('click', () => navigateTop('#challenge'));
 $('#scheme-map-button').addEventListener('click', () => navigateTop('#challenge?view=map'));

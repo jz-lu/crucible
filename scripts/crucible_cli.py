@@ -267,7 +267,7 @@ class Client:
             if parts.path.startswith(NOTEBOOK + "/"):
                 messages.update({403: "Notebook access needs explicit notebook permissions. Run login --notebook --no-browser and ask the participant to approve the connection once.",
                                  409: "The saved note, revision or retry conflicts with recorded state. Preserve the retry file; use notebook show to inspect the current revision before preparing a new request.",
-                                 410: "This note is in Trash or its revision was withdrawn. Use notebook list --deleted for your deleted drafts.",
+                                 410: "This note was removed or its revision was withdrawn. Permanently deleted drafts cannot be restored.",
                                  413: "The note or notebook exceeds the server's bounded workspace size.",
                                  422: "Check the note-format contract, required content fields and exact revision/hash."})
                 if parts.path.endswith("/delete"):
@@ -1225,6 +1225,8 @@ def notebook_command(client, args):
     if not isinstance(owner, str) or not re.fullmatch(r"[a-z0-9_]{3,32}", owner):
         raise ClientError("Connect with login --notebook --no-browser to bind notebook work to your account.", "login_required")
     client.expected_handle = owner
+    if action == "publication-policy":
+        return client.request(NOTEBOOK + "/publication-policy")
     identifier = notebook_id(args.note_id) if getattr(args, "note_id", None) else None
     endpoint = NOTEBOOK + "/notes" + ("/" + identifier if identifier else "")
     if action == "list":
@@ -1276,6 +1278,30 @@ def notebook_command(client, args):
         notebook_pin(args.revision, args.sha256)
         endpoint += "/delete" if action == "delete" else "/publication-requests"
         body = {"revision": args.revision, "content_sha256": args.sha256}
+        if action == "delete":
+            if not getattr(args, "permanent", False):
+                raise ClientError("Deletion permanently removes this private draft and all its saved revisions. Repeat with --permanent only after explicit authorization.", "permanent_delete_confirmation_required")
+            body["permanent"] = True
+        if action == "request-publication":
+            policy_id = getattr(args, "screening_policy_id", None)
+            if policy_id is not None:
+                if not re.fullmatch(r"[0-9a-f]{64}", policy_id):
+                    raise ClientError("Use the exact policy_id from notebook publication-policy.")
+                # The explicit pin records consent to a notice already read.
+                # Preserve it on retries; the server checks currency before a
+                # new enqueue and can replay an already committed request.
+                body.update(screening_consent=True, screening_policy_id=policy_id)
+            else:
+                policy = client.request(NOTEBOOK + "/publication-policy")
+                if (not isinstance(policy, dict) or type(policy.get("screening_required")) is not bool
+                        or policy.get("mode") not in {"disabled", "shadow", "automatic"}
+                        or policy["screening_required"] != (policy["mode"] != "disabled")):
+                    raise ClientError("The server returned an invalid publication policy.")
+                if policy["screening_required"]:
+                    raise ClientError("Read notebook publication-policy before submitting. "
+                        "This request sends the exact revision to the configured external screening provider. "
+                        "To consent, repeat with --screening-policy-id POLICY_ID from that notice; "
+                        "no publication request has been sent.", "screening_consent_required")
     retry_path, pending, payload = notebook_retry(client, args, endpoint, body, owner)
     response = client.request(endpoint, payload)
     if action in {"delete", "restore"}:
@@ -1287,7 +1313,10 @@ def notebook_command(client, args):
         if ((action == "delete" and (deletion["revision"], deletion["content_sha256"]) != (args.revision, args.sha256))
                 or (action == "restore" and deletion["id"] != args.deletion_id)):
             raise ClientError("The deletion receipt has a different revision or deletion ID. Preserve the retry file.")
-        receipt = {**deletion, "deletion_id": deletion["id"], "deleted": response["deleted"]}
+        if action == "delete" and (response.get("permanent") is not True or response["deleted"] is not True):
+            raise ClientError("The server did not confirm permanent deletion. Preserve the retry file and update the server before retrying.")
+        receipt = {**deletion, "deletion_id": deletion["id"], "deleted": response["deleted"],
+                   "permanent": response.get("permanent", False)}
     elif action == "import":
         mapping = response.get("id_map")
         expected = {note["id"] for note in value["notes"]}
@@ -1734,7 +1763,7 @@ def parser():
     notebook = commands.add_parser("notebook", help="Read, save and submit your own research notes through the API")
     common(notebook, True)
     actions = notebook.add_subparsers(dest="notebook_action", required=True)
-    for name in ("list", "show", "export", "import", "create", "revise", "request-publication", "delete", "restore"):
+    for name in ("list", "show", "export", "import", "create", "revise", "publication-policy", "request-publication", "delete", "restore"):
         item = actions.add_parser(name)
         common(item, True)
         if name in {"show", "revise", "request-publication", "delete", "restore"}:
@@ -1747,9 +1776,13 @@ def parser():
         if name == "export":
             item.add_argument("--note-id", help="Export one owned note instead of the whole notebook")
         if name in {"list", "show"}:
-            item.add_argument("--deleted", action="store_true", help="Read your recoverable private drafts in Trash")
+            item.add_argument("--deleted", action="store_true", help="Read drafts removed by the former recoverable-deletion workflow")
+        if name == "delete":
+            item.add_argument("--permanent", action="store_true", help="Explicitly confirm irreversible removal of this private draft and all revisions")
         if name == "restore":
             item.add_argument("--deletion-id", required=True, help="Exact deletion UUID from the delete receipt or notebook list --deleted")
+        if name == "request-publication":
+            item.add_argument("--screening-policy-id", help="Explicitly consent to external screening under the exact notice returned by notebook publication-policy")
         if name == "list":
             item.add_argument("--limit", type=int, choices=range(1, 101), default=50, metavar="1..100")
             item.add_argument("--search")

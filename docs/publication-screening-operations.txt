@@ -1,0 +1,233 @@
+PUBLICATION SCREENING — OPERATOR GUIDE
+2026-11-05 | opt-in hosted supervision; deployment evidence recorded separately
+
+CURRENT STATE
+
+Screening is disabled by default. Application settings, durable operator control
+and an explicitly enabled worker must agree before a request can reach the provider.
+The hosted factory can supervise a child at application startup, only with the
+explicit switch described below. Imports and browsing do not start a worker. Local
+synthetic/mocked-provider checks do not establish classifier quality. Complete the
+evaluation and release checks below before activation.
+
+Live synthetic model evaluation is recorded in
+publication-screening-evaluation-20261104.txt and its evidence JSON. The local
+project key works; that does not provision a hosted worker or enable publication.
+Use the maintained docs/operations.txt release entry point;
+this feature guide describes screening-specific controls, not a competing release
+procedure. The budget register records the implemented bounds and observed local trial usage.
+
+The local checkpoint includes ten executed disposable PostgreSQL 17 checks,
+synthetic desktop/mobile browser consent checks, and a real-provider twenty-note
+local trial with separate desktop/mobile reviewer-queue checks. Their scope excludes the
+hosted database, broad classification-quality claims and production activation.
+The PostgreSQL grant fixture verifies compatibility with existing runtime DML
+default privileges, not the proposed minimum table grants. Verify the reviewed
+runtime/backup grants separately during the hosted migration.
+
+There are three independent gates for hosted processing:
+  CRUCIBLE_PUBLICATION_SCREENING_MODE=disabled|shadow|automatic
+  Durable publication_screening_control mode/policy, set with configure.
+  CRUCIBLE_PUBLICATION_SCREENING_WORKER_ENABLED=true|false (default false).
+
+Application settings determine the publication notice and whether NEW requests
+require external-processing consent and enqueue work. The durable control gates
+dispatch and final publication; starting a worker never enables it. Both must
+identify the same policy. Shadow and automatic have different policy IDs, so
+switching modes does not upgrade old consent. To disable an in-flight publication,
+use durable configure --mode disabled; also disable the application setting when
+new requests should return to the human-only path. Configuration never erases jobs,
+costs, notes or historical decisions, and retains an outstanding lease until it
+finishes or expires. Human review remains available independently.
+
+SETTINGS AND KEY HANDLING
+
+  CRUCIBLE_PUBLICATION_SCREENING_MODE
+      Default disabled. Shadow records a check but never auto-publishes.
+  CRUCIBLE_PUBLICATION_SCREENING_MODEL
+      Default gpt-6-luna; alternatives gpt-5.4-mini and gpt-6.1-sol.
+  CRUCIBLE_PUBLICATION_SCREENING_BUDGET_MICRO_USD
+      Default 10000000 ($10 per UTC month); integer range 0–100000000.
+      This configuration cap is not authorization for new spending.
+  CRUCIBLE_PUBLICATION_SCREENING_WORKER_ENABLED
+      Default false. The hosted factory accepts exactly true or false; invalid
+      values fail before configuration/application creation. True starts the
+      supervised child only when the application mode is shadow or automatic.
+
+Use the existing trusted database/secret configuration for the target environment.
+Local development and beta databases remain separate. Never import a development
+database or overwrite beta environment settings to activate this feature.
+
+The hosted child uses the dedicated CRUCIBLE_PUBLICATION_SCREENING_API_KEY only,
+with no fallback to another variable. Supply it as an encrypted runtime-only
+secret in the existing service. deploy/app-platform.env.example leaves it blank
+and keeps both the mode and worker switch disabled.
+
+For an explicit foreground invocation, the worker accepts --key-env NAME. Its
+default is CRUCIBLE_PUBLICATION_SCREENING_API_KEY. For the approved local team-key setup,
+OPENAI_API_KEY is the selected variable, supplied explicitly with --key-env below.
+The worker does not load an environment file itself or search other projects for
+keys. Use the operator's trusted private environment loader; an ignored local file
+is not a hosted secret store. Keep any key file out of commits, screenshots, model
+prompts and logs. No key is needed for status, configure or an idle worker.
+The key is resolved only when an eligible exact revision reaches provider send.
+
+HOSTED CHILD LIFECYCLE
+
+The existing crucible.app_platform:create_app hosting factory owns one child
+process per ASGI lifespan. Keep the service's normal run command unchanged. With
+the switch true and mode enabled, it runs:
+  python -B -m crucible.publication_screening_worker run --loop --poll-seconds 1
+
+It uses the same Python executable and trusted runtime environment as the web
+process. The child runs inside the existing service instance; this does not
+provision an additional paid App Platform service. It still consumes instance
+resources, its own database connections and any dispatched provider usage.
+Worker CLI PostgreSQL connections use a five-second connect timeout, ten-second
+statement timeout, five-second lock timeout and ten-second idle-in-transaction
+timeout. These apply only to the worker; ordinary web database settings remain
+unchanged. The statement limits do not run a provider call inside a transaction.
+The web event loop does not perform provider calls or screening database work.
+Ordinary factories, local browsing and module imports remain inert. Starting the
+child never configures durable control, creates consent or backfills old requests.
+
+Child startup failures and exits restart after 1, 2, 4, 8, 16 then at most 30
+seconds. A child that survives at least 60 seconds resets that delay. On service
+shutdown, the supervisor sends TERM, waits up to five seconds, then sends KILL
+and allows two seconds for reaping. Stalled process creation/monitor cleanup also
+has a bounded cancellation path. These are process-management bounds, not a
+promise that the provider stopped work it already received.
+
+Restart/redeployment does not clear a durable lease, reservation or attempt.
+The next child resumes the normal durable queue; an interrupted dispatched call
+must pass the existing lease-expiry/retry rules. Unknown usage retains the
+conservative charge, and no late result can publish after a human decision,
+revocation, policy change or durable disable. Terminal human-review requests are
+not silently requeued.
+
+The child has no inherited stdin and its stdout/stderr are discarded. Parent
+logs contain fixed lifecycle events only: worker_started, worker_exited,
+worker_failed, worker_stopped, worker_reap_timeout and shutdown_timeout. They
+never include child output, raw exceptions, credentials or note/model text.
+Use the status command below for job counts, active lease expiry and monthly
+spent/reserved totals. HTTP /health confirms web/database readiness, not worker
+queue progress; a worker_started event also does not establish progress. Observe
+queued/running age, budget and status changes, plus a separately consented
+canary under the release plan. A growing/stalled queue needs operator attention,
+not blind restarts or repeated publication requests.
+
+COMMANDS
+
+Run from the application checkout with its installed Python environment. These
+commands do not run migrations or grant privileges. Database schema 0031 and the
+reviewed worker role permissions must already be present.
+
+Read counts, current control and recent monthly reservations/charges:
+  python3 -m crucible.publication_screening_worker status
+
+After evaluation/release authorization, explicitly configure shadow evaluation:
+  python3 -m crucible.publication_screening_worker configure --mode shadow --model gpt-6-luna --monthly-budget-micro-usd 10000000
+
+The web service and worker settings must also select shadow and the same model.
+Only new requests consenting to that exact policy are eligible. Old human-only
+requests are not backfilled. Shadow results remain private for human publication.
+
+Process at most one eligible attempt, using the selected team-key variable:
+  python3 -m crucible.publication_screening_worker run --once --key-env OPENAI_API_KEY
+
+For local/manual operation, run a foreground loop under the chosen supervisor:
+  python3 -m crucible.publication_screening_worker run --loop --key-env OPENAI_API_KEY
+
+The loop immediately processes eligible work after each attempt. It polls idle
+work every second, without recurring idle log messages. --poll-seconds accepts
+1–60 seconds. --once reports idle explicitly. Ctrl-C stops the worker with exit
+130; an interrupted dispatched call remains governed by lease expiry and
+conservative budget accounting. One global database lease prevents ordinary
+parallel dispatch even if multiple worker processes start.
+
+Once automatic publication has passed its go/no-go review, change both application
+settings and durable control to automatic under the same model/policy:
+  python3 -m crucible.publication_screening_worker configure --mode automatic --model gpt-6-luna --monthly-budget-micro-usd 10000000
+
+The settings change needs the normal service restart/deployment procedure. The
+configure command changes only the database control, not service environment
+variables. New automatic-mode requests require fresh explicit policy consent;
+existing shadow requests are never promoted to automatic publication.
+For the hosted child, set CRUCIBLE_PUBLICATION_SCREENING_WORKER_ENABLED=true
+explicitly and supply the dedicated runtime key through that same procedure.
+Neither the switch nor a service restart replaces the durable configure step.
+
+Disable dispatch and late automatic publication without deleting evidence:
+  python3 -m crucible.publication_screening_worker configure --mode disabled --monthly-budget-micro-usd 0
+
+INTERPRETING RESULTS
+
+In Review center, Flagged requests is the single publication-review entry. It
+lists model-raised concerns with compact reason categories, plus manual requests
+and operational fallbacks such as timeouts or exhausted budgets. Neutral labels
+distinguish screening unavailability from concerns about content. Active automatic
+jobs do not need reviewer attention. Open the submitted note and expand
+Publication screening for the detailed finding or fallback reason. Findings
+are bounded model suggestions, not an instruction to approve or reject. Check the
+cited passage in context and use the existing human publication decision form.
+Authors see fixed status copy; other members and agent tokens cannot read private
+findings. Lists and queues do not carry these result bodies or accounting data.
+
+Proposals groups new scheme admission and other proposed changes, while keeping
+their existing review forms and checks. Bounties retains its own workflow. These
+decisions remain separate from the automatic publication screen. Older review
+links still open the requested exact revision or proposal.
+
+Jobs are queued, running, published, completed (a shadow pass), human_review or
+superseded. Publication status stays submitted / approved / changes_requested /
+withdrawn. A superseded or stale result cannot override a human decision. A job
+status alone is not scientific approval and cannot admit a scheme or award points.
+
+At most two attempts are allowed, only retrying transient service/lease failures.
+Budget reserves each call's conservative maximum before dispatch. Known usage
+settles it; an ambiguous timeout consumes the full reservation. Calls are charged
+to their dispatch month. Changing a limit does not reset spent amounts. The
+stricter durable/worker monthly limit wins. Fixed error codes are safe operational
+output; do not add raw provider responses, note bodies or exceptions to logs.
+
+Permanent provider credential/access/configuration/quota failures do not retry.
+They need operator attention; correct the provider setup rather than asking an
+author to rewrite good-faith research. Transient failures still have at most two
+attempts. This implementation does not yet globally pause a queue on a permanent
+provider error; use the durable disable command during an outage and inspect
+pending human-review requests before re-enabling. It never silently requeues
+those requests or changes the consent attached to them.
+
+The worker has a 45-second asynchronous HTTP deadline and 120-second lease.
+The transport is canceled/closed on deadline; this does not guarantee the provider
+stopped processing a request it already received. Process/OS stalls and lost
+responses remain reasons for conservative cost accounting and stale-result checks.
+
+BEFORE HOSTED ACTIVATION
+
+1. Confirm the team project, model availability, billing/rates and retention policy.
+   The current local key arrangement does not configure a hosted worker.
+2. Evaluate the canonical prompt with synthetic/held-out cases before real private
+   notes. Preserve prompt/schema/input/model identities, outputs, usage and timing.
+   Report false flags and harmful passes separately; a small clean suite is not a
+   security proof. Decide explicit go/no-go criteria with the operator.
+3. Complete PostgreSQL claim/budget/receipt concurrency, human-race, withdrawal,
+   revocation, kill-switch and least-privilege checks against the actual release.
+   A collected/skipped test is not evidence that its PostgreSQL behavior passed.
+4. Verify browser and CLI consent, exact retries, owner-only status, cache refresh
+   after background completion, and continued privacy after logout/revocation.
+5. Use the established production backup/verified-restore and migration rehearsal
+   process before schema 0031. Deploy code through the normal reviewed release.
+   The migration preserves research/accounts and starts disabled. Do not replace
+   the beta database or erase audit records to roll back a code release.
+6. Verify the existing-service child is explicitly enabled, using the dedicated
+   runtime secret, matching policy and durable control. Check lifecycle logs,
+   durable queue/lease/cost progress and human fallback; HTTP health alone is
+   insufficient. Start with a separately consented shadow/canary evaluation;
+   enable automatic mode only after
+   its approval. No historical backfill or production activation is implied here.
+
+Downgrade of schema 0031 refuses to discard screening jobs, attempts, cost evidence
+or automated publication provenance. After such evidence exists, disable the
+feature and use a compatible code rollback instead of deleting its history.
+See publication-screening-design.txt for policy, budget assumptions and privacy.

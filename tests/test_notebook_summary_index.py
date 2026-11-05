@@ -84,7 +84,7 @@ def test_index_rechecks_withdrawal_and_trash_without_cross_request_cache(system)
     draft = create(owner, content(title='Private draft'))
     assert delete(owner, draft).status_code == 200
     assert draft['id'] not in json.dumps(index(owner))
-    assert page(owner, scope='trash')['notes'][0]['id'] == draft['id']
+    assert page(owner, scope='trash')['notes'] == []
 
 
 @pytest.mark.parametrize('params', [

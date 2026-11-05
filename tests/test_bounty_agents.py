@@ -2,7 +2,7 @@
 from uuid import uuid4
 
 from crucible import machine_auth
-from test_bounties import system, create, request, opened, body, terms
+from test_bounties import system, create, request, opened, body, terms, submit, published
 from test_notebook_agents import agent
 
 
@@ -52,6 +52,19 @@ def test_even_reviewer_agents_cannot_decide_or_discover_private_review_queue(sys
     identifier=value['bounty']['id']
     for suffix in ('/admission-decisions','/submissions/'+str(uuid4())+'/decisions'):
         assert machine_auth.required_scope('POST','/api/bounties/'+identifier+suffix) is None
+
+
+def test_reviewer_token_cannot_complete_a_claim_even_with_human_cookies(system):
+    app,owner,reviewer,solver,*_=system
+    value=submit(solver,opened(system),published(solver,reviewer))
+    sid=value['receipt']['submission_id']
+    client=agent(app,reviewer,machine_auth.BOUNTY_SCOPES)
+    client.cookies.update(reviewer.client.cookies)
+    path='/api/bounties/'+value['bounty']['id']+'/submissions/'+sid+'/decisions'
+    response=client.post(path,json=body(value,kind='pipeline',decision='approved',reason='Agent decision is forbidden.'))
+    assert response.status_code==403
+    detail=reviewer.client.get('/api/bounties/'+value['bounty']['id']).json()['bounty']
+    assert detail['version']==value['bounty']['version'] and detail['award'] is None
 
 
 def test_guidance_is_available_without_granting_other_private_resources(system):

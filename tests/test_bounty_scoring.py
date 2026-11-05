@@ -7,7 +7,6 @@ def test_pending_approval_has_no_points_and_final_award_reaches_profile_and_rank
     value = boost(supporter, opened(system))
     value = submit(solver, value, published(solver, reviewer))
     submission_id = value['receipt']['submission_id']
-    value = assess(owner, value, 'poster', submission_id=submission_id)
     before = solver.client.get('/api/people/solver').json()['person']
     assert before['points'] == before['score_breakdown']['bounty_points'] == 0
     value = assess(reviewer, value, 'pipeline', submission_id=submission_id)

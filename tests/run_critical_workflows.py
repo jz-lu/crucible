@@ -19,12 +19,20 @@ SUITES = (
     "test_notebook_agents.py", "test_notebook_trash.py", "test_notebook_graph.py",
     "test_notebook_numbers.py", "test_notebook_tags.py",
     "test_publication_queue_summary.py",
+    "test_publication_screening_worker.py", "test_publication_screening_integration.py",
+    "test_publication_screening_supervisor.py",
+    "test_publication_screening_database.py",
+    "test_publication_screening_status.py", "test_publication_screening_findings.py",
+    "test_publication_screening_queue.py",
+    "test_notebook_cli.py",
     "test_note_ratings.py", "test_notebook_discovery.py", "test_machine_auth.py",
     "test_researcher_profiles.py", "test_researcher_profiles_migration.py",
     "test_bounties.py", "test_bounties_migration.py",
+    "test_bounty_independent_completion.py", "test_bounty_completion_migration.py",
     "test_bounty_agents.py", "test_bounty_cli.py",
     "test_admission_weekly_points.py", "test_scoring_awards.py",
     "test_numerical_frontier_points.py", "test_bounty_scoring.py",
+    "test_reviewer_scoring.py",
     "test_points_workflow.py",
 )
 
@@ -49,7 +57,7 @@ def main():
     sys.path.insert(0, str(ROOT))
     # Never inherit a developer's server, provider or database configuration.
     for name in tuple(os.environ):
-        if name == "DATABASE_URL" or name.startswith("CRUCIBLE_"):
+        if name in {"DATABASE_URL", "OPENAI_API_KEY"} or name.startswith("CRUCIBLE_"):
             os.environ.pop(name)
     with tempfile.TemporaryDirectory(prefix="crucible-workflow-checks-") as tmp:
         os.environ.update(CRUCIBLE_ENV="development", CRUCIBLE_DATA_DIR=tmp)

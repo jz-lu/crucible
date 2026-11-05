@@ -51,6 +51,7 @@ MEMBER_PATHS = {
     "/api/notebook/research-requests/{request_id}/retraction",
     "/api/notebook/timeline", "/api/notebook/graph", "/api/notebook/notes", "/api/notebook/notes/{note_id}",
     "/api/notebook/curated-note-numbers", "/api/notebook/tags",
+    "/api/notebook/publication-policy", "/api/notebook/publication-status",
     "/api/notebook/notes/{note_id}/private-shares",
     "/api/notebook/private-shares", "/api/notebook/private-shares/{share_id}/response",
     "/api/notebook/notes/{note_id}/revisions", "/api/notebook/export",

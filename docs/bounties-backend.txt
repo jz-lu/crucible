@@ -54,17 +54,19 @@ bounty. There is at most one active solution claim per account/task, and at most
 100 total contributions per pilot task. Claimed solutions record the current
 server-ordered reward boundary. Submission alone does not freeze the task.
 
-Independent pipeline qualification freezes the task and its provisional eligible
-offer. It does not refund allocations yet: an earlier competing claim may still
-be rejected, and a later qualified claim must retain its submitted offer. The named poster must separately
-accept the same evidence and terms. Poster, solver and pipeline reviewer must be
-three distinct active accounts; the pipeline reviewer must still be configured.
-Agent tokens can never exercise reviewer or poster-assessment authority.
+Independent reviewer qualification freezes the task and its provisional eligible
+offer. An approved claim settles immediately when no earlier unresolved claim
+blocks it and all final checks pass. A later qualified claim retains its submitted
+offer while earlier claims are resolved; qualification alone does not refund
+allocations. Proposer, solver and reviewer must be three distinct active accounts;
+the reviewer must still be configured. Completion requires no proposer sign-off.
+Agent tokens can never exercise reviewer authority. Historical proposer decisions
+remain readable audit records; new proposer-decision requests are refused.
 
 An earlier unresolved claimed solution prevents settlement of a later claim.
 A later claim may be qualified, but cannot jump that queue. Rejections record
 reasons and can reopen a frozen task or restore a later claim's provisional offer.
-All allocations remain held until both approvals and ordering identify a final
+All allocations remain held until reviewer approval and ordering identify a final
 winner. Settlement atomically refunds post-winning-boundary allocations and the
 winner's own boosts under the original-month rule, then awards eligible funding.
 The submission-time headline offer is retained separately because a solver's own
@@ -73,7 +75,9 @@ boosts can never convert into that solver's earned points.
 Before settlement, the server rechecks active identities, configured review
 roles, immutable terms and exact published evidence. Withdrawn or unavailable
 notes cannot be substituted with a newer revision. A unique task award records
-both approval IDs, the evidence/terms identities, original boundary and points.
+the reviewer approval ID, evidence/terms identities, original boundary and points.
+New awards have no proposer-decision ID; historical awards retain their original
+decision references without being rewritten or awarded again.
 All decisions, allocations and award history remain durable. No submitted code
 is executed, no scheme is admitted, and no challenge is deployed by this flow.
 
@@ -113,7 +117,8 @@ POST .../admission-decisions: independent human admission decision.
 POST .../withdrawals: owned draft/pending-request withdrawal.
 POST .../boosts: explicitly spend the selected allowance units.
 POST .../submissions: exact contribution note and scoped claim.
-POST .../submissions/{id}/decisions: human poster or pipeline decision.
+POST .../submissions/{id}/decisions: independent human reviewer decision
+(kind=pipeline). New kind=poster decisions return 410; historical records remain.
 POST .../cancellations: owner closes an open task with no unresolved claims,
 returning outstanding boosts under original-month expiry.
 

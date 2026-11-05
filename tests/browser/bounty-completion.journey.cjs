@@ -31,7 +31,7 @@ test('a reviewed bounty spends explicit allowance and awards one independently a
     ['The task','Synthetic full bounty journey'],
     ['A short description','Disposable interface verification, not a research claim.'],
     ['What counts as completion?','A published synthetic note documenting this disposable workflow.'],
-    ['How will it be verified?','The task poster and a distinct reviewer inspect the pinned synthetic evidence.']
+    ['How will it be verified?','A reviewer independent of the task poster and solver inspects the pinned synthetic evidence.']
   ]) await panel().getByLabel(label, {exact:true}).fill(value);
   const created = await write('/api/bounties', () => panel().getByRole('button', {name:'Save private draft',exact:true}).click());
   const id = created.bounty.id, base = '/api/bounties/' + id;
@@ -83,12 +83,10 @@ test('a reviewed bounty spends explicit allowance and awards one independently a
   expect(submitted.bounty.award).toBeNull(); const submissionId = submitted.receipt.submission_id;
 
   await as('queueauthor'); await visit(id, false, 'contributions');
-  await panel().getByLabel('Reason and evidence', {exact:true}).fill('The pinned synthetic note meets this disposable task’s completion criteria.');
-  const accepted = await write(base + '/submissions/' + submissionId + '/decisions', () => panel().getByRole('button', {name:'Record poster decision',exact:true}).click());
-  expect(accepted.bounty.award).toBeNull();
+  await expect(panel().getByRole('button', {name:/Record (?:poster|reviewer) decision/})).toHaveCount(0);
   await as('queuereviewer'); await visit(id, true, 'contributions');
   await panel().getByLabel('Reason and evidence', {exact:true}).fill('Independent inspection confirms the exact stated synthetic completion criteria.');
-  const completed = await write(base + '/submissions/' + submissionId + '/decisions', () => panel().getByRole('button', {name:'Record pipeline decision',exact:true}).click());
+  const completed = await write(base + '/submissions/' + submissionId + '/decisions', () => panel().getByRole('button', {name:'Record reviewer decision',exact:true}).click());
   expect(completed.bounty.status).toBe('completed'); expect(completed.bounty.award.points).toBe(200);
   await expect(panel()).toContainText('Recorded award'); await expect(panel()).toContainText('200 points · browser_alice');
   await page.reload(); await expect(panel()).toContainText('200 points · browser_alice');

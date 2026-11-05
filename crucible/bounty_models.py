@@ -131,7 +131,9 @@ class BountyAward(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), index=True)
     policy_id: Mapped[str] = mapped_column(ForeignKey('bounty_policies.id'))
     terms_id: Mapped[str] = mapped_column(ForeignKey('bounty_terms.id'))
-    poster_decision_id: Mapped[str] = mapped_column(ForeignKey('bounty_decisions.id'))
+    # Retain historical dual-signoff evidence; new awards require only the
+    # independent pipeline reviewer and have no fabricated poster decision.
+    poster_decision_id: Mapped[str | None] = mapped_column(ForeignKey('bounty_decisions.id'), nullable=True)
     pipeline_decision_id: Mapped[str] = mapped_column(ForeignKey('bounty_decisions.id'))
     reward_boundary: Mapped[int] = mapped_column(Integer)
     points: Mapped[int] = mapped_column(Integer)

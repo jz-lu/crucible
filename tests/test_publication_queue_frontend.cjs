@@ -7,7 +7,7 @@ const {createApp, flush} = require('./frontend-dom.cjs');
 const reviewer = {id:'reviewer', handle:'reviewer'};
 const requestTypes = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../web/notebook/request-types.json'), 'utf8'));
 const deferred = () => {let resolve, reject; const promise = new Promise((a,b) => {resolve=a; reject=b;}); return {promise,resolve,reject};};
-const page = (title='Queued claim', next_after=null) => ({notes:title === null ? [] : [record(title)], next_after});
+const page = (title='Queued claim', next_after=null, screening='attention') => ({notes:title === null ? [] : [record(title)], next_after, screening});
 function record(title='Queued claim', full=false) {
   const revision = {revision:2, content_sha256:'a'.repeat(64), created_at:100, publication_status:'submitted', publication:{requested_at:99},
     summary:!full, content:{title, claim:'A precise claim', tags:['algebra'], kind:'conjecture',
@@ -26,7 +26,7 @@ function installNotebook(app) {
 async function boot(respond=()=>undefined, {initial=true, canWarm=()=>true}={}) {
   const app = await createApp({schemes:[], hash:'#about'});
   installNotebook(app);
-  let owner=reviewer, csrf='session-one', now=1000000, navigation=Promise.resolve();
+  let owner=reviewer, csrf='session-one', now=1000000, navigation=Promise.resolve(), lastRoute=null;
   app.sandbox.Date = class extends Date {static now() {return now;}};
   const requests=[], root=app.$('#review-notebook-workspace');
   const timers=new Map();let timerId=0;
@@ -37,17 +37,17 @@ async function boot(respond=()=>undefined, {initial=true, canWarm=()=>true}={}) 
     requests.push({url,body,options});
     const result=await respond(url,body,options);
     if(result!==undefined)return result;
-    if(url.startsWith('/api/notebook/review-queue?'))return page();
+    if(url.startsWith('/api/notebook/review-queue?'))return page('Queued claim', null, new URLSearchParams(url.split('?')[1]).get('screening'));
     if(url.startsWith('/api/notebook/notes/candidate'))return {note:record('Queued claim',true)};
     if(url==='/notebook/request-types.json')return requestTypes;
     throw Error('Unexpected request: '+url);
   };
   const controller=app.sandbox.window.CrucibleNotebook.mount(root,{api, account:()=>owner, session:()=>csrf,
-    reviewOnly:true, canWarm, navigate:route=>{navigation=controller.show(new URLSearchParams(route.split('?')[1]||''));}});
-  const show=extra=>controller.show(new URLSearchParams({section:'publication',...extra}));
+    reviewOnly:true, canWarm, navigate:route=>{lastRoute=route;navigation=controller.show(new URLSearchParams(route.split('?')[1]||''));}});
+  const show=extra=>controller.show(new URLSearchParams({section:'flagged',...extra}));
   if(initial)await show();
   return {...app,root,controller,show,requests,q:name=>root.querySelector(`[data-nb="${name}"]`),
-    navigateDone:()=>navigation, advance:ms=>{now+=ms;}, advanceTimers,
+    navigateDone:()=>navigation, lastRoute:()=>lastRoute, advance:ms=>{now+=ms;}, advanceTimers,
     account:(next,credential=csrf)=>{owner=next;csrf=credential;controller.setAccount(next);}};
 }
 const queueReads = app => app.requests.filter(row=>row.url.startsWith('/api/notebook/review-queue?'));
@@ -73,6 +73,93 @@ async function test(name, run) {
     app.q('more').click();await flush();assert.match(app.q('list').textContent,/Second request/);
     assert.equal(queueReads(app).length,2,'The just-prepared second page settles without another GET');
     assert.ok(queueReads(app).every(row=>new URLSearchParams(row.url.split('?')[1]).get('summary')==='true'));
+    assert.ok(queueReads(app).every(row=>new URLSearchParams(row.url.split('?')[1]).get('screening')==='attention'));
+  });
+  await test('legacy publication entry and flagged entry share one human-attention queue and cursor',async()=>{
+    const app=await boot(url=>{
+      if(!url.startsWith('/api/notebook/review-queue?'))return;
+      const query=new URLSearchParams(url.split('?')[1]);
+      assert.equal(query.get('screening'),'attention');
+      return page(query.has('after')?'Second attention request':'First attention request',query.has('after')?null:'next-attention');
+    });
+    app.q('more').click();await flush();assert.match(app.q('list').textContent,/Second attention request/);
+    await app.show({section:'publication'});assert.match(app.q('list').textContent,/Second attention request/);
+    assert.equal(new URLSearchParams(queueReads(app).at(-1).url.split('?')[1]).get('after'),'next-attention');
+    assert.equal(app.q('list').getAttribute('aria-label'),'Flagged requests');
+  });
+  await test('legacy and current warm calls join the exact same pending attention summary read',async()=>{
+    const late=deferred();
+    const app=await boot(url=>url.startsWith('/api/notebook/review-queue?')?late.promise:undefined,{initial:false});
+    const old=app.controller.warm('list','publication'),current=app.controller.warm('list','flagged');
+    assert.equal(queueReads(app).length,1);
+    assert.equal(new URLSearchParams(queueReads(app)[0].url.split('?')[1]).get('screening'),'attention');
+    late.resolve(page('Needs human review'));await Promise.all([old,current]);
+    await app.show({section:'flagged'});assert.match(app.q('list').textContent,/Needs human review/);
+    assert.equal(queueReads(app).length,1);
+  });
+  await test('missing or mismatched screening echoes never admit, cache or warm mixed queue rows',async()=>{
+    for(const scope of ['attention'])for(const echo of [undefined,'flagged','unflagged']){
+      let valid=false;
+      const app=await boot(url=>{
+        if(!url.startsWith('/api/notebook/review-queue?'))return;
+        const result=page(valid?'Correct filtered title':'Mixed private title','next',scope);
+        if(!valid){if(echo===undefined)delete result.screening;else result.screening=echo;}return result;
+      },{initial:false});
+      const section='flagged';
+      await assert.rejects(app.controller.warm('list',section),/queue is unavailable/);
+      await app.controller.warm('next',section);assert.equal(queueReads(app).length,1);
+      await app.show({section});assert.doesNotMatch(app.q('list').textContent,/Mixed private title/);
+      assert.match(app.q('list').textContent,/queue is unavailable/);assert.equal(app.q('list').querySelector('.nb-entry'),null);
+      valid=true;byText(app.q('list'),'Try again').click();await flush();assert.match(app.q('list').textContent,/Correct filtered title/);
+    }
+  });
+  await test('flagged summaries render only fixed category labels and limitations, never model text or markup',async()=>{
+    const result=page('Flagged <img src=x onerror=alert(1)>');
+    result.notes[0].revisions[0].publication.screening={verification:'summary_only',status:'human_review',attention_reason:'content_findings',reason:'PRIVATE_REASON',
+      categories:[{code:'spam',label:'<script>PRIVATE_LABEL</script>',count:2},{code:'<img>',label:'PRIVATE_UNKNOWN',count:1}],
+      concern_count:2,limitation_count:1,reviewer:{concerns:[{explanation:'PRIVATE_MODEL_TEXT'}]}};
+    const app=await boot(url=>url.startsWith('/api/notebook/review-queue?')?result:undefined,{initial:false});
+    await app.show({section:'flagged'});
+    assert.match(app.q('list').textContent,/Flagged <img src=x onerror=alert\(1\)>/);
+    assert.equal(app.q('list').querySelector('.nb-screening-summary').textContent,'Possible spam (2) · Screening limitation');
+    assert.doesNotMatch(app.q('list').textContent,/PRIVATE_REASON|PRIVATE_LABEL|PRIVATE_UNKNOWN|PRIVATE_MODEL_TEXT/);
+    assert.equal(app.q('list').querySelectorAll('img,script').length,0);assert.equal(app.root.querySelector('.nb-publication-review'),null);
+    assert.equal(app.requests.some(row=>row.body||row.url.startsWith('/api/notebook/notes/')),false);
+  });
+  await test('flagged readers preserve exact links and back navigation without granting self-review',async()=>{
+    const app=await boot(url=>{if(url.startsWith('/api/notebook/notes/candidate')){const own=record('Own flagged request',true);own.owner=reviewer;own.can_review=false;return{note:own};}},{initial:false});
+    await app.show({section:'flagged'});app.q('list').querySelector('.nb-title').click();
+    byText(app.q('list'),'Read full note →').click();await app.navigateDone();
+    assert.equal(app.lastRoute(),'#reviews?section=flagged&note=candidate&revision=2');
+    assert.equal(app.root.querySelector('.nb-publication-review'),null);assert.match(app.q('full').textContent,/Another reviewer/);
+    byText(app.q('full'),'← Flagged requests').click();await app.navigateDone();
+    assert.equal(app.lastRoute(),'#reviews?section=flagged');
+    assert.equal(new URLSearchParams(queueReads(app).at(-1).url.split('?')[1]).get('screening'),'attention');
+  });
+  await test('human-attention rows distinguish model concerns from unavailable screening and manual review',async()=>{
+    const result=page();
+    result.notes=Array.from(['content_findings','screening_unavailable','manual_review_needed'],(reason,index)=>{
+      const row=record('Attention request '+index);row.id='candidate-'+index;
+      row.revisions[0].publication.screening={verification:'summary_only',attention_reason:reason,attention_label:'UNTRUSTED_LABEL',
+        reason:'UNTRUSTED_REASON',categories:[{code:'spam',count:1}],limitation_count:0};return row;
+    });
+    const app=await boot(url=>url.startsWith('/api/notebook/review-queue?')?result:undefined);
+    const summaries=app.q('list').querySelectorAll('.nb-screening-summary').map(node=>node.textContent);
+    assert.deepEqual(summaries,['Possible spam','Screening unavailable · Manual review needed','Manual review needed']);
+    assert.doesNotMatch(app.q('list').textContent,/UNTRUSTED_LABEL|UNTRUSTED_REASON/);
+    await app.show({section:'flagged',research:'1',research_request:'old-research'});
+    assert.equal(app.requests.some(row=>row.url.includes('/research-requests')),false);
+  });
+  for(const change of ['account','session'])await test('switching '+change+' retires the attention queue cache and the pending flagged read',async()=>{
+    const old=deferred();let held=false;
+    const app=await boot(url=>held&&url.startsWith('/api/notebook/review-queue?')&&new URLSearchParams(url.split('?')[1]).get('screening')==='attention'?old.promise:undefined);
+    await app.show({section:'flagged'});held=true;const pending=app.show({section:'flagged'});
+    app.account(change==='account'?{id:'replacement',handle:'replacement'}:reviewer,'new-session');
+    assert.equal(app.q('list').textContent,'');old.resolve(page('Old flagged private title'));await pending;
+    assert.doesNotMatch(app.q('list').textContent,/Old flagged private title|Queued claim/);
+    held=false;await app.show();assert.match(app.q('list').textContent,/Queued claim/);
+    await app.show({section:'flagged'});assert.match(app.q('list').textContent,/Queued claim/);
+    assert.doesNotMatch(app.q('list').textContent,/Old flagged private title/);
   });
   await test('visible paging prepares one next page after settling, without recursively crawling the queue',async()=>{
     const app=await boot(url=>{
@@ -235,7 +322,7 @@ async function test(name, run) {
     });
     app.q('more').click();await flush();assert.match(app.q('list').textContent,/Second queued claim/);
     expired=true;await app.show();assert.doesNotMatch(app.q('list').textContent,/Second queued claim/);
-    byText(app.q('list'),'Restart publish requests').click();await flush();
+    byText(app.q('list'),'Restart flagged requests').click();await flush();
     assert.match(app.q('list').textContent,/First queued claim/);
     assert.equal(new URLSearchParams(queueReads(app).at(-1).url.split('?')[1]).has('after'),false);
   });
@@ -347,7 +434,7 @@ async function test(name, run) {
     app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();await app.navigateDone();
     assert.equal(app.requests.filter(row=>row.body).length,1);
     const pending=app.show();assert.doesNotMatch(app.q('list').textContent,/Queued claim/);
-    late.resolve(page(null));await pending;assert.match(app.q('list').textContent,/No publish requests awaiting approval/);
+    late.resolve(page(null));await pending;assert.match(app.q('list').textContent,/No flagged requests awaiting approval/);
   });
   await test('shell publication, review, edit and trash writes invalidate the separate reviewer cache',async()=>{
     let held=null;

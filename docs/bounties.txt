@@ -91,10 +91,10 @@ To add one explicitly authorized bounty boost:
 
   python3 crucible_cli.py bounty boost --path bounty-work --confirm-allowance 1
 
-A task has one final award. The proposer cannot win their own task. The poster
-and an independent configured reviewer must both approve the same exact
-solution evidence, and neither may be the recipient. A raw claim does not
-freeze a task; pipeline qualification freezes new contributions/boosts. Earlier
+A task has one final award. The proposer cannot win their own task. One
+configured human reviewer, distinct from both proposer and solver, approves
+the exact solution evidence. Proposer sign-off is not required. A raw claim
+does not freeze a task; reviewer qualification freezes new contributions/boosts. Earlier
 unresolved claims are resolved before a later award. Rewards use the winning
 submission's funding boundary, excluding the winner's own boosts. Later boosts
 stay held during review and are refunded only when the final award determines

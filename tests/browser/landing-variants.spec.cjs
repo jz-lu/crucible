@@ -7,7 +7,7 @@ for (const layout of ['centered', 'left']) for (const width of [1440, 390]) for 
     await page.goto('/#home?layout=' + layout);
     await expect(page.locator('#access-sign-in')).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('data-beta-landing', layout);
-    await expect(page.locator('.site-header .brand > span')).toHaveText('crucible');
+    await expect(page.locator('.site-header .brand-wordmark')).toHaveText('crucible');
     await expect(page.locator('.site-header .account-actions')).toBeHidden();
     await expect(page.locator('.site-header .brand-mark')).toHaveAttribute('data-logo-ready', 'true');
     const composition = await page.evaluate(() => {

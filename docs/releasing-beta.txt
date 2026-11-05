@@ -1,6 +1,9 @@
 Releasing the private beta
 ==========================
 
+Current operations entry point: docs/operations.txt.
+Cost/usage changes: update docs/operating-budget.txt in the same PR.
+
 Normal development uses a branch and pull request. The stable branch-protection
 check is "CI passed" in the CI workflow. A repository administrator must require
 it and protect main; write access alone cannot establish that rule. This check
@@ -74,6 +77,8 @@ or use Re-run all jobs, then restart Release beta. Re-run failed jobs alone may
 lack the complete same-attempt evidence and is intentionally insufficient.
 Candidate branches with Promote disabled still execute the reusable source
 workflow normally. Native image verification always runs before publication.
+A later promotion-only run reuses that verification and immutable image; it does
+not rerun native tests.
 
 The release artifact includes crucible-source-ci.json with the exact source SHA,
 workflow, run ID, attempt and gate inventory. Reuse saves duplicate Actions work;
@@ -147,6 +152,26 @@ reviewed runtime base are deleted by this workflow.
 
 The beta channel
 ----------------
+To promote a successful publish-only run later, use the manual Promote published
+beta workflow on main and enter the original Release beta run ID. It uses the
+latest attempt of that run only, verifies the trusted workflow/repository/main SHA,
+successful native verification/publication and skipped promotion, then downloads
+the exact immutable artifact ID. It accepts neither candidate-branch artifacts
+nor an older commit. Missing, expired or incomplete evidence stops the job before
+registry authentication. The artifact is retained for 30 days.
+
+deploy/reuse_release.py rechecks provenance after download and copies only named
+JSON receipts into a fresh directory. Downloaded code is never executed. The
+existing promote helper then validates native evidence, tested image configuration,
+immutable registry manifest and current main with the original run/attempt identity.
+Source CI is verified again. The new workflow shares the build workflow's concurrency
+group and uses the same limited registry secret; no app/database access is added.
+An original build run that already attempted promotion cannot use this path.
+Separate promotion runs leave the original artifact reusable; inspect their
+receipts before dispatching another run for that publication. If only the live
+probe failed, repeat the read-only verifier instead of promoting again.
+This avoids a second native rebuild simply to promote an already-tested image.
+
 Successful runs with both Publish and Promote enabled copy the single published
 manifest to
 registry.digitalocean.com/crucible-beta/app:beta using the already-installed Docker
@@ -177,8 +202,8 @@ retry/roll back over a newer release. Inspect the receipt and provider status.
 Publish without promotion is useful when a separately reviewed schema migration
 must precede deployment. It does not perform or authorize that migration. Retain
 the original prepared, verified, published and build-metadata receipts from the
-run; a later promotion must use that exact tested source and its original run and
-attempt identifiers. The helper still refuses promotion if that source is no
+run; Promote published beta retrieves these and uses that exact tested source and
+its original run and attempt identifiers. The helper still refuses promotion if that source is no
 longer current main. Do not fabricate new receipts or remove the current-main
 guard to reuse an older image. A reviewed operator may instead select its exact
 immutable image explicitly. Schema compatibility and a compatible rollback image
@@ -214,8 +239,17 @@ If the provider is still watching a unique tag/digest, promoting beta does not
 update it. Either keep manual selection of a verified immutable release, or
 perform the one-time channel setup deliberately. Registry promotion proves the
 image identity, not that the hosted service is healthy or even running that image.
-Wait for the provider deployment to complete, then check health, anonymous
-private-route denial, sign-in and the changed user flow. Keep the previous working
+Both promotion paths run deploy/verify_deployment.py after a successful tag update.
+It waits up to ten minutes for three consecutive samples of the released source
+SHA on both domains, plus anonymous private-route denial on the public domain.
+The provider hostname permits health probes but intentionally rejects ordinary
+application routes through the trusted-host boundary.
+rollout.json and the workflow summary distinguish verified promotion from live
+probe success. Probes are bounded anonymous GETs with no redirects, no body logging
+and no provider credentials. Failure leaves the tag as written and requires
+inspection; there is no automatic rollback. Three samples do not certify every
+replica/image digest, all authenticated journeys, or uninterrupted availability.
+Then check sign-in and the changed user flow. Keep the previous working
 unique tag/digest. To roll back, select it in the existing web component rather
 than rebuilding old code; disable channel Autodeploy until the next intended
 release if necessary. Do not replace environment values during an image rollback.
@@ -250,7 +284,10 @@ Maintenance locations
 ---------------------
 .github/workflows/tests.yml          portable checks and stable aggregate
 .github/workflows/release-beta.yml   intentional native build/test/publication
+.github/workflows/promote-beta.yml   promotion of an existing publish-only main run
 deploy/release.py                    source/context/runtime/publication checks
+deploy/reuse_release.py              GitHub provenance and receipt staging
+deploy/verify_deployment.py          anonymous rollout verification
 deploy/release-runtime.json          reviewed base, frozen files and manifests
 tests/test_release_pipeline.py       offline tests; no credentials or Docker
 

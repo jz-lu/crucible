@@ -1,4 +1,4 @@
-const {test, expect, holdResponse, signIn} = require('./helpers.cjs');
+const {test, expect, holdResponse, signIn, useDataSaver} = require('./helpers.cjs');
 const {createHash} = require('node:crypto');
 const {readFileSync} = require('node:fs');
 const {resolve} = require('node:path');
@@ -16,7 +16,7 @@ test('the complete decoded logo fills its reserved frame without partial paint o
     await expect(logo).toBeHidden();
     const before = await logo.boundingBox();
     expect(before.width).toBe(38); expect(before.height).toBe(54);
-    await expect(page.locator('.site-header .brand > span')).toBeVisible();
+    await expect(page.locator('.site-header .brand-wordmark')).toBeVisible();
     image.release(); await image.delivered;
     await expect(logo).toHaveAttribute('data-logo-ready', 'true');
     await expect(logo).toBeVisible();
@@ -33,7 +33,7 @@ test('an interrupted image leaves a usable wordmark and a reload recovers normal
   await page.goto('/');
   const logo = page.locator('.site-header .brand-mark');
   await expect(logo).toBeHidden();
-  await expect(page.locator('.site-header .brand > span')).toBeVisible();
+  await expect(page.locator('.site-header .brand-wordmark')).toBeVisible();
   await expect(page.locator('#access-sign-in')).toBeVisible();
   const before = await logo.boundingBox();
   await page.unroute(matcher); await page.reload();
@@ -198,4 +198,102 @@ test('an admitted catalogue and ordinary reload retain full typography and layou
   expect(await page.locator('body').evaluate(bodyStyle)).toEqual(expectedBodyStyle);
   expect(attempted).toEqual([]);
   expect(await page.evaluate(() => window.fixtureCspViolations)).toEqual([]);
+});
+
+
+async function holdAboutStartup(page) {
+  const app = await holdResponse(page, url => url.pathname === '/app.js');
+  const session = await holdResponse(page, url => url.pathname === '/api/session');
+  const received = new Set();
+  for (const response of [app, session]) void response.arrived.then(() => received.add(response));
+  return {app, session, arrived:Promise.all([app.arrived, session.arrived]), async close() {
+    app.release(); session.release();
+    await Promise.all([...received].map(response => response.delivered));
+    await app.remove(); await session.remove();
+  }};
+}
+
+const aboutBounds = page => page.evaluate(() => Object.fromEntries([
+  '.site-header', '#about-title', '#about-workspace .about-intro',
+  '#about-mission-title', '#about-community-title',
+].map(selector => {
+  const box = document.querySelector(selector).getBoundingClientRect();
+  return [selector, {x:box.x, y:box.y, width:box.width, height:box.height}];
+})));
+
+function trackProtectedReads(page) {
+  const reads = [];
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    if ((path.startsWith('/api/') && path !== '/api/session') || path.startsWith('/notebook/') || path.startsWith('/map/')) reads.push(path);
+  });
+  return reads;
+}
+
+test('an admitted About reload paints its real static content before app and session', async ({page}) => {
+    const width = 390;
+    await page.setViewportSize({width, height:1000}); await page.emulateMedia({reducedMotion:'reduce'}); await useDataSaver(page);
+    await signIn(page); await page.locator('#nav-about').click();
+    await expect(page.locator('#about-workspace')).toBeVisible();
+    expect(await page.evaluate(() => sessionStorage.getItem('crucible.pending-presentation'))).toBe('workspace');
+    // Retire the setup document so it cannot consume the new document's holds.
+    await page.goto('about:blank');
+    const held = await holdAboutStartup(page), reads = trackProtectedReads(page);
+    try {
+      await page.goto('/?about-reload=' + width + '#about', {waitUntil:'commit'}); await held.arrived;
+      const about = page.locator('#about-workspace');
+      await expect(page.locator('html')).toHaveAttribute('data-pending-page','about');
+      await expect(about).toBeVisible(); await expect(about).toContainText('Our principles');
+      await expect(page.locator('#access-workspace')).toBeHidden(); await expect(page.locator('#route-loading')).toBeHidden();
+      await expect(page.locator('#catalogue-workspace')).toBeHidden(); await expect(page.locator('#notebook-workspace')).toBeHidden();
+      await expect(page.locator('.primary-nav')).toHaveAttribute('inert','');
+      await page.evaluate(() => document.fonts.ready);
+      const before = await aboutBounds(page), original = await about.elementHandle();
+      expect(reads).toEqual([]);
+      held.app.release(); await held.app.delivered;
+      await expect(page.locator('body')).toHaveAttribute('data-access-pending','true');
+      await expect(about).toBeVisible(); await expect(page.locator('#access-workspace')).toBeHidden();
+      expect(await aboutBounds(page)).toEqual(before); expect(reads).toEqual([]);
+      held.session.release(); await held.session.delivered;
+      await expect(page.locator('body')).not.toHaveAttribute('data-access-pending','true');
+      await expect(page.locator('.primary-nav')).not.toHaveAttribute('inert','');
+      await expect(page.locator('#nav-about')).toHaveAttribute('aria-current','page');
+      await expect(about).toBeVisible(); await expect(page.locator('#access-workspace')).toBeHidden();
+      await expect(page.locator('#route-loading')).toBeHidden();
+      expect(await aboutBounds(page)).toEqual(before);
+      expect(await original.evaluate(element => element.isConnected)).toBe(true);
+      expect(reads).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    } finally { await held.close(); }
+});
+
+test('About access failure stays gated, retry respects an expired session and the gate survives reload', async ({page, context}) => {
+  await page.emulateMedia({reducedMotion:'reduce'}); await useDataSaver(page);
+  await signIn(page); await page.locator('#nav-about').click(); await expect(page.locator('#about-workspace')).toBeVisible();
+  await page.goto('about:blank'); await context.clearCookies();
+  const reads = trackProtectedReads(page), app = await holdResponse(page, url => url.pathname === '/app.js');
+  await page.route('**/api/session', route => route.abort('connectionrefused'));
+  try {
+    await page.goto('/?about-failed-session#about', {waitUntil:'commit'}); await app.arrived;
+    await expect(page.locator('#about-workspace')).toBeVisible(); await expect(page.locator('#access-workspace')).toBeHidden();
+    app.release(); await app.delivered;
+    await expect(page.locator('#access-description')).toContainText('Access could not be checked');
+    await expect(page.locator('#access-retry')).toBeEnabled();
+    await expect(page.locator('#about-workspace')).toBeHidden(); expect(reads).toEqual([]);
+    await page.unroute('**/api/session'); await page.locator('#access-retry').click();
+    await expect(page.locator('#access-title')).toHaveText('Private beta');
+    await expect(page.locator('#access-create-account')).toBeVisible(); await expect(page.locator('#about-workspace')).toBeHidden();
+    expect(await page.evaluate(() => sessionStorage.getItem('crucible.pending-presentation'))).toBe('gate');
+    expect(reads).toEqual([]);
+  } finally { app.release(); await app.delivered; await app.remove(); await page.unroute('**/api/session'); }
+  const held = await holdAboutStartup(page);
+  try {
+    await page.reload({waitUntil:'commit'}); await held.arrived;
+    await expect(page.locator('html')).toHaveAttribute('data-pending-page','gate');
+    await expect(page.locator('#about-workspace')).toBeHidden(); await expect(page.locator('#access-workspace')).toBeVisible();
+    await expect(page.locator('#access-title')).toHaveText('Private beta'); expect(reads).toEqual([]);
+    held.app.release(); await held.app.delivered; held.session.release(); await held.session.delivered;
+    await expect(page.locator('#access-create-account')).toBeVisible(); await expect(page.locator('#about-workspace')).toBeHidden();
+    expect(reads).toEqual([]);
+  } finally { await held.close(); }
 });

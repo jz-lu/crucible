@@ -84,7 +84,6 @@ const pendingRoutes = [
   ['#notebook?view=map', 'notebook-map', 'Scheme map'],
   ['#notebook?view=timeline', 'notebook-timeline', 'Timeline'],
   ['#person/browser_alice', 'profile', 'browser_alice'],
-  ['#about', 'neutral', 'About us'],
   ['#scheme/teaching-dh-kem/4', 'chart', 'Scheme'],
 ];
 
