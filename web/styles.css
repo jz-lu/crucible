@@ -4328,9 +4328,16 @@ dialog.points-help-dialog{width:min(740px,calc(100% - 32px));padding:0}
 /* RESI uses this same dark-theme filter on its transparent source artwork. */
 .resi-footer-brand img { filter:var(--brand-image-filter,none); }
 
+/* Introductory headlines share a type treatment; only their scale can vary. */
+.home-intro h1,.about-workspace .about-intro h2 {
+  margin:0; color:var(--ink);
+  font:700 var(--intro-title-size,clamp(36px,4vw,48px))/1.12 var(--display);
+  letter-spacing:-.02em;
+}
+
 /* About uses the same local type and palette, with no additional data load. */
 .about-workspace .about-intro { max-width:960px; padding:38px 0 42px; }
-.about-workspace .about-intro h2 { max-width:900px; margin:0; color:var(--ink); font:400 clamp(32px,3.5vw,46px)/1.18 var(--display); letter-spacing:-.6px; text-wrap:pretty; }
+.about-workspace .about-intro h2 { max-width:900px; text-wrap:pretty; }
 .about-workspace .about-section { padding:32px 0; border-top:1px solid var(--line); }
 .about-workspace .about-section > h2 { margin:0; color:var(--ink); font:700 24px/1.25 var(--display); }
 .about-workspace .about-story,.about-workspace .about-community { display:grid; grid-template-columns:220px minmax(0,1fr); gap:36px; }
@@ -4358,7 +4365,7 @@ html[data-pending-page=activity] #access-title { display:flex;align-items:center
 .home-workspace { padding-top:clamp(42px,7vw,88px); outline:none; }
 .home-intro { max-width:760px; padding-bottom:clamp(38px,5vw,64px); }
 .home-eyebrow { margin-bottom:18px; color:var(--primary); font:600 12px/1.5 var(--sans); letter-spacing:.1em; text-transform:uppercase; }
-.home-intro h1 { margin:0; color:var(--ink); font:700 clamp(42px,5.5vw,66px)/1.08 var(--display); letter-spacing:-1.3px; }
+.home-intro h1 { --intro-title-size:clamp(42px,5.5vw,66px); }
 .home-lede { max-width:650px; margin-top:24px; color:var(--text); font-size:18px; line-height:1.7; }
 .home-actions { display:flex; align-items:center; flex-wrap:wrap; gap:16px 26px; margin-top:28px; }
 .home-actions .button { min-height:46px; font-size:14px; }
@@ -4411,7 +4418,6 @@ html[data-pending-page=home] body[data-access-pending=true] #access-workspace,
 html[data-pending-page]:not([data-pending-page=home]) body[data-access-pending=true] #home-workspace { display:none; }
 @media(max-width:700px) {
   .home-workspace { padding-top:36px; }
-  .home-intro h1 { letter-spacing:-.8px; }
   .home-lede { font-size:16px; line-height:1.7; }
   .home-progress-grid { grid-template-columns:1fr; gap:30px; }
   .home-guide-grid { grid-template-columns:1fr; gap:0; }
@@ -4427,4 +4433,4 @@ html[data-pending-page]:not([data-pending-page=home]) body[data-access-pending=t
 
 .home-workspace.is-member { padding-top:40px; }
 .home-workspace.is-member .home-intro { padding-bottom:36px; }
-.home-workspace.is-member .home-intro h1 { font-size:clamp(36px,4vw,48px); }
+.home-workspace.is-member .home-intro h1 { --intro-title-size:clamp(36px,4vw,48px); }
