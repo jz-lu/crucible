@@ -2634,6 +2634,7 @@ function personStats(person) {
     const role = node('div', undefined, 'person-role-stat');
     role.append(node('dt', 'Role'), node('dd', 'Reviewer'));
     stats.append(role);
+    return stats;
   } else {
     const place = profileRankParts(person), link = node('a', undefined, 'person-place-link');
     link.id = 'person-leaderboard-rank'; link.href = '#people';
@@ -2643,7 +2644,7 @@ function personStats(person) {
     const rankValue = node('dd'); rankValue.append(link);
     const rankStat = node('div', undefined, 'person-place-stat'); rankStat.append(node('dt', 'Place on leaderboard'), rankValue); stats.append(rankStat);
   }
-  for (const [label, key] of [...(reviewer ? [] : [['Points', 'points']]), ['Accepted proposals', 'accepted_proposal_count']]) {
+  for (const [label, key] of [['Points', 'points'], ['Accepted proposals', 'accepted_proposal_count']]) {
     const value = node('dd', person ? peopleNumber(person[key], key === 'points' ? 'Pending' : '—') : undefined);
     if (!person) value.append(node('span', undefined, 'catalogue-placeholder'));
     const term = node('dt', label);
@@ -2864,17 +2865,13 @@ function profileRankParts(person) {
   const suffix = lastTwo >= 11 && lastTwo <= 13 ? 'th' : ({1: 'st', 2: 'nd', 3: 'rd'})[rank % 10] || 'th';
   return {rank, suffix};
 }
-function renderPerson(person) {
-  const target = $('#person-content');
-  setText('#person-title', person.handle);
-  renderResearcherProfile(person.researcher_profile);
-  target.replaceChildren(personStats(person));
-  if (person.score_status !== 'reviewer' && !Number.isFinite(person.points)) target.append(node('p', 'Scoring is being finalized. Verified results are recorded below.', 'people-score-note'));
+function renderPersonAchievements(person, target) {
+  if (!Number.isFinite(person.points)) target.append(node('p', 'Scoring is being finalized. Verified results are recorded below.', 'people-score-note'));
   target.append(renderFirstRecords(person));
   const {section: records, content: recordContent} = personDisclosure('Personal records',
     `${peopleNumber(person.records?.length || 0)} scheme${person.records?.length === 1 ? '' : 's'}`);
   records.id = 'personal-records';
-  if (person.records?.length) recordContent.append(personalRecordTable(person.records, {showPoints: person.score_status !== 'reviewer'}));
+  if (person.records?.length) recordContent.append(personalRecordTable(person.records));
   else recordContent.append(node('div', 'No solved challenges yet.', 'empty-state'));
   target.append(records);
   const {section: recent, content: recentContent} = personDisclosure('Recent solves',
@@ -2899,6 +2896,13 @@ function renderPerson(person) {
     recentContent.append(list);
   } else recentContent.append(node('div', 'No solved challenges yet.', 'empty-state'));
   target.append(recent);
+}
+function renderPerson(person) {
+  const target = $('#person-content');
+  setText('#person-title', person.handle);
+  renderResearcherProfile(person.researcher_profile);
+  target.replaceChildren(personStats(person));
+  if (person.score_status !== 'reviewer') renderPersonAchievements(person, target);
   state.personDataKey = JSON.stringify(person);
   renderAgentSettings();
   renderReviewAccountLink();
