@@ -1,6 +1,11 @@
 """Worker checks with synthetic notes/responses; no keys or network are used."""
 from dataclasses import replace
+import base64
 import json
+from pathlib import Path
+import subprocess
+import sys
+import textwrap
 from uuid import uuid4
 
 import pytest
@@ -16,6 +21,59 @@ from test_notebook import Actor, create
 from test_publication_screening_integration import (
     SyntheticProvider, configure, counts, publication, request, run, screened,
 )
+
+
+def test_fresh_worker_cli_claims_prepares_and_publishes_with_synthetic_provider(screened):
+    """App imports in the pytest process must not hide worker startup defects."""
+    configure(screened)
+    saved = create(screened.owner)
+    assert request(screened.owner, saved).status_code == 200
+    script = textwrap.dedent('''
+        import json, sys
+        assert 'crucible.notebook' not in sys.modules
+        def no_network(event, args):
+            if event in {'socket.connect', 'socket.getaddrinfo'}:
+                raise AssertionError('The synthetic worker must never access a network.')
+        sys.addaudithook(no_network)
+        from crucible import publication_screening_worker as worker
+        from crucible.publication_screening_provider import ProviderResult
+        inputs = json.loads(sys.stdin.read())
+        worker.time.time = lambda: inputs['now']
+        calls = []
+        def synthetic_screen(self, prepared):
+            assert prepared.content_sha256 == inputs['content_sha256']
+            assert prepared.fields and prepared.input_json
+            calls.append(prepared.content_sha256)
+            return ProviderResult(
+                verdict={'outcome':'no_concern_found', 'concerns':[], 'limitations':[]},
+                model='gpt-6-luna', response_id='synthetic-fresh-worker',
+                usage={'input_tokens':100, 'output_tokens':30,
+                       'cached_input_tokens':0, 'reasoning_tokens':0})
+        worker._EnvironmentProvider.screen = synthetic_screen
+        assert worker.main(['run', '--once']) == 0
+        assert calls == [inputs['content_sha256']]
+        # A second invocation is idle: the completed request is not dispatched twice.
+        assert worker.main(['run', '--once']) == 0
+        assert len(calls) == 1
+    ''')
+    # No inherited provider keys, hosted URLs or user configuration. Only the
+    # parent fixture's disposable SQLite database and explicit synthetic settings.
+    child = subprocess.run([sys.executable, '-B', '-c', script],
+        cwd=Path(worker.__file__).resolve().parents[1],
+        env={'CRUCIBLE_ENV':'development', 'DATABASE_URL':screened.app.state.settings.database_url,
+             'CRUCIBLE_SECRET':base64.b64encode(b's' * 32).decode(),
+             'CRUCIBLE_ORIGIN':'http://testserver', 'CRUCIBLE_ACCESS_MODE':'beta',
+             'CRUCIBLE_PUBLICATION_SCREENING_MODE':'automatic',
+             'CRUCIBLE_PUBLICATION_SCREENING_MODEL':'gpt-6-luna',
+             'CRUCIBLE_PUBLICATION_SCREENING_BUDGET_MICRO_USD':'10000000'},
+        input=json.dumps({'now':screened.now[0], 'content_sha256':saved['content_sha256']}),
+        text=True, capture_output=True, timeout=20)
+    assert child.returncode == 0, (child.stdout, child.stderr)
+    replies = [json.loads(line) for line in child.stdout.splitlines()]
+    assert [reply['status'] for reply in replies] == ['published', 'idle']
+    assert publication(screened, saved)['decision_source'] == 'automated'
+    assert counts(screened, (ScreeningAttempt, AutomaticPublication)) == {
+        'publication_screening_attempts':1, 'notebook_automatic_publications':1}
 
 
 @pytest.mark.parametrize('model,reserve,reasoning', [
