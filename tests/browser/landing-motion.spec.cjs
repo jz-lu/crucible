@@ -34,7 +34,7 @@ for(const layout of ['centered','left'])for(const width of [1440,390]) {
     const fire=page.locator('.brand-fire-ghost'),key=page.locator('.brand-key-sun');
     await expect(page.locator('#site-brand')).not.toHaveClass(/brand-ignited/,{timeout:3000});
     const resting=await fire.boundingBox();
-    await page.locator('#site-brand').click();
+    await page.locator('#brand-animate').click();
     await expect(page.locator('.site-header .brand')).toHaveClass(/brand-ignited/);
     const sample=async(elapsed,tips=elapsed)=>page.evaluate(({elapsed,tips})=>{
       const fire=document.querySelector('.brand-fire-ghost'),key=document.querySelector('.brand-key-sun'),shape=document.querySelector('.brand-flame-shape');
@@ -81,39 +81,66 @@ for(const layout of ['centered','left'])for(const width of [1440,390]) {
     await expect(page.locator('.site-header .brand')).not.toHaveClass(/brand-ignited/);
     await expect(fire).toHaveCSS('opacity','0');await expect(key).toHaveCSS('opacity','0');
     await expect(fire).toHaveCSS('transform','matrix(1, 0, 0, 1, 0, 0)');
-    await page.locator('#site-brand').focus();await expect(page.locator('#site-brand')).not.toHaveClass(/brand-ignited/);
+    await page.locator('#brand-animate').focus();await expect(page.locator('#site-brand')).not.toHaveClass(/brand-ignited/);
   });
 }
 
-test('each reload plays one brief fire, while hover, focus and routes do not replay it',async({page})=>{
+async function observeLogoStarts(page) {
   await page.addInitScript(()=>{
-    window.logoStarts=0;
-    document.addEventListener('animationstart',event=>{if(event.animationName==='flame-visit')window.logoStarts++;});
+    window.logoStarts=0;window.logoStartedAt=0;window.logoDecodedAt=0;
+    const decode=HTMLImageElement.prototype.decode;
+    HTMLImageElement.prototype.decode=function(...args){
+      return decode.apply(this,args).then(value=>{
+        if(this.closest('#site-brand'))window.logoDecodedAt=performance.now();
+        return value;
+      });
+    };
+    document.addEventListener('animationstart',event=>{
+      if(event.animationName==='flame-visit'){window.logoStarts++;window.logoStartedAt=performance.now();}
+    });
   });
+}
+
+test('each reload waits half a second for one fire, while hover, focus and routes do not replay it',async({page})=>{
+  await observeLogoStarts(page);
   await page.emulateMedia({reducedMotion:'no-preference'});await page.goto('/');
   const brand=page.locator('#site-brand'),fire=page.locator('.brand-fire-ghost');
   await expect.poll(()=>page.evaluate(()=>window.logoStarts)).toBe(1);
+  expect(await page.evaluate(()=>window.logoStartedAt-window.logoDecodedAt)).toBeGreaterThanOrEqual(490);
   await expect(brand).not.toHaveClass(/brand-ignited/,{timeout:3000});
   await expect(fire).toHaveCSS('opacity','0');await expect(page.locator('.brand-key-sun')).toHaveCSS('opacity','0');
-  await page.locator('.site-header .brand-mark').hover();await brand.focus();
+  await page.locator('.site-header .brand-mark').hover();await page.locator('#brand-animate').focus();
   await page.evaluate(()=>{location.hash='#about';});
   await expect(page).toHaveURL(/#about$/);
   expect(await page.evaluate(()=>window.logoStarts)).toBe(1);
   await expect(brand).not.toHaveClass(/brand-ignited/);
   await page.reload();await expect.poll(()=>page.evaluate(()=>window.logoStarts)).toBe(1);
+  expect(await page.evaluate(()=>window.logoStartedAt-window.logoDecodedAt)).toBeGreaterThanOrEqual(490);
   await expect(brand).not.toHaveClass(/brand-ignited/,{timeout:3000});
 });
 
-test('rapid logo clicks restart the full fire without stale cancellation and still navigate home',async({page})=>{
+test('a logo click cancels the pending startup fire and starts immediately',async({page})=>{
+  await observeLogoStarts(page);
+  await page.emulateMedia({reducedMotion:'no-preference'});await page.goto('/#about',{waitUntil:'domcontentloaded'});
+  await expect.poll(()=>page.evaluate(()=>window.logoDecodedAt)).toBeGreaterThan(0);
+  expect(await page.evaluate(()=>window.logoStarts)).toBe(0);
+  const brand=page.locator('#site-brand');
+  await page.locator('#brand-animate').click();await expect(brand).toHaveClass(/brand-ignited/);
+  await expect(page).toHaveURL(/#about$/);
+  await expect(brand).not.toHaveClass(/brand-ignited/,{timeout:3000});
+  expect(await page.evaluate(()=>window.logoStarts)).toBe(1);
+});
+
+test('rapid icon clicks restart the full fire without stale cancellation or leaving the page',async({page})=>{
   await page.emulateMedia({reducedMotion:'no-preference'});await page.goto('/#about');
   const brand=page.locator('#site-brand'),fire=page.locator('.brand-fire-ghost');
   await expect(page.locator('#access-workspace')).toHaveCSS('opacity','1');
-  await brand.click();await expect(page).toHaveURL(/#home$/);
+  await page.locator('#brand-animate').click();await expect(page).toHaveURL(/#about$/);
   await fire.evaluate(element=>{
     window.previousLogoAnimation=element.getAnimations().find(animation=>animation.animationName==='flame-visit');
     window.previousLogoAnimation.currentTime=1700;
   });
-  await brand.click();
+  await page.locator('#brand-animate').click();
   const current=await fire.evaluateHandle(element=>element.getAnimations().find(animation=>animation.animationName==='flame-visit'));
   expect(await current.evaluate(animation=>animation!==window.previousLogoAnimation&&animation.effect.getTiming().duration===2000)).toBe(true);
   await page.mouse.move(0,0);
@@ -123,6 +150,8 @@ test('rapid logo clicks restart the full fire without stale cancellation and sti
   await expect(brand).toHaveClass(/brand-ignited/);
   await expect(brand).not.toHaveClass(/brand-ignited/,{timeout:3000});
   await expect(fire).toHaveCSS('opacity','0');await expect(page.locator('.brand-key-sun')).toHaveCSS('opacity','0');
+  await page.locator('.site-header .brand-wordmark').click();await expect(page).toHaveURL(/#home$/);
+  await expect(brand).not.toHaveClass(/brand-ignited/);
 });
 
 test('reduced motion shows the full landing immediately and keeps the logo still',async({page})=>{
@@ -131,9 +160,34 @@ test('reduced motion shows the full landing immediately and keeps the logo still
     await expect(page.locator(selector)).toHaveCSS('animation-name','none');
     await expect(page.locator(selector)).toHaveCSS('opacity','1');
   }
-  await page.locator('.site-header .brand-mark').hover();await page.locator('#site-brand').click();
+  await page.locator('.site-header .brand-mark').hover();await page.locator('#brand-animate').click();
   await expect(page.locator('#site-brand')).not.toHaveClass(/brand-ignited/);
   await expect(page.locator('.brand-ember-effect')).toBeHidden();
+});
+
+test('the icon is a keyboard button separate from the home link',async({page})=>{
+  await page.emulateMedia({reducedMotion:'no-preference'});await page.goto('/#about');
+  const icon=page.getByRole('button',{name:'Animate Crucible logo',exact:true}),brand=page.locator('#site-brand');
+  await expect(brand.locator('a button,button a')).toHaveCount(0);
+  for(const key of ['Enter','Space']){
+    await icon.focus();await icon.press(key);await expect(brand).toHaveClass(/brand-ignited/);
+    await expect(page).toHaveURL(/#about$/);
+    await page.locator('.brand-fire-ghost').evaluate(element=>element.getAnimations().forEach(animation=>animation.finish()));
+    await expect(brand).not.toHaveClass(/brand-ignited/);
+  }
+  await page.getByRole('banner').getByRole('link',{name:'Crucible home',exact:true}).click();
+  await expect(page).toHaveURL(/#home$/);await expect(brand).not.toHaveClass(/brand-ignited/);
+});
+
+test.describe('touch logo control',()=>{
+  test.use({hasTouch:true,viewport:{width:390,height:844}});
+  test('tapping the icon plays in place and the name still navigates home',async({page})=>{
+    await page.emulateMedia({reducedMotion:'no-preference'});await page.goto('/#about');
+    await page.getByRole('button',{name:'Animate Crucible logo',exact:true}).tap();
+    await expect(page.locator('#site-brand')).toHaveClass(/brand-ignited/);await expect(page).toHaveURL(/#about$/);
+    await page.getByRole('banner').getByRole('link',{name:'Crucible home',exact:true}).tap();
+    await expect(page).toHaveURL(/#home$/);
+  });
 });
 
 for(const width of [1440,390])for(const theme of ['light','dark']) {

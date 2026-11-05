@@ -16,7 +16,7 @@ test('the complete decoded logo fills its reserved frame without partial paint o
     await expect(logo).toBeHidden();
     const before = await logo.boundingBox();
     expect(before.width).toBe(38); expect(before.height).toBe(54);
-    await expect(page.locator('.site-header .brand > span')).toBeVisible();
+    await expect(page.locator('.site-header .brand-wordmark')).toBeVisible();
     image.release(); await image.delivered;
     await expect(logo).toHaveAttribute('data-logo-ready', 'true');
     await expect(logo).toBeVisible();
@@ -33,7 +33,7 @@ test('an interrupted image leaves a usable wordmark and a reload recovers normal
   await page.goto('/');
   const logo = page.locator('.site-header .brand-mark');
   await expect(logo).toBeHidden();
-  await expect(page.locator('.site-header .brand > span')).toBeVisible();
+  await expect(page.locator('.site-header .brand-wordmark')).toBeVisible();
   await expect(page.locator('#access-sign-in')).toBeVisible();
   const before = await logo.boundingBox();
   await page.unroute(matcher); await page.reload();

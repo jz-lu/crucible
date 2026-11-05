@@ -47,7 +47,7 @@
           <stop offset=".85" stop-color="white" stop-opacity=".35"/>
           <stop offset="1" stop-color="white" stop-opacity="0"/>
         </radialGradient>
-        <!-- Optional landing hover: vector flame with a temporary warm key glow. -->
+        <!-- Brief reload/click animation: vector flame with a warm key glow. -->
         <filter id="crucible-key-sun" color-interpolation-filters="sRGB" x="-200%" y="-200%" width="500%" height="500%">
           <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="sun-near"/>
           <feGaussianBlur in="SourceGraphic" stdDeviation="16" result="sun-halo"/>
@@ -61,27 +61,29 @@
     </a>
     <header class="site-header">
       <div class="header-inner">
-        <a id="site-brand" class="brand" href="#home" aria-label="Crucible home">
-          <img class="brand-mark" src="/assets/crucible-mark.svg" width="38" height="54" alt="" decoding="async">
-          <svg class="brand-ember-effect" viewBox="0 0 189 192" width="38" height="54" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
-            <defs>
-              <pattern id="crucible-flame-dots" width="3.6" height="3.6" patternUnits="userSpaceOnUse">
-                <circle class="brand-flame-dot" cx="1.8" cy="1.8" r=".65"/>
-              </pattern>
-              <mask id="crucible-flame-edge" maskUnits="userSpaceOnUse" x="0" y="-20" width="189" height="150">
-                <rect x="0" y="-20" width="189" height="150" fill="url(#crucible-flame-dot-fade)"/>
-              </mask>
-            </defs>
-            <g class="brand-fire-ghost">
-              <path class="brand-flame-shape brand-flame-core" d="M95.5 130C68 130 43 115 47 95C50 79 62 66 60 45C77 58 82 73 75 85C91 72 78 54 84 36C90 22 96 16 95.5 4C95 16 101 22 107 36C113 54 100 72 116 85C109 73 114 58 131 45C129 66 141 79 144 95C148 115 123 130 95.5 130Z"/>
-              <g class="brand-flame-grain" mask="url(#crucible-flame-edge)"><path class="brand-flame-shape" d="M95.5 130C68 130 43 115 47 95C50 79 62 66 60 45C77 58 82 73 75 85C91 72 78 54 84 36C90 22 96 16 95.5 4C95 16 101 22 107 36C113 54 100 72 116 85C109 73 114 58 131 45C129 66 141 79 144 95C148 115 123 130 95.5 130Z"/></g>
-            </g>
-            <g class="brand-key-sun"><path fill-rule="evenodd" d="M93 52L98 52L98 53L102 54L103 57L104 57L104 59L105 59L105 62L109 63L109 64L111 65L111 68L112 68L112 73L111 73L110 77L108 77L107 79L103 79L103 80L102 80L102 79L99 79L99 80L101 81L101 85L99 86L99 110L106 110L106 121L99 121L99 125L98 125L98 127L96 127L96 128L93 128L93 127L91 126L91 85L89 84L89 82L90 82L92 79L89 79L89 80L84 79L84 78L82 78L82 77L80 76L80 74L79 74L79 67L80 67L80 65L81 65L83 62L85 62L86 59L87 59L87 56L88 56L89 54L93 53ZM94 58L94 59L92 59L92 64L94 65L94 67L93 67L93 68L91 68L91 67L86 67L86 68L85 68L85 72L86 72L87 74L90 74L90 73L92 72L92 70L94 70L94 71L97 71L97 70L98 70L99 73L104 74L104 73L106 72L105 67L100 67L100 68L98 68L97 65L99 64L99 60L98 60L97 58Z" filter="url(#crucible-key-sun)"/></g>
-          </svg>
-          <span>
+        <div id="site-brand" class="brand">
+          <button id="brand-animate" class="brand-icon-button" type="button" aria-label="Animate Crucible logo">
+            <img class="brand-mark" src="/assets/crucible-mark.svg" width="38" height="54" alt="" decoding="async">
+            <svg class="brand-ember-effect" viewBox="0 0 189 192" width="38" height="54" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+              <defs>
+                <pattern id="crucible-flame-dots" width="3.6" height="3.6" patternUnits="userSpaceOnUse">
+                  <circle class="brand-flame-dot" cx="1.8" cy="1.8" r=".65"/>
+                </pattern>
+                <mask id="crucible-flame-edge" maskUnits="userSpaceOnUse" x="0" y="-20" width="189" height="150">
+                  <rect x="0" y="-20" width="189" height="150" fill="url(#crucible-flame-dot-fade)"/>
+                </mask>
+              </defs>
+              <g class="brand-fire-ghost">
+                <path class="brand-flame-shape brand-flame-core" d="M95.5 130C68 130 43 115 47 95C50 79 62 66 60 45C77 58 82 73 75 85C91 72 78 54 84 36C90 22 96 16 95.5 4C95 16 101 22 107 36C113 54 100 72 116 85C109 73 114 58 131 45C129 66 141 79 144 95C148 115 123 130 95.5 130Z"/>
+                <g class="brand-flame-grain" mask="url(#crucible-flame-edge)"><path class="brand-flame-shape" d="M95.5 130C68 130 43 115 47 95C50 79 62 66 60 45C77 58 82 73 75 85C91 72 78 54 84 36C90 22 96 16 95.5 4C95 16 101 22 107 36C113 54 100 72 116 85C109 73 114 58 131 45C129 66 141 79 144 95C148 115 123 130 95.5 130Z"/></g>
+              </g>
+              <g class="brand-key-sun"><path fill-rule="evenodd" d="M93 52L98 52L98 53L102 54L103 57L104 57L104 59L105 59L105 62L109 63L109 64L111 65L111 68L112 68L112 73L111 73L110 77L108 77L107 79L103 79L103 80L102 80L102 79L99 79L99 80L101 81L101 85L99 86L99 110L106 110L106 121L99 121L99 125L98 125L98 127L96 127L96 128L93 128L93 127L91 126L91 85L89 84L89 82L90 82L92 79L89 79L89 80L84 79L84 78L82 78L82 77L80 76L80 74L79 74L79 67L80 67L80 65L81 65L83 62L85 62L86 59L87 59L87 56L88 56L89 54L93 53ZM94 58L94 59L92 59L92 64L94 65L94 67L93 67L93 68L91 68L91 67L86 67L86 68L85 68L85 72L86 72L87 74L90 74L90 73L92 72L92 70L94 70L94 71L97 71L97 70L98 70L99 73L104 74L104 73L106 72L105 67L100 67L100 68L98 68L97 65L99 64L99 60L98 60L97 58Z" filter="url(#crucible-key-sun)"/></g>
+            </svg>
+          </button>
+          <a class="brand-wordmark" href="#home" aria-label="Crucible home">
             crucible
-          </span>
-        </a>
+          </a>
+        </div>
         <nav class="primary-nav" aria-label="Main navigation" inert hidden>
           <button id="nav-challenge" class="nav-button selected" type="button" aria-current="page">
             Schemes
@@ -990,7 +992,7 @@
         <section class="about-section about-story" aria-labelledby="about-mission-title">
           <h2 id="about-mission-title">Why Crucible</h2>
           <div class="about-prose">
-            <p>Artificial intelligence is rapidly changing research, especially in mathematics and computer science. AI-driven breakthroughs could uncover unexpected weaknesses in the cryptographic schemes that underpin our digital infrastructure. The same capabilities could also help strengthen cryptography, accelerating the process of conceiving, proposing, and stress-testing new encryption schemes.</p>
+            <p>Artificial intelligence is rapidly changing research, especially in mathematics and computer science. AI-driven breakthroughs could uncover unexpected weaknesses in the cryptographic schemes that underpin our digital infrastructure. But the same capabilities could also help strengthen cryptography, accelerating the process of conceiving, proposing, and stress-testing new encryption schemes.</p>
             <p>Crucible’s mission is to make AI a force for stronger cryptography. Our platform gives researchers a systematic way to propose and stress-test new schemes, working with one another and with AI. Through sustained scrutiny, we aim to strengthen trust in promising constructions and help fundamentally new ideas mature into candidates for independent evaluation and potential NIST standardization.</p>
           </div>
         </section>
@@ -999,22 +1001,18 @@
           <h2 id="about-principles-title">Our principles</h2>
           <div class="about-principle-list">
             <section aria-labelledby="about-safety-title">
-              <span class="about-principle-number" aria-hidden="true">01</span>
               <h3 id="about-safety-title">Safety</h3>
               <p>Our purpose is to strengthen security and privacy. We study cryptographic constructions through controlled research challenges, without targeting real systems or other people’s data.</p>
             </section>
             <section aria-labelledby="about-accountability-title">
-              <span class="about-principle-number" aria-hidden="true">02</span>
               <h3 id="about-accountability-title">Public accountability</h3>
               <p>Our goal is to make proposals and verified attacks publicly inspectable, together with the supporting code, AI transcripts, and human notes that explain how results were obtained.</p>
             </section>
             <section aria-labelledby="about-understanding-title">
-              <span class="about-principle-number" aria-hidden="true">03</span>
               <h3 id="about-understanding-title">Human-centric</h3>
               <p>AI-assisted research should remain understandable to people. We work to explain progress, assumptions, and key techniques clearly, so researchers can assess results and build on them.</p>
             </section>
           </div>
-          <p class="about-beta-note">During the private beta, published research is shared with approved participants. Drafts remain private.</p>
         </section>
 
         <section class="about-section about-community" aria-labelledby="about-community-title">

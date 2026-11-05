@@ -6496,8 +6496,9 @@ window.addEventListener('pointercancel', clearTaglinePointer);
 window.addEventListener('blur', clearTaglinePointer);
 const landingBrand = $('#site-brand'), landingMark = landingBrand.querySelector('.brand-mark'), landingFire = landingBrand.querySelector('.brand-fire-ghost');
 const logoMotionPreference = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-let logoAnimationRun = 0;
+let logoAnimationRun = 0, logoStartupTimer = null;
 function stopLogoAnimation() {
+  clearTimeout(logoStartupTimer); logoStartupTimer = null;
   logoAnimationRun++;
   landingBrand.classList.remove('brand-ignited');
 }
@@ -6515,16 +6516,22 @@ function igniteLandingLogo() {
   else finish();
 }
 logoMotionPreference?.addEventListener?.('change', event => { if (event.matches) stopLogoAnimation(); });
-const startLogoAnimation = () => { if (logoAnimationRun === 0) igniteLandingLogo(); };
-// Run once for this document, after its logo is available; route changes do not
-// replay it. A click before decoding completes already counts as the first run.
+const startLogoAnimation = () => {
+  if (logoAnimationRun !== 0 || logoStartupTimer !== null) return;
+  logoStartupTimer = setTimeout(() => {
+    logoStartupTimer = null;
+    if (logoAnimationRun === 0) igniteLandingLogo();
+  }, 500);
+};
+// Pause briefly after decoding, once per document. Routes never replay it;
+// clicking the icon starts immediately and cancels any pending startup animation.
 if (typeof landingMark.decode === 'function') landingMark.decode().then(startLogoAnimation, () => {});
 else if (landingMark.complete) startLogoAnimation();
 else landingMark.addEventListener('load', startLogoAnimation, {once: true});
-for (const brand of document.querySelectorAll('a.brand')) brand.addEventListener('click', event => {
+$('#brand-animate').addEventListener('click', igniteLandingLogo);
+for (const brand of document.querySelectorAll('a.brand, a.brand-wordmark')) brand.addEventListener('click', event => {
   if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   event.preventDefault();
-  if (brand === landingBrand) igniteLandingLogo();
   navigateTop('#home');
 });
 $('#nav-challenge').addEventListener('click', () => navigateTop('#challenge'));

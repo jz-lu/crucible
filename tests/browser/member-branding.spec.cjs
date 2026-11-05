@@ -17,13 +17,13 @@ for (const width of [1440, 640, 390]) for (const theme of ['light', 'dark']) {
     await expect(mark).toBeVisible();await expect(mark).toHaveAttribute('data-logo-ready', 'true');
     expect(await mark.evaluate(element => element.naturalWidth)).toBeGreaterThan(0);
     const wording = page.locator('#home-title .scrutiny-wording');
-    const reveal = await wording.evaluate(element => element.getAnimations().map(animation => ({name:animation.animationName, duration:animation.effect.getTiming().duration})));
-    expect(reveal.some(animation => animation.name === 'scrutiny-reveal' && animation.duration === 520)).toBe(true);
+    await expect(wording).toHaveCSS('animation-name','scrutiny-reveal');
+    await expect(wording).toHaveCSS('animation-duration','0.52s');
     await wording.evaluate(element => element.getAnimations().forEach(animation => animation.finish()));
     await expect(page.locator('#home-title')).toHaveText('Find new cryptography. Test its limits.');
     expect(await wording.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
     const baselineColor = await wording.evaluate(element => getComputedStyle(element).color);
-    await brand.click();await expect(brand).toHaveClass(/brand-ignited/);
+    await page.locator('#brand-animate').click();await expect(brand).toHaveClass(/brand-ignited/);
     const measurements = await page.evaluate(() => {
       const mark = document.querySelector('#site-brand .brand-mark'), fire = document.querySelector('.brand-fire-ghost'), key = document.querySelector('.brand-key-sun');
       for (const element of [fire, key]) for (const animation of element.getAnimations()) { animation.pause();animation.currentTime = 500; }
@@ -48,17 +48,17 @@ for (const width of [1440, 640, 390]) for (const theme of ['light', 'dark']) {
     await expect(wording.locator('.scrutiny-dots')).toHaveCSS('color', baselineColor);
     await page.screenshot({path:testInfo.outputPath('member-dots-'+width+'-'+theme+'.png'),fullPage:true,animations:'allow'});
     await page.mouse.move(0, 0);await expect(wording).not.toHaveClass(/is-dotted/);
-    await brand.click();await expect(brand).toHaveClass(/brand-ignited/);
+    await page.locator('#brand-animate').click();await expect(brand).toHaveClass(/brand-ignited/);
     await page.mouse.move(0, 0);await expect(brand).not.toHaveClass(/brand-ignited/, {timeout:3000});
     await page.locator('#nav-challenge').click();await expect(page.locator('#catalogue-workspace')).toBeVisible();
-    await brand.click();await expect(brand).toHaveClass(/brand-ignited/);
+    await page.locator('#brand-animate').click();await expect(brand).toHaveClass(/brand-ignited/);
   });
 }
 
 test('members with reduced motion see the complete logo and heading without hover animations', async ({page}) => {
   await page.emulateMedia({reducedMotion:'reduce'});await page.goto('/#home');await signIn(page, 'alice', {navigate:false});
   const mark = page.locator('#site-brand .brand-mark');await expect(mark).toBeVisible();
-  await mark.hover();await page.locator('#site-brand').click();await expect(page.locator('#site-brand')).not.toHaveClass(/brand-ignited/);
+  await mark.hover();await page.locator('#brand-animate').click();await expect(page.locator('#site-brand')).not.toHaveClass(/brand-ignited/);
   await expect(page.locator('.brand-ember-effect')).toBeHidden();
   await page.locator('#home-title .scrutiny-wording').hover();
   await expect(page.locator('#home-title .scrutiny-letters')).toHaveCSS('mask-image', 'none');
