@@ -293,12 +293,23 @@
         <a id="review-account-back" class="text-button scheme-back" href="#people">← My account</a>
         <div class="catalogue-heading"><h1 id="review-title">Review center</h1></div>
         <nav id="review-navigation" class="review-navigation" aria-label="Review queues" hidden>
-          <a id="review-nav-publication" href="#reviews?section=publication">Publish requests</a>
-          <a id="review-nav-schemes" href="#reviews?section=schemes">Scheme proposals</a>
+          <a id="review-nav-flagged" href="#reviews?section=flagged">Flagged requests</a>
+          <a id="review-nav-proposals" href="#reviews?section=proposals">Proposals</a>
           <a id="review-nav-bounties" href="#reviews?section=bounties">Bounties</a>
-          <a id="review-nav-research" href="#reviews?section=research">Proposed changes</a>
         </nav>
         <p id="review-access-message" class="empty-state">The review center is available to configured reviewers.</p>
+      </section>
+      <section id="review-proposals-workspace" class="review-proposals-workspace" aria-label="Proposals awaiting review" hidden>
+        <section class="review-proposal-group" aria-labelledby="review-schemes-title">
+          <h2 id="review-schemes-title">Scheme proposals</h2>
+          <div id="review-schemes-list" aria-live="polite"></div>
+          <div id="review-schemes-pages" class="review-proposal-pages"></div>
+        </section>
+        <section class="review-proposal-group" aria-labelledby="review-changes-title">
+          <h2 id="review-changes-title">Other proposed changes</h2>
+          <div id="review-changes-list" aria-live="polite"></div>
+          <div id="review-changes-pages" class="review-proposal-pages"></div>
+        </section>
       </section>
       <section id="review-notebook-workspace" aria-label="Reviewer queue" hidden></section>
       <section id="notebook-workspace" aria-label="Notes" tabindex="-1" hidden></section>
@@ -340,7 +351,7 @@
       <section id="person-workspace" class="person-workspace" aria-labelledby="person-title" tabindex="-1" hidden>
         <div class="catalogue-heading profile-heading">
           <div class="profile-title-row"><h1 id="person-title">Profile</h1></div>
-          <div class="profile-heading-actions"><a id="profile-review-link" class="text-button" href="#reviews?section=publication" hidden>Review center →</a><button id="edit-researcher-profile" class="button button-quiet profile-edit" type="button" aria-expanded="false" aria-controls="researcher-profile-editor" hidden>Edit profile</button></div>
+          <div class="profile-heading-actions"><a id="profile-review-link" class="text-button" href="#reviews?section=flagged" hidden>Review center →</a><button id="edit-researcher-profile" class="button button-quiet profile-edit" type="button" aria-expanded="false" aria-controls="researcher-profile-editor" hidden>Edit profile</button></div>
         </div>
         <div id="researcher-profile-summary" class="researcher-profile-summary" hidden></div>
         <section id="researcher-profile-editor" class="researcher-profile-editor" aria-labelledby="researcher-profile-title" hidden>

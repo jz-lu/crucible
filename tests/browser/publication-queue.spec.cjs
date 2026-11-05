@@ -1,6 +1,6 @@
 const {test, expect, signIn, holdResponse, useDataSaver} = require('./helpers.cjs');
 
-for (const width of [1440,390]) test(`publish requests prepare two pages, then only the next page at ${width}px`,async({page},testInfo)=>{
+for (const width of [1440,390]) test(`human-attention requests prepare two pages, then only the next page at ${width}px`,async({page},testInfo)=>{
   await page.setViewportSize({width,height:1000});
   const requests=[],queuePath='/api/notebook/review-queue';
   page.on('request',request=>requests.push({url:new URL(request.url()),method:request.method()}));
@@ -10,7 +10,11 @@ for (const width of [1440,390]) test(`publish requests prepare two pages, then o
   const first=await firstResponse,second=await secondResponse;
   const firstData=await first.json(),secondData=await second.json();
   expect(firstData.notes).toHaveLength(25);expect(secondData.notes).toHaveLength(25);
-  for(const response of [first,second])expect(new URL(response.url()).searchParams.get('summary')).toBe('true');
+  for(const response of [first,second]){
+    expect(new URL(response.url()).searchParams.get('summary')).toBe('true');
+    expect(new URL(response.url()).searchParams.get('screening')).toBe('attention');
+  }
+  for(const data of [firstData,secondData])expect(data.screening).toBe('attention');
   for(const note of [...firstData.notes,...secondData.notes])expect(note.revisions[0].content.body).toBeUndefined();
   const root=page.locator('#review-notebook-workspace'),list=root.locator('[data-nb="list"]');
   await expect(root).not.toBeVisible();await expect(list.locator('.nb-entry')).toHaveCount(0);
@@ -46,7 +50,7 @@ for (const width of [1440,390]) test(`publish requests prepare two pages, then o
   }finally{third.release();await third.remove();}
 });
 
-for (const width of [1440,390]) test(`publish requests retain cached summaries and refresh exact review readers at ${width}px`,async({page},testInfo)=>{
+for (const width of [1440,390]) test(`human-attention requests retain cached summaries and refresh exact review readers at ${width}px`,async({page},testInfo)=>{
   await page.setViewportSize({width,height:1000});
   await useDataSaver(page); // Deliberately exercise cold reads and ordinary refreshes.
   const requests=[];
@@ -57,6 +61,8 @@ for (const width of [1440,390]) test(`publish requests retain cached summaries a
   const response=await firstResponse, data=await response.json();
   expect(response.status()).toBe(200);
   expect(new URL(response.url()).searchParams.get('summary')).toBe('true');
+  expect(new URL(response.url()).searchParams.get('screening')).toBe('attention');
+  expect(data.screening).toBe('attention');
   const candidate=data.notes.find(note=>note.revisions[0].content.title==='Queueauthor browser-only private note');
   expect(candidate).toBeTruthy();expect(candidate.revisions[0].summary).toBe(true);
   expect(candidate.revisions[0].content.body).toBeUndefined();
@@ -108,7 +114,7 @@ for (const width of [1440,390]) test(`publish requests retain cached summaries a
         await expect(full.locator('[name="reason"]')).toHaveValue('Browser fixture: check the exact attribution before publication.');
         await expect(full.getByRole('button',{name:'Record publication decision',exact:true})).toBeEnabled();
       }
-      const returning=await holdQueue();await full.getByRole('button',{name:'← Publish requests',exact:true}).click();
+      const returning=await holdQueue();await full.getByRole('button',{name:'← Flagged requests',exact:true}).click();
       await returning.arrived;
       await expect(row).toBeVisible();await expect(list.locator('.nb-reading')).toHaveCount(0);
       expect(await row.evaluate(element=>element===window.queueRowForTest)).toBe(true);

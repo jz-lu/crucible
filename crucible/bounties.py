@@ -146,12 +146,9 @@ def source(session, user, ref, *, published=False, owned=False):
         if published:
             publication = session.scalar(select(notebook.NotebookPublication).where(
                 notebook.NotebookPublication.revision_id == revision.id,
-                notebook.NotebookPublication.decision == 'approved',
-                notebook.NotebookPublication.test_only_self_review.is_(False),
-                notebook.NotebookPublication.reviewer_id != note.author_id,
-                notebook.NotebookPublication.revision_id.not_in(notebook_moderation.withdrawn_ids())))
+                notebook.publication_screening.approved_clause()))
             if publication is None:
-                raise HTTPException(409, 'This exact note revision needs independent publication approval.')
+                raise HTTPException(409, 'This exact note revision must be published before it can be used here.')
     record = research_reviews.source_snapshot(session, user, ref)
     return {**ref.model_dump(), 'title': record['content'].get('title', ''), 'author_id': record['author_id']}
 

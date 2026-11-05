@@ -256,7 +256,7 @@ def test_retraction_guidance_separates_research_advice_from_author_authority():
     assert len(json.dumps(pipeline).encode()) < 65536
 
 
-def test_agent_contract_tracks_opt_in_notebook_and_human_publication_review():
+def test_agent_contract_tracks_opt_in_notebook_and_scoped_publication_authority():
     pipeline = json.loads((ROOT / "web/agent/pipeline.json").read_text())
     catalogue = json.loads((ROOT / "web/notebook/request-types.json").read_text())
     assert "technical_review" not in {row["id"] for row in catalogue["actions"]}
@@ -268,6 +268,9 @@ def test_agent_contract_tracks_opt_in_notebook_and_human_publication_review():
     assert "Author-only" in publication["scope"]
     assert "notebook:publish" in publication["scope"]
     assert "Agents cannot approve publication" in publication["scope"]
+    assert "screening_policy_id" in publication["scope"]
+    assert "/api/notebook/publication-policy" in publication["interface"]
+    assert "--screening-policy-id" in publication["interface"]
     owned = capabilities["agent-owned-notebook"]
     assert "notebook:read" in owned["scope"] and "notebook:write" in owned["scope"]
     assert "retry file" in owned["scope"]
@@ -275,6 +278,9 @@ def test_agent_contract_tracks_opt_in_notebook_and_human_publication_review():
     assert "Later edits remain private" in rule["instruction"]
     assert "historical grants confer no access" in rule["instruction"]
     assert "Do not forward another author" in rule["instruction"]
+    assert "obtain consent" in rule["instruction"]
+    assert "shadow" in rule["instruction"]
+    assert "effectful proposals still need their separate reviews" in rule["instruction"]
 
 
 def test_current_scoring_guidance_resolves_live_policy_without_old_formulas():
@@ -304,8 +310,9 @@ def test_current_scoring_guidance_resolves_live_policy_without_old_formulas():
     assert "stops future active-week" in rules["authority.author-retraction"]["instruction"]
     bounty = rules["scoring.bounty-settlement"]["instruction"]
     assert "10 units per month without rollover" in bounty
-    assert "single approval are not awards" in bounty
-    assert "refunds are settled only at the final winning boundary" in bounty
+    assert "human reviewer, distinct from proposer and solver" in bounty
+    assert "proposer sign-off is not required" in bounty
+    assert "refunds are settled only at the final winning boundary" in bounty.casefold()
     capabilities = {item["id"]: item for item in pipeline["capabilities"]["current"]}
     assert "bounties:spend" in capabilities["agent-research-bounties"]["scope"]
     assert "human-only" in capabilities["agent-research-bounties"]["scope"]

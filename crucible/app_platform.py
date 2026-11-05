@@ -102,8 +102,11 @@ def create_app():
         raise RuntimeError("This entry point requires an explicitly configured production beta.")
     from .config import load_settings
     from .app import create_app as application
+    from .publication_screening_supervisor import enabled_from_environment, install
 
+    worker_enabled = enabled_from_environment()
     settings = load_settings()
     if not settings.production or settings.access_mode != "beta" or len(settings.origins) != 1:
         raise RuntimeError("This entry point requires an explicitly configured production beta.")
-    return AppPlatformIngress(application(settings), settings.origins[0])
+    app = install(application(settings), settings, enabled=worker_enabled)
+    return AppPlatformIngress(app, settings.origins[0])

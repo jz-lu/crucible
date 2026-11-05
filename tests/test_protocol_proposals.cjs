@@ -295,7 +295,7 @@ async function test(name,run){await run();console.log('PASS '+name);passed++;}
   });
   await test('configured reviewers see the private queue and its author-labelled exact detail links',async()=>{
     const app=await boot({account:reviewer,canReview:true,hash:'#propose?review=1',hook:url=>url.pathname==='/api/protocol/review-queue'?{proposals:[{...receipt(),author:user}]}:undefined});
-    const link=app.$('#proposal-list').querySelector('a');assert.equal(link.href,'#reviews?section=schemes&proposal=proposal-one');
+    const link=app.$('#review-schemes-list').querySelector('a');assert.equal(link.href,'#reviews?section=proposals&proposal=proposal-one');
     assert.match(link.textContent,/Revision 1.*Review pending.*owner/);
     link.click();await flush();assert.equal(app.$('#proposal-review-form').hidden,false);
     assert.equal(app.$('#proposal-detail-actions').hidden,false);assert.equal(app.$('#revise-proposal').hidden,true);assert.equal(reviews(app).length,0);
@@ -472,12 +472,13 @@ async function test(name,run){await run();console.log('PASS '+name);passed++;}
     assert.equal(app.$('#upload-proposal').disabled,false);assert.equal(app.$('#submit-proposal').textContent,'Submit revised specification');
     assert.equal(app.requests.filter(r=>r.url.pathname.endsWith('/proposal-one')).length,1,'No silent rebasing or retry');
   });
-  await test('review queue pagination uses the server cursor and appends distinct private records',async()=>{
+  await test('review queue pagination uses the server cursor and keeps one bounded page of private records',async()=>{
     const app=await boot({account:reviewer,canReview:true,hash:'#propose?review=1',hook:url=>{
       if(url.pathname==='/api/protocol/review-queue')return url.searchParams.has('after')?{proposals:[{...receipt({id:'proposal-two'}),author:user}],next_after:null}:{proposals:[{...receipt(),author:user}],next_after:'proposal-one'};
     }});
-    const more=app.$('#proposal-list').querySelector('button');assert.equal(more.textContent,'Load more proposals');more.click();await flush();
-    assert.equal(app.$('#proposal-list').querySelectorAll('a').length,2);
+    const more=app.$('#review-schemes-pages').querySelectorAll('button').find(button=>button.textContent==='Next page');more.click();await flush();
+    assert.equal(app.$('#review-schemes-list').querySelectorAll('a').length,1);
+    assert.equal(app.$('#review-schemes-list').querySelector('a').href,'#reviews?section=proposals&proposal=proposal-two');
     const requests=app.requests.filter(r=>r.url.pathname==='/api/protocol/review-queue');assert.equal(requests.length,2);assert.equal(requests[1].url.searchParams.get('after'),'proposal-one');
   });
   await test('author retraction reloads the trusted receipt and removes revision and approval actions',async()=>{

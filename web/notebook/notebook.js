@@ -183,15 +183,77 @@
     let bountyController = null, bountyPreparation = null;
     let curatedNotes = [], curatedLoaded = false, curatedPromise = null, timelinePreparation = null, indexPreparation = null;
     let pageCursors = [null], pageIndex = 0, knownPageCount = null, searchTimer = null;
+    const reviewSection = 'flagged';
+    const reviewLabel = () => 'Flagged requests';
     let reviewDraft = null, captureReviewDraft = () => {};
     let currentSession = session(), readEpoch = 0, listStamp = null, timelineStamp = null, listRefreshing = false, warmEnabled = false;
     const readCache = new Map();
     const preparingNotes = new Map();
     const preparingLists = new Map();
     const reviewListReads = new Map();
-    let reviewPreparation = null, reviewPageTimer = null;
+    const reviewPreparations = new Map();
+    let reviewPageTimer = null;
+    let publicationTimer = null, publicationWatch = null, listPublicationPolicy = null;
+    const publicationWindows = new Map();
     function cancelReviewPagePreparation() { clearTimeout(reviewPageTimer); reviewPageTimer = null; }
-    function invalidateReads() { bountyController?.invalidateReads(); cancelReviewPagePreparation(); readCache.clear(); preparingNotes.clear(); preparingLists.clear(); reviewListReads.clear(); reviewPreparation = null; timelinePreparation = null; indexPreparation = null; warmEnabled = false; listStamp = null; timelineStamp = null; readEpoch++; }
+    function invalidateReads({publicationsOnly = false} = {}) { if (!publicationsOnly) bountyController?.invalidateReads(); cancelReviewPagePreparation(); readCache.clear(); preparingNotes.clear(); preparingLists.clear(); reviewListReads.clear(); reviewPreparations.clear(); timelinePreparation = null; indexPreparation = null; warmEnabled = false; listStamp = null; timelineStamp = null; readEpoch++; }
+    function stopPublicationWatch() { clearTimeout(publicationTimer); publicationTimer = null; publicationWatch = null; }
+    function watchPublications(records, policy, readerId = null) {
+      stopPublicationWatch();
+      if (reviewOnly || reviewMode || !active || !['automatic', 'shadow'].includes(policy?.mode)) return;
+      const pins = records.filter(({note, revision}) => ownsNote(note) && revision?.publication_status === 'submitted' &&
+        /^[0-9a-f-]{36}$/.test(revision.publication?.id || '')).slice(0, 25).map(({note, revision}) => ({
+          id:revision.publication.id, note_id:note.id, revision:revision.revision, content_sha256:revision.content_sha256}));
+      if (!pins.length) return;
+      for (const pin of pins) if (!publicationWindows.has(pin.id)) {
+        publicationWindows.set(pin.id, {deadline:Date.now() + 300000, attempts:0, done:false});
+        if (publicationWindows.size > 500) publicationWindows.delete(publicationWindows.keys().next().value);
+      }
+      publicationWatch = {pins, readerId, current:pageGuard(), credential:currentSession,
+        screeningStatuses:new Map(records.map(({revision}) => [revision.publication?.id, revision.publication?.screening?.status ?? null]))};
+      schedulePublicationCheck();
+    }
+    function schedulePublicationCheck() {
+      clearTimeout(publicationTimer); publicationTimer = null;
+      const watch = publicationWatch;
+      if (!watch || !watch.current() || session() !== watch.credential || document.visibilityState === 'hidden') return;
+      const pins = watch.pins.filter(pin => { const window = publicationWindows.get(pin.id); return window && !window.done && window.deadline > Date.now(); });
+      if (!pins.length) return;
+      const attempt = Math.min(...pins.map(pin => publicationWindows.get(pin.id).attempts));
+      publicationTimer = setTimeout(async () => {
+        publicationTimer = null;
+        if (publicationWatch !== watch || !watch.current() || session() !== watch.credential || document.visibilityState === 'hidden') return;
+        if (q('dialog').open) { schedulePublicationCheck(); return; }
+        const selected = pins.filter(pin => publicationWindows.get(pin.id).deadline > Date.now());
+        if (!selected.length) return;
+        for (const pin of selected) publicationWindows.get(pin.id).attempts++;
+        try {
+          const query = new URLSearchParams(); selected.forEach(pin => query.append('publication_id', pin.id));
+          const result = await api('/api/notebook/publication-status?' + query);
+          if (publicationWatch !== watch || !watch.current() || session() !== watch.credential) return;
+          if (document.visibilityState === 'hidden' || q('dialog').open) { schedulePublicationCheck(); return; }
+          if (!Array.isArray(result?.publications) || result.publications.length !== selected.length || result.publications.some((row, index) =>
+            Object.keys(selected[index]).some(key => row[key] !== selected[index][key]) ||
+            !['submitted', 'approved', 'changes_requested', 'withdrawn'].includes(row.status))) throw Error('Invalid publication status.');
+          let changed = false;
+          for (const row of result.publications) {
+            if (row.status !== 'submitted') changed = true;
+            if (watch.readerId && row.screening_status && row.screening_status !== watch.screeningStatuses.get(row.id)) changed = true;
+            if (row.status !== 'submitted' || !['queued', 'running'].includes(row.screening_status)) publicationWindows.get(row.id).done = true;
+          }
+          if (changed) {
+            stopPublicationWatch(); invalidateReads({publicationsOnly:true});
+            if (watch.readerId) await loadNote(watch.readerId, {quiet:true}); else await loadList({quiet:true});
+            return;
+          }
+        } catch (error) {
+          if (publicationWatch !== watch || !watch.current()) return;
+          if ([401, 403, 404, 410].includes(error.status)) { stopPublicationWatch(); return; }
+          // Transient failures back off silently; normal reads remain usable.
+        }
+        if (publicationWatch === watch) schedulePublicationCheck();
+      }, Math.min(30000, 2000 * 2 ** Math.min(attempt, 4)));
+    }
     function cachedRead(key) {
       // Queue summaries can paint on return; decision forms and full revisions
       // still require a fresh server read, even in the same reviewer session.
@@ -267,14 +329,14 @@
       catch (error) { if (current() && forbiddenRead(error)) invalidateReads(); throw error; }
       finally { if (indexPreparation === task) indexPreparation = null; }
     }
-    async function warm(kind) {
+    async function warm(kind, section = reviewSection) {
       if (typeof account === 'function') setAccount(account());
       if (!accountId || identity() !== accountId || session() !== currentSession ||
           document.hidden || document.visibilityState === 'hidden' || navigator.connection?.saveData || !canWarm()) return {bytes:0};
       if (reviewOnly) {
         // Two separately budgeted idle jobs prepare only the first two summary
         // pages. Later pages are prepared one ahead of the page being read.
-        const query = new URLSearchParams({limit:'25', summary:'true'});
+        const query = new URLSearchParams({limit:'25', summary:'true', screening:'attention'});
         if (kind === 'next') {
           const first = cachedRead('list:review:' + query);
           if (!first?.next_after) return {bytes:0};
@@ -336,7 +398,7 @@
       const summary = el('div', 'nb-toolbar-summary'); summary.append(noteCount, timelineView); toolbar.append(summary);
     }
     const list = mark('list', el('div', 'nb-list')); list.id = reviewOnly ? 'nb-review-note-list' : 'nb-note-list';
-    list.tabIndex = -1; list.setAttribute('aria-label', reviewOnly ? 'Publish requests' : 'Research notes');
+    list.tabIndex = -1; list.setAttribute('aria-label', reviewOnly ? 'Flagged requests' : 'Research notes');
     const pagination = mark('pagination', el('nav', 'nb-pagination')); pagination.setAttribute('aria-label', 'Note pages');
     pagination.tabIndex = -1;
     const pageJump = mark('page-jump', el('label', 'nb-page-jump'));
@@ -380,6 +442,7 @@
       const next = value?.id == null ? null : String(value.id);
       const nextSession = session();
       if (next === accountId && nextSession === currentSession) return;
+      stopPublicationWatch(); publicationWindows.clear(); listPublicationPolicy = null;
       clearReviewDraft(); clearViewSpace(); currentSession = nextSession; invalidateReads(); cancelMapPreparation();
       accountId = next; epoch++; request++; mapRequest++; timelineRequest++; listLoaded = false;
       q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy');
@@ -390,13 +453,14 @@
       q('search').value = ''; q('filter').replaceChildren(); q('page').textContent = ''; humanHint.hidden = true;
       closeDialog(true); q('dialog-body').replaceChildren(); q('list').replaceChildren(); q('full').replaceChildren(); q('count').textContent = ''; q('pagination').hidden = true; notice('');
     }
-    function hide() { captureReviewDraft(); captureReviewDraft = () => {}; bountyController?.hide(); cancelReviewPagePreparation(); clearPageSpace(); clearViewSpace(); timelinePreparation = null; cancelMapPreparation(); clearTimeout(searchTimer); searchTimer = null; active = false; request++; mapRequest++; timelineRequest++; q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy'); q('timeline').replaceChildren(); mapController?.hide(); if (q('dialog').open) { suspendedDialog = true; q('dialog').close(); } }
-    const reviewUrl = (section, extra = {}) => '#reviews?' + new URLSearchParams({section, ...extra});
+    function hide() { stopPublicationWatch(); captureReviewDraft(); captureReviewDraft = () => {}; bountyController?.hide(); cancelReviewPagePreparation(); clearPageSpace(); clearViewSpace(); timelinePreparation = null; cancelMapPreparation(); clearTimeout(searchTimer); searchTimer = null; active = false; request++; mapRequest++; timelineRequest++; q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy'); q('timeline').replaceChildren(); mapController?.hide(); if (q('dialog').open) { suspendedDialog = true; q('dialog').close(); } }
+    const reviewUrl = (section, extra = {}) => '#reviews?' + new URLSearchParams({section:['schemes', 'research'].includes(section) ? 'proposals' : section === 'publication' ? 'flagged' : section, ...extra});
     function pageGuard() { const current = guard(), token = request; return () => current() && token === request; }
-    function backToNotes() { return button(reviewOnly ? '← Publish requests' : '← Notes', () => navigate(reviewOnly ? reviewUrl('publication') : '#notebook'), 'nb-link nb-back'); }
+    function backToNotes() { return button(reviewOnly ? '← ' + reviewLabel() : '← Notes', () => navigate(reviewOnly ? reviewUrl(reviewSection) : '#notebook'), 'nb-link nb-back'); }
     function url(id, revision) { return '#notebook?' + new URLSearchParams({note:id, ...(revision ? {revision:String(revision)} : {})}); }
-    function openNote(id, revision) { navigate(reviewOnly ? reviewUrl('publication', {note:id, ...(revision ? {revision:String(revision)} : {})}) : url(id, revision)); }
+    function openNote(id, revision) { navigate(reviewOnly ? reviewUrl(reviewSection, {note:id, ...(revision ? {revision:String(revision)} : {})}) : url(id, revision)); }
     async function show(nextParams = new URLSearchParams()) {
+      stopPublicationWatch();
       captureReviewDraft(); captureReviewDraft = () => {};
       cancelReviewPagePreparation();
       const readerHadFocus = !q('full').hidden && document.activeElement?.closest('.nb-full') === q('full');
@@ -404,7 +468,16 @@
       const timelineHadFocus = !timelineView.hidden && document.activeElement === timelineView;
       if (typeof account === 'function') setAccount(account());
       active = true; params = new URLSearchParams(nextParams);
-      if (reviewOnly && params.get('section') !== 'bounties') { params.delete('view'); if (params.get('section') === 'research' || params.has('research') || params.has('research_request')) { params.set('research', '1'); params.set('research_review', '1'); params.delete('review'); } else params.set('review', '1'); }
+      if (reviewOnly && ['publication', 'schemes', 'research'].includes(params.get('section'))) params.set('section', params.get('section') === 'publication' ? 'flagged' : 'proposals');
+      if (reviewOnly && params.get('section') !== 'bounties') {
+        params.delete('view');
+        if (params.get('section') === 'proposals' || params.get('section') !== 'flagged' && (params.has('research') || params.has('research_request'))) {
+          params.set('research', '1'); params.set('research_review', '1'); params.delete('review');
+        } else {
+          params.set('review', '1');
+          for (const key of ['research', 'research_review', 'research_request']) params.delete(key);
+        }
+      }
       const inMap = params.get('view') === 'map';
       const inTimeline = params.get('view') === 'timeline', inBounties = reviewOnly ? params.get('section') === 'bounties' : ['bounties', 'guide'].includes(params.get('view')), inVisualization = inMap || inTimeline || inBounties;
       const inShared = !inVisualization && params.get('shared') === '1' && !params.has('note');
@@ -423,7 +496,9 @@
       if (!inTimeline) q('timeline').replaceChildren();
       if (!inMap) mapController?.hide();
       const nextReviewMode = reviewOnly && params.get('review') === '1';
-      if (nextReviewMode !== reviewMode) resetPages();
+      if (nextReviewMode !== reviewMode) { resetPages(); previewId = null; }
+      root.classList.toggle('nb-flagged-queue', nextReviewMode && !inNote);
+      if (reviewOnly) list.setAttribute('aria-label', reviewLabel());
       if (nextReviewMode && !reviewMode) { visibility = 'all'; filter.input.value = 'all'; search = ''; tag = ''; }
       reviewMode = nextReviewMode; filter.wrap.hidden = reviewMode; searchLabel.hidden = reviewMode; notice('');
       if (!reviewMode && params.has('tag')) { tag = params.get('tag'); search = ''; visibility = 'all'; filter.input.value = 'all'; resetPages(); }
@@ -795,7 +870,7 @@
       const pageCount = Math.ceil(rows.length / 25);
       knownPageCount = pageCount;
       pageIndex = Math.min(pageIndex, Math.max(0, pageCount - 1));
-      return {notes:rows.slice(pageIndex * 25, (pageIndex + 1) * 25),
+      return {notes:rows.slice(pageIndex * 25, (pageIndex + 1) * 25), capabilities:cachedRead('summary-index')?.capabilities,
         next_after:(pageIndex + 1) * 25 < rows.length ? 'index:' + (pageIndex + 1) : null};
     }
     function prepareNextPage(query, after) {
@@ -838,28 +913,31 @@
       reviewListReads.set(key, task);
       return task;
     }
-    function reviewPage(result, cursor) {
+    function reviewPage(result, cursor, screening) {
+      if (result?.screening !== screening) throw Error('This review queue is unavailable. Reload after the service has updated.');
       if (!Array.isArray(result?.notes) || result.notes.length > 25 ||
           result.next_after != null && (typeof result.next_after !== 'string' || !result.next_after || result.next_after === cursor)) {
         throw Error('The publish requests could not be loaded.');
       }
-      return {notes:result.notes, next_after:result.next_after || null};
+      return {notes:result.notes, next_after:result.next_after || null, screening};
     }
     function prepareReviewPage(query) {
       const key = 'list:review:' + query;
       if (cachedRead(key)) return Promise.resolve({bytes:0});
-      if (reviewPreparation) return reviewPreparation.key === key ? reviewPreparation.task : Promise.resolve({bytes:0});
+      const scope = query.get('screening');
+      const preparing = reviewPreparations.get(scope);
+      if (preparing) return preparing.key === key ? preparing.task : Promise.resolve({bytes:0});
       const current = readGuard(), entry = {key};
       const task = (async () => {
         const result = await readReviewList(key, query);
-        if (!current() || reviewPreparation !== entry) return {bytes:0};
-        const page = reviewPage(result, query.get('after'));
+        if (!current() || reviewPreparations.get(scope) !== entry) return {bytes:0};
+        const page = reviewPage(result, query.get('after'), scope);
         rememberRead(key, page);
         const cached = readCache.get(key);
         if (cached) cached.prepared = true;
         return {bytes:jsonBytes(result)};
-      })().finally(() => { if (reviewPreparation === entry) reviewPreparation = null; });
-      entry.task = task; reviewPreparation = entry; return task;
+      })().finally(() => { if (reviewPreparations.get(scope) === entry) reviewPreparations.delete(scope); });
+      entry.task = task; reviewPreparations.set(scope, entry); return task;
     }
     function takePreparedReviewPage(key) {
       const entry = readCache.get(key);
@@ -887,9 +965,14 @@
       };
       reviewPageTimer = setTimeout(prepare, 250);
     }
-    async function loadList({paging = false} = {}) {
+    async function loadList({paging = false, quiet = false} = {}) {
       cancelReviewPagePreparation();
       clearTimeout(searchTimer); searchTimer = null;
+      if (quiet && String(pageCursors[pageIndex] || '').startsWith('index:')) {
+        const current = pageGuard(), authorized = readGuard();
+        try { await prepareIndex(true); } catch (_) { return; }
+        if (!current() || !authorized() || !cachedRead('summary-index')?.complete) return;
+      }
       humanHint.hidden = reviewMode || visibility !== 'human';
       knownPageCount = null;
       const indexed = indexedListPage();
@@ -897,7 +980,7 @@
       if (!indexed && String(pageCursors[pageIndex] || '').startsWith('index:')) resetPages();
       const current = guard(), token = ++request, cursor = pageCursors[pageIndex], generation = readEpoch;
       const query = new URLSearchParams({limit:'25'});
-      if (reviewMode) query.set('summary', 'true');
+      if (reviewMode) { query.set('summary', 'true'); query.set('screening', 'attention'); }
       if (!reviewMode) {
         query.set('include_curated', 'true');
         query.set('scope', visibility === 'research' ? 'literature' : ['mine', 'human', 'trash'].includes(visibility) ? visibility : 'all');
@@ -910,9 +993,10 @@
       const cached = indexed || (visibility === 'trash' ? null : cachedRead(key));
       // Keep the last admitted page while a different query is pending, but
       // never treat its rows as matches for that query or derive local pages.
-      const retained = !cached && !reviewOnly && visibility !== 'trash' && listStamp?.generation === readEpoch &&
-        listStamp.child === q('list').firstChild && q('list').querySelector('.nb-entry') && cachedRead(listStamp.key);
+      const retained = !cached && !reviewOnly && visibility !== 'trash' && q('list').querySelector('.nb-entry') &&
+        (quiet && listLoaded || listStamp?.generation === readEpoch && listStamp.child === q('list').firstChild && cachedRead(listStamp.key));
       const paint = result => {
+        listPublicationPolicy = result.capabilities?.publication_policy || null;
         notes = result.notes; nextAfter = result.next_after || null; listLoaded = true;
         const signature = JSON.stringify(result);
         if (listStamp?.key !== key || listStamp.signature !== signature || listStamp.child !== q('list').firstChild) {
@@ -938,7 +1022,7 @@
           reviewMode ? readReviewList(key, query) : api('/api/notebook/notes?' + query));
         if (!current() || request !== token || generation !== readEpoch || params.has('note')) return;
         if (!Array.isArray(result.notes) || (result.next_after && result.next_after === cursor)) throw Error('The notebook could not be loaded.');
-        const page = reviewMode ? reviewPage(result, cursor) : {notes: result.notes, next_after: result.next_after || null};
+        const page = reviewMode ? reviewPage(result, cursor, query.get('screening')) : {notes: result.notes, next_after: result.next_after || null, capabilities:result.capabilities};
         if (visibility !== 'trash') rememberRead(key, page, indexed ? readCache.get('summary-index').at : preparedReview?.at);
         listRefreshing = false; paint(page);
         setListActionsDisabled(false);
@@ -954,13 +1038,13 @@
         if (expiredCursor) resetPages();
         if (retainQueue) {
           listRefreshing = false;
-          notice('Publish requests could not be refreshed. ' + error.message, true);
+          notice(reviewLabel() + ' could not be refreshed. ' + error.message, true);
           q('notice').append(' ', button('Try again', () => loadList(), 'nb-button'));
         } else if (cached && !forbiddenRead(error) && !expiredCursor) notice('Notes could not be refreshed. ' + error.message, true);
         else {
           notes = []; nextAfter = null; listLoaded = false; listStamp = null;
           updateList(() => q('list').replaceChildren(el('p', 'nb-error', error.message), button(expiredCursor ?
-            reviewMode ? 'Restart publish requests' : 'Restart notebook list' : 'Try again', () => loadList(), 'nb-button')));
+            reviewMode ? 'Restart ' + reviewLabel().toLowerCase() : 'Restart notebook list' : 'Try again', () => loadList(), 'nb-button')));
           q('count').textContent = '';
         }
       } finally {
@@ -1058,8 +1142,8 @@
       const filtered = notes;
       q('count').textContent = `${filtered.length} ${filtered.length === 1 ? 'note' : 'notes'}`; q('list').replaceChildren();
       renderPagination();
-      if (reviewMode) q('list').append(el('p', 'nb-hint', 'Publish requests · approve an exact revision for all approved participants to read. This does not publish it to the internet or certify its mathematics.'));
-      if (!filtered.length) q('list').append(el('p', 'nb-empty', reviewMode ? 'No publish requests awaiting approval.' : search.trim() || tag || visibility !== 'all' ? 'No matching notes.' : 'No notes yet. Start with New note.'));
+      if (reviewMode) q('list').append(el('p', 'nb-hint', 'Requests needing human publication review. Open a note to review the reason.'));
+      if (!filtered.length) q('list').append(el('p', 'nb-empty', reviewMode ? 'No ' + reviewLabel().toLowerCase() + ' awaiting approval.' : search.trim() || tag || visibility !== 'all' ? 'No matching notes.' : 'No notes yet. Start with New note.'));
       filtered.forEach((note, index) => {
         const shown = selectedRevision(note), proposal = reviewMode ? null : proposalRevision(note), r = shown.content, expanded = previewId === note.id + ':' + shown.revision, item = el('section', 'nb-entry'), heading = el('h2', 'nb-entry-title');
         const previewIdValue = (reviewOnly ? 'nb-review-preview-' : 'nb-preview-') + index;
@@ -1087,6 +1171,7 @@
         const aside = el('div', 'nb-entry-aside');
         if (!reviewOnly && !reviewMode) aside.append(noteMetadata(note, shown));
         aside.append(actions); headingRow.append(heading, aside); item.append(headingRow);
+        if (reviewMode) item.append(screeningSummary(shown.publication?.screening));
         if (!reviewOnly && ownsNote(note)) {
           actions.append(button('Edit', () => openCardAction(note, 'edit', actions), 'nb-button'));
           if (canPublish(note, shown)) actions.append(button('Publish', () => openCardAction(note, 'publish', actions), 'nb-button'));
@@ -1103,6 +1188,7 @@
         item.append(preview); q('list').append(item);
       });
       if (listStamp) listStamp = {...listStamp, child: q('list').firstChild};
+      watchPublications(filtered.map(note => ({note, revision:selectedRevision(note)})), listPublicationPolicy);
     }
     async function openCardAction(summary, action, actions) {
       if (reviewOnly || !ownsNote(summary) || q('dialog').open) return;
@@ -1163,7 +1249,7 @@
       (passage || q('full').querySelector('.nb-full-title'))?.focus({preventScroll:true});
       if (passage) passage.scrollIntoView({block:'center'});
     }
-    async function loadNote(id) {
+    async function loadNote(id, {quiet = false} = {}) {
       captureReviewDraft(); captureReviewDraft = () => {};
       const current = guard(), token = ++request, requested = params.get('revision'), expectedHash = params.get('sha256'), generation = readEpoch;
       const pinError = passagePinError(params);
@@ -1178,7 +1264,7 @@
         // Quiet revalidation below must not steal focus back from the reader.
         focusReader();
       }
-      else q('full').replaceChildren(backToNotes(), reading('Loading note…'));
+      else if (!quiet) q('full').replaceChildren(backToNotes(), reading('Loading note…'));
       try {
         const result = await (prepared && Date.now() - prepared.at < 10000 ? prepared.task : id.startsWith('curated:')
           ? loadCuratedNotes().then(records => ({note:records.find(note => note.id === id)}))
@@ -1211,7 +1297,7 @@
         if (cached && JSON.stringify(cached) === JSON.stringify(note)) unlock();
         else {
           renderFull(note, requested);
-          if (!cached) focusReader();
+          if (!cached && !quiet) focusReader();
         }
       } catch (error) {
         if (current() && request === token && generation === readEpoch) {
@@ -1280,7 +1366,7 @@
         const passage = body.querySelector('[data-nb-location="' + location + '"]');
         if (!passage) {
           full.append(heading, el('p', 'nb-error', 'Passage ' + location + ' is not present in this saved revision. The link must identify the start of a paragraph, heading or code block.'),
-            button('Read this exact revision', () => navigate(url(note.id, revision.revision) + '&sha256=' + encodeURIComponent(revision.content_sha256))));
+            button('Read this exact revision', () => navigate((reviewOnly ? reviewUrl(reviewSection, {note:note.id, revision:String(revision.revision)}) : url(note.id, revision.revision)) + '&sha256=' + encodeURIComponent(revision.content_sha256))));
           return;
         }
         passage.classList.add('nb-passage-selected');
@@ -1339,13 +1425,67 @@
         const publication = el('section', 'nb-publication');
         publication.append(el('p', 'nb-hint', revision.moderation ? 'Historical publication decision. Access was subsequently withdrawn; the original decision remains in the audit record.' : revision.publication.scope || 'Publication applies only to this revision and makes it readable by all approved participants. It does not publish it to the internet, certify the mathematics or activate a scheme.'));
         if (revision.publication.reason) publication.append(el('p', '', revision.publication.reason));
-        if (revision.publication.reviewer?.handle) publication.append(el('p', 'nb-hint', 'Reviewed by ' + revision.publication.reviewer.handle));
+        if (revision.publication.decision_source === 'automated') publication.append(el('p', 'nb-hint', 'Published after automated screening. This is not a scientific review.'));
+        else if (revision.publication.reviewer?.handle) publication.append(el('p', 'nb-hint', 'Reviewed by ' + revision.publication.reviewer.handle));
         if (revision.publication.test_only_self_review) publication.append(el('p', 'nb-hint', 'Development-only self-review.'));
+        const screening = revision.publication.screening;
+        if (screening?.revision === revision.revision && screening.content_sha256 === revision.content_sha256) {
+          if (revision.publication_status === 'submitted' && (ownsNote(note) || reviewOnly)) {
+            publication.append(el('p', 'nb-screening-status', screening.message));
+          }
+          if (reviewOnly && note.can_moderate && screening.reviewer) publication.append(screeningPanel(screening));
+        }
         full.append(publication);
       }
       if (revision.moderation) full.append(section('Moderation withdrawal', revision.moderation.reason), el('p', 'nb-hint', 'Restricted audit copy. This revision is no longer shared with the community; its original content and review history are preserved.'));
       if (reviewOnly && note.can_review && revision.publication_status === 'submitted') publicationForm(note, revision, full, pageGuard());
       if (reviewOnly && note.can_moderate && revision.publication_status === 'approved') full.append(button('Withdraw community access', () => withdrawalDialog(note, revision)));
+      watchPublications([{note, revision}], note.publication_policy, note.id);
+    }
+    const screeningCategories = {privacy_or_credentials:'Possible private information or credentials', targeted_abuse:'Possible targeted abuse',
+      unauthorized_harm:'Possible unauthorized harm', deceptive_content:'Possible deceptive content', spam:'Possible spam', other_concrete_harm:'Possible publication harm'};
+    function screeningSummary(screening) {
+      // Queue reasons are fixed labels. Model explanations belong only to the
+      // freshly authorized, exact-revision reader.
+      if (screening?.attention_reason === 'screening_unavailable' || screening?.reason_code === 'findings_unavailable') {
+        return el('p', 'nb-screening-summary', 'Screening unavailable · Manual review needed');
+      }
+      if (screening?.attention_reason !== 'content_findings') return el('p', 'nb-screening-summary', 'Manual review needed');
+      const labels = [];
+      if (screening?.verification === 'summary_only') {
+        for (const [code, label] of Object.entries(screeningCategories)) {
+          const category = Array.isArray(screening.categories) && screening.categories.find(item => item?.code === code);
+          if (category && Number.isSafeInteger(category.count) && category.count > 0 && category.count <= 4) labels.push(label + (category.count > 1 ? ' (' + category.count + ')' : ''));
+        }
+        if (Number.isSafeInteger(screening.limitation_count) && screening.limitation_count > 0 && screening.limitation_count <= 2) labels.push('Screening limitation' + (screening.limitation_count > 1 ? ' (' + screening.limitation_count + ')' : ''));
+      }
+      return el('p', 'nb-screening-summary', labels.length ? labels.join(' · ') : 'Screening requested review');
+    }
+    function screeningPanel(screening) {
+      const panel = el('details', 'nb-screening'), finding = screening.reviewer;
+      panel.append(el('summary', '', 'Publication screening'));
+      const content = el('div', 'nb-screening-content');
+      content.append(el('p', 'nb-hint', 'Automated suggestions for publication review only. They may be mistaken; assess the note in context. This is not a scientific review.'),
+        el('p', 'nb-screening-pin', 'Submitted revision ' + screening.revision + ' · SHA-256 ' + screening.content_sha256));
+      if (finding.reason) content.append(el('p', '', finding.reason));
+      if (finding.unavailable) content.append(el('p', '', finding.unavailable));
+      if (finding.outcome === 'no_concern_found') content.append(el('p', '', 'The model reported no concern within this check’s scope. This is not proof of safety or correctness.'));
+      const concerns = Array.isArray(finding.concerns) ? finding.concerns.slice(0, 4) : [];
+      const limitations = Array.isArray(finding.limitations) ? finding.limitations.slice(0, 2) : [];
+      for (const item of concerns) {
+        const row = el('section', 'nb-screening-finding');
+        row.append(el('h4', '', screeningCategories[item.category] || 'Suggested concern'),
+          el('p', 'nb-hint', item.field_label + ' · ' + item.field_id + ' · ' + (item.line_start === item.line_end ? 'line ' + item.line_start : 'lines ' + item.line_start + '–' + item.line_end)),
+          el('p', '', String(item.explanation || '').slice(0, 600)),
+          el('p', '', 'Suggested human check: ' + String(item.next_step || '').slice(0, 600)));
+        content.append(row);
+      }
+      for (const item of limitations) {
+        const row = el('section', 'nb-screening-finding');
+        row.append(el('h4', '', 'Screening limitation'), el('p', 'nb-hint', item.field_label + ' · ' + item.field_id),
+          el('p', '', String(item.reason || '').slice(0, 600))); content.append(row);
+      }
+      panel.append(content); return panel;
     }
     const purposeNames = {visualization_nomination:'Content or visualization change',procedure:'Pipeline or process change',scoring_nomination:'Enable challenge scoring for a scheme',map_nomination:'Add to the Scheme map',highlight_nomination:'Highlight a result',source_check:'Check sources'};
     const outcomeNames = {recommend:'Recommended for the requested next step',changes_requested:'Further work requested',decline:'Not recommended'};
@@ -1486,7 +1626,7 @@
       }catch(err){if(current()&&token===request)full.append(el('p','nb-error',err.message));}
     }
     async function readResearchRequest(id) {
-      const current=guard(),token=++request,full=q('full');full.replaceChildren(button(reviewOnly ? '← Research changes' : '← Research requests',()=>navigate(reviewOnly ? reviewUrl('research') : '#notebook?research=1'),'nb-link nb-back'));
+      const current=guard(),token=++request,full=q('full');full.replaceChildren(button(reviewOnly ? '← Proposals' : '← Research requests',()=>navigate(reviewOnly ? reviewUrl('research') : '#notebook?research=1'),'nb-link nb-back'));
       try{
         const {request:record}=await api('/api/notebook/research-requests/'+encodeURIComponent(id));if(!current()||token!==request)return;
         if(record.withdrawn_source){full.append(el('h2','nb-full-title','Review packet withheld'),el('p','nb-hint',record.scope));return;}
@@ -1692,7 +1832,7 @@
       const container = openDialog('Request publication', 'publication'), alive = dialogGuard(), credential = currentSession;
       const owned = () => alive() && currentSession === credential && session() === credential;
       const preparation = request, preparing = () => owned() && active && request === preparation;
-      container.append(el('p', 'nb-publication-intro', 'These notes will be shared with approved participants only after a reviewer approves them. Later edits stay private.'),
+      const noticePanel = el('div'); container.append(noticePanel,
         el('p', 'nb-hint', 'All eligible private notes are included, regardless of your current filters.'));
       const status = el('p', 'nb-batch-status'); status.setAttribute('role', 'status');
       const rows = el('ol', 'nb-publication-batch'), error = el('p', 'nb-error'); error.setAttribute('role', 'alert');
@@ -1700,9 +1840,13 @@
       const send = button('Send publish requests', run, 'nb-button nb-primary'); send.disabled = true;
       actions.append(cancel, send); container.append(status, rows, error, actions);
       container.setAttribute('aria-busy', 'true');
-      let items = [], busy = false;
+      let items = [], busy = false, policy = null, policyBlocked = false;
       const seen = new Set(); let bytes = 0, count = 0;
       function collect(data, limit) {
+        const pagePolicy = publicationPolicy(data?.capabilities?.publication_policy);
+        if (pagePolicy?.policy_id !== policy?.policy_id || pagePolicy?.mode !== policy?.mode) {
+          throw Error('The publication policy changed while selecting notes. Close and reopen Publish all to read the current notice. No requests were sent.');
+        }
         if (!Array.isArray(data?.notes) || data.notes.length > limit ||
             !(data.next_after === null || typeof data.next_after === 'string' && data.next_after.length > 0 && data.next_after.length <= 768)) throw Error('The complete note selection could not be confirmed. No requests were sent.');
         bytes += jsonBytes(data); count += data.notes.length;
@@ -1728,6 +1872,7 @@
             typeof index.complete !== 'boolean' || index.next_after !== null || !Array.isArray(index.notes) ||
             jsonBytes(index) > 512 * 1024 || (index.complete ? index.overflow_reason !== null :
               !['count_limit', 'byte_limit'].includes(index.overflow_reason) || index.notes.length)) throw Error('The complete note selection could not be confirmed. No requests were sent.');
+        policy = publicationPolicy(index.capabilities?.publication_policy);
         if (index.complete) collect(index, 500);
         else {
           let cursor = null; const cursors = new Set();
@@ -1740,6 +1885,8 @@
             cursors.add(cursor);
           }
         }
+        publicationNotice(noticePanel, policy, true);
+        for (const item of items) Object.assign(item.payload, publicationConsent(policy));
         for (const item of items) {
           const row = el('li'); item.label = el('span', 'nb-batch-result');
           row.append(publicationSelection(item.title, item.payload.revision), item.label); rows.append(row);
@@ -1752,7 +1899,7 @@
       finally { if (owned()) { container.removeAttribute('aria-busy'); if (!preparing()) { send.hidden = true; status.textContent = 'Selection paused. Close and reopen Publish all to refresh it.'; } } }
 
       async function run() {
-        if (busy || !owned() || !active || !items.length) return;
+        if (busy || policyBlocked || !owned() || !active || !items.length) return;
         const page = request, current = () => owned() && active && request === page;
         busy = true; send.disabled = true; error.textContent = '';
         try {
@@ -1771,7 +1918,11 @@
               item.state = 'confirmed'; if (owned()) item.label.textContent = statusLabel(receipt.status);
             } catch (err) {
               if (!owned()) return;
-              if ([404, 409, 410, 422].includes(err.status)) {
+              if (err.status === 422) {
+                policyBlocked = true; item.state = 'waiting'; item.label.textContent = 'Not sent';
+                error.textContent = err.message + ' Close and reopen Publish all to read the current notice and confirm the selected revisions.';
+                break;
+              } else if ([404, 409, 410].includes(err.status)) {
                 item.state = 'skipped'; item.label.textContent = 'Skipped — changed or unavailable';
               } else {
                 item.state = uncertain(err) ? 'uncertain' : 'waiting';
@@ -1787,7 +1938,7 @@
             const remaining = items.filter(item => !['confirmed', 'skipped'].includes(item.state)).length;
             status.textContent = items.filter(item => item.state === 'confirmed').length + ' confirmed · ' +
               items.filter(item => item.state === 'skipped').length + ' skipped' + (remaining ? ' · ' + remaining + ' remaining' : '');
-            send.hidden = !remaining; send.disabled = false;
+            send.hidden = !remaining || policyBlocked; send.disabled = policyBlocked;
             send.textContent = items.some(item => item.state === 'uncertain') ? 'Retry remaining requests' : 'Continue requests';
             cancel.textContent = 'Close';
             if (!remaining && active && !params.has('note') && !params.has('view') && !params.has('research')) void loadList();
@@ -1800,6 +1951,33 @@
       selection.append(el('h3', '', title), el('span', 'nb-publication-revision', 'Revision ' + revision));
       return selection;
     }
+    function publicationPolicy(value) {
+      if (value == null || value.mode === 'disabled') return null;
+      if (!['automatic', 'shadow'].includes(value.mode) || value.screening_required !== true ||
+          !/^[0-9a-f]{64}$/.test(value.policy_id || '') || typeof value.notice !== 'string' || !value.notice.trim() ||
+          typeof value.processor !== 'string' || !value.processor.trim() || !/^https:\/\/\S+$/.test(value.privacy_url || '')) {
+        throw Error('The publication processing notice could not be confirmed. Reload before submitting.');
+      }
+      return Object.freeze({...value});
+    }
+    function publicationConsent(policy) {
+      return policy ? {screening_consent:true, screening_policy_id:policy.policy_id} : {};
+    }
+    function publicationNotice(container, policy, plural = false) {
+      const subject = policy ? (plural ? 'These exact revisions' : 'This exact revision') : (plural ? 'These notes' : 'This revision');
+      const action = policy?.mode === 'automatic' ? subject + ' will be shared with approved participants after a passing automated check.' :
+        subject + ' will be shared with approved participants only after a reviewer approves ' + (plural ? 'them.' : 'it.');
+      container.append(el('p', 'nb-publication-intro', action + ' Later edits stay private.'));
+      if (policy) {
+        const processing = el('p', 'nb-hint', policy.notice + ' ');
+        const privacy = el('a', '', policy.processor + ' data policy');
+        privacy.href = policy.privacy_url; privacy.target = '_blank'; privacy.rel = 'noopener noreferrer';
+        processing.append(privacy); container.append(processing);
+        if (policy.mode === 'shadow') container.append(el('p', 'nb-hint', 'The automated check is an evaluation only; it will not publish these notes.'));
+        container.append(el('p', 'nb-hint', 'Sending the request confirms this processing of the selected ' + (plural ? 'revisions.' : 'revision.')));
+      }
+      container.append(el('p', 'nb-hint', 'Publication does not verify the mathematics or activate a scheme.'));
+    }
     function publicationDialog(note, revision) {
       if (!ownsNote(note)) return;
       const container = openDialog('Request publication', 'publication'), present = dialogGuard();
@@ -1809,9 +1987,11 @@
         return;
       }
       if (revision.publication_status !== 'private') { container.append(el('p', 'nb-hint', statusLabel(revision.publication_status))); return; }
-      container.append(el('p', 'nb-publication-intro', 'This revision will be shared with approved participants only after a reviewer approves it. Later edits stay private.'),
-        el('p', 'nb-hint', 'Publication approval does not verify the mathematics or activate a scheme.'));
-      publicationForm(note, revision, container, present, false);
+      try {
+        const policy = publicationPolicy(note.publication_policy);
+        publicationNotice(container, policy);
+        publicationForm(note, revision, container, present, false, policy);
+      } catch (err) { container.append(el('p', 'nb-error', err.message)); }
     }
     function clearReviewDraft() { reviewDraft?.clear?.(); reviewDraft = null; captureReviewDraft = () => {}; }
     function reviewDraftDirty() {
@@ -1819,7 +1999,7 @@
     }
     function publicationReviewForm(note, revision, container, present) {
       const panel = el('section', 'nb-publication-review'); container.append(panel);
-      panel.append(el('h3', '', 'Publication decision'), el('p', 'nb-hint', 'Review privacy, attribution, spam and suitability for research discussion. Unproved ideas, negative results and criticism can be published with their uncertainty stated. Approval lets all approved participants read this exact revision; it does not certify its mathematics or activate a scheme.'));
+      panel.append(el('h3', '', 'Publication decision'), el('p', 'nb-hint', 'Review concrete abuse, unwanted disclosure of private information and harmful misuse. Unproved ideas, negative results and criticism can be published with their uncertainty stated. Approval lets all approved participants read this exact revision; it does not certify its mathematics or activate a scheme.'));
       if (note.can_edit) panel.append(el('p', 'nb-hint', 'This is a development-only self-review, and the saved decision will be labeled as such.'));
       const requestedAt = revision.publication?.requested_at;
       if (!Number.isFinite(requestedAt) || typeof revision.content_sha256 !== 'string' || !revision.content_sha256) {
@@ -1886,18 +2066,18 @@
         }
       });
     }
-    function publicationForm(note, revision, container, present, reviewing = true) {
+    function publicationForm(note, revision, container, present, reviewing = true, policy = null) {
       if (reviewing) return publicationReviewForm(note, revision, container, present);
       const panel = el('section', 'nb-publication-request');
       const form = el('form', 'nb-form'), error = el('p', 'nb-error'); error.setAttribute('role', 'alert');
       const actions = el('div', 'nb-form-actions'), save = el('button', 'nb-button nb-primary', 'Send publish request'); save.type = 'submit';
       actions.append(button('Cancel', () => closeDialog(), 'nb-button'), save);
       form.append(error, actions); panel.append(form); container.append(panel);
-      let pending = null, busy = false;
+      let pending = null, busy = false, policyBlocked = false;
       form.addEventListener('submit', async event => {
-        event.preventDefault(); if (busy || !present()) return;
+        event.preventDefault(); if (busy || policyBlocked || !present()) return;
         busy = true; save.disabled = true; error.textContent = '';
-        pending ||= {revision:revision.revision,content_sha256:revision.content_sha256,idempotency_key:crypto.randomUUID()};
+        pending ||= {revision:revision.revision,content_sha256:revision.content_sha256,idempotency_key:crypto.randomUUID(), ...publicationConsent(policy)};
         try {
           await api('/api/notebook/notes/' + encodeURIComponent(note.id) + '/publication-requests', pending);
           if (!present()) return;
@@ -1906,8 +2086,9 @@
           notice('Publish request pending.');
         } catch (err) {
           if (!present()) return; if (!uncertain(err)) pending = null;
-          error.textContent = err.message + (pending ? ' Retry the same request to confirm its outcome.' : '');
-        } finally { if (present()) { busy = false; save.disabled = false; save.textContent = pending ? 'Retry the same request' : 'Send publish request'; } }
+          policyBlocked = err.status === 422;
+          error.textContent = err.message + (pending ? ' Retry the same request to confirm its outcome.' : policyBlocked ? ' Close and reopen Publish to read the current notice and confirm this revision.' : '');
+        } finally { if (present()) { busy = false; save.disabled = policyBlocked; save.textContent = pending ? 'Retry the same request' : 'Send publish request'; } }
       });
     }
     function openDialog(title, variant = '') { returnFocus = document.activeElement; hasUnsavedDraft = () => false; discardMessage = 'Discard the unsaved changes to this note?'; suspendedDialog = false; dialogEpoch++; q('dialog-title').textContent = title; q('dialog').setAttribute('aria-label', title); q('dialog').classList.toggle('nb-publish-dialog', variant === 'publication'); q('close').setAttribute('aria-label', 'Close dialog'); q('dialog-body').replaceChildren(); q('dialog').showModal(); return q('dialog-body'); }
@@ -2251,6 +2432,10 @@
     q('search').addEventListener('search', event => { search = event.target.value; changeQuery(); });
     q('dialog').addEventListener('cancel', event => { event.preventDefault(); closeDialog(); });
     q('dialog').addEventListener('close', () => { if (returnFocus?.isConnected) returnFocus.focus({preventScroll:true}); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') { clearTimeout(publicationTimer); publicationTimer = null; }
+      else schedulePublicationCheck();
+    });
     window.addEventListener('beforeunload', event => { captureReviewDraft(); if (hasUnsavedDraft() || reviewDraftDirty()) { event.preventDefault(); event.returnValue = ''; } });
     const controller = {show, hide, setAccount, invalidateReads, warm,
       bountyRoute: () => bountyController?.route() || '#bounties'};

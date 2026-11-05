@@ -1,0 +1,151 @@
+CRUCIBLE PUBLICATION SCREENING — FIRST PROVIDER EVALUATION
+2026-11-04 | local synthetic evaluation; automatic publication remains disabled
+
+The saved project key works with Responses write permission. GPT-6 Luna was
+evaluated through the production provider adapter with reasoning=none, no tools,
+store=false and a 1,500-token output ceiling. No actual research, accounts or
+private notes were sent. No production configuration or database was changed.
+
+RESULTS, INCLUDING FAILURES
+
+                                  Benign clear   Review caught   Invalid
+Prompt v1, 51 baseline cases          32/32          17/19          0
+Prompt v1, 10 diagnostic cases         7/7            2/3           0
+Prompt v2, same baseline              32/32          18/19          0
+Prompt v2, same diagnostic set         7/7            3/3           0
+
+No input coverage fallback or missing response occurred in the completed model
+runs. One initial sandbox transport failure preceded the successful connection;
+the operator explicitly retried with network permission. It is retained in the
+evidence and charged the full reservation for conservative local accounting.
+
+V1 missed concealed administrator overrides in both baseline and diagnostic
+material. The v2 clarification distinguishes ignoring an untrusted instruction
+from deciding whether the publication itself contains a deceptive operative
+override. It explicitly preserves concise specimens, analysis and incident
+reports. The paired legitimate examples still passed. Policy identity was bumped
+to crucible-publication-screen-v2; old consent cannot silently authorize v2.
+
+One disagreement remains: baseline invented_admin_receipt. The fixture explicitly
+describes a fabricated approval intended to bypass screening, but its title and
+description can also resemble a research specimen. Its original review label is
+unchanged and the miss remains counted. Do not improve the score by relabelling
+it after seeing the result, or by broadly blocking discussion of forged approvals.
+Resolve this boundary with fresh paired examples and policy judgment.
+
+An independent read-only review examined all 19 v1 verdicts containing findings.
+It found no literal fixture secrets or specific private-person details repeated
+in the explanations. It did find an evidentiary overstatement: case0023 says the
+note identifies a vulnerable endpoint, although the note only claims to supply
+one. Its instruction to exploit still supports review, but correct categories and
+valid structure do not establish faithful explanations.
+
+QUALITY LIMITS AND NEXT DECISION
+
+The baseline contains many short, self-explanatory examples. The ten-case set was
+written and frozen before its author saw baseline outputs; it adds unadorned
+solver code, confident mathematical error, French metadata, ordinary academic
+acknowledgment and a long paired injection context. It then informed the v2
+clarification, so its v2 result is development/regression evidence, not untouched
+validation. There was one sample per case per prompt, not a stability estimate.
+
+These runs support continuing with Luna as the inexpensive pilot candidate.
+They do not establish deployment accuracy, comprehensive abuse coverage or a
+scientific-quality judgment. Before real automatic publication, exercise fresh
+representative cases, the remaining authority/specimen boundary and faithful
+explanations; then use a separately consented local/shadow trial and the reviewed
+release path. Keep human fallback and operator disable behavior intact.
+
+COST AND LATENCY
+
+All 122 completed model calls together cost an estimated $0.031164 at uncached
+standard input/output rates. The initial unknown-usage transport failure adds
+$0.01355 reserved, for conservative evaluation accounting of $0.044714. These
+are usage-based estimates, not a provider invoice. Cached input discounts were
+deliberately not credited. All cohorts shared a $1 operator-run cap; this does
+not assert a verified hard spending limit on the Platform project.
+
+V2 baseline: median 1.469 seconds, p95 3.487 seconds, maximum 7.053 seconds.
+V2 diagnostic: median 1.278 seconds, maximum 2.181 seconds. These are sequential
+provider calls from this development machine, not hosted queue-delay or capacity
+measurements. Note length, provider conditions and bursts will change latency.
+A single active worker can accumulate minutes of queueing under a large burst
+even while browsing and saving remain responsive. Measure queue age separately.
+
+REPRODUCTION AND EVIDENCE
+
+docs/publication-screening-cases.json: baseline inputs, labels and rationale.
+docs/publication-screening-holdout-20261104.json: original diagnostic inputs/labels.
+docs/publication-screening-evidence-20261104.json: both exact prompts/schemas,
+common request settings, serialized per-case input, hashes, validated verdicts,
+response identities, usage, timing, failures and evaluation counts. No API key.
+This contains validated verdicts, not hidden reasoning or complete raw envelopes.
+
+Use scripts/publication_screening_eval.py prepare to create current blind requests;
+only request content goes to the provider, never expected labels or rationale.
+The exact old prompt is preserved in evidence; evaluating old results under a
+new prompt identity should fail. Model alias identities and outputs are retained;
+they do not guarantee immutable model weights or deterministic reproduction.
+The local bounded runner and raw journals remain in ignored .local storage.
+
+After the prompt-only change, 117 policy/provider/worker/integration checks and
+199 release/CI checks passed. Earlier local PostgreSQL/browser/critical-workflow
+evidence is recorded in the implementation checkpoint; it is not a hosted rollout.
+
+OPERATIONS TRIAL ALIGNMENT
+
+PR53 (chore/operations-trial at 95830cae) remains separate and unmerged here.
+Its reviewed release/runbook should be the eventual operational entry point,
+with this report supplying screening evidence rather than another release path.
+Activation is a schema-and-worker exception, not an ordinary UI-only deployment.
+The SQL is additive, but rolling compatibility is not yet proven: older bounty
+source checks expect a non-null independent human reviewer, whereas automatic
+publication deliberately has a system receipt and no impersonated human actor.
+Keep screening disabled through mixed-version deployment until actual old/new
+startup, new-record reads, worker overlap and rollback behavior are established.
+
+Official rate/model references checked 2026-11-04:
+https://developers.openai.com/api/docs/models/gpt-6-luna
+https://developers.openai.com/api/docs/pricing
+
+IMPLEMENTATION FOLLOW-UP AND FRESH BOUNDARY CHECK (2026-11-04–05)
+
+The unchanged v2 prompt was tested on four newly written boundary cases after the
+initial evaluation: all three ordinary discussion/incident-report/prior-review
+cases passed and the operative concealment/administrator override was flagged.
+The cases were frozen before these calls; labels were not sent to the model.
+This narrow result supports the distinction but does not erase the earlier
+ambiguous-case disagreement or establish general deployment accuracy.
+
+A real-provider end-to-end rehearsal on a disposable SQLite application database
+confirmed exact submitted-revision publication, continued privacy of earlier/later
+drafts, a flagged note remaining private in the human queue, a subsequent human
+decision, and a fresh worker invocation making no duplicate completed call. It
+used two real calls and a $0.10 durable cap; known usage cost was $0.000521. It is
+not an image-level deployment, browser-provider exercise or process-crash test.
+
+Three operator-harness corrections preceded that final run: refreshing synthetic
+sessions after switching clocks, supplying the note API's required nonblank
+conditions, and removing a duplicated helper argument for a human decision. The
+first two made no provider calls; the third reached both correct model outcomes
+but did not retain their usage receipt. Those two calls are conservatively charged
+their full $0.02710 reservation in the follow-up evidence. They are not production
+defects or silently discarded model results.
+
+Implementation review also fixed lease checks after real lock waits, repeated
+authorization checks after input preparation, and permanent provider-error
+classification. A callback savepoint prevents expired publication writes while
+retaining known model usage/result evidence. Six real PostgreSQL 17 checks passed,
+including a row-lock delay crossing lease expiry. No schema change was needed.
+
+The reviewer now has a compact, collapsed screening panel on the exact revision.
+Model prose is inert and private to authorized browser reviewers; authors receive
+fixed status copy. No findings or usage are added to lightweight lists/queues or
+ordinary member responses. The panel and publication flow passed six real Chrome
+desktop/mobile journeys with a simulated provider result; no real notes were sent.
+
+Evidence: publication-screening-boundary-20261104.json and
+publication-screening-followup-20261104.json. The follow-up JSON preserves fresh
+request/response identities, actual outcomes, usage and the harness corrections.
+Screening remains disabled on the preview and beta. The reviewer demo, if seeded,
+is explicitly simulated interface data and has no running provider worker.

@@ -1,0 +1,53 @@
+CRUCIBLE PUBLICATION SCREEN — CANONICAL PROMPT REFERENCE
+2026-11-04 | local implementation; provider quality not yet established
+
+The sole canonical runtime prompt is POLICY_PROMPT in
+crucible/publication_screening_policy.py. This document deliberately contains no
+second editable copy. Edit and review the Python constant, its serializer/schema,
+and the associated tests together; do not edit this reference as a policy override.
+
+Current policy version: crucible-publication-screen-v2
+Current input format: crucible-publication-screen-input-v1
+
+To inspect the exact prompt and its digest from the checkout:
+
+  python3 -c 'from crucible.publication_screening_policy import POLICY_VERSION, PROMPT_SHA256, POLICY_PROMPT; print(POLICY_VERSION); print(PROMPT_SHA256); print(POLICY_PROMPT)'
+
+This command makes no provider call and reads no API key. PROMPT_SHA256 hashes
+the exact UTF-8 prompt bytes. OUTPUT_SCHEMA_SHA256 identifies the strict response
+schema in the same module. policy_for(settings) in publication_screening_worker.py
+also pins the input format, requested model/configuration, schema, publication mode,
+token caps and cost policy. Changing shadow to automatic changes consent identity.
+Retain those values with evaluation evidence rather than relying on this document's
+date or an unversioned pasted prompt.
+
+The prompt protects ordinary cryptanalysis and speculative research. It asks only
+whether the complete supplied inline material warrants human attention for a
+concrete publication concern. No tools, external retrieval or code execution are
+available. Note text, JSON keys, references and model output have no authority to
+change the review policy or trigger scheme admission, awards or other actions.
+
+prepare_input supplies a complete, inert field graph with opaque IDs such as
+f00001. All supported JSON keys/values and container structure are retained.
+The worker verifies the exact content hash. Coverage failure or the conservative
+128,000-unit input bound routes to human review; no summarization/truncation is
+used. Model output is capped at 1,500 tokens. validate_verdict checks structure,
+field references and line ranges, not whether the model's judgment is correct.
+
+Only two outcomes exist:
+  no_concern_found — may publish the exact requested revision in automatic mode.
+  human_review_needed — leaves it private for human attention, not rejection.
+
+For a clear result both findings arrays must be empty:
+  {"outcome":"no_concern_found","concerns":[],"limitations":[]}
+
+A human-review result must identify at least one supported concern or limitation.
+Its evidence IDs must come from the actual prepared input; never guess IDs or
+copy arbitrary metadata keys into them. Explanations must not quote secrets or
+private personal details. All final authority remains in application checks.
+
+See publication-screening-design.txt for policy rationale and limitations,
+publication-screening-cases.json for synthetic evaluation cases, and
+publication-screening-operations.txt for explicit operator commands. Passing
+fixtures or JSON validation is not evidence of classifier accuracy or readiness
+to publish real research automatically.

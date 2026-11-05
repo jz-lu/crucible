@@ -24,7 +24,7 @@ const state = {
   agentTokenRequest: 0,
   agentTokens: [], agentTokenPagination: null,
   agentInstructionsKey: null, challengeStartIntent: null, profileMetadataPending: null,
-  screen: 'catalogue', reviewSection: 'publication', schemeId: null, schemeVersion: null,
+  screen: 'catalogue', reviewSection: 'flagged', schemeId: null, schemeVersion: null,
   overviewMetrics: {computation: 'keygen', security: 'classical'},
   importBusy: false, recoveryImportRequest: 0, submissionFormRevision: 0, submissionDraftBaseline: null,
 };
@@ -87,7 +87,7 @@ let readViewEpoch = 0;
 let renderedReads = new WeakMap();
 function invalidateReadViews({resourceReports = true} = {}) {
   readViews.clear(); pendingReads.clear(); intendedReads.clear(); renderedReads = new WeakMap(); readViewEpoch++;
-  warmedReads.clear(); notebookEarlyReads.clear(); referenceTimings.clear();
+  warmedReads.clear(); notebookEarlyReads.clear(); referenceTimings.clear(); clearReviewProposals();
   if (resourceReports) window.CrucibleResources?.clear();
   browseWarmScheduled = null; browseWarmIntent = null;
 }
@@ -182,7 +182,8 @@ function browseWarmJobs() {
   add('notebook:setup', async () => { await ensureNotebookAssets(); if (browseWarmAllowed()) getNotebookWorkspace(); return 0; });
   for (const kind of ['timeline', 'list']) add('notebook:' + kind, () => notebookWorkspace?.warm?.(kind));
   if (state.canReviewProposals) for (const kind of ['list', 'next']) {
-    add('publication:' + kind, () => window.CrucibleNotebook && getNotebookWorkspace(true).warm(kind));
+    const section = 'flagged';
+    add(section + ':' + kind, () => window.CrucibleNotebook && getNotebookWorkspace(true).warm(kind, section));
   }
   add('navigation', async () => {
     if (state.catalogueLoaded) return 0;
@@ -870,46 +871,137 @@ async function loadAuthorizedWorkspace() {
   applyRoute();
   return true;
 }
-function reviewerRoute(section = 'publication', values = {}) {
+function reviewerRoute(section = 'flagged', values = {}) {
+  section = ['schemes', 'research'].includes(section) ? 'proposals' : section === 'publication' ? 'flagged' : section;
   return '#reviews?' + new URLSearchParams({section, ...values});
 }
+function reviewSurface() {
+  if (state.reviewSection !== 'proposals') return state.reviewSection;
+  const query = new URLSearchParams(window.location.hash.split('?')[1] || '');
+  return query.has('proposal') ? 'scheme-detail' : query.has('research_request') ? 'change-detail' : 'proposals';
+}
 function proposalPageActive() {
-  return state.screen === 'propose' || (state.screen === 'reviews' && state.reviewSection === 'schemes' && state.canReviewProposals);
+  return state.screen === 'propose' || (state.screen === 'reviews' && reviewSurface() === 'scheme-detail' && state.canReviewProposals);
 }
 function renderReviewAccountLink() {
   $('#profile-review-link').hidden = !ownsViewedProfile() || !state.canReviewProposals || !hasAccess();
   renderAccountSignIn();
 }
+let reviewProposalsGeneration = 0;
+function clearReviewProposals() {
+  reviewProposalsGeneration++;
+  for (const kind of ['schemes', 'changes']) {
+    $('#review-' + kind + '-list').replaceChildren();
+    $('#review-' + kind + '-list').removeAttribute('aria-busy');
+    $('#review-' + kind + '-pages').replaceChildren();
+  }
+}
+function showReviewProposals() {
+  clearReviewProposals();
+  const generation = reviewProposalsGeneration, account = state.user?.id, credential = state.csrf, lifecycle = documentEpoch, reads = readViewEpoch;
+  const owns = () => ownsDocument(lifecycle) && state.user?.id === account && state.csrf === credential && reads === readViewEpoch;
+  const current = () => generation === reviewProposalsGeneration && ownsDocument(lifecycle) && hasAccess() &&
+    state.canReviewProposals && state.user?.id === account && state.csrf === credential && state.screen === 'reviews' && reviewSurface() === 'proposals';
+  const changeTypes = {visualization_nomination:'Content or visualization change', procedure:'Pipeline or process change',
+    scoring_nomination:'Challenge scoring', map_nomination:'Scheme map inclusion', highlight_nomination:'Highlight a result', source_check:'Source check'};
+  for (const kind of ['schemes', 'changes']) {
+    const target = $('#review-' + kind + '-list'), pages = $('#review-' + kind + '-pages');
+    let cursors = [null], page = 0, request = 0;
+    const load = async () => {
+      const token = ++request, cursor = cursors[page], key = 'review-proposals:' + kind + ':' + (cursor || '');
+      const present = () => current() && request === token;
+      if (!current()) return;
+      const paint = data => {
+        paintRead(key, target, data, result => {
+          target.replaceChildren();
+          for (const record of result.records) {
+            const link = node('a', undefined, 'proposal-list-entry');
+            link.href = reviewerRoute('proposals', kind === 'schemes' ? {proposal:record.id} : {research_request:record.id});
+            link.append(node('span', record.title, 'proposal-list-name'), node('span', record.meta, 'proposal-list-meta')); target.append(link);
+          }
+          if (!result.records.length) showEmpty(target, kind === 'schemes' ? 'No scheme proposals awaiting review.' : 'No proposed changes awaiting review.');
+        });
+        pages.replaceChildren();
+        if (page || data.next_after) {
+          const previous = node('button', 'Previous page', 'text-button'); previous.type = 'button'; previous.disabled = page === 0;
+          previous.addEventListener('click', () => { if (present() && page) { page--; void load(); } });
+          const next = node('button', 'Next page', 'text-button'); next.type = 'button'; next.disabled = !data.next_after;
+          next.addEventListener('click', () => { if (present() && data.next_after) { cursors = [...cursors.slice(0, page + 1), data.next_after]; page++; void load(); } });
+          pages.append(previous, node('span', 'Page ' + (page + 1)), next);
+        }
+      };
+      const cached = cachedRead(key);
+      if (cached) paint(cached);
+      else { setLoading(target, kind === 'schemes' ? 'Loading scheme proposals…' : 'Loading proposed changes…'); pages.replaceChildren(); }
+      target.setAttribute('aria-busy', 'true');
+      for (const control of pages.querySelectorAll('button')) control.disabled = true;
+      const query = new URLSearchParams({limit:'25'});
+      if (kind === 'changes') query.set('review', 'true');
+      if (cursor) query.set('after', cursor);
+      try {
+        const data = await readAgain(key, (kind === 'schemes' ? '/api/protocol/review-queue?' : '/api/notebook/research-requests?') + query);
+        if (!present()) return;
+        const records = kind === 'schemes' ? data.proposals : data.requests;
+        if (!Array.isArray(records) || records.length > 25 || records.some(record => kind === 'schemes' ? !validProposal(record) :
+            !record || typeof record.id !== 'string' || !record.id || typeof record.title !== 'string' || !Object.hasOwn(changeTypes, record.purpose)) ||
+            data.next_after != null && (typeof data.next_after !== 'string' || !data.next_after || data.next_after === cursor || cursors.slice(0, page + 1).includes(data.next_after))) {
+          throw Error('This proposal group could not be loaded.');
+        }
+        const compact = {records:records.map(record => ({id:record.id, title:kind === 'schemes' ? record.specification.name : record.title,
+          meta:(kind === 'schemes' ? 'Scheme proposal · Revision ' + record.revision + ' · ' + proposalStatusLabel(record.status) : changeTypes[record.purpose] + ' · Awaiting assessment') +
+            (typeof record.author?.handle === 'string' ? ' · ' + record.author.handle : '')})), next_after:data.next_after || null};
+        rememberRead(key, compact); paint(compact);
+      } catch (error) {
+        if (owns() && forbiddenRead(error)) {
+          invalidateReadViews();
+          reviewNotebookWorkspace?.setAccount(null); reviewNotebookWorkspace?.hide();
+          proposals.detailRequest++; proposals.listRequest++; clearProposalReview();
+          $('#proposal-detail-content').replaceChildren(); $('#proposal-list').replaceChildren();
+          if (state.screen === 'reviews' && reviewSurface() === 'proposals') {
+            for (const group of ['schemes', 'changes']) showInlineError($('#review-' + group + '-list'), error.message, showReviewProposals);
+          }
+          return;
+        }
+        if (!present()) return;
+        const expired = error.status === 422 && cursor;
+        if (expired) { readViews.delete(key); cursors = [null]; page = 0; }
+        if (cached && !expired) {
+          renderedReads.delete(target);
+          const retry = node('button', 'Try again', 'text-button'); retry.type = 'button'; retry.addEventListener('click', load);
+          target.append(node('p', 'This group could not be refreshed. ' + error.message, 'error-message'), retry);
+        } else showInlineError(target, error.message, load);
+      } finally { if (present()) target.removeAttribute('aria-busy'); }
+    };
+    void load();
+  }
+}
 function renderReviewPage(query) {
-  const params = new URLSearchParams(query);
+  const params = new URLSearchParams(query), surface = reviewSurface();
   const allowed = hasAccess() && Boolean(state.user) && state.canReviewProposals;
+  clearReviewProposals();
   $('#review-account-back').href = state.user ? personRoute(state.user.handle) : '#people';
   $('#review-navigation').hidden = !allowed;
   $('#review-access-message').hidden = allowed;
-  for (const section of ['publication', 'schemes', 'research', 'bounties']) {
+  for (const section of ['flagged', 'proposals', 'bounties']) {
     const link = $('#review-nav-' + section), selected = state.reviewSection === section;
     if (selected) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
   }
-  $('#review-notebook-workspace').hidden = !allowed || state.reviewSection === 'schemes';
-  $('#proposal-workspace').hidden = !allowed || state.reviewSection !== 'schemes';
+  $('#review-proposals-workspace').hidden = !allowed || surface !== 'proposals';
+  $('#review-notebook-workspace').hidden = !allowed || ['scheme-detail', 'proposals'].includes(surface);
+  $('#proposal-workspace').hidden = !allowed || surface !== 'scheme-detail';
   if (!allowed) {
-    reviewNotebookWorkspace?.setAccount(null);
-    reviewNotebookWorkspace?.hide();
-    return;
+    reviewNotebookWorkspace?.setAccount(null); reviewNotebookWorkspace?.hide(); return;
   }
-  if (state.reviewSection === 'schemes') {
+  if (surface === 'proposals') { showReviewProposals(); return; }
+  if (surface === 'scheme-detail') { params.set('review', '1'); enterProposalPage(params, true); return; }
+  if (surface === 'flagged') {
     params.set('review', '1');
-    enterProposalPage(params, true);
-  } else {
-    if (state.reviewSection === 'publication') {
-      params.set('review', '1');
-      for (const key of ['research', 'research_review', 'research_request']) params.delete(key);
-    } else if (state.reviewSection === 'research') {
-      params.set('research', '1'); params.set('research_review', '1');
-      for (const key of ['review', 'note', 'revision']) params.delete(key);
-    }
-    showNotebook(params, true);
+    for (const key of ['research', 'research_review', 'research_request']) params.delete(key);
+  } else if (surface === 'change-detail') {
+    params.set('research', '1'); params.set('research_review', '1');
+    for (const key of ['review', 'note', 'revision']) params.delete(key);
   }
+  showNotebook(params, true);
 }
 function loadNotebookAsset(path, stylesheet = false) {
   if (notebookAssetLoads.has(path)) return notebookAssetLoads.get(path);
@@ -991,13 +1083,13 @@ function notebookPendingFrame(params) {
   return frame;
 }
 async function showNotebook(query, reviewing = false, page = 'notebook') {
-  const account = state.user?.id, csrf = state.csrf, section = state.reviewSection, request = ++notebookShowRequest, lifecycle = documentEpoch;
+  const account = state.user?.id, csrf = state.csrf, section = state.reviewSection, surface = reviewSurface(), request = ++notebookShowRequest, lifecycle = documentEpoch;
   const params = new URLSearchParams(query || window.location.hash.split('?')[1] || '');
   if (page === 'bounties') params.set('view', 'bounties');
   if (page === 'scheme-map') params.set('view', 'map');
   const target = $(reviewing ? '#review-notebook-workspace' : '#notebook-workspace');
   const current = () => ownsDocument(lifecycle) && request === notebookShowRequest && hasAccess() && account === state.user?.id && csrf === state.csrf &&
-    (reviewing ? state.screen === 'reviews' && state.canReviewProposals && state.reviewSection === section && section !== 'schemes' : state.screen === page);
+    (reviewing ? state.screen === 'reviews' && state.canReviewProposals && state.reviewSection === section && reviewSurface() === surface && !['scheme-detail', 'proposals'].includes(surface) : state.screen === page);
   if (!current()) return;
   // Resolve the tiny action-link index alongside notebook assets, rather than
   // competing with the map's six assets after its controller becomes available.
@@ -1259,7 +1351,7 @@ function applyRoute(focus = false) {
   const legacyParams = new URLSearchParams(query);
   if ((path === '#propose' && legacyParams.get('review') === '1') ||
       (path === '#notebook' && (legacyParams.get('review') === '1' || legacyParams.get('research_review') === '1'))) {
-    const section = path === '#propose' ? 'schemes' : legacyParams.get('research_review') === '1' ? 'research' : 'publication';
+    const section = path === '#propose' || legacyParams.get('research_review') === '1' ? 'proposals' : 'flagged';
     legacyParams.delete('review'); legacyParams.delete('research'); legacyParams.delete('research_review');
     legacyParams.set('section', section); path = '#reviews'; query = legacyParams.toString();
     window.history.replaceState(null, '', path + '?' + query);
@@ -1283,7 +1375,7 @@ function applyRoute(focus = false) {
   const reviewParams = new URLSearchParams(query);
   if (path === '#reviews') {
     const section = reviewParams.get('section');
-    state.reviewSection = ['publication', 'schemes', 'research', 'bounties'].includes(section) ? section : 'publication';
+    state.reviewSection = ['schemes', 'research'].includes(section) ? 'proposals' : ['flagged', 'proposals', 'bounties'].includes(section) ? section : 'flagged';
     if (section !== state.reviewSection) { reviewParams.set('section', state.reviewSection); query = reviewParams.toString(); window.history.replaceState(null, '', '#reviews?' + query); }
   }
   let scheme, profile, handle, view = 'leaderboard';
@@ -5285,7 +5377,7 @@ function enterProposalPage(params, entering) {
   $('#proposal-page-back').hidden = reviewMode;
   $('#proposal-context').hidden = reviewMode;
   $('#proposal-detail-back').href = reviewMode ? reviewerRoute('schemes') : '#notebook?compose=proposal';
-  setText('#proposal-detail-back', reviewMode ? '← Scheme proposals' : '← New proposal note');
+  setText('#proposal-detail-back', reviewMode ? '← Proposals' : '← New proposal note');
   $('#proposal-workspace').classList.toggle('proposal-review-workspace', reviewMode);
   $('#proposal-draft').hidden = Boolean(id) || reviewMode;
   $('#proposal-detail').hidden = !id;
@@ -5551,7 +5643,7 @@ function clearProposalReview() {
   $('#proposal-review-status').hidden = true;
 }
 function showProposalReview(record, initialize = false) {
-  if (state.screen !== 'reviews' || state.reviewSection !== 'schemes' || !proposals.reviewMode || !state.canReviewProposals) return;
+  if (state.screen !== 'reviews' || reviewSurface() !== 'scheme-detail' || !proposals.reviewMode || !state.canReviewProposals) return;
   $('#proposal-review-form').hidden = false;
   $('#proposal-self-review-notice').hidden = !proposals.detailOwn;
   const approvalOption = $('#proposal-decision').querySelector('[value="approved"]');
@@ -5682,7 +5774,7 @@ function showWorkspace(name) {
   // Catalogue arrival must not detach the connected map being prepared for
   // this same destination. Other routes and access loss still cancel it.
   if (!['notebook', 'bounties', 'scheme-map'].includes(name) && !preparingMap) notebookWorkspace?.hide();
-  if (name !== 'reviews' || state.reviewSection === 'schemes') reviewNotebookWorkspace?.hide();
+  if (name !== 'reviews' || ['scheme-detail', 'proposals'].includes(reviewSurface())) reviewNotebookWorkspace?.hide();
   if (name !== 'assumptions') assumptionsWorkspace?.clear();
   const enteringResearch = !research.visible && name === 'research';
   research.visible = name === 'research';
@@ -5702,10 +5794,11 @@ function showWorkspace(name) {
   $('#notebook-workspace').setAttribute('aria-label', name === 'bounties' ? 'Bounties' : name === 'scheme-map' ? 'Scheme map' : 'Notes');
   $('#nav-bounties').hidden = !bountyFeatureAvailable();
   $('#review-workspace').hidden = name !== 'reviews';
-  $('#review-notebook-workspace').hidden = name !== 'reviews' || state.reviewSection === 'schemes' || !state.canReviewProposals;
+  $('#review-notebook-workspace').hidden = name !== 'reviews' || ['scheme-detail', 'proposals'].includes(reviewSurface()) || !state.canReviewProposals;
+  $('#review-proposals-workspace').hidden = name !== 'reviews' || reviewSurface() !== 'proposals' || !state.canReviewProposals;
   $('#research-workspace').hidden = !research.visible;
   $('#about-workspace').hidden = name !== 'about';
-  $('#proposal-workspace').hidden = name !== 'propose' && !(name === 'reviews' && state.reviewSection === 'schemes' && state.canReviewProposals);
+  $('#proposal-workspace').hidden = name !== 'propose' && !(name === 'reviews' && reviewSurface() === 'scheme-detail' && state.canReviewProposals);
   $('#people-workspace').hidden = name !== 'people';
   $('#activity-workspace').hidden = name !== 'activity';
   $('#activity-bounties-section').hidden = !bountyFeatureAvailable();

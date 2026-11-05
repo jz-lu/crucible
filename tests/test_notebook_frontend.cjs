@@ -63,6 +63,139 @@ function fill(app,title='New mathematical claim'){for(const [key,value]of Object
 const byText=(root,label)=>root.querySelectorAll('button').find(n=>n.textContent===label);
 let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
 (async()=>{
+ const screeningPolicy = mode => ({mode,screening_required:true,policy_id:'a'.repeat(64),processor:'OpenAI',model:'gpt-6-luna',
+  notice:'This exact revision is sent to OpenAI. Private drafts are not sent. Monitoring retention may be up to30days.',privacy_url:'https://developers.openai.com/api/docs/guides/your-data'});
+ for(const mode of ['automatic','shadow']) await test(mode+' publication confirmation shows processing before pinned consent',async()=>{
+  const policy=screeningPolicy(mode),stored=note({publication_policy:policy});let sent;
+  const app=await boot({respond:(url,body)=>{if(url.endsWith('/publication-requests')&&body){sent=JSON.parse(JSON.stringify(body));return{note:stored};}if(url.startsWith('/api/notebook/notes/note-one'))return{note:stored};}});
+  await app.show('note-one');byText(app.q('full'),'Publish').click();
+  assert.equal(sent,undefined);assert.match(app.q('dialog-body').textContent,/sent to OpenAI.*Private drafts.*retention/);
+  assert.match(app.q('dialog-body').textContent,/Sending the request confirms this processing/);
+  assert.match(app.q('dialog-body').textContent,mode==='automatic'?/after a passing automated check/:/evaluation only.*will not publish/);
+  app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
+  assert.equal(sent.screening_consent,true);assert.equal(sent.screening_policy_id,policy.policy_id);
+  assert.equal(sent.revision,1);assert.equal(sent.content_sha256,'hash-1');
+ });
+ await test('invalid processing notice cannot offer publication confirmation',async()=>{
+  const stored=note({publication_policy:{...screeningPolicy('automatic'),policy_id:'invalid'}});
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});
+  await app.show('note-one');byText(app.q('full'),'Publish').click();
+  assert.match(app.q('dialog-body').textContent,/notice could not be confirmed/);
+  assert.equal(byText(app.q('dialog-body'),'Send publish request'),undefined);assert.equal(app.requests.some(row=>row.body),false);
+ });
+ for(const mode of ['shadow','disabled']) await test('a stale '+mode+' processing policy requires renewed confirmation and never upgrades consent',async()=>{
+  const stored=note(mode==='disabled'?{}:{publication_policy:screeningPolicy(mode)});let writes=0;
+  const app=await boot({respond:(url,body)=>{if(body&&url.endsWith('/publication-requests')){writes++;throw Object.assign(Error('Policy changed'),{status:422});}if(url.startsWith('/api/notebook/notes/note-one'))return{note:stored};}});
+  await app.show('note-one');byText(app.q('full'),'Publish').click();const form=app.root.querySelector('.nb-form');
+  form.dispatchEvent({type:'submit'});await flush();assert.equal(writes,1);
+  assert.match(app.q('dialog-body').textContent,/Close and reopen Publish to read the current notice/);assert.equal(byText(app.q('dialog-body'),'Send publish request').disabled,true);
+  if(mode==='disabled')assert.equal(app.requests.find(row=>row.body).body.screening_consent,undefined);
+  form.dispatchEvent({type:'submit'});await flush();assert.equal(writes,1);
+ });
+ await test('automatic publication provenance never impersonates a human scientific reviewer',async()=>{
+  const stored=note({...revision(1,'Automatically shared','approved'),publication:{decision_source:'automated',reviewer:{handle:'must-not-appear'},scope:'Community visibility only.'}});
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});await app.show('note-one');
+  assert.match(app.q('full').textContent,/Published after automated screening.*not a scientific review/);
+  assert.doesNotMatch(app.q('full').textContent,/Reviewed by must-not-appear/);
+ });
+ const screeningDetail = () => ({revision:1,content_sha256:'hash-1',status:'human_review',message:'Awaiting human publication review.',
+  reviewer:{reason:null,outcome:'human_review_needed',concerns:[{category:'privacy_or_credentials',field_label:'Body',field_id:'f00003',
+   line_start:1,line_end:2,explanation:'<img src=x onerror=alert(1)> PRIVATE_MODEL_FINDING',next_step:'[Do this](https://example.invalid)'}],
+   limitations:[{field_label:'Additional metadata',field_id:'f00007',reason:'The model could not interpret this field.'}]}});
+ await test('reviewer findings stay collapsed, exactly pinned and inert without filling the decision',async()=>{
+  const stored=note({...revision(1,'Screened request','submitted'),can_edit:false,can_review:true,can_moderate:true,
+   owner:{id:2,handle:'bob'},publication:{requested_at:99,screening:screeningDetail()}});
+  const app=await boot({reviewOnly:true,initialParams:new URLSearchParams('section=publication&note=note-one'),
+   respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});
+  const panel=app.q('full').querySelector('.nb-screening');assert.ok(panel);assert.ok(!panel.open);
+  assert.equal(panel.querySelector('summary').textContent,'Publication screening');
+  assert.match(panel.textContent,/may be mistaken.*not a scientific review.*Submitted revision 1.*hash-1/);
+  assert.match(panel.textContent,/Possible private information.*Body.*f00003.*lines 1–2/);
+  assert.match(panel.textContent,/<img src=x onerror=alert\(1\)> PRIVATE_MODEL_FINDING/);
+  assert.match(panel.textContent,/Screening limitation.*Additional metadata/);
+  assert.equal(panel.querySelectorAll('a,img,script,button').length,0);
+  assert.match(app.q('full').textContent,/Review concrete abuse, unwanted disclosure of private information and harmful misuse/);
+  assert.doesNotMatch(app.q('full').textContent,/suitability for research discussion/);
+  assert.equal(app.root.querySelector('[name="reason"]').value,'');assert.equal(app.requests.some(row=>row.body),false);
+ });
+ for(const audience of ['author','other member','reviewer normal reader']) await test(audience+' reader does not render private screening findings',async()=>{
+  const stored=note({...revision(1,'Screened request','submitted'),owner:audience==='other member'?{id:2,handle:'bob'}:user,
+   can_moderate:audience==='reviewer normal reader',publication:{requested_at:99,screening:screeningDetail()}});
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});await app.show('note-one');
+  assert.equal(app.q('full').querySelector('.nb-screening'),null);assert.doesNotMatch(app.q('full').textContent,/PRIVATE_MODEL_FINDING/);
+  assert.equal(Boolean(app.q('full').querySelector('.nb-screening-status')),audience!=='other member');
+ });
+ await test('screening panel ignores a result pinned to another revision',async()=>{
+  const stored=note({...revision(1,'Screened request','submitted'),can_review:true,can_moderate:true,
+   publication:{requested_at:99,screening:{...screeningDetail(),revision:2}}});
+  const app=await boot({reviewOnly:true,initialParams:new URLSearchParams('section=publication&note=note-one'),
+   respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});
+  assert.equal(app.q('full').querySelector('.nb-screening'),null);
+ });
+ await test('owner reader quietly refreshes human fallback status once then stops polling',async()=>{
+  const id='30000000-0000-4000-8000-000000000005';let complete=false,statusReads=0,bodyReads=0;
+  const stored=()=>note({...revision(1,'Pending screening','submitted'),publication_policy:screeningPolicy('automatic'),
+   publication:{id,requested_at:99,screening:{revision:1,content_sha256:'hash-1',status:complete?'human_review':'queued',
+    message:complete?'Awaiting human publication review.':'Awaiting automated screening.'}}});
+  const app=await boot({respond:url=>{
+   if(url.startsWith('/api/notebook/publication-status?')){statusReads++;complete=true;return{publications:[{id,note_id:'note-one',revision:1,content_sha256:'hash-1',status:'submitted',screening_status:'human_review'}]};}
+   if(url.startsWith('/api/notebook/notes/note-one')){bodyReads++;return{note:stored()};}
+  }});
+  await app.show('note-one');assert.match(app.q('full').textContent,/Awaiting automated screening/);
+  await app.advanceTimers(2000);assert.equal(statusReads,1);assert.equal(bodyReads,2);assert.match(app.q('full').textContent,/Awaiting human publication review/);
+  await app.advanceTimers(30000);assert.equal(statusReads,1);assert.equal(bodyReads,2);
+ });
+ await test('visible own pending requests refresh compact status then quietly refresh the list once',async()=>{
+  const id='30000000-0000-4000-8000-000000000001';let complete=false,statusReads=0;
+  const stored=()=>note({...revision(1,'Pending screened note',complete?'approved':'submitted'),publication:{id,requested_at:99}});
+  const app=await boot({respond:url=>{
+   if(url.startsWith('/api/notebook/publication-status?')){statusReads++;assert.deepEqual(new URL(url,'http://testserver').searchParams.getAll('publication_id'),[id]);return{publications:[{id,note_id:'note-one',revision:1,content_sha256:'hash-1',status:complete?'approved':'submitted',screening_status:complete?'published':'running'}]};}
+   if(url.startsWith('/api/notebook/notes?'))return{notes:[stored()],next_after:null,capabilities:{publication_policy:screeningPolicy('automatic')}};
+  }});
+  await app.advanceTimers(2000);assert.equal(statusReads,1);assert.match(app.q('list').textContent,/Publish request pending/);
+  complete=true;await app.advanceTimers(4000);assert.equal(statusReads,2);assert.match(app.q('list').textContent,/Published/);
+  assert.equal(app.requests.some(row=>row.url.startsWith('/api/notebook/notes/')),false,'List refresh never loads bodies');
+  await app.advanceTimers(30000);assert.equal(statusReads,2,'Completed work stops polling');
+ });
+ for(const stop of ['hide','account','hidden','expired','human-review']) await test('screening status refresh stops for '+stop,async()=>{
+  const id='30000000-0000-4000-8000-000000000002';let statusReads=0;
+  const stored=note({...revision(1,'Pending screened note','submitted'),publication:{id,requested_at:99}});
+  const app=await boot({respond:url=>{
+   if(url.startsWith('/api/notebook/publication-status?')){statusReads++;return{publications:[{id,note_id:'note-one',revision:1,content_sha256:'hash-1',status:'submitted',screening_status:'human_review'}]};}
+   if(url.startsWith('/api/notebook/notes?'))return{notes:[stored],next_after:null,capabilities:{publication_policy:screeningPolicy('automatic')}};
+  }});
+  if(stop==='hide')app.controller.hide();
+  if(stop==='account')app.setAccount({id:2,handle:'bob'});
+  if(stop==='hidden'){app.document.visibilityState='hidden';app.document.dispatchEvent({type:'visibilitychange'});}
+  if(stop==='expired'){const Now=Date.now()+300001;app.sandbox.Date=class extends Date{static now(){return Now;}};}
+  await app.advanceTimers(2000);assert.equal(statusReads,stop==='human-review'?1:0);
+  await app.advanceTimers(30000);assert.equal(statusReads,stop==='human-review'?1:0);
+ });
+ await test('late publication status cannot render across an account change',async()=>{
+  const id='30000000-0000-4000-8000-000000000003',held=deferred();
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/publication-status?')?held.promise:
+   url.startsWith('/api/notebook/notes?')?{notes:[note({...revision(1,'Private pending title','submitted'),publication:{id,requested_at:99}})],next_after:null,capabilities:{publication_policy:screeningPolicy('automatic')}}:undefined});
+  const polling=app.advanceTimers(2000);await flush();app.setAccount({id:2,handle:'bob'});
+  held.resolve({publications:[{id,note_id:'note-one',revision:1,content_sha256:'hash-1',status:'approved',screening_status:'published'}]});await polling;
+  assert.doesNotMatch(app.q('list').textContent,/Private pending title/);
+ });
+ await test('publication completion refreshes an indexed later page without jumping to the first page',async()=>{
+  const id='30000000-0000-4000-8000-000000000004';let complete=false,indexReads=0;
+  const records=()=>Array.from({length:30},(_,index)=>{
+   const pending=index===29,record=note({id:'indexed-'+index,...revision(1,'Indexed note '+(index+1),pending?(complete?'approved':'submitted'):'private'),
+    ...(pending?{publication:{id,requested_at:99}}:{})});record.revisions[0].summary=true;return record;
+  });
+  const app=await boot({respond:url=>{
+   if(url.startsWith('/api/notebook/publication-status?')){complete=true;return{publications:[{id,note_id:'indexed-29',revision:1,content_sha256:'hash-1',status:'approved',screening_status:'published'}]};}
+   if(url.includes('projection=index')){indexReads++;return{format:'crucible-notebook-summary-index-v1',projection:'index',complete:true,viewer_id:1,scope:'all',include_curated:true,notes:records(),next_after:null,overflow_reason:null,capabilities:{publication_policy:screeningPolicy('automatic')}};}
+   if(url.startsWith('/api/notebook/notes?'))return{notes:records().slice(0,25),next_after:'next',capabilities:{publication_policy:screeningPolicy('automatic')}};
+  }});
+  await app.controller.warm('list');await app.show();app.q('more').click();await flush();
+  assert.equal(app.q('page').textContent,'Page 2');assert.match(app.q('list').textContent,/Indexed note 30.*Publish request pending/);
+  await app.advanceTimers(2000);
+  assert.equal(indexReads,2);assert.equal(app.q('page').textContent,'Page 2');
+  assert.match(app.q('list').textContent,/Indexed note 30.*Published/);assert.doesNotMatch(app.q('list').textContent,/Indexed note 1\b/);
+ });
  await test('new notes choose a type, preserve entered text and save proposal intent without submitting for review',async()=>{
   let saved;
   const app=await boot({respond:(url,body)=>url==='/api/notebook/notes'&&body?(saved=JSON.parse(JSON.stringify(body)),{note:note()}):undefined});
@@ -588,7 +721,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const owned=note({private_share_count:2,can_manage_private_sharing:true});const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:owned}:undefined});await app.show('note-one');byText(app.q('full'),'Edit').click();assert.match(app.q('dialog-body').textContent,/private revision/);assert.doesNotMatch(app.q('dialog-body').textContent,/recipients/);fill(app,'Improved note');app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();assert.equal(app.q('notice').textContent,'Private revision saved.');
  });
  await test('normal note reviewer actions navigate to the separate review page without opening a popup',async()=>{
-  const queued=note({can_edit:false,can_review:true,owner:{id:2,handle:'bob'},...revision(2,'Candidate','submitted')});const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:queued}:undefined});await app.show('note-one',2);byText(app.q('full'),'Review note').click();assert.equal(app.location.hash,'#reviews?section=publication&note=note-one&revision=2');assert.equal(app.q('dialog').open,false);assert.equal(app.requests.some(row=>row.body),false);
+  const queued=note({can_edit:false,can_review:true,owner:{id:2,handle:'bob'},...revision(2,'Candidate','submitted')});const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:queued}:undefined});await app.show('note-one',2);byText(app.q('full'),'Review note').click();assert.equal(app.location.hash,'#reviews?section=flagged&note=note-one&revision=2');assert.equal(app.q('dialog').open,false);assert.equal(app.requests.some(row=>row.body),false);
  });
  await test('review-only notebook has no ordinary author tools and records a publication decision inline',async()=>{
   const queued=note({can_edit:false,can_review:true,owner:{id:2,handle:'bob'},...revision(2,'Candidate','submitted')});const app=await boot({reviewOnly:true,initialParams:new URLSearchParams('section=publication&note=note-one&revision=2'),respond:(url,body)=>body?{note:queued}:url.startsWith('/api/notebook/notes/note-one')?{note:queued}:undefined});assert.equal(app.q('new'),null);assert.equal(app.q('files'),null);assert.equal(app.q('notes-view'),null);assert.equal(app.q('dialog').open,false);assert.equal(byText(app.q('full'),'Edit'),undefined);assert.match(app.q('full').textContent,/Publication decision.*certify its mathematics/);app.root.querySelector('[name="reason"]').value='Unproved claim clearly marked.';app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();const write=app.requests.find(r=>r.body);assert.equal(write.url,'/api/notebook/notes/note-one/publication-reviews');assert.equal(write.body.decision,'approved');assert.equal(write.body.revision,2);
@@ -650,7 +783,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.equal(destroyed,1);assert.equal(app.q('map').textContent,'');
  });
  await test('review workspace never schedules or accepts map preparation',async()=>{
-  let mounts=0;const app=await boot({reviewOnly:true,mapFactory:async()=>{mounts++;return null;},respond:url=>url.startsWith('/api/notebook/review-queue?')?{notes:[],next_after:null}:undefined});
+  let mounts=0;const app=await boot({reviewOnly:true,mapFactory:async()=>{mounts++;return null;},respond:url=>url.startsWith('/api/notebook/review-queue?')?{notes:[],next_after:null,screening:'attention'}:undefined});
   await app.advanceTimers(300);assert.equal(mounts,0);
  });
  await test('map receives a current catalogue callback rather than a frozen release snapshot',async()=>{
@@ -725,9 +858,10 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   await app.show('curated:landscape-ml-kem',1);assert.equal(app.requests.filter(r=>r.url==='/map/notes.json').length,1);
   assert.match(app.q('full').textContent,/ML-KEM/);
  });
- await test('community sharing requests uses clear audience and revision language and excludes curated research',async()=>{
-  const app=await boot({reviewOnly:true,researchWorkspace:research,initialParams:new URLSearchParams('section=publication'),respond:url=>url.startsWith('/api/notebook/review-queue')?{notes:[note({...revision(1,'Review candidate','submitted')})],next_after:null}:undefined});
-  assert.match(app.q('list').textContent,/Publish requests.*exact revision.*all approved participants.*internet.*mathematics.*Review candidate.*Publish request pending/);assert.doesNotMatch(app.q('list').textContent,/Sharing review|Awaiting sharing approval/);assert.equal(app.q('list').querySelectorAll('.nb-literature').length,0);
+ await test('human-attention queue uses neutral manual review language and excludes curated research',async()=>{
+  const app=await boot({reviewOnly:true,researchWorkspace:research,initialParams:new URLSearchParams('section=publication'),respond:url=>url.startsWith('/api/notebook/review-queue')?{notes:[note({...revision(1,'Review candidate','submitted')})],next_after:null,screening:'attention'}:undefined});
+  assert.match(app.q('list').textContent,/Requests needing human publication review.*Review candidate.*Publish request pending.*Manual review needed/);assert.doesNotMatch(app.q('list').textContent,/Sharing review|Awaiting sharing approval/);assert.equal(app.q('list').querySelectorAll('.nb-literature').length,0);
+  assert.equal(listQuery(app.requests.find(row=>row.url.startsWith('/api/notebook/review-queue')).url).get('screening'),'attention');
   assert.equal(app.requests.some(r=>r.url==='/map/notes.json'),false);
  });
  await test('an obsolete notebook cursor restarts at the first bounded page after an explicit retry',async()=>{

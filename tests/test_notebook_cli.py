@@ -107,7 +107,8 @@ def test_cli_import_export_and_followup_publication_are_end_to_end(connected_cli
     assert output(capsys)["receipt"]["publication_status"] == "submitted"
     assert count(app, notebook.NotebookPublication) == 1
     assert count(app, notebook.NotebookNote) == 1
-    assert state["requests"][-1] == state["requests"][-2]
+    writes = [item for item in state["requests"] if item[0] == "POST"]
+    assert writes[-1] == writes[-2]
     assert invoke("import", "--file", source) == 0
     assert output(capsys)["receipt"]["replayed"]
     assert count(app, notebook.NotebookImport) == 1
@@ -208,4 +209,47 @@ def test_cli_private_note_delete_restore_and_lost_response_retries(connected_cli
     assert invoke(*restore_args) == 0
     assert output(capsys)["receipt"]["deleted"] is True  # Nor can restore undo a later deletion.
     assert count(app, notebook_trash.NotebookDeletion) == 2
+    assert count(app, notebook.NotebookPublication) == 0
+
+
+def test_cli_screening_requires_an_explicit_policy_pin_before_writing(connected_cli, capsys, monkeypatch):
+    app, owner, invoke, state, config, root = connected_cli
+    note = create(owner)
+    policy = {'mode': 'automatic', 'screening_required': True, 'policy_id': 'b' * 64,
+              'processor': 'OpenAI', 'notice': 'Synthetic notice: external screening and automatic publication.'}
+    original = cli.Client.request
+    def request(self, path, *args, **kwargs):
+        return policy if path == '/api/notebook/publication-policy' else original(self, path, *args, **kwargs)
+    monkeypatch.setattr(cli.Client, 'request', request)
+    assert invoke('publication-policy') == 0
+    assert output(capsys) == policy
+    args = ('request-publication', note['id'], '--revision', 1, '--sha256', note['content_sha256'],
+            '--retry', root / 'consented-request.json')
+    assert invoke(*args) == 1
+    assert output(capsys)['error']['code'] == 'screening_consent_required'
+    assert count(app, notebook.NotebookPublication) == 0
+    assert not (root / 'consented-request.json').exists()
+    assert not any(method == 'POST' for method, *_ in state['requests'])
+    state['lose_once'] = True
+    assert invoke(*args, '--screening-policy-id', policy['policy_id']) == 1
+    assert output(capsys)['error']['code'] == 'network_error'
+    # An uncertain retry preserves consent, identity and content instead of
+    # silently adopting a new notice. Server enforces pins on new requests.
+    policy['policy_id'] = 'c' * 64
+    assert invoke(*args, '--screening-policy-id', 'b' * 64) == 0
+    assert output(capsys)['receipt']['publication_status'] == 'submitted'
+    writes = [item for item in state['requests'] if item[0] == 'POST']
+    assert writes[-1] == writes[-2]
+    assert json.loads(writes[-1][2])['screening_consent'] is True
+    assert json.loads(writes[-1][2])['screening_policy_id'] == 'b' * 64
+    assert count(app, notebook.NotebookPublication) == 1
+
+
+def test_cli_rejects_invalid_screening_pins_before_any_request(connected_cli, capsys):
+    app, owner, invoke, state, *_ = connected_cli
+    note = create(owner)
+    assert invoke('request-publication', note['id'], '--revision', 1, '--sha256', note['content_sha256'],
+                  '--screening-policy-id', 'not-a-policy') == 1
+    assert 'policy_id' in output(capsys)['error']['message']
+    assert state['requests'] == []
     assert count(app, notebook.NotebookPublication) == 0

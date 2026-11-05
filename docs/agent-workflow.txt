@@ -62,8 +62,9 @@ Existing tokens never gain private-notebook access automatically:
 
 The participant opens the printed link and approves the displayed short code and
 permissions. --notebook adds notebook:read (own private notes/export/feedback),
-notebook:write (create, import, revise, delete/restore private drafts), and notebook:publish (request publication
-review) to the usual scopes. To request a smaller set, repeat --scope instead,
+notebook:write (create, import, revise, delete/restore private drafts), and
+notebook:publish (request exact-revision publication) to the usual scopes. To
+request a smaller set, repeat --scope instead,
 for example --scope notebook:read --scope notebook:write. These permissions grant
 no review, moderation, research-request or scheme-admission authority.
 
@@ -73,7 +74,8 @@ no review, moderation, research-request or scheme-admission authority.
   python3 crucible_cli.py notebook import --file workspace.json --json
   python3 crucible_cli.py notebook create --file content.json --json
   python3 crucible_cli.py notebook revise NOTE_UUID --file revision-2.json --revision 1 --sha256 BASE_HASH --json
-  python3 crucible_cli.py notebook request-publication NOTE_UUID --revision 2 --sha256 SAVED_HASH --json
+  python3 crucible_cli.py notebook publication-policy --json
+  python3 crucible_cli.py notebook request-publication NOTE_UUID --revision 2 --sha256 SAVED_HASH --screening-policy-id POLICY_ID --json
   python3 crucible_cli.py notebook delete NOTE_UUID --revision 2 --sha256 SAVED_HASH --retry delete-1.json --json
   python3 crucible_cli.py notebook list --deleted --json
   python3 crucible_cli.py notebook restore NOTE_UUID --deletion-id DELETION_UUID --json
@@ -101,7 +103,30 @@ optional. Read note-format.txt for citations, exact links and inert metadata.
 import takes the existing crucible-theory-local-v1 workspace, including notes,
 consecutive revision history with createdAt milliseconds, and views (usually []).
 All saves/imports start private; import never submits a publication request.
-Publication approval is a separate human action and is not scientific admission.
+Publication is a separate, explicit action and is not scientific admission.
+
+Read notebook publication-policy before requesting publication. The local
+implementation defaults to disabled and has not enabled live automated screening.
+The actual server notice is authoritative: disabled uses human publication review;
+shadow checks externally but never auto-publishes; automatic publishes the exact
+revision on a valid pass, with other results available for human attention.
+This screen concerns concrete abuse/privacy risks, not mathematical merit.
+
+When screening_required is true, inspect the processor/retention notice and use
+its exact policy_id with --screening-policy-id. Supplying that flag explicitly
+consents to sending the submitted revision to the named external processor under
+that policy. Without the flag the CLI stops before writing a publication request.
+If screening is disabled, omit the flag. Never obtain consent by silently fetching
+a notice and treating its hash as permission. The configured human/agent authority
+must cover the disclosed external processing. Private drafts, other revisions and
+unrelated notes are not sent. Model calls never happen during browsing or saving.
+
+The policy pins publication mode as well as prompt/schema/model configuration.
+Shadow consent cannot be promoted to automatic publication. After an uncertain
+write, repeat the exact command and policy pin with its original retry file;
+do not replace the pin with the latest notice or create a second request. If a
+request has not committed and its policy changed, read the new notice and make an
+explicit new choice. A later edit always needs its own publication request.
 
 Every write saves a private retry file before sending the request. By default
 create/revise/import place it beside the input as FILE.ACTION-retry.json;
@@ -116,7 +141,8 @@ latest note and preparing a new revision explicitly; no automatic merge occurs.
 
 Notebook API allowlist: GET /api/notebook/notes (owned summaries only),
 GET /api/notebook/notes/{note_id}, GET /api/notebook/export,
-GET /api/notebook/imports/{import_id}; POST /api/notebook/notes,
+GET /api/notebook/imports/{import_id}, GET /api/notebook/publication-policy,
+GET /api/notebook/publication-status; POST /api/notebook/notes,
 POST /api/notebook/import, POST /api/notebook/notes/{note_id}/revisions,
 POST /api/notebook/notes/{note_id}/delete, POST /api/notebook/notes/{note_id}/restore,
 POST /api/notebook/notes/{note_id}/publication-requests. The optional ?summary=true
@@ -125,6 +151,17 @@ returns a crucible-publication-request-v1 receipt containing publication_request
 history. The default full-note response is unchanged. Both projections retain
 the same authorization, latest-revision checks, idempotency and rate limit; a
 replay acknowledges the original exact request with its current decision status.
+When screening is enabled, a new publication request also needs
+screening_consent=true and screening_policy_id equal to the current notice's
+policy_id. The server validates these before enqueueing any work. No new scope
+or reviewer authority is granted by the consent fields.
+
+For bounded progress checks, publication-status accepts 1–25 distinct repeated
+publication_id query parameters from owned publication receipts. It returns exact
+note/revision/hash pins, publication status and a separate screening_status, never
+note bodies or model output. An unknown or unowned ID fails the whole request.
+Poll only pending owned requests; a status read never triggers a provider call.
+The existing show command remains available to inspect the saved note/decision.
 Reads require notebook:read;
 create/import/revise/delete/restore require notebook:write; requesting publication
 requires notebook:publish. Revisions bind expected_revision/content_sha256;
@@ -508,11 +545,14 @@ results from new deductions and conjectures, and name any source you could not
 check. Include mathematical conditions, objections and next questions. Negative
 results and distant theoretical leads are valid. Never manufacture approval,
 security estimates or a KEM connection from a descriptive tag.
-Use notebook request-publication (or the human Publish action) to request
-publication of an exact saved revision.
-A configured reviewer approves publication to eligible Crucible participants.
-During private beta, this does not expose the note to the internet. Editing
-preserves old revisions; publication approval never silently follows an edit.
+Use notebook publication-policy, then notebook request-publication (or the human
+Publish action) to request publication of an exact saved revision under the
+current notice. Disabled mode uses a configured reviewer; explicitly enabled
+automatic screening can publish a valid pass with recorded automated provenance.
+Flags/failures remain available for human review. Neither path validates the
+science or executes proposed changes. During private beta, publication does not
+expose the note to the internet. Editing preserves old revisions; publication
+approval never silently follows an edit.
 Private participant sharing has been removed. Historical grants are inert and
 cannot expose drafts or future saves. Only the author edits the note. A reviewer
 can read only revisions submitted to the relevant review process; their role

@@ -1,6 +1,7 @@
 """Creation-date counts cover the current readable corpus, never private history."""
 from datetime import datetime, timezone
 import json
+import re
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -146,7 +147,9 @@ def test_account_dates_aggregate_without_loading_note_bodies_or_one_query_per_no
     assert result['total'] == 150 and result['points'] == [{'date': '1970-01-01', 'created': 150, 'total': 150}]
     assert len(statements) == 1
     assert 'count(*)' in statements[0].lower() and 'GROUP BY' in statements[0]
-    assert 'content' not in statements[0] and 'source_revision' not in statements[0]
+    # Exact-publication eligibility reads a digest, never the content column.
+    # Do not confuse content_sha256 with selecting a note's body/metadata.
+    assert not re.search(r'\b(?:content|source_revision)\b', statements[0])
     assert 'floor(' in str(compiled[0]) and 'GROUP BY' in str(compiled[0])
 
 

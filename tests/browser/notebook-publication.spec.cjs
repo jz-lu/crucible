@@ -1,5 +1,81 @@
 const {test, expect, signIn} = require('./helpers.cjs');
 
+for (const width of [1440, 390]) {
+  test(`Reviewer screening findings are collapsed and inert at ${width}px`, async ({page}, testInfo) => {
+    await page.setViewportSize({width, height:1000});
+    await signIn(page, 'queuereviewer');
+    const saved = await page.evaluate(async () => (await api('/api/notebook/review-queue?summary=true')).notes[0]);
+    // Only synthetic screening evidence is overlaid on the real authorized
+    // fixture read. No worker or model runs; API scoping has separate tests.
+    await page.route('**/api/notebook/notes/' + saved.id + '*', async route => {
+      const response = await route.fetch(), data = await response.json();
+      const revision = data.note.revisions.find(item => item.revision === saved.revision);
+      revision.publication.screening = {revision:revision.revision, content_sha256:revision.content_sha256,
+        status:'human_review', message:'Awaiting human publication review. Automated screening has not approved this request.',
+        reviewer:{reason:null,outcome:'human_review_needed',concerns:[{category:'privacy_or_credentials',
+          field_label:'Body',field_id:'f00003',line_start:1,line_end:1,
+          explanation:'<img src=x onerror=alert(1)> is inert synthetic text. The model suggested checking disclosure context.',
+          next_step:'Ask whether the example is intentionally public.'}],
+          limitations:[{field_label:'Additional metadata',field_id:'f00007',reason:'The model could not interpret this synthetic field.'}]}};
+      await route.fulfill({response,json:data});
+    });
+    await page.goto('/#reviews?section=publication&note=' + saved.id + '&revision=' + saved.revision);
+    const panel = page.locator('.nb-screening'), disclosure = panel.locator('summary');
+    await expect(disclosure).toHaveText('Publication screening');
+    await expect(panel.locator('.nb-screening-content')).not.toBeVisible();
+    await disclosure.scrollIntoViewIfNeeded();
+    await page.screenshot({path:testInfo.outputPath('screening-review-collapsed.png')});
+    await disclosure.click();
+    await expect(panel).toContainText('Submitted revision ' + saved.revision);
+    await expect(panel).toContainText(saved.content_sha256);
+    await expect(panel).toContainText('may be mistaken');
+    await expect(panel).toContainText('<img src=x onerror=alert(1)>');
+    await expect(panel.locator('img,a,script,button')).toHaveCount(0);
+    await expect(page.locator('[name="reason"]')).toHaveValue('');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await panel.scrollIntoViewIfNeeded();
+    await page.screenshot({path:testInfo.outputPath('screening-review-expanded.png')});
+  });
+}
+
+for (const [width, actor, mode] of [[1440, 'alice', 'automatic'], [390, 'bob', 'shadow']]) {
+  test(`Screening notice binds explicit consent at ${width}px`, async ({page}, testInfo) => {
+    await page.setViewportSize({width, height:1000});
+    await signIn(page, actor);
+    const saved = await page.evaluate(async () => (await api('/api/notebook/notes', {
+      idempotency_key:crypto.randomUUID(), content:{title:'Synthetic screening consent fixture',
+        claim:'Browser confirmation only.', conditions:'Disposable local data.', body:'No model call occurs.', tags:['fixture']}})).note);
+    const policy = {mode, screening_required:true, policy_id:'a'.repeat(64), processor:'OpenAI', model:'gpt-6-luna',
+      notice:'This exact revision will be sent to OpenAI for a publication-safety check. Private drafts are not sent. API data is not used for training by default; standard monitoring retention can be up to 30 days, with exceptions.',
+      privacy_url:'https://developers.openai.com/api/docs/guides/your-data'};
+    // The server remains disabled and never runs a provider. Overlay only the
+    // synthetic notice to exercise the real browser form; backend worker tests
+    // separately verify enabled consent, dispatch and publication transitions.
+    await page.route('**/api/notebook/notes/*', async route => {
+      if (route.request().method() !== 'GET' || !/\/api\/notebook\/notes\/[^/]+$/.test(new URL(route.request().url()).pathname)) return route.fallback();
+      const response = await route.fetch(), data = await response.json();
+      if (data.note?.id === saved.id) data.note.publication_policy = policy;
+      await route.fulfill({response, json:data});
+    });
+    await page.goto('/#notebook?note=' + saved.id);
+    await page.locator('[data-nb="full"]').getByRole('button', {name:'Publish', exact:true}).click();
+    const dialog = page.locator('#notebook-workspace dialog[data-nb="dialog"]');
+    await expect(dialog).toContainText('sent to OpenAI');
+    await expect(dialog).toContainText('up to 30 days');
+    await expect(dialog).toContainText('Sending the request confirms this processing');
+    await expect(dialog).toContainText(mode === 'automatic' ? 'after a passing automated check' : 'evaluation only');
+    expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await page.screenshot({path:testInfo.outputPath('screening-consent.png'), fullPage:true});
+    const received = page.waitForRequest(request => request.method() === 'POST' && new URL(request.url()).pathname === `/api/notebook/notes/${saved.id}/publication-requests`);
+    await dialog.getByRole('button', {name:'Send publish request', exact:true}).click();
+    const body = (await received).postDataJSON();
+    expect(body).toMatchObject({revision:saved.revision, content_sha256:saved.content_sha256,
+      screening_consent:true, screening_policy_id:policy.policy_id});
+    await expect(dialog).not.toBeVisible();
+    await expect(page.locator('[data-nb="full"]')).toContainText('Publish request pending');
+  });
+}
+
 for (const [width, actor] of [[1440, 'bulkdesktop'], [390, 'bulkmobile']]) {
   test(`Publish all confirms exact revisions and renders compact receipts at ${width}px`, async ({page}, testInfo) => {
     await page.setViewportSize({width, height:1000});

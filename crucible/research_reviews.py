@@ -119,9 +119,7 @@ def source_snapshot(session, user, ref):
         if note.author_id != user.id:
             shared = session.scalar(select(notebook.NotebookPublication).where(
                 notebook.NotebookPublication.revision_id == revision.id,
-                notebook.NotebookPublication.decision == 'approved',
-                notebook.NotebookPublication.revision_id.not_in(notebook_moderation.withdrawn_ids()),
-                notebook.NotebookPublication.test_only_self_review.is_(False)))
+                notebook.publication_screening.approved_clause()))
             if shared is None:
                 raise HTTPException(404, 'Source revision not found.')
         content, author_id, origin = revision.content, note.author_id, 'account-note'

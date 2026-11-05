@@ -1,0 +1,342 @@
+CRUCIBLE — AUTOMATIC NOTE PUBLICATION SCREEN
+2026-11-05 | disabled by default; hosted deployment is a separate operation
+
+DECISION AND SCOPE
+
+When automatic mode is deliberately enabled, a valid no_concern_found result
+publishes the exact requested revision to admitted participants. There is no
+routine second human publication approval after a pass. human_review_needed and
+failures leave the request available for human attention; neither is an automatic
+rejection, ban or claim about the author's intentions.
+
+Publishing research does not authorize admitting a scheme, changing parameters,
+executing code, changing a visualization, creating a bounty or awarding points.
+Those actions retain their separate reviews. Private-beta publication is limited
+to admitted participants, not anonymous internet readers. An unflagged note is
+not a correctness, security, novelty, attribution or scientific-quality verdict.
+
+The implementation includes consent, exact-revision queueing, a provider adapter,
+durable leases and budget accounting, automated provenance, and a common effective
+publication predicate. It also includes opt-in child supervision in the existing
+hosted service. Synthetic and mocked-provider tests exercise the lifecycle;
+they do not establish the classifier's quality. Provider evaluation, operational
+validation and production activation remain separate work. This local pass has
+not sent private research to a provider or enabled a live publication worker.
+The first synthetic provider evaluation is now complete; see
+publication-screening-evaluation-20261104.txt for both prompts, observed failures,
+usage/timing and the remaining limitations. The current prompt is v2. This small
+development suite is not evidence of deployment accuracy or activation approval.
+
+Local validation through 2026-11-05 includes ten executed PostgreSQL 17 checks
+against a disposable loopback database, plus synthetic browser consent and reviewer
+checks across desktop/mobile. These complement lifecycle/unit checks; they are not
+hosted database validation, model-quality evaluation or authorization to activate
+beta. The grant fixture checks compatibility with existing broad runtime default
+privileges; it does not establish the proposed minimum hosted table grants.
+
+Canonical sources:
+  crucible/publication_screening_policy.py — prompt, serializer and output schema
+  crucible/publication_screening_jobs.py — leases, budget and atomic finalization
+  crucible/publication_screening_worker.py — dispatch, access checks and operator CLI
+  crucible/publication_screening_supervisor.py — explicit hosted child lifecycle
+  crucible/publication_screening_provider.py — opt-in tool-free Responses adapter
+  docs/publication-screening-prompt.txt — exact canonical prompt reference
+  docs/publication-screening-cases.json — synthetic evaluation cases
+  docs/publication-screening-operations.txt — setup, commands and activation checks
+
+POLICY
+
+The screen looks for concrete publication abuse, privacy exposure or harmful
+misuse grounded in the submitted material. It protects legitimate research:
+cryptanalysis, unexpected attacks, key recovery, solver code, reductions, useful
+obstructions, negative results, conjectures and unconventional or incorrect
+mathematics are eligible to pass. Ordinary dual-use potential, missing citations,
+low prestige, AI authorship, terse prose or sharp technical criticism are not
+reasons to flag a note. Quoted hostile content and adversarial prompts must be
+read in context. A model cannot establish intent or certify plagiarism checks.
+
+The six categories for human attention are privacy_or_credentials,
+targeted_abuse, unauthorized_harm, deceptive_content, spam and other_concrete_harm.
+The last category requires a specific serious concern, not a subjective quality
+judgment. Apparently usable nonpublic service credentials need attention even if
+the author owns them. Public challenge keys, public keys, synthetic test secrets
+and ordinary public citations are not credential leaks merely because they contain
+key material or names. General mathematical cryptanalysis requires no blanket
+proof of authorization; explicit assistance to harm actual targets is different.
+
+The canonical prompt defines the detailed distinctions. Model content and output
+remain untrusted. No URLs are fetched, no code is run, and no tools are offered.
+The model cannot choose a record ID, database write or permission. A flag applies
+to one exact revision; the author can correct it in a new revision without
+rewriting history. The human path can approve a pending request or ask for changes.
+
+REQUEST, CONSENT AND VISIBILITY
+
+Saving, importing, reading, searching, reloading and browsing never call a model.
+Only an explicit publication request can enqueue work. Publish all submits exact
+eligible revisions under the same consent, ownership, quota and rate limits; it
+does not scan the whole notebook. Existing publication requests are not backfilled
+by the migration, by changing settings, or by starting the worker.
+
+GET /api/notebook/publication-policy returns the current mode and, when enabled,
+the processor notice, model and exact policy_id. The author must submit
+screening_consent=true and that screening_policy_id when making a new request in
+shadow or automatic mode. The notice discloses external processing and whether a
+pass can publish. Disabled mode retains the existing human-review request path.
+
+An earlier submitted revision may finish while its author works on a newer private
+draft. The worker uses the submitted ID and canonical content hash, never the
+latest revision. A new revision needs its own publication request. Exact retries
+return the original request; changing the policy does not silently upgrade the
+earlier consent. Publication mode is part of policy identity: shadow consent can
+never be reinterpreted as permission for automatic publication.
+
+The policy identity also pins prompt digest, input-format version, output-schema
+digest, requested model, reasoning setting, token caps, tool restrictions,
+store=false and the cost reservation policy. The returned model ID is retained.
+Requested model aliases are not immutable model weights; reevaluate changes and
+inspect the actual returned snapshot rather than claiming full reproducibility.
+
+Publication status remains submitted / approved / changes_requested / withdrawn.
+GET /api/notebook/publication-status accepts 1–25 distinct repeated publication_id
+query parameters owned by the caller. It returns exact note/revision/hash pins,
+publication status and a separate screening_status. It returns no note body,
+screening explanation or model output. Unknown or unowned IDs fail as a whole;
+the endpoint does not enumerate another participant's pending work. Status polling
+is bounded and does not trigger dispatch or a model call.
+
+DURABLE EXECUTION
+
+Migration 0031 adds screening jobs, attempts, monthly budget buckets, a singleton
+operator-control row and automated publication receipts. It adds nullable
+decision_source to existing publication decisions. Existing decided records with
+a reviewer receive human provenance; their reviewer IDs, reasons, times and
+content remain unchanged. No historical note is enqueued. The new control starts
+disabled, independently of application settings.
+
+The publication-request transaction enqueues only identifiers and a policy
+snapshot. Its compact summary response does not wait for screening. Jobs deduplicate
+on publication request plus policy identity. A dispatcher reserves the call's
+maximum configured cost and claims one global database lease in a short transaction.
+Author fairness uses least-recently-served ordering, then request age. The initial
+implementation has one global active lease across worker processes, not two.
+
+The CLI loop polls idle work every second by default, emits no repeated idle log
+messages, and drains eligible work without an extra sleep between jobs. There is
+no hourly batch or model call inside a web request. Initial local synthetic v2
+provider calls had a median around 1.4 seconds, with one call above seven seconds;
+hosted queue delay and burst capacity remain unmeasured. At an illustrative five
+seconds per call, sixty calls need roughly five minutes plus overhead. Increasing
+concurrency needs a deliberate lease/budget change and measured queue-delay need.
+
+Hosted execution is opt-in through CRUCIBLE_PUBLICATION_SCREENING_WORKER_ENABLED,
+which defaults to false and accepts only literal true/false. The App Platform
+factory attaches supervision to ASGI lifespan only when that switch is true and
+the application mode is not disabled. The existing service starts an independent
+child running the ordinary worker loop; no extra paid hosting component is
+provisioned. Provider usage and the child's instance/database resources still
+count. The hosted child reads only CRUCIBLE_PUBLICATION_SCREENING_API_KEY, lazily
+at an eligible send. Imports, normal local factories and browsing spawn nothing.
+The worker CLI bounds PostgreSQL connection establishment to five seconds,
+statements to ten seconds, lock waits to five seconds and idle transactions to
+ten seconds. These connection settings leave the ordinary web database unchanged.
+
+Application mode, matching durable control and explicit worker enablement remain
+separate gates. The supervisor never enables control, backfills notes, creates
+consent, releases leases, interprets results or changes cost/attempt limits.
+Child failure restarts use exponential delays from one to thirty seconds, reset
+after sixty seconds of stable lifetime. Shutdown sends TERM with a five-second
+grace, then KILL with a two-second reap grace and bounded monitor cancellation.
+Service restarts preserve the existing 120-second lease and conservative cost
+recovery: a provider may have received an interrupted request, and any eligible
+retry still obeys the two-attempt limit and exact-policy checks.
+
+The child's streams are discarded; supervisor logs are fixed lifecycle codes,
+not raw exceptions, provider responses or note content. HTTP /health confirms
+web/database readiness, not worker queue progress. Operators inspect safe durable
+status counts, queued/running age, lease expiry and reservations, plus a separately
+consented canary.
+Supervision tests use synthetic children and do not demonstrate hosted rollout
+or provider success. The operator guide records the exact lifecycle and controls.
+
+The worker checks active membership, suspension, ownership, exact revision/hash,
+pending publication, withdrawal and trash before sending. It checks the lease,
+policy and expiry again after input preparation. The network call happens outside
+database transactions. Finalization repeats access and exact-revision checks under
+account → note → publication locks, after the core's global lease lock. A human
+decision, withdrawal, revocation, changed policy or disabled control prevents a
+late automatic publication. Human notebook paths do not acquire the global
+screening lock, avoiding reversed lock ordering.
+
+A successful publication and its immutable receipt commit together. The source is
+automated; actor is system:publication-screening. reviewer_id, review_key and
+review_sha256 stay NULL. The receipt binds publication, revision/hash, job, attempt,
+policy, actual model, result hash and time. The attempt retains bounded validated
+findings and usage/input-digest metadata, not the input note or hidden reasoning.
+At most one receipt can apply to a publication. Human history is not impersonated
+or overwritten. Downgrade refuses to discard durable screening/cost/provenance data.
+Detailed model concerns remain private evidence. An authorized configured reviewer
+using a browser can now open a compact, initially collapsed Publication screening
+panel on the exact full note revision. It revalidates stored result/input hashes
+and field/line bounds, then renders bounded model prose as inert, fallible advice.
+Authors receive fixed status copy only; other members and agent tokens receive no
+reviewer findings. Ordinary note lists and the compact status endpoint do not load
+model findings or usage. The reviewer-only Flagged requests queue adds bounded
+category summaries, as described below. Human decisions remain explicit and
+separate from the model.
+
+The shared effective-publication predicate accepts receipt-backed automated
+publication for note visibility and source evidence. A bare automated label with
+no matching receipt grants no access. Bounty completion, scheme admission and
+other effectful reviews remain independent. Development-only self-review remains
+excluded from production evidence; it is not converted into automatic approval.
+
+COVERAGE, LIMITS AND FAILURE
+
+Note storage limits are unchanged: body 40,000 characters; claim and conditions
+20,000 each; supported serialized content at most 384 KiB. The serializer includes
+every inline JSON field and key, retaining exact strings, container structure and
+opaque field IDs. Account metadata, unrelated notes and private revision history
+are excluded. External resources are outside this screen's scope.
+
+The input budget is 128,000 conservative units: UTF-8 bytes of the serialized
+request envelope, including prompt, schema and input, plus framing allowance.
+This is a conservative token ceiling, not a tokenizer measurement or permission
+to silently truncate. Oversize, unsupported or uncovered input goes to a human.
+The output cap is 1,500 tokens. Validation checks exact output structure, categories,
+field IDs, line ranges and consistency; a clear verdict must contain no findings.
+This validates form and coverage, not the model's semantic judgment.
+
+The provider applies a 45-second asynchronous deadline to the complete HTTP
+send/receive operation, including headers and body, with cancellation and transport
+cleanup. The database lease is 120 seconds. Process/OS stalls can still exceed a
+wall-clock target, so lease checks remain authoritative. An expired/stale result
+cannot publish. Canceling transport cannot recall a request already received by
+the provider, so ambiguous timeouts may incur billable duplicates. The ledger
+charges the full reserved maximum when usage is unknown. These limits must be
+exercised before hosted activation.
+
+At most two attempts are allowed. Only transient service errors or expired leases
+may retry; invalid verdicts do not retry in search of a more permissive answer.
+Authentication, access, configuration and recognized quota failures have distinct
+fixed error codes and do not retry. A billing-related HTTP 429 is distinguished
+from transient throttling without retaining raw provider error messages. Error
+body reads are bounded and covered by the same total request deadline.
+Malformed output, refusal, incomplete coverage, exhausted budget and unrecoverable
+errors leave the note private for human attention. No failure means automatic
+approval or a finding of abuse. Error telemetry uses fixed codes, never raw note
+content, credentials, provider bodies or exception strings.
+
+Rendering sanitization, inert URLs, authentication, quotas and rate limits remain
+deterministic safeguards. A passed note is no guarantee about remote links or
+the safety of running its code. Publication does not turn artifacts into commands.
+
+CANDIDATE MODELS AND COST WORKSHEET
+
+The implemented default candidate is gpt-6-luna with reasoning=none. The worksheet
+pins $0.10 per million input tokens and $0.50 per million output tokens. Alternate
+candidate settings are gpt-5.4-mini at $0.75/$4.50 with reasoning=none, and
+gpt-6.1-sol at $2/$10 with reasoning=low. These are declared planning/rate inputs,
+not measured usage, invoices or an assertion that any model passes evaluation.
+Confirm availability and current project pricing before activation. [1]
+
+Luna worksheet, without cached-input discounts:
+  Input tokens   Output tokens    One call       1,000 calls
+  5,000          500              $0.00075       $0.75
+  15,000         1,000            $0.00200       $2.00
+  128,000        1,500            $0.01355       $13.55
+
+The last row is the configured maximum reservation, not a typical note. A maximum
+call reserves 13,550 micro-USD for Luna, 102,750 for mini, or 271,000 for Sol. Charges
+round upward to integer micro-USD and include billed output/reasoning tokens.
+Known usage settles the reservation; ambiguous usage consumes the full reserve.
+Cached inputs are charged at full input rate conservatively. Rates, tax, provider
+billing policy and retry exposure can differ from this worksheet.
+
+The default application cap is 10,000,000 micro-USD ($10) per UTC month. Durable
+operator control and worker settings both constrain it; the stricter cap wins.
+Reservations are transactional, so concurrent claim attempts cannot independently
+spend the same allowance. A call is accounted to its dispatch month. This ledger
+is an application guard, not a guarantee about provider billing or spend by other
+applications. Provider project limits/alerts are useful additional controls.
+
+PRIVACY AND ACTIVATION EVIDENCE
+
+The notice explains that a submitted exact revision is sent to OpenAI. Private
+drafts are not sent. API data is not used for training by default, but standard
+abuse-monitoring retention can include content for up to 30 days, subject to the
+provider's exceptions. store=false does not provide zero retention. Confirm the
+actual project and data controls before transmitting unpublished research. [2]
+
+Automatic publication remains disabled until the operator completes synthetic
+provider evaluation and independent validation of the release. Evaluate paired
+research/abuse contexts, prompt injection, metadata, Unicode and long notes. Keep
+unseen holdout cases; report false flags and harmful passes separately with counts
+and uncertainty. Synthetic fixture labels are not measurements. A small perfect
+suite is not a safety proof. Do not claim an accuracy percentage without evidence.
+
+Before activation, complete PostgreSQL lock/race and privilege checks, browser
+consent/status/cache checks, migration rehearsal, production backup and verified
+restore, plus explicit go/no-go review of provider results. A shadow/canary phase
+uses its own consent policy and does not publish automatically. It does not grant
+permission to promote those earlier requests when automatic mode is enabled.
+
+Keep the human fallback and operator disable command available. Investigate
+unexpected false flags, harmful passes, queue delays and budget discrepancies.
+Do not add continuous rescanning, a multi-model cascade or wider permissions
+without evidence and a separate decision.
+
+OFFICIAL REFERENCES (reviewed for the design on 2026-11-04)
+[1] https://developers.openai.com/api/docs/pricing
+[2] https://developers.openai.com/api/docs/guides/your-data
+[3] https://developers.openai.com/api/docs/guides/latency-optimization
+
+REVIEW CENTER
+
+The review center has three entries: Flagged requests, Proposals and Bounties.
+There is no separate Publish requests tab. With automatic screening enabled, a
+passing publication request publishes without reviewer intervention. The Flagged
+requests entry collects unresolved requests needing human attention: model-raised
+concerns or limitations, screening failures, evaluation-only outcomes and older
+manual requests. Active automatic jobs are not review work. Fixed neutral labels
+distinguish screening unavailability and manual review from content concerns.
+A provider outage or exhausted budget does not imply abuse by the author.
+Queued work remains visible for manual attention if screening is disabled or its
+policy no longer matches. A running job without a current matching lease also
+surfaces here. These are read-only checks; browsing never repairs, retries or
+cancels provider work. A valid queued job still depends on an operating worker;
+the queue is not a worker-health monitor.
+
+GET /api/notebook/review-queue accepts screening=attention for this combined human
+queue. The existing all|flagged|unflagged filters remain API-compatible, with all
+retaining its original default response. Filters are applied in SQL before keyset
+pagination, and the response identifies the chosen filter. The frontend checks
+that identity before rendering or caching a page, so an older server ignoring an
+unknown parameter cannot silently show every pending request as human review
+work. Browser reviewer authorization remains required.
+
+Filtered summaries read bounded evidence for only the selected page in a batched
+query. Fixed category labels and counts give a concise reason without publishing
+model prose, evidence text, note bodies, accounting, or arbitrary metadata keys.
+Stored result/policy digests and bounded structure are checked for that summary.
+Recomputing full input hashes and evidence line locations remains the exact-note
+reader's job. Corrupt summary evidence yields a neutral unavailable message,
+leaving the note readable and pending; it never supplies a new approval or rejection.
+
+The publication queue preserves exact revision navigation and back links. A
+completed human decision removes the request from pending queues. Legacy Publish
+requests links open the combined queue, preserving any exact note target.
+
+Proposals groups scheme admission and other proposed changes in one overview.
+The two bounded lists keep independent cursors and failures: combining initial
+pages must not pretend to provide a globally ordered merged queue. Each entry is
+labelled by type and opens the existing specific review form. This changes the
+navigation, not the permissions or authority of those decisions. A publication
+screen cannot admit a scheme, implement a change, approve a bounty or award points.
+Legacy scheme and research-review links retain their selected requests.
+Compact proposal pages use the existing session-bound browser read cache and
+revalidate on return. The overview cache retains only row metadata; the existing
+scheme-list API still returns specifications, while the changes API omits source
+bodies. Opening a request uses its existing detailed review endpoint.
+Authorization loss clears both groups and prevents late responses from painting.
+This simplification introduces no schema or provider changes.

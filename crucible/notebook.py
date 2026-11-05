@@ -20,7 +20,7 @@ from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, JSON, String,
 from sqlalchemy.orm import Mapped, aliased, load_only, mapped_column
 
 from .db import Base, User
-from . import protocol_proposals, proposal_notes, proposal_retractions, notebook_sharing, notebook_moderation, notebook_graph, note_ratings, machine_auth, notebook_trash, notebook_numbers
+from . import protocol_proposals, proposal_notes, proposal_retractions, notebook_sharing, notebook_moderation, notebook_graph, note_ratings, machine_auth, notebook_trash, notebook_numbers, publication_screening
 
 
 FORMAT = "crucible-theory-local-v1"
@@ -96,6 +96,7 @@ class NotebookPublication(Base):
     idempotency_key: Mapped[str] = mapped_column(String(36))
     request_sha256: Mapped[str] = mapped_column(String(64))
     decision: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    decision_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
     reviewer_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     reviewed_at: Mapped[float | None] = mapped_column(Float, nullable=True)
     reason: Mapped[str | None] = mapped_column(String(10000), nullable=True)
@@ -216,6 +217,11 @@ class PublicationInput(BaseModel):
     revision: int = Field(ge=1, le=MAX_REVISIONS, strict=True)
     content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     idempotency_key: UUID
+
+
+class PublicationRequestInput(PublicationInput):
+    screening_consent: bool = Field(default=False, strict=True)
+    screening_policy_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
 class ReviewInput(PublicationInput):
@@ -630,9 +636,10 @@ def register_routes(app, db, settings, clock, user_for, throttle):
         if revision.source_revision is not None:
             data["imported_created_at"] = revision.source_revision["createdAt"]
         if publication:
-            data["publication"] = {"requested_at": publication.requested_at, "reviewed_at": publication.reviewed_at,
+            data["publication"] = {"id": publication.id, "requested_at": publication.requested_at, "reviewed_at": publication.reviewed_at,
                 "reason": publication.reason, "reviewer": {"handle": reviewer_handle} if reviewer_handle is not None else None,
                 "test_only_self_review": publication.test_only_self_review,
+                "decision_source": publication.decision_source or ("human" if publication.reviewer_id else None),
                 "scope": "Publication makes this exact revision readable to eligible Crucible participants. It does not certify mathematics or activate a scheme."}
         if withdrawal:
             data["publication_status"] = "withdrawn"
@@ -640,11 +647,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
         return data
 
     def approved_clause():
-        allowed = [NotebookPublication.test_only_self_review.is_(False)]
-        if not settings.production and settings.allow_self_review:
-            allowed.append(NotebookPublication.test_only_self_review.is_(True))
-        return and_(NotebookPublication.decision == "approved", or_(*allowed),
-                    NotebookPublication.revision_id.not_in(notebook_moderation.withdrawn_ids()))
+        return publication_screening.approved_clause(
+            allow_development=not settings.production and settings.allow_self_review)
 
     def visible(session, user, note_id=None, *, review=False, include_deleted=False):
         query = select(NotebookRevision).join(NotebookNote, NotebookNote.id == NotebookRevision.note_id).outerjoin(
@@ -678,7 +682,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 "publication_status": "approved", "publication": {"test_only_self_review": test_only}, "summary": True}
                 for identifier, number, digest, created, title, claim, tags, kind, test_only in rows}
 
-    def note_data(session, note, user, revisions, *, selected=None, summary=False, agent=False):
+    def note_data(session, note, user, revisions, *, selected=None, summary=False, agent=False, screening_detail=False):
         publications, reviewer_handles = publication_map(session, revisions)
         withdrawals = notebook_moderation.records(session, [item.id for item in revisions])
         chosen = next((item for item in revisions if item.revision == selected), None) if selected is not None else revisions[-1]
@@ -692,6 +696,12 @@ def register_routes(app, db, settings, clock, user_for, throttle):
         for data, item in zip(serial, ([chosen] if summary else revisions)):
             data["scheme_review"] = submissions.get(item.id)
         current = next(data for data in serial if data["revision"] == chosen.revision)
+        screening_reviewer = not agent and protocol_proposals.is_reviewer(settings, user)
+        if screening_detail and not summary and (user.id == note.author_id or screening_reviewer):
+            screening = publication_screening.detail(session, publications.get(chosen.id), chosen,
+                                                       reviewer=screening_reviewer)
+            if screening is not None:
+                current["publication"]["screening"] = screening
         shared = shared_summaries(session, [note.id]).get(note.id)
         refs = [(note.id, item.revision, item.content_sha256) for item in revisions]
         if shared:
@@ -716,7 +726,9 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 "can_moderate": not agent and protocol_proposals.is_reviewer(settings, user),
                 "created_at": note.created_at, "revision": chosen.revision, "content_sha256": chosen.content_sha256,
                 "publication_status": current["publication_status"], "revision_count": len(revisions), "revisions": serial,
-                "shared_revision": shared, "proposal_revision": proposal_revision, "imported": note.source_id is not None}
+                "shared_revision": shared, "proposal_revision": proposal_revision, "imported": note.source_id is not None,
+                **({"publication_policy": publication_screening.public_policy(settings)}
+                   if settings.publication_screening_mode != "disabled" and user.id == note.author_id else {})}
 
     def owned(session, user, note_id, *, metadata_only=False):
         query = select(NotebookNote).where(NotebookNote.id == note_id,
@@ -866,6 +878,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             snapshot = cursor[0] if cursor else clock()
             capabilities = {"review_publication": not agent and protocol_proposals.is_reviewer(settings, user),
                             "self_review_publication": not agent and protocol_proposals.can_self_review(settings, user)}
+            if settings.publication_screening_mode != "disabled":
+                capabilities["publication_policy"] = publication_screening.public_policy(settings)
 
             def index_result(records, *, overflow_reason=None):
                 return {"format": "crucible-notebook-summary-index-v1", "projection": "index",
@@ -1026,6 +1040,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                         if proposed_number is not None else None,
                     "revisions": [{"revision": number, "content_sha256": digest, "created_at": created,
                                    "content": content, "publication_status": status, "summary": True,
+                                   **({"publication": {"id": publication_id}}
+                                      if publication_id and user.id == note.author_id else {}),
                                    "requests": requests.get((note.id, number, digest), [])}]})
             if indexed:
                 result = index_result(records)
@@ -1068,7 +1084,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                     raise HTTPException(410, notebook_moderation.NOTICE)
             if not revisions:
                 raise HTTPException(404, "Note not found.")
-            result = note_data(session, note, user, revisions, selected=revision, agent=agent)
+            result = note_data(session, note, user, revisions, selected=revision, agent=agent, screening_detail=True)
             if not agent:
                 result.update(note_ratings.notebook_metadata(session, [note.id])[note.id])
             return {"note": result}
@@ -1217,8 +1233,44 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 raise HTTPException(404, "Import not found.")
             return {"import_id": record.id, "created_at": record.created_at, "workspace": record.workspace, "id_map": record.id_map}
 
+    @app.get("/api/notebook/publication-policy")
+    def publication_policy(request: Request):
+        with db.transaction() as session:
+            account(request, session)
+            return publication_screening.public_policy(settings)
+
+    @app.get("/api/notebook/publication-status")
+    def publication_status(request: Request, publication_id: list[UUID] = Query(min_length=1, max_length=25)):
+        """Bounded owner-only progress projection: no note bodies or model output."""
+        identifiers = [str(value) for value in publication_id]
+        if len(set(identifiers)) != len(identifiers):
+            raise HTTPException(422, "Use distinct publication request IDs.")
+        from .publication_screening_models import ScreeningJob
+        withdrawal = notebook_moderation.PublicationWithdrawal
+        with db.transaction() as session:
+            user = account(request, session)
+            rows = session.execute(select(NotebookPublication.id, NotebookPublication.decision,
+                NotebookRevision.note_id, NotebookRevision.revision, NotebookRevision.content_sha256,
+                withdrawal.revision_id.label("withdrawn_id"))
+                .join(NotebookRevision, NotebookRevision.id == NotebookPublication.revision_id)
+                .outerjoin(withdrawal, withdrawal.revision_id == NotebookRevision.id)
+                .where(NotebookPublication.id.in_(identifiers), NotebookPublication.author_id == user.id)).all()
+            if len(rows) != len(identifiers):
+                raise HTTPException(404, "Publication request not found.")
+            jobs = session.execute(select(ScreeningJob.publication_id, ScreeningJob.status)
+                .where(ScreeningJob.publication_id.in_(identifiers))
+                .order_by(ScreeningJob.created_at.desc(), ScreeningJob.id)).all()
+            states = {}
+            for identifier, state in jobs:
+                states.setdefault(identifier, state)
+            by_id = {row.id: {"id": row.id, "note_id": row.note_id, "revision": row.revision,
+                "content_sha256": row.content_sha256,
+                "status": "withdrawn" if row.withdrawn_id else row.decision or "submitted",
+                "screening_status": states.get(row.id)} for row in rows}
+            return {"publications": [by_id[identifier] for identifier in identifiers]}
+
     @app.post("/api/notebook/notes/{note_id}/publication-requests")
-    def request_publication(note_id: UUID, body: PublicationInput, request: Request, summary: bool = False):
+    def request_publication(note_id: UUID, body: PublicationRequestInput, request: Request, summary: bool = False):
         throttle(request, "notebook-publication", 60, 3600)
         commitment = _hash({"note_id": str(note_id), "revision": body.revision, "content_sha256": body.content_sha256})
         with db.transaction(write=True) as session:
@@ -1256,11 +1308,22 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             existing = session.scalar(select(NotebookPublication.id).where(NotebookPublication.revision_id == target.id))
             if existing:
                 raise HTTPException(409, "This revision already has a publication request. Revise the note before making a new request.")
+            screening_policy = None
+            if settings.publication_screening_mode != "disabled":
+                from .publication_screening_worker import policy_for
+                screening_policy = policy_for(settings)
+                if not body.screening_consent or body.screening_policy_id != screening_policy.id:
+                    raise HTTPException(422, "Confirm the current automated-screening notice before publication. "
+                                        "Read /api/notebook/publication-policy and submit screening_consent=true "
+                                        "with its policy_id as screening_policy_id.")
             publication = NotebookPublication(id=str(uuid4()), revision_id=target.id, author_id=user.id,
                 requested_at=clock(), idempotency_key=str(body.idempotency_key), request_sha256=commitment,
                 test_only_self_review=False)
             session.add(publication)
             session.flush()
+            if screening_policy is not None:
+                from .publication_screening_jobs import enqueue
+                enqueue(session, publication, policy=screening_policy, now=clock())
             return result(publication)
 
     def publication_queue_summaries(session, user, rows):
@@ -1308,7 +1371,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
 
     @app.get("/api/notebook/review-queue")
     def publication_queue(request: Request, after: str | None = Query(default=None, max_length=36),
-                          limit: int = Query(default=50, ge=1, le=100), summary: bool = False):
+                          limit: int = Query(default=50, ge=1, le=100), summary: bool = False,
+                          screening: Literal["all", "flagged", "unflagged", "attention"] = "all"):
         with db.transaction() as session:
             user = account(request, session)
             if not protocol_proposals.is_reviewer(settings, user):
@@ -1316,6 +1380,13 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             query = select(NotebookPublication, NotebookRevision, NotebookNote).join(
                 NotebookRevision, NotebookRevision.id == NotebookPublication.revision_id).join(
                 NotebookNote, NotebookNote.id == NotebookRevision.note_id).where(NotebookPublication.decision.is_(None))
+            attention = None
+            if screening == "attention":
+                attention = publication_screening.attention_context(session, settings, clock())
+                query = query.where(publication_screening.attention_clause(attention))
+            elif screening != "all":
+                flagged = publication_screening.flagged_clause()
+                query = query.where(flagged if screening == "flagged" else ~flagged)
             if summary:
                 query = query.join(User, User.id == NotebookNote.author_id).outerjoin(
                     notebook_numbers.NotebookNumber, notebook_numbers.NotebookNumber.note_id == NotebookNote.id
@@ -1339,9 +1410,17 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 query = query.where(or_(NotebookPublication.requested_at > anchor.requested_at,
                     and_(NotebookPublication.requested_at == anchor.requested_at, NotebookPublication.id > anchor.id)))
             rows = session.execute(query.order_by(NotebookPublication.requested_at, NotebookPublication.id).limit(limit + 1)).all()
-            return {"notes": (publication_queue_summaries(session, user, rows[:limit]) if summary else
-                              [note_data(session, note, user, [revision]) for _, revision, note in rows[:limit]]),
-                    "next_after": rows[limit - 1][0].id if len(rows) > limit else None}
+            page = rows[:limit]
+            notes = (publication_queue_summaries(session, user, page) if summary else
+                     [note_data(session, note, user, [revision]) for _, revision, note in page])
+            if screening != "all":
+                findings = publication_screening.queue_summaries(session, [row[0].id for row in page],
+                                                                 attention=attention)
+                for data, row in zip(notes, page):
+                    if row[0].id in findings:
+                        data["revisions"][0]["publication"]["screening"] = findings[row[0].id]
+            return {"notes": notes, "next_after": rows[limit - 1][0].id if len(rows) > limit else None,
+                    **({"screening": screening} if screening != "all" else {})}
 
     @app.post("/api/notebook/notes/{note_id}/publication-reviews")
     def review_publication(note_id: UUID, body: ReviewInput, request: Request):
@@ -1372,6 +1451,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 if publication.decision is not None:
                     raise HTTPException(409, "This revision already has a publication decision. Review a newly submitted revision instead.")
                 publication.decision = body.decision
+                publication.decision_source = "human"
                 publication.reviewer_id = user.id
                 publication.reviewed_at = clock()
                 publication.reason = body.reason
