@@ -346,12 +346,14 @@ def _legacy_revision(revision):
 
 
 def check_capacity(session, user, added=1):
-    count = session.scalar(select(func.count()).select_from(NotebookNote).where(NotebookNote.author_id == user.id))
+    count = session.scalar(select(func.count()).select_from(NotebookNote).where(NotebookNote.author_id == user.id,
+        NotebookNote.id.not_in(select(NotebookNote.id).where(NotebookNote.latest_revision == 0,
+            NotebookNote.id.in_(notebook_trash.deleted_ids())))))
     if count + added > MAX_NOTES:
         raise HTTPException(409, "This notebook currently supports 200 notes per account. Existing notes remain saved.")
 
 def workspace_for(session, user, note_id=None, *, include_deleted=True):
-    query = select(NotebookNote).where(NotebookNote.author_id == user.id)
+    query = select(NotebookNote).where(NotebookNote.author_id == user.id, NotebookNote.latest_revision > 0)
     if not include_deleted:
         query = query.where(NotebookNote.id.not_in(notebook_trash.deleted_ids()))
     if note_id:
@@ -718,7 +720,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
         return {"id": note.id, "number": session.scalar(select(notebook_numbers.NotebookNumber.number)
                     .where(notebook_numbers.NotebookNumber.note_id == note.id)),
                 "owner": {"id": owner.id, "handle": owner.handle}, "can_edit": user.id == owner.id and deletion is None,
-                "can_delete": user.id == owner.id and deletion is None and not notebook_trash.has_review_history(session, note.id),
+                "can_delete": user.id == owner.id and not notebook_trash.has_review_history(session, note.id),
                 "can_restore": user.id == owner.id and deletion is not None,
                 "deletion": notebook_trash.data(deletion) if deletion else None,
                 "can_review": not agent and protocol_proposals.is_reviewer(settings, user) and (user.id != owner.id or protocol_proposals.can_self_review(settings, user)),
@@ -891,9 +893,12 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             # First identify the latest VISIBLE revision; search never selects
             # an old matching draft or discloses an unpublished later revision.
             newest_proposal = func.max(case((proposal_request_clause(settings, user, own_only=agent), NotebookRevision.revision), else_=None))
-            grouped = visible(session, user, include_deleted=scope == "trash").with_only_columns(NotebookRevision.note_id,
+            grouped = visible(session, user, include_deleted=indexed or scope in {"mine", "trash"}).with_only_columns(NotebookRevision.note_id,
                 func.max(NotebookRevision.revision).label("latest"), func.count().label("revision_count"),
                 newest_proposal.label("proposal_revision"))
+            if indexed:
+                grouped = grouped.where(or_(NotebookNote.author_id == user.id,
+                    NotebookNote.id.not_in(notebook_trash.deleted_ids())))
             if scope in {"mine", "trash"}:
                 grouped = grouped.where(NotebookNote.author_id == user.id)
             if scope == "trash":
@@ -1026,6 +1031,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                     content["kind"] = kind
                 records.append({"id": note.id, "number": note_number, "owner": {"id": note.author_id, "handle": handle},
                     "can_edit": user.id == note.author_id and deleted is None,
+                    "can_delete": user.id == note.author_id and deleted is not None,
                     "can_restore": user.id == note.author_id and deleted is not None,
                     "deletion": notebook_trash.data(deleted) if deleted is not None else None,
                     "can_review": not agent and protocol_proposals.is_reviewer(settings, user) and (user.id != note.author_id or protocol_proposals.can_self_review(settings, user)),

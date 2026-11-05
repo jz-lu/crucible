@@ -108,10 +108,12 @@ const lists=app=>app.requests.filter(row=>row.url.startsWith('/api/notebook/note
   const app=await boot({respond:url=>url===indexPath?summaryIndex(rows):undefined});await app.controller.warm('list');await app.show();const before=lists(app).length;
   assert.equal(app.q('list').querySelectorAll('.nb-entry').length,25);app.q('more').click();await flush();assert.match(app.q('list').textContent,/Title 25/);
   await filterNotes(app,'mine');assert.equal(app.q('list').querySelectorAll('.nb-entry').length,25);assert.doesNotMatch(app.q('list').textContent,/Title 1\b/);
-  await filterNotes(app,'research');assert.match(app.q('list').textContent,/Title 1/);assert.doesNotMatch(app.q('list').textContent,/Title 0\b/);
   await filterNotes(app,'human');assert.match(app.q('list').textContent,/Title 0/);
   await filterNotes(app,'proposals');assert.equal(app.q('list').querySelectorAll('.nb-entry').length,1);assert.match(app.q('list').textContent,/Title 3/);
   await app.controller.show(new URLSearchParams('tag=literature'));assert.equal(app.q('list').querySelectorAll('.nb-entry').length,25);
+  assert.match(app.q('list').textContent,/Title 1/);assert.doesNotMatch(app.q('list').textContent,/Title 0\b/);
+  await app.controller.show(new URLSearchParams('filter=research'));assert.equal(app.root.querySelector('[name="visibility"]').value,'all');
+  assert.equal(app.q('list').querySelectorAll('.nb-entry').length,25);assert.doesNotMatch(app.q('list').textContent,/Title 0\b/);
   assert.equal(lists(app).length,before);assert.equal(app.q('more').disabled,false);
   await searchNotes(app,'İ%_');assert.ok(lists(app).at(-1).url.includes('q='));assert.equal(lists(app).length,before+1,'Text search retains server semantics');
  });
@@ -258,16 +260,20 @@ const lists=app=>app.requests.filter(row=>row.url.startsWith('/api/notebook/note
   late.resolve(summaryIndex([indexRow('new',{content:content('Fresh index')})]));await flush();
   await filterNotes(app,'all');assert.match(app.q('list').textContent,/Fresh index/);
  });
- await test('quiet index refresh does not repeat retained server search or Trash reads',async()=>{
-  for(const mode of ['search','trash']){
-   const late=deferred();let reads=0;const rows=[indexRow('one')];
-   const app=await boot({respond:url=>url===indexPath?(++reads===1?summaryIndex(rows):late.promise):undefined});
-   vm.runInContext('Date.now=()=>1000',app.sandbox);await app.controller.warm('list');
-   if(mode==='search')await searchNotes(app,'Private');else await filterNotes(app,'trash');
-   vm.runInContext('Date.now=()=>12000',app.sandbox);await app.show();assert.equal(reads,2);
-   const before=lists(app).length;late.resolve(summaryIndex([indexRow('new')]));await flush();
-   assert.equal(lists(app).length,before,'Quiet metadata refresh must not repeat a server-only query');
-  }
+ await test('quiet index refresh does not repeat retained server search',async()=>{
+  const late=deferred();let reads=0;const rows=[indexRow('one')];
+  const app=await boot({respond:url=>url===indexPath?(++reads===1?summaryIndex(rows):late.promise):undefined});
+  vm.runInContext('Date.now=()=>1000',app.sandbox);await app.controller.warm('list');await searchNotes(app,'Private');
+  vm.runInContext('Date.now=()=>12000',app.sandbox);await app.show();assert.equal(reads,2);
+  const before=lists(app).length;late.resolve(summaryIndex([indexRow('new')]));await flush();
+  assert.equal(lists(app).length,before,'Quiet metadata refresh must not repeat a server-only query');
+ });
+ await test('removed owner drafts in the complete index appear only under My notes',async()=>{
+  const rows=[indexRow('active'),indexRow('removed',{can_edit:false,can_delete:true,deletion:{id:'old-deletion'},content:content('Previously removed draft')})];
+  const app=await boot({respond:url=>url===indexPath?summaryIndex(rows):undefined});await app.controller.warm('list');await app.show();
+  assert.equal(app.q('list').querySelectorAll('.nb-entry').length,1);assert.doesNotMatch(app.q('list').textContent,/Previously removed draft/);
+  const before=lists(app).length;await filterNotes(app,'mine');assert.equal(app.q('list').querySelectorAll('.nb-entry').length,2);
+  assert.match(app.q('list').textContent,/Previously removed draft/);assert.equal(lists(app).length,before);
  });
  await test('server page to complete index to expiry never sends synthetic cursors or wrong cached pages',async()=>{
   const rows=Array.from({length:60},(_,i)=>indexRow('item-'+i,{content:content('Row '+i)}));

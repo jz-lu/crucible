@@ -522,70 +522,80 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const loading=app.show('note-one');assert.match(app.q('full').textContent,/Loading note/);assert.doesNotMatch(app.q('full').textContent,/Argument as text/);
   late.resolve({note:note()});await loading;
  });
- await test('private draft deletion freezes its exact revision and retries after a lost reply',async()=>{
+ await test('permanent private draft deletion freezes its exact revision and retries after a lost reply',async()=>{
   let writes=0,deleted=false;
   const app=await boot({respond:(url,body)=>{
-   if(url.endsWith('/delete')){writes++;deleted=true;if(writes===1)throw Error('Connection lost');return{deletion:{note_id:'note-one',id:'deletion-one'},deleted};}
+   if(url.endsWith('/delete')){writes++;deleted=true;if(writes===1)throw Error('Connection lost');return{deletion:{note_id:'note-one',id:'deletion-one'},deleted,permanent:true};}
    if(url==='/api/notebook/notes/note-one')return{note:note({can_delete:true})};
    if(url.startsWith('/api/notebook/notes?'))return{notes:deleted?[]:[note({can_delete:true})]};
   }});
-  await app.show('note-one');byText(app.q('full'),'Edit').click();byText(app.q('dialog-body'),'Remove note').click();
-  assert.match(app.q('dialog-body').textContent,/Move this private draft to Trash/);
-  assert.equal(writes,0);byText(app.q('dialog-body'),'Move to Trash').click();await flush();
+  await app.show('note-one');byText(app.q('full'),'Edit').click();byText(app.q('dialog-body'),'Delete').click();
+  assert.match(app.q('dialog-body').textContent,/Permanently delete this private note and all its saved revisions.*cannot be undone/);
+  assert.equal(writes,0);byText(app.q('dialog-body'),'Delete').click();await flush();
   const first=app.requests.find(row=>row.body);
-  assert.equal(first.body.revision,1);assert.equal(first.body.content_sha256,'hash-1');
+  assert.equal(first.body.revision,1);assert.equal(first.body.content_sha256,'hash-1');assert.equal(first.body.permanent,true);
   byText(app.q('dialog-body'),'Retry the same delete').click();await flush();
   assert.deepEqual(app.requests.filter(row=>row.body)[1].body,first.body);
   assert.equal(app.q('dialog').open,false);assert.match(app.q('list').textContent,/No notes yet/);
  });
- await test('Trash restores its exact deletion and refreshes the current list',async()=>{
-  let restored=false;
-  const trashed=note({can_edit:false,can_restore:true,deletion:{id:'deletion-one'},can_delete:false});
+ await test('previously removed drafts remain in My notes and require a new permanent-delete confirmation',async()=>{
+  let deleted=false;
+  const removed=note({can_edit:false,can_restore:true,deletion:{id:'deletion-one'},can_delete:true});
   const app=await boot({respond:(url,body)=>{
-   if(url.endsWith('/restore')){assert.equal(body.deletion_id,'deletion-one');restored=true;return{deletion:{note_id:'note-one',id:'deletion-one'},deleted:false};}
-   if(url.startsWith('/api/notebook/notes?'))return{notes:listQuery(url).get('scope')==='trash'&&!restored?[trashed]:[]};
+   if(url.endsWith('/delete')){assert.equal(body.permanent,true);assert.equal(body.revision,1);deleted=true;return{deletion:{note_id:'note-one',id:'permanent-deletion'},deleted:true,permanent:true};}
+   if(url.startsWith('/api/notebook/notes?'))return{notes:listQuery(url).get('scope')==='mine'&&!deleted?[removed]:[]};
   }});
-  await filterNotes(app,'trash');assert.equal(listQuery(app.requests.at(-1).url).get('scope'),'trash');
-  assert.match(app.q('list').textContent,/In Trash/);assert.equal(byText(app.q('list'),'Edit'),undefined);
-  byText(app.q('list'),'Restore').click();assert.equal(restored,false);
-  byText(app.q('dialog-body'),'Restore note').click();await flush();
+  await app.controller.show(new URLSearchParams('filter=trash'));assert.equal(listQuery(app.requests.at(-1).url).get('scope'),'mine');
+  assert.equal(app.root.querySelector('[name="visibility"]').value,'mine');
+  assert.match(app.q('list').textContent,/Previously removed/);assert.equal(byText(app.q('list'),'Edit'),undefined);assert.equal(byText(app.q('list'),'Restore'),undefined);
+  byText(app.q('list'),'Delete').click();assert.equal(deleted,false);
+  byText(app.q('dialog-body'),'Delete').click();await flush();
   assert.equal(app.q('dialog').open,false);assert.match(app.q('list').textContent,/No matching notes/);
  });
- await test('removal lives inside Edit and requires owner and draft permissions',async()=>{
+ await test('a recoverable-delete response cannot be shown as permanent deletion',async()=>{
+  const app=await boot({respond:(url,body)=>{
+   if(url.endsWith('/delete'))return{deletion:{note_id:'note-one'},deleted:true};
+   if(url==='/api/notebook/notes/note-one')return{note:note({can_delete:true})};
+  }});
+  await app.show('note-one');byText(app.q('full'),'Edit').click();byText(app.q('dialog-body'),'Delete').click();byText(app.q('dialog-body'),'Delete').click();await flush();
+  assert.equal(app.q('dialog').open,true);assert.match(app.q('dialog-body').textContent,/Permanent deletion could not be confirmed/);
+  assert.doesNotMatch(app.q('notice').textContent,/Note deleted/);
+ });
+ await test('deletion lives inside Edit and requires owner and draft permissions',async()=>{
   for(const record of [note({can_delete:false}),note({can_delete:true,owner:{id:2,handle:'alice'}})]){
    const app=await boot({respond:url=>url==='/api/notebook/notes/note-one'?{note:record}:undefined});
    await app.show('note-one');assert.equal(byText(app.q('full'),'Delete'),undefined);
-   byText(app.q('full'),'Edit')?.click();assert.equal(byText(app.q('dialog-body'),'Remove note'),undefined);
+   byText(app.q('full'),'Edit')?.click();assert.equal(byText(app.q('dialog-body'),'Delete'),undefined);
   }
-  const app=await boot();app.q('new').click();assert.equal(byText(app.q('dialog-body'),'Remove note'),undefined);
+  const app=await boot();app.q('new').click();assert.equal(byText(app.q('dialog-body'),'Delete'),undefined);
  });
- await test('removal from Edit respects unsaved changes and confirmation cancellation',async()=>{
+ await test('deletion from Edit respects unsaved changes and confirmation cancellation',async()=>{
   const app=await boot({respond:url=>url==='/api/notebook/notes/note-one'?{note:note({can_delete:true})}:undefined});
   await app.show('note-one');assert.equal(byText(app.q('full'),'Delete'),undefined);
   byText(app.q('full'),'Edit').click();const title=app.root.querySelector('[name="title"]');title.value='Keep this unsaved draft';
   let confirmations=0;app.sandbox.window.confirm=()=>{confirmations++;return false;};
-  byText(app.q('dialog-body'),'Remove note').click();assert.equal(confirmations,1);assert.equal(title.value,'Keep this unsaved draft');
-  assert.equal(byText(app.q('dialog-body'),'Move to Trash'),undefined);
-  title.value='Private claim';byText(app.q('dialog-body'),'Remove note').click();
+  byText(app.q('dialog-body'),'Delete').click();assert.equal(confirmations,1);assert.equal(title.value,'Keep this unsaved draft');
+  assert.doesNotMatch(app.q('dialog-body').textContent,/Permanently delete/);
+  title.value='Private claim';byText(app.q('dialog-body'),'Delete').click();
   byText(app.q('dialog-body'),'Cancel').click();assert.equal(app.q('dialog').open,false);
   assert.equal(app.requests.filter(row=>row.body).length,0);
  });
- await test('removal is blocked during a pending or uncertain revision save',async()=>{
+ await test('deletion is blocked during a pending or uncertain revision save',async()=>{
   const pending=deferred();
   const app=await boot({respond:url=>url.endsWith('/revisions')?pending.promise:url==='/api/notebook/notes/note-one'?{note:note({can_delete:true})}:undefined});
   await app.show('note-one');byText(app.q('full'),'Edit').click();fill(app,'Updated draft');
-  const remove=byText(app.q('dialog-body'),'Remove note');app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
-  assert.equal(remove.disabled,true);remove.click();assert.equal(byText(app.q('dialog-body'),'Move to Trash'),undefined);
+  const remove=byText(app.q('dialog-body'),'Delete');app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
+  assert.equal(remove.disabled,true);remove.click();assert.doesNotMatch(app.q('dialog-body').textContent,/Permanently delete/);
   pending.reject(Error('Connection lost'));await flush();assert.equal(remove.disabled,true);
   assert.equal(app.requests.some(row=>row.url.endsWith('/delete')),false);
  });
  await test('late delete replies do not navigate or show data after an account switch',async()=>{
   const pending=deferred();
   const app=await boot({respond:url=>url.endsWith('/delete')?pending.promise:url==='/api/notebook/notes/note-one'?{note:note({can_delete:true})}:undefined});
-  await app.show('note-one');byText(app.q('full'),'Edit').click();byText(app.q('dialog-body'),'Remove note').click();byText(app.q('dialog-body'),'Move to Trash').click();
+  await app.show('note-one');byText(app.q('full'),'Edit').click();byText(app.q('dialog-body'),'Delete').click();byText(app.q('dialog-body'),'Delete').click();
   app.setAccount({id:2,handle:'bob'});const before=app.location.hash;
-  pending.resolve({deletion:{note_id:'note-one'},deleted:true});await flush();
-  assert.equal(app.location.hash,before);assert.doesNotMatch(app.root.textContent,/Note moved to Trash/);
+  pending.resolve({deletion:{note_id:'note-one'},deleted:true,permanent:true});await flush();
+  assert.equal(app.location.hash,before);assert.doesNotMatch(app.root.textContent,/Note deleted/);
  });
  await test('signing in on an exact notebook link restores that view and signing out clears it',async()=>{
   let current=null;
@@ -821,17 +831,18 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.equal(disposed,1);assert.equal(app.q('map').textContent,'');
  });
 
- await test('My notes and Literature request globally filtered summary pages without fetching bodies',async()=>{
+ await test('My notes and literature tag search request globally filtered summaries without fetching bodies',async()=>{
   const shared=note({id:'shared',can_edit:false,owner:{id:2,handle:'bob'},...revision(1,'Approved claim','approved')});
   const published=note({id:'my-shared',...revision(1,'My published note','approved')});
   const all=[note(),published,shared,...research.notes.map(curatedSummary)];
   const app=await boot({researchWorkspace:research,respond:url=>url.startsWith('/api/notebook/notes?')?summaryPage(url,all):undefined});
   assert.equal(app.q('list').querySelectorAll('.nb-entry').length,25);
-  await filterNotes(app,'research');assert.equal(listQuery(app.requests.at(-1).url).get('scope'),'literature');
+  await searchNotes(app,'literature');assert.equal(listQuery(app.requests.at(-1).url).get('q'),'literature');
+  assert.equal(listQuery(app.requests.at(-1).url).get('scope'),'all');
   assert.ok(app.q('list').querySelectorAll('.nb-entry').every(e=>e.querySelector('.nb-literature')));
-  await filterNotes(app,'mine');assert.equal(listQuery(app.requests.at(-1).url).get('scope'),'mine');
+  await searchNotes(app,'');await filterNotes(app,'mine');assert.equal(listQuery(app.requests.at(-1).url).get('scope'),'mine');
   assert.equal(app.q('list').querySelectorAll('.nb-entry').length,2);assert.match(app.q('list').textContent,/Private claim.*Private.*My published note.*Published/);assert.doesNotMatch(app.q('list').textContent,/Approved claim/);
-  assert.deepEqual(Array.from(app.root.querySelector('[name="visibility"]').querySelectorAll('option'),option=>option.textContent),['All notes','My notes','Human-written','Proposals','Literature','Trash']);
+  assert.deepEqual(Array.from(app.root.querySelector('[name="visibility"]').querySelectorAll('option'),option=>option.textContent),['All notes','My notes','Human-written','Proposals']);
   assert.equal(app.requests.some(r=>r.url==='/map/notes.json'||r.body),false);assert.equal(app.storage.length,0);
  });
  await test('curated source links preserve every revision hash and expose sources without author or review tools',async()=>{

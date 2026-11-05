@@ -109,7 +109,10 @@ class Child:
         self.done.set()
 
 
-def test_child_failures_restart_with_backoff_and_raw_output_is_never_inherited(caplog):
+def test_child_failures_restart_with_backoff_and_raw_output_is_never_inherited(caplog, monkeypatch):
+    # Earlier migration fixtures configure logging with fileConfig, which can
+    # disable this already-imported logger. Isolate the capture from suite order.
+    monkeypatch.setattr(hosting.LOG, 'disabled', False)
     async def scenario():
         calls, options, children = [], [], []
         four = asyncio.Event()

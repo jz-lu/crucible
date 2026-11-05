@@ -76,7 +76,7 @@ no review, moderation, research-request or scheme-admission authority.
   python3 crucible_cli.py notebook revise NOTE_UUID --file revision-2.json --revision 1 --sha256 BASE_HASH --json
   python3 crucible_cli.py notebook publication-policy --json
   python3 crucible_cli.py notebook request-publication NOTE_UUID --revision 2 --sha256 SAVED_HASH --screening-policy-id POLICY_ID --json
-  python3 crucible_cli.py notebook delete NOTE_UUID --revision 2 --sha256 SAVED_HASH --retry delete-1.json --json
+  python3 crucible_cli.py notebook delete NOTE_UUID --revision 2 --sha256 SAVED_HASH --permanent --retry delete-1.json --json
   python3 crucible_cli.py notebook list --deleted --json
   python3 crucible_cli.py notebook restore NOTE_UUID --deletion-id DELETION_UUID --json
 
@@ -85,17 +85,21 @@ to verify a pin and --out to save the complete record privately. export accepts
 --note-id for a single owned note. list searches only your notes; notes list/show
 still reads the published/curated corpus and notes rate retains its existing API.
 
-delete moves an unsubmitted private note and its history to recoverable Trash.
-The note leaves normal lists, search, timeline, graph and exports. Only its owner
-can inspect it with list/show --deleted or restore the exact deletion_id returned
-in the receipt (or deletion.id from list --deleted). No revision is erased, and
-Trash still counts toward storage limits. Notes with publication requests,
-decisions, scheme submissions or research-request evidence cannot be deleted;
-their recorded evidence remains available under its existing access policy.
-Old imports do not restore a deleted note. In the human notebook, use Delete in
-the full reader and Show → Trash to recover it. A deliberate new deletion after
-restoring requires a new --retry path: retrying an earlier command retrieves its
-receipt and current deleted state without reversing subsequent operations.
+delete --permanent requires explicit authorization: it permanently erases an
+unsubmitted private draft's saved revisions and its copies/bindings in that
+account's stored import archives. The website confirms this before sending.
+Content-free identity, number reservation and retry receipts remain, so note
+numbers never change targets and old retries/imports cannot resurrect a draft.
+The receipt must say deleted:true and permanent:true. This does not erase other
+people's authored quotations, downloaded exports or retained backups. Notes
+with publication requests, decisions, scheme submissions or research-request
+evidence cannot be deleted. Their existing access policies remain in force.
+
+Older drafts removed by the former recoverable workflow appear in My notes as
+Previously removed. They are not erased automatically; their owner may explicitly
+delete them. Legacy list/show --deleted and restore remain for compatibility with
+those older drafts only. A permanent deletion can never be restored. New delete
+requests require --permanent; old clients cannot silently take the new action.
 
 create/revise take the content object: nonempty title, claim, conditions and body;
 tags is an array (default []); kind, references, artifacts and extensions are

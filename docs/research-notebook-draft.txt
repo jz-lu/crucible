@@ -13,7 +13,7 @@ bounded cursor fallback up to 1,000 notes / 2 MiB); an incomplete enumeration se
 nothing. The existing 60-per-hour publication request limit applies. Partial
 results remain visible, uncertain requests retain exact retry keys, and changes
 to navigation/session/dialog ownership stop further sends. Existing notes in
-Trash or with requests/decisions are skipped; a newer private revision is eligible.
+Previously removed drafts or notes with requests/decisions are skipped; a newer private revision is eligible.
 Reviewer queues and decisions live on
 the dedicated Review center, reached from the reviewer’s own account profile.
 Its queues are /#reviews?section=publication, section=schemes and section=research;
@@ -36,17 +36,24 @@ With schema 0031 they also include screening jobs, cost records and automated
 publication provenance. The migration creates no historical screening jobs.
 Durability does not substitute for operator backups or redundant hosting.
 
-An author can delete an unsubmitted private draft from its full reader or with
-CLI notebook delete, pinning its latest revision/hash. This moves the entire
-note to Trash without erasing its history. Normal lists, search, timeline, graph
-and exports exclude it. Only its author can inspect or restore it through Show →
-Trash, CLI list/show --deleted and restore, or the corresponding scoped API.
-Restore binds a deletion ID; exact retries never reverse a later lifecycle action.
+An author can permanently delete an unsubmitted private draft from Edit → Delete,
+after a confirmation, or with CLI notebook delete --permanent and its exact
+latest revision/hash. All live revisions, derived outgoing references and copies
+of that note/bindings in the author's stored import archives are erased. A
+content-free note identity, permanent number reservation and deletion receipt
+remain for safe retries. Backup retention and separately authored quotations or
+exports are not erased by this action. Permanently deleted notes cannot restore,
+reappear through old retries/imports, or consume active-note capacity.
+
 Notes ever submitted for publication, scheme admission or as research-request
-evidence cannot be deleted, including their newer private revisions. Existing
-moderator withdrawal and proposal retraction are separate operations. Import
-archives remain available to their author; importing old content cannot restore
-a deleted note. Trash still counts toward note and revision-storage quotas.
+evidence cannot be deleted, including newer private revisions. Moderator
+withdrawal and proposal retraction remain separate. Earlier recoverable removals
+are preserved and visible to their owner in My notes as Previously removed;
+they may be explicitly permanently deleted. Legacy read/restore APIs remain for
+those old drafts only. No Trash selector or new soft-delete workflow remains.
+For a confirmed permanent deletion of an earlier soft removal, the old receipt
+is atomically superseded by the permanent receipt. Its legacy restored_at column
+records closure of that former removal, not an actual restoration of content.
 
 Publishing is separate from saving. The author uses Publish to make a Publish
 request for an exact latest revision. By default automated screening is disabled:
