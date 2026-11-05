@@ -13,9 +13,9 @@ evaluation and release checks below before activation.
 Live synthetic model evaluation is recorded in
 publication-screening-evaluation-20261104.txt and its evidence JSON. The local
 project key works; that does not provision a hosted worker or enable publication.
-Use the maintained operations/release entry point from PR53 once integrated;
+Use the maintained docs/operations.txt release entry point;
 this feature guide describes screening-specific controls, not a competing release
-procedure. Reconcile the budget register with observed usage when merging it.
+procedure. The budget register records the implemented bounds and observed local trial usage.
 
 The local checkpoint includes ten executed disposable PostgreSQL 17 checks,
 synthetic desktop/mobile browser consent checks, and a real-provider twenty-note
