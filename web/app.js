@@ -6002,7 +6002,6 @@ function showWorkspace(name) {
   $('#home-workspace').hidden = name !== 'home';
   $('#access-workspace').hidden = name !== 'access';
   $('#access-branding').hidden = name !== 'access';
-  if (name === 'home' || name === 'access') window.requestAnimationFrame?.(syncTypingKeyGlow);
   if (routeLoadingPanel) {
     routeLoadingPanel.hidden = name !== 'loading';
     if (name !== 'loading') routeLoadingPanel.setAttribute('aria-busy', 'false');
@@ -6495,61 +6494,38 @@ function clearTaglinePointer() { taglinePointer = null; requestTaglineFrame(); }
 window.addEventListener('pointerout', event => { if (!event.relatedTarget) clearTaglinePointer(); });
 window.addEventListener('pointercancel', clearTaglinePointer);
 window.addEventListener('blur', clearTaglinePointer);
-const landingBrand = $('#site-brand'), landingMark = landingBrand.querySelector('.brand-mark'), landingFire = landingBrand.querySelector('.brand-fire-ghost'), landingEffect = landingBrand.querySelector('.brand-ember-effect');
-const typingGlowAnimations = new WeakSet();
-function syncTypingKeyGlow() {
-  if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches || landingBrand.classList.contains('brand-ignited')) return;
-  for (const {element} of taglineSpots) {
-    if (!element.getBoundingClientRect().width) continue;
-    for (const animation of element.getAnimations()) {
-      if (animation.animationName !== 'scrutiny-reveal' || typingGlowAnimations.has(animation)) continue;
-      typingGlowAnimations.add(animation);
-      const timing = animation.effect.getTiming();
-      const delay = Math.max(0, Number(timing.delay) + Number(timing.duration) / 2 - Number(animation.currentTime || 0));
-      landingBrand.style.setProperty('--typing-glow-delay', delay + 'ms');
-      landingBrand.classList.remove('brand-typing');
-      void landingBrand.offsetWidth;
-      landingBrand.classList.add('brand-typing');
-    }
-  }
-}
-for (const {element} of taglineSpots) element.addEventListener('animationstart', event => {
-  if (event.animationName === 'scrutiny-reveal') syncTypingKeyGlow();
-});
-landingBrand.querySelector('.brand-key-sun').addEventListener('animationend', event => {
-  if (event.animationName === 'key-typing-glow') landingBrand.classList.remove('brand-typing');
-});
-window.requestAnimationFrame?.(syncTypingKeyGlow);
-function igniteLandingLogo() {
-  if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
-  landingBrand.classList.remove('brand-typing');
-  landingBrand.classList.remove('brand-cooling');
-  landingBrand.classList.add('brand-ignited');
-}
-landingMark.addEventListener('pointerenter', event => {
-  if (event.pointerType !== 'touch') igniteLandingLogo();
-});
-landingBrand.addEventListener('focus', igniteLandingLogo);
-function finishLandingLogo() {
+const landingBrand = $('#site-brand'), landingMark = landingBrand.querySelector('.brand-mark'), landingFire = landingBrand.querySelector('.brand-fire-ghost');
+const logoMotionPreference = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+let logoAnimationRun = 0;
+function stopLogoAnimation() {
+  logoAnimationRun++;
   landingBrand.classList.remove('brand-ignited');
-  landingBrand.classList.remove('brand-cooling');
 }
-function coolLandingLogo() {
-  if (!landingBrand.classList.contains('brand-ignited')) return;
-  if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) finishLandingLogo();
-  else landingBrand.classList.add('brand-cooling');
+function igniteLandingLogo() {
+  stopLogoAnimation();
+  if (logoMotionPreference?.matches) return;
+  // Commit the reset before starting a new CSS animation, even on rapid clicks.
+  void landingBrand.offsetWidth;
+  landingBrand.classList.add('brand-ignited');
+  const run = logoAnimationRun;
+  const animation = landingFire.getAnimations?.().find(item => item.animationName === 'flame-visit');
+  const finish = () => { if (run === logoAnimationRun) landingBrand.classList.remove('brand-ignited'); };
+  // Own the exact animation: a cancelled earlier run must not finish this one.
+  if (animation) animation.finished.then(finish, finish);
+  else finish();
 }
-landingMark.addEventListener('pointerleave', coolLandingLogo);
-landingBrand.addEventListener('blur', coolLandingLogo);
-landingEffect.addEventListener('transitionend', event => {
-  if (event.target === landingEffect && event.propertyName === 'opacity' && landingBrand.classList.contains('brand-cooling')) finishLandingLogo();
-});
-for (const type of ['animationend', 'animationcancel']) landingFire.addEventListener(type, event => {
-  if (event.target === landingFire && event.animationName === 'flame-visit') finishLandingLogo();
-});
+logoMotionPreference?.addEventListener?.('change', event => { if (event.matches) stopLogoAnimation(); });
+const startLogoAnimation = () => { if (logoAnimationRun === 0) igniteLandingLogo(); };
+// Run once for this document, after its logo is available; route changes do not
+// replay it. A click before decoding completes already counts as the first run.
+if (typeof landingMark.decode === 'function') landingMark.decode().then(startLogoAnimation, () => {});
+else if (landingMark.complete) startLogoAnimation();
+else landingMark.addEventListener('load', startLogoAnimation, {once: true});
 for (const brand of document.querySelectorAll('a.brand')) brand.addEventListener('click', event => {
   if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-  event.preventDefault(); navigateTop('#home');
+  event.preventDefault();
+  if (brand === landingBrand) igniteLandingLogo();
+  navigateTop('#home');
 });
 $('#nav-challenge').addEventListener('click', () => navigateTop('#challenge'));
 $('#scheme-map-button').addEventListener('click', () => navigateTop('#challenge?view=map'));

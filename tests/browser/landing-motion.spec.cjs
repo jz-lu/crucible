@@ -26,14 +26,15 @@ test('account controls and RESI appear only after the tagline finishes', async (
 });
 
 for(const layout of ['centered','left'])for(const width of [1440,390]) {
-  test('the '+layout+' flame stays centered on the key and fades after two seconds at '+width+'px',async({page},testInfo)=>{
+  test('the '+layout+' flame stays centered on the key and fades softly over two seconds at '+width+'px',async({page},testInfo)=>{
     await page.setViewportSize({width,height:1000});
     await page.emulateMedia({reducedMotion:'no-preference',colorScheme:'light'});
     await page.goto('/#home?layout='+layout);
     await expect(page.locator('#access-workspace')).toHaveCSS('opacity','1');
     const fire=page.locator('.brand-fire-ghost'),key=page.locator('.brand-key-sun');
+    await expect(page.locator('#site-brand')).not.toHaveClass(/brand-ignited/,{timeout:3000});
     const resting=await fire.boundingBox();
-    await page.locator('.site-header .brand-mark').hover();
+    await page.locator('#site-brand').click();
     await expect(page.locator('.site-header .brand')).toHaveClass(/brand-ignited/);
     const sample=async(elapsed,tips=elapsed)=>page.evaluate(({elapsed,tips})=>{
       const fire=document.querySelector('.brand-fire-ghost'),key=document.querySelector('.brand-key-sun'),shape=document.querySelector('.brand-flame-shape');
@@ -47,7 +48,10 @@ for(const layout of ['centered','left'])for(const width of [1440,390]) {
         opacity:Number(getComputedStyle(fire).opacity),key:Number(getComputedStyle(key).opacity),
         transform:getComputedStyle(fire).transform,d:getComputedStyle(shape).d,flickerDuration:shape.getAnimations()[0].effect.getTiming().duration};
     },{elapsed,tips});
-    const initial=await sample(600,0),flicker=await sample(900,190),later=await sample(1600,394),held=await sample(1999,0);
+    const rising=await sample(250,0);
+    expect(rising.opacity).toBeGreaterThan(0);expect(rising.opacity).toBeLessThan(.5);
+    expect(rising.key).toBeGreaterThan(0);expect(rising.key).toBeLessThan(.9);
+    const initial=await sample(600,0),flicker=await sample(900,190),later=await sample(1100,394),held=await sample(1299,0);
     expect(initial.height).toBeGreaterThan(resting.height);expect(initial.height).toBeLessThan(resting.height*1.15);
     expect(initial.width).toBeGreaterThan(resting.width*.9);expect(initial.width).toBeLessThan(resting.width*1.15);
     expect(initial.flickerDuration).toBeLessThan(800);
@@ -68,8 +72,8 @@ for(const layout of ['centered','left'])for(const width of [1440,390]) {
     await expect(page.locator('#crucible-flame-fade stop').last()).toHaveAttribute('stop-opacity','0');
     expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
     await sample(900,190);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-    await page.screenshot({path:testInfo.outputPath('logo-hover-'+layout+'-'+width+'.png'),fullPage:true,animations:'allow'});
-    const fading=await sample(2200,190),last=await sample(2399,190);
+    await page.screenshot({path:testInfo.outputPath('logo-click-'+layout+'-'+width+'.png'),fullPage:true,animations:'allow'});
+    const fading=await sample(1650,190),last=await sample(1999,190);
     expect(fading.opacity).toBeGreaterThan(0);expect(fading.opacity).toBeLessThan(.5);
     expect(fading.key).toBeGreaterThan(0);expect(fading.key).toBeLessThan(.9);
     expect(fading.transform).toBe(initial.transform);expect(last.opacity).toBeLessThan(.01);expect(last.key).toBeLessThan(.01);
@@ -77,35 +81,48 @@ for(const layout of ['centered','left'])for(const width of [1440,390]) {
     await expect(page.locator('.site-header .brand')).not.toHaveClass(/brand-ignited/);
     await expect(fire).toHaveCSS('opacity','0');await expect(key).toHaveCSS('opacity','0');
     await expect(fire).toHaveCSS('transform','matrix(1, 0, 0, 1, 0, 0)');
-    await page.locator('#site-brand').focus();await expect(page.locator('#site-brand')).toHaveClass(/brand-ignited/);
-    await fire.evaluate(element=>element.getAnimations().forEach(animation=>animation.finish()));
-    await expect(page.locator('#site-brand')).not.toHaveClass(/brand-ignited/);
+    await page.locator('#site-brand').focus();await expect(page.locator('#site-brand')).not.toHaveClass(/brand-ignited/);
   });
 }
 
-test('the flame and key glow finish while the pointer remains on the logo',async({page})=>{
+test('each reload plays one brief fire, while hover, focus and routes do not replay it',async({page})=>{
+  await page.addInitScript(()=>{
+    window.logoStarts=0;
+    document.addEventListener('animationstart',event=>{if(event.animationName==='flame-visit')window.logoStarts++;});
+  });
   await page.emulateMedia({reducedMotion:'no-preference'});await page.goto('/');
-  await expect(page.locator('#access-workspace')).toHaveCSS('opacity','1');
   const brand=page.locator('#site-brand'),fire=page.locator('.brand-fire-ghost');
-  await page.locator('.site-header .brand-mark').hover();
-  await expect(brand).toHaveClass(/brand-ignited/);await expect(fire).toHaveCSS('opacity','0.5');
-  await expect(brand).not.toHaveClass(/brand-ignited/);await expect(fire).toHaveCSS('opacity','0');
-  await expect(page.locator('.brand-key-sun')).toHaveCSS('opacity','0');
-  await page.locator('.site-footer').hover();await page.locator('.site-header .brand-mark').hover();
-  await expect(brand).toHaveClass(/brand-ignited/);
+  await expect.poll(()=>page.evaluate(()=>window.logoStarts)).toBe(1);
+  await expect(brand).not.toHaveClass(/brand-ignited/,{timeout:3000});
+  await expect(fire).toHaveCSS('opacity','0');await expect(page.locator('.brand-key-sun')).toHaveCSS('opacity','0');
+  await page.locator('.site-header .brand-mark').hover();await brand.focus();
+  await page.evaluate(()=>{location.hash='#about';});
+  await expect(page).toHaveURL(/#about$/);
+  expect(await page.evaluate(()=>window.logoStarts)).toBe(1);
+  await expect(brand).not.toHaveClass(/brand-ignited/);
+  await page.reload();await expect.poll(()=>page.evaluate(()=>window.logoStarts)).toBe(1);
+  await expect(brand).not.toHaveClass(/brand-ignited/,{timeout:3000});
 });
 
-test('leaving the logo quickly fades the flame and key back to normal',async({page})=>{
-  await page.emulateMedia({reducedMotion:'no-preference'});await page.goto('/');
-  await expect(page.locator('#access-workspace')).toHaveCSS('opacity','1');
+test('rapid logo clicks restart the full fire without stale cancellation and still navigate home',async({page})=>{
+  await page.emulateMedia({reducedMotion:'no-preference'});await page.goto('/#about');
   const brand=page.locator('#site-brand'),fire=page.locator('.brand-fire-ghost');
-  await page.locator('.site-header .brand-mark').hover();await expect(fire).toHaveCSS('opacity','0.5');
-  await page.locator('.site-footer').hover();
-  await expect(brand).not.toHaveClass(/brand-ignited/,{timeout:700});
-  await expect(brand).not.toHaveClass(/brand-cooling/);
+  await expect(page.locator('#access-workspace')).toHaveCSS('opacity','1');
+  await brand.click();await expect(page).toHaveURL(/#home$/);
+  await fire.evaluate(element=>{
+    window.previousLogoAnimation=element.getAnimations().find(animation=>animation.animationName==='flame-visit');
+    window.previousLogoAnimation.currentTime=1700;
+  });
+  await brand.click();
+  const current=await fire.evaluateHandle(element=>element.getAnimations().find(animation=>animation.animationName==='flame-visit'));
+  expect(await current.evaluate(animation=>animation!==window.previousLogoAnimation&&animation.effect.getTiming().duration===2000)).toBe(true);
+  await page.mouse.move(0,0);
+  // Let cancellation of the old CSS animation dispatch before checking ownership.
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  expect(await current.evaluate(animation=>animation.playState)).toBe('running');
+  await expect(brand).toHaveClass(/brand-ignited/);
+  await expect(brand).not.toHaveClass(/brand-ignited/,{timeout:3000});
   await expect(fire).toHaveCSS('opacity','0');await expect(page.locator('.brand-key-sun')).toHaveCSS('opacity','0');
-  // Re-entering still starts a fresh effect after the early exit.
-  await page.locator('.site-header .brand-mark').hover();await expect(brand).toHaveClass(/brand-ignited/);
 });
 
 test('reduced motion shows the full landing immediately and keeps the logo still',async({page})=>{
@@ -114,7 +131,8 @@ test('reduced motion shows the full landing immediately and keeps the logo still
     await expect(page.locator(selector)).toHaveCSS('animation-name','none');
     await expect(page.locator(selector)).toHaveCSS('opacity','1');
   }
-  await page.locator('.site-header .brand-mark').hover();
+  await page.locator('.site-header .brand-mark').hover();await page.locator('#site-brand').click();
+  await expect(page.locator('#site-brand')).not.toHaveClass(/brand-ignited/);
   await expect(page.locator('.brand-ember-effect')).toBeHidden();
 });
 
