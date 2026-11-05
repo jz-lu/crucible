@@ -2426,10 +2426,10 @@ function recoveryRecordLabel(record) {
 function exactRecord(record) {
   return exactProfileRecords(availableReleases().find(scheme => scheme.id === record.scheme_id && String(scheme.version) === String(record.scheme_version)), record);
 }
-function personalRecordTable(records) {
+function personalRecordTable(records, {showPoints = true} = {}) {
   const includesNamed = records.some(record => namedParameters(availableReleases().find(scheme =>
     scheme.id === record.scheme_id && String(scheme.version) === String(record.scheme_version)), record));
-  return peopleTable(['Scheme', includesNamed ? 'Stage / parameter set' : 'Highest stage', 'Points', 'Solved'], records.map(record => {
+  return peopleTable(['Scheme', includesNamed ? 'Stage / parameter set' : 'Highest stage', ...(showPoints ? ['Points'] : []), 'Solved'], records.map(record => {
     const name = node('span', undefined, 'person-record-scheme');
     const link = node('a', record.scheme_name || record.scheme_id, 'person-scheme-link');
     link.href = overviewRoute({id: record.scheme_id, version: record.scheme_version});
@@ -2443,7 +2443,7 @@ function personalRecordTable(records) {
     result.setAttribute('aria-haspopup', 'dialog');
     result.addEventListener('click', () => openSubmissionDetails(record.submission_id, result));
     const points = node('span', record.scoring_eligible ? peopleNumber(record.score?.total) : 'Not scored', 'person-record-points');
-    return [name, result, points, node('span', utcDate(record.received_at), 'person-record-date')];
+    return [name, result, ...(showPoints ? [points] : []), node('span', utcDate(record.received_at), 'person-record-date')];
   }));
 }
 function validFirstRecord(record) {
@@ -2487,14 +2487,22 @@ function renderFirstRecords(person) {
 }
 function personStats(person) {
   const stats = node('dl', undefined, 'person-stats');
-  const place = profileRankParts(person), link = node('a', undefined, 'person-place-link');
-  link.id = 'person-leaderboard-rank'; link.href = '#people';
-  link.setAttribute('aria-label', place ? place.rank + place.suffix + ' on leaderboard' : 'Place unavailable. View leaderboard');
-  if (place) link.append(node('span', String(place.rank), 'person-rank-number'), node('sup', place.suffix, 'person-rank-suffix'));
-  else link.append(node('span', '—', 'person-rank-number'));
-  const rankValue = node('dd'); rankValue.append(link);
-  const rankStat = node('div', undefined, 'person-place-stat'); rankStat.append(node('dt', 'Place on leaderboard'), rankValue); stats.append(rankStat);
-  for (const [label, key] of [['Points', 'points'], ['Accepted proposals', 'accepted_proposal_count']]) {
+  const reviewer = person?.score_status === 'reviewer';
+  if (reviewer) {
+    stats.classList.add('person-reviewer-stats');
+    const role = node('div', undefined, 'person-role-stat');
+    role.append(node('dt', 'Role'), node('dd', 'Reviewer'));
+    stats.append(role);
+  } else {
+    const place = profileRankParts(person), link = node('a', undefined, 'person-place-link');
+    link.id = 'person-leaderboard-rank'; link.href = '#people';
+    link.setAttribute('aria-label', place ? place.rank + place.suffix + ' on leaderboard' : 'Place unavailable. View leaderboard');
+    if (place) link.append(node('span', String(place.rank), 'person-rank-number'), node('sup', place.suffix, 'person-rank-suffix'));
+    else link.append(node('span', '—', 'person-rank-number'));
+    const rankValue = node('dd'); rankValue.append(link);
+    const rankStat = node('div', undefined, 'person-place-stat'); rankStat.append(node('dt', 'Place on leaderboard'), rankValue); stats.append(rankStat);
+  }
+  for (const [label, key] of [...(reviewer ? [] : [['Points', 'points']]), ['Accepted proposals', 'accepted_proposal_count']]) {
     const value = node('dd', person ? peopleNumber(person[key], key === 'points' ? 'Pending' : '—') : undefined);
     if (!person) value.append(node('span', undefined, 'catalogue-placeholder'));
     const term = node('dt', label);
@@ -2710,7 +2718,7 @@ $('#reload-researcher-profile').addEventListener('click', () => {
 
 function profileRankParts(person) {
   const rank = person?.rank;
-  if (!Number.isSafeInteger(rank) || rank <= 0 || !Number.isFinite(person.points) || person.score_status === 'pending') return null;
+  if (!Number.isSafeInteger(rank) || rank <= 0 || !Number.isFinite(person.points) || ['pending', 'reviewer'].includes(person.score_status)) return null;
   const lastTwo = rank % 100;
   const suffix = lastTwo >= 11 && lastTwo <= 13 ? 'th' : ({1: 'st', 2: 'nd', 3: 'rd'})[rank % 10] || 'th';
   return {rank, suffix};
@@ -2720,12 +2728,12 @@ function renderPerson(person) {
   setText('#person-title', person.handle);
   renderResearcherProfile(person.researcher_profile);
   target.replaceChildren(personStats(person));
-  if (!Number.isFinite(person.points)) target.append(node('p', 'Scoring is being finalized. Verified results are recorded below.', 'people-score-note'));
+  if (person.score_status !== 'reviewer' && !Number.isFinite(person.points)) target.append(node('p', 'Scoring is being finalized. Verified results are recorded below.', 'people-score-note'));
   target.append(renderFirstRecords(person));
   const {section: records, content: recordContent} = personDisclosure('Personal records',
     `${peopleNumber(person.records?.length || 0)} scheme${person.records?.length === 1 ? '' : 's'}`);
   records.id = 'personal-records';
-  if (person.records?.length) recordContent.append(personalRecordTable(person.records));
+  if (person.records?.length) recordContent.append(personalRecordTable(person.records, {showPoints: person.score_status !== 'reviewer'}));
   else recordContent.append(node('div', 'No solved challenges yet.', 'empty-state'));
   target.append(records);
   const {section: recent, content: recentContent} = personDisclosure('Recent solves',
@@ -2807,7 +2815,7 @@ async function loadPerson(handle, {preserve = false} = {}) {
         .find(element => element.dataset.submissionId === detailsId && !element.disabled);
       dialogTriggers.set(recoveryDialog, replacement || section?.querySelector('summary') || $('#person-workspace'));
     }
-    if (focused?.id === 'person-leaderboard-rank') $('#person-leaderboard-rank').focus({preventScroll: true});
+    if (focused?.id === 'person-leaderboard-rank') ($('#person-leaderboard-rank') || $('#person-workspace')).focus({preventScroll: true});
     if (focusKey) {
       const section = [...target.querySelectorAll('details')].find(element => disclosureKey(element) === focusKey);
       const receipt = focused.dataset.submissionId;

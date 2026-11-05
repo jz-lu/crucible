@@ -552,7 +552,8 @@
       "test_scoring_weights.py",
       "test_numerical_frontier_points.py",
       "test_admission_weekly_points.py",
-      "test_scoring_awards.py"
+      "test_scoring_awards.py",
+      "test_reviewer_scoring.py"
     ],
     "session-notebook": [
       "test_session_read_performance.py",
@@ -778,7 +779,7 @@
     "crucible/resource_identity.py": "068fd102a41e924a45e276699c6f816993d585d3b184a79f3a8d78288f59c553",
     "crucible/resource_publications.py": "1a5ceeffcb532f6eb732b5660efc39c11707d79e6f50f2742b7c158f216522bf",
     "crucible/resource_state.py": "da004619bee08456cdfb2968a1604ca42a0a21c8f0200808b2313ef42675ab4b",
-    "crucible/scoring.py": "1d2c8e6ef9c823ff7d7a29010f89c7fbecafbf87e17c552277aab9bc62b83dbf",
+    "crucible/scoring.py": "bda0f74706433215786ae61d81682afdb0f986e45a18cf1036a6015243359512",
     "crucible/scoring_awards.py": "c898fb4b581fca2b88d2d34f1616e15a46c932d7cd2c117a4f8a9273aa3e04b5",
     "docs/beta-release-policy.txt": "549c69ce412bde8de427c755959450ce0cbaaf87c2c63297468eb864d2375c8a",
     "migrations/env.py": "cdd84c98ca4eedb4bfef9385742cf573c5c61ea392ee2491875ce1c7a35e19be",

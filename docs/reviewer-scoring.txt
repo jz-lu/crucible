@@ -1,0 +1,32 @@
+REVIEWER SCORE ELIGIBILITY — 5 November 2026
+Policy: crucible-reviewer-exclusion-v1
+
+Configured reviewer accounts are not competitors. The application identifies
+them by the existing settings.reviewer_ids account UUIDs, never by handle. An
+access administrator who is not also a reviewer remains eligible.
+
+Every reviewer score component and total is zero in the API, with rank=null and
+score_status=reviewer. The interface shows Reviewer instead of points or rank.
+The participant leaderboard excludes reviewers before counting or paginating,
+and its ranking window includes only eligible participants. This applies to
+recovery, scheme-admission, weekly, note-contribution and bounty points.
+
+No migration or manual balance reset is needed. Scores are derived; original
+submissions, notes, ratings, admission credits and bounty award receipts remain
+intact. An old award's recorded amount is historical evidence, not an exception
+to current eligibility. Note votes still express support for the note. Accepted
+proposal counts and factual personal/first-recovery records remain visible.
+
+Reviewer recoveries still establish the factual recovery frontier. Removing
+them before detecting advances would incorrectly reward later copies. They
+earn no points themselves and their milestone receipts never count toward a
+bonus. Scheme recovery records and their original attribution are not rewritten.
+
+Eligibility follows the current configured role. Removing reviewer status later
+would restore scores derived from the retained evidence under the applicable
+policy. Permanent exclusion after leaving the role, or excluding only work done
+during a recorded reviewer tenure, would require a separate policy and durable
+role history; neither is silently implied here.
+
+Reviewer permissions, invitation membership and monthly bounty allowance are
+unchanged. This is score eligibility, not a restriction on research or reading.

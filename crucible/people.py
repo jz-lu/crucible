@@ -36,8 +36,8 @@ def _cached_release_name(scheme_id, version, adapter, provider, source_sha256):
         first_manifest=registry.presentation_manifests(adapter)[0])["name"]
 
 
-def _participants(session):
-    participants, _ = scoring.score_relations(session.get_bind().dialect.name)
+def _participants(session, reviewer_ids=()):
+    participants, _ = scoring.score_relations(session.get_bind().dialect.name, reviewer_ids=reviewer_ids)
     admissions = select(SchemeAdmissionCredit.user_id,
                         func.count().label("accepted_proposal_count")).group_by(
                             SchemeAdmissionCredit.user_id).subquery()
@@ -73,7 +73,7 @@ def _record(row):
 def _headline(user):
     """Small leaderboard contract, without placeholder record/count values."""
     return {"handle": user.handle, "points": user.points, "rank": user.rank,
-            "score_status": "active",
+            "score_status": "reviewer" if user.is_reviewer else "active",
             "score_breakdown": {"progress": user.progress, "early_recovery": user.early_recovery,
                                 "scheme_contributions": user.scheme_contributions,
                                 "note_contributions": user.note_contributions,
@@ -85,13 +85,13 @@ def _headline(user):
             "accepted_proposal_count": user.accepted_proposal_count}
 
 
-def _family_scores(session, user_ids):
-    _, families = scoring.score_relations(session.get_bind().dialect.name)
+def _family_scores(session, user_ids, reviewer_ids=()):
+    _, families = scoring.score_relations(session.get_bind().dialect.name, reviewer_ids=reviewer_ids)
     return {(row.user_id, row.scheme_id): row for row in session.execute(
         select(families).where(families.c.user_id.in_(user_ids)))}
 
 
-def _summaries(session, users, *, family_scores=None):
+def _summaries(session, users, *, family_scores=None, reviewer_ids=()):
     """Three aggregate queries for the whole page, independent of account count."""
     if not users:
         return []
@@ -115,7 +115,7 @@ def _summaries(session, users, *, family_scores=None):
                   valid.c.received_at, valid.c.submission_id),
     ).label("position")).subquery()
     if family_scores is None:
-        family_scores = _family_scores(session, user_ids)
+        family_scores = _family_scores(session, user_ids, reviewer_ids)
     rows = session.execute(select(ranked).where(ranked.c.position == 1)
                            .order_by(ranked.c.scheme_id, ranked.c.scheme_version)).all()
     # Project one record per family without comparing incompatible releases.
@@ -129,6 +129,8 @@ def _summaries(session, users, *, family_scores=None):
     records = {}
     for row in chosen.values():
         record = _record(row)
+        if row.user_id in reviewer_ids:
+            record["scoring_eligible"] = False
         key = (row.user_id, row.scheme_id)
         score = family_scores.get(key) if record["scoring_eligible"] else None
         record["score"] = ({"progress": score.progress, "early_recovery": score.early_recovery,
@@ -150,7 +152,7 @@ def _summaries(session, users, *, family_scores=None):
 def _first_records(session, user_id, family_scores):
     """One highest actual frontier advance, separate from the first earning receipt."""
     winners = [row.highest_frontier_submission_id for (owner, _), row in family_scores.items()
-               if owner == user_id and row.early_recovery > 0]
+               if owner == user_id and row.highest_frontier_submission_id is not None]
     if not winners:
         return []
     receipts = milestones.registered_receipts(session.get_bind().dialect.name, [user_id]).subquery()
@@ -159,18 +161,20 @@ def _first_records(session, user_id, family_scores):
                   key=lambda record: (record["scheme_name"].casefold(), record["scheme_id"]))
 
 
-def register_routes(app, db, envelope):
+def register_routes(app, db, envelope, settings):
     """Use the catalogue's existing read access; introduce no new permissions."""
     @app.get("/api/people")
     def people(limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0),
                include_records: bool = True):
         with db.transaction() as session:
-            total = session.scalar(select(func.count()).select_from(User))
-            participants = _participants(session)
+            total = session.scalar(select(func.count()).select_from(User)
+                                   .where(User.id.not_in(settings.reviewer_ids)))
+            participants = _participants(session, settings.reviewer_ids)
             users = session.execute(select(participants)
+                                    .where(participants.c.is_reviewer.is_(False))
                                     .order_by(participants.c.points.desc(), participants.c.handle,
                                               participants.c.id).offset(offset).limit(limit)).all()
-            rows = _summaries(session, users) if include_records else [_headline(user) for user in users]
+            rows = _summaries(session, users, reviewer_ids=settings.reviewer_ids) if include_records else [_headline(user) for user in users]
         return envelope(people=rows,
                         pagination={"limit": limit, "offset": offset, "total": total,
                                     "has_more": offset + len(rows) < total},
@@ -181,13 +185,19 @@ def register_routes(app, db, envelope):
         if not re.fullmatch(r"[A-Za-z0-9_]{3,32}", handle):
             raise HTTPException(404, "Participant not found.")
         with db.transaction() as session:
-            participants = _participants(session)
+            participants = _participants(session, settings.reviewer_ids)
             user = session.execute(select(participants)
                                    .where(participants.c.handle == handle.lower())).first()
             if user is None:
                 raise HTTPException(404, "Participant not found.")
-            family_scores = _family_scores(session, [user.id])
-            summary = _summaries(session, [user], family_scores=family_scores)[0]
+            family_scores = _family_scores(session, [user.id], settings.reviewer_ids)
+            summary = _summaries(session, [user], family_scores=family_scores,
+                                 reviewer_ids=settings.reviewer_ids)[0]
+            def record(row):
+                value = _record(row)
+                if user.is_reviewer:
+                    value["scoring_eligible"] = False
+                return value
             recent = milestones.registered_receipts(session.get_bind().dialect.name, [user.id],
                                                     include_standard=True).subquery()
             rows = session.execute(select(recent)
@@ -195,9 +205,12 @@ def register_routes(app, db, envelope):
                                    .limit(RECENT_LIMIT + 1)).all()
             summary.update(joined_at=user.created_at,
                            researcher_profile=researcher_profiles.profile_for(session, user.id),
-                           recent_recoveries=[_record(row) for row in rows[:RECENT_LIMIT]],
+                           recent_recoveries=[record(row) for row in rows[:RECENT_LIMIT]],
                            recent_recoveries_has_more=len(rows) > RECENT_LIMIT)
             summary["first_records"] = _first_records(session, user.id, family_scores)
+            if user.is_reviewer:
+                for first in summary["first_records"]:
+                    first["scoring_eligible"] = False
             if include_milestones:
                 # Display selection may prefer an unenrolled/archived release. The
                 # earning receipt remains bound to the frozen scoring release.
@@ -205,7 +218,7 @@ def register_routes(app, db, envelope):
                             score.early_recovery_submission_id, score.early_recovery_tier)
                            for (owner, scheme_id), score in family_scores.items()
                            if owner == user.id and score.early_recovery > 0}
-                summary["first_ten"] = milestones.summary(session, user.id, _record, winners)
+                summary["first_ten"] = milestones.summary(session, user.id, record, winners)
         return envelope(person=summary, scoring=scoring.SCORING)
 
     @app.get("/api/people/{handle}/milestones")
@@ -217,6 +230,11 @@ def register_routes(app, db, envelope):
             user_id = session.scalar(select(User.id).where(User.handle == handle.lower()))
             if user_id is None:
                 raise HTTPException(404, "Participant not found.")
-            winners = milestones.winning_keys_for_user(session, user_id)
-            result = milestones.page(session, user_id, _record, winners, limit=limit, offset=offset)
+            winners = milestones.winning_keys_for_user(session, user_id, reviewer_ids=settings.reviewer_ids)
+            def record(row):
+                value = _record(row)
+                if user_id in settings.reviewer_ids:
+                    value["scoring_eligible"] = False
+                return value
+            result = milestones.page(session, user_id, record, winners, limit=limit, offset=offset)
         return envelope(**result)

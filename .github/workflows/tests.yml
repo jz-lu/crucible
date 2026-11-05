@@ -86,6 +86,7 @@ jobs:
           tests/test_bounty_agents.py tests/test_bounty_cli.py
           tests/test_admission_weekly_points.py tests/test_scoring_awards.py
           tests/test_numerical_frontier_points.py tests/test_bounty_scoring.py
+          tests/test_reviewer_scoring.py
       - name: State verification boundary
         shell: bash
         run: |

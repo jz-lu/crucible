@@ -2,6 +2,10 @@ CRUCIBLE — PROVISIONAL POINTS POLICY v11
 Decision date: 29 October 2026
 Policy ID: crucible-points-v11
 
+Current role eligibility: configured reviewers receive no points and do not
+appear on the participant leaderboard. Their original research records remain.
+See docs/reviewer-scoring.txt (crucible-reviewer-exclusion-v1).
+
 Numerical recovery recognition
 
 An account earns 100 points in an enrolled scheme the first time it genuinely

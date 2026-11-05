@@ -74,6 +74,19 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
     assert.equal(app.$('#person-content').querySelector('.person-score-breakdown'), null);
     assert.ok(app.document.activeElement === app.$('#person-workspace'));
   });
+  await test('becoming a reviewer removes score controls without leaving focus or an error behind', async () => {
+    for (const selector of ['#person-leaderboard-rank', '.person-score-breakdown']) {
+      const {app, change, refresh} = await boot();
+      const control = profileElement(app, selector);
+      (control.querySelector('summary') || control).focus();
+      change({score_status:'reviewer', rank:null, points:0}); await refresh();
+      assert.equal(app.$('#person-content').querySelector('#person-leaderboard-rank'), null);
+      assert.equal(app.$('#person-content').querySelector('.person-score-breakdown'), null);
+      assert.equal(app.$('#person-content').querySelector('.person-role-stat').querySelector('dd').textContent, 'Reviewer');
+      assert.ok(app.document.activeElement === app.$('#person-workspace'));
+      assert.equal(app.$('#person-content').querySelector('.inline-error'), null);
+    }
+  });
   await test('moving focus outside the profile during a read prevents focus restoration', async () => {
     const {app, hold, refresh} = await boot();
     app.$('#personal-records').querySelector('summary').focus();
