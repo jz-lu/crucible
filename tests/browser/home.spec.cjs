@@ -1,4 +1,11 @@
 const {test,expect,signIn,useDataSaver,holdResponse}=require('./helpers.cjs');
+async function expectFooterClearOfTheme(page) {
+ await page.locator('.footer-brand').scrollIntoViewIfNeeded();
+ const footer=await page.locator('.footer-brand').boundingBox(),theme=await page.locator('#theme-toggle').boundingBox();
+ // The fixed theme control must not cover the footer's real pointer target.
+ const overlap=footer.x<theme.x+theme.width&&footer.x+footer.width>theme.x&&footer.y<theme.y+theme.height&&footer.y+footer.height>theme.y;
+ expect(overlap,'footer brand stays clear of the theme switcher').toBe(false);
+}
 for(const width of [1440,390]) {
  test('public welcome is useful before sign-in and keeps live research private at '+width+'px',async({page},testInfo)=>{
   await page.setViewportSize({width,height:1000});await useDataSaver(page);
@@ -18,6 +25,8 @@ for(const width of [1440,390]) {
    await page.keyboard.press('Escape');await expect(page.locator('#home-primary')).toBeFocused();
    await page.locator('#home-bounty-guide').click();await expect(page.locator('#access-workspace')).toBeVisible();expect(protectedReads).toEqual([]);
    await page.getByRole('banner').getByRole('link',{name:'Crucible home',exact:true}).click();await expect(page.locator('#home-workspace')).toBeVisible();
+   await expectFooterClearOfTheme(page);
+   await page.screenshot({path:testInfo.outputPath('welcome-footer-'+width+'.png')});
    await page.locator('.footer-brand').click();await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(0);
   }finally{pending.release();await pending.delivered;await pending.remove();}
  });
@@ -57,6 +66,14 @@ for(const width of [1440,390]) {
    await page.goBack();await expect(page.locator('#home-workspace')).toBeVisible();
    await page.locator('#home-primary').click();await expect(page.locator('#activity-workspace')).toBeVisible();
   }finally{held.release();await held.delivered;await held.remove();}
+ });
+}
+
+for(const width of [768,1024]) {
+ test('the fixed theme control leaves the tablet footer usable at '+width+'px',async({page})=>{
+  await page.setViewportSize({width,height:1000});await useDataSaver(page);await page.goto('/');
+  await expect(page.locator('#home-primary')).toBeEnabled();await expectFooterClearOfTheme(page);
+  await page.locator('.footer-brand').click();await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(0);
  });
 }
 

@@ -4307,7 +4307,8 @@ dialog.points-help-dialog{width:min(740px,calc(100% - 32px));padding:0}
 @media(max-width:480px){.points-help-header{padding:18px 18px 16px}.points-help-header h2{font-size:28px}.points-help-content{padding:17px 18px 22px}.points-help-item-heading{gap:7px}.points-help-value{font-size:22px}.points-help-allowance{padding:15px}}
 
 /* Footer partnership: two identities, no added marketing copy. */
-.site-footer { gap: 28px; padding-block: 22px 8px; }
+/* Bottom clearance keeps both links above the fixed theme control. */
+.site-footer { gap: 28px; padding-block: 22px calc(44px + env(safe-area-inset-bottom,0px)); }
 .resi-footer-brand { display: inline-flex; align-items: center; gap: 10px; padding-left: 28px; border-left: 1px solid var(--line); text-decoration: none; color: var(--ink); }
 .resi-footer-brand img { display: block; width: 43px; height: 34px; object-fit: contain; }
 .resi-footer-brand span { font: 400 25px/1 var(--display); letter-spacing: -.045em; }
@@ -4330,7 +4331,6 @@ dialog.points-help-dialog{width:min(740px,calc(100% - 32px));padding:0}
 /* About uses the same local type and palette, with no additional data load. */
 .about-workspace .about-intro { max-width:960px; padding:38px 0 42px; }
 .about-workspace .about-intro h2 { max-width:900px; margin:0; color:var(--ink); font:400 clamp(32px,3.5vw,46px)/1.18 var(--display); letter-spacing:-.6px; text-wrap:pretty; }
-.about-workspace .about-intro p { margin-top:22px; color:var(--primary); font:400 20px/1.5 var(--display); }
 .about-workspace .about-section { padding:32px 0; border-top:1px solid var(--line); }
 .about-workspace .about-section > h2 { margin:0; color:var(--ink); font:700 24px/1.25 var(--display); }
 .about-workspace .about-story,.about-workspace .about-community { display:grid; grid-template-columns:220px minmax(0,1fr); gap:36px; }
@@ -4340,12 +4340,10 @@ dialog.points-help-dialog{width:min(740px,calc(100% - 32px));padding:0}
 .about-workspace .about-principle-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:36px; margin-top:26px; }
 .about-workspace .about-principle-number { color:var(--primary); font:500 12px/1.5 var(--sans); letter-spacing:.08em; }
 .about-workspace .about-principle-list h3 { margin:9px 0 12px; color:var(--ink); font:700 23px/1.25 var(--display); }
-.about-workspace .about-beta-note { margin:26px 0 0; max-width:780px; color:var(--muted); font:400 14px/1.65 var(--sans); }
 .about-workspace .about-prose a { color:var(--primary); text-decoration-thickness:1px; text-underline-offset:3px; }
 .about-workspace .about-prose a:hover { color:var(--primary-hover); }
 @media(max-width:760px) {
   .about-workspace .about-intro { padding:28px 0 32px; }
-  .about-workspace .about-intro p { font-size:19px; }
   .about-workspace .about-story,.about-workspace .about-community { grid-template-columns:1fr; gap:18px; }
   .about-workspace .about-principle-list { grid-template-columns:1fr; gap:24px; margin-top:22px; }
   .about-workspace .about-principle-list h3 { margin:5px 0 9px; }
