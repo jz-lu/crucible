@@ -80,7 +80,11 @@ def has_review_history(session, note_id):
 
     publication = select(notebook.NotebookPublication.id).join(
         notebook.NotebookRevision, notebook.NotebookRevision.id == notebook.NotebookPublication.revision_id
-        ).where(notebook.NotebookRevision.note_id == note_id).exists()
+        ).where(notebook.NotebookRevision.note_id == note_id,
+            notebook.NotebookPublication.decision.is_not(None),
+            or_(notebook.NotebookPublication.decision != 'cancelled',
+                notebook.NotebookPublication.decision_source.is_(None),
+                notebook.NotebookPublication.decision_source != 'author')).exists()
     proposal = select(proposal_notes.ProposalNoteLink.note_id).where(
         proposal_notes.ProposalNoteLink.note_id == note_id).exists()
     # The request contract bounds its frozen sources to eight exact references.
@@ -103,7 +107,17 @@ def purge_content(session, note):
     revision_ids = select(notebook.NotebookRevision.id).where(notebook.NotebookRevision.note_id == note.id)
     session.execute(delete(notebook_graph.NotebookReference).where(
         notebook_graph.NotebookReference.source_revision_id.in_(revision_ids)))
-    session.execute(delete(notebook.NotebookRevision).where(notebook.NotebookRevision.note_id == note.id))
+    retained = select(notebook.NotebookPublication.revision_id)
+    # Pending/author-cancelled requests and screening usage retain their exact
+    # content commitments through FK-required shells, never recoverable bodies.
+    for revision in session.scalars(select(notebook.NotebookRevision).where(
+            notebook.NotebookRevision.note_id == note.id,
+            notebook.NotebookRevision.id.in_(retained))):
+        revision.content = {}
+        revision.source_revision = None
+    session.execute(delete(notebook.NotebookRevision).where(
+        notebook.NotebookRevision.note_id == note.id,
+        notebook.NotebookRevision.id.not_in(retained)))
     for record in session.scalars(select(notebook.NotebookImport).where(
             notebook.NotebookImport.author_id == note.author_id)):
         identifiers = {key for key, value in record.id_map.items() if value == note.id} | {note.id}
@@ -124,7 +138,7 @@ def purge_content(session, note):
 
 
 def register_routes(app, db, clock, account, throttle):
-    from . import notebook
+    from . import notebook, notebook_publication_lifecycle, publication_screening_jobs
 
     def owned(session, user, identifier):
         note = session.scalar(select(notebook.NotebookNote).where(
@@ -145,7 +159,7 @@ def register_routes(app, db, clock, account, throttle):
         if not body.permanent:
             raise HTTPException(422, "Confirm permanent deletion explicitly.")
         with db.transaction(write=True) as session:
-            user = account(request, session, True)
+            user, control = notebook_publication_lifecycle.lock_author_mutation(request, session, account)
             note = owned(session, user, note_id)
             replay = session.scalar(select(NotebookDeletion).where(
                 NotebookDeletion.author_id == user.id, NotebookDeletion.idempotency_key == str(body.idempotency_key)))
@@ -164,8 +178,18 @@ def register_routes(app, db, clock, account, throttle):
             if (target.revision, target.content_sha256) != (body.revision, body.content_sha256):
                 raise HTTPException(409, "This note changed. Read its latest revision before deleting it.")
             if has_review_history(session, note.id):
-                raise HTTPException(409, "Only unsubmitted private drafts can be deleted. Publication and review evidence remains in its recorded history.")
+                raise HTTPException(409, "Published or reviewed evidence cannot be deleted. Its recorded history is preserved.")
             now = clock()
+            publications = list(session.scalars(select(notebook.NotebookPublication).join(
+                notebook.NotebookRevision, notebook.NotebookRevision.id == notebook.NotebookPublication.revision_id)
+                .where(notebook.NotebookRevision.note_id == note.id).with_for_update(of=notebook.NotebookPublication)))
+            for publication in publications:
+                if publication.decision is None:
+                    notebook_publication_lifecycle.cancel(session, publication, now=now,
+                        key=str(uuid4()), commitment=notebook._hash({'action': 'delete-note',
+                            'note_id': note.id, 'idempotency_key': str(body.idempotency_key)}))
+            publication_screening_jobs.cancel_publications(session, [item.id for item in publications],
+                control=control, now=now, erase_results=True)
             previous = active(session, note.id)
             if previous is not None:
                 # Retire the former soft-removal receipt to satisfy its active

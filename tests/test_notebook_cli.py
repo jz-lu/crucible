@@ -8,7 +8,7 @@ import pytest
 
 from scripts import crucible_cli as cli
 from crucible import notebook, notebook_trash
-from test_notebook import system, content, count, workspace, create, revise
+from test_notebook import system, content, count, workspace, create, revise, request_publication, publication_body
 from test_notebook_agents import agent
 
 
@@ -42,6 +42,10 @@ def connected_cli(system, tmp_path, monkeypatch):
             if state["bad_hash"] and "note" in result.json():
                 body = result.json()
                 body["note"]["revisions"][-1]["content"]["body"] = "tampered"
+                data = cli.encode(body)
+            if state.get("bad_cancellation") and "publication" in result.json():
+                body = result.json()
+                body["publication"]["content_sha256"] = "f" * 64
                 data = cli.encode(body)
             return Reply(data, request.full_url)
 
@@ -132,6 +136,42 @@ def test_cli_revision_checks_base_and_does_not_publish_edits(connected_cli, caps
     assert invoke("request-publication", first["id"], "--revision", 1, "--sha256", first["content_sha256"]) == 1
     assert output(capsys)["error"]["code"] == "http_409"
     assert count(app, notebook.NotebookPublication) == 0
+
+
+def test_cli_cancel_publication_retries_lost_response_and_checks_exact_receipt(connected_cli, capsys):
+    app, owner, invoke, state, config, root = connected_cli
+    note = create(owner)
+    request_publication(owner, note)
+    retry = root / 'cancel-retry.json'
+    args = ('cancel-publication', note['id'], '--revision', 1, '--sha256', note['content_sha256'], '--retry', retry)
+    state['lose_once'] = True
+    assert invoke(*args) == 1
+    assert output(capsys)['error']['code'] == 'network_error'
+    state['bad_cancellation'] = True
+    assert invoke(*args) == 1
+    assert 'receipt' in output(capsys)['error']['message']
+    assert 'receipt' not in cli.load_json(retry)
+    state['bad_cancellation'] = False
+    assert invoke(*args) == 0
+    assert output(capsys)['receipt']['status'] == 'cancelled'
+    assert state['requests'][0] == state['requests'][1] == state['requests'][2]
+    assert count(app, notebook.NotebookPublication) == 1
+    assert owner.client.get('/api/notebook/notes/' + note['id']).json()['note']['publication_status'] == 'cancelled'
+
+
+def test_original_publication_retry_reports_later_author_cancellation(connected_cli, capsys):
+    app, owner, invoke, state, config, root = connected_cli
+    note = create(owner)
+    args = ('request-publication', note['id'], '--revision', 1, '--sha256', note['content_sha256'],
+            '--retry', root / 'publish-retry.json')
+    state['lose_once'] = True
+    assert invoke(*args) == 1
+    output(capsys)
+    assert owner.post('/api/notebook/notes/' + note['id'] + '/publication-cancellations',
+                      publication_body(note)).status_code == 200
+    assert invoke(*args) == 0
+    assert output(capsys)['receipt']['publication_status'] == 'cancelled'
+    assert count(app, notebook.NotebookPublication) == 1
 
 
 def test_cli_retry_is_bound_to_owner_and_server(connected_cli, capsys):

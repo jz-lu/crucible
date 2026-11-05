@@ -179,8 +179,10 @@ decisions remain separate from the automatic publication screen. Older review
 links still open the requested exact revision or proposal.
 
 Jobs are queued, running, published, completed (a shadow pass), human_review or
-superseded. Publication status stays submitted / approved / changes_requested /
-withdrawn. A superseded or stale result cannot override a human decision. A job
+superseded or cancelled. Publication status is submitted / approved /
+changes_requested / withdrawn / cancelled. Cancellation has decision_source=author
+and no reviewer identity; it is not a human review. A superseded or stale result
+cannot override a human decision. A job
 status alone is not scientific approval and cannot admit a scheme or award points.
 
 At most two attempts are allowed, only retrying transient service/lease failures.
@@ -189,6 +191,19 @@ settles it; an ambiguous timeout consumes the full reservation. Calls are charge
 to their dispatch month. Changing a limit does not reset spent amounts. The
 stricter durable/worker monthly limit wins. Fixed error codes are safe operational
 output; do not add raw provider responses, note bodies or exceptions to logs.
+
+Author cancellation and eligible private-note deletion lock control → author →
+note → publication, matching worker completion. They invalidate queued work and
+in-flight publication authority atomically with the note transition. Its occupied
+worker slot remains until the call returns or its existing lease expires, so an
+author cancellation cannot bypass the concurrency limit. A dispatched provider call
+cannot be recalled; its full reservation remains charged conservatively. A late
+response has a stale lease and cannot publish or restore content. Permanent
+deletion erases revision/import content and stored model findings, retaining only
+required content-free identity/request/hash/usage commitments. Existing human
+decisions, published history and scientific proposal evidence cannot be erased.
+No schema migration or automatic screening reconfiguration is required for this
+lifecycle extension. Older code also rejects its non-pending publication decisions.
 
 Permanent provider credential/access/configuration/quota failures do not retry.
 They need operator attention; correct the provider setup rather than asking an

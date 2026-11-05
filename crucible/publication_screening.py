@@ -54,6 +54,7 @@ _STATUS_COPY = {
     "completed": "The evaluation check is complete. Human publication review is still required.",
     "published": "This revision was published after automated screening.",
     "superseded": "The screening result did not change publication. The publication decision remains authoritative.",
+    "cancelled": "The author cancelled this publish request. This revision remains private.",
 }
 _FAILURE_COPY = {
     "provider_timeout": "The screening service timed out.",

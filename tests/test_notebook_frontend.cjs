@@ -522,6 +522,71 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const loading=app.show('note-one');assert.match(app.q('full').textContent,/Loading note/);assert.doesNotMatch(app.q('full').textContent,/Argument as text/);
   late.resolve({note:note()});await loading;
  });
+ for(const reviewOnly of [false,true]) await test('pending cancellation belongs to the owner in '+(reviewOnly?'review':'normal')+' readers and expanded rows',async()=>{
+  const stored=note({...revision(1,'Pending claim','submitted')});
+  const app=await boot({reviewOnly,respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:
+   url.startsWith('/api/notebook/review-queue?')?{notes:[stored],next_after:null,screening:'attention'}:url.startsWith('/api/notebook/notes?')?{notes:[stored]}:undefined});
+  assert.equal(byText(app.q('list'),'Cancel publish request'),undefined);
+  app.q('list').querySelector('.nb-expand').click();
+  assert.ok(byText(app.q('list'),'Cancel publish request').closest('.nb-preview'));
+  byText(app.q('list'),'Cancel publish request').click();
+  assert.equal(app.requests.filter(row=>row.body).length,0,'Opening confirmation never cancels');
+  assert.match(app.q('dialog-body').textContent,/Pending claim.*Revision 1.*stays private.*already be running.*new revision/);
+  byText(app.q('dialog-body'),'Keep request').click();
+  await app.show('note-one');assert.ok(byText(app.q('full'),'Cancel publish request'));
+ });
+ await test('cancellation is never offered for another author or a nonpending revision',async()=>{
+  for(const stored of [note({...revision(1,'Other pending','submitted'),owner:{id:2,handle:'bob'}}),
+   ...['private','approved','cancelled','changes_requested','withdrawn'].map(status=>note({...revision(1,'Settled request',status)}))]){
+   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});
+   await app.show('note-one');assert.equal(byText(app.q('full'),'Cancel publish request'),undefined);
+   if(stored.publication_status==='cancelled'){assert.match(app.q('full').textContent,/Publish request cancelled/);assert.equal(byText(app.q('full'),'Publish'),undefined);}
+  }
+ });
+ await test('cancellation pins the displayed older revision, retries a lost reply and invalidates reader and list caches',async()=>{
+  let cancelled=false,writes=0,reads=0;
+  const stored=()=>note({revision:2,revisions:[revision(1,'Submitted earlier',cancelled?'cancelled':'submitted'),revision(2,'New private revision')],revision_count:2});
+  const app=await boot({respond:(url,body)=>{
+   if(url.endsWith('/publication-cancellations')){writes++;cancelled=true;if(writes===1)throw Error('Connection lost');return{publication:{id:'publication-one',note_id:'note-one',revision:1,content_sha256:'hash-1',status:'cancelled'}};}
+   if(url.startsWith('/api/notebook/notes/note-one')){reads++;return{note:stored()};}
+   if(url.startsWith('/api/notebook/notes?'))return{notes:[stored()]};
+  }});
+  await app.show('note-one',1);byText(app.q('full'),'Cancel publish request').click();
+  byText(app.q('dialog-body'),'Cancel publish request').click();await flush();
+  const first=app.requests.find(row=>row.url.endsWith('/publication-cancellations'));
+  assert.equal(first.body.revision,1);assert.equal(first.body.content_sha256,'hash-1');assert.ok(first.body.idempotency_key);
+  byText(app.q('dialog-body'),'Retry the same cancellation').click();await flush();
+  const sends=app.requests.filter(row=>row.url.endsWith('/publication-cancellations'));assert.equal(sends.length,2);assert.deepEqual(sends[1].body,first.body);
+  assert.equal(app.q('dialog').open,false);assert.ok(reads>=2);assert.match(app.q('full').textContent,/Submitted earlier.*Publish request cancelled/);
+  assert.equal(byText(app.q('full'),'Cancel publish request'),undefined);
+  await app.show();await app.show('note-one',1);assert.match(app.q('full').textContent,/Publish request cancelled/);
+ });
+ for(const reply of ['approval won','wrong receipt']) await test('cancellation does not claim success when '+reply,async()=>{
+  const app=await boot({respond:(url,body)=>{
+   if(url.endsWith('/publication-cancellations')){if(reply==='approval won')throw Object.assign(Error('This request has already been reviewed'),{status:409});return{publication:{note_id:'different-note',revision:1,content_sha256:'hash-1',status:'cancelled'}};}
+   if(url.startsWith('/api/notebook/notes/note-one'))return{note:note({...revision(1,'Pending claim','submitted')})};
+  }});
+  await app.show('note-one');byText(app.q('full'),'Cancel publish request').click();byText(app.q('dialog-body'),'Cancel publish request').click();await flush();
+  assert.equal(app.q('dialog').open,true);assert.match(app.q('dialog-body').textContent,reply==='approval won'?/already been reviewed/:/Cancellation could not be confirmed/);
+  assert.doesNotMatch(app.q('notice').textContent,/Publish request cancelled/);
+ });
+ await test('late cancellation replies cannot render after an account change',async()=>{
+  const pending=deferred();const app=await boot({respond:url=>url.endsWith('/publication-cancellations')?pending.promise:url.startsWith('/api/notebook/notes/note-one')?{note:note({...revision(1,'Pending private claim','submitted')})}:undefined});
+  await app.show('note-one');byText(app.q('full'),'Cancel publish request').click();byText(app.q('dialog-body'),'Cancel publish request').click();
+  app.setAccount({id:2,handle:'bob'});const reads=app.requests.length,before=app.location.hash;
+  pending.resolve({publication:{note_id:'note-one',revision:1,content_sha256:'hash-1',status:'cancelled'}});await flush();
+  assert.equal(app.requests.length,reads);assert.equal(app.location.hash,before);assert.doesNotMatch(app.root.textContent,/Publish request cancelled|Pending private claim/);
+ });
+ await test('publication polling accepts cancellation from another tab and stops',async()=>{
+  const id='30000000-0000-4000-8000-000000000010';let cancelled=false,reads=0;
+  const stored=()=>note({...revision(1,'Pending screened note',cancelled?'cancelled':'submitted'),publication:{id,requested_at:99}});
+  const app=await boot({respond:url=>{
+   if(url.startsWith('/api/notebook/publication-status?')){reads++;cancelled=true;return{publications:[{id,note_id:'note-one',revision:1,content_sha256:'hash-1',status:'cancelled',screening_status:'cancelled'}]};}
+   if(url.startsWith('/api/notebook/notes?'))return{notes:[stored()],next_after:null,capabilities:{publication_policy:screeningPolicy('automatic')}};
+  }});
+  await app.advanceTimers(2000);assert.match(app.q('list').textContent,/Publish request cancelled/);
+  await app.advanceTimers(30000);assert.equal(reads,1);
+ });
  await test('permanent private draft deletion freezes its exact revision and retries after a lost reply',async()=>{
   let writes=0,deleted=false;
   const app=await boot({respond:(url,body)=>{
@@ -531,6 +596,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   }});
   await app.show('note-one');byText(app.q('full'),'Edit').click();byText(app.q('dialog-body'),'Delete').click();
   assert.match(app.q('dialog-body').textContent,/Permanently delete this private note and all its saved revisions.*cannot be undone/);
+  assert.match(app.q('dialog-body').textContent,/Pending publish requests are cancelled and note content is erased.*Minimal audit and usage records remain/);
   assert.equal(writes,0);byText(app.q('dialog-body'),'Delete').click();await flush();
   const first=app.requests.find(row=>row.body);
   assert.equal(first.body.revision,1);assert.equal(first.body.content_sha256,'hash-1');assert.equal(first.body.permanent,true);

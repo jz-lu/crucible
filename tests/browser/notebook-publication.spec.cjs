@@ -1,5 +1,53 @@
 const {test, expect, signIn} = require('./helpers.cjs');
 
+for (const [width, actor, reviewReader] of [[1440, 'alice', false], [390, 'queuereviewer', true]]) {
+  test(`Author cancels a pending publication and deletes its private content at ${width}px`, async ({page}, testInfo) => {
+    await page.setViewportSize({width, height:1000});
+    await signIn(page, actor);
+    const saved = await page.evaluate(async width => {
+      const note = (await api('/api/notebook/notes', {idempotency_key:crypto.randomUUID(),
+        content:{title:'Synthetic cancellation fixture ' + width, claim:'Local lifecycle check.',
+          conditions:'Disposable browser data.', body:'Private cancellation sentinel.', tags:['fixture']}})).note;
+      await api('/api/notebook/notes/' + note.id + '/publication-requests', {
+        revision:note.revision, content_sha256:note.content_sha256, idempotency_key:crypto.randomUUID()});
+      return note;
+    }, width);
+    await page.goto('/#notebook?filter=mine&q=' + encodeURIComponent('Synthetic cancellation fixture ' + width));
+    const row = page.locator('#notebook-workspace .nb-entry').filter({hasText:'Synthetic cancellation fixture ' + width});
+    await row.locator('.nb-expand').click();
+    const cancel = row.getByRole('button', {name:'Cancel publish request', exact:true});
+    await expect(cancel).toBeVisible(); await cancel.click();
+    const dialog = page.locator('#notebook-workspace dialog[data-nb="dialog"]');
+    await expect(dialog).toContainText('This revision stays private');
+    await dialog.getByRole('button', {name:'Keep request', exact:true}).click();
+    const prefix = reviewReader ? '/#reviews?section=flagged&note=' : '/#notebook?note=';
+    await page.goto(prefix + saved.id + '&revision=1');
+    const workspace = page.locator(reviewReader ? '#review-notebook-workspace' : '#notebook-workspace');
+    const reader = workspace.locator('[data-nb="full"]');
+    const readerCancel = reader.getByRole('button', {name:'Cancel publish request', exact:true});
+    await expect(readerCancel).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await readerCancel.click();
+    const confirmation = workspace.locator('dialog[data-nb="dialog"]');
+    const response = page.waitForResponse(value => value.request().method() === 'POST' &&
+      new URL(value.url()).pathname === `/api/notebook/notes/${saved.id}/publication-cancellations`);
+    await confirmation.getByRole('button', {name:'Cancel publish request', exact:true}).click();
+    expect((await (await response).json()).publication).toMatchObject({note_id:saved.id, revision:1,
+      content_sha256:saved.content_sha256, status:'cancelled'});
+    await expect(confirmation).not.toBeVisible();
+    await expect(reader).toContainText('Publish request cancelled');
+    await expect(reader.getByRole('button', {name:'Cancel publish request', exact:true})).toHaveCount(0);
+    await page.screenshot({path:testInfo.outputPath('cancelled-publication.png'), fullPage:true});
+    await page.goto('/#notebook?note=' + saved.id);
+    await page.locator('#notebook-workspace [data-nb="full"]').getByRole('button', {name:'Edit', exact:true}).click();
+    await dialog.getByRole('button', {name:'Delete', exact:true}).click();
+    await expect(dialog).toContainText('Minimal audit and usage records remain');
+    await dialog.getByRole('button', {name:'Delete', exact:true}).click();
+    await expect(dialog).not.toBeVisible();
+    expect(await page.evaluate(async id => (await fetch('/api/notebook/notes/' + id)).status, saved.id)).toBe(410);
+  });
+}
+
 for (const width of [1440, 390]) {
   test(`Reviewer screening findings are collapsed and inert at ${width}px`, async ({page}, testInfo) => {
     await page.setViewportSize({width, height:1000});
