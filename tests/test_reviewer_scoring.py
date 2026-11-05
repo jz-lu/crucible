@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from crucible import note_ratings, scoring
+from crucible import note_ratings, registry, scoring
 from crucible.app import create_app
 from crucible.bounty_models import BountyAward
 from crucible.db import Submission
@@ -26,6 +26,16 @@ ZERO_BREAKDOWN = {
     "progress": 0, "early_recovery": 0, "scheme_contributions": 0,
     "note_contributions": 0, "bounty_points": 0,
 }
+
+
+@pytest.fixture(autouse=True)
+def portable_scoring_catalogue(monkeypatch):
+    """Role/ledger checks need the real portable schemes, not native PQ builds."""
+    monkeypatch.setattr(registry, "ADAPTERS", {
+        key: value for key, value in registry.ADAPTERS.items()
+        if key[0] in ("teaching-dh-kem", "rsa-kem")
+    })
+    monkeypatch.setattr(registry, "CURRENT", {"teaching-dh-kem": "7", "rsa-kem": "4"})
 
 
 @contextmanager
