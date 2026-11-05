@@ -4570,7 +4570,7 @@ html[data-beta-landing=left] .access-heading { align-items:flex-start; }
 .brand-ember-effect { display:none; }
 .site-header .brand-ember-effect {
   display:block;position:absolute;top:0;left:0;width:38px;height:54px;overflow:visible;pointer-events:none;z-index:1;
-  opacity:.5625;
+  opacity:.75;
 }
 .site-header .brand > span,.site-header .brand > .brand-wordmark { position:relative;z-index:2; }
 .brand-flame-pigment { stop-color:var(--primary); }
