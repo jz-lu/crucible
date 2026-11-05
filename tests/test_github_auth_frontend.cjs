@@ -41,11 +41,14 @@ async function appWith({hash = '#challenge', signedIn = null, status, config = a
     assert.equal(state(app).authMode, 'register');
     assert.equal(app.$('#auth-github').hidden, false);
     assert.equal(app.$('#auth-password-options').open, false);
-    app.$('#auth-password-options').open = true;app.$('#auth-password-options').dispatchEvent({type:'toggle'});
+    app.$('#auth-password-summary').click();
     assert.equal(app.$('#auth-github').hidden, true);
     assert.equal(app.$('#auth-methods-back').hidden, false);
     assert.equal(app.$('#auth-password').getAttribute('placeholder'), '12–128 characters');
     assert.equal(app.$('#auth-handle-label').textContent, 'Crucible username');
+    app.$('#auth-password').focus();
+    app.$('#auth-password-options').dispatchEvent({type:'toggle'});
+    assert.equal(app.document.activeElement, app.$('#auth-password'), 'a delayed native toggle must not move typing focus');
     app.$('#auth-methods-back').click();
     assert.equal(app.$('#auth-github').hidden, false);
     assert.equal(app.$('#auth-password-options').open, false);
@@ -324,7 +327,7 @@ async function appWith({hash = '#challenge', signedIn = null, status, config = a
     assert.equal(app.$('#auth-github-password').hidden, true);
     app.$('#auth-password').value = 'Discarded synthetic password';
     app.$('#auth-methods-back').click();
-    app.$('#auth-password-options').open = true;app.$('#auth-password-options').dispatchEvent({type:'toggle'});await flush();
+    app.$('#auth-password-summary').click();await flush();
     assert.equal(app.document.activeElement, app.$('#auth-handle'));
     assert.equal(app.$('#auth-password-options').open, true);
     assert.equal(app.$('#auth-password').value, '');

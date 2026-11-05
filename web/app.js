@@ -4306,10 +4306,13 @@ function renderAuthMethods() {
   for (const [id, panel] of [['auth-verification-panel','verification'], ['auth-joined-panel','joined'], ['auth-invitation-issue-panel','invitation-issue'], ['auth-reset-sent-panel','reset-sent'], ['auth-reset-complete-panel','reset-complete'], ['auth-reset-invalid-panel','reset-invalid']]) $('#' + id).hidden = state.authPanel !== panel;
   renderAccountSignIn();renderVerificationControls();
 }
-$('#auth-password-options').addEventListener('toggle', () => {
-  renderAuthMethods();
-  if ($('#auth-password-options').open && authDialog.open && state.authPanel === 'signin') $('#auth-handle').focus();
+$('#auth-password-summary').addEventListener('click', event => {
+  event.preventDefault();
+  if (state.githubBusy) return;
+  $('#auth-password-options').open = true;
+  renderAuthMethods();$('#auth-handle').focus();
 });
+$('#auth-password-options').addEventListener('toggle', renderAuthMethods);
 $('#auth-methods-back').addEventListener('click', () => {
   $('#auth-password-options').open = false;$('#auth-password').value = '';setError('#auth-error', '');renderAuthMethods();$('#auth-github').focus();
 });
@@ -4339,7 +4342,7 @@ function signInExistingAccount(trigger, password = false) {
   window.history.replaceState(null, '', state.returnRoute);
   renderAccessGate(); setAuthMode('login'); openAuth(trigger);
   dialogTriggers.set(authDialog, $('#access-sign-in'));
-  if (password || !state.auth?.github_enabled) { $('#auth-password-options').open = true; $('#auth-handle').focus(); }
+  if (password || !state.auth?.github_enabled) { $('#auth-password-options').open = true; renderAuthMethods();$('#auth-handle').focus(); }
   else $('#auth-github').focus();
 }
 $('#access-existing-account').addEventListener('click', () => signInExistingAccount($('#access-existing-account')));
@@ -4452,7 +4455,7 @@ async function handleAuthenticationRoute() {
     else {
       openAuth();
       if (showInvitationIssue(error)) return true;
-      if (outcome === 'invite-required') { $('#auth-password-options').open = true;renderAuthMethods();setError('#auth-error', error.message); }
+      if (outcome === 'invite-required') { $('#auth-password-options').open = true;renderAuthMethods();setError('#auth-error', error.message);$('#auth-handle').focus(); }
       else setError('#auth-github-error', error.message);
     }
   } finally { state.authCallbackBusy = false; }
@@ -4578,6 +4581,7 @@ function setAuthMode(mode) {
 function openAuth(trigger) {
   setAuthMode(state.authMode);$('#auth-password-options').open = !state.auth?.github_enabled;
   renderAuthMethods();if (!authDialog.open) openDialog(authDialog, trigger);
+  if ($('#auth-password-options').open) $('#auth-handle').focus();
 }
 function authFieldError(input, error, message) {
   setError(error, message);$(input).setAttribute('aria-invalid', 'true');$(input).setAttribute('aria-describedby', error.slice(1));$(input).focus();

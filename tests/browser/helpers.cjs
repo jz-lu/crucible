@@ -26,6 +26,8 @@ async function signIn(page, actor = 'alice', {navigate = true} = {}) {
   if (navigate) await page.goto('/#notebook');
   await page.locator('#access-sign-in').click();
   if (await page.locator('#auth-password-summary').isVisible()) await page.locator('#auth-password-summary').click();
+  await expect(page.locator('#auth-form')).toBeVisible();
+  await expect(page.locator('#auth-github')).toBeHidden();
   await page.locator('#auth-form').getByLabel('Crucible username', {exact: true}).fill('browser_' + actor);
   await page.locator('#auth-form').getByLabel('Password', {exact: true}).fill('Synthetic browser fixture password');
   await page.locator('#auth-submit').click();
