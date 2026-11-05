@@ -95,7 +95,7 @@ def test_exact_award_and_allowance_survive_readonly_backup_restore(pg_system):
             assert connection.scalar(text('SELECT has_table_privilege(current_user,:t,:p)'),{'t':name,'p':'SELECT'})
             for privilege in ('INSERT','UPDATE','DELETE'):
                 assert not connection.scalar(text('SELECT has_table_privilege(current_user,:t,:p)'),{'t':name,'p':privilege})
-    with pytest.raises(RuntimeError,match='Preserve bounty'):
+    with pytest.raises(RuntimeError,match='Preserve independent-reviewer bounty awards before downgrading schema0030'):
         command.downgrade(fixture.config,'0027')
     dumped=pg_tool(fixture.service_container,'pg_dump',fixture.backup,'--format=custom','--no-owner','--no-privileges',
                    *[f'--table={fixture.schema}.{table}' for table in sorted(TABLES)],'crucible_metadata_test')

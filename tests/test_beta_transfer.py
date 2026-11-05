@@ -5,6 +5,7 @@ cluster with CREATEDB. Each test creates/drops ONLY a randomly named database.
 Neither DATABASE_URL nor the operator transfer DSN is consulted by tests.
 """
 from contextlib import closing
+import hashlib
 import json
 import os
 import platform
@@ -66,9 +67,13 @@ def source(tmp_path,migration_root):
               {"id": "revision-" + suffix, "note": "note-" + suffix,
                "content": '{"title":"synthetic","body":"α\\nβ","n":9007199254740993}',
                "hash": "d" * 64, "key": "revision-key-" + suffix, "request": "e" * 64})
-        connection.execute(sa.text("""INSERT INTO notebook_publications VALUES
+        connection.execute(sa.text("""INSERT INTO notebook_publications
+          (id,revision_id,author_id,requested_at,idempotency_key,request_sha256,decision,reviewer_id,
+           reviewed_at,reason,review_key,review_sha256,test_only_self_review) VALUES
           ('publication','revision-sql','author',1729000010.125,'publish-key',:hash,'approved','reviewer',
            1729000020.25,'Synthetic approval','review-key',:review,0)"""), {"hash": "f" * 64, "review": "1" * 64})
+        if "decision_source" in {column["name"] for column in sa.inspect(connection).get_columns("notebook_publications")}:
+            connection.exec_driver_sql("UPDATE notebook_publications SET decision_source='human'")
     engine.dispose()
     return path
 
@@ -294,13 +299,40 @@ def all_table_source(tmp_path,migration_root):
     _, schema = transfer.expected_schema(migration_root)
     engine = sa.create_engine("sqlite:///" + str(path))
     records = {}
+    # Realistic completed screening history, not arbitrary strings in fields
+    # whose values carry lifecycle or accounting meaning. Keep this schema-only
+    # fixture independent of application imports/native runtime availability.
+    def document(value):
+        encoded = json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+        return encoded, hashlib.sha256(encoded.encode()).hexdigest()
+    policy, policy_id = document(dict(policy_version='synthetic-v1', prompt_sha256='a' * 64,
+        input_format_version='synthetic-v1', model='synthetic-model', max_input_tokens=1000,
+        max_output_tokens=100, reserve_micro_usd=100, max_attempts=2, model_configuration={}))
+    result, result_sha256 = document(dict(outcome='no_concern_found', concerns=[], limitations=[]))
+    screening_rows = {
+        'publication_screening_jobs': dict(content_sha256='b' * 64, policy_id=policy_id,
+            policy=policy, status='published', attempt_count=1, available_at=1729000000.125,
+            created_at=1729000000.125, last_started_at=1729000001.125,
+            finished_at=1729000002.125, error_code=None),
+        'publication_screening_budgets': dict(month='2024-10', spent_micro_usd=30, reserved_micro_usd=0),
+        'publication_screening_attempts': dict(number=1, reserved_micro_usd=100,
+            charged_micro_usd=30, usage_known=1, started_at=1729000001.125,
+            lease_expires_at=1729000121.125, finished_at=1729000002.125,
+            outcome='no_concern_found', error_code=None, model_id='synthetic-model',
+            result=result, result_sha256=result_sha256),
+        'notebook_automatic_publications': dict(content_sha256='b' * 64, policy_id=policy_id,
+            model_id='synthetic-model', actor='system:publication-screening',
+            result_sha256=result_sha256, created_at=1729000002.125),
+    }
     with engine.begin() as connection:
         transfer.migrate_fixture(connection, revisions, head)
         for name in transfer.dependency_order(schema):
             info = schema[name]
-            if name == "bounty_policies":
-                # A migrated database already contains the exact immutable seed.
-                records[name] = dict(connection.exec_driver_sql("SELECT * FROM bounty_policies").mappings().one())
+            if name in {"bounty_policies", "publication_screening_control"}:
+                # Preserve migration seeds. Screening remains disabled even
+                # when a fixture contains historical completed work.
+                records[name] = dict(connection.exec_driver_sql(
+                    "SELECT * FROM " + transfer.quoted(name)).mappings().one())
                 continue
             row = {}
             for column, kind, nullable in info["columns"]:
@@ -323,6 +355,14 @@ def all_table_source(tmp_path,migration_root):
             for columns, parent, parent_columns in info["foreign_keys"]:
                 for column, parent_column in zip(columns, parent_columns):
                     row[column] = None if parent == name else records[parent][parent_column]
+            row.update(screening_rows.get(name, {}))
+            if 'publication_screening_jobs' in schema:
+                if name == 'notebook_revisions':
+                    row['content_sha256'] = 'b' * 64
+                elif name == 'notebook_publications':
+                    row.update(decision='approved', decision_source='automated', reviewer_id=None,
+                        reviewed_at=1729000002.125, review_key=None, review_sha256=None,
+                        reason='Synthetic automatic publication', test_only_self_review=0)
             names = list(row)
             statement = sa.text("INSERT INTO " + transfer.quoted(name) + " (" +
                 ", ".join(transfer.quoted(column) for column in names) + ") VALUES (" +
@@ -331,6 +371,37 @@ def all_table_source(tmp_path,migration_root):
             records[name] = row
     engine.dispose()
     return path
+
+
+def test_current_all_table_fixture_preserves_screening_lifecycle(all_table_source):
+    """Exercise current-schema fixtures even when PostgreSQL is unavailable."""
+    with closing(sqlite3.connect(all_table_source)) as connection:
+        connection.row_factory = sqlite3.Row
+        assert connection.execute('PRAGMA foreign_key_check').fetchall() == []
+        def row(table):
+            rows = connection.execute('SELECT * FROM ' + transfer.quoted(table)).fetchall()
+            assert len(rows) == 1
+            return dict(rows[0])
+        control = row('publication_screening_control')
+        job = row('publication_screening_jobs')
+        attempt = row('publication_screening_attempts')
+        budget = row('publication_screening_budgets')
+        receipt = row('notebook_automatic_publications')
+        publication = row('notebook_publications')
+        revision = row('notebook_revisions')
+        assert control['mode'] == 'disabled' and control['active_job_id'] is None
+        assert job['status'] == 'published' and job['attempt_count'] == 1
+        assert job['publication_id'] == receipt['publication_id'] == publication['id']
+        assert job['revision_id'] == receipt['revision_id'] == revision['id']
+        assert job['content_sha256'] == receipt['content_sha256'] == revision['content_sha256']
+        assert attempt['job_id'] == receipt['job_id'] == job['id']
+        assert attempt['id'] == receipt['attempt_id']
+        assert attempt['budget_month'] == budget['month']
+        assert attempt['charged_micro_usd'] == budget['spent_micro_usd'] == 30
+        assert budget['reserved_micro_usd'] == 0
+        assert attempt['result_sha256'] == receipt['result_sha256']
+        assert job['policy_id'] == receipt['policy_id']
+        assert publication['decision_source'] == 'automated' and publication['reviewer_id'] is None
 
 
 @pytest.mark.parametrize("migration_root", ["0024"], indirect=True)
