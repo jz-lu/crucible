@@ -18,13 +18,20 @@ test('rapid filters keep admitted rows stable until only the newest real respons
   const original = await list(page).locator('.nb-entry').first().elementHandle();
   const human = await holdResponse(page, listRequest('human'));
   const mine = await holdResponse(page, listRequest('mine'));
+  let humanArrived = false, mineArrived = false;
+  void human.arrived.then(() => { humanArrived = true; });
+  void mine.arrived.then(() => { mineArrived = true; });
   try {
     await filter(page).focus();
     await filter(page).selectOption('human'); await human.arrived;
     await expect(list(page)).toHaveAttribute('aria-busy', 'true');
     await expect(list(page)).toContainText('Alice browser-only private note');
     expect(await original.evaluate(element => element.isConnected)).toBe(true);
-    await expect(list(page).getByRole('button', {name: 'Edit', exact: true})).toBeDisabled();
+    // Other browser flows can leave additional private notes in this shared
+    // disposable database. Every retained row must have its actions disabled.
+    const pendingEdits = await list(page).getByRole('button', {name: 'Edit', exact: true}).all();
+    expect(pendingEdits.length).toBeGreaterThan(0);
+    for (const edit of pendingEdits) await expect(edit).toBeDisabled();
     await filter(page).selectOption('mine'); await mine.arrived;
     human.release(); await human.delivered;
     await expect(list(page)).toContainText('Alice browser-only private note');
@@ -34,11 +41,16 @@ test('rapid filters keep admitted rows stable until only the newest real respons
     await expect(list(page)).not.toHaveAttribute('aria-busy', 'true');
     await expect(filter(page)).toHaveValue('mine');
     await expect(filter(page)).toBeFocused();
-    await expect(list(page).getByRole('button', {name: 'Edit', exact: true})).toBeEnabled();
+    const admittedEdits = await list(page).getByRole('button', {name: 'Edit', exact: true}).all();
+    expect(admittedEdits.length).toBeGreaterThan(0);
+    for (const edit of admittedEdits) await expect(edit).toBeEnabled();
     await expect(search).toHaveAttribute('placeholder', 'Search titles, tags or #number…');
   } finally {
     human.release(); mine.release();
-    await human.delivered; await mine.delivered;
+    // Preserve the actual assertion failure if it happens before a later
+    // request starts, rather than waiting forever for that unused response.
+    if (humanArrived) await human.delivered;
+    if (mineArrived) await mine.delivered;
     await human.remove(); await mine.remove();
   }
 });
