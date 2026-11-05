@@ -1746,6 +1746,7 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
   }
 }
 function setSession(data) {
+  const enteringBeta = state.sessionResolved && !hasAccess();
   document.body.removeAttribute('data-access-pending');
   $('.primary-nav').removeAttribute('inert');
   state.sessionRevision++;
@@ -1764,6 +1765,8 @@ function setSession(data) {
   state.access = data.access || (state.access?.mode === 'beta' ?
     {mode: 'beta', allowed: false, status: state.user ? 'pending' : 'anonymous'} :
     {mode: 'open', allowed: true, status: state.user ? 'active' : 'anonymous'});
+  if (!hasAccess()) logoBetaEntryPending = false;
+  else if (enteringBeta) logoBetaEntryPending = true;
   // Presentation only: the next reload can keep the gate or route frame in
   // place, but every reload still waits for its fresh session before any data.
   document.body.setAttribute('data-access-view', hasAccess() ? 'workspace' : 'gate');
@@ -6063,6 +6066,7 @@ function showWorkspace(name) {
   if (transferLoadingFocus) $(workspaceSelector(name)).focus({preventScroll: true});
   if (enteringResearch && !research.targets.length) loadResearch();
   else if (enteringResearch && research.target) loadFindings();
+  playBetaEntryGlow();
 }
 function researchError(message) {
   setText('#research-error-text', message);
@@ -6510,7 +6514,7 @@ window.addEventListener('pointercancel', clearTaglinePointer);
 window.addEventListener('blur', clearTaglinePointer);
 const landingBrand = $('#site-brand'), landingMark = landingBrand.querySelector('.brand-mark'), landingFire = landingBrand.querySelector('.brand-fire-ghost');
 const logoMotionPreference = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-let logoAnimationRun = 0, logoStartupTimer = null;
+let logoAnimationRun = 0, logoStartupTimer = null, logoBetaEntryPending = false;
 function stopLogoAnimation() {
   clearTimeout(logoStartupTimer); logoStartupTimer = null;
   logoAnimationRun++;
@@ -6529,6 +6533,14 @@ function igniteLandingLogo() {
   if (animation) animation.finished.then(finish, finish);
   else finish();
 }
+function playBetaEntryGlow() {
+  // Wait for the visible workspace, including the invitation's final dialog.
+  // Session refreshes and ordinary routes do not create another entry event.
+  if (!logoBetaEntryPending || !hasAccess() || authDialog.open || !$('#access-workspace').hidden) return;
+  logoBetaEntryPending = false;
+  igniteLandingLogo();
+}
+authDialog.addEventListener('close', playBetaEntryGlow);
 logoMotionPreference?.addEventListener?.('change', event => { if (event.matches) stopLogoAnimation(); });
 const startLogoAnimation = () => {
   if (logoAnimationRun !== 0 || logoStartupTimer !== null) return;
@@ -6537,8 +6549,8 @@ const startLogoAnimation = () => {
     if (logoAnimationRun === 0) igniteLandingLogo();
   }, 500);
 };
-// Pause briefly after decoding, once per document. Routes never replay it;
-// clicking the icon starts immediately and cancels any pending startup animation.
+// Pause briefly after decoding, once per document. Entering beta and icon
+// clicks start immediately and cancel any pending startup animation.
 if (typeof landingMark.decode === 'function') landingMark.decode().then(startLogoAnimation, () => {});
 else if (landingMark.complete) startLogoAnimation();
 else landingMark.addEventListener('load', startLogoAnimation, {once: true});
