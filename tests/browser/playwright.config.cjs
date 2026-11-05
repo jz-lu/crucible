@@ -1,4 +1,7 @@
 const {defineConfig} = require('playwright/test');
+const {resolve} = require('node:path');
+const mailOutbox = process.env.CRUCIBLE_BROWSER_OUTBOX || resolve(__dirname, '../../.local/browser-mail');
+process.env.CRUCIBLE_BROWSER_OUTBOX = mailOutbox;
 
 module.exports = defineConfig({
   testDir: __dirname,
@@ -23,6 +26,7 @@ module.exports = defineConfig({
     launchOptions: process.env.CRUCIBLE_BROWSER_EXECUTABLE ? {executablePath: process.env.CRUCIBLE_BROWSER_EXECUTABLE} : {},
   },
   webServer: {
+    env: {CRUCIBLE_BROWSER_OUTBOX: mailOutbox},
     command: '"' + (process.env.CRUCIBLE_BROWSER_PYTHON || 'python') + '" -B server.py',
     cwd: __dirname,
     url: 'http://127.0.0.1:8029/health',

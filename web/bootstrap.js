@@ -9,10 +9,16 @@
   try { const saved = window.localStorage.getItem(key); if (valid(saved)) preference = saved; } catch {}
   try { media = window.matchMedia('(prefers-color-scheme: dark)'); } catch {}
   const current = () => preference || (media?.matches ? 'dark' : 'light');
+  function syncIcon() {
+    const icon = document.querySelector('#site-icon');
+    const iconURL = icon?.getAttribute('data-icon-' + (media?.matches ? 'dark' : 'light'));
+    if (iconURL && icon.getAttribute('href') !== iconURL) icon.setAttribute('href', iconURL);
+  }
   function apply() {
     const theme = current(), next = theme === 'dark' ? 'light' : 'dark';
     root.setAttribute('data-theme', theme);
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#171a18' : '#ebede6');
+    syncIcon();
     const button = document.querySelector('#theme-toggle');
     if (button) {
       button.setAttribute('aria-label', `Switch to ${next} theme`);
@@ -123,14 +129,19 @@
     let hint;
     try { hint = window.sessionStorage.getItem(presentationKey); } catch {}
     const described = describe();
-    const route = described.page === 'home' ? described : hint === 'gate' ? {page: 'gate', title: 'Private beta'} :
+    const route = described.page === 'home' ? {page: 'gate', title: 'Private beta'} : hint === 'gate' ? {page: 'gate', title: 'Private beta'} :
       hint !== 'workspace' && described.page === 'catalogue' ? {page: 'neutral', title: 'Crucible'} : described;
     root.setAttribute('data-pending-page', route.page);
+    if (route.page === 'gate') root.setAttribute('data-beta-landing',
+      new URLSearchParams((window.location?.hash || '').split('?')[1] || '').get('layout') === 'left' ? 'left' : 'centered');
+    else root.removeAttribute('data-beta-landing');
     const home = document.querySelector('#home-workspace');
-    if (home) home.hidden = route.page !== 'home';
+    if (home) home.hidden = true;
+    const branding = document.querySelector('#access-branding');
+    if (branding) branding.hidden = route.page !== 'gate';
     root.classList.toggle('pending-notebook', ['Notes', 'Scheme map', 'Timeline', 'Bounties'].includes(route.title));
     const title = document.querySelector('#access-title');
-    if (title) { title.textContent = route.title; title.removeAttribute('aria-hidden'); }
+    if (title) { title.textContent = route.title; title.removeAttribute('aria-hidden'); title.setAttribute('aria-level', route.page === 'gate' ? '2' : '1'); }
     const notebookTitle = document.querySelector('#notebook-frame-template .nb-heading h1');
     if (notebookTitle) notebookTitle.textContent = route.title;
     const selected = route.page === 'gate' ? null : section();

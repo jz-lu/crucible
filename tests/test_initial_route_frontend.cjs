@@ -238,11 +238,11 @@ test('app-first and repeated bootstrap execution preserve one-shot session owner
   assert.equal(f.window.CrucibleSessionBootstrap, boot);
 });
 
-test('the public home is independent of stored gate or workspace presentation hints', () => {
+test('the home page stays gated regardless of stored presentation hints', () => {
   for (const options of [{}, {storageBlocked: true}, {hint: 'unrecognized'}]) {
     const f = fixture(options);
-    assert.equal(f.root.getAttribute('data-pending-page'), 'home');
-    assert.equal(f.nodes.get('#access-title').textContent, 'Crucible');
+    assert.equal(f.root.getAttribute('data-pending-page'), 'gate');
+    assert.equal(f.nodes.get('#access-title').textContent, 'Private beta');
     assert.equal(f.requests.length, 1);
   }
   const gate = fixture({hash: '#notebook', hint: 'gate'});
@@ -251,8 +251,8 @@ test('the public home is independent of stored gate or workspace presentation hi
   assert.equal(gate.nodes.get('#nav-notebook').getAttribute('aria-current'), null);
   assert.deepEqual(gate.requests.map(item => item.url), ['/api/session']);
   const workspace = fixture({hint: 'workspace'});
-  assert.equal(workspace.root.getAttribute('data-pending-page'), 'home');
-  assert.equal(workspace.nodes.get('#access-title').textContent, 'Crucible');
+  assert.equal(workspace.root.getAttribute('data-pending-page'), 'gate');
+  assert.equal(workspace.nodes.get('#access-title').textContent, 'Private beta');
   assert.deepEqual(workspace.requests.map(item => item.url), ['/api/session']);
 });
 

@@ -12,20 +12,18 @@ for (const width of [1440, 390]) test(`real awards agree on Leaderboard and prof
   await page.setViewportSize({width, height: 1000});
   await page.goto('/#people');
   await page.locator('#access-sign-in').click();
-  await page.locator('#auth-form').getByLabel('Public handle', {exact: true}).fill('solver');
+  await page.locator('#auth-form').getByLabel('Crucible username', {exact: true}).fill('solver');
   await page.locator('#auth-form').getByLabel('Password', {exact: true}).fill('Synthetic points fixture password');
   await page.locator('#auth-submit').click();
   await expect(page.locator('#account-handle')).toHaveText('solver');
-  await expect(page.locator('#people-content .people-table tbody tr')).toHaveCount(5);
+  await expect(page.locator('#people-content .people-table tbody tr')).toHaveCount(3);
   page.on('request', request => {if (request.method() !== 'GET') writes.push(request.url());});
 
   const rows = page.locator('#people-content .people-table tbody tr');
   await expect(rows.nth(0).locator('td')).toHaveText(['1', 'solver', '2,403', '1']);
   await expect(rows.nth(1).locator('td')).toHaveText(['2', 'poster', '100', '0']);
-  for (let index = 2; index < 5; index++) {
-    await expect(rows.nth(index).locator('td').nth(0)).toHaveText('3');
-    await expect(rows.nth(index).locator('td').nth(2)).toHaveText('0');
-  }
+  await expect(rows.nth(2).locator('td')).toHaveText(['3', 'supporter', '0', '0']);
+  await expect(rows.getByRole('link', {name: /^reviewer2?$/})).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
   await page.screenshot({path: testInfo.outputPath(`points-leaderboard-${width}.png`), fullPage: true});
   await rows.nth(0).getByRole('link', {name: 'solver', exact: true}).click();
@@ -54,9 +52,9 @@ test('an open Leaderboard refreshes after a real bounty award without double cou
     const client = await playwright.request.newContext({baseURL: origin, extraHTTPHeaders: {Origin: origin}});
     clients.push(client);
     let csrf = (await (await client.get('/api/session')).json()).csrf_token;
-    const post = async (path, data) => {
+    const post = async (path, data, status = 200) => {
       const response = await client.post(path, {data, headers: {'X-CSRF-Token': csrf}});
-      expect(response.status(), await response.text()).toBe(200);
+      expect(response.status(), await response.text()).toBe(status);
       return response.json();
     };
     csrf = (await post('/api/auth/login', {handle, password: 'Synthetic points fixture password'})).csrf_token;
@@ -90,7 +88,7 @@ test('an open Leaderboard refreshes after a real bounty award without double cou
     let value = await poster.post('/api/bounties', {idempotency_key: randomUUID(), terms: {
       title: 'Synthetic award refresh check', summary: 'Verify the cached Leaderboard updates.', background_tags: [], scope: 4,
       completion_criteria: 'Publish the exact synthetic note describing the points refresh verification.',
-      verification_plan: 'Poster and independent reviewer inspect the pinned note.', source_notes: []}});
+      verification_plan: 'An independent reviewer inspects the pinned note.', source_notes: []}});
     const base = '/api/bounties/' + value.bounty.id;
     const change = extra => ({expected_version: value.bounty.version, idempotency_key: randomUUID(), ...extra});
     value = await poster.post(base + '/admission-requests', change({terms_sha256: value.bounty.terms_sha256,
@@ -103,7 +101,9 @@ test('an open Leaderboard refreshes after a real bounty award without double cou
       contribution_note: {note_id: note.id, ...revision}, claim: 'solution',
       explanation: 'This published synthetic note supplies the exact disposable evidence.'}));
     const path = base + '/submissions/' + value.receipt.submission_id + '/decisions';
-    value = await poster.post(path, change({kind: 'poster', decision: 'approved', reason: 'The exact published note satisfies the synthetic criteria.'}));
+    const retired = await poster.post(path, change({kind: 'poster', decision: 'approved', reason: 'The exact published note satisfies the synthetic criteria.'}), 410);
+    expect(retired.detail).toContain('Poster completion decisions are retired');
+    value = await (await solver.client.get(base)).json();
     expect(value.bounty.award).toBeNull();
     await assertPoints(2403);
     const finalBody = change({kind: 'pipeline', decision: 'approved', reason: 'Independent check of the exact synthetic evidence.'});

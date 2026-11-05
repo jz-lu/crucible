@@ -8,8 +8,9 @@ const bountyFeatureAvailable = () => window.CrucibleFeatures?.bounties !== false
   (document.documentElement || document.querySelector('html'))?.getAttribute?.('data-bounties-enabled') !== 'false';
 const state = {
   auth: {}, authPanel: 'signin', githubBusy: false, githubPending: false, githubCompleteBusy: false, authCallbackBusy: false, githubLinkContext: null,
-  passwordResetToken: null, passwordResetBusy: false, passwordRecoveryBusy: false,
-  access: null, sessionResolved: false, invitationToken: null, invitationBusy: false, invitationDelivery: null,
+  passwordResetToken: null, passwordResetBusy: false, passwordRecoveryBusy: false, authRecoveryEntry: false,
+  invitationPresented: null, invitationInspection: 0, invitationResendAt: 0,
+  access: null, sessionResolved: false, invitationToken: null, invitationBusy: false, invitationDelivery: null, invitationIssue: null,
   returnRoute: null, protectedLoaded: false, canManageBetaAccess: false,
   user: null, csrf: '', canReviewProposals: false, canSelfReviewProposals: false, schemes: [], profile: null, challenge: null,
   generationAdmission: null, methods: [], view: 'leaderboard', authMode: 'login', round: null,
@@ -542,52 +543,106 @@ function connectionCode(value) {
   return /^[A-Z0-9]{8}$/.test(code) ? code.slice(0, 4) + '-' + code.slice(4) : null;
 }
 function isHomeRoute() { return ['', '#', '#home'].includes(window.location.hash.split('?')[0]); }
+function landingLayout() {
+  return new URLSearchParams(window.location.hash.split('?')[1] || '').get('layout') === 'left' ? 'left' : 'centered';
+}
 function hasAccess() { return state.sessionResolved && state.access?.allowed === true; }
+const invitationMessages = {
+  invitation_redeemed: 'This invitation has already been used. Sign in to your existing account.',
+  invitation_expired: 'This invitation has expired. Sign in if you have already joined, or contact your inviter for a new link.',
+  invitation_unavailable: 'This invitation is unavailable. Sign in if you have already joined, or contact your inviter for a new link.'
+};
+function clearInvitation() {
+  state.invitationToken = null; state.invitationDelivery = null; state.invitationIssue = null;
+  state.invitationPresented = null;state.invitationInspection++;state.invitationResendAt = 0;
+  $('#access-code').value = '';
+}
+function clearAcceptedInvitation() {
+  if (!hasAccess()) return false;
+  const joining = window.location.hash.split('?')[0] === '#join';
+  clearInvitation();
+  if (joining) window.history.replaceState(null, '', safeAuthReturnRoute(state.returnRoute));
+  return joining;
+}
+function showInvitationIssue(error, invitationToken = state.invitationToken) {
+  if (!Object.hasOwn(invitationMessages, error?.code)) return false;
+  if (state.invitationToken !== invitationToken) return true;
+  state.invitationIssue = error.code; state.invitationDelivery = null;
+  $('#access-code').value = ''; $('#auth-password').value = '';
+  if (authDialog.open) showInvitationIssuePanel();
+  renderAccessGate();
+  return true;
+}
+function showInvitationIssuePanel() {
+  if (state.invitationIssue === 'invitation_redeemed') {
+    setAuthMode('login');$('#auth-password-options').open = !state.auth?.github_enabled;showAuthPanel('signin');
+    return;
+  }
+  setText('#auth-title', state.invitationIssue === 'invitation_expired' ? 'Invitation expired' : 'Invitation unavailable');
+  setText('#auth-description', 'Ask your inviter for a new link to create your account.');
+  showAuthPanel('invitation-issue');
+}
+async function presentInvitation(force = false) {
+  const token = state.invitationToken, account = state.user?.id;
+  if (!token || hasAccess() || (!force && state.invitationPresented === token)) return;
+  state.invitationPresented = token;
+  const inspection = ++state.invitationInspection;
+  setText('#auth-title', 'Checking invitation…'); setText('#auth-description', '');
+  showAuthPanel('invitation-check');
+  try {
+    await api('/api/access/invitations/inspect', {token});
+    if (inspection !== state.invitationInspection || state.invitationToken !== token || state.user?.id !== account || !authDialog.open) return;
+    state.invitationIssue = null;
+    if (state.user) await openPendingVerification(false);
+    else { setAuthMode('register'); openAuth(); }
+  } catch (error) {
+    if (inspection !== state.invitationInspection || state.invitationToken !== token || state.user?.id !== account || !authDialog.open) return;
+    if (!showInvitationIssue(error, token)) {
+      setText('#auth-title', 'Invitation could not be checked');setText('#auth-description', error.message);
+      showAuthPanel('invitation-issue');
+    }
+  }
+}
 function captureInvitation() {
   const [path, query = ''] = window.location.hash.split('?');
   if (path !== '#join') return;
   const token = new URLSearchParams(query).get('token');
   if (!token || token.length > 512 || !/^[A-Za-z0-9_-]+$/.test(token)) {
-    state.invitationToken = null; state.invitationDelivery = null;
+    clearInvitation();
     setError('#access-error', 'This invitation link is incomplete. Open the full link you received.');
     return;
   }
   if (token && token.length <= 512 && /^[A-Za-z0-9_-]+$/.test(token) && token !== state.invitationToken) {
     state.invitationToken = token;
+    state.invitationIssue = null;
     state.invitationDelivery = null;
     $('#access-code').value = '';
     setError('#access-error', '');
   }
 }
 function renderAccessGate() {
-  if (isHomeRoute()) { showHome(); return; }
+  if (hasAccess()) {
+    clearAcceptedInvitation();
+    void loadAuthorizedWorkspace().catch(error => globalError(error.message));
+    return;
+  }
   $('#access-workspace').removeAttribute('data-catalogue-pending');
   $('#access-loading-preview').hidden = true;
   $('#access-workspace').setAttribute('aria-busy', 'false');
   if (state.screen !== 'access' && window.location.hash && !window.location.hash.startsWith('#join') && !authenticationRoute()) state.returnRoute = window.location.hash;
-  state.screen = 'access';
-  showWorkspace('access');
-  const status = state.access?.status;
-  const blocked = ['revoked', 'suspended'].includes(status);
-  const joining = Boolean(state.invitationToken);
-  setText('#access-title', 'Private beta');
-  setText('#access-description', hasAccess() ? 'Your access is ready.' : blocked ?
-    'Your beta access is not active. Contact the person who invited you.' : joining ?
-    'Join Crucible with your invitation.' : state.user ?
-    'Open your invitation link to activate beta access.' : 'Sign in to continue, or open your invitation link to join.');
-  $('#access-auth-actions').hidden = Boolean(state.user);
-  $('#access-register').hidden = !joining;
-  $('#access-verification').hidden = !state.user || !joining || blocked || hasAccess();
-  $('#access-continue').hidden = !hasAccess();
-  setText('#access-account', state.user ? 'Joining as ' + state.user.handle : '');
-  $('#access-code-form').hidden = !state.invitationDelivery;
-  $('#access-send-code').disabled = state.invitationBusy;
-  $('#access-redeem').disabled = state.invitationBusy;
-  setText('#access-send-code', state.invitationDelivery ? 'Send a new code' : 'Email a verification code');
-  setText('#access-delivery', state.invitationDelivery ? 'Code sent to ' + state.invitationDelivery.masked_recipient + '. Check that inbox to continue.' : '');
-  $('#register-mode').hidden = state.access?.mode === 'beta' && !joining;
-  renderAuthMethods();
+  state.screen = 'access'; showWorkspace('access');
+  const blocked = ['revoked', 'suspended'].includes(state.access?.status);
+  if (isHomeRoute()) state.returnRoute = '#home';
+  setText('#access-title', blocked ? 'Access unavailable' : 'Private beta');
+  $('#access-title').setAttribute('aria-level', '2');
+  setText('#access-description', blocked ? 'Your beta access is not active. Contact the person who invited you.' : state.user ? 'Finish verifying your invitation email to enter.' : 'An invitation is required to join.');
+  $('#access-auth-actions').hidden = Boolean(state.user) || blocked;
+  $('#access-resume').hidden = !state.user || blocked;
+  $('#access-pending-signout').hidden = !state.user;
+  $('#access-continue').hidden = true;
+  renderAuthMethods(); renderVerificationControls();
   document.title = 'Private beta — Crucible';
+  if (state.invitationToken && !blocked && state.invitationPresented !== state.invitationToken) void presentInvitation();
 }
 function clearProtectedState() {
   resetResearcherEditor();
@@ -1131,47 +1186,122 @@ async function showNotebook(query, reviewing = false, page = 'notebook') {
   await getNotebookWorkspace(reviewing).show(params);
   if (current()) scheduleBrowseWarmup();
 }
-$('#access-sign-in').addEventListener('click', () => { setAuthMode('login'); openAuth($('#access-sign-in')); $('#auth-password-options').open = true; });
-$('#access-register').addEventListener('click', () => { setAuthMode('register'); openAuth($('#access-register')); });
-$('#access-send-code').addEventListener('click', async () => {
+$('#access-sign-in').addEventListener('click', () => signInExistingAccount($('#access-sign-in')));
+function openInvitationForm(trigger) {
+  $('#auth-invitation-form').reset();setError('#auth-invitation-error', '');
+  setText('#auth-title', state.user ? 'Finish joining Crucible' : 'Create an account');
+  setText('#auth-description', state.user ? 'Your account already exists. Open your invitation link to verify your email.' : 'Crucible is invitation-only. Paste your invitation link to continue.');
+  showAuthPanel('invitation', trigger);$('#auth-invitation-link').focus();
+}
+function openCreateAccount(trigger) {
+  if (state.user) { void openPendingVerification(false);return; }
+  if (passwordRegistrationAllowed()) { setAuthMode('register');openAuth(trigger);return; }
+  openInvitationForm(trigger);
+}
+$('#access-create-account').addEventListener('click', () => {
+  if (state.invitationToken) void presentInvitation(true);
+  else openCreateAccount($('#access-create-account'));
+});
+$('#auth-create-account').addEventListener('click', () => openCreateAccount($('#auth-create-account')));
+$('#auth-invitation-sign-in').addEventListener('click', () => signInExistingAccount($('#auth-invitation-sign-in')));
+$('#auth-another-invitation').addEventListener('click', () => { clearInvitation();openInvitationForm($('#auth-another-invitation')); });
+$('#auth-issue-signin').addEventListener('click', () => signInExistingAccount($('#auth-issue-signin')));
+$('#access-resume').addEventListener('click', () => { void openPendingVerification(false); });
+$('#access-pending-signout').addEventListener('click', () => { void logout(); });
+$('#auth-invitation-form').addEventListener('submit', event => {
+  event.preventDefault();
+  if (state.authPanel !== 'invitation') return;
+  let link;
+  try { link = new URL($('#auth-invitation-link').value.trim(), siteOrigin() + '/'); } catch {}
+  const [path, query = ''] = (link?.hash || '').split('?');
+  const token = new URLSearchParams(query).get('token');
+  if (!link || !['http:', 'https:'].includes(link.protocol) || link.username || link.password || path !== '#join' || !/^cri_[A-Za-z0-9_-]{43}$/.test(token || '')) {
+    setError('#auth-invitation-error', 'Paste the full Crucible invitation link you received.');return;
+  }
+  if (link.origin !== siteOrigin()) {
+    const local = ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(siteOrigin()).hostname);
+    const destination = local ? 'this local preview' : new URL(siteOrigin()).host;
+    setError('#auth-invitation-error', link.origin === 'https://crucible.fail' ?
+      'This invitation is for crucible.fail. Open it on crucible.fail, or use an invitation created for ' + destination + '.' :
+      'This invitation belongs to a different site (' + link.host + '). Use an invitation created for ' + destination + '.');return;
+  }
+  state.invitationPresented = null;
+  const destination = '#join?' + new URLSearchParams({token});
+  $('#auth-invitation-form').reset();authDialog.close();
+  if (window.location.hash === destination) { captureInvitation();void presentInvitation(true); }
+  else window.location.hash = destination;
+});
+$('#access-register').addEventListener('click', () => { setAuthMode('register');openAuth($('#access-register')); });
+async function openPendingVerification(send = false) {
+  if (!state.user || hasAccess()) return;
+  if (!state.invitationToken) { openInvitationForm();return; }
+  if (state.invitationIssue) { showInvitationIssuePanel();return; }
+  state.invitationPresented = state.invitationToken;
+  setText('#auth-title', 'Verify your email');
+  setText('#auth-description', state.invitationDelivery ? 'Enter the code sent to ' + state.invitationDelivery.masked_recipient + '.' : send ? 'Sending your verification code…' : 'Enter the code from your invitation email.');
+  showAuthPanel('verification');renderVerificationControls();
+  if (send && !state.invitationBusy) await sendVerificationCode();
+  if (authDialog.open && state.authPanel === 'verification') $('#access-code').focus();
+}
+function renderVerificationControls() {
+  const visible = state.authPanel === 'verification' && Boolean(state.user && state.invitationToken) && !state.invitationIssue;
+  $('#access-verification').hidden = !visible;$('#access-code-form').hidden = !visible;
+  $('#access-code').disabled = state.invitationBusy;
+  $('#access-redeem').disabled = state.invitationBusy;
+  const seconds = Math.max(0, Math.ceil((state.invitationResendAt - Date.now()) / 1000));
+  $('#access-send-code').disabled = state.invitationBusy || seconds > 0;
+  setText('#access-send-code', seconds ? 'Resend in ' + Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0') : 'Resend code');
+}
+async function sendVerificationCode() {
   if (!state.user || !state.invitationToken || state.invitationBusy) return;
   const account = state.user.id, token = state.invitationToken;
-  state.invitationBusy = true; setError('#access-error', ''); renderAccessGate();
+  state.invitationBusy = true;setError('#auth-verify-error', '');setError('#access-code-error', '');renderVerificationControls();
   try {
     const data = await api('/api/access/invitations/verify/start', {token});
     if (state.user?.id !== account || state.invitationToken !== token) return;
-    state.invitationDelivery = data;
+    state.invitationDelivery = data;state.invitationResendAt = Date.now() + Number(data.resend_after_seconds || 60) * 1000;
     $('#access-code').value = '';
-  } catch (error) { if (state.user?.id === account) setError('#access-error', error.message); }
-  finally {
-    state.invitationBusy = false;
-    if (!hasAccess() || state.screen === 'access') { renderAccessGate(); if (state.invitationDelivery) $('#access-code').focus(); }
+    if (state.authPanel === 'verification') setText('#auth-description', 'Enter the code sent to ' + data.masked_recipient + '.');
+  } catch (error) {
+    if (state.user?.id === account && state.invitationToken === token && !showInvitationIssue(error)) setError('#auth-verify-error', error.message);
+  } finally {
+    state.invitationBusy = false;renderVerificationControls();
   }
-});
+}
+$('#access-send-code').addEventListener('click', sendVerificationCode);
 $('#access-code-form').addEventListener('submit', async event => {
   event.preventDefault();
   if (!state.user || !state.invitationToken || state.invitationBusy) return;
-  const account = state.user.id, token = state.invitationToken;
-  state.invitationBusy = true; setError('#access-error', ''); renderAccessGate();
+  const code = $('#access-code').value.trim();
+  setError('#access-code-error', '');setError('#auth-verify-error', '');
+  if (!/^\d{8}$/.test(code)) { authFieldError('#access-code', '#access-code-error', 'Enter the 8-digit code from your email.');return; }
+  const account = state.user.id, token = state.invitationToken, dialogWasOpen = authDialog.open;
+  state.invitationBusy = true;renderVerificationControls();
   try {
-    await api('/api/access/invitations/redeem', {token, code: $('#access-code').value.trim()});
+    await api('/api/access/invitations/redeem', {token, code});
     if (state.user?.id !== account || state.invitationToken !== token) return;
     const session = await api('/api/session');
     if (state.user?.id !== account) return;
     setSession(session);
     if (!hasAccess()) throw new Error('Your access is not active yet. Please try again.');
-    state.invitationToken = null; state.invitationDelivery = null; $('#access-code').value = '';
-    window.history.replaceState(null, '', state.returnRoute || '#challenge');
+    clearInvitation();window.history.replaceState(null, '', state.returnRoute || '#home');
     await loadAuthorizedWorkspace();
-  } catch (error) { if (state.user?.id === account) setError('#access-error', error.message); }
-  finally { state.invitationBusy = false; if (!hasAccess() || state.screen === 'access') renderAccessGate(); }
+    if (dialogWasOpen && authDialog.open) {
+      setText('#auth-title', "You're in.");setText('#auth-description', '');showAuthPanel('joined');
+    }
+  } catch (error) {
+    if (state.user?.id === account && state.invitationToken === token && !showInvitationIssue(error)) {
+      if (error.status === 403) authFieldError('#access-code', '#access-code-error', 'That code is incorrect or has expired. Try again or request a new code.');
+      else setError('#auth-verify-error', error.message);
+    }
+  } finally { state.invitationBusy = false;renderVerificationControls(); }
 });
+$('#auth-enter').addEventListener('click', () => authDialog.close());
 $('#access-continue').addEventListener('click', async () => {
-  state.invitationToken = null; state.invitationDelivery = null;
-  window.history.replaceState(null, '', state.returnRoute || '#challenge');
-  try { await loadAuthorizedWorkspace(); }
-  catch (error) { globalError(error.message); }
+  clearInvitation();window.history.replaceState(null, '', state.returnRoute || '#home');
+  try { await loadAuthorizedWorkspace(); } catch (error) { globalError(error.message); }
 });
+setInterval(renderVerificationControls, 1000);
 let homeSummaryRequest = 0;
 function renderHomeAccount() {
   const member = hasAccess() && Boolean(state.user);
@@ -1179,8 +1309,6 @@ function renderHomeAccount() {
   const button = $('#home-primary');
   button.disabled = !state.sessionResolved;
   setText('#home-primary', member ? 'My activity →' : state.user ? 'Check your access →' : 'Sign in to Crucible →');
-  setText('#home-welcome', member ? 'Welcome back, ' + state.user.handle + '.' : '');
-  $('#home-welcome').hidden = !member;
   $('#home-access-note').hidden = member;
   setText('#home-access-note', state.user ?
     'Your account needs active beta access. Open your invitation link or contact the person who invited you.' :
@@ -1190,13 +1318,14 @@ function renderHomeAccount() {
   $('#home-bounty-guide').hidden = !bountyFeatureAvailable();
 }
 function showHome() {
+  if (!hasAccess()) { renderAccessGate(); return; }
   if (['propose', 'reviews'].includes(state.screen)) leaveProposalPage();
   if (recoveryDialog.open) recoveryDialog.close();
   state.challengeStartIntent = null;
   state.screen = 'home';
   state.challengeRequest++; state.leaderboardRequest++; state.historyRequest++; state.peopleRequest++; state.personRequest++;
   showWorkspace('home'); renderHomeAccount();
-  document.title = 'Crucible — Cryptography 2.0';
+  document.title = 'crucible — Find new cryptography. Test its limits.';
   if (hasAccess() && state.user && state.ready) void loadHomeProgress();
 }
 function homeSummaryPreview(target) {
@@ -1306,15 +1435,17 @@ function applyRoute(focus = false) {
   if (documentRetired) return;
   const routeRequest = ++workspaceLoadRequest, lifecycle = documentEpoch;
   if (authenticationRoute() && state.sessionResolved) { void handleAuthenticationRoute().catch(error => globalError(error.message)); return; }
-  if (isHomeRoute()) {
-    const previous = state.screen; showHome();
-    if (focus && previous !== 'home') $('#home-workspace').focus({preventScroll: true});
-    return;
-  }
   captureInvitation();
+  clearAcceptedInvitation();
   if (state.sessionResolved && (!hasAccess() || window.location.hash.split('?')[0] === '#join')) {
     renderAccessGate();
     if (focus) $('#access-workspace').focus();
+    return;
+  }
+  if (isHomeRoute()) {
+    if (!state.sessionResolved) return;
+    const previous = state.screen; showHome();
+    if (focus && previous !== 'home') $(workspaceSelector(state.screen)).focus({preventScroll: true});
     return;
   }
   if (!state.ready) return;
@@ -1567,15 +1698,17 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
       data = {};
     }
     if (!response.ok) {
-      const detail = typeof data?.detail === 'string' ? data.detail : null;
+      const invitationCode = Object.hasOwn(invitationMessages, data?.detail?.code) ? data.detail.code : null;
+      const detail = typeof data?.detail === 'string' ? data.detail : invitationCode ? data.detail.message : null;
       const fallback = response.status === 429 ? 'Too many requests. Wait a moment and try again.' :
         response.status === 401 ? 'Your session has ended. Sign in again to continue.' :
         response.status === 403 ? 'This request could not be authorized. Refresh your session and try again.' :
         'The request could not be completed. Please try again.';
       const error = new Error(detail || fallback);
       error.status = response.status;
+      if (invitationCode) error.code = invitationCode;
       if (path === '/api/me/profile' && ['profile_revision_conflict', 'profile_idempotency_conflict'].includes(data?.code)) error.code = data.code;
-      if ((protectedRequest || path.startsWith('/api/access/')) && state.access?.mode === 'beta' && [401, 403].includes(response.status)) {
+      if (!invitationCode && (protectedRequest || path.startsWith('/api/access/')) && state.access?.mode === 'beta' && [401, 403].includes(response.status)) {
         // Recheck membership without making a rejected child request await its parent refresh.
         void synchronizeSession();
       }
@@ -1695,7 +1828,7 @@ function setSession(data) {
   $('#account-handle').href = state.user ? personRoute(state.user.handle) : '#people';
   $('#logout-button').hidden = !state.user;
   $('#history-button').hidden = !state.user || !hasAccess();
-  $('#register-mode').hidden = state.access.mode === 'beta' && !state.invitationToken;
+  clearAcceptedInvitation();
   renderAuthMethods();
   renderHomeAccount();
   if (!hasAccess()) {
@@ -4212,6 +4345,7 @@ for (const dialog of document.querySelectorAll('dialog')) {
       $('#auth-password').value = '';
       $('#password-reset-form').reset();
       $('#github-link-password').value = ''; state.githubLinkContext = null;
+      $('#auth-invitation-form').reset();
       state.passwordResetToken = null;
       if (authenticationRoute() && !state.authCallbackBusy) window.history.replaceState(null, '', safeAuthReturnRoute(state.returnRoute));
       if (hasAccess() && !state.ready && !state.authCallbackBusy && !state.githubCompleteBusy) void loadAuthorizedWorkspace().catch(error => globalError(error.message));
@@ -4227,36 +4361,66 @@ for (const dialog of document.querySelectorAll('dialog')) {
 }
 function safeAuthReturnRoute(value) {
   return typeof value === 'string' && value.length <= 2048 && !/[\u0000-\u0020\\]/.test(value) &&
-    /^#(?:home|challenge|scheme|assumptions|person|people|notebook|propose|reviews|about|connect)(?:[/?]|$)/.test(value) ? value : '#challenge';
+    /^#(?:home|challenge|scheme|assumptions|person|people|notebook|bounties|activity|propose|reviews|about|connect)(?:[/?]|$)/.test(value) ? value : '#home';
 }
 function authenticationRoute() { return /^#(?:auth|reset-password)(?:\?|$)/.test(window.location.hash); }
+function passwordRegistrationAllowed() {
+  return !state.invitationIssue && (state.access?.mode !== 'beta' || Boolean(state.invitationToken));
+}
 function renderAuthMethods() {
-  const github = state.auth?.github_enabled === true;
-  for (const selector of ['#access-existing-account', '#auth-existing-account']) {
-    $(selector).hidden = !state.invitationToken || Boolean(state.user);
-    $(selector).disabled = state.githubBusy || state.githubCompleteBusy || state.invitationBusy;
-  }
-  $('#access-github').hidden = !github;
-  $('#access-github').disabled = state.githubBusy;
-  $('#access-sign-in').classList.toggle('button-primary', !github);
-  $('#access-sign-in').classList.toggle('button-quiet', github);
-  setText('#access-sign-in', github ? 'Use a password' : 'Sign in');
-  $('#access-register').hidden = github || !state.invitationToken;
-  $('#auth-github').hidden = !github;
+  const github = state.auth?.github_enabled === true, registering = state.authMode === 'register';
+  const password = $('#auth-password-options').open || !github;
+  const methods = state.authPanel === 'signin';
+  setText('#auth-invitation-notice', invitationMessages[state.invitationIssue] || '');
+  $('#auth-invitation-notice').hidden = !methods || !state.invitationIssue;
+  $('#register-mode').hidden = true;$('#auth-mode-switch').hidden = true;
+  $('#access-existing-account').hidden = true;
+  $('#auth-existing-account').hidden = !methods || !registering;
+  $('#auth-existing-account').disabled = state.githubBusy || state.githubCompleteBusy || state.invitationBusy;
+  $('#auth-create-account').disabled = state.githubBusy;
+  $('#auth-methods-back').disabled = state.githubBusy;
+  if (state.githubBusy) $('#auth-password-options').setAttribute('inert', '');
+  else $('#auth-password-options').removeAttribute('inert');
+  $('#auth-existing-account').classList.remove('button-primary', 'button-quiet');
+  $('#access-create-account').hidden = Boolean(state.user);
+  $('#access-github').hidden = true;$('#access-register').hidden = true;
+  $('#access-sign-in').classList.add('button-primary');$('#access-sign-in').classList.remove('button-quiet');setText('#access-sign-in', 'Sign in');
+  $('#auth-github').hidden = !github || password;
   $('#auth-github').disabled = state.githubBusy;
-  setText('#auth-github', state.githubBusy ? 'Connecting to GitHub…' : 'Continue with GitHub');
-  setText('#access-github', state.githubBusy ? 'Connecting to GitHub…' : 'Continue with GitHub');
+  setText('#auth-github-label', state.githubBusy ? 'Connecting to GitHub…' : 'Continue with GitHub');
+  $('#auth-github-password').hidden = true;
   $('#auth-password-options').classList.toggle('sole-method', !github);
-  if (!github) $('#auth-password-options').open = true;
-  $('#auth-forgot-password').hidden = !state.auth?.password_recovery || state.authMode !== 'login';
-  $('#auth-sign-in-methods').hidden = state.authPanel !== 'signin';
+  $('#auth-password-options').classList.toggle('password-selected', password);
+  if (!github && !$('#auth-password-options').open) $('#auth-password-options').open = true;
+  $('#auth-methods-back').hidden = !methods || !password || !github;
+  setText('#auth-methods-back', (state.authRecoveryEntry ? '' : '← ') + 'Other ways to ' + (registering ? 'join' : 'sign in'));
+  $('#auth-forgot-password').hidden = !password || !state.auth?.password_recovery || registering;
+  $('#auth-create-account').hidden = !methods || registering || Boolean(state.user) || Boolean(state.invitationIssue);
+  $('#auth-sign-in-methods').hidden = !methods;
+  $('#auth-invitation-form').hidden = state.authPanel !== 'invitation';
+  $('#auth-invitation-sign-in').hidden = Boolean(state.user);
   $('#github-handle-form').hidden = state.authPanel !== 'github-handle';
-  $('#github-link-form').hidden = state.authPanel !== 'github-link';
-  $('#github-link-submit').disabled = state.githubBusy;
+  $('#github-link-form').hidden = state.authPanel !== 'github-link';$('#github-link-submit').disabled = state.githubBusy;
   $('#password-reset-request-form').hidden = state.authPanel !== 'reset-request';
   $('#password-reset-form').hidden = state.authPanel !== 'reset-password';
-  renderAccountSignIn();
+  for (const [id, panel] of [['auth-verification-panel','verification'], ['auth-joined-panel','joined'], ['auth-invitation-issue-panel','invitation-issue'], ['auth-reset-sent-panel','reset-sent'], ['auth-reset-complete-panel','reset-complete'], ['auth-reset-invalid-panel','reset-invalid']]) $('#' + id).hidden = state.authPanel !== panel;
+  renderAccountSignIn();renderVerificationControls();
 }
+$('#auth-password-summary').addEventListener('click', event => {
+  event.preventDefault();
+  if (state.githubBusy) return;
+  $('#auth-password-options').open = true;
+  renderAuthMethods();$('#auth-handle').focus();
+});
+$('#auth-password-options').addEventListener('toggle', renderAuthMethods);
+$('#auth-methods-back').addEventListener('click', () => {
+  $('#auth-password-options').open = false;$('#auth-password').value = '';setError('#auth-error', '');renderAuthMethods();$('#auth-github').focus();
+});
+for (const button of document.querySelectorAll('[data-show-password]')) button.addEventListener('click', () => {
+  const input = document.getElementById(button.dataset.showPassword), showing = input.type === 'password';
+  const label = document.querySelector('label[for="' + input.id + '"]').textContent.trim().toLowerCase();
+  input.type = showing ? 'text' : 'password';button.textContent = showing ? 'Hide' : 'Show';button.setAttribute('aria-label', (showing ? 'Hide ' : 'Show ') + label);
+});
 function renderAccountSignIn() {
   const visible = Boolean(ownsViewedProfile() && hasAccess() && state.auth?.github_enabled);
   $('#account-sign-in').hidden = !visible;
@@ -4271,13 +4435,14 @@ function signInExistingAccount(trigger, password = false) {
   if (state.user || state.githubBusy || state.githubCompleteBusy || state.invitationBusy || $('#auth-submit').disabled) return;
   // This explicit choice leaves the invitation flow. The server still rejects
   // unavailable invitations, and new identities still require a valid one.
-  state.invitationToken = null; state.invitationDelivery = null; state.githubPending = false;
+  const usedIssue = state.invitationIssue === 'invitation_redeemed' ? state.invitationIssue : null;
+  clearInvitation();state.invitationIssue = usedIssue;state.githubPending = false;state.authRecoveryEntry = false;
   $('#access-code').value = ''; $('#auth-password').value = ''; setError('#access-error', '');
   state.returnRoute = safeAuthReturnRoute(state.returnRoute);
   window.history.replaceState(null, '', state.returnRoute);
   renderAccessGate(); setAuthMode('login'); openAuth(trigger);
-  dialogTriggers.set(authDialog, state.auth?.github_enabled ? $('#access-github') : $('#access-sign-in'));
-  if (password || !state.auth?.github_enabled) { $('#auth-password-options').open = true; $('#auth-handle').focus(); }
+  dialogTriggers.set(authDialog, $('#access-sign-in'));
+  if (password || !state.auth?.github_enabled) { $('#auth-password-options').open = true; renderAuthMethods();$('#auth-handle').focus(); }
   else $('#auth-github').focus();
 }
 $('#access-existing-account').addEventListener('click', () => signInExistingAccount($('#access-existing-account')));
@@ -4288,13 +4453,15 @@ async function startGitHub(mode = 'login', trigger = $('#auth-github'), password
   const destination = mode === 'link' ? personRoute(state.user.handle) : safeAuthReturnRoute(state.returnRoute || window.location.hash);
   const errorTarget = mode === 'link' ? (dialogStart ? '#github-link-error' : '#account-sign-in-error') : dialogStart ? '#auth-github-error' : '#access-error';
   state.githubBusy = true; renderAuthMethods(); setError(errorTarget, '');
+  if (errorTarget === '#auth-github-error') $('#auth-github-password').hidden = true;
   try {
     const data = await api('/api/auth/github/start', {mode, return_route: destination,
       ...(mode === 'link' && typeof password === 'string' ? {password} : {}),
-      ...(mode === 'login' && state.invitationToken ? {invitation_token: state.invitationToken} : {})});
+      ...(mode === 'login' && state.invitationToken && !state.invitationIssue ? {invitation_token: state.invitationToken} : {})});
     if (state.user?.id !== account || state.csrf !== csrf || (dialogStart && !authDialog.open) || (mode === 'link' && !ownsViewedProfile())) return;
     const destinationURL = new URL(data.authorization_url);
-    if (destinationURL.origin !== 'https://github.com' || destinationURL.pathname !== '/login/oauth/authorize' || destinationURL.username || destinationURL.password) throw new Error('GitHub sign-in could not be started. Please try again.');
+    const github = destinationURL.origin === 'https://github.com' && destinationURL.pathname === '/login/oauth/authorize';
+    if (!github || destinationURL.username || destinationURL.password) throw new Error('GitHub sign-in could not be started. Please try again.');
     window.location.assign(destinationURL.href);
   } catch (error) {
     if (state.user?.id === account && (!dialogStart || authDialog.open)) setError(errorTarget, error.message);
@@ -4302,6 +4469,8 @@ async function startGitHub(mode = 'login', trigger = $('#auth-github'), password
 }
 function showAuthPanel(panel, trigger) {
   state.authPanel = panel;
+  $('#auth-title').classList.toggle('auth-entry-title', panel === 'signin');
+  $('#auth-description').hidden = !$('#auth-description').textContent.trim();
   renderAuthMethods();
   if (!authDialog.open) openDialog(authDialog, trigger);
 }
@@ -4310,8 +4479,8 @@ async function finishAuthentication(returnRoute = state.returnRoute) {
   state.returnRoute = destination;
   const route = !hasAccess() && state.invitationToken ? '#join?' + new URLSearchParams({token: state.invitationToken}) : destination;
   window.history.replaceState(null, '', route);
-  if (!hasAccess()) { renderAccessGate(); return; }
-  state.invitationToken = null; state.invitationDelivery = null;
+  if (!hasAccess()) { renderAccessGate();await openPendingVerification(false);return; }
+  clearInvitation();
   try { await loadAuthorizedWorkspace(); }
   catch (error) { globalError(error.message); }
 }
@@ -4328,11 +4497,13 @@ async function handleAuthenticationRoute() {
   const [path, query = ''] = window.location.hash.split('?');
   if (path === '#auth' && new URLSearchParams(query).get('password') === 'reset') {
     $('#password-reset-form').reset();
-    setText('#auth-title', 'Reset your password');
-    setText('#auth-description', 'Choose a new password for your Crucible account.');
+    setText('#auth-title', 'Set a new password');
+    setText('#auth-description', 'Use 12–128 characters.');
     setError('#password-reset-error', state.passwordResetToken ? '' : 'This reset link is incomplete. Request a new link.');
     $('#password-reset-submit').disabled = !state.passwordResetToken;
-    showAuthPanel('reset-password');
+    state.authRecoveryEntry = true;
+    showAuthPanel(state.passwordResetToken ? 'reset-password' : 'reset-invalid');
+    if (!state.passwordResetToken) { setText('#auth-title', 'This link can’t be used');setText('#auth-description', 'Request a new link to reset your password.'); }
     if (state.passwordResetToken) $('#password-reset-new').focus();
     return true;
   }
@@ -4355,7 +4526,7 @@ async function handleAuthenticationRoute() {
       const suggested = result.suggested_handle;
       $('#github-handle').value = typeof suggested === 'string' && /^[A-Za-z0-9_]{3,32}$/.test(suggested) ? suggested : '';
       setText('#github-handle-context', result.github_login ? 'Connected to GitHub as ' + result.github_login + '.' : 'Your GitHub account is connected.');
-      setText('#auth-title', 'Choose your handle');
+      setText('#auth-title', 'Choose your username');
       setText('#auth-description', state.access?.mode === 'beta' ? 'Create your Crucible account, then verify your invitation email.' : 'Create your Crucible account.');
       setError('#github-handle-error', '');
       showAuthPanel('github-handle');
@@ -4374,15 +4545,18 @@ async function handleAuthenticationRoute() {
       'identity-in-use': 'This GitHub account is already linked to another Crucible account. Sign in to that account or contact the operator.',
       'session-changed': 'Your session changed during GitHub sign-in. Please try again from your current account.'
     };
-    throw new Error(messages[outcome] || 'GitHub sign-in could not be completed. Please try again.');
+    const failure = new Error(invitationMessages[outcome] || messages[outcome] || 'GitHub sign-in could not be completed. Please try again.');
+    if (Object.hasOwn(invitationMessages, outcome)) failure.code = outcome;
+    throw failure;
   } catch (error) {
     if (window.location.hash !== callbackHash || state.user?.id !== account) return true;
     await finishAuthentication(returnRoute);
-    if (state.user) { globalError(error.message); }
+    if (state.user) { if (!showInvitationIssue(error)) globalError(error.message); }
     else {
       openAuth();
-      if (outcome === 'invite-required') $('#auth-password-options').open = true;
-      setError('#auth-github-error', error.message);
+      if (showInvitationIssue(error)) return true;
+      if (outcome === 'invite-required') { $('#auth-password-options').open = true;renderAuthMethods();setError('#auth-error', error.message);$('#auth-handle').focus(); }
+      else setError('#auth-github-error', error.message);
     }
   } finally { state.authCallbackBusy = false; }
   return true;
@@ -4408,20 +4582,26 @@ $('#github-link-form').addEventListener('submit', event => {
   void startGitHub('link', $('#github-link-submit'), password);
 });
 $('#github-existing-account').addEventListener('click', () => signInExistingAccount($('#github-existing-account'), true));
+$('#auth-github-password').addEventListener('click', () => signInExistingAccount($('#auth-github-password'), true));
 $('#github-handle-form').addEventListener('submit', async event => {
   event.preventDefault();
   if (!state.githubPending || state.githubCompleteBusy || state.user) return;
-  const csrf = state.csrf;
+  if (!validateUsernameField('#github-handle', '#github-handle-error')) return;
+  const csrf = state.csrf, invitationToken = state.invitationToken;
   state.githubCompleteBusy = true;
   $('#github-handle-submit').disabled = true; setError('#github-handle-error', '');
   try {
     const data = await api('/api/auth/github/complete', {handle: $('#github-handle').value.trim()});
     if (state.user || state.csrf !== csrf) return;
     state.githubPending = false;
-    setSession(data); authDialog.close();
-    await finishAuthentication();
+    setSession(data);
+    if (!hasAccess()) {
+      if (state.invitationToken) window.history.replaceState(null, '', '#join?' + new URLSearchParams({token:state.invitationToken}));
+      await openPendingVerification(true);
+    }
+    else { authDialog.close();await finishAuthentication(); }
   } catch (error) {
-    if (authDialog.open && state.authPanel === 'github-handle') setError('#github-handle-error', error.message);
+    if (authDialog.open && state.authPanel === 'github-handle' && !showInvitationIssue(error, invitationToken)) setError('#github-handle-error', error.message);
   } finally { state.githubCompleteBusy = false; $('#github-handle-submit').disabled = false; }
 });
 function openPasswordRecovery() {
@@ -4431,14 +4611,14 @@ function openPasswordRecovery() {
   setError('#password-reset-request-error', '');
   $('#password-reset-request-status').hidden = true;
   setText('#auth-title', 'Reset your password');
-  setText('#auth-description', 'We’ll send a reset link to your verified email address.');
+  setText('#auth-description', 'Enter your Crucible username to request a reset link.');state.authRecoveryEntry = true;
   showAuthPanel('reset-request', $('#auth-forgot-password'));
   $('#password-reset-handle').focus();
 }
 $('#auth-forgot-password').addEventListener('click', openPasswordRecovery);
 for (const id of ['#password-reset-request-back', '#password-reset-back']) $(id).addEventListener('click', () => {
   state.passwordResetToken = null; $('#password-reset-form').reset();
-  setAuthMode('login'); $('#auth-password-options').open = true; $('#auth-handle').focus();
+  setAuthMode('login');$('#auth-password-options').open = true;state.authRecoveryEntry = true;renderAuthMethods();$('#auth-handle').focus();
 });
 $('#password-reset-request-form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -4450,7 +4630,7 @@ $('#password-reset-request-form').addEventListener('submit', async event => {
     await api('/api/auth/password/reset/start', {handle: $('#password-reset-handle').value.trim()});
     if (state.csrf !== csrf || !authDialog.open || state.authPanel !== 'reset-request') return;
     setText('#password-reset-request-status', 'If this account has a verified email address, a reset link will arrive shortly.');
-    $('#password-reset-request-status').hidden = false;
+    $('#password-reset-request-status').hidden = false;setText('#auth-title', 'Check your inbox');setText('#auth-description', '');showAuthPanel('reset-sent');
   } catch (error) {
     if (authDialog.open && state.authPanel === 'reset-request' && state.csrf === csrf) setError('#password-reset-request-error', error.message);
   } finally { state.passwordRecoveryBusy = false; $('#password-reset-request-submit').disabled = false; }
@@ -4469,41 +4649,67 @@ $('#password-reset-form').addEventListener('submit', async event => {
     state.passwordResetToken = null; $('#password-reset-form').reset();
     window.history.replaceState(null, '', safeAuthReturnRoute(state.returnRoute));
     setSession(data);
-    setAuthMode('login'); $('#auth-password-options').open = true;
-    setText('#auth-description', 'Your password has been reset. Sign in with your new password.');
-    $('#auth-handle').focus();
+    setText('#auth-title', 'Password changed');setText('#auth-description', 'Sign in with your new password.');showAuthPanel('reset-complete');
   } catch (error) {
-    if (authDialog.open && state.authPanel === 'reset-password' && state.csrf === csrf) setError('#password-reset-error', error.message);
+    if (authDialog.open && state.authPanel === 'reset-password' && state.csrf === csrf) {
+      if (error.status === 400) { state.passwordResetToken = null;setText('#auth-title', 'This link can’t be used');setText('#auth-description', 'It may have expired or already been used. Request a new link to reset your password.');showAuthPanel('reset-invalid'); }
+      else setError('#password-reset-error', error.message);
+    }
   } finally { state.passwordResetBusy = false; $('#password-reset-submit').disabled = !state.passwordResetToken; }
 });
 
 function setAuthMode(mode) {
-  if (mode === 'register' && state.access?.mode === 'beta' && !state.invitationToken) mode = 'login';
-  state.authMode = mode;
-  state.authPanel = 'signin';
-  $('#login-mode').classList.toggle('selected', mode === 'login');
-  $('#register-mode').classList.toggle('selected', mode === 'register');
-  $('#login-mode').setAttribute('aria-pressed', String(mode === 'login'));
-  $('#register-mode').setAttribute('aria-pressed', String(mode === 'register'));
-  setText('#auth-title', mode === 'login' ? 'Welcome back.' : 'Join the challenge.');
-  setText('#auth-description', state.access?.mode === 'beta' ? (mode === 'login' ? 'Sign in to your Crucible account.' : 'Create your account, then verify your invitation email.') : mode === 'login' ? 'Sign in to receive your instance for the current round.' : 'Create an account to investigate challenges and share your results.');
+  if (mode === 'register' && !passwordRegistrationAllowed()) mode = 'login';
+  state.authMode = mode;state.authPanel = 'signin';
+  $('#login-mode').classList.toggle('selected', mode === 'login');$('#register-mode').classList.toggle('selected', mode === 'register');
+  $('#login-mode').setAttribute('aria-pressed', String(mode === 'login'));$('#register-mode').setAttribute('aria-pressed', String(mode === 'register'));
+  setText('#auth-title', mode === 'login' ? 'Welcome back' : 'Create an account');
+  setText('#auth-description', '');$('#auth-description').hidden = true;
   setText('#auth-submit', mode === 'login' ? 'Sign in →' : 'Create account →');
-  $('#auth-password').autocomplete = mode === 'login' ? 'current-password' : 'new-password';
-  $('#auth-password').minLength = 12;
-  setError('#auth-error', '');
-  setError('#auth-github-error', '');
+  setText('#auth-handle-label', 'Crucible username');setText('#auth-password-label', 'Password');
+  $('#auth-handle-hint').hidden = true;$('#auth-password-hint').hidden = true;
+  $('#auth-handle').setAttribute('title', 'Use 3–32 letters, numbers or underscores. No spaces.');
+  $('#auth-handle').setAttribute('placeholder', mode === 'login' ? 'Your Crucible username' : '3–32 letters, numbers or _');
+  $('#auth-password').setAttribute('placeholder', mode === 'login' ? 'Your password' : '12–128 characters');
+  $('#auth-password').autocomplete = mode === 'login' ? 'current-password' : 'new-password';$('#auth-password').minLength = 12;
+  $('#auth-password').type = 'password';
+  const showPassword = document.querySelector('[data-show-password="auth-password"]');showPassword.textContent = 'Show';showPassword.setAttribute('aria-label', 'Show password');
+  for (const [input, error] of [['#auth-handle','#auth-handle-error'], ['#auth-password','#auth-password-error']]) { $(input).removeAttribute('aria-invalid');$(input).setAttribute('aria-describedby', error.slice(1));setError(error, ''); }
+  setError('#auth-error', '');setError('#auth-github-error', '');$('#auth-github-password').hidden = true;
   renderAuthMethods();
 }
-function openAuth(trigger) { setAuthMode(state.authMode); $('#auth-password-options').open = !state.auth?.github_enabled; if (!authDialog.open) openDialog(authDialog, trigger); }
+function openAuth(trigger) {
+  setAuthMode(state.authMode);$('#auth-password-options').open = !state.auth?.github_enabled;
+  renderAuthMethods();if (!authDialog.open) openDialog(authDialog, trigger);
+  if ($('#auth-password-options').open) $('#auth-handle').focus();
+}
+function authFieldError(input, error, message) {
+  setError(error, message);$(input).setAttribute('aria-invalid', 'true');$(input).setAttribute('aria-describedby', error.slice(1));$(input).focus();
+}
+function validateUsernameField(input, error) {
+  $(input).removeAttribute('aria-invalid');setError(error, '');
+  if (!/^[A-Za-z0-9_]{3,32}$/.test($(input).value.trim())) { authFieldError(input, error, 'Use 3–32 letters, numbers or underscores. No spaces.');return false; }
+  return true;
+}
+for (const id of ['#auth-reset-sent-signin','#auth-reset-complete-signin','#auth-reset-invalid-signin']) $(id).addEventListener('click', () => {
+  state.authRecoveryEntry = true;setAuthMode('login');$('#auth-password-options').open = true;showAuthPanel('signin');renderAuthMethods();$('#auth-handle').focus();
+});
+$('#auth-reset-request-again').addEventListener('click', openPasswordRecovery);
 $('#auth-form').addEventListener('submit', async event => {
   event.preventDefault();
+  setError('#auth-error', '');setError('#auth-handle-error', '');setError('#auth-password-error', '');
+  $('#auth-handle').removeAttribute('aria-invalid');$('#auth-password').removeAttribute('aria-invalid');
+  if (!validateUsernameField('#auth-handle', '#auth-handle-error')) return;
+  if ($('#auth-password').value.length < 12 || $('#auth-password').value.length > 128) { authFieldError('#auth-password', '#auth-password-error', 'Use 12–128 characters for your password.');return; }
   const startIntent = state.challengeStartIntent;
+  const invitationToken = state.invitationToken;
   const button = $('#auth-submit');
   button.disabled = true;
   $('#login-mode').disabled = true;
   $('#register-mode').disabled = true;
   setError('#auth-error', '');
   setError('#auth-github-error', '');
+  $('#auth-github-password').hidden = true;
   setText('#auth-submit', state.authMode === 'login' ? 'Signing in…' : 'Creating your account…');
   try {
     const data = await api('/api/auth/' + state.authMode, {handle: $('#auth-handle').value.trim(), password: $('#auth-password').value,
@@ -4514,16 +4720,20 @@ $('#auth-form').addEventListener('submit', async event => {
     setSession(data);
     if (resumeStart && state.user) state.challengeStartIntent = {...startIntent, accountId: state.user.id,
       csrf: state.csrf, awaitingSignIn: false};
+    const wasRegistration = state.authMode === 'register';
     $('#auth-form').reset();
+    if (!hasAccess()) { renderAccessGate();if (dialogStillOpen) await openPendingVerification(wasRegistration);return; }
     authDialog.close();
-    if (!hasAccess()) { renderAccessGate(); return; }
     if (!state.ready || state.screen === 'home') { await loadAuthorizedWorkspace(); return; }
     await loadChallenge();
     if (state.screen === 'scheme' && state.view === 'leaderboard') await loadLeaderboard();
     toast('Signed in as ' + state.user.handle + '.');
   } catch (error) {
-    if (authDialog.open) setError('#auth-error', error.message);
-    else globalError(error.message);
+    if (authDialog.open && !showInvitationIssue(error, invitationToken)) {
+      if (state.authMode === 'register' && error.status === 409) authFieldError('#auth-handle', '#auth-handle-error', 'That username is taken. Try another, or sign in.');
+      else setError('#auth-error', error.status === 401 ? 'Username or password is incorrect.' : error.message);
+    }
+    else if (!authDialog.open) globalError(error.message);
   }
   finally {
     button.disabled = false;
@@ -5768,7 +5978,10 @@ $('#download-proposal').addEventListener('click', () => {
 
 // Research records keep claims and their conditions separate from hourly ranking.
 function showWorkspace(name) {
-  if (!hasAccess() && name !== 'home') name = 'access';
+  if (!hasAccess()) name = 'access';
+  const root = document.documentElement || document.querySelector('html');
+  if (name === 'access') root.setAttribute('data-beta-landing', landingLayout());
+  else root.removeAttribute('data-beta-landing');
   if (name !== 'people' && pointsHelpDialog.open) {
     dialogTriggers.delete(pointsHelpDialog); pointsHelpDialog.close();
   }
@@ -5788,6 +6001,8 @@ function showWorkspace(name) {
   research.visible = name === 'research';
   $('#home-workspace').hidden = name !== 'home';
   $('#access-workspace').hidden = name !== 'access';
+  $('#access-branding').hidden = name !== 'access';
+  if (name === 'home' || name === 'access') window.requestAnimationFrame?.(syncTypingKeyGlow);
   if (routeLoadingPanel) {
     routeLoadingPanel.hidden = name !== 'loading';
     if (name !== 'loading') routeLoadingPanel.setAttribute('aria-busy', 'false');
@@ -6234,6 +6449,104 @@ $('#finding-form').addEventListener('submit', async event => {
     setText('#save-finding', editing ? 'Publish revision →' : 'Publish finding →');
   }
 });
+const taglineSpots = [...document.querySelectorAll('.scrutiny-wording')].map(element => ({element, x: null, y: null, strength: 0}));
+let taglinePointer = null, taglineFrame = null, taglineTime = 0;
+function requestTaglineFrame() {
+  if (taglineFrame === null) taglineFrame = window.requestAnimationFrame(animateTaglineDots);
+}
+function animateTaglineDots(time) {
+  taglineFrame = null;
+  const elapsed = taglineTime ? Math.min(time - taglineTime, 32) : 16;
+  const easing = 1 - Math.exp(-elapsed / 65);
+  taglineTime = time;
+  let unsettled = false;
+  const motionAllowed = !window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  for (const spot of taglineSpots) {
+    const box = spot.element.getBoundingClientRect();
+    const nearby = taglinePointer && motionAllowed && box.width > 0 && box.height > 0;
+    const x = nearby ? taglinePointer.x - box.left : spot.x;
+    const y = nearby ? taglinePointer.y - box.top : spot.y;
+    const distance = nearby ? Math.hypot(Math.max(-x, 0, x - box.width), Math.max(-y, 0, y - box.height)) : 85;
+    const proximity = Math.max(0, 1 - distance / 85);
+    const target = proximity * proximity * (3 - 2 * proximity);
+    if (spot.x === null || spot.strength < .002) { spot.x = x; spot.y = y; }
+    else { spot.x += (x - spot.x) * easing; spot.y += (y - spot.y) * easing; }
+    spot.strength += (target - spot.strength) * easing;
+    if (Math.abs(target - spot.strength) > .001 || (target > 0 && Math.hypot(x - spot.x, y - spot.y) > .1)) unsettled = true;
+    if (spot.strength > .002) {
+      spot.element.style.setProperty('--dot-x', spot.x.toFixed(2) + 'px');
+      spot.element.style.setProperty('--dot-y', spot.y.toFixed(2) + 'px');
+      spot.element.style.setProperty('--dot-strength', spot.strength.toFixed(4));
+      spot.element.classList.add('is-dotted');
+    } else {
+      if (!target) spot.strength = 0;
+      spot.element.classList.remove('is-dotted');
+    }
+  }
+  if (unsettled) requestTaglineFrame();
+  else taglineTime = 0;
+}
+window.addEventListener('pointermove', event => {
+  if (event.pointerType === 'touch' || window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
+  taglinePointer = {x: event.clientX, y: event.clientY};
+  requestTaglineFrame();
+});
+function clearTaglinePointer() { taglinePointer = null; requestTaglineFrame(); }
+window.addEventListener('pointerout', event => { if (!event.relatedTarget) clearTaglinePointer(); });
+window.addEventListener('pointercancel', clearTaglinePointer);
+window.addEventListener('blur', clearTaglinePointer);
+const landingBrand = $('#site-brand'), landingMark = landingBrand.querySelector('.brand-mark'), landingFire = landingBrand.querySelector('.brand-fire-ghost'), landingEffect = landingBrand.querySelector('.brand-ember-effect');
+const typingGlowAnimations = new WeakSet();
+function syncTypingKeyGlow() {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches || landingBrand.classList.contains('brand-ignited')) return;
+  for (const {element} of taglineSpots) {
+    if (!element.getBoundingClientRect().width) continue;
+    for (const animation of element.getAnimations()) {
+      if (animation.animationName !== 'scrutiny-reveal' || typingGlowAnimations.has(animation)) continue;
+      typingGlowAnimations.add(animation);
+      const timing = animation.effect.getTiming();
+      const delay = Math.max(0, Number(timing.delay) + Number(timing.duration) / 2 - Number(animation.currentTime || 0));
+      landingBrand.style.setProperty('--typing-glow-delay', delay + 'ms');
+      landingBrand.classList.remove('brand-typing');
+      void landingBrand.offsetWidth;
+      landingBrand.classList.add('brand-typing');
+    }
+  }
+}
+for (const {element} of taglineSpots) element.addEventListener('animationstart', event => {
+  if (event.animationName === 'scrutiny-reveal') syncTypingKeyGlow();
+});
+landingBrand.querySelector('.brand-key-sun').addEventListener('animationend', event => {
+  if (event.animationName === 'key-typing-glow') landingBrand.classList.remove('brand-typing');
+});
+window.requestAnimationFrame?.(syncTypingKeyGlow);
+function igniteLandingLogo() {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
+  landingBrand.classList.remove('brand-typing');
+  landingBrand.classList.remove('brand-cooling');
+  landingBrand.classList.add('brand-ignited');
+}
+landingMark.addEventListener('pointerenter', event => {
+  if (event.pointerType !== 'touch') igniteLandingLogo();
+});
+landingBrand.addEventListener('focus', igniteLandingLogo);
+function finishLandingLogo() {
+  landingBrand.classList.remove('brand-ignited');
+  landingBrand.classList.remove('brand-cooling');
+}
+function coolLandingLogo() {
+  if (!landingBrand.classList.contains('brand-ignited')) return;
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) finishLandingLogo();
+  else landingBrand.classList.add('brand-cooling');
+}
+landingMark.addEventListener('pointerleave', coolLandingLogo);
+landingBrand.addEventListener('blur', coolLandingLogo);
+landingEffect.addEventListener('transitionend', event => {
+  if (event.target === landingEffect && event.propertyName === 'opacity' && landingBrand.classList.contains('brand-cooling')) finishLandingLogo();
+});
+for (const type of ['animationend', 'animationcancel']) landingFire.addEventListener(type, event => {
+  if (event.target === landingFire && event.animationName === 'flame-visit') finishLandingLogo();
+});
 for (const brand of document.querySelectorAll('a.brand')) brand.addEventListener('click', event => {
   if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   event.preventDefault(); navigateTop('#home');
@@ -6308,7 +6621,6 @@ async function initialize() {
   let revision = state.sessionRevision;
   const current = () => !documentRetired && lifecycle === documentEpoch && token === initializationRequest && revision === state.sessionRevision;
   globalError('');
-  if (isHomeRoute()) showHome();
   if (!state.sessionResolved) {
     $('#access-loading-preview').hidden = false;
     $('#access-workspace').setAttribute('aria-busy', 'true');
@@ -6334,9 +6646,7 @@ async function initialize() {
     await loadAuthorizedWorkspace();
   } catch (error) {
     if (!current()) return;
-    if (isHomeRoute()) {
-      showHome(); globalError('Sign-in could not be checked. You can still read about Crucible below. Try again to sign in.');
-    } else if (hasAccess()) { showRouteLoading(); showInlineError(routeLoadingTarget(), error.message, initialize); }
+    if (hasAccess()) { showRouteLoading(); showInlineError(routeLoadingTarget(), error.message, initialize); }
     else {
       document.body.removeAttribute('data-access-pending');
       $('#access-loading-preview').hidden = true;

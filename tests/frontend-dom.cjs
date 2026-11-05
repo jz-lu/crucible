@@ -110,6 +110,8 @@ async function createApp({schemes, user = null, hash = '#challenge', responder, 
     if (responder) data = await responder(url, options, envelope);
     if (data === undefined) {
       if (url.pathname === '/api/session') data = envelope({user, csrf_token: 'test-csrf'});
+      else if (url.pathname === '/api/access/invitations/inspect') data = {status:'available',expires_at:epoch+604800};
+      else if (url.pathname === '/api/access/invitations/verify/start') data = {status:'verification_sent',masked_recipient:'a***@example.org',expires_at:epoch+600,resend_after_seconds:60};
       else if (url.pathname === '/api/schemes') data = envelope({schemes});
       else if (url.pathname === '/api/challenges') data = envelope({challenge: null});
       else if (url.pathname === '/api/leaderboard') data = envelope({entries: []});

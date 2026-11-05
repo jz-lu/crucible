@@ -11,12 +11,14 @@ async function expectTheme(page, theme) {
   await expect(page.locator('#theme-toggle')).toHaveAttribute('aria-label', `Switch to ${opposite(theme)} theme`);
   await expect(page.locator('#theme-toggle-label')).toHaveText(`${opposite(theme) === 'dark' ? 'Dark' : 'Light'} mode`);
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', palette[theme].meta);
+  const browserTheme = await page.evaluate(() => matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  await expect(page.locator('#site-icon')).toHaveAttribute('href', new RegExp('/assets/crucible-icon-' + browserTheme + '\\.svg\\?v=[a-f0-9]{24}$'));
   expect(await page.locator('body').evaluate(element => ({
     background: getComputedStyle(element).backgroundColor,
     color: getComputedStyle(element).color,
   }))).toEqual({background: palette[theme].background, color: palette[theme].color});
-  // The saved theme must select the vessel's matching RESI color on first
-  // paint and after both kinds of reload, without replacing the decoded PNG.
+  // The saved theme selects the matching forest/sage logo palette on first
+  // paint and both kinds of reload, while retaining the decoded SVG.
   await expect(page.locator('.site-header .brand-mark')).toHaveCSS('filter',
     new RegExp(`url\\("#crucible-vessel-${theme}"\\)`));
 }
@@ -95,5 +97,5 @@ test('denied browser storage keeps the theme control usable without promising re
   // Storage denial removes the persistence mechanism. The OS preference is the
   // documented fallback, without crashing access or introducing other storage.
   await expectTheme(page, 'light');
-  await expect(page.locator('#home-primary')).toBeEnabled();
+  await expect(page.locator('#access-sign-in')).toBeVisible();
 });

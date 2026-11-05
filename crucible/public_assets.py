@@ -41,6 +41,7 @@ CONTENT_SECURITY_POLICY = (
 PUBLIC_FILES = (
     '/styles.css', '/app.js', '/bootstrap.js', '/math.js', '/assumptions.js',
     '/proposal-retractions.js', '/resource-metrics.js', '/assets/crucible-logo.png',
+    '/assets/crucible-icon-light.svg', '/assets/crucible-icon-dark.svg', '/assets/crucible-mark.svg',
     '/assets/resi-logo.png', '/vendor/resi/cardo-normal-400-latin.woff2',
     '/vendor/resi/cardo-normal-700-latin.woff2', '/vendor/resi/plex-sans-normal-100-700-latin.woff2',
 )
@@ -98,7 +99,7 @@ PROTECTED_FILES = {
 # Minimal Linux images do not always have a system MIME database. The browser
 # must receive the same declared types for our fixed UI inventory on every host.
 UI_MEDIA_TYPES = {
-    '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png',
+    '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml',
     '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf',
 }
 

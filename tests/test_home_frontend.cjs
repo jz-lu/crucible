@@ -16,28 +16,64 @@ async function boot({actor=null,status=actor?'active':'anonymous',hash='',hook}=
 }
 let passed=0;async function test(name,run){await run();console.log('PASS '+name);passed++;}
 (async()=>{
- await test('the public root explains the site before access resolves without requesting protected data',async()=>{
+ await test('the root stays gated before and after anonymous access resolves without reading site content',async()=>{
   const pending=deferred();const app=await boot({hook:url=>url.pathname==='/api/session'?pending.promise:undefined});
-  assert.equal(app.$('#home-workspace').hidden,false);assert.equal(app.$('#access-workspace').hidden,true);
-  assert.match(app.$('#home-title').textContent,/Find new crypto/);assert.equal(app.$('#home-primary').disabled,true);
-  assert.equal(app.$('#home-progress').hidden,true);assert.deepEqual(app.requests.map(r=>r.url.pathname),['/api/session']);
+  assert.equal(app.$('#home-workspace').hidden,true);assert.equal(app.$('#access-workspace').hidden,false);
+  assert.equal(app.$('#home-title').textContent,'Find new cryptography. Test its limits.');
+  assert.deepEqual(app.requests.map(r=>r.url.pathname),['/api/session']);
   pending.resolve(app.envelope({user:null,csrf_token:'csrf',access:access('anonymous')}));await flush();
-  assert.equal(app.$('#home-primary').disabled,false);assert.equal(app.$('#home-progress').hidden,true);
+  assert.equal(app.$('#home-workspace').hidden,true);assert.equal(app.$('#access-workspace').hidden,false);
+  assert.equal(app.$('#access-title').textContent,'Private beta');assert.equal(app.$('#access-branding').hidden,false);assert.match(app.$('#access-branding').textContent,/Find new cryptography. Test its limits./);
+  assert.equal(app.$('#access-description').textContent,'An invitation is required to join.');
+  assert.equal(app.$('#access-create-account').hidden,false);assert.equal(app.$('#access-sign-in').hidden,false);
   assert.deepEqual(app.requests.map(r=>r.url.pathname),['/api/session']);
  });
- await test('visitors get invitation guidance, sign-in and gated paths to schemes, the map and bounties',async()=>{
-  const app=await boot();assert.match(app.$('#home-primary').textContent,/Sign in/);assert.match(app.$('#home-access-note').textContent,/invitation/);
-  const paths=app.$('#home-workspace').querySelectorAll('a').map(a=>a.href);
-  for(const href of ['#challenge','#challenge?view=map','#bounties','#notebook'])assert.ok(paths.includes(href));
-  app.$('#home-primary').focus();app.$('#home-primary').click();assert.equal(app.$('#auth-dialog').open,true);
-  app.$('#auth-dialog').querySelector('[data-close]').click();await flush();assert.equal(app.document.activeElement,app.$('#home-primary'));
-  await app.navigate('#challenge?view=map');assert.equal(app.$('#access-workspace').hidden,false);assert.equal(app.$('#home-workspace').hidden,true);
-  assert.equal(app.requests.some(r=>r.url.pathname==='/api/schemes'),false);
-  await app.navigate('#home');assert.equal(app.$('#home-workspace').hidden,false);
+ await test('signed-out visitors see only account entry on every home alias and other site routes',async()=>{
+  const app=await boot();
+  for(const hash of ['#home','#','#challenge','#about','#notebook','#bounties','#people','#scheme/fixture/1','#home']){
+   await app.navigate(hash);assert.equal(app.$('#access-workspace').hidden,false);assert.equal(app.$('#home-workspace').hidden,true);
+   assert.equal(app.$('.primary-nav').hidden,true);
+  }
+  assert.deepEqual(app.requests.map(r=>r.url.pathname),['/api/session']);
+  app.$('#access-sign-in').focus();app.$('#access-sign-in').click();assert.equal(app.$('#auth-dialog').open,true);
+  assert.equal(app.$('#auth-title').textContent,'Welcome back');
+  app.$('#auth-dialog').querySelector('[data-close]').click();await flush();assert.equal(app.document.activeElement,app.$('#access-sign-in'));
+ });
+ await test('create account distinguishes malformed and wrong-site invitations before resuming a local invitation',async()=>{
+  const app=await boot();app.$('#access-create-account').click();
+  assert.equal(app.$('#auth-title').textContent,'Create an account');assert.match(app.$('#auth-description').textContent,/invitation-only/);
+  assert.equal(app.$('#auth-invitation-form').hidden,false);assert.equal(app.$('#auth-sign-in-methods').hidden,true);
+  app.$('#auth-invitation-link').value='https://elsewhere.invalid/#join?token=cri_vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv';
+  app.$('#auth-invitation-form').dispatchEvent({type:'submit'});await flush();
+  assert.equal(app.location.hash,'');assert.match(app.$('#auth-invitation-error').textContent,/different site/);
+  app.$('#auth-invitation-link').value='https://crucible.fail/#join?token=cri_'+'e'.repeat(43);
+  app.$('#auth-invitation-form').dispatchEvent({type:'submit'});await flush();
+  assert.match(app.$('#auth-invitation-error').textContent,/for crucible.fail/);
+  assert.match(app.$('#auth-invitation-error').textContent,/local preview/);
+  assert.doesNotMatch(app.$('#auth-invitation-error').textContent,/expired|full Crucible invitation/);
+  for(const bad of ['not an invitation','https://name:secret@127.0.0.1:8000/#join?token=abc','javascript:alert(1)#join?token=abc']){
+   app.$('#auth-invitation-link').value=bad;app.$('#auth-invitation-form').dispatchEvent({type:'submit'});await flush();
+   assert.match(app.$('#auth-invitation-error').textContent,/full Crucible invitation/);
+  }
+  app.$('#auth-invitation-link').value='http://127.0.0.1:8000/#join?token=cri_vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv';
+  app.$('#auth-invitation-form').dispatchEvent({type:'submit'});await flush();
+  assert.equal(app.location.hash,'#join?token=cri_vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv');assert.equal(app.$('#auth-dialog').open,true);
+  assert.equal(app.$('#auth-title').textContent,'Create an account');assert.equal(app.$('#auth-invitation-link').value,'');
+  assert.deepEqual(app.requests.map(r=>r.url.pathname),['/api/session','/api/access/invitations/inspect']);
+ });
+ await test('landing layout links select a bounded presentation and admission restores the app header',async()=>{
+  const app=await boot({hash:'#home?layout=left'});
+  assert.equal(app.$('html').getAttribute('data-beta-landing'),'left');
+  await app.navigate('#home?layout=unrecognized');
+  assert.equal(app.$('html').getAttribute('data-beta-landing'),'centered');
+  app.sandbox.setSession(app.envelope({user,csrf_token:'signed-in',access:access('active')}));
+  await app.sandbox.loadAuthorizedWorkspace();await flush();
+  assert.equal(app.$('html').getAttribute('data-beta-landing'),null);
+  assert.equal(app.$('#home-workspace').hidden,false);
  });
  await test('member highlights show exact current stages and bounty rewards with useful destinations',async()=>{
   const app=await boot({actor:user});assert.equal(app.$('#home-progress').hidden,false);assert.match(app.$('#home-primary').textContent,/My activity/);
-  assert.match(app.$('#home-welcome').textContent,/alice/);assert.equal(app.$('#home-welcome').hidden,false);assert.equal(app.$('#home-access-note').hidden,true);assert.match(app.$('#home-schemes').textContent,/Fixture scheme.*Largest recovery: Stage 2/);
+  assert.equal(app.document.querySelector('#home-welcome'),null);assert.equal(app.$('#home-access-note').hidden,true);assert.match(app.$('#home-schemes').textContent,/Fixture scheme.*Largest recovery: Stage 2/);
   assert.equal(app.$('#home-schemes').querySelector('.home-stage-strip').children.length,3);assert.equal(app.$('#home-schemes').querySelectorAll('.is-recovered').length,2);
   assert.equal(app.$('#home-schemes').querySelector('a').href,'#scheme/fixture/1');
   assert.match(app.$('#home-bounties').textContent,/Investigate a test construction.*300 points/);
@@ -68,22 +104,22 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
   assert.match(app.$('#home-schemes').textContent,/Fixture scheme/);
   app.sandbox.setSession(app.envelope({user:null,csrf_token:'bye',access:access('anonymous')}));
   assert.equal(app.$('#home-progress').hidden,true);assert.equal(app.$('#home-schemes').textContent,'');assert.equal(app.$('#home-bounties').textContent,'');
-  pending.resolve(app.envelope({bounties}));await flush();assert.equal(app.$('#home-bounties').textContent,'');assert.match(app.$('#home-primary').textContent,/Sign in/);
+  pending.resolve(app.envelope({bounties}));await flush();assert.equal(app.$('#home-bounties').textContent,'');assert.equal(app.$('#home-workspace').hidden,true);assert.equal(app.$('#access-workspace').hidden,false);
  });
- await test('leaving home retires pending highlights and Back restores the public destination',async()=>{
+ await test('leaving home retires pending highlights and Back restores the authorized home destination',async()=>{
   const pending=deferred();const app=await boot({actor:user,hook:url=>url.pathname==='/api/bounties'?pending.promise:undefined});
   await app.navigate('#about');pending.resolve(app.envelope({bounties}));await flush();assert.doesNotMatch(app.$('#home-bounties').textContent,/Investigate/);
   app.history.back();await flush();assert.equal(app.$('#home-workspace').hidden,false);assert.match(app.$('#home-bounties').textContent,/Investigate/);
  });
- await test('password sign-in from home stays on the personalized welcome page',async()=>{
+ await test('password sign-in from the home gate opens the private home page',async()=>{
   const app=await boot({hook:(url,options,envelope)=>url.pathname==='/api/auth/login'?envelope({user,csrf_token:'signed-in',access:access('active')}):undefined});
-  app.$('#home-primary').click();app.$('#auth-handle').value='alice';app.$('#auth-password').value='Synthetic local password';app.$('#auth-form').dispatchEvent({type:'submit'});await flush();
+  app.$('#access-sign-in').click();app.$('#auth-handle').value='alice';app.$('#auth-password').value='Synthetic local password';app.$('#auth-form').dispatchEvent({type:'submit'});await flush();
   assert.equal(app.$('#auth-dialog').open,false);assert.equal(app.$('#home-workspace').hidden,false);assert.match(app.$('#home-primary').textContent,/My activity/);assert.match(app.$('#home-schemes').textContent,/Fixture scheme/);
-  assert.equal(app.sandbox.safeAuthReturnRoute('#home'),'#home');assert.equal(app.sandbox.safeAuthReturnRoute('https://external.invalid'),'#challenge');
+  assert.equal(app.sandbox.safeAuthReturnRoute('#home'),'#home');assert.equal(app.sandbox.safeAuthReturnRoute('https://external.invalid'),'#home');
  });
  await test('pending accounts get access guidance without any private highlights',async()=>{
-  const app=await boot({actor:user,status:'pending'});assert.equal(app.$('#home-progress').hidden,true);assert.match(app.$('#home-primary').textContent,/Check your access/);
-  assert.deepEqual(app.requests.map(r=>r.url.pathname),['/api/session']);app.$('#home-primary').click();await flush();assert.equal(app.$('#access-workspace').hidden,false);
+  const app=await boot({actor:user,status:'pending'});assert.equal(app.$('#home-workspace').hidden,true);assert.equal(app.$('#home-progress').hidden,true);assert.equal(app.$('#access-workspace').hidden,false);
+  assert.deepEqual(app.requests.map(r=>r.url.pathname),['/api/session']);assert.match(app.$('#access-description').textContent,/invitation email/);
  });
  await test('empty data stays distinct from loading, and disabled bounties omit their reads and links',async()=>{
   const app=await boot({actor:user,hash:'#about'});app.window.CrucibleFeatures={bounties:false};await app.navigate('#home');

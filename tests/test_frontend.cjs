@@ -1161,11 +1161,14 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.$('#catalogue-workspace').hidden, false);
     assert.equal(app.$('#workspace').hidden, true);
   });
-  await test('About us is an empty deep-linked page with navigation state, history, and keyboard focus', async () => {
+  await test('About us is a readable deep-linked page with navigation state, history, and keyboard focus', async () => {
     const app = await createApp({schemes, hash: '#about'});
     const about = app.$('#about-workspace');
     assert.equal(about.hidden, false);
-    assert.equal(about.textContent.trim(), 'About us');
+    assert.equal(app.$('#about-title').textContent.trim(), 'About us');
+    assert.equal(app.$('#about-mission-title').textContent.trim(), 'Why Crucible');
+    assert.equal(app.$('#about-principles-title').textContent.trim(), 'Our principles');
+    assert(about.querySelector('.about-prose').textContent.trim().length > 0);
     assert.equal(app.document.title, 'About us — Crucible');
     assert.equal(app.$('#catalogue-workspace').hidden, true);
     assert.equal(app.$('#workspace').hidden, true);

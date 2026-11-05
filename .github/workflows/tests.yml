@@ -158,7 +158,8 @@ jobs:
     name: Real Chromium UI and private-access checks
     # Keep the tested distro stable across ubuntu-latest migrations.
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    # The full account/branding coverage precedes the two isolated journeys.
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7

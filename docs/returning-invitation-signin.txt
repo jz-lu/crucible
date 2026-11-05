@@ -1,40 +1,128 @@
-RETURNING TO CRUCIBLE THROUGH AN OLD INVITATION
-=============================================
+SIGNING IN AND JOINING THROUGH AN INVITATION
+==========================================
 
-Local reproduction and fix; no production account diagnosis or access change.
+Authentication and accepting an invitation are separate operations. Existing
+accounts keep their UUIDs, passwords, linked GitHub identities, membership,
+notes and contributions. This change needs no database migration, password
+reset, account merge or re-invitation. It does not grant or restore access to
+revoked or suspended accounts.
 
-The invitation URL populates the browser's invitation context. GitHub start
-normally carries that token so a new participant can choose a handle, verify
-their invited mailbox and activate beta membership. The server validates a
-supplied invitation before contacting GitHub. A redeemed, expired, revoked or
-otherwise unavailable invitation is rejected at that point, even when the
-person intended to sign in to an already-linked GitHub account.
+The beta home page follows the same gate as all other site workspaces. No home
+guide or research content appears while the session is unresolved, signed out
+or lacking membership. The root entry screen offers Create an account and Sign
+in beneath “Find new cryptography. Test its limits.” and a smaller Private beta heading.
+The tagline stays on one line, uses a brief typing-style reveal and honors
+reduced-motion preferences. Without an invitation, Create an
+account explains the invitation requirement and accepts a same-origin join
+link; it never creates an account or consumes the token on its own. Sign in
+opens the single-line “Welcome back” heading, with a highlighted GitHub button, a password
+choice and an account-creation link for first-time visitors. The private home page
+uses the same headline and the original project description, without a welcome-back greeting.
+Malformed links and links belonging to a different site have separate messages.
+A crucible.fail invitation pasted into the local preview explains that it must
+be opened on crucible.fail, or replaced by a local invitation. The token is not
+sent to another site or imported into a different database. Expiry and redemption
+are checked by a CSRF-protected, read-only inspection before showing account
+creation, and again by signup/verification. Inspection returns no mailbox or
+account information and never consumes, extends or renews an invitation.
 
-The ordinary GitHub sign-in path, without an invitation token, already works
-for an existing linked account. Unlinked identities still need a valid invite;
-sign-in does not regrant revoked membership or bypass private-beta access.
+The signed-out landing has no boxed navigation or enclosing access card. The
+brand, one-line tagline, beta label and actions share a centered axis by default.
+Use /#home?layout=left to compare the consistently left-aligned composition,
+or /#home?layout=centered for the centered composition. The whitelisted layout
+parameter changes presentation only. Admission restores the normal app header.
+The lowercase crucible wordmark and vector silhouette use the shared forest/sage
+palette in both themes. Flame, key and vessel have exactly the same resting color.
+The matching tab icon follows the browser appearance independently of the site
+theme. On both the beta landing and signed-in home page, the key starts glowing
+halfway through typing, holds its glow for about three seconds, then fades
+back to its theme color over another 1.5 seconds.
+After the tagline finishes,
+the beta content and account actions fade in, followed by RESI. The optional
+landing-logo hover shows a flame barely larger than the original, then holds that size while its
+three tips flicker and sway on a faster 680ms cycle. A soft core fades into
+sparse dots at the edges. The flame is centered on the key, with its base fixed
+at the bowl. After two seconds, both the flame and the red-orange key glow fade
+out over 400ms, even when the pointer stays on the logo. A new hover or keyboard
+focus can replay the effect after it finishes. Leaving the logo or moving
+keyboard focus away fades the overlay back to the ordinary logo in 280ms.
+The faster tagline types in 520ms after a 40ms delay before the beta content
+fades in. As the cursor approaches the text, nearby letter shapes gradually
+become fine dots in the same color. Cursor tracking and the effect's strength
+ease between positions and fade smoothly when the pointer leaves.
+Every popup heading uses the same font family and weight as the navigation tabs.
+The effects are isolated in their SVG, event handlers and CSS blocks for easy removal.
+Reduced motion displays all content immediately and disables the logo and dot effects.
 
-The local UI now offers “Already joined? Sign in” on the invitation gate and in
-its sign-in dialog, including beside an unavailable-invitation error. Only this
-explicit choice clears the invitation token, verification state/code and typed
-password, removes the invitation from the URL, and opens normal sign-in. It
-keeps a safe intended destination. GitHub remains primary when configured;
-password sign-in remains available. Cancelling returns keyboard focus to a
-visible sign-in control. A pending provider attempt cannot be interrupted by
-this action. The existing choose-handle/password escape uses the same cleanup.
+Returning participants
 
-First-time invitation flows still send their token. Backend validation, account
-linking, mailbox proof, membership checks and OAuth protections are unchanged.
-There is no automatic retry without the token, account creation, re-invitation,
-password reset or access grant.
+- An active, signed-in member who opens any invitation enters the app directly.
+  The invitation is removed from the URL and the safe previous destination is
+  retained, defaulting to the home page. No acceptance request is made.
+- A signed-out member can sign in with their existing Crucible password or
+  linked GitHub identity, even through a used, expired or unavailable link.
+  GitHub resolves the identity before checking whether invitation acceptance
+  is necessary. An active member goes directly to the intended page.
+- “Already joined? Sign in” explicitly leaves invitation context, clears the
+  verification state/code and typed password, removes the invitation URL, and
+  opens ordinary sign-in. GitHub stays highlighted; the smaller “Continue with
+  password” text below it replaces the method choices with the password form,
+  hiding GitHub until “Other ways to sign in” is chosen. Both methods
+  show a small arrow beside their label; only the password label is underlined.
+  On the direct-invitation screen, the returning-member action is a compact
+  text link below the account options. It does not stretch across the page.
+- Trying to create an account with a used invitation creates no account. The
+  UI says “This invitation has already been used. Sign in to your existing
+  account.” and offers a prominent Sign in action. A used link remains used
+  after its original seven-day expiry; expiry never affects existing access.
+- An unused expired link explains that a new invitation is needed and still
+  offers sign-in for existing members. Revoked, locked, invalid or missing
+  invitations use a general unavailable message with the same sign-in escape.
 
-Evidence: frontend regressions cover original valid-invitation transport, both
-error surfaces, safe destination/context cleanup, busy states and focus. The
-isolated browser tests use a synthetic unavailable token against the real local
-invitation check (403), then exercise normal GitHub sign-in with a locally
-intercepted provider callback into an existing disposable account. These tests
-do not identify the cause of any particular beta participant's reported issue.
+New and unfinished accounts
 
-Relevant implementation: web/app.js captureInvitation/startGitHub/
+- Valid unused links still support either GitHub or Crucible username/password
+  account creation. Password signup remains available when GitHub is enabled,
+  including in production. Creating an account does not consume the invitation
+  or grant beta access.
+- After account creation, the verification popup automatically sends the code
+  to the invitation mailbox. Signing back into that account through
+  the invitation resumes verification without creating a replacement account.
+- The existing recipient-bound mailbox verification remains mandatory. Only
+  successful verification/redemption consumes the invitation and activates
+  membership. Opening the link, signing in, creating an account and requesting
+  a code do not consume or extend it. An unfinished account with an expired
+  invitation needs a fresh valid invitation to finish joining.
+- Password users can explicitly link GitHub from their profile, then sign in
+  with either method to the same account. An unlinked GitHub callback provides
+  a direct password-sign-in action; it does not automatically merge accounts.
+
+Account creation and verification return HTTP 403 with detail.code and
+detail.message for invitation_redeemed, invitation_expired or
+invitation_unavailable. Matching GitHub callback outcomes show the same UI.
+Known invitation errors do not trigger an unnecessary session refresh. Late
+errors from an old invitation cannot invalidate a newly opened invitation.
+The browser inspection endpoint returns only availability and expiry. New GitHub identities
+still require a valid invitation after OAuth and again in the account-creation
+transaction. Existing CSRF, browser binding, PKCE, link confirmation, rate
+limits, mailbox ownership, locking and one-time redemption checks remain.
+
+Invitation records, tokens, recipient bindings and deadlines are unchanged.
+Already-issued unused links keep working until their existing expiry. The
+operator invite command keeps returning invitation_url, id and expires_at.
+The CLI does not send invitation email. Existing members can use /#auth directly.
+Verification emails also include the ordinary sign-in link.
+
+Validation uses disposable accounts/invitations only: backend regressions cover
+both sign-in methods, unchanged identity/password/invitation metadata, valid
+signup and redemption, unavailable signup rejection and revoked access.
+Frontend/browser checks cover used links before and after expiry, ordinary
+sign-in, signed-in navigation, fresh GitHub/password signup, unfinished-account
+resumption, friendly error messages, focus and desktop/mobile layout. Provider
+responses are synthetic; real invitation tokens and hosted accounts are never
+used by these tests. PostgreSQL concurrency checks require a dedicated test DSN.
+
+Relevant implementation: web/app.js captureInvitation/showInvitationIssue/
 signInExistingAccount; crucible/github_auth.py start/callback/complete;
-crucible/beta_access.py validate_registration_invitation.
+crucible/beta_access.py validate_registration_invitation;
+crucible/mail_delivery.py send_verification.

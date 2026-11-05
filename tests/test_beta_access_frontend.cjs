@@ -59,23 +59,25 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
         return {masked_recipient: 'a***@example.org', expires_at: 2000000000};
       }
       if (url.pathname === '/api/access/invitations/redeem') {
-        assert.deepEqual(body, {token: 'invitation_token', code: '123456'});
+        assert.deepEqual(body, {token: 'invitation_token', code: '12345678'});
         status = 'active'; return {ok: true};
       }
     }});
-    assert.equal(app.$('#access-register').hidden, false);
+    assert.equal(app.$('#auth-dialog').open, true);
     app.$('#access-register').click();
     app.$('#auth-handle').value = 'alice'; app.$('#auth-password').value = 'a long test password';
     app.$('#auth-form').dispatchEvent({type: 'submit'}); await flush();
     assert.equal(app.$('#access-verification').hidden, false);
+    assert.equal(app.$('#auth-title').textContent, 'Verify your email');
+    assert.match(app.$('#auth-description').textContent, /code sent to/);
     assert.equal(paths(app).includes('/api/schemes'), false);
-    app.$('#access-send-code').click(); await flush();
-    assert.match(app.$('#access-delivery').textContent, /a\*\*\*@example.org/);
+    await flush();
+    assert.match(app.$('#auth-description').textContent, /a\*\*\*@example.org/);
     assert.equal(app.$('#access-code-form').hidden, false);
-    app.$('#access-code').value = '123456'; app.$('#access-code-form').dispatchEvent({type: 'submit'}); await flush();
-    assert.equal(app.location.hash, '#challenge');
+    app.$('#access-code').value = '12345678'; app.$('#access-code-form').dispatchEvent({type: 'submit'}); await flush();
+    assert.equal(app.location.hash, '#home');
     assert.equal(app.$('#access-workspace').hidden, true);
-    assert.match(app.$('#kem-catalogue').textContent, /Private scheme/);
+    assert.match(app.$('#home-schemes').textContent, /Private scheme/);
     assert.equal(readState(app).invitationToken, null);
     assert.equal(paths(app).filter(path => path === '/api/schemes').length, 1);
   });

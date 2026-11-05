@@ -39,7 +39,7 @@ def test_shell_versions_public_assets_and_reuses_identical_bytes(private_app):
     urls = re.findall(r'(?:src|href|data-katex-script|data-katex-style)="(/[^"?]+\?v=[a-f0-9]{24})"', shell.text)
     assert '/app.js' in {url.split('?')[0] for url in urls}
     assert '/vendor/katex/katex.min.css' in {url.split('?')[0] for url in urls}
-    assert '/assets/crucible-logo.png' in {url.split('?')[0] for url in urls}
+    assert '/assets/crucible-mark.svg' in {url.split('?')[0] for url in urls}
     for url in set(urls):
         response = client.get(url)
         assert response.status_code == 200, url
@@ -167,6 +167,9 @@ def test_ui_types_do_not_depend_on_the_host_mime_database(monkeypatch):
     for url, expected in (
         ('/app.js', 'text/javascript'), ('/styles.css', 'text/css'),
         ('/assets/crucible-logo.png', 'image/png'),
+        ('/assets/crucible-mark.svg', 'image/svg+xml'),
+        ('/assets/crucible-icon-light.svg', 'image/svg+xml'),
+        ('/assets/crucible-icon-dark.svg', 'image/svg+xml'),
         ('/vendor/katex/fonts/KaTeX_Main-Regular.woff2', 'font/woff2'),
         ('/vendor/katex/fonts/KaTeX_Main-Regular.woff', 'font/woff'),
         ('/vendor/katex/fonts/KaTeX_Main-Regular.ttf', 'font/ttf'),

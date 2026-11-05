@@ -6,14 +6,14 @@
     <meta name="theme-color" content="#ebede6">
     <script src="/bootstrap.js" async></script>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Explore cryptographic schemes, test their limits, and build on shared research. Work with AI agents or by hand on Crucible.">
+    <meta name="description" content="crucible — Find new cryptography. Test its limits.">
     <meta name="color-scheme" content="light dark">
-    <link rel="icon" type="image/png" href="/assets/crucible-logo.png">
+    <link id="site-icon" rel="icon" type="image/svg+xml" href="/assets/crucible-icon-light.svg" data-icon-light="/assets/crucible-icon-light.svg" data-icon-dark="/assets/crucible-icon-dark.svg">
     <link rel="preload" href="/vendor/resi/plex-sans-normal-100-700-latin.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/vendor/resi/cardo-normal-700-latin.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/vendor/resi/cardo-normal-400-latin.woff2" as="font" type="font/woff2" crossorigin>
     <title>
-      Crucible — Cryptography 2.0
+      crucible — Find new cryptography. Test its limits.
     </title>
     <script src="/math.js" data-katex-script="/vendor/katex/katex.min.js" data-katex-style="/vendor/katex/katex.min.css" defer></script>
     <script src="/assumptions.js" defer></script>
@@ -26,19 +26,33 @@
   <body data-access-pending="true">
     <svg class="brand-filter-definitions" aria-hidden="true" focusable="false" width="0" height="0" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <!-- The vessel begins at row 130 of the unchanged 192px-high PNG.
-             Composite complementary regions, retaining its antialiased alpha. -->
+        <!-- One exact theme color for the flame, key and vessel. -->
         <filter id="crucible-vessel-light" color-interpolation-filters="sRGB" primitiveUnits="objectBoundingBox" x="0" y="0" width="100%" height="100%">
-          <feFlood x="0" y="0.677083333333" width="1" height="0.322916666667" flood-color="#002154" result="vessel-paint"/>
-          <feComposite in="vessel-paint" in2="SourceAlpha" operator="in" result="vessel"/>
-          <feComposite in="SourceGraphic" in2="vessel-paint" operator="out" result="flame"/>
-          <feMerge><feMergeNode in="flame"/><feMergeNode in="vessel"/></feMerge>
+          <feColorMatrix type="matrix" values="0 0 0 0 .156862745 0 0 0 0 .317647059 0 0 0 0 .247058824 0 0 0 1 0"/>
         </filter>
         <filter id="crucible-vessel-dark" color-interpolation-filters="sRGB" primitiveUnits="objectBoundingBox" x="0" y="0" width="100%" height="100%">
-          <feFlood x="0" y="0.677083333333" width="1" height="0.322916666667" flood-color="#c4e5ff" result="vessel-paint"/>
-          <feComposite in="vessel-paint" in2="SourceAlpha" operator="in" result="vessel"/>
-          <feComposite in="SourceGraphic" in2="vessel-paint" operator="out" result="flame"/>
-          <feMerge><feMergeNode in="flame"/><feMergeNode in="vessel"/></feMerge>
+          <feColorMatrix type="matrix" values="0 0 0 0 .650980392 0 0 0 0 .796078431 0 0 0 0 .717647059 0 0 0 1 0"/>
+        </filter>
+        <!-- A soft core gives way to sparse dots at the flame's edges. -->
+        <radialGradient id="crucible-flame-fade" gradientUnits="userSpaceOnUse" cx="95.5" cy="105" r="72" gradientTransform="matrix(1 0 0 1.55 0 -57.75)">
+          <stop class="brand-flame-pigment" offset="0" stop-opacity=".7"/>
+          <stop class="brand-flame-pigment" offset=".4" stop-opacity=".55"/>
+          <stop class="brand-flame-pigment" offset=".72" stop-opacity=".08"/>
+          <stop class="brand-flame-pigment" offset="1" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="crucible-flame-dot-fade" gradientUnits="userSpaceOnUse" cx="95.5" cy="105" r="72" gradientTransform="matrix(1 0 0 1.55 0 -57.75)">
+          <stop offset="0" stop-color="white" stop-opacity="0"/>
+          <stop offset=".35" stop-color="white" stop-opacity=".08"/>
+          <stop offset=".65" stop-color="white" stop-opacity=".8"/>
+          <stop offset=".85" stop-color="white" stop-opacity=".35"/>
+          <stop offset="1" stop-color="white" stop-opacity="0"/>
+        </radialGradient>
+        <!-- Optional landing hover: vector flame with a temporary warm key glow. -->
+        <filter id="crucible-key-sun" color-interpolation-filters="sRGB" x="-200%" y="-200%" width="500%" height="500%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="sun-near"/>
+          <feGaussianBlur in="SourceGraphic" stdDeviation="16" result="sun-halo"/>
+          <feComponentTransfer in="sun-halo" result="sun-corona"><feFuncA type="linear" slope="3.5"/></feComponentTransfer>
+          <feMerge><feMergeNode in="sun-corona"/><feMergeNode in="sun-near"/><feMergeNode in="SourceGraphic"/></feMerge>
         </filter>
       </defs>
     </svg>
@@ -47,10 +61,25 @@
     </a>
     <header class="site-header">
       <div class="header-inner">
-        <a class="brand" href="#home" aria-label="Crucible home">
-          <img class="brand-mark" src="/assets/crucible-logo.png" width="38" height="54" alt="" decoding="async">
+        <a id="site-brand" class="brand" href="#home" aria-label="Crucible home">
+          <img class="brand-mark" src="/assets/crucible-mark.svg" width="38" height="54" alt="" decoding="async">
+          <svg class="brand-ember-effect" viewBox="0 0 189 192" width="38" height="54" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+            <defs>
+              <pattern id="crucible-flame-dots" width="3.6" height="3.6" patternUnits="userSpaceOnUse">
+                <circle class="brand-flame-dot" cx="1.8" cy="1.8" r=".65"/>
+              </pattern>
+              <mask id="crucible-flame-edge" maskUnits="userSpaceOnUse" x="0" y="-20" width="189" height="150">
+                <rect x="0" y="-20" width="189" height="150" fill="url(#crucible-flame-dot-fade)"/>
+              </mask>
+            </defs>
+            <g class="brand-fire-ghost">
+              <path class="brand-flame-shape brand-flame-core" d="M95.5 130C68 130 43 115 47 95C50 79 62 66 60 45C77 58 82 73 75 85C91 72 78 54 84 36C90 22 96 16 95.5 4C95 16 101 22 107 36C113 54 100 72 116 85C109 73 114 58 131 45C129 66 141 79 144 95C148 115 123 130 95.5 130Z"/>
+              <g class="brand-flame-grain" mask="url(#crucible-flame-edge)"><path class="brand-flame-shape" d="M95.5 130C68 130 43 115 47 95C50 79 62 66 60 45C77 58 82 73 75 85C91 72 78 54 84 36C90 22 96 16 95.5 4C95 16 101 22 107 36C113 54 100 72 116 85C109 73 114 58 131 45C129 66 141 79 144 95C148 115 123 130 95.5 130Z"/></g>
+            </g>
+            <g class="brand-key-sun"><path fill-rule="evenodd" d="M93 52L98 52L98 53L102 54L103 57L104 57L104 59L105 59L105 62L109 63L109 64L111 65L111 68L112 68L112 73L111 73L110 77L108 77L107 79L103 79L103 80L102 80L102 79L99 79L99 80L101 81L101 85L99 86L99 110L106 110L106 121L99 121L99 125L98 125L98 127L96 127L96 128L93 128L93 127L91 126L91 85L89 84L89 82L90 82L92 79L89 79L89 80L84 79L84 78L82 78L82 77L80 76L80 74L79 74L79 67L80 67L80 65L81 65L83 62L85 62L86 59L87 59L87 56L88 56L89 54L93 53ZM94 58L94 59L92 59L92 64L94 65L94 67L93 67L93 68L91 68L91 67L86 67L86 68L85 68L85 72L86 72L87 74L90 74L90 73L92 72L92 70L94 70L94 71L97 71L97 70L98 70L99 73L104 74L104 73L106 72L105 67L100 67L100 68L98 68L97 65L99 64L99 60L98 60L97 58Z" filter="url(#crucible-key-sun)"/></g>
+          </svg>
           <span>
-            Crucible
+            crucible
           </span>
         </a>
         <nav class="primary-nav" aria-label="Main navigation" inert hidden>
@@ -97,12 +126,10 @@
           Try again
         </button>
       </div>
-      <section id="home-workspace" class="home-workspace" aria-labelledby="home-title" tabindex="-1">
+      <section id="home-workspace" class="home-workspace" aria-labelledby="home-title" tabindex="-1" hidden>
         <div class="home-intro">
-          <p class="home-eyebrow">Cryptography 2.0</p>
-          <h1 id="home-title">Find new cryptography.<br>Put it to the test.</h1>
+          <h1 id="home-title" class="scrutiny-tagline"><span class="scrutiny-wording"><span class="scrutiny-letters">Find new cryptography. Test its limits.</span><span class="scrutiny-dots" aria-hidden="true" data-label="Find new cryptography. Test its limits."></span></span></h1>
           <p class="home-lede">Crucible is a place to explore cryptographic schemes, test their limits, and build on each other’s work. Bring an AI agent, or work by hand.</p>
-          <p id="home-welcome" class="home-welcome" hidden></p>
           <div class="home-actions">
             <button id="home-primary" class="button button-primary" type="button" disabled>Sign in to Crucible <span aria-hidden="true">→</span></button>
             <a class="text-button home-secondary" href="#challenge">Explore schemes <span aria-hidden="true">→</span></a>
@@ -151,6 +178,9 @@
           <p class="home-notes-guide">Have an attack, a proposed scheme, or an idea to investigate? <a href="#notebook">Write it up in Notes <span aria-hidden="true">→</span></a></p>
         </section>
       </section>
+      <div id="access-branding" class="access-branding" hidden>
+        <h1 class="scrutiny-tagline"><span class="scrutiny-wording"><span class="scrutiny-letters">Find new cryptography. Test its limits.</span><span class="scrutiny-dots" aria-hidden="true" data-label="Find new cryptography. Test its limits."></span></span></h1>
+      </div>
       <section id="access-workspace" class="access-workspace" aria-labelledby="access-title" aria-busy="true" tabindex="-1">
         <div class="catalogue-heading access-heading">
           <div class="profile-title-row access-title-row"><h1 id="access-title" aria-hidden="true"></h1></div>
@@ -164,8 +194,8 @@
             <div class="loading-preview-row"><span></span><span></span></div>
           </div>
           <div class="pending-page-preview" data-pending-layout="gate" aria-hidden="true">
-            <p>Sign in to continue, or open your invitation link to join.</p>
-            <div class="pending-gate-actions"><span class="button button-primary">Continue with GitHub</span><span class="button button-quiet">Use a password</span></div>
+            <p>An invitation is required to join.</p>
+            <div class="pending-gate-actions"><span class="button button-quiet">Create an account</span><span class="button button-quiet">Sign in</span></div>
           </div>
         <div class="pending-page-preview kem-table-wrap catalogue-preview loading-preview" data-pending-layout="catalogue" aria-hidden="true">
           <table class="kem-table">
@@ -251,21 +281,14 @@
           </div>
         </div>
         <div id="access-auth-actions" class="access-actions" hidden>
-          <button id="access-github" class="button button-primary" type="button" hidden>Continue with GitHub</button>
+          <button id="access-create-account" class="button button-quiet" type="button" hidden>Create an account</button>
+          <button id="access-github" class="button button-primary auth-hover-choice" type="button" hidden><span class="auth-choice-copy"><span id="access-github-label">Continue with GitHub</span><span class="auth-choice-arrow" aria-hidden="true">→</span></span></button>
           <button id="access-sign-in" class="button button-primary" type="button">Sign in</button>
-          <button id="access-register" class="button button-quiet" type="button" hidden>Create account</button>
+          <button id="access-register" class="button button-quiet" type="button" hidden>Create account with a password</button>
         </div>
-        <button id="access-existing-account" class="text-button auth-back" type="button" hidden>Already joined? Sign in</button>
-        <div id="access-verification" hidden>
-          <p id="access-account"></p>
-          <button id="access-send-code" class="button button-primary" type="button">Email a verification code</button>
-          <form id="access-code-form" hidden>
-            <label for="access-code">Code from your invitation email</label>
-            <input id="access-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12" required>
-            <button id="access-redeem" class="button button-primary" type="submit">Join Crucible</button>
-          </form>
-          <p id="access-delivery" class="field-hint" role="status"></p>
-        </div>
+        <button id="access-existing-account" class="text-button auth-existing-account" type="button" hidden>Already joined? Sign in</button>
+        <button id="access-resume" class="button button-primary" type="button" hidden>Continue joining <span aria-hidden="true">→</span></button>
+        <button id="access-pending-signout" class="text-button auth-back" type="button" hidden>Sign out</button>
         <button id="access-continue" class="button button-primary" type="button" hidden>Continue to Crucible</button>
         <p id="access-error" class="form-error" role="alert" hidden></p>
       </section>
@@ -380,7 +403,7 @@
               <div class="profile-account-body">
                 <div class="account-sign-in-row">
                   <div><strong>GitHub</strong><p id="account-github-status" class="field-hint"></p></div>
-                  <button id="account-link-github" class="button button-quiet" type="button">Link GitHub</button>
+                  <button id="account-link-github" class="button button-primary" type="button">Link GitHub</button>
                 </div>
                 <p id="account-sign-in-error" class="form-error" role="alert" hidden></p>
               </div>
@@ -967,8 +990,8 @@
         <section class="about-section about-story" aria-labelledby="about-mission-title">
           <h2 id="about-mission-title">Why Crucible</h2>
           <div class="about-prose">
-            <p>Artificial intelligence is changing the scientific landscape at an ever-accelerating pace, especially in math and computer science. AI-driven breakthroughs pose a particular risk to the future of security: never in history has it been easier to discover unexpected attacks on the cryptographic schemes underpinning our digital infrastructure. At the same time, AI also has the potential to be a force for good in cryptography, allowing researchers to accelerate the process of conceiving, proposing, and red-teaming new encryption schemes with AI.</p>
-            <p>The mission of Crucible is to build a future in which AI is beneficial, rather than detrimental, to cryptography. Our platform provides a systematic way in which new cryptographic schemes can be proposed and stress-tested in collaboration with each other and with AI. In doing so, we aim to strengthen public trust in well-scrutinized cryptographic constructions and accelerate the process by which theoretical research produces fundamentally new cryptographic schemes ready for NIST standardization. To that end, our core principles are as follows.</p>
+            <p>Artificial intelligence is rapidly changing research, especially in mathematics and computer science. AI-driven breakthroughs could uncover unexpected weaknesses in the cryptographic schemes that underpin our digital infrastructure. The same capabilities could also help strengthen cryptography, accelerating the process of conceiving, proposing, and stress-testing new encryption schemes.</p>
+            <p>Crucible’s mission is to make AI a force for stronger cryptography. Our platform gives researchers a systematic way to propose and stress-test new schemes, working with one another and with AI. Through sustained scrutiny, we aim to strengthen trust in promising constructions and help fundamentally new ideas mature into candidates for independent evaluation and potential NIST standardization.</p>
           </div>
         </section>
 
@@ -978,34 +1001,35 @@
             <section aria-labelledby="about-safety-title">
               <span class="about-principle-number" aria-hidden="true">01</span>
               <h3 id="about-safety-title">Safety</h3>
-              <p>Our purpose is to strengthen security and privacy, not to erode it. We do not develop attacks on cryptography which is presently deployed.</p>
+              <p>Our purpose is to strengthen security and privacy. We study cryptographic constructions through controlled research challenges, without targeting real systems or other people’s data.</p>
             </section>
             <section aria-labelledby="about-accountability-title">
               <span class="about-principle-number" aria-hidden="true">02</span>
               <h3 id="about-accountability-title">Public accountability</h3>
-              <p>All proposals and verified attacks are public, alongside the code, AI transcripts, and human notes used to devise them.</p>
+              <p>Our goal is to make proposals and verified attacks publicly inspectable, together with the supporting code, AI transcripts, and human notes that explain how results were obtained.</p>
             </section>
             <section aria-labelledby="about-understanding-title">
               <span class="about-principle-number" aria-hidden="true">03</span>
               <h3 id="about-understanding-title">Human-centric</h3>
-              <p>AI-driven research does not replace human comprehensibility. We make every effort to make current progress and the most important techniques accessible for human understanding.</p>
+              <p>AI-assisted research should remain understandable to people. We work to explain progress, assumptions, and key techniques clearly, so researchers can assess results and build on them.</p>
             </section>
           </div>
+          <p class="about-beta-note">During the private beta, published research is shared with approved participants. Drafts remain private.</p>
         </section>
 
         <section class="about-section about-community" aria-labelledby="about-community-title">
           <h2 id="about-community-title">Built together</h2>
           <div class="about-prose">
-            <p>Crucible is managed by a group of cryptography researchers in partnership with <a href="https://resi.org/" target="_blank" rel="noopener noreferrer">The Institute for Responsible Superintelligence (RESI)</a>.</p>
-            <p>We have been inspired by similar recent efforts across research, including <a href="https://hexagonmath.org/" target="_blank" rel="noopener noreferrer">Hexagon</a>, <a href="https://largemath.org/" target="_blank" rel="noopener noreferrer">Large Math Initiative</a>, and <a href="https://arena.ai/" target="_blank" rel="noopener noreferrer">Arena</a>.</p>
+            <p>Crucible is run by cryptography researchers in partnership with <a href="https://resi.org/" target="_blank" rel="noopener noreferrer">The Institute for Responsible Superintelligence (RESI)</a>.</p>
+            <p>We draw inspiration from recent efforts across research, including <a href="https://hexagonmath.org/" target="_blank" rel="noopener noreferrer">Hexagon</a>, <a href="https://largemath.org/" target="_blank" rel="noopener noreferrer">Large Math Initiative</a>, and <a href="https://arena.ai/" target="_blank" rel="noopener noreferrer">Arena</a>.</p>
           </div>
         </section>
       </section>
       <section id="route-loading" aria-label="Loading page" tabindex="-1" hidden></section>
       <footer class="site-footer">
         <a class="brand footer-brand" href="#home" aria-label="Crucible home">
-          <img class="brand-mark" src="/assets/crucible-logo.png" width="30" height="42" alt="" decoding="async" fetchpriority="low" loading="lazy">
-          <span>Crucible</span>
+          <img class="brand-mark" src="/assets/crucible-mark.svg" width="30" height="42" alt="" decoding="async" fetchpriority="low" loading="lazy">
+          <span>crucible</span>
         </a>
         <a class="resi-footer-brand" href="https://resi.org/" aria-label="RESI — The Institute for Responsible Superintelligence" target="_blank" rel="noopener noreferrer">
           <img src="/assets/resi-logo.png" width="43" height="34" alt="" loading="lazy" decoding="async">
@@ -1023,26 +1047,25 @@
     </button>
     <dialog id="auth-dialog" aria-labelledby="auth-title">
       <div class="dialog-top">
-        <p class="eyebrow">
-          Your challenge workspace
-        </p>
         <button class="icon-button" type="button" data-close aria-label="Close sign-in dialog">
           ×
         </button>
       </div>
+      <button id="auth-methods-back" class="text-button auth-methods-back" type="button" hidden>← Other ways to sign in</button>
       <h2 id="auth-title">
-        Welcome back.
+        Welcome back
       </h2>
-      <p class="dialog-description" id="auth-description">
+      <p class="dialog-description" id="auth-description" hidden>
         Sign in to receive your instance for the current round.
       </p>
       <div id="auth-sign-in-methods">
-        <button id="auth-github" class="button button-primary full-width github-sign-in" type="button" hidden>Continue with GitHub</button>
+        <p id="auth-invitation-notice" class="auth-invitation-notice" role="status" hidden></p>
+        <button id="auth-github" class="button button-primary full-width auth-method github-sign-in auth-hover-choice" type="button" hidden><span class="auth-choice-copy"><span id="auth-github-label">Continue with GitHub</span><span class="auth-choice-arrow" aria-hidden="true">→</span></span></button>
         <p id="auth-github-error" class="form-error" role="alert" hidden></p>
-        <button id="auth-existing-account" class="text-button auth-back" type="button" hidden>Already joined? Sign in</button>
+        <button id="auth-github-password" class="button button-quiet full-width" type="button" hidden>Sign in with a Crucible password</button>
         <details id="auth-password-options" class="auth-password-options sole-method" open>
-          <summary>Use a password</summary>
-          <div class="auth-switch" role="group" aria-label="Account action">
+          <summary id="auth-password-summary" class="auth-password-summary auth-hover-choice"><span class="auth-choice-copy"><span class="auth-choice-label">Continue with password</span><span class="auth-choice-arrow" aria-hidden="true">→</span></span></summary>
+          <div id="auth-mode-switch" class="auth-switch" role="group" aria-label="Account action">
             <button id="login-mode" type="button" class="selected" aria-pressed="true">
               Sign in
             </button>
@@ -1050,22 +1073,24 @@
               Create account
             </button>
           </div>
-          <form id="auth-form">
+          <form id="auth-form" novalidate>
             <div class="form-field">
-              <label for="auth-handle">
-                Public handle
+              <label id="auth-handle-label" for="auth-handle">
+                Crucible username
               </label>
-              <input id="auth-handle" name="handle" required autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" title="Use 3–32 letters, numbers, or underscores." autocapitalize="none" spellcheck="false">
-              <p class="field-hint">
-                Use 3–32 letters, numbers, or underscores. Your handle appears beside public recoveries.
+              <input id="auth-handle" name="handle" required autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" autocapitalize="none" spellcheck="false" placeholder="Your Crucible username">
+              <p id="auth-handle-error" class="form-error" role="alert" hidden></p>
+              <p id="auth-handle-hint" class="field-hint" hidden>
+                Use 3–32 letters, numbers or underscores. No spaces.
               </p>
             </div>
             <div class="form-field">
-              <label for="auth-password">
+              <label id="auth-password-label" for="auth-password">
                 Password
               </label>
-              <input id="auth-password" name="password" type="password" required autocomplete="current-password" minlength="12" maxlength="128">
-              <p class="field-hint">
+              <div class="auth-password-row"><input id="auth-password" name="password" type="password" required autocomplete="current-password" minlength="12" maxlength="128"><button class="text-button auth-password-show" type="button" data-show-password="auth-password" aria-label="Show password">Show</button></div>
+              <p id="auth-password-error" class="form-error" role="alert" hidden></p>
+              <p id="auth-password-hint" class="field-hint" hidden>
                 Use 12–128 characters.
               </p>
             </div>
@@ -1080,7 +1105,35 @@
           </form>
           <button id="auth-forgot-password" class="text-button auth-forgot-password" type="button" hidden>Forgot your password?</button>
         </details>
+        <button id="auth-create-account" class="text-button auth-new-account" type="button" hidden>New here? Create an account</button>
+        <button id="auth-existing-account" class="text-button auth-existing-account" type="button" hidden>Already have an account? Sign in</button>
       </div>
+      <div id="auth-verification-panel" hidden>
+        <div id="access-verification" hidden>
+          <p id="access-account" hidden></p>
+          <form id="access-code-form" novalidate>
+            <div class="form-field"><label for="access-code">Verification code</label><input id="access-code" class="auth-verification-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="00000000" aria-describedby="access-code-error" required><p id="access-code-error" class="form-error" role="alert" hidden></p></div>
+            <button id="access-redeem" class="button button-primary full-width" type="submit">Verify and continue <span aria-hidden="true">→</span></button>
+          </form>
+          <p class="auth-resend-line">Didn't get it? <button id="access-send-code" class="text-button" type="button">Resend code</button></p>
+          <p id="access-delivery" class="field-hint" role="status" hidden></p>
+          <p id="auth-verify-error" class="form-error" role="alert" hidden></p>
+        </div>
+      </div>
+      <div id="auth-joined-panel" class="auth-single-action" hidden><button id="auth-enter" class="button button-primary full-width" type="button">Enter Crucible <span aria-hidden="true">→</span></button></div>
+      <div id="auth-invitation-issue-panel" class="auth-single-action" hidden>
+        <button id="auth-another-invitation" class="button button-primary full-width" type="button">Use another invitation <span aria-hidden="true">→</span></button>
+        <button id="auth-issue-signin" class="text-button auth-back" type="button">Already have an account? Sign in</button>
+      </div>
+      <form id="auth-invitation-form" hidden>
+        <div class="form-field">
+          <label for="auth-invitation-link">Invitation link</label>
+          <input id="auth-invitation-link" name="invitation" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" required maxlength="2048" placeholder="Paste your invitation link">
+        </div>
+        <p id="auth-invitation-error" class="form-error" role="alert" hidden></p>
+        <button class="button button-primary full-width" type="submit">Continue</button>
+        <button id="auth-invitation-sign-in" class="text-button auth-back" type="button">Already have an account? Sign in</button>
+      </form>
       <form id="github-link-form" hidden>
         <p id="github-link-context" class="field-hint"></p>
         <div class="form-field">
@@ -1090,12 +1143,12 @@
         <p id="github-link-error" class="form-error" role="alert" hidden></p>
         <button id="github-link-submit" class="button button-primary full-width" type="submit">Continue to GitHub</button>
       </form>
-      <form id="github-handle-form" hidden>
+      <form id="github-handle-form" novalidate hidden>
         <p id="github-handle-context" class="field-hint"></p>
         <div class="form-field">
-          <label for="github-handle">Public handle</label>
-          <input id="github-handle" name="handle" required autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" title="Use 3–32 letters, numbers, or underscores." autocapitalize="none" spellcheck="false">
-          <p class="field-hint">Your name beside results and research notes. Use 3–32 letters, numbers, or underscores.</p>
+          <label for="github-handle">Crucible username</label>
+          <input id="github-handle" name="handle" required autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" title="Use 3–32 letters, numbers or underscores. No spaces." autocapitalize="none" spellcheck="false" placeholder="3–32 letters, numbers or _">
+          <p class="field-hint">Use 3–32 letters, numbers or underscores. No spaces.</p>
         </div>
         <p id="github-handle-error" class="form-error" role="alert" hidden></p>
         <button id="github-handle-submit" class="button button-primary full-width" type="submit">Create account</button>
@@ -1103,26 +1156,25 @@
       </form>
       <form id="password-reset-request-form" hidden>
         <div class="form-field">
-          <label for="password-reset-handle">Public handle</label>
+          <label for="password-reset-handle">Crucible username</label>
           <input id="password-reset-handle" name="handle" required autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" autocapitalize="none" spellcheck="false">
         </div>
         <p id="password-reset-request-error" class="form-error" role="alert" hidden></p>
-        <p id="password-reset-request-status" class="field-hint" role="status" hidden></p>
         <button id="password-reset-request-submit" class="button button-primary full-width" type="submit">Send reset link</button>
-        <p class="field-hint">If you have no verified email address, contact the person who invited you.</p>
         <button class="text-button auth-back" type="button" id="password-reset-request-back">Back to sign in</button>
       </form>
-      <form id="password-reset-form" hidden>
+      <div id="auth-reset-sent-panel" class="auth-single-action" hidden><p id="password-reset-request-status" class="dialog-description" role="status"></p><button id="auth-reset-sent-signin" class="button button-primary full-width" type="button">Back to sign in <span aria-hidden="true">→</span></button></div>
+      <div id="auth-reset-complete-panel" class="auth-single-action" hidden><button id="auth-reset-complete-signin" class="button button-primary full-width" type="button">Sign in <span aria-hidden="true">→</span></button></div>
+      <div id="auth-reset-invalid-panel" class="auth-single-action" hidden><button id="auth-reset-request-again" class="button button-primary full-width" type="button">Request a new link <span aria-hidden="true">→</span></button><button id="auth-reset-invalid-signin" class="text-button auth-back" type="button">Back to sign in</button></div>
+      <form id="password-reset-form" novalidate hidden>
         <div class="form-field">
           <label for="password-reset-new">New password</label>
-          <input id="password-reset-new" name="password" type="password" required autocomplete="new-password" minlength="12" maxlength="128">
-          <p class="field-hint">Use 12–128 characters.</p>
+          <div class="auth-password-row"><input id="password-reset-new" name="password" type="password" required autocomplete="new-password" minlength="12" maxlength="128" placeholder="12–128 characters"><button class="text-button auth-password-show" type="button" data-show-password="password-reset-new" aria-label="Show new password">Show</button></div>
         </div>
         <div class="form-field">
           <label for="password-reset-confirm">Confirm new password</label>
-          <input id="password-reset-confirm" name="password_confirmation" type="password" required autocomplete="new-password" minlength="12" maxlength="128">
+          <div class="auth-password-row"><input id="password-reset-confirm" name="password_confirmation" type="password" required autocomplete="new-password" minlength="12" maxlength="128" placeholder="Re-enter your new password"><button class="text-button auth-password-show" type="button" data-show-password="password-reset-confirm" aria-label="Show confirm new password">Show</button></div>
         </div>
-        <p class="field-hint">Resetting your password signs out your browsers and connected agents.</p>
         <p id="password-reset-error" class="form-error" role="alert" hidden></p>
         <button id="password-reset-submit" class="button button-primary full-width" type="submit">Reset password</button>
         <button class="text-button auth-back" type="button" id="password-reset-back">Back to sign in</button>

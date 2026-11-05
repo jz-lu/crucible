@@ -1,7 +1,11 @@
 const {test: base, expect} = require('playwright/test');
+const fixtureOrigins = new WeakMap();
 
 const test = base.extend({
-  page: async ({page}, use) => {
+  page: async ({page, baseURL}, use) => {
+    const fixtureOrigin = new URL(baseURL).origin;
+    if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(fixtureOrigin)) throw new Error('Browser fixtures require an owned loopback origin.');
+    fixtureOrigins.set(page, fixtureOrigin);
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     // Tests only talk to their owned loopback app. Unexpected third-party
@@ -9,7 +13,7 @@ const test = base.extend({
     const external = [];
     await page.context().route('**/*', route => {
       const url = new URL(route.request().url());
-      if (url.origin === 'http://127.0.0.1:8029') return route.fallback();
+      if (url.origin === fixtureOrigin) return route.fallback();
       external.push(url.origin); return route.abort();
     });
     await use(page);
@@ -21,7 +25,10 @@ const test = base.extend({
 async function signIn(page, actor = 'alice', {navigate = true} = {}) {
   if (navigate) await page.goto('/#notebook');
   await page.locator('#access-sign-in').click();
-  await page.locator('#auth-form').getByLabel('Public handle', {exact: true}).fill('browser_' + actor);
+  if (await page.locator('#auth-password-summary').isVisible()) await page.locator('#auth-password-summary').click();
+  await expect(page.locator('#auth-form')).toBeVisible();
+  await expect(page.locator('#auth-github')).toBeHidden();
+  await page.locator('#auth-form').getByLabel('Crucible username', {exact: true}).fill('browser_' + actor);
   await page.locator('#auth-form').getByLabel('Password', {exact: true}).fill('Synthetic browser fixture password');
   await page.locator('#auth-submit').click();
   await expect(page.locator('#account-handle')).toHaveText('browser_' + actor);
@@ -51,9 +58,10 @@ function gate() {
 // Hold a real response after the server has authorized/read it. This creates
 // a deterministic race without fake payloads or time-based speed assertions.
 async function holdResponse(page, predicate) {
+  const fixtureOrigin = fixtureOrigins.get(page);
   const arrived = gate(), release = gate(), delivered = gate();
   let held = false;
-  const matcher = url => url.origin === 'http://127.0.0.1:8029' && predicate(url);
+  const matcher = url => url.origin === fixtureOrigin && predicate(url);
   await page.route(matcher, async route => {
     if (held) return route.fallback();
     held = true;
