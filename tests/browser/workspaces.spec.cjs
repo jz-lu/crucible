@@ -16,13 +16,12 @@ for (const width of [1440, 390]) test(`an unlinked GitHub callback offers a work
   const writes = [];
   page.on('request', request => {if (request.method() === 'POST') writes.push(new URL(request.url()).pathname);});
   await page.goto('/#auth?github=invite-required');
-  await expect(page.locator('#auth-github-error')).toContainText('is not linked');
+  await expect(page.locator('#auth-error')).toContainText('is not linked');
   await expect(page.locator('#auth-form')).toBeVisible();
-  await expect(page.locator('#auth-github-password')).toBeVisible();
+  await expect(page.locator('#auth-github')).toBeHidden();
+  await expect(page.locator('#auth-methods-back')).toBeVisible();
   await page.screenshot({path: testInfo.outputPath('unlinked-github.png'), fullPage: true});
   expect(writes).toEqual([]);
-  await page.locator('#auth-github-password').focus();
-  await page.keyboard.press('Enter');
   await expect(page.locator('#auth-form').getByLabel('Crucible username', {exact: true})).toBeFocused();
   await expect(page.locator('#auth-handle-hint')).toBeHidden();
   await expect(page.locator('#auth-password-hint')).toBeHidden();
@@ -33,7 +32,7 @@ for (const width of [1440, 390]) test(`an unlinked GitHub callback offers a work
   await page.locator('#auth-form').getByLabel('Crucible username', {exact: true}).fill('browser_alice');
   await page.locator('#auth-password').fill('Incorrect synthetic password');
   await page.locator('#auth-submit').click();
-  await expect(page.locator('#auth-error')).toHaveText('Handle or password is incorrect.');
+  await expect(page.locator('#auth-error')).toHaveText('Username or password is incorrect.');
   await expect(page.locator('#auth-github-error')).toBeHidden();
   await page.locator('#auth-password').fill('Synthetic browser fixture password');
   await page.locator('#auth-submit').click();
@@ -177,7 +176,8 @@ test('initial notebook access has its inert public frame without revealing priva
   } finally {pending.release(); await pending.delivered; await pending.remove();}
   await expect(page.locator('#access-loading-preview')).toBeHidden();
   await expect(page.locator('#access-auth-actions')).toBeVisible();
-  expect((await page.locator('#access-workspace').boundingBox()).width).toBeLessThanOrEqual(520);
+  await expect(page.locator('html')).toHaveAttribute('data-beta-landing', 'centered');
+  await expect(page.locator('#access-workspace')).toHaveCSS('border-top-width', '0px');
 });
 
 test('anonymous and revoked readers cannot fetch private assets or notebook data', async ({page, context}) => {

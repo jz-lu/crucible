@@ -11,7 +11,8 @@ async function expectTheme(page, theme) {
   await expect(page.locator('#theme-toggle')).toHaveAttribute('aria-label', `Switch to ${opposite(theme)} theme`);
   await expect(page.locator('#theme-toggle-label')).toHaveText(`${opposite(theme) === 'dark' ? 'Dark' : 'Light'} mode`);
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', palette[theme].meta);
-  await expect(page.locator('#site-icon')).toHaveAttribute('href', new RegExp('/assets/crucible-icon-' + theme + '\\.svg\\?v=[a-f0-9]{24}$'));
+  const browserTheme = await page.evaluate(() => matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  await expect(page.locator('#site-icon')).toHaveAttribute('href', new RegExp('/assets/crucible-icon-' + browserTheme + '\\.svg\\?v=[a-f0-9]{24}$'));
   expect(await page.locator('body').evaluate(element => ({
     background: getComputedStyle(element).backgroundColor,
     color: getComputedStyle(element).color,
