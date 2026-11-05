@@ -1237,7 +1237,15 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             record = session.scalar(select(NotebookImport).where(NotebookImport.id == str(import_id), NotebookImport.author_id == user.id))
             if record is None:
                 raise HTTPException(404, "Import not found.")
-            return {"import_id": record.id, "created_at": record.created_at, "workspace": record.workspace, "id_map": record.id_map}
+            # The archive retains its original request commitment, but an
+            # explicitly erased draft no longer has recoverable source bytes.
+            # Say so instead of presenting the redacted workspace as original.
+            removed = sorted(session.scalars(select(NotebookNote.id).where(
+                NotebookNote.author_id == user.id, NotebookNote.id.in_(record.id_map.values()),
+                NotebookNote.latest_revision == 0, NotebookNote.id.in_(notebook_trash.deleted_ids()))))
+            return {"import_id": record.id, "created_at": record.created_at, "workspace": record.workspace,
+                    "id_map": record.id_map, "redacted": bool(removed), "deleted_note_ids": removed,
+                    "original_request_sha256": record.request_sha256}
 
     @app.get("/api/notebook/publication-policy")
     def publication_policy(request: Request):

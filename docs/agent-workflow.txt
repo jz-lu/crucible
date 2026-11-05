@@ -88,6 +88,8 @@ still reads the published/curated corpus and notes rate retains its existing API
 delete --permanent requires explicit authorization: it permanently erases an
 unsubmitted private draft's saved revisions and its copies/bindings in that
 account's stored import archives. The website confirms this before sending.
+Original-import responses mark redacted archives and list deleted note IDs, while
+preserving the original request hash as a commitment, not a hash of returned bytes.
 Content-free identity, number reservation and retry receipts remain, so note
 numbers never change targets and old retries/imports cannot resurrect a draft.
 The receipt must say deleted:true and permanent:true. This does not erase other

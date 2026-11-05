@@ -143,6 +143,8 @@ def test_import_archive_target_and_bindings_are_erased_without_harming_other_not
     assert delete(owner, note).status_code == 200
     archived = owner.client.get('/api/notebook/imports/' + imported.json()['import_id']).json()
     assert 'ERASE_THIS' not in str(archived)
+    assert archived['redacted'] is True and archived['deleted_note_ids'] == [pin]
+    assert archived['original_request_sha256'] == notebook._hash(value)
     assert [item['id'] for item in archived['workspace']['notes']] == ['keep-note']
     assert [item['id'] for item in archived['workspace']['views'][0]['bindings']] == ['keep']
     assert import_workspace(owner, value).status_code == 410
@@ -209,6 +211,7 @@ def test_import_redaction_uses_saved_identity_not_reused_source_name(system):
     assert delete(owner, note).status_code == 200
     archived = owner.client.get('/api/notebook/imports/' + identifier).json()
     assert archived['workspace'] == workspace('source-name')
+    assert archived['redacted'] is False and archived['deleted_note_ids'] == []
     assert owner.client.get('/api/notebook/notes/' + unrelated['id']).status_code == 200
 
 
