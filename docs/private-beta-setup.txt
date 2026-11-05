@@ -100,12 +100,22 @@ Create a recipient-bound invitation using the same database/configuration:
   .venv/bin/python -m scripts.beta_access invite participant@example.invalid
 
 The CLI returns its secret invitation link once; it does not email that link.
-Open it, sign in or create the invited account, and request mailbox verification.
+Open the invitation, sign in or create the invited account with GitHub or a
+Crucible username/password. New accounts automatically receive their mailbox
+verification code. Existing members can sign in directly at /#auth.
 Local delivery puts the verification message in .local/mail-outbox as a private
 .eml file. Read its code locally and complete the invitation page. This exercises
 the flow without claiming delivery to a real mailbox. Invitations expire after
 seven days; verification codes expire after ten minutes, with resend/guess limits.
 Do not commit or share the outbox, invite links, codes or database contents.
+
+Existing active members can sign in through old links even after use or expiry;
+their accounts and membership do not expire with the invitation. Unused links
+keep their original recipient binding and deadline. Creating an account does
+not consume the invitation: successful mailbox verification does. An account
+awaiting verification can sign back in through its invitation to resume; after
+expiry it needs a fresh invitation. See returning-invitation-signin.txt for the
+complete returning-member and unfinished-account behavior.
 
 List or withdraw invitations through the trusted operator CLI:
 

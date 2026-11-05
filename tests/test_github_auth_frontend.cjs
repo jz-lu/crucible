@@ -31,18 +31,37 @@ async function appWith({hash = '#challenge', signedIn = null, status, config = a
     assert.ok(app.$('#auth-password-options').classList.contains('sole-method'));
     assert.equal(app.$('#auth-github').hidden, true);
     assert.equal(app.$('#auth-forgot-password').hidden, true);
+    assert.equal(app.$('#auth-handle-label').textContent, 'Crucible username');
+    assert.equal(app.$('#auth-handle-hint').hidden, true);
+    assert.equal(app.$('#auth-password-hint').hidden, true);
   });
-  await test('GitHub is primary while password fallback stays one disclosure away', async () => {
+  await test('invited participants start with methods and password replaces GitHub', async () => {
     const app = await appWith({hash: '#join?token=invitation_token'});
-    assert.equal(app.$('#access-github').hidden, false);
-    assert.equal(app.$('#access-register').hidden, true);
-    assert.equal(app.$('#access-sign-in').textContent, 'Use a password');
-    app.$('#auth-button').click();
+    assert.equal(app.$('#auth-dialog').open, true);
+    assert.equal(state(app).authMode, 'register');
     assert.equal(app.$('#auth-github').hidden, false);
     assert.equal(app.$('#auth-password-options').open, false);
-    app.$('#auth-dialog').close(); app.$('#access-sign-in').click();
+    app.$('#auth-password-options').open = true;app.$('#auth-password-options').dispatchEvent({type:'toggle'});
+    assert.equal(app.$('#auth-github').hidden, true);
+    assert.equal(app.$('#auth-methods-back').hidden, false);
+    assert.equal(app.$('#auth-password').getAttribute('placeholder'), '12–128 characters');
+    assert.equal(app.$('#auth-handle-label').textContent, 'Crucible username');
+    app.$('#auth-methods-back').click();
+    assert.equal(app.$('#auth-github').hidden, false);
+    assert.equal(app.$('#auth-password-options').open, false);
+    app.$('#auth-existing-account').click();
+    assert.equal(state(app).authMode, 'login');assert.equal(state(app).invitationToken,null);
+    assert.equal(app.requests.some(request => request.url.pathname === '/api/auth/register'), false);
+  });
+  await test('password-only signup has clear field rules and still requires an invitation', async () => {
+    const app = await appWith({hash: '#join?token=invitation_token', config: {github_enabled:false}});
     assert.equal(app.$('#auth-password-options').open, true);
-    assert.equal(app.$('#register-mode').hidden, false);
+    assert.equal(app.$('#auth-handle').getAttribute('placeholder'), '3–32 letters, numbers or _');
+    assert.equal(app.$('#auth-password').getAttribute('placeholder'), '12–128 characters');
+    app.$('#auth-existing-account').click();
+    assert.equal(state(app).authMode,'login');
+    const hosted=await appWith();hosted.$('#register-mode').click();
+    assert.equal(state(hosted).authMode,'login');
   });
   await test('GitHub start carries invitation and safe deep link server-side with CSRF', async () => {
     const app = await appWith({hash: '#join?token=invitation_token', responder: (url, options) => {
@@ -67,8 +86,8 @@ async function appWith({hash = '#challenge', signedIn = null, status, config = a
     }});
     state(app).returnRoute = '#notebook'; state(app).invitationDelivery = {masked_recipient: 'fixture'};
     state(app).authMode = 'register'; app.$('#access-code').value = '12345678'; app.$('#auth-password').value = 'Discarded synthetic secret';
-    assert.equal(app.$('#access-existing-account').hidden, false);
-    const before = app.requests.length; app.$('#access-existing-account').click(); await flush();
+    assert.equal(app.$('#auth-existing-account').hidden, false);
+    const before = app.requests.length; app.$('#auth-existing-account').click(); await flush();
     assert.equal(app.requests.length, before); assert.equal(state(app).invitationToken, null);
     assert.equal(state(app).invitationDelivery, null); assert.equal(app.$('#access-code').value, '');
     assert.equal(app.$('#auth-password').value, ''); assert.equal(app.location.hash, '#notebook');
@@ -78,7 +97,7 @@ async function appWith({hash = '#challenge', signedIn = null, status, config = a
     const destinations = []; app.location.assign = value => destinations.push(value);
     app.$('#auth-github').click(); await flush();
     assert.deepEqual(destinations, ['https://github.com/login/oauth/authorize?state=normal-signin']);
-    assert.ok(!paths(app).some(path => /invitations|register|github\/complete/.test(path)));
+    assert.ok(!paths(app).some(path => /auth\/(?:register|github\/complete)/.test(path)));
   });
   for (const inDialog of [false, true]) await test('unavailable invitation errors retain an explicit returning-account escape ' + (inDialog ? 'in dialog' : 'at access gate'), async () => {
     const app = await appWith({hash: '#join?token=unavailable_invitation_token'});
@@ -86,24 +105,25 @@ async function appWith({hash = '#challenge', signedIn = null, status, config = a
     app.sandbox.fetch = async (url, options) => String(url).includes('/api/auth/github/start') ?
       {ok: false, status: 403, json: async () => ({detail: 'This invitation is invalid or unavailable.'})} : fetch(url, options);
     if (inDialog) app.$('#auth-button').click();
-    app.$(inDialog ? '#auth-github' : '#access-github').click(); await flush();
-    assert.match(app.$(inDialog ? '#auth-github-error' : '#access-error').textContent, /invalid or unavailable/);
-    const escape = app.$(inDialog ? '#auth-existing-account' : '#access-existing-account');
+    app.$('#auth-github').click(); await flush();
+    assert.match(app.$('#auth-github-error').textContent, /invalid or unavailable/);
+    const escape = app.$('#auth-existing-account');
     assert.equal(escape.hidden, false); assert.equal(escape.disabled, false);
     escape.click(); await flush();
-    assert.equal(state(app).invitationToken, null); assert.equal(app.location.hash, '#challenge');
+    assert.equal(state(app).invitationToken, null); assert.equal(app.location.hash, '#home');
     assert.equal(app.$('#auth-github-error').hidden, true); assert.equal(app.$('#access-error').hidden, true);
     assert.equal(app.$('#auth-dialog').open, true); assert.equal(state(app).authMode, 'login');
-    app.$('#auth-dialog').close(); assert.equal(app.document.activeElement, app.$('#access-github'));
+    app.$('#auth-dialog').close(); assert.equal(app.document.activeElement, app.$('#access-sign-in'));
   });
   await test('returning-account controls are absent outside invitation flow and cannot interrupt an active provider start', async () => {
     const normal = await appWith(); assert.equal(normal.$('#access-existing-account').hidden, true);
     const signed = await appWith({hash: '#join?token=old_invitation_token', signedIn: user});
-    assert.equal(signed.$('#access-existing-account').hidden, true); assert.equal(signed.$('#access-continue').hidden, false);
+    assert.equal(signed.$('#access-existing-account').hidden, true); assert.equal(signed.$('#access-continue').hidden, true);
+    assert.equal(signed.location.hash, '#home'); assert.equal(state(signed).invitationToken, null);
     const gate = deferred(), app = await appWith({hash: '#join?token=active_invitation_token', responder: url => url.pathname === '/api/auth/github/start' ? gate.promise : undefined});
-    app.location.assign = () => {}; app.$('#access-github').click(); await flush();
-    assert.equal(app.$('#access-existing-account').disabled, true);
-    app.$('#access-existing-account').click(); assert.equal(state(app).invitationToken, 'active_invitation_token');
+    app.location.assign = () => {}; app.$('#auth-github').click(); await flush();
+    assert.equal(app.$('#auth-existing-account').disabled, true);
+    app.$('#auth-existing-account').click(); assert.equal(state(app).invitationToken, 'active_invitation_token');
     gate.resolve({authorization_url: 'https://github.com/login/oauth/authorize'}); await flush();
   });
   await test('provider navigation rejects an unexpected authorization host', async () => {
@@ -112,6 +132,80 @@ async function appWith({hash = '#challenge', signedIn = null, status, config = a
     app.$('#access-github').click(); await flush();
     assert.match(app.$('#access-error').textContent, /could not be started/);
     assert.equal(app.$('#access-github').disabled, false);
+  });
+  await test('the neutral sign-in panel highlights GitHub and lets first-time visitors find account creation', async () => {
+    const app = await appWith(); app.$('#access-sign-in').click();
+    assert.equal(app.$('#auth-title').textContent, 'Welcome back');
+    assert.equal(app.$('#auth-description').hidden, true);
+    assert.ok(app.$('#auth-github').classList.contains('button-primary'));
+    assert.equal(app.$('#auth-create-account').hidden, false);
+    app.$('#auth-create-account').click();
+    assert.equal(app.$('#auth-title').textContent, 'Create an account');
+    assert.equal(app.$('#auth-invitation-form').hidden, false);
+    assert.match(app.$('#auth-description').textContent, /invitation-only/);
+    assert.equal(paths(app).includes('/api/auth/register'), false);
+    app.$('#auth-invitation-sign-in').click();
+    assert.equal(app.$('#auth-title').textContent, 'Welcome back');
+    assert.equal(app.$('#auth-github').hidden, false);
+  });
+  await test('provider navigation rejects local demo destinations', async () => {
+    for (const destination of [
+      'http://127.0.0.1:8000/__preview__/github/authorize?state=test',
+      'http://elsewhere.invalid/__preview__/github/authorize',
+      'http://127.0.0.1:8000/unexpected',
+      'http://name:secret@127.0.0.1:8000/__preview__/github/authorize',
+    ]) {
+      const app = await appWith({responder: url => url.pathname === '/api/auth/github/start' ? {authorization_url: destination} : undefined});
+      const destinations = []; app.location.assign = value => destinations.push(value);
+      app.$('#access-sign-in').click(); app.$('#auth-github').click(); await flush();
+      assert.equal(destinations.length, 0);
+      assert.match(app.$('#auth-github-error').textContent, /could not be started/);
+    }
+    const app = await appWith({responder: url => url.pathname === '/api/auth/github/start' ? {authorization_url: 'https://crucible.fail/__preview__/github/authorize'} : undefined});
+    Object.defineProperty(app.location, 'href', {value: 'https://crucible.fail/#challenge'});
+    let navigated = false; app.location.assign = () => {navigated = true;};
+    app.$('#access-sign-in').click(); app.$('#auth-github').click(); await flush();
+    assert.equal(navigated, false);
+  });
+  for (const code of ['invitation_redeemed', 'invitation_expired']) await test(code + ' rejects signup and preserves existing account sign-in', async () => {
+    const app = await appWith({hash:'#join?token=previously_issued_invite',responder:(url,options,envelope)=>url.pathname==='/api/auth/login'?envelope({...session(user),csrf_token:'signed-in'}):undefined});
+    const fetch=app.sandbox.fetch;
+    app.sandbox.fetch=async(url,options)=>String(url).includes('/api/auth/register')?{ok:false,status:403,json:async()=>({detail:{code,message:'Invitation unavailable.'}})}:fetch(url,options);
+    app.$('#auth-handle').value='alice';app.$('#auth-password').value='Existing synthetic password';app.$('#auth-form').dispatchEvent({type:'submit'});await flush();
+    if(code==='invitation_redeemed'){
+      assert.equal(state(app).authMode,'login');assert.equal(app.$('#auth-invitation-notice').hidden,false);
+      assert.equal(app.$('#auth-create-account').hidden,true);assert.equal(app.$('#auth-existing-account').hidden,true);
+    }else{
+      assert.equal(app.$('#auth-title').textContent,'Invitation expired');app.$('#auth-issue-signin').click();await flush();
+    }
+    app.$('#auth-password-options').open=true;app.$('#auth-password-options').dispatchEvent({type:'toggle'});
+    app.$('#auth-handle').value='alice';app.$('#auth-password').value='Existing synthetic password';app.$('#auth-form').dispatchEvent({type:'submit'});await flush();
+    assert.equal(state(app).user.id,user.id);assert.equal(state(app).invitationToken,null);assert.equal(app.location.hash,'#home');
+  });
+  await test('a used-invitation GitHub callback offers sign-in without restoring signup',async()=>{
+    const app=await appWith({hash:'#auth?github=invitation_redeemed',responder:url=>url.pathname==='/api/auth/github/pending'?{pending:false,return_route:'#notebook'}:undefined});
+    assert.equal(app.$('#auth-invitation-notice').hidden,false);assert.match(app.$('#auth-invitation-notice').textContent,/already been used/);
+    assert.equal(app.$('#auth-create-account').hidden,true);assert.equal(app.$('#auth-existing-account').hidden,true);
+    assert.equal(state(app).invitationToken,null);assert.equal(app.location.hash,'#notebook');
+    assert.deepEqual(paths(app),['/api/session','/api/auth/github/pending']);
+  });
+  await test('a late rejection from an old signup cannot invalidate a newly opened invitation', async () => {
+    const gate = deferred();
+    const app = await appWith({hash: '#join?token=old_invitation'});
+    const fetch = app.sandbox.fetch;
+    app.sandbox.fetch = async (url, options) => String(url).includes('/api/auth/register') ? gate.promise : fetch(url, options);
+    app.$('#access-register').click();
+    app.$('#auth-handle').value = 'new_participant'; app.$('#auth-password').value = 'Synthetic new password';
+    app.$('#auth-form').dispatchEvent({type: 'submit'}); await flush();
+    app.location.hash = '#join?token=fresh_invitation';
+    app.window.dispatchEvent({type: 'hashchange'}); await flush();
+    gate.resolve({ok: false, status: 403, json: async () => ({detail: {code: 'invitation_redeemed', message: 'Old invitation used.'}})});
+    await flush();
+    assert.equal(state(app).invitationToken, 'fresh_invitation');
+    assert.equal(state(app).invitationIssue, null);
+    assert.equal(app.$('#auth-invitation-notice').hidden, true);
+    assert.equal(app.$('#auth-title').textContent, 'Create an account');
+    assert.equal(app.$('#auth-github').hidden, false);
   });
   await test('closing dialog cancels a late provider-start navigation', async () => {
     const gate = deferred();
@@ -220,18 +314,28 @@ async function appWith({hash = '#challenge', signedIn = null, status, config = a
     assert.equal(app.$('#github-handle-form').hidden,true);
     assert.equal(state(app).user,null);assert.equal(state(app).authMode,'login');
     assert.equal(state(app).access.allowed,false);
-    const guidance=app.$('#auth-github-error').textContent;
+    const guidance=app.$('#auth-error').textContent;
     assert.match(guidance,/not linked to a Crucible account/);
     assert.match(guidance,/sign in with your password/);
     assert.match(guidance,/profile’s Sign-in settings and choose Link GitHub/);
     assert.match(guidance,/New participants should open their invitation link/);
     assert.deepEqual(paths(app),['/api/session','/api/auth/github/pending']);
     assert.ok(app.requests.every(request=>request.options.method==='GET'));
+    assert.equal(app.$('#auth-github-password').hidden, true);
+    app.$('#auth-password').value = 'Discarded synthetic password';
+    app.$('#auth-methods-back').click();
+    app.$('#auth-password-options').open = true;app.$('#auth-password-options').dispatchEvent({type:'toggle'});await flush();
+    assert.equal(app.document.activeElement, app.$('#auth-handle'));
+    assert.equal(app.$('#auth-password-options').open, true);
+    assert.equal(app.$('#auth-password').value, '');
+    assert.equal(app.$('#auth-github-password').hidden, true);
+    assert.equal(app.location.hash, '#notebook');
+    assert.deepEqual(paths(app),['/api/session','/api/auth/github/pending']);
   });
   await test('password rejection replaces stale GitHub guidance with the actual password error', async () => {
     const app = await appWith({hash:'#auth?github=invite-required', responder:url =>
       url.pathname === '/api/auth/github/pending' ? {pending:false, return_route:'#notebook'} : undefined});
-    assert.equal(app.$('#auth-github-error').hidden,false);
+    assert.equal(app.$('#auth-error').hidden,false);
     const fetch=app.sandbox.fetch, attempts=[];
     app.sandbox.fetch=async(path,options)=>{
       if(path!=='/api/auth/login')return fetch(path,options);
@@ -243,7 +347,7 @@ async function appWith({hash = '#challenge', signedIn = null, status, config = a
     assert.equal(app.$('#auth-github-error').hidden,true);
     assert.equal(app.$('#auth-github-error').textContent,'');
     await flush();
-    assert.equal(app.$('#auth-error').textContent,'Invalid handle or password.');
+    assert.equal(app.$('#auth-error').textContent,'Username or password is incorrect.');
     assert.equal(app.$('#auth-github-error').hidden,true);
     assert.equal(app.$('#auth-dialog').open,true);assert.equal(state(app).user,null);
     assert.deepEqual(attempts,[{path:'/api/auth/login',method:'POST',body:{handle:'alice',password:'incorrect fixture password'}}]);
@@ -293,8 +397,11 @@ async function appWith({hash = '#challenge', signedIn = null, status, config = a
     assert.equal(state(app).user, null);
     assert.equal(state(app).csrf, 'reset-csrf');
     assert.equal(app.$('#password-reset-new').value, '');
+    assert.equal(state(app).authPanel, 'reset-complete');
+    assert.match(app.$('#auth-description').textContent, /new password/);
+    app.$('#auth-reset-complete-signin').click();
     assert.equal(app.$('#auth-password-options').open, true);
-    assert.match(app.$('#auth-description').textContent, /has been reset/);
+    assert.equal(app.$('#auth-methods-back').textContent, 'Other ways to sign in');
     assert.equal(paths(app).includes('/api/auth/login'), false);
   });
   await test('closing reset form clears in-memory secrets and malformed links stay disabled', async () => {
@@ -308,7 +415,7 @@ async function appWith({hash = '#challenge', signedIn = null, status, config = a
   });
   await test('authentication does not persist browser credentials or use raw callback codes', async () => {
     const app = await appWith();
-    for (const unsafe of ['https://evil.example/', '//evil.example', '#auth?code=secret', '#reset-password?token=secret', '#challenge\\evil']) assert.equal(app.sandbox.safeAuthReturnRoute(unsafe), '#challenge');
+    for (const unsafe of ['https://evil.example/', '//evil.example', '#auth?code=secret', '#reset-password?token=secret', '#challenge\\evil']) assert.equal(app.sandbox.safeAuthReturnRoute(unsafe), '#home');
     const source = fs.readFileSync(require('node:path').resolve(__dirname, '../web/app.js'), 'utf8');
     const authSource = source.slice(source.indexOf('function safeAuthReturnRoute'), source.indexOf('function setAuthMode'));
     assert.doesNotMatch(authSource, /(?:localStorage|sessionStorage)\s*\./);

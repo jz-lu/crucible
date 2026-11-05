@@ -1,6 +1,7 @@
 const {test, expect, signIn, notebookReady, useDataSaver, gate, holdResponse} = require('./helpers.cjs');
 
-test('an unlinked GitHub callback offers password sign-in and clears its error on a real password attempt', async ({page}) => {
+for (const width of [1440, 390]) test(`an unlinked GitHub callback offers a working password sign-in action at ${width}px`, async ({page}, testInfo) => {
+  await page.setViewportSize({width, height: 1000});
   // Simulate only the callback presentation; password authentication still uses
   // the real local app, CSRF checks, and disposable account database.
   await page.route('**/api/session', async route => {
@@ -17,8 +18,19 @@ test('an unlinked GitHub callback offers password sign-in and clears its error o
   await page.goto('/#auth?github=invite-required');
   await expect(page.locator('#auth-github-error')).toContainText('is not linked');
   await expect(page.locator('#auth-form')).toBeVisible();
+  await expect(page.locator('#auth-github-password')).toBeVisible();
+  await page.screenshot({path: testInfo.outputPath('unlinked-github.png'), fullPage: true});
   expect(writes).toEqual([]);
-  await page.locator('#auth-handle').fill('browser_alice');
+  await page.locator('#auth-github-password').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#auth-form').getByLabel('Crucible username', {exact: true})).toBeFocused();
+  await expect(page.locator('#auth-handle-hint')).toBeHidden();
+  await expect(page.locator('#auth-password-hint')).toBeHidden();
+  expect(writes).toEqual([]);
+  expect(new URL(page.url()).hash).toBe('#about');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({path: testInfo.outputPath('password-sign-in.png'), fullPage: true});
+  await page.locator('#auth-form').getByLabel('Crucible username', {exact: true}).fill('browser_alice');
   await page.locator('#auth-password').fill('Incorrect synthetic password');
   await page.locator('#auth-submit').click();
   await expect(page.locator('#auth-error')).toHaveText('Handle or password is incorrect.');
@@ -62,7 +74,8 @@ test('GitHub return opens the requested page without a continuation round trip',
       new URLSearchParams({state: query.get('state'), code: 'synthetic-browser-code'})}, body: ''});
   });
   await page.goto('/#notebook');
-  await page.locator('#access-github').click();
+  await page.locator('#access-sign-in').click();
+  await page.locator('#auth-github').click();
   await notebookReady(page);
   await expect(page.locator('#account-handle')).toHaveText('browser_alice');
   expect(requests).toContain('/api/auth/github/callback');

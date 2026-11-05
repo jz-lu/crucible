@@ -8,6 +8,8 @@ from starlette.routing import Mount
 
 PUBLIC = {
     ("GET", "/assets/resi-logo.png"),
+    ("GET", "/assets/crucible-icon-light.svg"), ("GET", "/assets/crucible-icon-dark.svg"),
+    ("GET", "/assets/crucible-mark.svg"),
     ("GET", "/vendor/resi/cardo-normal-400-latin.woff2"),
     ("GET", "/vendor/resi/cardo-normal-700-latin.woff2"),
     ("GET", "/vendor/resi/plex-sans-normal-100-700-latin.woff2"),
@@ -21,6 +23,7 @@ PUBLIC = {
     ("POST", "/api/auth/password/reset/start"), ("POST", "/api/auth/password/reset/complete"),
     ("POST", "/api/agent/connect/poll"),
     ("GET", "/api/access/status"),
+    ("POST", "/api/access/invitations/inspect"),
     ("POST", "/api/access/invitations/verify/start"),
     ("POST", "/api/access/invitations/redeem"),
 }

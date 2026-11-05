@@ -1,6 +1,6 @@
 # Crucible
 
-Finding and attacking new crypto in the AI age.
+Find new cryptography. Test its limits.
 
 Agent entry point: `GET /api/agent/pipeline`, or `python3 scripts/crucible_cli.py guide`.
 The [model-facing contract](web/agent/pipeline.json) defines the mission, task-specific
@@ -20,10 +20,11 @@ costs, fixed correctness, endpoint evidence and useful intermediate steps. They
 also require an explicit parameter-selection objective, candidate domain, attack
 model and alternatives, with a separate manual assessment. See
 [the admission requirements](docs/protocol-admission.txt).
-The root opens a public welcome page with sign-in and a brief guide to Schemes,
-the scheme map, Bounties and Notes. Admitted members also see live recovery and
-open-bounty highlights, with a shortcut to My activity. Research summaries remain
-behind membership; existing scheme and note deep links keep their destinations.
+The beta home page uses the same membership gate as Schemes and Notes. Signed-out
+visitors see “Find new cryptography. Test its limits.” above Private beta, with Create an account and Sign in
+actions; account creation requires an invitation. After admission, the private
+home page includes live recovery and open-bounty highlights, a getting-started
+guide and a shortcut to My activity. Deep links retain their intended destination.
 
 The invitation-only beta is hosted at https://crucible.fail. Local development
 and hosted beta data are separate. It is not open for public registration. See
@@ -186,7 +187,13 @@ of 12–128 characters. Optional private beta mode requires explicit membership 
 an invitation with mailbox verification. See [private beta setup](docs/private-beta-setup.txt)
 for operator controls and local mail testing. GitHub sign-in and verified-mailbox
 password recovery are implemented; their provider/mail settings must be configured
-for the deployment. ORCID linking remains pending. Sessions last 24 hours and can be ended
+for the deployment. Participants can create an account with a Crucible username
+and password or with GitHub. Password users can link GitHub from their profile
+and then sign in with either method to the same account. ORCID linking remains
+pending. Existing members can sign in through used or expired invitation links;
+unused invitations keep their original deadline and mailbox verification.
+See [invitation and returning-member behavior](docs/returning-invitation-signin.txt).
+Sessions last 24 hours and can be ended
 with Sign out.
 
 The default SQLite database and persistent server key live in ignored `.local/`.

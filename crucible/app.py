@@ -1094,6 +1094,12 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     def logo(request: Request):
         return public_assets.response(request)
 
+    @app.get("/assets/crucible-icon-light.svg")
+    @app.get("/assets/crucible-icon-dark.svg")
+    @app.get("/assets/crucible-mark.svg")
+    def site_icon(request: Request):
+        return public_assets.response(request)
+
     # Only the vendored math distribution is mounted, never the repository or
     # general web directory. Real-path containment also rejects escaping symlinks.
     app.mount("/vendor/katex", PublicMathFiles(public_assets), name="katex")
@@ -1232,7 +1238,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     notebook.register_routes(app, db, settings, clock, user_for, throttle)
     bounties.register_routes(app, db, settings, clock, user_for, throttle)
     research_reviews.register_routes(app, db, settings, clock, user_for, throttle)
-    beta_access.register_routes(app, db, settings, clock, account_for, throttle)
+    beta_access.register_routes(app, db, settings, clock, account_for, throttle, identity=identity)
     github_auth.register_routes(app, db, settings, clock, identity, issue_session, session_payload, password_operation, throttle)
     password_recovery.register_routes(app, db, settings, clock, identity, issue_session,
                                       session_payload, password_operation, throttle)

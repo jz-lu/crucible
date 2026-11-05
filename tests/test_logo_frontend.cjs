@@ -7,7 +7,7 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 function fixture({readyState = 'complete', complete = true, width = 189, decode} = {}) {
   const classes = new Set(), listeners = new Map(), readyWhenGated = [];
   const image = {classList: {contains: name => name === 'brand-mark'}, complete, naturalWidth: width,
-    currentSrc: '/assets/crucible-logo.png?v=fixture', dataset: {}, decode};
+    currentSrc: '/assets/crucible-mark.svg?v=fixture', dataset: {}, decode};
   const root = {classList: {contains: name => classes.has(name), add: name => {
     readyWhenGated.push(image.dataset.logoReady); classes.add(name);
   }}};
@@ -50,7 +50,7 @@ function fixture({readyState = 'complete', complete = true, width = 189, decode}
   let staleDone;
   const stale = fixture({complete: false, decode: () => new Promise(done => {staleDone = done;})});
   stale.image.complete = true; stale.listeners.get('load')({target: stale.image});
-  stale.image.currentSrc = '/assets/crucible-logo.png?v=replacement';
+  stale.image.currentSrc = '/assets/crucible-mark.svg?v=replacement';
   staleDone(); await flush(); assert.equal(stale.image.dataset.logoReady, undefined);
   console.log('PASS complete/cached/late/rejected/unsupported/failed/stale logo decode paths');
 })().catch(error => {console.error(error); process.exitCode = 1;});
