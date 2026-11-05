@@ -4327,6 +4327,31 @@ dialog.points-help-dialog{width:min(740px,calc(100% - 32px));padding:0}
 /* RESI uses this same dark-theme filter on its transparent source artwork. */
 .resi-footer-brand img { filter:var(--brand-image-filter,none); }
 
+/* About uses the same local type and palette, with no additional data load. */
+.about-workspace .about-intro { max-width:960px; padding:38px 0 42px; }
+.about-workspace .about-intro h2 { max-width:900px; margin:0; color:var(--ink); font:400 clamp(32px,3.5vw,46px)/1.18 var(--display); letter-spacing:-.6px; text-wrap:pretty; }
+.about-workspace .about-intro p { margin-top:22px; color:var(--primary); font:400 20px/1.5 var(--display); }
+.about-workspace .about-section { padding:32px 0; border-top:1px solid var(--line); }
+.about-workspace .about-section > h2 { margin:0; color:var(--ink); font:700 24px/1.25 var(--display); }
+.about-workspace .about-story,.about-workspace .about-community { display:grid; grid-template-columns:220px minmax(0,1fr); gap:36px; }
+.about-workspace .about-prose { max-width:740px; }
+.about-workspace .about-prose p,.about-workspace .about-principle-list p { color:var(--text); font:400 16px/1.75 var(--sans); }
+.about-workspace .about-prose p + p { margin-top:18px; }
+.about-workspace .about-principle-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:36px; margin-top:26px; }
+.about-workspace .about-principle-number { color:var(--primary); font:500 12px/1.5 var(--sans); letter-spacing:.08em; }
+.about-workspace .about-principle-list h3 { margin:9px 0 12px; color:var(--ink); font:700 23px/1.25 var(--display); }
+.about-workspace .about-beta-note { margin:26px 0 0; max-width:780px; color:var(--muted); font:400 14px/1.65 var(--sans); }
+.about-workspace .about-prose a { color:var(--primary); text-decoration-thickness:1px; text-underline-offset:3px; }
+.about-workspace .about-prose a:hover { color:var(--primary-hover); }
+@media(max-width:760px) {
+  .about-workspace .about-intro { padding:28px 0 32px; }
+  .about-workspace .about-intro p { font-size:19px; }
+  .about-workspace .about-story,.about-workspace .about-community { grid-template-columns:1fr; gap:18px; }
+  .about-workspace .about-principle-list { grid-template-columns:1fr; gap:24px; margin-top:22px; }
+  .about-workspace .about-principle-list h3 { margin:5px 0 9px; }
+  .about-workspace .about-section { padding:28px 0; }
+}
+
 html[data-pending-page=activity] #access-title { display:flex;align-items:center;min-height:45px;margin:0;font:var(--page-title-font);letter-spacing:-.3px;color:var(--ink); }
 
 .activity-workspace,.people-workspace { padding-top:var(--page-top-space); }
