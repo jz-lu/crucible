@@ -223,6 +223,7 @@ def check_image(root, output, image):
     batches = {'runtime': ['-B', '/checks/release.py', 'verify-runtime']}
     for name, files in contract['native_test_batches'].items():
         batches[name] = ['-B', '-m', 'pytest', '-q', '--tb=short', '-p', 'no:cacheprovider',
+                         '-o', 'tmp_path_retention_policy=failed',
                          '-o', 'faulthandler_timeout=30', *['/tests/' + f for f in files]]
     for label, arguments in batches.items():
         name = 'crucible-release-' + uuid.uuid4().hex

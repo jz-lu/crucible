@@ -142,11 +142,26 @@ or a full backend suite. The portable source checks run first. Published images
 are the exact tested images, not a second rebuild.
 
 Each named native batch starts in a separate read-only container with its own
-128 MiB temporary filesystem. Pytest retains per-test SQLite fixtures until the
-batch ends; this space must cover the whole batch, not just one test. Publication
-cancellation has a separate required batch so its databases cannot exhaust the
-screening batch's scratch space. No checks are dropped and the container limits
-are unchanged; both batch receipts must pass before publication or promotion.
+128 MiB temporary filesystem. Release checks set pytest's
+tmp_path_retention_policy=failed: after dependent fixtures finish teardown,
+successful test-call directories are removed instead of accumulating SQLite
+databases for the entire batch. This setting is confined to the release runner;
+ordinary local pytest retention is unchanged. With pinned pytest 8.4.2, failed
+test-call directories remain until container cleanup; setup/teardown-only errors
+do not guarantee directory retention. Test logs remain in the release artifact,
+but scratch databases never leave the disposable container. This does not bound
+session-scoped temporary files or a single oversized fixture; those still need
+investigation if they exhaust the limit. All named batches, test selections,
+timeouts and container limits remain required and unchanged.
+
+Release 42159717407 stopped before publishing because completed screening-test
+databases filled that 128 MiB filesystem (253 passed, three late setup errors and
+one failure, all SQLite disk-full errors). Cleanup addresses that fixture-lifetime
+cause without enlarging scratch storage or removing checks. A local regression
+runs real pytest with the runner's options, checks per-test database cleanup and
+dependent teardown ordering, and confirms an intentional call failure remains
+diagnosable and still blocks the verified receipt. This is not a substitute for
+the complete native image checks before the next publication.
 
 Publishing records the full Git SHA, unique run/attempt tag, immutable registry
 digest, config digest and test evidence. A digest-pinned remote manifest must
