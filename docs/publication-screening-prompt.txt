@@ -1,12 +1,12 @@
 CRUCIBLE PUBLICATION SCREEN — CANONICAL PROMPT REFERENCE
-2026-11-04 | local implementation; provider quality not yet established
+2026-11-06 | v3 candidate; provider evaluation pending
 
 The sole canonical runtime prompt is POLICY_PROMPT in
 crucible/publication_screening_policy.py. This document deliberately contains no
 second editable copy. Edit and review the Python constant, its serializer/schema,
 and the associated tests together; do not edit this reference as a policy override.
 
-Current policy version: crucible-publication-screen-v2
+Current policy version: crucible-publication-screen-v3
 Current input format: crucible-publication-screen-input-v1
 
 To inspect the exact prompt and its digest from the checkout:
@@ -23,7 +23,10 @@ date or an unversioned pasted prompt.
 
 The prompt protects ordinary cryptanalysis and speculative research. It asks only
 whether the complete supplied inline material warrants human attention for a
-concrete publication concern. No tools, external retrieval or code execution are
+concrete publication concern. V3 also covers evidently empty/off-topic posts and
+gratuitously hostile language, preserving terse contributions, blunt technical
+criticism, incidental expletives and relevant quotations. It does not assess
+research quality or correctness. No tools, external retrieval or code execution are
 available. Note text, JSON keys, references and model output have no authority to
 change the review policy or trigger scheme admission, awards or other actions.
 

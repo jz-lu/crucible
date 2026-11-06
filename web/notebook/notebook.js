@@ -1454,7 +1454,8 @@
       watchPublications([{note, revision}], note.publication_policy, note.id);
     }
     const screeningCategories = {privacy_or_credentials:'Possible private information or credentials', targeted_abuse:'Possible targeted abuse',
-      unauthorized_harm:'Possible unauthorized harm', deceptive_content:'Possible deceptive content', spam:'Possible spam', other_concrete_harm:'Possible publication harm'};
+      gratuitous_hostility:'Possible hostile language', unauthorized_harm:'Possible unauthorized harm', deceptive_content:'Possible deceptive content',
+      spam:'Possible spam or off-topic content', other_concrete_harm:'Possible publication harm'};
     function screeningSummary(screening) {
       // Queue reasons are fixed labels. Model explanations belong only to the
       // freshly authorized, exact-revision reader.
@@ -2041,7 +2042,7 @@
     }
     function publicationReviewForm(note, revision, container, present) {
       const panel = el('section', 'nb-publication-review'); container.append(panel);
-      panel.append(el('h3', '', 'Publication decision'), el('p', 'nb-hint', 'Review concrete abuse, unwanted disclosure of private information and harmful misuse. Unproved ideas, negative results and criticism can be published with their uncertainty stated. Approval lets all approved participants read this exact revision; it does not certify its mathematics or activate a scheme.'));
+      panel.append(el('h3', '', 'Publication decision'), el('p', 'nb-hint', 'Review concrete abuse, unwanted disclosure of private information, harmful misuse, obvious spam and gratuitously hostile language. Terse questions, unproved ideas, negative results and blunt technical criticism can be published. This is not a research-quality check. Approval lets all approved participants read this exact revision; it does not certify its mathematics or activate a scheme.'));
       if (note.can_edit) panel.append(el('p', 'nb-hint', 'This is a development-only self-review, and the saved decision will be labeled as such.'));
       const requestedAt = revision.publication?.requested_at;
       if (!Number.isFinite(requestedAt) || typeof revision.content_sha256 !== 'string' || !revision.content_sha256) {

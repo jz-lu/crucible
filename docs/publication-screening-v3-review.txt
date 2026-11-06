@@ -1,0 +1,74 @@
+PUBLICATION SCREEN V3 — SCOPE AND EVALUATION
+2026-11-06 | candidate wording; no provider result claimed here
+
+DECISION
+
+The publication screen should also send obviously empty/off-topic posts and
+needlessly degrading or profanity-heavy attacks to human review. A flag is neither
+a rejection nor a claim about the author's intentions. Scientific quality,
+correctness, novelty, usefulness, prestige and mathematical maturity are not gates.
+
+The new gratuitous_hostility category makes this distinction explicit: a tirade
+against a result may need a language edit even if it is not targeted harassment
+or serious harm. The existing targeted_abuse definition is unchanged. Spam covers
+obvious filler or unrelated publications; it cannot stand in for "bad research".
+
+Protected cases include direct criticism of Crucible or an institution, terse
+questions, weak or false mathematical claims, speculative mathematics without a
+known application, literature pointers and collaboration requests. An incidental
+expletive is not a word-list veto. A relevant hostile quotation can be evidence,
+not endorsement. A substantive technical point alongside gratuitous insults does
+not make those insults acceptable; the smallest correction preserves the point.
+
+The canonical wording and structured output contract are in
+crucible/publication_screening_policy.py. V3 adds one output enum value, not a
+new database table, score, automatic sanction, scientific review or provider call.
+The publication notice and reviewer labels describe the expanded scope.
+
+IDENTITY AND OLD WORK
+
+The version, prompt hash and output-schema hash all change the policy identity.
+Existing jobs retain their exact v2 policy snapshots. V3 workers do not send or
+publish them as v3: queued mismatches become human-review work. Already published
+revisions retain their original receipts and are not rescanned. In-flight results
+must still satisfy the original lease and the current durable control checks.
+
+A stale browser policy ID requires the author to read the new notice. A deployment
+alone does not change the durable control to v3. The legacy-request adoption
+helper excludes every request with any existing job and will reject a saved v2
+plan. After validation and activation, the operator must create a new preview of
+only the still-eligible original requests. Do not recreate the old 20 trial notes
+or change the user's earlier test note. No migration or retrospective reclassification
+is part of this change.
+
+EVIDENCE AND EVALUATION
+
+publication-screening-v3-cases.json contains 18 new development examples, including
+contrastive pairs. They are proposed labels, not evidence the model agrees. Two
+independent reviewers are preparing held-out sets without seeing this wording;
+keep their contents out of prompt development until the candidate is frozen.
+Existing v1/v2 evaluations remain historical evidence with their original hashes.
+
+Offline tests cover serialization without evaluator-label leakage, valid new
+category handling, private reviewer presentation and preservation of old-policy
+jobs. They do not classify prose. The release coordinator will run the approved
+model against frozen blind requests using the existing team key and pilot budget;
+this draft does not read a key or call a provider.
+
+For the model run, report legitimate contributions wrongly flagged separately
+from empty/hostile material wrongly passed, with counts and case-level reasons.
+Inspect whether cited passages support the finding and whether suggested changes
+preserve the criticism. Coverage/transport/schema failures are operational human
+fallbacks, never correct classifier judgments. Include the old benign/abuse cases
+to check that broader relevance screening has not degraded cryptanalysis protections.
+Do not lower thresholds or change labels merely to improve a score; an ambiguous
+boundary needs a documented human decision. Any prompt revision needs a new digest
+and fresh evidence, with development and first-use held-out results distinguished.
+
+Small synthetic sets cannot establish a production error rate. After activation,
+monitor manual reversals and genuine participant feedback before expanding scope.
+The broader policy may create more false flags; retaining human review is deliberate.
+
+Method reference: OpenAI Evaluation best practices recommends task-specific cases,
+edge/adversarial coverage and human calibration instead of relying on impressions.
+https://developers.openai.com/api/docs/guides/evaluation-best-practices

@@ -1,5 +1,5 @@
 CRUCIBLE — AUTOMATIC NOTE PUBLICATION SCREEN
-2026-11-05 | disabled by default; hosted deployment is a separate operation
+2026-11-06 | v3 candidate; hosted deployment is a separate operation
 
 DECISION AND SCOPE
 
@@ -24,8 +24,10 @@ validation and production activation remain separate work. This local pass has
 not sent private research to a provider or enabled a live publication worker.
 The first synthetic provider evaluation is now complete; see
 publication-screening-evaluation-20261104.txt for both prompts, observed failures,
-usage/timing and the remaining limitations. The current prompt is v2. This small
-development suite is not evidence of deployment accuracy or activation approval.
+usage/timing and the remaining limitations. That evidence applies to v1/v2;
+the current v3 candidate has not yet undergone provider evaluation. No previous
+pass rate establishes its behavior. See publication-screening-v3-review.txt for
+the changed boundary and evaluation plan.
 
 Local validation through 2026-11-05 includes ten executed PostgreSQL 17 checks
 against a disposable loopback database, plus synthetic browser consent and reviewer
@@ -46,8 +48,9 @@ Canonical sources:
 
 POLICY
 
-The screen looks for concrete publication abuse, privacy exposure or harmful
-misuse grounded in the submitted material. It protects legitimate research:
+The screen looks for concrete publication abuse, privacy exposure, harmful
+misuse, obvious spam/off-topic filler and gratuitously hostile language grounded
+in the submitted material. It protects legitimate research:
 cryptanalysis, unexpected attacks, key recovery, solver code, reductions, useful
 obstructions, negative results, conjectures and unconventional or incorrect
 mathematics are eligible to pass. Ordinary dual-use potential, missing citations,
@@ -55,8 +58,15 @@ low prestige, AI authorship, terse prose or sharp technical criticism are not
 reasons to flag a note. Quoted hostile content and adversarial prompts must be
 read in context. A model cannot establish intent or certify plagiarism checks.
 
-The six categories for human attention are privacy_or_credentials,
-targeted_abuse, unauthorized_harm, deceptive_content, spam and other_concrete_harm.
+The seven categories for human attention are privacy_or_credentials,
+targeted_abuse, gratuitous_hostility, unauthorized_harm, deceptive_content, spam
+and other_concrete_harm. Gratuitous hostility is a discourse concern; it need not
+amount to harassment or serious harm. Spam includes evidently empty or unrelated
+publications, not weak research. Short questions, literature pointers, tentative
+mathematics without an established cryptographic application, and relevant
+collaboration requests qualify without a minimum length or usefulness threshold.
+Blunt technical criticism, incidental expletives and analyzed hostile quotations
+remain protected. A flag describes the passage, never the author's character.
 The last category requires a specific serious concern, not a subjective quality
 judgment. Apparently usable nonpublic service credentials need attention even if
 the author owns them. Public challenge keys, public keys, synthetic test secrets

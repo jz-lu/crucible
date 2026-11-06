@@ -3,6 +3,16 @@ PUBLICATION SCREENING — OPERATOR GUIDE
 
 CURRENT STATE
 
+This checkout contains the v3 policy candidate. The prior v1/v2 provider evidence
+does not validate v3. Its prompt and output-schema hashes change the exact policy
+ID; deployment must not silently retarget existing jobs. Evaluate the v3 boundary
+and then explicitly configure the matching policy before processing new requests.
+Queued jobs under an earlier policy remain human-review work, and historical
+publication receipts keep their original policy. The legacy adoption helper skips
+every request with any existing job. Old saved adoption plans cannot be applied
+under v3; preview the still-eligible original requests again after activation.
+No database migration is needed for the additional structured-result category.
+
 Screening is disabled by default. Application settings, durable operator control
 and an explicitly enabled worker must agree before a request can reach the provider.
 The hosted factory can supervise a child at application startup, only with the

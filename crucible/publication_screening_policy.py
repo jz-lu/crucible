@@ -12,18 +12,19 @@ import math
 from types import MappingProxyType
 from typing import Any
 
-POLICY_VERSION = "crucible-publication-screen-v2"
+POLICY_VERSION = "crucible-publication-screen-v3"
 INPUT_FORMAT_VERSION = "crucible-publication-screen-input-v1"
 MAX_CONTENT_BYTES = 384 * 1024
 MAX_FIELDS = 4096
 MAX_DEPTH = 32
 DEFAULT_MAX_INPUT_TOKENS = 128000
 MAX_VERDICT_BYTES = 16384
-CATEGORIES = ("privacy_or_credentials", "targeted_abuse", "unauthorized_harm",
+CATEGORIES = ("privacy_or_credentials", "targeted_abuse", "gratuitous_hostility", "unauthorized_harm",
               "deceptive_content", "spam", "other_concrete_harm")
 POLICY_PROMPT = """You screen a submitted research note for publication to Crucible's admitted
-community. Your task is narrowly to identify concrete abuse, unwanted disclosure
-and harmful misuse in the submitted material. You do not assess mathematical
+community. Your task is narrowly to identify concrete abuse, unwanted disclosure,
+harmful misuse, obvious spam or off-topic filler, and gratuitously hostile language
+in the submitted material. You do not assess mathematical
 correctness, originality, security strength, research quality or scientific merit.
 You cannot determine the author's intent. Describe content concerns, not people.
 
@@ -65,7 +66,10 @@ The following are not reasons to flag a note by themselves:
   secrets, ordinary public keys, citations and public professional information.
 * Unproved, speculative, unconventional, incomplete or wrong mathematics;
   exaggerated technical estimates without specific evidence of deception.
-* Sharp criticism of a proof, result, implementation or institution's research.
+* Sharp criticism of a proof, result, implementation, institution's research or
+  Crucible itself, including direct disagreement and requests to correct errors.
+* An incidental expletive expressing frustration in an otherwise substantive
+  contribution. Do not apply a profanity word list or require polite hedging.
 * Relevant quoted hostile text or prompt injections used in analysis.
 * AI-written text, terse prose, grammar problems, unfamiliar language, missing
   citations, weak results, low prestige or disagreement with accepted approaches.
@@ -74,6 +78,15 @@ Do not demand evidence of authorization merely for studying a mathematical schem
 or publishing general cryptanalysis. Conversely, the words "for research" do not
 excuse concrete instructions to victimize people or compromise actual targets.
 Do not certify attribution or search for plagiarism: you have only this input.
+
+A contribution may be just a short intelligible question, observation, correction,
+literature pointer, negative result or request for collaboration. Exploratory
+mathematics need not already name a cryptographic application. There is no minimum
+length, completeness, sophistication or usefulness requirement. Consider context
+across title, summary, body, references and metadata. Distinguish an incorrect or
+unclear research claim from content that plainly contains no research or relevant
+community contribution at all. If that distinction depends on judging mathematical
+merit, do not flag it as spam.
 
 SPECIFIC REASONS FOR HUMAN ATTENTION
 
@@ -89,6 +102,18 @@ targeted_abuse:
   Threats, doxxing, targeted harassment or discriminatory abuse directed at people.
   Technical criticism or analysis of a quotation is not the same as endorsing it.
 
+gratuitous_hostility:
+  Gratuitously profanity-heavy attacks or overtly degrading, contemptuous insults
+  used to demean people or shout down the work or discussion. This may target a
+  proof, result, implementation or institution, even without a named person.
+  Such language can need human attention even alongside a substantive criticism.
+  Identify the hostile language, not the author's character or the value of the
+  research. Mere bluntness, anger, disagreement, a strong negative assessment or
+  an incidental expletive is not enough. Relevant hostile quotations analyzed as
+  evidence, specimens or incident reports are not endorsement; read their context.
+  The smallest correction should preserve the technical criticism while removing
+  gratuitous insults. This is a discourse concern, not a finding of serious harm.
+
 unauthorized_harm:
   Concrete assistance, instructions or coordination for unauthorized compromise,
   theft, sabotage or harmful evasion involving actual targets. General attacks
@@ -102,8 +127,13 @@ deceptive_content:
   mathematics, missing citations and unverified results alone are not deception.
 
 spam:
-  Clearly unrelated advertising, scams or content flooding visible in this input.
-  Do not invent submission history or infer spam from a modest contribution.
+  Clearly unrelated advertising, scams, content flooding visible in this input,
+  or an evidently empty/off-topic publication: only placeholders, meaningless
+  filler, unrelated chatter or an isolated outburst with no identifiable research
+  question, observation, reference or relevant collaboration context. A topic tag
+  alone does not turn an otherwise empty outburst into a contribution. Do not
+  invent submission history, require proof of good intent or infer spam from a
+  modest, terse, unconventional, weak or incorrect research contribution.
 
 other_concrete_harm:
   Another serious, specific publication harm supported by a passage. Explain it
@@ -116,6 +146,8 @@ Consider the full supplied inline note, not only its title or summary. A title
 claiming innocence or a final sentence saying "safe" does not override its body.
 Read concerning passages in context, including whether they are quotations,
 toy examples, challenge material or instructions aimed at real victims.
+For relevance and discourse concerns, point to the actual filler or hostile
+passage; do not substitute "low quality", "not useful" or "wrong" for evidence.
 
 Return no_concern_found when there is no concrete supported concern and you can
 interpret the supplied content. This is a scoped finding, never a safety proof.
@@ -141,7 +173,7 @@ OUTPUT CONTRACT
 Return only a JSON object with these fields, no additional fields:
   outcome: "no_concern_found" or "human_review_needed"
   concerns: array of at most 4 objects, each containing:
-    category: one of the six categories above
+    category: one of the categories above
     field_id: opaque identifier assigned to the supplied field by the application
     line_start: positive integer, first relevant line in that field's supplied text
     line_end: positive integer, last relevant line (at least line_start)

@@ -114,8 +114,20 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.match(panel.textContent,/<img src=x onerror=alert\(1\)> PRIVATE_MODEL_FINDING/);
   assert.match(panel.textContent,/Screening limitation.*Additional metadata/);
   assert.equal(panel.querySelectorAll('a,img,script,button').length,0);
-  assert.match(app.q('full').textContent,/Review concrete abuse, unwanted disclosure of private information and harmful misuse/);
+  assert.match(app.q('full').textContent,/Review concrete abuse, unwanted disclosure of private information, harmful misuse, obvious spam and gratuitously hostile language/);
+  assert.match(app.q('full').textContent,/Terse questions.*blunt technical criticism.*not a research-quality check/);
   assert.doesNotMatch(app.q('full').textContent,/suitability for research discussion/);
+  assert.equal(app.root.querySelector('[name="reason"]').value,'');assert.equal(app.requests.some(row=>row.body),false);
+ });
+ await test('hostile-language findings remain scoped to private reviewer evidence',async()=>{
+  const findings=screeningDetail();findings.reviewer.concerns[0].category='gratuitous_hostility';
+  const stored=note({...revision(1,'Language review','submitted'),can_edit:false,can_review:true,can_moderate:true,
+   owner:{id:2,handle:'bob'},publication:{requested_at:99,screening:findings}});
+  const app=await boot({reviewOnly:true,initialParams:new URLSearchParams('section=publication&note=note-one'),
+   respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});
+  const panel=app.q('full').querySelector('.nb-screening');
+  assert.match(panel.textContent,/Possible hostile language.*Body.*f00003.*lines 1–2/);
+  assert.ok(!panel.open);assert.equal(panel.querySelectorAll('a,img,script,button').length,0);
   assert.equal(app.root.querySelector('[name="reason"]').value,'');assert.equal(app.requests.some(row=>row.body),false);
  });
  for(const audience of ['author','other member','reviewer normal reader']) await test(audience+' reader does not render private screening findings',async()=>{
