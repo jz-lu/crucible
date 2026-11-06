@@ -1,5 +1,5 @@
 CRUCIBLE PUBLICATION SCREEN — CANONICAL PROMPT REFERENCE
-2026-11-06 | v3 candidate; provider evaluation pending
+2026-11-06 | v3 candidate; synthetic evaluation recorded separately
 
 The sole canonical runtime prompt is POLICY_PROMPT in
 crucible/publication_screening_policy.py. This document deliberately contains no
@@ -8,6 +8,10 @@ and the associated tests together; do not edit this reference as a policy overri
 
 Current policy version: crucible-publication-screen-v3
 Current input format: crucible-publication-screen-input-v1
+
+The frozen 48-case provider run is documented in
+publication-screening-v3-evaluation-20261106.txt. Its evidence includes an archived
+prompt snapshot for reproduction; the Python constant remains the runtime source.
 
 To inspect the exact prompt and its digest from the checkout:
 

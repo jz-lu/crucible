@@ -24,10 +24,13 @@ validation and production activation remain separate work. This local pass has
 not sent private research to a provider or enabled a live publication worker.
 The first synthetic provider evaluation is now complete; see
 publication-screening-evaluation-20261104.txt for both prompts, observed failures,
-usage/timing and the remaining limitations. That evidence applies to v1/v2;
-the current v3 candidate has not yet undergone provider evaluation. No previous
-pass rate establishes its behavior. See publication-screening-v3-review.txt for
-the changed boundary and evaluation plan.
+usage/timing and the remaining limitations. That evidence applies to v1/v2.
+The separate v3 run matched 47/48 predeclared outcomes on 28 held-out cases and
+20 historical regressions. Its sole outcome deviation was later accepted by the
+user as a wording-review case; the frozen label and original mismatch remain.
+See publication-screening-v3-evaluation-20261106.txt for evidence and limits,
+and publication-screening-v3-review.txt for the changed boundary. Neither small
+synthetic run establishes production accuracy or authorizes activation by itself.
 
 Local validation through 2026-11-05 includes ten executed PostgreSQL 17 checks
 against a disposable loopback database, plus synthetic browser consent and reviewer

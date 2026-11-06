@@ -1,12 +1,15 @@
 PUBLICATION SCREENING — OPERATOR GUIDE
-2026-11-05 | opt-in hosted supervision; deployment evidence recorded separately
+2026-11-06 | opt-in hosted supervision; deployment evidence recorded separately
 
 CURRENT STATE
 
-This checkout contains the v3 policy candidate. The prior v1/v2 provider evidence
-does not validate v3. Its prompt and output-schema hashes change the exact policy
-ID; deployment must not silently retarget existing jobs. Evaluate the v3 boundary
-and then explicitly configure the matching policy before processing new requests.
+This checkout contains the v3 policy candidate. Its separate 48-case synthetic
+evaluation is recorded in publication-screening-v3-evaluation-20261106.txt,
+including the one predeclared outcome mismatch and subsequent user clarification.
+The prior v1/v2 provider evidence does not validate v3. Its prompt and output-schema
+hashes change the exact policy ID; deployment must not silently retarget existing
+jobs. Review the evidence and release checks, then explicitly configure the
+matching policy before processing new requests.
 Queued jobs under an earlier policy remain human-review work, and historical
 publication receipts keep their original policy. The legacy adoption helper skips
 every request with any existing job. Old saved adoption plans cannot be applied

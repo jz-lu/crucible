@@ -1,5 +1,5 @@
 PUBLICATION SCREEN V3 — SCOPE AND EVALUATION
-2026-11-06 | candidate wording; no provider result claimed here
+2026-11-06 | candidate wording; separate frozen provider evidence available
 
 DECISION
 
@@ -45,15 +45,22 @@ EVIDENCE AND EVALUATION
 
 publication-screening-v3-cases.json contains 18 new development examples, including
 contrastive pairs. They are proposed labels, not evidence the model agrees. Two
-independent reviewers are preparing held-out sets without seeing this wording;
-keep their contents out of prompt development until the candidate is frozen.
+independent reviewers prepared 28 held-out cases without seeing this wording;
+their contents stayed out of prompt development until the candidate was frozen.
 Existing v1/v2 evaluations remain historical evidence with their original hashes.
 
 Offline tests cover serialization without evaluator-label leakage, valid new
 category handling, private reviewer presentation and preservation of old-policy
-jobs. They do not classify prose. The release coordinator will run the approved
-model against frozen blind requests using the existing team key and pilot budget;
-this draft does not read a key or call a provider.
+jobs. They do not classify prose. The release coordinator ran the approved model
+against 48 frozen synthetic inputs using the existing team key and pilot budget:
+28 held-out cases and the 20 historical trial cases. The separate report and raw
+validated verdicts are in publication-screening-v3-evaluation-20261106.txt and its
+linked JSON artifacts. That run made no production note or publication changes.
+
+The result remains 47/48 predeclared outcome matches. The sole deviation, a
+wording flag on substantive criticism, was accepted by the user after evaluation
+as a human-review case. That later clarification does not change the frozen label,
+the prompt, or the reported mismatch. The 23 older requests remain unadopted.
 
 For the model run, report legitimate contributions wrongly flagged separately
 from empty/hostile material wrongly passed, with counts and case-level reasons.
