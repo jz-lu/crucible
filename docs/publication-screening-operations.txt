@@ -129,8 +129,10 @@ After evaluation/release authorization, explicitly configure shadow evaluation:
   python3 -m crucible.publication_screening_worker configure --mode shadow --model gpt-6-luna --monthly-budget-micro-usd 10000000
 
 The web service and worker settings must also select shadow and the same model.
-Only new requests consenting to that exact policy are eligible. Old human-only
-requests are not backfilled. Shadow results remain private for human publication.
+New requests consenting to that exact policy are eligible. Old pending requests
+are not backfilled by configuration. The separately authorized platform migration
+below is restricted to automatic mode; it never upgrades prior shadow jobs.
+Shadow results remain private for human publication.
 
 Process at most one eligible attempt, using the selected team-key variable:
   python3 -m crucible.publication_screening_worker run --once --key-env OPENAI_API_KEY
@@ -212,6 +214,55 @@ attempts. This implementation does not yet globally pause a queue on a permanent
 provider error; use the durable disable command during an outage and inspect
 pending human-review requests before re-enabling. It never silently requeues
 those requests or changes the consent attached to them.
+
+AUTHORIZED REVIEW-PROCESS CHANGE FOR OLDER PENDING REQUESTS
+
+The original publication request already asks Crucible to review the exact
+submitted revision for publication. An authorized platform process change can
+move those still-pending requests through the lightweight automated filter,
+without making participants submit another request or falsely recording a fresh
+notice acceptance. Ordinary new-request notice requirements remain unchanged.
+The authorized process change includes sending the exact submitted revision to
+the configured model provider and automatically publishing it to eligible beta
+participants after a passing screen. It does not provide scientific approval.
+
+Use the configured active access administrator's account UUID. The default
+command is a read-only metadata preview; it does not read note bodies:
+  python -m crucible.publication_screening_adoption --actor-id <UUID>
+
+Save the exact JSON plan privately and review its count, cutoff, policy and
+request identities. Each plan contains at most 25 requests and a commitment hash.
+For following pages, retain its cutoff and pass its next_after cursor:
+  python -m crucible.publication_screening_adoption --actor-id <UUID> --cutoff <same-cutoff> --after <next_after>
+
+Apply only an explicitly authorized reviewed plan:
+  python -m crucible.publication_screening_adoption --actor-id <UUID> --apply-plan <private-plan.json> --execute-reviewed --authorization-reference <record-id> --reason "Authorized platform review-process change"
+
+There is no broad unbounded apply, participant HTTP route, model call or worker
+enablement here. Apply rechecks the locked durable control: it must already be
+automatic under the exact planned policy. A pause or policy change after preview
+blocks apply without creating jobs. Each job and its publication_screening_adopted AccessEvent commit
+atomically. The event identifies the real operator, affected author, original
+request/revision/hash/time, exact policy/job/plan and bounded authorization record;
+its authority_basis is platform_policy_migration, publication_basis is
+original_publication_request, and fresh_author_consent_recorded is false.
+This deliberately extends AccessEvent to a publication-access process decision;
+it does not grant or revoke beta membership. Do not put private note text, email
+addresses, credentials or model findings in the reason/reference or shell logs.
+
+Exact original requests are rechecked before enqueue. Existing jobs at any policy
+are skipped, including terminal failures, so this is never a retry/reset tool.
+Reviewed, cancelled, withdrawn, deleted and inactive-author requests are skipped.
+A newer unsubmitted revision does not replace the older submitted one. Repeating
+an exact plan cannot create duplicate jobs or audit events, and skipped entries
+do not prevent later cursor pages from being inspected. The fixed cutoff excludes
+newly submitted requests from the historical pass. If a command reports an
+uncertain apply outcome, inspect the durable jobs/events before retrying. The
+normal worker's current policy, bounded budget, lease and publication checks
+remain authoritative. No new table or schema migration is needed.
+Retain the exact tested source revision and adoption module SHA-256 alongside the
+private reviewed plan, command result and authorization record. A plan hash binds
+the requested metadata; it is not itself proof of which implementation executed.
 
 The worker has a 45-second asynchronous HTTP deadline and 120-second lease.
 The transport is canceled/closed on deadline; this does not guarantee the provider

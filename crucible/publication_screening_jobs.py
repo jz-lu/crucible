@@ -132,7 +132,12 @@ def configure(db, *, policy, mode, monthly_budget_micro_usd, now):
 
 
 def enqueue(session, publication, *, policy, now):
-    """Called only for an explicit new publication request, in its transaction."""
+    """Enqueue within an explicitly authorized publication transaction.
+
+    Ordinary requests have author consent. An operator policy migration uses
+    publication_screening_adoption and records its distinct AccessEvent basis.
+    Neither changing settings nor starting a worker creates this authority.
+    """
     from .notebook import NotebookNote, NotebookRevision
     _time(now)
     if publication.decision is not None:
