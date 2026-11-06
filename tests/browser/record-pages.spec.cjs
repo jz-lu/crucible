@@ -166,7 +166,8 @@ for (const width of [1440, 390]) {
     expect(many.overflow).toBe(false);
     expect(await historyContent(page).evaluate(element => getComputedStyle(element).overflowY)).toBe('visible');
     await page.screenshot({path:testInfo.outputPath('activity-many-' + width + '.png'),fullPage:true});
-    await expect(page.locator('.activity-tabs button')).toHaveText(['Schemes','Bounties','Notes']);
+    await expect(history(page).locator('.activity-tabs button')).toHaveText(['Schemes','Bounties','Notes']);
+    await expect(page.locator('#activity-frame')).toBeHidden();
     fixture.rows=[];await page.locator('#nav-about').click();const empty=fixture.holdNext();
     try {
       await page.locator('#history-button').click();await empty.arrived;
@@ -262,16 +263,22 @@ test('a full note reader returns to the same activity page, expansion and scroll
       revisions:source.revisions.map(revision=>({...revision,content:{...revision.content,title:'Activity summary '+Number(second)+'-'+i}}))});
     await route.fulfill({response,json:{...data,notes,next_after:second?null:'second-page'}});
   });
-  await page.locator('#history-button').click();await page.locator('#activity-tab-notes').click();
-  await expect(page.locator('#activity-notes .activity-item')).toHaveCount(25);await page.locator('#activity-next').click();
-  await expect(page.locator('#activity-page-select')).toHaveValue('1');
-  const row=page.locator('#activity-notes .activity-item').nth(15);await row.locator('.activity-toggle').click();
-  await row.locator('.activity-detail').scrollIntoViewIfNeeded();const before=await page.evaluate(()=>scrollY);
-  await row.locator('.activity-detail').click();await expect(page.locator('#notebook-workspace .nb-full-title')).toBeVisible();
-  expect(readCounts.filter(path=>path==='/api/notebook/notes/'+source.id).length).toBeGreaterThan(0);
-  await page.goBack();await expect(page.locator('#activity-workspace')).toBeVisible();
-  await expect(page.locator('#activity-page-select')).toHaveValue('1');await expect(row.locator('.activity-toggle')).toHaveAttribute('aria-expanded','true');
-  await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(before);
+  try {
+    await page.locator('#history-button').click();await page.locator('#activity-tab-notes').click();
+    await expect(page.locator('#activity-notes .activity-item')).toHaveCount(25);await page.locator('#activity-next').click();
+    await expect(page.locator('#activity-page-select')).toHaveValue('1');
+    const row=page.locator('#activity-notes .activity-item').nth(15);await row.locator('.activity-toggle').click();
+    await row.locator('.activity-detail').scrollIntoViewIfNeeded();const before=await page.evaluate(()=>scrollY);
+    await row.locator('.activity-detail').click();await expect(page.locator('#notebook-workspace .nb-full-title')).toBeVisible();
+    expect(readCounts.filter(path=>path==='/api/notebook/notes/'+source.id).length).toBeGreaterThan(0);
+    await page.goBack();await expect(page.locator('#activity-workspace')).toBeVisible();
+    await expect(page.locator('#activity-page-select')).toHaveValue('1');await expect(row.locator('.activity-toggle')).toHaveAttribute('aria-expanded','true');
+    await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(before);
+  } finally {
+    // Back paints its cached page immediately, before the fresh read completes.
+    // Finish that intercepted read before Playwright disposes its response.
+    await page.unrouteAll({behavior:'wait'});
+  }
 });
 
 test('submission details return to activity and late reads cannot restore a departed page',async({page})=>{
