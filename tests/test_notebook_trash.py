@@ -106,7 +106,7 @@ def test_only_owner_with_write_authority_can_permanently_delete(system):
     assert reader.client.get(path + '?include_deleted=true').status_code == 404
 
 
-@pytest.mark.parametrize('history', ['requested', 'approved', 'changes_requested', 'scheme', 'research'])
+@pytest.mark.parametrize('history', ['approved', 'changes_requested', 'scheme', 'research'])
 def test_submitted_evidence_cannot_be_deleted_even_after_new_private_revision(system, history):
     _, owner, reviewer, *_ = system
     note = create(owner, scheme_content() if history == 'scheme' else content())

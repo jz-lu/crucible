@@ -37,7 +37,8 @@ def public_policy(settings):
     return {"mode": mode, "screening_required": True,
             "policy_id": policy_for(settings).id, "processor": "OpenAI",
             "model": settings.publication_screening_model,
-            "notice": "This exact revision will be sent to OpenAI for a publication-safety check. "
+            "notice": "This exact revision will be sent to OpenAI to check for abuse, privacy exposure, "
+                      "harmful misuse, spam and gratuitously hostile language. "
                       "Private drafts are not sent. API data is not used for training by default; "
                       "standard monitoring retention can be up to 30 days, with exceptions.",
             "privacy_url": "https://developers.openai.com/api/docs/guides/your-data",
@@ -54,6 +55,7 @@ _STATUS_COPY = {
     "completed": "The evaluation check is complete. Human publication review is still required.",
     "published": "This revision was published after automated screening.",
     "superseded": "The screening result did not change publication. The publication decision remains authoritative.",
+    "cancelled": "The author cancelled this publish request. This revision remains private.",
 }
 _FAILURE_COPY = {
     "provider_timeout": "The screening service timed out.",
@@ -64,6 +66,10 @@ _FAILURE_COPY = {
     "provider_quota_exhausted": "The screening provider quota is exhausted.",
     "provider_configuration_error": "The screening service configuration needs operator attention.",
     "input_too_large": "This revision exceeds the automated screening size limit.",
+    "input_token_limit": "This revision exceeds the automated screening token limit.",
+    "input_content_size_limit": "This revision exceeds the automated screening content-size limit.",
+    "input_structure_limit": "This revision exceeds the automated screening structure limit.",
+    "provider_count_unavailable": "The screening service could not determine the input size.",
     "coverage_incomplete": "The automated check could not cover this complete revision.",
     "unsupported_input": "This revision could not be prepared for automated screening.",
     "invalid_response": "The automated response did not meet the required format.",
@@ -83,9 +89,10 @@ _FIELD_LABELS = {"title": "Title", "claim": "Summary", "conditions": "Conditions
 _CATEGORY_LABELS = {
     "privacy_or_credentials": "Privacy or credentials",
     "targeted_abuse": "Targeted abuse",
+    "gratuitous_hostility": "Hostile language",
     "unauthorized_harm": "Unauthorized harm",
     "deceptive_content": "Deceptive content",
-    "spam": "Spam",
+    "spam": "Spam or off-topic content",
     "other_concrete_harm": "Other concrete harm",
 }
 
@@ -172,6 +179,40 @@ def _inactive_job_reason(row, context):
     return None
 
 
+def _recorded_admission(policy, result):
+    """Check recorded admission shape without rerunning today's prompt/budget.
+
+    The enclosing result digest and exact input digest bind the historical
+    receipt. This is a reader check, never fresh publication authority.
+    """
+    configuration = policy.get("model_configuration", {})
+    if type(configuration) is not dict:
+        raise ValueError("Invalid screening configuration")
+    version = configuration.get("input_admission")
+    if version is None:
+        return  # Older policies predate the optional receipt.
+    if version != "utf8-bound-or-responses-count-v1":
+        raise ValueError("Unknown screening admission")
+    admission, budget = result.get("input_admission"), policy.get("max_input_tokens")
+    if (type(budget) is not int or not 1 <= budget <= 1_000_000
+            or type(admission) is not dict or set(admission) != {
+                "method", "budget_units", "input_tokens", "count_request_sha256"}
+            or type(admission["budget_units"]) is not int or admission["budget_units"] < 1):
+        raise ValueError("Invalid screening admission")
+    if admission["method"] == "utf8_upper_bound":
+        if (admission["budget_units"] > budget or admission["input_tokens"] is not None
+                or admission["count_request_sha256"] is not None):
+            raise ValueError("Invalid screening admission")
+    elif admission["method"] == "responses_input_tokens":
+        if (admission["budget_units"] <= budget or type(admission["input_tokens"]) is not int
+                or not 0 <= admission["input_tokens"] <= budget
+                or type(admission["count_request_sha256"]) is not str
+                or re.fullmatch(r"[0-9a-f]{64}", admission["count_request_sha256"]) is None):
+            raise ValueError("Invalid screening admission")
+    else:
+        raise ValueError("Unknown screening admission method")
+
+
 def _summary_findings(policy, policy_id, result, result_sha256, outcome):
     """Bounded integrity/shape checks, explicitly not a recheck of source text."""
     from .publication_screening_jobs import digest
@@ -187,6 +228,7 @@ def _summary_findings(policy, policy_id, result, result_sha256, outcome):
             or type(result.get("input_sha256")) is not str
             or re.fullmatch(r"[0-9a-f]{64}", result["input_sha256"]) is None):
         raise ValueError("Unverified screening summary")
+    _recorded_admission(policy, result)
     concerns, limitations = result.get("concerns"), result.get("limitations")
     if (type(concerns) is not list or len(concerns) > 4
             or type(limitations) is not list or len(limitations) > 2
@@ -309,7 +351,7 @@ def detail(session, publication, revision, *, reviewer=False):
     """
     from .publication_screening_models import ScreeningAttempt, ScreeningJob
     from .publication_screening_jobs import digest
-    from .publication_screening_policy import prepare_input, validate_verdict
+    from .publication_screening_policy import reconstruct_input, validate_verdict
     if publication is None:
         return None
     job = session.scalar(select(ScreeningJob).where(
@@ -323,6 +365,8 @@ def detail(session, publication, revision, *, reviewer=False):
     data = {"revision": revision.revision, "content_sha256": revision.content_sha256,
             "status": job.status if job.status in _STATUS_COPY else "human_review",
             "message": _STATUS_COPY.get(job.status, "A human publication review is required.")}
+    if job.status == "human_review" and job.error_code in _FAILURE_COPY:
+        data["message"] = _FAILURE_COPY[job.error_code] + " A human can review this request."
     if not reviewer:
         return data
     findings = {"reason": _FAILURE_COPY.get(job.error_code, "The automated check could not finish.")
@@ -337,7 +381,9 @@ def detail(session, publication, revision, *, reviewer=False):
         if (type(result) is not dict or digest(result) != attempt.result_sha256
                 or type(job.policy) is not dict or digest(job.policy) != job.policy_id):
             raise ValueError("Unverified result")
-        prepared = prepare_input(revision.content, max_input_tokens=job.policy.get("max_input_tokens"))
+        _recorded_admission(job.policy, result)
+        prepared = reconstruct_input(revision.content,
+            input_format_version=job.policy.get("input_format_version"))
         if (prepared.content_sha256 != revision.content_sha256
                 or result.get("input_sha256") != prepared.input_sha256
                 or result.get("input_format_version") != prepared.input_format_version

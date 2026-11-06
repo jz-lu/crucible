@@ -99,7 +99,7 @@ def test_reviewer_agent_does_not_inherit_private_findings(screened):
         client.close()
 
 
-@pytest.mark.parametrize('damage', ['digest', 'input', 'lines', 'field', 'excess', 'outcome'])
+@pytest.mark.parametrize('damage', ['digest', 'input', 'lines', 'field', 'excess', 'outcome', 'admission'])
 def test_unverified_findings_fail_closed_without_hiding_the_note(screened, damage):
     saved = flagged(screened)
     with screened.app.state.db.transaction(write=True) as session:
@@ -110,6 +110,7 @@ def test_unverified_findings_fail_closed_without_hiding_the_note(screened, damag
         if damage == 'field': result['concerns'][0]['field_id'] = 'f99999'
         if damage == 'excess': result['concerns'] *= 5
         if damage == 'outcome': attempt.outcome = 'no_concern_found'
+        if damage == 'admission': result['input_admission']['input_tokens'] = True
         attempt.result = result
         attempt.result_sha256 = '0' * 64 if damage == 'digest' else digest(result)
     result = screening(screened.reviewer, saved)['reviewer']
@@ -126,6 +127,10 @@ def test_unverified_findings_fail_closed_without_hiding_the_note(screened, damag
     ('human_review', 'provider_quota_exhausted', 'quota is exhausted'),
     ('human_review', 'provider_configuration_error', 'configuration needs operator attention'),
     ('human_review', 'provider_timeout', 'timed out'),
+    ('human_review', 'input_token_limit', 'token limit'),
+    ('human_review', 'input_content_size_limit', 'content-size limit'),
+    ('human_review', 'input_structure_limit', 'structure limit'),
+    ('human_review', 'provider_count_unavailable', 'could not determine the input size'),
     ('human_review', 'untrusted arbitrary failure text', 'could not finish'),
 ])
 def test_pending_and_failure_copy_is_fixed_and_does_not_accuse_the_author(screened, state, code, expected):
@@ -139,3 +144,24 @@ def test_pending_and_failure_copy_is_fixed_and_does_not_accuse_the_author(screen
     assert value['reviewer']['outcome'] is None and not value['reviewer']['concerns']
     assert 'untrusted arbitrary failure text' not in json.dumps(value)
     assert 'reviewer' not in screening(screened.owner, saved)
+
+
+def test_historical_findings_survive_later_prompt_size_changes(screened, monkeypatch):
+    from crucible import publication_screening_policy as policy
+    saved = flagged(screened)
+    original = screening(screened.reviewer, saved)['reviewer']
+    monkeypatch.setattr(policy, 'POLICY_PROMPT', 'future prompt' * 20000)
+    assert screening(screened.reviewer, saved)['reviewer'] == original
+
+
+def test_historical_findings_without_admission_receipts_remain_readable(screened):
+    saved = flagged(screened)
+    original = screening(screened.reviewer, saved)['reviewer']
+    with screened.app.state.db.transaction(write=True) as session:
+        job, attempt = session.scalar(select(ScreeningJob)), session.scalar(select(ScreeningAttempt))
+        policy, result = deepcopy(job.policy), deepcopy(attempt.result)
+        policy['model_configuration'].pop('input_admission')
+        result.pop('input_admission')
+        job.policy, job.policy_id = policy, digest(policy)
+        attempt.result, attempt.result_sha256 = result, digest(result)
+    assert screening(screened.reviewer, saved)['reviewer'] == original

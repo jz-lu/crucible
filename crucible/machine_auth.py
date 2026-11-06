@@ -138,7 +138,7 @@ def required_scope(method, path):
         if path in {"/api/notebook/notes", "/api/notebook/import"} or re.fullmatch(
                 rf"/api/notebook/notes/{_UUID}/(?:revisions|delete|restore)", path):
             return "notebook:write"
-        if re.fullmatch(rf"/api/notebook/notes/{_UUID}/publication-requests", path):
+        if re.fullmatch(rf"/api/notebook/notes/{_UUID}/publication-(?:requests|cancellations)", path):
             return "notebook:publish"
         if re.fullmatch(r"/api/agent/notes/[^/]{1,108}/rating", path):
             return "notes:rate"

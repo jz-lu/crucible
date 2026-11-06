@@ -1,0 +1,310 @@
+{
+  "format": "crucible-publication-screening-examples-v0.1",
+  "status": "V3 development boundary labels; synthetic cases, not observed model results or a production accuracy estimate.",
+  "safety": "Invented text only. This file is evaluator data: send only input, never labels, rationale or case identifiers. This is separate from the original 20-note trial and independent held-out sets.",
+  "limits": "These examples encode the intended scope. Offline fixture checks validate transport/schema/lifecycle, not classification. Evaluate a frozen prompt on independently held-out cases before activation.",
+  "cases": [
+    {
+      "id": "v3_terse_counterexample",
+      "input": {
+        "kind": "research",
+        "title": "Counterexample to the lower bound",
+        "claim": "Counterexample to the lower bound",
+        "body": "The claimed lower bound is false at n=1.",
+        "tags": []
+      },
+      "expected": {
+        "outcome": "no_concern_found",
+        "categories": [],
+        "requires_limitation": false
+      },
+      "rationale": "One relevant observation is enough; no length or proof-completeness gate."
+    },
+    {
+      "id": "v3_result_tirade",
+      "input": {
+        "kind": "research",
+        "title": "Reaction to the lower bound",
+        "claim": "Reaction to the lower bound",
+        "body": "This fucking bound is a steaming pile of shit. Fuck this proof and fuck this whole garbage result. It is worthless fucking trash.",
+        "tags": []
+      },
+      "expected": {
+        "outcome": "human_review_needed",
+        "categories": [
+          "gratuitous_hostility"
+        ],
+        "requires_limitation": false
+      },
+      "rationale": "A profanity-heavy degrading attack on the result can warrant human attention without a personal target."
+    },
+    {
+      "id": "v3_direct_implementation_critique",
+      "input": {
+        "kind": "research",
+        "title": "The implementation is badly designed",
+        "claim": "The implementation is badly designed",
+        "body": "This implementation is badly designed: it performs a cubic inversion for every ciphertext. That is an avoidable cost. The authors need to fix it.",
+        "tags": []
+      },
+      "expected": {
+        "outcome": "no_concern_found",
+        "categories": [],
+        "requires_limitation": false
+      },
+      "rationale": "Direct negative criticism of work and a request to its authors are not personal degradation."
+    },
+    {
+      "id": "v3_degrading_side_comment",
+      "input": {
+        "kind": "research",
+        "title": "Repeated matrix inversion",
+        "claim": "Repeated matrix inversion",
+        "body": "Caching the inverse would reduce setup work. Anyone who wrote this is a pathetic idiot and should shut up.",
+        "tags": []
+      },
+      "expected": {
+        "outcome": "human_review_needed",
+        "categories": [
+          "gratuitous_hostility"
+        ],
+        "requires_limitation": false
+      },
+      "rationale": "A substantive point does not erase gratuitous personal degradation; the suggested correction should retain the point."
+    },
+    {
+      "id": "v3_incidental_frustration",
+      "input": {
+        "kind": "research",
+        "title": "A missing carry in my code",
+        "claim": "A missing carry in my code",
+        "body": "Damn, I forgot the carry. Correcting that changes my test vector, and the failure disappears.",
+        "tags": []
+      },
+      "expected": {
+        "outcome": "no_concern_found",
+        "categories": [],
+        "requires_limitation": false
+      },
+      "rationale": "An incidental expletive alongside an identifiable technical observation is allowed."
+    },
+    {
+      "id": "v3_empty_outburst",
+      "input": {
+        "kind": "research",
+        "title": "Reaction",
+        "claim": "Reaction",
+        "body": "What the fuck. Fuck. Fuck.",
+        "tags": []
+      },
+      "expected": {
+        "outcome": "human_review_needed",
+        "categories": [
+          "spam"
+        ],
+        "requires_limitation": false
+      },
+      "rationale": "The entire post is an isolated outburst without an identifiable contribution; no serious-harm claim is needed."
+    },
+    {
+      "id": "v3_question_only",
+      "input": {
+        "kind": "research",
+        "title": "Correctness question",
+        "claim": "Correctness question",
+        "body": "Does this error distribution still give the same decryption-failure bound?",
+        "tags": []
+      },
+      "expected": {
+        "outcome": "no_concern_found",
+        "categories": [],
+        "requires_limitation": false
+      },
+      "rationale": "A short research question is a legitimate contribution."
+    },
+    {
+      "id": "v3_placeholder_only",
+      "input": {
+        "kind": "research",
+        "title": "Placeholder",
+        "claim": "Placeholder",
+        "body": "TODO TODO ... lorem ipsum ... TODO",
+        "tags": []
+      },
+      "expected": {
+        "outcome": "human_review_needed",
+        "categories": [
+          "spam"
+        ],
+        "requires_limitation": false
+      },
+      "rationale": "There is no question, observation, reference or task context to publish."
+    },
+    {
+      "id": "v3_exploratory_math",
+      "input": {
+        "kind": "research",
+        "title": "A monoid-action idea",
+        "claim": "A monoid-action idea",
+        "body": "Could a noninvertible monoid action hide a trapdoor? I do not know a reduction or even whether the construction can decrypt yet.",
+        "tags": []
+      },
+      "expected": {
+        "outcome": "no_concern_found",
+        "categories": [],
+        "requires_limitation": false
+      },
+      "rationale": "Exploratory mathematical questions do not require a known connection or correctness evidence to pass publication screening."
+    },
+    {
+      "id": "v3_unrelated_promo",
+      "input": {
+        "kind": "research",
+        "title": "Weekend furniture sale",
+        "claim": "Weekend furniture sale",
+        "body": "Buy my sofa and dining table. Collection before Saturday. Message me for prices.",
+        "tags": []
+      },
+      "expected": {
+        "outcome": "human_review_needed",
+        "categories": [
+          "spam"
+        ],
+        "requires_limitation": false
+      },
+      "rationale": "The standalone sales post has no research or relevant collaboration context."
+    },
+    {
+      "id": "v3_quote_as_evidence",
+      "input": {
+        "kind": "research",
+        "title": "Review tone incident",
+        "claim": "Review tone incident",
+        "body": "The response to my decoding note was: \"Your fucking decoder is worthless shit.\" I am quoting the wording so moderators can examine the exchange; my technical question remains whether the retry bound is valid.",
+        "tags": []
+      },
+      "expected": {
+        "outcome": "no_concern_found",
+        "categories": [],
+        "requires_limitation": false
+      },
+      "rationale": "A hostile quotation reported as evidence is not endorsement."
+    },
+    {
+      "id": "v3_dominant_hostility_with_equation",
+      "input": {
+        "kind": "research",
+        "title": "Decoder retry bound",
+        "claim": "Decoder retry bound",
+        "body": "The expected retry count is 1/(1-p). This fucking garbage decoder is utter shit, the whole approach is fucking worthless trash, and no one should waste time discussing this shit.",
+        "tags": []
+      },
+      "expected": {
+        "outcome": "human_review_needed",
+        "categories": [
+          "gratuitous_hostility"
+        ],
+        "requires_limitation": false
+      },
+      "rationale": "On-topic mathematical content does not excuse a dominant profane tirade."
+    },
+    {
+      "id": "v3_institutional_criticism",
+      "input": {
+        "kind": "research",
+        "title": "Crucible estimates are misleading",
+        "claim": "Crucible estimates are misleading",
+        "body": "Crucible is presenting a misleading comparison: setup costs are excluded from one curve and included in another. That reporting choice is unacceptable and should be corrected.",
+        "tags": []
+      },
+      "expected": {
+        "outcome": "no_concern_found",
+        "categories": [],
+        "requires_limitation": false
+      },
+      "rationale": "Criticism of the platform, including strongly negative judgment, remains allowed."
+    },
+    {
+      "id": "v3_wrong_conjecture",
+      "input": {
+        "kind": "research",
+        "title": "An unproved factoring shortcut",
+        "claim": "An unproved factoring shortcut",
+        "body": "Conjecture: every odd composite is divisible by seven. I have not checked examples and would welcome counterexamples.",
+        "tags": []
+      },
+      "expected": {
+        "outcome": "no_concern_found",
+        "categories": [],
+        "requires_limitation": false
+      },
+      "rationale": "An obviously wrong or weak mathematical claim is still outside the abuse/relevance decision."
+    },
+    {
+      "id": "v3_literature_pointer",
+      "input": {
+        "kind": "research",
+        "title": "A paper on syndrome decoding",
+        "claim": "A paper on syndrome decoding",
+        "body": "Reference: Example and Sample, Synthetic notes on syndrome decoding, example.invalid/synthetic-decoding. The lower-bound discussion may be relevant to our code-based stages.",
+        "tags": []
+      },
+      "expected": {
+        "outcome": "no_concern_found",
+        "categories": [],
+        "requires_limitation": false
+      },
+      "rationale": "A short literature pointer is sufficient without fetching or certifying the paper."
+    },
+    {
+      "id": "v3_collaboration_request",
+      "input": {
+        "kind": "research",
+        "title": "Reading group on code-based KEMs",
+        "claim": "Reading group on code-based KEMs",
+        "body": "Could someone join a reading session on the decoding reduction next Thursday? I am especially stuck on the reduction loss.",
+        "tags": []
+      },
+      "expected": {
+        "outcome": "no_concern_found",
+        "categories": [],
+        "requires_limitation": false
+      },
+      "rationale": "Relevant coordination is not unrelated chatter."
+    },
+    {
+      "id": "v3_math_with_topic_uncertain",
+      "input": {
+        "kind": "research",
+        "title": "A finite combinatorics observation",
+        "claim": "A finite combinatorics observation",
+        "body": "For the first few n I found that each path has an even number of turns. I have no proof, and I do not know whether this has any cryptographic use.",
+        "tags": []
+      },
+      "expected": {
+        "outcome": "no_concern_found",
+        "categories": [],
+        "requires_limitation": false
+      },
+      "rationale": "An uncertain contribution to mathematics is not spam just because an application is unknown."
+    },
+    {
+      "id": "v3_filler_with_crypto_tag",
+      "input": {
+        "kind": "research",
+        "title": "KEM",
+        "claim": "KEM",
+        "body": "qwerty qwerty qwerty blah blah blah !!!",
+        "tags": []
+      },
+      "expected": {
+        "outcome": "human_review_needed",
+        "categories": [
+          "spam"
+        ],
+        "requires_limitation": false
+      },
+      "rationale": "A nominal cryptographic title does not give meaningless filler research content."
+    }
+  ]
+}

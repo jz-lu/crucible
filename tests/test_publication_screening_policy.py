@@ -6,7 +6,7 @@ import pytest
 
 from crucible.publication_screening_policy import (
     CATEGORIES, POLICY_PROMPT, PROMPT_SHA256, ScreeningCoverageError,
-    ScreeningValidationError, canonical_json, prepare_input, validate_verdict,
+    ScreeningValidationError, canonical_json, prepare_input, reconstruct_input, validate_verdict,
 )
 
 
@@ -80,7 +80,7 @@ def test_cycles_limits_and_full_budget_do_not_truncate():
     with pytest.raises(ScreeningCoverageError, match='input_structure_limit'):
         prepare_input(nested)
     with pytest.raises(ScreeningCoverageError, match='input_structure_limit'):
-        prepare_input({'x': [0] * 4100}, max_input_tokens=128000)
+        reconstruct_input({'x': [0] * 100000})
     with pytest.raises(ScreeningCoverageError, match='content_size_limit'):
         prepare_input({'secret': 'X' * (384 * 1024 + 1)}, max_input_tokens=128000)
     baseline = prepare_input({'body': 'private passage'})
@@ -88,6 +88,42 @@ def test_cycles_limits_and_full_budget_do_not_truncate():
         prepare_input({'body': 'private passage'}, max_input_tokens=baseline.input_budget_units - 1)
     assert baseline.input_budget_units > len(baseline.input_json.encode()) + len(POLICY_PROMPT.encode())
     assert PROMPT_SHA256 == hashlib.sha256(POLICY_PROMPT.encode()).hexdigest()
+
+
+def test_counting_path_retains_complete_math_text_without_changing_v1_graph():
+    content = {'body': ('Let x \\in \\mathbb{F}_q.\n' * 1800),
+               'extensions': {'evidence': ['long but ordinary research. ' * 1100] * 5}}
+    with pytest.raises(ScreeningCoverageError, match='input_budget_exceeded'):
+        prepare_input(content)
+    prepared = prepare_input(content, allow_token_count=True)
+    reconstructed = reconstruct_input(content)
+    assert prepared.input_budget_units > 128000
+    assert prepared.input_sha256 == reconstructed.input_sha256
+    assert prepared.input_json == reconstructed.input_json
+    assert reconstruct(prepared) == content
+    assert reconstructed.input_budget_units == 0
+
+
+def test_metadata_tables_have_no_old_4096_node_cutoff():
+    content = {'extensions': {'measurements': [list(range(50)) for _ in range(100)]}}
+    prepared = prepare_input(content, allow_token_count=True)
+    assert len(prepared.fields) > 4096
+    assert reconstruct(prepared) == content
+    assert all(len(identifier) == 6 for identifier in prepared.fields)
+
+
+def test_historical_reconstruction_never_uses_current_prompt_or_admission(monkeypatch):
+    from crucible import publication_screening_policy as policy
+    content = {'body': 'Two lines\nwith a mathematical observation.'}
+    original = prepare_input(content)
+    monkeypatch.setattr(policy, 'POLICY_PROMPT', 'future prompt' * 20000)
+    with pytest.raises(ScreeningCoverageError, match='input_budget_exceeded'):
+        prepare_input(content)
+    historical = reconstruct_input(content, input_format_version=original.input_format_version)
+    assert historical.input_sha256 == original.input_sha256
+    assert historical.input_json == original.input_json
+    with pytest.raises(ScreeningCoverageError, match='unsupported_input_format'):
+        reconstruct_input(content, input_format_version='unknown-version')
 
 
 def test_valid_pass_review_and_limitation():
@@ -142,6 +178,35 @@ def test_synthetic_cases_all_fit_and_roundtrip_without_expected_labels():
         assert reconstruct(prepared) == case['input']
         assert 'expected' not in json.loads(prepared.input_json)
     assert len(cases) >= 49
+
+
+def test_v3_boundary_cases_use_the_real_blind_export_and_result_contract():
+    from pathlib import Path
+    import crucible
+    from scripts.publication_screening_eval import cases_from, prepare_cases
+    root = Path(crucible.__file__).resolve().parents[1]
+    cases = cases_from(json.loads((root / 'docs/publication-screening-v3-cases.json').read_text()))
+    exported = prepare_cases(cases, model='synthetic', reasoning_effort='none')
+    assert {case['expected']['outcome'] for case in cases} == {'no_concern_found', 'human_review_needed'}
+    for case, record in zip(cases, exported['cases']):
+        prepared = prepare_input(case['input'])
+        assert reconstruct(prepared) == case['input']
+        assert 'request' in record and record['input_sha256'] == prepared.input_sha256
+        assert record['request']['input'][0]['content'][0]['text'] == prepared.input_json
+        assert case['id'] not in json.dumps(record) and case['rationale'] not in json.dumps(record)
+        assert set(case['expected']['categories']) <= set(CATEGORIES)
+
+
+def test_hostile_language_has_a_bounded_concern_with_real_field_evidence():
+    prepared = prepare_input({'body': 'Synthetic hostile passage.\nA technical observation.'})
+    verdict = concern(prepared)
+    verdict['concerns'][0].update(category='gratuitous_hostility', line_end=1,
+        explanation='The first line is a degrading attack.',
+        next_step='Remove the insult while retaining the technical observation.')
+    assert validate_verdict(verdict, prepared) == verdict
+    verdict['concerns'][0]['category'] = 'low_quality_research'
+    with pytest.raises(ScreeningValidationError):
+        validate_verdict(verdict, prepared)
 
 
 def evaluation_cases():

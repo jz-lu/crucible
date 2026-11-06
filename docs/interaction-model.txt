@@ -289,16 +289,27 @@ capability changes, and denied access retain unconditional invalidation. Cached
 measurements do not authorize any action. A hard reload still requires a fresh
 session and authorized reads; background preparation reduces subsequent waits.
 
-My activity replaces the submissions dialog with the canonical #activity page.
-It applies rules 1–3 and 6 to three independent sections: recent scheme answer
-receipts, owned/contributed bounties, then owned notes (including attacks and
-scheme proposals). Each section paints bounded session-owned summaries before
-quiet revalidation, with independent errors/retries. Bounties and notes retain
-explicitly loaded pages within the normal cache lifetime; reload begins at the
-first page. The existing submission endpoint retains its latest-50 limit. Note
-links pin the displayed revision, and recovery details return focus to their row
-on the activity page. Departing the page retires its pending paints; account or
-access changes clear every private section. No scoring or write policy changes.
+My activity uses the canonical #activity page with compact Schemes, Bounties and
+Notes categories. Only the selected category is fetched in the foreground. Its
+25-row pages use expandable summary rows, Previous/Next and a visited-page
+selector. Owned note lists request summary=true and retain only titles, summaries,
+tags and status metadata; the existing full reader fetches the note on demand.
+
+Authorized summaries use the normal bounded, expiring session-memory cache.
+Returning paints cached rows immediately and quietly refreshes only that page;
+idle warmup may prepare the selected category's first and next page. It never
+fetches every previously visited page. Pagination preserves the outgoing height
+while a cold read is pending, then lets a short final page shrink. Page changes
+do not request scrolling; returning from a reader preserves page, expansion and
+native scroll position. Relevant writes invalidate their category, while account
+or access changes clear all private state and retire pending paints.
+
+GET /api/me/submissions preserves its default first 50 rows and accepts limit
+1–100 plus an owner-scoped UUID after cursor; next_after identifies the next page.
+The activity UI requests 25. Timestamp/ID ordering is stable, and canonical scheme
+names arrive with each row without a separate catalogue fetch. Note links pin the
+displayed revision; recovery details return focus to their row. No scoring,
+publication or write-authority policy changes.
 
 The root and #home now show a public welcome page. It follows rules 1–3 and 6:
 static guidance renders independently of session/network readiness; signed-out

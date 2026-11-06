@@ -63,6 +63,7 @@ MEMBER_PATHS = {
     "/api/notebook/import", "/api/notebook/imports/{import_id}",
     "/api/notebook/notes/{note_id}/proposal-submissions",
     "/api/notebook/notes/{note_id}/publication-requests",
+    "/api/notebook/notes/{note_id}/publication-cancellations",
     "/api/notebook/notes/{note_id}/delete", "/api/notebook/notes/{note_id}/restore",
     "/api/notebook/notes/{note_id}/publication-withdrawals",
     "/api/notebook/notes/{note_id}/publication-reviews", "/api/notebook/review-queue",

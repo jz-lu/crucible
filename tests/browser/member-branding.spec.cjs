@@ -16,6 +16,20 @@ for (const width of [1440, 640, 390]) for (const theme of ['light', 'dark']) {
     const mark = page.locator('#site-brand .brand-mark'), brand = page.locator('#site-brand');
     await expect(mark).toBeVisible();await expect(mark).toHaveAttribute('data-logo-ready', 'true');
     expect(await mark.evaluate(element => element.naturalWidth)).toBeGreaterThan(0);
+    await page.evaluate(() => document.fonts.ready);
+    const alignment = await page.evaluate(() => {
+      const center = element => { const box = element.getBoundingClientRect();return box.y + box.height / 2; };
+      const wordmark = document.querySelector('#site-brand .brand-wordmark');
+      return {wordmark:center(wordmark),mark:center(document.querySelector('#brand-animate')),
+        navigation:[...document.querySelectorAll('.primary-nav .nav-button')].filter(element => element.getClientRects().length).map(center),
+        account:center(document.querySelector('.account-actions')),font:getComputedStyle(wordmark).fontFamily,
+        overflow:document.documentElement.scrollWidth > innerWidth};
+    });
+    expect(alignment.font).toContain('Georgia');expect(alignment.overflow).toBe(false);
+    expect(Math.abs(alignment.wordmark - alignment.mark), 'wordmark and complete icon share a centre').toBeLessThan(1);
+    const navigationCenter = width > 700 ? alignment.wordmark : alignment.navigation[0];
+    for (const center of alignment.navigation) expect(Math.abs(center - navigationCenter), 'navigation labels share their row centre').toBeLessThan(1);
+    if (width > 700) expect(Math.abs(alignment.account - alignment.wordmark), 'account controls share the title centre').toBeLessThan(1);
     const wording = page.locator('#home-title .scrutiny-wording');
     await expect(wording).toHaveCSS('animation-name','scrutiny-reveal');
     await expect(wording).toHaveCSS('animation-duration','0.52s');
@@ -65,15 +79,46 @@ test('members with reduced motion see the complete logo and heading without hove
   await expect(page.locator('#home-title .scrutiny-wording')).toHaveCSS('animation-name', 'none');
 });
 
-test('opening member home does not start a separate tagline key glow', async ({page}) => {
+for (const width of [1440, 390]) test('entering beta glows once without replaying on member routes at ' + width + 'px', async ({page}) => {
+  await page.setViewportSize({width, height:1000});
+  await page.addInitScript(() => {
+    window.logoStarts = 0;
+    document.addEventListener('animationstart', event => {
+      if (event.animationName === 'flame-visit') window.logoStarts++;
+    });
+  });
   await page.emulateMedia({reducedMotion:'no-preference'});await page.goto('/');
   await expect(page.locator('#access-workspace')).toHaveCSS('opacity','1');
+  await expect.poll(() => page.evaluate(() => window.logoStarts)).toBe(1);
   await expect(page.locator('#site-brand')).not.toHaveClass(/brand-ignited/);
   await signIn(page, 'alice', {navigate:false});
   await expect(page.locator('#home-workspace')).toBeVisible();
-  await expect(page.locator('#site-brand')).not.toHaveClass(/brand-typing|brand-ignited/);
-  expect(await page.locator('.brand-key-sun').evaluate(element=>element.getAnimations().length)).toBe(0);
+  await expect(page.locator('#site-brand')).toHaveClass(/brand-ignited/);
+  await expect(page.locator('#site-brand')).not.toHaveClass(/brand-typing/);
+  await expect.poll(() => page.evaluate(() => window.logoStarts)).toBe(2);
+  const timing = await page.locator('.brand-fire-ghost').evaluate(element => {
+    const animation = element.getAnimations().find(item => item.animationName === 'flame-visit');
+    const {delay, duration} = animation.effect.getTiming();
+    return {delay, duration};
+  });
+  expect(timing).toEqual({delay:0, duration:2000});
+  await expect(page.locator('#site-brand')).not.toHaveClass(/brand-ignited/, {timeout:3000});
   await expect(page.locator('.brand-key-sun')).toHaveCSS('opacity','0');
+  await page.locator('#nav-challenge').click();await expect(page.locator('#catalogue-workspace')).toBeVisible();
+  await page.getByRole('banner').getByRole('link', {name:'Crucible home', exact:true}).click();
+  await expect(page.locator('#home-workspace')).toBeVisible();
+  expect(await page.evaluate(() => window.logoStarts)).toBe(2);
+  await expect(page.locator('#site-brand')).not.toHaveClass(/brand-ignited/);
+  await page.reload();
+  await expect(page.locator('#home-workspace')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.logoStarts)).toBe(1);
+  await expect(page.locator('#site-brand')).not.toHaveClass(/brand-ignited/, {timeout:3000});
+  expect(await page.evaluate(() => window.logoStarts)).toBe(1);
+  await page.locator('#logout-button').click();await expect(page.locator('#access-workspace')).toBeVisible();
+  await signIn(page, 'alice', {navigate:false});
+  await expect(page.locator('#home-workspace')).toBeVisible();
+  await expect(page.locator('#site-brand')).toHaveClass(/brand-ignited/);
+  await expect.poll(() => page.evaluate(() => window.logoStarts)).toBe(2);
 });
 
 test('signup placeholders state the existing username and password rules separately', async ({page}) => {

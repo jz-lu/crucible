@@ -5,25 +5,29 @@ to publish by itself. Output explanations remain untrusted private text.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import hashlib
 import json
 import math
 from types import MappingProxyType
 from typing import Any
 
-POLICY_VERSION = "crucible-publication-screen-v2"
+POLICY_VERSION = "crucible-publication-screen-v3"
 INPUT_FORMAT_VERSION = "crucible-publication-screen-input-v1"
 MAX_CONTENT_BYTES = 384 * 1024
-MAX_FIELDS = 4096
+# Five-digit evidence IDs are part of input-v1's immutable format. The content
+# byte cap and actual token admission handle normal note sizes; this ceiling
+# only bounds graph construction and prevents identifier/schema overflow.
+MAX_FIELDS = 99999
 MAX_DEPTH = 32
 DEFAULT_MAX_INPUT_TOKENS = 128000
 MAX_VERDICT_BYTES = 16384
-CATEGORIES = ("privacy_or_credentials", "targeted_abuse", "unauthorized_harm",
+CATEGORIES = ("privacy_or_credentials", "targeted_abuse", "gratuitous_hostility", "unauthorized_harm",
               "deceptive_content", "spam", "other_concrete_harm")
 POLICY_PROMPT = """You screen a submitted research note for publication to Crucible's admitted
-community. Your task is narrowly to identify concrete abuse, unwanted disclosure
-and harmful misuse in the submitted material. You do not assess mathematical
+community. Your task is narrowly to identify concrete abuse, unwanted disclosure,
+harmful misuse, obvious spam or off-topic filler, and gratuitously hostile language
+in the submitted material. You do not assess mathematical
 correctness, originality, security strength, research quality or scientific merit.
 You cannot determine the author's intent. Describe content concerns, not people.
 
@@ -65,7 +69,10 @@ The following are not reasons to flag a note by themselves:
   secrets, ordinary public keys, citations and public professional information.
 * Unproved, speculative, unconventional, incomplete or wrong mathematics;
   exaggerated technical estimates without specific evidence of deception.
-* Sharp criticism of a proof, result, implementation or institution's research.
+* Sharp criticism of a proof, result, implementation, institution's research or
+  Crucible itself, including direct disagreement and requests to correct errors.
+* An incidental expletive expressing frustration in an otherwise substantive
+  contribution. Do not apply a profanity word list or require polite hedging.
 * Relevant quoted hostile text or prompt injections used in analysis.
 * AI-written text, terse prose, grammar problems, unfamiliar language, missing
   citations, weak results, low prestige or disagreement with accepted approaches.
@@ -74,6 +81,15 @@ Do not demand evidence of authorization merely for studying a mathematical schem
 or publishing general cryptanalysis. Conversely, the words "for research" do not
 excuse concrete instructions to victimize people or compromise actual targets.
 Do not certify attribution or search for plagiarism: you have only this input.
+
+A contribution may be just a short intelligible question, observation, correction,
+literature pointer, negative result or request for collaboration. Exploratory
+mathematics need not already name a cryptographic application. There is no minimum
+length, completeness, sophistication or usefulness requirement. Consider context
+across title, summary, body, references and metadata. Distinguish an incorrect or
+unclear research claim from content that plainly contains no research or relevant
+community contribution at all. If that distinction depends on judging mathematical
+merit, do not flag it as spam.
 
 SPECIFIC REASONS FOR HUMAN ATTENTION
 
@@ -89,6 +105,18 @@ targeted_abuse:
   Threats, doxxing, targeted harassment or discriminatory abuse directed at people.
   Technical criticism or analysis of a quotation is not the same as endorsing it.
 
+gratuitous_hostility:
+  Gratuitously profanity-heavy attacks or overtly degrading, contemptuous insults
+  used to demean people or shout down the work or discussion. This may target a
+  proof, result, implementation or institution, even without a named person.
+  Such language can need human attention even alongside a substantive criticism.
+  Identify the hostile language, not the author's character or the value of the
+  research. Mere bluntness, anger, disagreement, a strong negative assessment or
+  an incidental expletive is not enough. Relevant hostile quotations analyzed as
+  evidence, specimens or incident reports are not endorsement; read their context.
+  The smallest correction should preserve the technical criticism while removing
+  gratuitous insults. This is a discourse concern, not a finding of serious harm.
+
 unauthorized_harm:
   Concrete assistance, instructions or coordination for unauthorized compromise,
   theft, sabotage or harmful evasion involving actual targets. General attacks
@@ -102,8 +130,13 @@ deceptive_content:
   mathematics, missing citations and unverified results alone are not deception.
 
 spam:
-  Clearly unrelated advertising, scams or content flooding visible in this input.
-  Do not invent submission history or infer spam from a modest contribution.
+  Clearly unrelated advertising, scams, content flooding visible in this input,
+  or an evidently empty/off-topic publication: only placeholders, meaningless
+  filler, unrelated chatter or an isolated outburst with no identifiable research
+  question, observation, reference or relevant collaboration context. A topic tag
+  alone does not turn an otherwise empty outburst into a contribution. Do not
+  invent submission history, require proof of good intent or infer spam from a
+  modest, terse, unconventional, weak or incorrect research contribution.
 
 other_concrete_harm:
   Another serious, specific publication harm supported by a passage. Explain it
@@ -116,6 +149,8 @@ Consider the full supplied inline note, not only its title or summary. A title
 claiming innocence or a final sentence saying "safe" does not override its body.
 Read concerning passages in context, including whether they are quotations,
 toy examples, challenge material or instructions aimed at real victims.
+For relevance and discourse concerns, point to the actual filler or hostile
+passage; do not substitute "low quality", "not useful" or "wrong" for evidence.
 
 Return no_concern_found when there is no concrete supported concern and you can
 interpret the supplied content. This is a scoped finding, never a safety proof.
@@ -141,7 +176,7 @@ OUTPUT CONTRACT
 Return only a JSON object with these fields, no additional fields:
   outcome: "no_concern_found" or "human_review_needed"
   concerns: array of at most 4 objects, each containing:
-    category: one of the six categories above
+    category: one of the categories above
     field_id: opaque identifier assigned to the supplied field by the application
     line_start: positive integer, first relevant line in that field's supplied text
     line_end: positive integer, last relevant line (at least line_start)
@@ -225,18 +260,18 @@ class ScreeningInput:
     input_format_version: str = INPUT_FORMAT_VERSION
 
 
-def prepare_input(content: dict, *, max_input_tokens: int = DEFAULT_MAX_INPUT_TOKENS) -> ScreeningInput:
-    """Serialize ALL plain-JSON inline values and keys, or refuse coverage.
+def reconstruct_input(content: dict, *, input_format_version: str = INPUT_FORMAT_VERSION) -> ScreeningInput:
+    """Reconstruct the complete versioned field graph without admission checks.
 
-    UTF-8 bytes plus policy/schema/framing form a deliberately conservative
-    input budget, not a tokenizer measurement. Long inputs go to human review;
-    never summarize/truncate to fit. Only pass the exact note content, not a
-    database/account/publication envelope. No top-level whitelist drops fields.
+    Stored findings are bound to these deterministic bytes, not today's prompt
+    length or token budget. Keep this format's ordering, field IDs and exact
+    strings stable; a future representation needs its own version and reader.
+    Resource bounds still apply. No provider or database is consulted here.
     """
+    if input_format_version != INPUT_FORMAT_VERSION:
+        raise ScreeningCoverageError("unsupported_input_format")
     if type(content) is not dict or not content:
         raise ScreeningCoverageError("invalid_content")
-    if type(max_input_tokens) is not int or not 1024 <= max_input_tokens <= 128000:
-        raise ScreeningCoverageError("invalid_input_budget")
     nodes, locations, ancestors = [], {}, set()
     accumulated_bytes = 0
 
@@ -292,20 +327,37 @@ def prepare_input(content: dict, *, max_input_tokens: int = DEFAULT_MAX_INPUT_TO
         raise ScreeningCoverageError("unsupported_json_encoding") from None
     if len(canonical) > MAX_CONTENT_BYTES:
         raise ScreeningCoverageError("content_size_limit")
+    return ScreeningInput(input_json, hashlib.sha256(canonical).hexdigest(),
+                          hashlib.sha256(encoded).hexdigest(),
+                          MappingProxyType(locations), 0)
+
+
+def prepare_input(content: dict, *, max_input_tokens: int = DEFAULT_MAX_INPUT_TOKENS,
+                  allow_token_count: bool = False) -> ScreeningInput:
+    """Prepare all inline content; never summarize or truncate it to fit.
+
+    The byte upper bound keeps small requests on the fast path. A worker opting
+    into token counting may retain a larger complete input, but the provider
+    must count and admit that exact request before generating a verdict. The
+    default preserves the legacy offline-export admission behavior.
+    """
+    if type(max_input_tokens) is not int or not 1024 <= max_input_tokens <= 128000:
+        raise ScreeningCoverageError("invalid_input_budget")
+    if type(allow_token_count) is not bool:
+        raise ScreeningCoverageError("invalid_input_budget")
+    prepared = reconstruct_input(content)
     # Counts the serialized message envelope (including JSON escaping), policy
     # and output schema, plus a reserve for model/configuration/protocol framing.
     # This deliberately overestimates input tokens; it is not a tokenizer count.
     envelope = {"instructions": POLICY_PROMPT,
                 "input": [{"role": "user", "content": [
-                    {"type": "input_text", "text": input_json}]}],
+                    {"type": "input_text", "text": prepared.input_json}]}],
                 "text": {"format": {"type": "json_schema", "name": "crucible_publication_screen",
                                       "strict": True, "schema": OUTPUT_SCHEMA}}}
     units = len(canonical_json(envelope).encode()) + 1024
-    if units > max_input_tokens:
+    if units > max_input_tokens and not allow_token_count:
         raise ScreeningCoverageError("input_budget_exceeded")
-    return ScreeningInput(input_json, hashlib.sha256(canonical).hexdigest(),
-                          hashlib.sha256(encoded).hexdigest(),
-                          MappingProxyType(locations), units)
+    return replace(prepared, input_budget_units=units)
 
 
 def strict_json(raw: str | bytes, *, max_bytes: int = MAX_VERDICT_BYTES):

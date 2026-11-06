@@ -26,7 +26,8 @@ ERRORS = TRANSIENT_ERRORS | {'invalid_response', 'input_too_large', 'coverage_in
     'unsupported_input', 'provider_unconfigured', 'publication_unavailable', 'policy_changed',
     'disabled', 'budget_exhausted', 'lease_expired', 'usage_invalid', 'usage_exceeded_reservation',
     'internal_error', 'provider_authentication_failed', 'provider_access_denied',
-    'provider_quota_exhausted', 'provider_configuration_error'}
+    'provider_quota_exhausted', 'provider_configuration_error', 'input_token_limit',
+    'input_content_size_limit', 'input_structure_limit', 'provider_count_unavailable'}
 ACTOR = 'system:publication-screening'
 
 
@@ -132,7 +133,12 @@ def configure(db, *, policy, mode, monthly_budget_micro_usd, now):
 
 
 def enqueue(session, publication, *, policy, now):
-    """Called only for an explicit new publication request, in its transaction."""
+    """Enqueue within an explicitly authorized publication transaction.
+
+    Ordinary requests have author consent. An operator policy migration uses
+    publication_screening_adoption and records its distinct AccessEvent basis.
+    Neither changing settings nor starting a worker creates this authority.
+    """
     from .notebook import NotebookNote, NotebookRevision
     _time(now)
     if publication.decision is not None:
@@ -174,6 +180,43 @@ def _release(control):
     control.active_job_id = control.lease_token = control.lease_expires_at = None
 
 
+def lock_for_cancellation(session):
+    """Lock before account/note locks, matching finish's control→account order."""
+    return _control(session)
+
+
+def cancel_publications(session, publication_ids, *, control, now, erase_results=False):
+    """Revoke dispatch/results while retaining conservative usage commitments.
+
+    Caller owns the control, author, note and publication locks in that order.
+    An already dispatched provider call cannot be recalled; its full reservation
+    remains charged and its eventual response has no publication authority. Keep
+    the occupied slot until that call returns or expires, so cancellation cannot
+    bypass the global concurrency bound. Cancelled jobs are never claimed again.
+    """
+    if not publication_ids:
+        return
+    rows = list(session.scalars(select(ScreeningJob).where(
+        ScreeningJob.publication_id.in_(publication_ids)).order_by(ScreeningJob.id)
+        .with_for_update().execution_options(populate_existing=True)))
+    for job in rows:
+        if control is not None and control.active_job_id == job.id:
+            attempt = session.scalar(select(ScreeningAttempt).where(
+                ScreeningAttempt.lease_token == control.lease_token).with_for_update())
+            if attempt is None or attempt.job_id != job.id:
+                raise RuntimeError('Screening lease is inconsistent.')
+            _settle(session, attempt, now)
+            attempt.outcome, attempt.error_code = 'cancelled', 'publication_unavailable'
+        if job.status != 'cancelled':
+            _terminal(job, 'cancelled', 'publication_unavailable', now)
+    if erase_results and rows:
+        for attempt in session.scalars(select(ScreeningAttempt).where(
+                ScreeningAttempt.job_id.in_([row.id for row in rows])).with_for_update()):
+            # Findings can quote note content. Keep only their commitment and
+            # usage/decision metadata after permanent content erasure.
+            attempt.result = None
+
+
 def _terminal(job, status, code, now):
     job.status, job.error_code, job.finished_at = status, code, now
 
@@ -186,6 +229,9 @@ def _recover_expired(session, control, now):
     if job is None or attempt is None:
         raise RuntimeError('Screening lease is inconsistent.')
     _settle(session, attempt, now)
+    if job.status == 'cancelled':
+        _release(control)
+        return
     attempt.error_code = 'lease_expired'
     if control.mode != 'disabled' and control.policy_id == job.policy_id and job.attempt_count < job.policy['max_attempts']:
         job.status, job.error_code, job.available_at = 'queued', 'lease_expired', now + 5
@@ -263,13 +309,20 @@ def _active(session, control, lease, now):
     if control.active_job_id != lease.job_id or control.lease_token != lease.token:
         return None
     job, attempt = session.get(ScreeningJob, lease.job_id), session.get(ScreeningAttempt, lease.attempt_id)
-    if job is None or attempt is None or job.status != 'running' or attempt.lease_token != lease.token or attempt.job_id != job.id:
+    if job is None or attempt is None or attempt.lease_token != lease.token or attempt.job_id != job.id:
         return None
     if (job.publication_id, job.revision_id, job.author_id, job.content_sha256, job.policy_id) != (
             lease.publication_id, lease.revision_id, lease.author_id, lease.content_sha256, lease.policy_id):
         raise RuntimeError('Screening lease identity changed.')
     if now < attempt.started_at:
         raise ValueError('A screening result cannot precede its dispatch.')
+    if job.status == 'cancelled':
+        # The provider call has returned (or preflight stopped dispatch). Free
+        # its slot, but never retain a late result or reapply publication.
+        _release(control)
+        return None
+    if job.status != 'running':
+        return None
     return job, attempt
 
 

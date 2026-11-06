@@ -284,6 +284,20 @@ test('a late bootstrap records the app-first resolved presentation without alter
   }
 });
 
+test('activity framing selects only public category labels and respects disabled bounties', () => {
+  for (const [requested, enabled, expected] of [['notes',true,'notes'],['bounties',true,'bounties'],['bounties',false,'schemes'],['unknown',true,'schemes']]) {
+    const f=fixture({hash:'#activity?kind='+requested,hint:'workspace'});
+    f.window.CrucibleFeatures={bounties:enabled};
+    for(const kind of ['schemes','bounties','notes'])f.nodes.set('#activity-frame [data-activity-frame-kind='+kind+']',element());
+    f.nodes.set('#activity-frame [data-activity-frame-link]',element());
+    f.window.CruciblePendingPage.apply();
+    for(const kind of ['schemes','bounties','notes'])assert.equal(f.nodes.get('#activity-frame [data-activity-frame-kind='+kind+']').getAttribute('aria-pressed'),String(kind===expected));
+    assert.equal(f.nodes.get('#activity-frame [data-activity-frame-kind=bounties]').hidden,!enabled);
+    assert.equal(f.nodes.get('#activity-frame [data-activity-frame-link]').textContent,expected==='notes'?'All your notes →':expected==='bounties'?'All your bounties →':'Browse schemes →');
+    assert.deepEqual(f.requests.map(request=>request.url),['/api/session']);
+  }
+});
+
 test('unexecuted HTML starts neutral with inert decorative variants and no fabricated results', () => {
   const html = fs.readFileSync(path.join(__dirname, '../web/index.html'), 'utf8');
   assert.match(html, /<h1 id="access-title" aria-hidden="true"><\/h1>/);
@@ -291,17 +305,18 @@ test('unexecuted HTML starts neutral with inert decorative variants and no fabri
   assert.doesNotMatch(html.slice(0, html.indexOf('<body')), /data-pending-page=/);
   const preview = html.slice(html.indexOf('<div id="access-loading-preview"'), html.indexOf('<div id="access-auth-actions"'));
   assert.deepEqual([...preview.matchAll(/data-pending-layout="([^"]+)"/g)].map(match => match[1]),
-    ['neutral', 'gate', 'catalogue', 'people', 'profile', 'notebook', 'list', 'chart', 'timeline']);
-  assert.equal((preview.match(/class="pending-page-preview[^>]*aria-hidden="true"/g) || []).length, 9);
-  const document = parseHTML(html), frame = document.querySelector('#notebook-frame-template');
+    ['neutral', 'gate', 'catalogue', 'people', 'profile', 'notebook', 'activity', 'list', 'chart', 'timeline']);
+  assert.equal((preview.match(/class="pending-page-preview[^>]*aria-hidden="true"/g) || []).length, 10);
+  const document = parseHTML(html), frame = document.querySelector('#notebook-frame-template'), activity = document.querySelector('#activity-frame');
   assert.equal(frame.getAttribute('aria-hidden'), 'true');
   assert.notEqual(frame.getAttribute('inert'), null);
   assert.equal(frame.querySelectorAll('[id]').length, 0, 'Cloning the frame must not duplicate control IDs');
   for (const variant of document.querySelectorAll('[data-pending-layout]')) {
     assert.equal(variant.querySelectorAll('a,script,form,[href],[action],[name],[data-nb],[data-note],[data-user]').length, 0);
     const controls = variant.querySelectorAll('button,input,select,textarea');
-    if (variant === frame) {
-      assert.ok(controls.length > 0, 'The notebook frame mirrors the normal static controls');
+    if (variant === frame || variant === activity) {
+      assert.ok(controls.length > 0, 'The route frame mirrors the normal static controls');
+      assert.notEqual(variant.getAttribute('inert'), null);
       assert.ok(controls.every(control => control.disabled), 'Every pre-access control is disabled');
     } else assert.equal(controls.length, 0, 'Other decorative layouts remain noninteractive');
   }

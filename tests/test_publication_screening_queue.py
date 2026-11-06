@@ -41,6 +41,34 @@ def flagged(system, **changes):
     return saved
 
 
+@pytest.mark.parametrize('category,label', [
+    ('gratuitous_hostility', 'Hostile language'), ('spam', 'Spam or off-topic content'),
+])
+def test_v3_concerns_reach_private_review_without_automatic_publication(screened, category, label):
+    class ScopedProvider(SyntheticProvider):
+        def screen(self, prepared):
+            result = super().screen(prepared)
+            verdict = deepcopy(result.verdict)
+            verdict['concerns'][0].update(category=category,
+                explanation='SYNTHETIC_PRIVATE_LANGUAGE_FINDING',
+                next_step='Check the cited passage without judging the research.')
+            return replace(result, verdict=verdict)
+
+    configure(screened)
+    saved = submitted(screened, body='Synthetic passage for a bounded publication concern.')
+    assert run(screened, ScopedProvider(flagged=True))['status'] == 'human_review'
+    response = queue(screened)
+    entry = response.json()['notes'][0]['revisions'][0]['publication']['screening']
+    assert entry['categories'] == [{'code': category, 'label': label, 'count': 1}]
+    assert 'SYNTHETIC_PRIVATE_LANGUAGE_FINDING' not in response.text
+    detail = screened.reviewer.client.get(f'/api/notebook/notes/{saved["id"]}?revision=1').json()['note']
+    publication = detail['revisions'][0]['publication']
+    assert publication['screening']['reviewer']['concerns'][0]['category'] == category
+    assert detail['revisions'][0]['publication_status'] == 'submitted'
+    own = screened.owner.client.get(f'/api/notebook/notes/{saved["id"]}?revision=1')
+    assert 'SYNTHETIC_PRIVATE_LANGUAGE_FINDING' not in own.text
+
+
 def job_for(session, saved):
     return session.scalar(select(ScreeningJob).join(notebook.NotebookRevision,
         notebook.NotebookRevision.id == ScreeningJob.revision_id).where(
@@ -213,7 +241,7 @@ def test_damaged_summary_keeps_pending_triage_without_category_claims(screened, 
         if damage == 'category': value['concerns'][0]['category'] = 'MODEL_CONTROLLED_LABEL'
         if damage == 'excess': value['concerns'] *= 5
         if damage == 'prose': value['concerns'][0]['explanation'] = 'x' * 601
-        if damage == 'field': value['concerns'][0]['field_id'] = 'f99999'
+        if damage == 'field': value['concerns'][0]['field_id'] = 'f100000'
         if damage == 'line_type': value['concerns'][0]['line_start'] = True
         attempt.result = value
         attempt.result_sha256 = '0' * 64 if damage == 'result_digest' else digest(value)

@@ -15,7 +15,9 @@ import time
 
 from sqlalchemy import event, func, select
 
-from . import publication_screening_jobs as jobs
+# Register the notebook FK targets before the first claim flush. A standalone
+# worker has not imported the web application, unlike in-process worker tests.
+from . import notebook, publication_screening_jobs as jobs
 from .publication_screening_models import ScreeningAttempt, ScreeningBudget, ScreeningControl, ScreeningJob
 from .publication_screening_policy import (
     DEFAULT_MAX_INPUT_TOKENS, INPUT_FORMAT_VERSION, OUTPUT_SCHEMA_SHA256, POLICY_VERSION,
@@ -23,7 +25,7 @@ from .publication_screening_policy import (
     prepare_input, validate_verdict,
 )
 from .publication_screening_provider import (
-    OpenAIResponsesProvider, ProviderResult, ScreeningProviderError,
+    ADMISSION_VERSION, OpenAIResponsesProvider, ProviderResult, ScreeningProviderError, validate_admission,
 )
 
 # Integer micro-USD per million tokens. Cached inputs are conservatively charged
@@ -92,18 +94,20 @@ def policy_for(settings):
             'input_micro_usd_per_million_tokens': rates[0],
             'output_micro_usd_per_million_tokens': rates[1],
             'cost_policy': 'full-input-rate-ceiling-v1',
+            'input_admission': ADMISSION_VERSION,
         })
 
 
 class _Unavailable(Exception):
-    def __init__(self, code='publication_unavailable'):
+    def __init__(self, code='publication_unavailable', *, actual_cost_micro_usd=None):
         self.code = code
+        self.actual_cost_micro_usd = actual_cost_micro_usd
         super().__init__(code)
 
 
 def _target(session, identity):
     """Lock account → note → publication, as in normal notebook mutations."""
-    from . import beta_access, notebook, notebook_moderation, notebook_trash
+    from . import beta_access, notebook_moderation, notebook_trash
     user = beta_access.lock_user(session, identity.author_id)
     if user is None:
         raise _Unavailable()
@@ -158,10 +162,9 @@ def _usage(result, policy):
         raise _Unavailable('usage_invalid')
     usage = result.usage
     expected = {'input_tokens', 'output_tokens', 'cached_input_tokens', 'reasoning_tokens'}
-    if set(usage) != expected or any(type(value) is not int or value < 0 for value in usage.values()):
+    if set(usage) != expected or any(type(value) is not int or not 0 <= value <= 10_000_000 for value in usage.values()):
         raise _Unavailable('usage_invalid')
-    if (usage['input_tokens'] > policy.max_input_tokens or usage['output_tokens'] > policy.max_output_tokens
-            or usage['cached_input_tokens'] > usage['input_tokens']
+    if (usage['cached_input_tokens'] > usage['input_tokens']
             or usage['reasoning_tokens'] > usage['output_tokens']):
         raise _Unavailable('usage_invalid')
     if (type(result.model) is not str or not re.fullmatch(
@@ -169,7 +172,12 @@ def _usage(result, policy):
             or type(result.response_id) is not str
             or not re.fullmatch(r'[A-Za-z0-9._:/-]{1,200}', result.response_id)):
         raise _Unavailable('invalid_response')
-    return dict(usage), _cost(usage['input_tokens'], usage['output_tokens'], RATES[policy.model])
+    cost = _cost(usage['input_tokens'], usage['output_tokens'], RATES[policy.model])
+    if usage['input_tokens'] > policy.max_input_tokens or usage['output_tokens'] > policy.max_output_tokens:
+        # Refuse publication, but retain validated known overspend rather than
+        # replacing it with the smaller maximum we originally reserved.
+        raise _Unavailable('usage_invalid', actual_cost_micro_usd=cost)
+    return dict(usage), cost
 
 
 def _failure(db, lease, code, clock, *, retryable=False, actual_cost=None):
@@ -187,6 +195,30 @@ def run_once(db, settings, provider, *, clock=time.time):
         now=clock(), lease_seconds=LEASE_SECONDS, clock=clock)
     if lease is None:
         return {'status': 'idle'}
+
+    def authorize_dispatch():
+        # Repeat after counting: a token count grants no publication authority.
+        with db.transaction(write=True) as session:
+            _target(session, lease)
+            control = session.get(ScreeningControl, 1, populate_existing=True)
+            now = clock()
+            if (control is None or control.active_job_id != lease.job_id
+                    or control.lease_token != lease.token or control.lease_expires_at is None
+                    or now >= min(lease.expires_at, control.lease_expires_at)):
+                raise _Unavailable()
+            if control.mode == 'disabled':
+                raise _Unavailable('disabled')
+            if control.policy_id != policy.id:
+                raise _Unavailable('policy_changed')
+
+    def before_generation():
+        try:
+            authorize_dispatch()
+        except _Unavailable as exc:
+            raise ScreeningProviderError(exc.code, generation_started=False) from None
+        except Exception:
+            raise ScreeningProviderError('internal_error', generation_started=False) from None
+
     # All preflight failures precede transport, so zero cost is known.
     try:
         with db.transaction(write=True) as session:
@@ -199,29 +231,16 @@ def run_once(db, settings, provider, *, clock=time.time):
                 raise _Unavailable()
             _publication, revision = _target(session, lease)
             content = revision.content
-        prepared = prepare_input(content, max_input_tokens=policy.max_input_tokens)
+        prepared = prepare_input(content, max_input_tokens=policy.max_input_tokens, allow_token_count=True)
         if prepared.content_sha256 != lease.content_sha256:
             raise _Unavailable('coverage_incomplete')
         # Account/note locks and complete-input preparation can take time. Do
         # not knowingly dispatch an expired or superseded lease after that wait.
         # Read the clock AFTER this fresh query; no DB transaction spans send.
-        with db.transaction(write=True) as session:
-            # Membership or the note can change during preparation. Recheck
-            # authorization after it, as well as after the provider returns.
-            _target(session, lease)
-            control = session.get(ScreeningControl, 1, populate_existing=True)
-            now = clock()
-            if (control is None or control.active_job_id != lease.job_id
-                    or control.lease_token != lease.token or control.lease_expires_at is None
-                    or now >= min(lease.expires_at, control.lease_expires_at)):
-                raise _Unavailable()
-            if control.mode == 'disabled':
-                raise _Unavailable('disabled')
-            if control.policy_id != policy.id:
-                raise _Unavailable('policy_changed')
+        authorize_dispatch()
     except ScreeningCoverageError as exc:
-        code = ('input_too_large' if exc.code in ('input_budget_exceeded', 'content_size_limit',
-                                                'input_structure_limit') else 'unsupported_input')
+        code = {'input_budget_exceeded': 'input_token_limit', 'content_size_limit': 'input_content_size_limit',
+                'input_structure_limit': 'input_structure_limit'}.get(exc.code, 'unsupported_input')
         return _failure(db, lease, code, clock, actual_cost=0)
     except _Unavailable as exc:
         return _failure(db, lease, exc.code, clock, actual_cost=0)
@@ -231,12 +250,18 @@ def run_once(db, settings, provider, *, clock=time.time):
 
     actual_cost = None
     try:
-        response = provider.screen(prepared)  # No transaction or lock is held.
+        # No database transaction spans either HTTP call. Small-note injected
+        # providers retain their existing one-call interface.
+        response = (provider.screen(prepared, before_generation=before_generation)
+                    if prepared.input_budget_units > policy.max_input_tokens else provider.screen(prepared))
         usage, actual_cost = _usage(response, policy)
+        admission = validate_admission(response.admission, prepared, model=policy.model,
+            max_input_tokens=policy.max_input_tokens, max_output_tokens=policy.max_output_tokens,
+            reasoning_effort=policy.configuration['model_configuration']['reasoning_effort'])
         verdict = validate_verdict(response.verdict, prepared)
         result = {**verdict, 'input_sha256': prepared.input_sha256,
             'input_format_version': prepared.input_format_version, 'full_coverage': True,
-            'provider_response_id': response.response_id, 'usage': usage}
+            'provider_response_id': response.response_id, 'usage': usage, 'input_admission': admission}
     except ScreeningProviderError as exc:
         if exc.code == 'provider_timeout':
             code, retryable = 'provider_timeout', exc.retryable
@@ -247,13 +272,18 @@ def run_once(db, settings, provider, *, clock=time.time):
             code, retryable = exc.code, False
         elif exc.code == 'missing_or_invalid_api_key':
             return _failure(db, lease, 'provider_unconfigured', clock, actual_cost=0)
+        elif exc.code in ('input_token_limit', 'provider_count_unavailable', 'disabled',
+                          'policy_changed', 'publication_unavailable', 'coverage_incomplete', 'internal_error'):
+            code, retryable = exc.code, False
         else:
             code, retryable = 'invalid_response', False
-        return _failure(db, lease, code, clock, retryable=retryable)
+        return _failure(db, lease, code, clock, retryable=retryable,
+                        actual_cost=0 if exc.generation_started is False else actual_cost)
     except ScreeningValidationError:
         return _failure(db, lease, 'invalid_response', clock, actual_cost=actual_cost)
     except _Unavailable as exc:
-        return _failure(db, lease, exc.code, clock, actual_cost=actual_cost)
+        return _failure(db, lease, exc.code, clock,
+                        actual_cost=exc.actual_cost_micro_usd if exc.actual_cost_micro_usd is not None else actual_cost)
     except Exception:
         return _failure(db, lease, 'internal_error', clock, actual_cost=actual_cost)
 
@@ -292,10 +322,13 @@ class _EnvironmentProvider:
     def __init__(self, policy, key_env):
         self.policy, self.key_env = policy, key_env
 
-    def screen(self, prepared):
-        return OpenAIResponsesProvider.from_env(model=self.policy.model, key_env=self.key_env,
+    def screen(self, prepared, *, before_generation=None):
+        provider = OpenAIResponsesProvider.from_env(model=self.policy.model, key_env=self.key_env,
             timeout_seconds=PROVIDER_TIMEOUT_SECONDS, max_output_tokens=self.policy.max_output_tokens,
-            reasoning_effort=self.policy.configuration['model_configuration']['reasoning_effort']).screen(prepared)
+            max_input_tokens=self.policy.max_input_tokens,
+            reasoning_effort=self.policy.configuration['model_configuration']['reasoning_effort'])
+        return (provider.screen(prepared, before_generation=before_generation)
+                if before_generation is not None else provider.screen(prepared))
 
 
 def main(argv=None):

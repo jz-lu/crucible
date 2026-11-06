@@ -2,10 +2,12 @@
 import base64
 import importlib.util
 import json
+import os
 from pathlib import Path
 import re
 import stat
 import subprocess
+import sys
 import textwrap
 
 import pytest
@@ -204,6 +206,94 @@ def test_check_cleanup_accepts_only_verified_absence_after_inspection_error(monk
     release.remove_owned_check('fixture', 'image', {'id'})
     assert calls[-1] == ('ps', '-aq', '--filter', 'name=^/fixture$')
     assert not any(args[0] == 'rm' for args in calls)
+
+
+@pytest.mark.parametrize('fail_call', [False, True])
+def test_native_pytest_reclaims_successful_databases_after_teardown_and_retains_call_failures(tmp_path, monkeypatch, fail_call):
+    """Exercise the actual runner options through real pytest, without Docker.
+
+    The next fixture observes the prior fixture's disk lifetime. Retaining every
+    successful SQLite database would exceed this small serial fixture budget;
+    a deliberate failure must still fail the release and retain its diagnostic.
+    """
+    output, suite, scratch = (tmp_path / name for name in ('output', 'suite', 'scratch'))
+    output.mkdir()
+    suite.mkdir()
+    teardown_log = tmp_path / 'teardowns.txt'
+    test_file = suite / 'test_temporary_databases.py'
+    test_file.write_text(textwrap.dedent('''
+        from pathlib import Path
+        import sqlite3
+        import pytest
+
+        @pytest.fixture
+        def database(tmp_path):
+            # No previous successful test's database may consume the next
+            # fixture's budget. This inspects real files, not runner strings.
+            assert not list(tmp_path.parent.glob('*/fixture.db'))
+            path = tmp_path / 'fixture.db'
+            connection = sqlite3.connect(path)
+            connection.execute('CREATE TABLE evidence (payload BLOB)')
+            connection.execute('INSERT INTO evidence VALUES (zeroblob(1048576))')
+            connection.commit()
+            yield connection
+            try:
+                # Cleanup must follow dependent-fixture teardown, not precede it.
+                assert path.is_file()
+                assert connection.execute('SELECT length(payload) FROM evidence').fetchone() == (1048576,)
+            finally:
+                connection.close()
+            with Path(TEARDOWN_LOG).open('a') as stream:
+                stream.write('closed\\n')
+
+        @pytest.mark.parametrize('case', range(8))
+        def test_completed_fixture(database, case):
+            assert database.execute('SELECT count(*) FROM evidence').fetchone() == (1,)
+
+        def test_final_call(database):
+            assert not FAIL_CALL, 'deliberate retained failure'
+    ''').replace('TEARDOWN_LOG', repr(str(teardown_log))).replace('FAIL_CALL', repr(fail_call)))
+    revision, image_id = 'a' * 40, 'sha256:' + 'b' * 64
+    image = 'crucible-beta-check:' + revision
+    release.write_json(output / 'prepared.json', {'source_revision': revision})
+    release.write_json(output / 'build-metadata.json', {'containerimage.config.digest': image_id})
+    monkeypatch.setattr(release, 'policy', lambda: {'native_test_batches': {'fixture-lifetime': [test_file.name]}})
+    monkeypatch.setattr(release, 'docker', lambda *args, **kwargs: json.dumps([{
+        'Os': 'linux', 'Architecture': 'amd64', 'Config': {'User': '10001:10001'}, 'Id': image_id}]).encode())
+    cleaned = []
+    monkeypatch.setattr(release, 'remove_owned_check', lambda *args: cleaned.append(args))
+    real_run = subprocess.run
+
+    def run(command, **kwargs):
+        # Only the transport changes: use the current Python process instead of
+        # an actual container, retaining the runner's complete pytest arguments.
+        assert command[command.index('--tmpfs') + 1] == '/tmp:rw,noexec,nosuid,size=128m'
+        assert command[command.index('--network') + 1] == 'none'
+        arguments = command[command.index(image) + 1:]
+        if 'verify-runtime' in arguments:
+            return subprocess.CompletedProcess(command, 0)
+        arguments = [str(test_file) if value == '/tests/' + test_file.name else value for value in arguments]
+        return real_run([sys.executable, *arguments, '--basetemp', str(scratch), '--confcutdir', str(suite)],
+            cwd=suite, env={**os.environ, 'PYTEST_DISABLE_PLUGIN_AUTOLOAD': '1'}, **kwargs)
+
+    monkeypatch.setattr(release.subprocess, 'run', run)
+    if fail_call:
+        with pytest.raises(release.ReleaseError, match='Native release check failed: fixture-lifetime'):
+            release.check_image(ROOT, output, image)
+        assert not (output / 'verified.json').exists()
+    else:
+        receipt = release.check_image(ROOT, output, image)
+        assert receipt['native_checks'] == {'runtime': 'passed', 'fixture-lifetime': 'passed'}
+        assert (output / 'verified.json').is_file()
+    assert teardown_log.read_text().splitlines() == ['closed'] * 9
+    databases = [path for path in scratch.glob('*/fixture.db') if not path.parent.is_symlink()]
+    assert len(databases) == int(fail_call)
+    if fail_call:
+        assert 'test_final_call' in databases[0].parent.name
+    log = (output / 'evidence/fixture-lifetime.log').read_text()
+    assert ('1 failed, 8 passed' if fail_call else '9 passed') in log
+    assert 'deliberate retained failure' in log if fail_call else 'failed' not in log
+    assert len(cleaned) == 2
 
 
 def test_workflow_is_manual_and_promotes_only_after_successful_publication():
@@ -501,7 +591,8 @@ def test_promotion_preserves_exact_manifest_and_immutable_receipts(promotion):
 
 
 @pytest.mark.parametrize('invalid', ['verify-only', 'failed-test', 'incomplete-tests', 'wrong-run',
-                                    'receipt-drift', 'foreign-registry', 'bad-digest', 'config-drift'])
+                                    'receipt-drift', 'foreign-registry', 'bad-digest', 'config-drift',
+                                    'missing-cancellation', 'failed-cancellation'])
 def test_unverified_or_mismatched_release_never_starts_promotion(promotion, invalid):
     root = promotion['root']
     published = promotion['published']
@@ -510,6 +601,15 @@ def test_unverified_or_mismatched_release_never_starts_promotion(promotion, inva
         (root / 'published.json').unlink()
     elif invalid in {'failed-test', 'incomplete-tests'}:
         checked['native_checks']['runtime'] = 'failed' if invalid == 'failed-test' else 'skipped'
+        published['native_checks'] = checked['native_checks']
+        release.write_json(root / 'verified.json', checked)
+    elif invalid in {'missing-cancellation', 'failed-cancellation'}:
+        # A separately isolated native batch remains mandatory evidence. A
+        # successful screening receipt must not silently stand in for it.
+        if invalid == 'missing-cancellation':
+            del checked['native_checks']['publication-cancellation']
+        else:
+            checked['native_checks']['publication-cancellation'] = 'failed'
         published['native_checks'] = checked['native_checks']
         release.write_json(root / 'verified.json', checked)
     elif invalid == 'wrong-run': published['registry_tag'] = 'git-' + promotion['revision'] + '-122-1'

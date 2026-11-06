@@ -1,5 +1,5 @@
 CRUCIBLE — AUTOMATIC NOTE PUBLICATION SCREEN
-2026-11-05 | disabled by default; hosted deployment is a separate operation
+2026-11-06 | v3 candidate; hosted deployment is a separate operation
 
 DECISION AND SCOPE
 
@@ -24,8 +24,13 @@ validation and production activation remain separate work. This local pass has
 not sent private research to a provider or enabled a live publication worker.
 The first synthetic provider evaluation is now complete; see
 publication-screening-evaluation-20261104.txt for both prompts, observed failures,
-usage/timing and the remaining limitations. The current prompt is v2. This small
-development suite is not evidence of deployment accuracy or activation approval.
+usage/timing and the remaining limitations. That evidence applies to v1/v2.
+The separate v3 run matched 47/48 predeclared outcomes on 28 held-out cases and
+20 historical regressions. Its sole outcome deviation was later accepted by the
+user as a wording-review case; the frozen label and original mismatch remain.
+See publication-screening-v3-evaluation-20261106.txt for evidence and limits,
+and publication-screening-v3-review.txt for the changed boundary. Neither small
+synthetic run establishes production accuracy or authorizes activation by itself.
 
 Local validation through 2026-11-05 includes ten executed PostgreSQL 17 checks
 against a disposable loopback database, plus synthetic browser consent and reviewer
@@ -46,8 +51,9 @@ Canonical sources:
 
 POLICY
 
-The screen looks for concrete publication abuse, privacy exposure or harmful
-misuse grounded in the submitted material. It protects legitimate research:
+The screen looks for concrete publication abuse, privacy exposure, harmful
+misuse, obvious spam/off-topic filler and gratuitously hostile language grounded
+in the submitted material. It protects legitimate research:
 cryptanalysis, unexpected attacks, key recovery, solver code, reductions, useful
 obstructions, negative results, conjectures and unconventional or incorrect
 mathematics are eligible to pass. Ordinary dual-use potential, missing citations,
@@ -55,8 +61,15 @@ low prestige, AI authorship, terse prose or sharp technical criticism are not
 reasons to flag a note. Quoted hostile content and adversarial prompts must be
 read in context. A model cannot establish intent or certify plagiarism checks.
 
-The six categories for human attention are privacy_or_credentials,
-targeted_abuse, unauthorized_harm, deceptive_content, spam and other_concrete_harm.
+The seven categories for human attention are privacy_or_credentials,
+targeted_abuse, gratuitous_hostility, unauthorized_harm, deceptive_content, spam
+and other_concrete_harm. Gratuitous hostility is a discourse concern; it need not
+amount to harassment or serious harm. Spam includes evidently empty or unrelated
+publications, not weak research. Short questions, literature pointers, tentative
+mathematics without an established cryptographic application, and relevant
+collaboration requests qualify without a minimum length or usefulness threshold.
+Blunt technical criticism, incidental expletives and analyzed hostile quotations
+remain protected. A flag describes the passage, never the author's character.
 The last category requires a specific serious concern, not a subjective quality
 judgment. Apparently usable nonpublic service credentials need attention even if
 the author owns them. Public challenge keys, public keys, synthetic test secrets
@@ -73,16 +86,43 @@ rewriting history. The human path can approve a pending request or ask for chang
 REQUEST, CONSENT AND VISIBILITY
 
 Saving, importing, reading, searching, reloading and browsing never call a model.
-Only an explicit publication request can enqueue work. Publish all submits exact
+Ordinary screening begins with an explicit publication request. Publish all submits exact
 eligible revisions under the same consent, ownership, quota and rate limits; it
 does not scan the whole notebook. Existing publication requests are not backfilled
 by the migration, by changing settings, or by starting the worker.
+
+An explicitly authorized platform review-process change can adopt older pending
+requests into the lightweight automated filter. Those authors already asked for
+publication review; this changes how their original request is processed, rather
+than creating a new request or asking them to publish again. The trusted host
+operator uses publication_screening_adoption to preview at most 25 exact original
+requests, then apply that reviewed plan. There is no participant or reviewer HTTP
+endpoint for bulk adoption and no automatic scan during normal service startup.
+
+Each adoption writes a publication_screening_adopted AccessEvent atomically with
+its ScreeningJob. AccessEvent here records a publication-access process change,
+not a membership grant. It distinguishes the configured active operator from the
+affected author and records authority_basis=platform_policy_migration,
+publication_basis=original_publication_request and
+fresh_author_consent_recorded=false. The exact original request ID, timestamp,
+revision/hash, policy/job, plan hash and authorization reference remain auditable;
+no note body, title or model result is copied into that event. A screening job
+alone must therefore not be described as proof of fresh author notice consent.
+
+The operation preserves original request and note records. Any existing screening
+job under any policy is excluded, so retries cannot reset attempts or costs or
+upgrade an earlier shadow policy. Reviewed, cancelled, withdrawn, deleted or
+inactive-author requests are excluded and rechecked under the existing mutation
+lock order. A later private revision remains private: only the older explicitly
+submitted revision may enter screening. Jobs and audit events commit together;
+adoption makes no provider call, reserves no budget, and does not enable dispatch.
 
 GET /api/notebook/publication-policy returns the current mode and, when enabled,
 the processor notice, model and exact policy_id. The author must submit
 screening_consent=true and that screening_policy_id when making a new request in
 shadow or automatic mode. The notice discloses external processing and whether a
 pass can publish. Disabled mode retains the existing human-review request path.
+That ordinary new-request notice is unchanged by the bounded platform migration.
 
 An earlier submitted revision may finish while its author works on a newer private
 draft. The worker uses the submitted ID and canonical content hash, never the
@@ -199,21 +239,40 @@ every inline JSON field and key, retaining exact strings, container structure an
 opaque field IDs. Account metadata, unrelated notes and private revision history
 are excluded. External resources are outside this screen's scope.
 
-The input budget is 128,000 conservative units: UTF-8 bytes of the serialized
-request envelope, including prompt, schema and input, plus framing allowance.
-This is a conservative token ceiling, not a tokenizer measurement or permission
-to silently truncate. Oversize, unsupported or uncovered input goes to a human.
+The input budget is 128,000 tokens for the complete review request. Small inputs
+use a conservative UTF-8 byte bound of the serialized envelope, including prompt,
+schema and framing allowance. Exceeding that estimate no longer rejects a note:
+the provider counts the exact supported request inputs before generation. It
+includes the same model, instructions, full field graph, schema, reasoning and
+tool settings. Truncation is disabled. A measured count above the budget goes to
+a human; a failed count is a service limitation, not a content flag. There is no
+extra count request for inputs that already fit the conservative bound.
+
+The old 4,096-node cutoff has been replaced by the existing five-digit field-ID
+ceiling (99,999). The 384 KiB source cap and depth guard remain, so construction
+is bounded before any provider call. Ordinary tables are judged by the complete
+request's tokens, not an arbitrary low field count. Nothing is summarized,
+flattened, omitted or silently truncated. Exact v1 field IDs and graph bytes
+remain stable; historical findings reconstruct that format without applying a
+later prompt's size or admission rules.
 The output cap is 1,500 tokens. Validation checks exact output structure, categories,
 field IDs, line ranges and consistency; a clear verdict must contain no findings.
 This validates form and coverage, not the model's semantic judgment.
 
-The provider applies a 45-second asynchronous deadline to the complete HTTP
-send/receive operation, including headers and body, with cancellation and transport
-cleanup. The database lease is 120 seconds. Process/OS stalls can still exceed a
+The provider applies one 45-second asynchronous deadline across counting and
+generation, including headers and bodies, with cancellation and transport
+cleanup. Authorization, publication state and lease validity are checked again
+after counting and before generation, outside the HTTP calls. The database
+lease is 120 seconds. Process/OS stalls can still exceed a
 wall-clock target, so lease checks remain authoritative. An expired/stale result
 cannot publish. Canceling transport cannot recall a request already received by
 the provider, so ambiguous timeouts may incur billable duplicates. The ledger
-charges the full reserved maximum when usage is unknown. These limits must be
+charges the full reserved generation maximum when generation usage is unknown.
+Known generation usage is retained even if it unexpectedly exceeds the reservation;
+that request cannot publish. Counting has at most one call per attempt and no
+internal retries. Its endpoint reports no billable-usage field; zero generation
+charges do not establish that counting is free or that this ledger equals the
+provider invoice. Reconcile provider billing separately. These limits must be
 exercised before hosted activation.
 
 At most two attempts are allowed. Only transient service errors or expired leases

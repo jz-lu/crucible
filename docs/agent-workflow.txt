@@ -76,6 +76,7 @@ no review, moderation, research-request or scheme-admission authority.
   python3 crucible_cli.py notebook revise NOTE_UUID --file revision-2.json --revision 1 --sha256 BASE_HASH --json
   python3 crucible_cli.py notebook publication-policy --json
   python3 crucible_cli.py notebook request-publication NOTE_UUID --revision 2 --sha256 SAVED_HASH --screening-policy-id POLICY_ID --json
+  python3 crucible_cli.py notebook cancel-publication NOTE_UUID --revision 2 --sha256 SAVED_HASH --retry cancel-1.json --json
   python3 crucible_cli.py notebook delete NOTE_UUID --revision 2 --sha256 SAVED_HASH --permanent --retry delete-1.json --json
   python3 crucible_cli.py notebook list --deleted --json
   python3 crucible_cli.py notebook restore NOTE_UUID --deletion-id DELETION_UUID --json
@@ -86,7 +87,7 @@ to verify a pin and --out to save the complete record privately. export accepts
 still reads the published/curated corpus and notes rate retains its existing API.
 
 delete --permanent requires explicit authorization: it permanently erases an
-unsubmitted private draft's saved revisions and its copies/bindings in that
+eligible private note's saved content and its copies/bindings in that
 account's stored import archives. The website confirms this before sending.
 Original-import responses mark redacted archives and list deleted note IDs, while
 preserving the original request hash as a commitment, not a hash of returned bytes.
@@ -94,8 +95,17 @@ Content-free identity, number reservation and retry receipts remain, so note
 numbers never change targets and old retries/imports cannot resurrect a draft.
 The receipt must say deleted:true and permanent:true. This does not erase other
 people's authored quotations, downloaded exports or retained backups. Notes
-with publication requests, decisions, scheme submissions or research-request
-evidence cannot be deleted. Their existing access policies remain in force.
+with actual publication decisions, scheme submissions or research-request evidence
+cannot be deleted. Pending requests are cancelled atomically before erasure;
+author-cancelled requests alone do not prevent deletion. Required content-free
+revision shells, request hashes and screening usage records remain; model findings
+are erased. Existing publication/citation integrity is preserved.
+
+cancel-publication retracts only a pending exact request and keeps its content
+private. It uses notebook:publish and a durable retry file, just like requesting
+publication. After cancellation, save a new revision before requesting again.
+An already-dispatched external check cannot be recalled; its conservative cost
+reservation remains charged, but its eventual result cannot publish the note.
 
 Older drafts removed by the former recoverable workflow appear in My notes as
 Previously removed. They are not erased automatically; their owner may explicitly
@@ -168,6 +178,7 @@ GET /api/notebook/imports/{import_id}, GET /api/notebook/publication-policy,
 GET /api/notebook/publication-status; POST /api/notebook/notes,
 POST /api/notebook/import, POST /api/notebook/notes/{note_id}/revisions,
 POST /api/notebook/notes/{note_id}/delete, POST /api/notebook/notes/{note_id}/restore,
+POST /api/notebook/notes/{note_id}/publication-cancellations,
 POST /api/notebook/notes/{note_id}/publication-requests. The optional ?summary=true
 returns a crucible-publication-request-v1 receipt containing publication_request
 {id,note_id,revision,content_sha256,requested_at,status}, without note bodies or
@@ -186,9 +197,9 @@ note bodies or model output. An unknown or unowned ID fails the whole request.
 Poll only pending owned requests; a status read never triggers a provider call.
 The existing show command remains available to inspect the saved note/decision.
 Reads require notebook:read;
-create/import/revise/delete/restore require notebook:write; requesting publication
+create/import/revise/delete/restore require notebook:write; requesting or cancelling publication
 requires notebook:publish. Revisions bind expected_revision/content_sha256;
-publication requests and delete bind revision/content_sha256; restore binds
+publication requests, cancellations and delete bind revision/content_sha256; restore binds
 deletion_id. Every POST requires an idempotency_key UUID.
 Quotas, immutable history, ownership and publication checks match the human UI.
 Even an agent belonging to a reviewer can read only that account's own drafts.

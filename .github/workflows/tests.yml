@@ -51,6 +51,8 @@ jobs:
           tests/test_mceliece_candidate_screen.py
           tests/test_common_correctness_policy.py
           tests/test_exact_parameters.py
+          tests/test_ram_common.py tests/test_ram_classical_attacks.py
+          tests/test_ram_lattice_attacks.py tests/test_ram_code_attacks.py
           tests/test_beta_invitations.py
           tests/test_beta_operator.py
           tests/test_beta_preflight.py
@@ -106,7 +108,8 @@ jobs:
   frontend-checks:
     name: Standalone frontend regressions
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # The complete sequential gate can exceed ten minutes on shared runners.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6

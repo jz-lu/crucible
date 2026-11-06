@@ -25,6 +25,7 @@ from crucible.config import Settings
 from crucible.db import Database, User
 from crucible import publication_screening_jobs as jobs
 from crucible import publication_screening
+from crucible import publication_screening_adoption as adoption
 from crucible import publication_screening_worker as worker
 from crucible.publication_screening_models import (
     AutomaticPublication, ScreeningAttempt, ScreeningBudget, ScreeningControl, ScreeningJob,
@@ -712,3 +713,550 @@ def test_pg17_exact_automatic_receipt_is_durable_and_later_revision_stays_privat
     assert [item['revision'] for item in public['revisions']] == [submitted['revision']]
     for private in (first, later):
         assert system.reader.client.get(f'/api/notebook/notes/{private["id"]}?revision={private["revision"]}').status_code == 404
+
+
+def retract_publication(system, note, action):
+    path = 'delete' if action == 'delete' else 'publication-cancellations'
+    body = publication_body(note, **({'permanent': True} if action == 'delete' else {}))
+    return system.owner.post(f'/api/notebook/notes/{note["id"]}/{path}', body)
+
+
+def legacy_pending(system, actor=None):
+    """A real note and synthetic pre-screening publication request, with no job."""
+    actor = actor or system.owner
+    note = create(actor, content(body='Synthetic original submitted revision; not private later text.'))
+    with system.db.transaction(write=True) as session:
+        revision = session.scalar(select(notebook.NotebookRevision).where(
+            notebook.NotebookRevision.note_id == note['id'],
+            notebook.NotebookRevision.revision == note['revision']))
+        publication = notebook.NotebookPublication(id=str(uuid4()), revision_id=revision.id,
+            author_id=actor.identifier, requested_at=system.now[0],
+            idempotency_key=str(uuid4()), request_sha256='a' * 64,
+            test_only_self_review=False)
+        session.add(publication); session.flush()
+        original = {column.name: getattr(publication, column.name)
+                    for column in publication.__table__.columns}
+    return note, original
+
+
+def adoption_settings(system):
+    return replace(system.settings, access_admin_ids=(system.reviewer.identifier, system.reader.identifier))
+
+
+def adoption_plan(system, actor_id=None):
+    return adoption.preview(system.db, adoption_settings(system),
+        actor_id=actor_id or system.reviewer.identifier, clock=lambda: system.now[0])
+
+
+def apply_adoption(system, plan):
+    return adoption.apply_plan(system.db, adoption_settings(system), plan,
+        actor_id=plan['actor_id'], authorization_reference='synthetic-operator-authorization',
+        reason='Explicit synthetic platform-policy migration; not author consent.',
+        clock=lambda: system.now[0])
+
+
+def adopted_events(session):
+    return list(session.scalars(select(beta_access.AccessEvent).where(
+        beta_access.AccessEvent.action == adoption.ACTION)))
+
+
+def test_pg17_competing_operator_plans_adopt_each_author_once_and_keep_original_revision(pg_screened):
+    system = pg_screened
+    note, original = legacy_pending(system)
+    other, other_original = legacy_pending(system, system.reader)
+    plans = [adoption_plan(system, actor.identifier) for actor in (system.reviewer, system.reader)]
+    later = revise(system.owner, note, content(body='LATER_UNSUBMITTED_PRIVATE_TEXT'))
+    barrier = Barrier(2)
+
+    def apply(plan):
+        barrier.wait(timeout=5)
+        return apply_adoption(system, plan)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(apply, plans))
+    assert sorted(result['queued'] for result in results) == [0, 2]
+    assert sorted(outcome['status'] for result in results for outcome in result['outcomes']) == [
+        'already_screened', 'already_screened', 'queued', 'queued']
+    with system.db.transaction() as session:
+        recorded = list(session.scalars(select(ScreeningJob)))
+        audits = adopted_events(session)
+        assert len(recorded) == len(audits) == 2
+        assert {job.author_id for job in recorded} == {system.owner.identifier, system.reader.identifier}
+        assert {job.revision_id for job in recorded} == {original['revision_id'], other_original['revision_id']}
+        for saved in (original, other_original):
+            publication = session.get(notebook.NotebookPublication, saved['id'])
+            assert {column.name: getattr(publication, column.name)
+                    for column in publication.__table__.columns} == saved
+        assert session.get(notebook.NotebookNote, note['id']).latest_revision == later['revision']
+        for audit in audits:
+            job = next(job for job in recorded if job.id == audit.details['job_id'])
+            assert audit.user_id == job.author_id and audit.actor_id in adoption_settings(system).access_admin_ids
+            assert audit.details['authority_basis'] == 'platform_policy_migration'
+            assert audit.details['fresh_author_consent_recorded'] is False
+            assert audit.details['publication_basis'] == 'original_publication_request'
+            assert audit.details['content_sha256'] == job.content_sha256
+            assert audit.details['policy_id'] == system.policy.id
+            assert audit.details['plan_sha256'] in {plan['plan_sha256'] for plan in plans}
+        assert session.scalar(select(func.count()).select_from(ScreeningAttempt)) == 0
+        assert all(row.reserved_micro_usd == row.spent_micro_usd == 0
+                   for row in session.scalars(select(ScreeningBudget)))
+    assert system.reader.client.get(f'/api/notebook/notes/{note["id"]}?revision={later["revision"]}').status_code == 404
+
+
+@pytest.mark.parametrize('action', ['cancel', 'delete'])
+@pytest.mark.parametrize('first', ['operator', 'author'])
+def test_pg17_operator_adoption_and_author_retraction_serialize_on_control(pg_screened, action, first):
+    system = pg_screened
+    note, original = legacy_pending(system)
+    plan = adoption_plan(system)
+    locked, release, waiting = Event(), Event(), Event()
+
+    def before(_connection, _cursor, statement, _parameters, _context, _many):
+        if locked.is_set() and 'FROM publication_screening_control' in statement and 'FOR UPDATE' in statement:
+            waiting.set()
+
+    def after(_connection, _cursor, statement, _parameters, _context, _many):
+        if not locked.is_set() and 'FROM publication_screening_control' in statement and 'FOR UPDATE' in statement:
+            locked.set()
+            assert release.wait(5), 'The first control-lock holder was not released.'
+
+    operations = {'operator': lambda: apply_adoption(system, plan),
+                  'author': lambda: retract_publication(system, note, action)}
+    second = 'author' if first == 'operator' else 'operator'
+    event.listen(system.db.engine, 'before_cursor_execute', before)
+    event.listen(system.db.engine, 'after_cursor_execute', after)
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            winner = pool.submit(operations[first])
+            try:
+                assert locked.wait(5)
+                loser = pool.submit(operations[second])
+                assert waiting.wait(3) and not loser.done()
+            finally:
+                release.set()
+            outcomes = {first: winner.result(timeout=15), second: loser.result(timeout=15)}
+    finally:
+        release.set()
+        event.remove(system.db.engine, 'before_cursor_execute', before)
+        event.remove(system.db.engine, 'after_cursor_execute', after)
+    assert outcomes['author'].status_code == 200, outcomes['author'].text
+    assert outcomes['operator']['queued'] == int(first == 'operator')
+    with system.db.transaction() as session:
+        publication = session.get(notebook.NotebookPublication, original['id'])
+        assert (publication.decision, publication.decision_source) == ('cancelled', 'author')
+        recorded = list(session.scalars(select(ScreeningJob)))
+        assert len(recorded) == len(adopted_events(session)) == int(first == 'operator')
+        if recorded:
+            assert recorded[0].status == 'cancelled'
+    provider = SyntheticProvider()
+    assert run(system, provider) == {'status': 'idle'} and provider.calls == 0
+
+
+@pytest.mark.parametrize('first', ['operator', 'reviewer'])
+def test_pg17_operator_adoption_respects_concurrent_human_decision(pg_screened, first):
+    system = pg_screened
+    note, original = legacy_pending(system)
+    plan = adoption_plan(system)
+    locked, release, waiting = Event(), Event(), Event()
+
+    def before(_connection, _cursor, statement, _parameters, _context, _many):
+        if locked.is_set() and 'FOR UPDATE' in statement and ('FROM users' in statement or 'FROM notebook_notes' in statement):
+            waiting.set()
+
+    def after(_connection, _cursor, statement, _parameters, _context, _many):
+        if not locked.is_set() and 'FROM notebook_notes' in statement and 'FOR UPDATE' in statement:
+            locked.set()
+            assert release.wait(5), 'The first note-lock holder was not released.'
+
+    operations = {'operator': lambda: apply_adoption(system, plan),
+        'reviewer': lambda: system.reviewer.post(f'/api/notebook/notes/{note["id"]}/publication-reviews',
+            publication_body(note, decision='approved', reason='Synthetic independent human decision.'))}
+    second = 'reviewer' if first == 'operator' else 'operator'
+    event.listen(system.db.engine, 'before_cursor_execute', before)
+    event.listen(system.db.engine, 'after_cursor_execute', after)
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            winner = pool.submit(operations[first])
+            try:
+                assert locked.wait(5)
+                loser = pool.submit(operations[second])
+                assert waiting.wait(3) and not loser.done()
+            finally:
+                release.set()
+            outcomes = {first: winner.result(timeout=15), second: loser.result(timeout=15)}
+    finally:
+        release.set()
+        event.remove(system.db.engine, 'before_cursor_execute', before)
+        event.remove(system.db.engine, 'after_cursor_execute', after)
+    assert outcomes['reviewer'].status_code == 200, outcomes['reviewer'].text
+    assert outcomes['operator']['queued'] == int(first == 'operator')
+    provider = SyntheticProvider()
+    run(system, provider)
+    assert provider.calls == 0
+    with system.db.transaction() as session:
+        publication = session.get(notebook.NotebookPublication, original['id'])
+        assert (publication.decision, publication.decision_source) == ('approved', 'human')
+        assert publication.reviewer_id == system.reviewer.identifier
+        assert session.get(AutomaticPublication, publication.id) is None
+        assert len(adopted_events(session)) == int(first == 'operator')
+
+
+@pytest.mark.parametrize('revoked', ['author', 'operator'])
+def test_pg17_operator_adoption_rechecks_membership_after_actual_user_lock_wait(pg_screened, revoked):
+    from fastapi import HTTPException
+    system = pg_screened
+    _note, original = legacy_pending(system)
+    plan = adoption_plan(system)
+    target = system.owner.identifier if revoked == 'author' else system.reviewer.identifier
+    waiting = Event()
+
+    def before(_connection, _cursor, statement, parameters, _context, _many):
+        if ('FROM users' in statement and 'FOR UPDATE' in statement
+                and target in (parameters.values() if isinstance(parameters, dict) else parameters)):
+            waiting.set()
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with system.db.transaction(write=True) as session:
+            beta_access.lock_user(session, target)
+            event.listen(system.db.engine, 'before_cursor_execute', before)
+            try:
+                future = pool.submit(apply_adoption, system, plan)
+                assert waiting.wait(3) and not future.done()
+                beta_access.set_membership(session, target, 'revoked', system.now[0])
+            finally:
+                event.remove(system.db.engine, 'before_cursor_execute', before)
+        if revoked == 'operator':
+            with pytest.raises(HTTPException) as denied:
+                future.result(timeout=15)
+            assert denied.value.status_code == 403
+        else:
+            result = future.result(timeout=15)
+            assert result['queued'] == 0 and result['outcomes'][0]['status'] == 'author_ineligible'
+    with system.db.transaction() as session:
+        assert session.scalar(select(func.count()).select_from(ScreeningJob)) == 0
+        assert adopted_events(session) == []
+        assert session.get(notebook.NotebookPublication, original['id']).decision is None
+
+
+def test_pg17_operator_adoption_audit_failure_rolls_back_the_job_and_allows_exact_retry(pg_screened):
+    system = pg_screened
+    _note, original = legacy_pending(system)
+    plan = adoption_plan(system)
+
+    def reject_audit(_connection, _cursor, statement, _parameters, _context, _many):
+        if statement.lstrip().upper().startswith('INSERT INTO ACCESS_EVENTS'):
+            raise RuntimeError('Synthetic audit persistence failure')
+
+    event.listen(system.db.engine, 'before_cursor_execute', reject_audit)
+    try:
+        with pytest.raises(RuntimeError, match='Synthetic audit persistence failure'):
+            apply_adoption(system, plan)
+    finally:
+        event.remove(system.db.engine, 'before_cursor_execute', reject_audit)
+    with system.db.transaction() as session:
+        assert session.scalar(select(func.count()).select_from(ScreeningJob)) == 0
+        assert adopted_events(session) == []
+        assert session.get(notebook.NotebookPublication, original['id']).decision is None
+    assert apply_adoption(system, plan)['queued'] == 1
+    with system.db.transaction() as session:
+        assert session.scalar(select(func.count()).select_from(ScreeningJob)) == len(adopted_events(session)) == 1
+        assert session.scalar(select(func.count()).select_from(ScreeningAttempt)) == 0
+
+
+@pytest.mark.parametrize('change', ['disabled', 'other_policy'])
+def test_pg17_operator_adoption_rechecks_control_after_actual_lock_wait(pg_screened, change):
+    from fastapi import HTTPException
+    system = pg_screened
+    _note, original = legacy_pending(system)
+    plan = adoption_plan(system)
+    waiting = Event()
+
+    def before(_connection, _cursor, statement, _parameters, _context, _many):
+        if 'FROM publication_screening_control' in statement and 'FOR UPDATE' in statement:
+            waiting.set()
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with system.db.transaction(write=True) as session:
+            control = session.scalar(select(ScreeningControl).with_for_update())
+            event.listen(system.db.engine, 'before_cursor_execute', before)
+            try:
+                future = pool.submit(apply_adoption, system, plan)
+                assert waiting.wait(3) and not future.done()
+                if change == 'disabled':
+                    control.mode = 'disabled'
+                else:
+                    control.policy_id = '0' * 64
+            finally:
+                event.remove(system.db.engine, 'before_cursor_execute', before)
+        with pytest.raises(HTTPException) as stopped:
+            future.result(timeout=15)
+        assert stopped.value.status_code == 409
+    with system.db.transaction() as session:
+        assert session.scalar(select(func.count()).select_from(ScreeningJob)) == 0
+        assert adopted_events(session) == []
+        assert session.get(notebook.NotebookPublication, original['id']).decision is None
+
+
+@pytest.mark.parametrize('action', ['cancel', 'delete'])
+def test_pg17_author_retraction_during_provider_call_prevents_late_publication_and_keeps_cost(pg_screened, action):
+    system = pg_screened
+    note, publication_id = requested(system, create(system.owner,
+        content(body='PRIVATE_PENDING_RETRACTION_SENTINEL')))
+    started, release = Event(), Event()
+    provider = SyntheticProvider(started, release)
+    next_provider = SyntheticProvider()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(run, system, provider)
+        try:
+            assert started.wait(5), 'The synthetic provider boundary was not reached.'
+            # The provider is still in flight. The author action must commit
+            # without waiting for it, and conservatively retain its whole cost.
+            response = retract_publication(system, note, action)
+            assert response.status_code == 200, response.text
+            assert not future.done()
+            next_note, next_publication_id = requested(system)
+            # Cancellation revokes publication authority, not the transport
+            # already in flight. A second worker must not bypass the one-call
+            # limit merely because the author withdrew the first request.
+            assert run(system, next_provider) == {'status': 'idle'}
+            assert next_provider.calls == 0
+            with system.db.transaction() as session:
+                publication = session.get(notebook.NotebookPublication, publication_id)
+                assert (publication.decision, publication.decision_source) == ('cancelled', 'author')
+                assert publication.reviewer_id is None
+                assert session.get(AutomaticPublication, publication_id) is None
+                job = session.scalar(select(ScreeningJob).where(ScreeningJob.publication_id == publication_id))
+                assert job.status == 'cancelled' and job.content_sha256 == note['content_sha256']
+                attempt = session.scalar(select(ScreeningAttempt).where(ScreeningAttempt.job_id == job.id))
+                assert attempt.charged_micro_usd == attempt.reserved_micro_usd == system.policy.reserve_micro_usd
+                assert attempt.usage_known is False and attempt.finished_at == system.now[0]
+                assert attempt.result is None
+                budget = session.get(ScreeningBudget, attempt.budget_month)
+                assert (budget.spent_micro_usd, budget.reserved_micro_usd) == (system.policy.reserve_micro_usd, 0)
+                control = session.get(ScreeningControl, 1)
+                assert (control.active_job_id, control.lease_token, control.lease_expires_at) == (
+                    job.id, attempt.lease_token, attempt.lease_expires_at)
+                assert session.scalar(select(ScreeningJob.status).where(
+                    ScreeningJob.publication_id == next_publication_id)) == 'queued'
+                assert session.scalar(select(func.count()).select_from(ScreeningAttempt)) == 1
+        finally:
+            release.set()
+        assert future.result(timeout=15)['status'] == 'stale_lease'
+    assert provider.calls == 1
+    assert system.reader.client.get(f'/api/notebook/notes/{note["id"]}').status_code == 404
+    # Reopen through a new pool: the terminal decision and cost are durable,
+    # not just retained in the API request's SQLAlchemy identity map.
+    reopened = Database(system.fixture.runtime_url)
+    try:
+        with reopened.transaction() as session:
+            publication = session.get(notebook.NotebookPublication, publication_id)
+            assert (publication.decision, publication.decision_source) == ('cancelled', 'author')
+            assert session.get(AutomaticPublication, publication_id) is None
+            attempt = session.scalar(select(ScreeningAttempt))
+            assert attempt.charged_micro_usd == system.policy.reserve_micro_usd and attempt.usage_known is False
+            assert attempt.result is None
+            budget = session.get(ScreeningBudget, attempt.budget_month)
+            assert (budget.spent_micro_usd, budget.reserved_micro_usd) == (system.policy.reserve_micro_usd, 0)
+            control = session.get(ScreeningControl, 1)
+            assert (control.active_job_id, control.lease_token, control.lease_expires_at) == (None, None, None)
+            revision = session.get(notebook.NotebookRevision, publication.revision_id)
+            assert revision.content_sha256 == note['content_sha256']
+            if action == 'delete':
+                assert revision.content == {}
+                assert session.get(notebook.NotebookNote, note['id']).latest_revision == 0
+            else:
+                assert revision.content['body'] == 'PRIVATE_PENDING_RETRACTION_SENTINEL'
+    finally:
+        reopened.engine.dispose()
+    assert run(system, next_provider)['status'] == 'published'
+    assert next_provider.calls == 1
+    assert run(system, next_provider) == {'status': 'idle'}
+    assert next_provider.calls == provider.calls == 1
+    assert system.reader.client.get(f'/api/notebook/notes/{next_note["id"]}').status_code == 200
+    with system.db.transaction() as session:
+        assert session.get(AutomaticPublication, next_publication_id) is not None
+        budget = session.scalar(select(ScreeningBudget))
+        assert (budget.spent_micro_usd, budget.reserved_micro_usd) == (system.policy.reserve_micro_usd + 25, 0)
+
+
+@pytest.mark.parametrize('action', ['cancel', 'delete'])
+def test_pg17_cancelled_lost_worker_expires_without_requeue_or_releasing_replacement_slot(pg_screened, action):
+    system = pg_screened
+    note, publication_id = requested(system)
+
+    def claim():
+        return jobs.claim(system.db, policy=system.policy, enabled=True,
+            monthly_budget_micro_usd=system.settings.publication_screening_monthly_budget_micro_usd,
+            now=system.now[0])
+
+    abandoned = claim()
+    assert abandoned is not None and abandoned.publication_id == publication_id
+    assert retract_publication(system, note, action).status_code == 200
+    _, next_publication_id = requested(system)
+    # A crashed worker cannot signal that its transport has stopped. Preserve
+    # the occupied slot up to its original deadline, then unblock other work.
+    system.now[0] = abandoned.expires_at - 1
+    assert claim() is None
+    system.now[0] = abandoned.expires_at
+    replacement = claim()
+    assert replacement is not None and replacement.publication_id == next_publication_id
+    assert jobs.fail(system.db, abandoned, code='provider_unavailable', retryable=True,
+                     now=system.now[0]) == 'stale_lease'
+    with system.db.transaction() as session:
+        old_job = session.get(ScreeningJob, abandoned.job_id)
+        assert old_job.status == 'cancelled' and old_job.attempt_count == 1
+        old_attempt = session.get(ScreeningAttempt, abandoned.attempt_id)
+        assert old_attempt.charged_micro_usd == system.policy.reserve_micro_usd
+        assert old_attempt.usage_known is False and old_attempt.error_code == 'publication_unavailable'
+        assert session.scalar(select(func.count()).select_from(ScreeningAttempt)
+            .where(ScreeningAttempt.job_id == old_job.id)) == 1
+        control = session.get(ScreeningControl, 1)
+        assert (control.active_job_id, control.lease_token) == (replacement.job_id, replacement.token)
+        budget = session.get(ScreeningBudget, old_attempt.budget_month)
+        assert (budget.spent_micro_usd, budget.reserved_micro_usd) == (
+            system.policy.reserve_micro_usd, system.policy.reserve_micro_usd)
+        assert session.get(AutomaticPublication, publication_id) is None
+    # The replacement call was never sent in this synthetic lost-worker test;
+    # settle it at known zero cost, then verify neither terminal job requeues.
+    jobs.fail(system.db, replacement, code='provider_unconfigured', retryable=False,
+              now=system.now[0], actual_cost_micro_usd=0)
+    system.now[0] += worker.LEASE_SECONDS
+    assert claim() is None
+    with system.db.transaction() as session:
+        budget = session.scalar(select(ScreeningBudget))
+        assert (budget.spent_micro_usd, budget.reserved_micro_usd) == (system.policy.reserve_micro_usd, 0)
+        assert session.get(ScreeningJob, abandoned.job_id).status == 'cancelled'
+    assert system.reader.client.get(f'/api/notebook/notes/{note["id"]}').status_code == 404
+
+
+@pytest.mark.parametrize('action', ['cancel', 'delete'])
+def test_pg17_queued_retraction_never_calls_provider_or_reserves_budget(pg_screened, action):
+    system = pg_screened
+    note, publication_id = requested(system)
+    response = retract_publication(system, note, action)
+    assert response.status_code == 200, response.text
+    provider = SyntheticProvider()
+    assert run(system, provider) == {'status': 'idle'}
+    assert provider.calls == 0
+    with system.db.transaction() as session:
+        publication = session.get(notebook.NotebookPublication, publication_id)
+        assert (publication.decision, publication.decision_source) == ('cancelled', 'author')
+        assert session.get(AutomaticPublication, publication_id) is None
+        assert session.scalar(select(ScreeningJob.status)) == 'cancelled'
+        assert session.scalar(select(func.count()).select_from(ScreeningAttempt)) == 0
+        assert all((row.spent_micro_usd, row.reserved_micro_usd) == (0, 0)
+                   for row in session.scalars(select(ScreeningBudget)))
+
+
+@pytest.mark.parametrize('action', ['cancel', 'delete'])
+@pytest.mark.parametrize('first', ['author', 'reviewer'])
+def test_pg17_human_publication_and_author_retraction_have_one_serialized_winner(pg_screened, action, first):
+    system = pg_screened
+    note, publication_id = requested(system)
+    locked, release, waiting = Event(), Event(), Event()
+
+    def before(connection, cursor, statement, parameters, context, many):
+        if locked.is_set() and 'FROM notebook_notes' in statement and 'FOR UPDATE' in statement:
+            waiting.set()
+
+    def after(connection, cursor, statement, parameters, context, many):
+        if not locked.is_set() and 'FROM notebook_notes' in statement and 'FOR UPDATE' in statement:
+            locked.set()
+            assert release.wait(5), 'The winning note transaction was not released.'
+
+    def author():
+        return retract_publication(system, note, action)
+
+    def reviewer():
+        return system.reviewer.post(f'/api/notebook/notes/{note["id"]}/publication-reviews',
+            publication_body(note, decision='approved', reason='Synthetic independent publication review.'))
+
+    actions = {'author': author, 'reviewer': reviewer}
+    second = 'reviewer' if first == 'author' else 'author'
+    event.listen(system.db.engine, 'before_cursor_execute', before)
+    event.listen(system.db.engine, 'after_cursor_execute', after)
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            winner = pool.submit(actions[first])
+            try:
+                assert locked.wait(5), 'The first HTTP mutation did not hold the note row lock.'
+                loser = pool.submit(actions[second])
+                assert waiting.wait(3), 'The competing HTTP mutation did not reach the held row lock.'
+                assert not loser.done()
+            finally:
+                release.set()
+            accepted, rejected = winner.result(timeout=15), loser.result(timeout=15)
+            assert accepted.status_code == 200, accepted.text
+            assert rejected.status_code == 409, rejected.text
+    finally:
+        release.set()
+        event.remove(system.db.engine, 'before_cursor_execute', before)
+        event.remove(system.db.engine, 'after_cursor_execute', after)
+    with system.db.transaction() as session:
+        publication = session.get(notebook.NotebookPublication, publication_id)
+        assert (publication.decision, publication.decision_source) == (
+            ('cancelled', 'author') if first == 'author' else ('approved', 'human'))
+        assert publication.reviewer_id == (None if first == 'author' else system.reviewer.identifier)
+        assert session.get(AutomaticPublication, publication_id) is None
+        revision = session.get(notebook.NotebookRevision, publication.revision_id)
+        assert revision.content_sha256 == note['content_sha256']
+        assert bool(revision.content) is not (first == 'author' and action == 'delete')
+    visible = system.reader.client.get(f'/api/notebook/notes/{note["id"]}')
+    assert visible.status_code == (404 if first == 'author' else 200)
+
+
+@pytest.mark.parametrize('action', ['cancel', 'delete'])
+def test_pg17_worker_finalization_wins_control_lock_without_deadlocking_author_retraction(pg_screened, action):
+    system = pg_screened
+    note, publication_id = requested(system)
+    started, provider_release, worker_locked, worker_release, author_waiting = [Event() for _ in range(5)]
+    provider = SyntheticProvider(started, provider_release)
+
+    def control_lock(statement):
+        return 'FROM publication_screening_control' in statement and 'FOR UPDATE' in statement
+
+    def before(connection, cursor, statement, parameters, context, many):
+        if worker_locked.is_set() and control_lock(statement):
+            author_waiting.set()
+
+    def after(connection, cursor, statement, parameters, context, many):
+        if not worker_locked.is_set() and control_lock(statement):
+            worker_locked.set()
+            assert worker_release.wait(5), 'The finalization transaction was not released.'
+
+    listening = False
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        model_future = pool.submit(run, system, provider)
+        try:
+            assert started.wait(5)
+            # Pause actual finalization after control acquisition but before it
+            # locks the author. A cancel/delete request must wait for control
+            # without holding that author's account lock: the opposite order
+            # would produce a real PostgreSQL deadlock when finish resumes.
+            event.listen(system.db.engine, 'before_cursor_execute', before)
+            event.listen(system.db.engine, 'after_cursor_execute', after)
+            listening = True
+            provider_release.set()
+            assert worker_locked.wait(5)
+            author_future = pool.submit(retract_publication, system, note, action)
+            assert author_waiting.wait(3)
+            assert not author_future.done()
+            worker_release.set()
+            assert model_future.result(timeout=15)['status'] == 'published'
+            response = author_future.result(timeout=15)
+            assert response.status_code == 409, response.text
+        finally:
+            provider_release.set(); worker_release.set()
+            if listening:
+                event.remove(system.db.engine, 'before_cursor_execute', before)
+                event.remove(system.db.engine, 'after_cursor_execute', after)
+    with system.db.transaction() as session:
+        publication = session.get(notebook.NotebookPublication, publication_id)
+        assert publication.decision == 'approved'
+        assert session.get(AutomaticPublication, publication_id) is not None
+        attempt = session.scalar(select(ScreeningAttempt))
+        assert attempt.usage_known and attempt.charged_micro_usd == 25
+        budget = session.get(ScreeningBudget, attempt.budget_month)
+        assert (budget.spent_micro_usd, budget.reserved_micro_usd) == (25, 0)
+        assert session.get(notebook.NotebookRevision, publication.revision_id).content
+    assert system.reader.client.get(f'/api/notebook/notes/{note["id"]}').status_code == 200

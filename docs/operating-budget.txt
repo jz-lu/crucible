@@ -1,6 +1,6 @@
 CRUCIBLE OPERATING BUDGET
 =======================
-Last reviewed: 2026-11-05. Currency: USD, before tax and credits.
+Last reviewed: 2026-11-06. Currency: USD, before tax and credits.
 Public rates retain their 2026-11-04 verification date below.
 Planning scale: hundreds of active researchers, with occasional bursts.
 Next review: first full month after screening is enabled, or 2026-12-04,
@@ -111,11 +111,16 @@ revision; a transient retry can create a second billable call. Approval of shari
 does not certify the mathematics, admit a scheme or award a bounty.
 
 The implemented defaults are gpt-6-luna, a $10 per UTC month cap, at most two
-attempts and one global database lease. The 128,000 input allowance is a
-conservative byte-based token ceiling including policy/serialization overhead;
-it is not a tokenizer measurement or permission to truncate. Output is capped
-at 1,500 tokens. The stricter application/durable budget applies. Known usage
-settles reservations; unknown usage retains the full conservative charge.
+attempts and one global database lease. The 128,000-token input allowance covers
+the complete request. A small input fitting the conservative byte bound needs no
+extra call. Larger valid notes use one provider token-count request before
+generation; they are not truncated to fit. Counting and generation share a
+45-second deadline. Output is capped at 1,500 tokens. The stricter application/
+durable generation budget applies. Known usage settles reservations (including
+unexpected overspend); unknown generation usage retains the full reserved charge.
+Counting is bounded to one call per attempt but reports no billable-usage field.
+This ledger records generation usage, not proof of free counting or a guaranteed
+complete provider invoice. Reconcile actual billing before assuming otherwise.
 
 Hosted execution uses an opt-in child inside the existing web service, not an
 additional paid App Platform component. It still uses shared CPU/memory, its own
