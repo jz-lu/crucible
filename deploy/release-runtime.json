@@ -510,7 +510,8 @@
       "test_catalogue_progress.py",
       "test_recovery_summary.py",
       "test_read_performance.py",
-      "test_busy_http.py"
+      "test_busy_http.py",
+      "test_submission_history.py"
     ],
     "generation-lifecycle": [
       "test_generation_concurrency.py"
