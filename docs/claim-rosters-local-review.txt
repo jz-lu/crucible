@@ -138,7 +138,7 @@ configuration coverage, initial provenance and migration compatibility.
 
 This document records engineering behavior, not a cryptographic endorsement.
 
-Integrated local checkpoint
+Original local checkpoint (retained development workspace)
 
 All eight scheme notes are at revision 12. They contain 34 premise statements,
 39 conclusion statements and 39 arguments. Sixteen scheme arguments and ten
@@ -181,7 +181,17 @@ be conditional: no automatic theorem badge follows from an empty premise list.
 The neutral Claim label describes the proposition; review provenance describes
 what the pipeline has actually done.
 
-This implementation remains local and uncommitted. Nothing in this pass was
-deployed or pushed. Local validation receipts are in
+These counts describe the retained development workspace, not the contents of
+a new clone. Its private local validation receipts are in
 .local/note-integration-v2/claim-rosters-validation.json and
 .local/note-integration-v2/claim-rosters-http-validation.json.
+
+Collaborator handoff
+
+The implementation is preserved on feature/assumptions-note-integration, with
+newer main changes incorporated. See docs/claims-local-setup.txt for the tracked
+launcher and clean-checkout instructions. A fresh fixture has its own users,
+note IDs, revision numbering and server key; it reproduces the current content,
+not the original developer's private history. No existing database is shipped.
+The local workflow remains disabled in production. This checkpoint does not
+authorize a deployment or claim independent scientific review of the corpus.

@@ -1,0 +1,139 @@
+Claims and arguments: collaborator preview
+=========================================
+
+This is a local development checkpoint, not a hosted release. It uses the real
+application and eight registered scheme releases, with newly generated research
+notes. It does not import the beta database, existing users, private research,
+API credentials or another developer's server key.
+
+The source branch is feature/assumptions-note-integration. Run commands below
+from its checkout root. Python 3.11 or newer is required. No Node build is needed
+to view the application.
+
+1. Install the application and verified native workers
+
+   python3 -m venv .venv
+   .venv/bin/python -m pip install -r requirements.lock
+   .venv/bin/python -m pip install --no-deps -e .
+
+The full catalogue needs native workers. Follow docs/native-setup.txt before
+preparing the preview. That maintained guide describes compiler/CMake/Ninja and
+OpenSSL prerequisites, platform pins, downloads, and build validation. Its
+original local build sequence is:
+
+   .venv/bin/python scripts/build_pq_backend.py --download
+   .venv/bin/python scripts/build_sntrup.py --download --reference
+   .venv/bin/python scripts/build_ntru_tiers.py
+   .venv/bin/python scripts/build_ntru_frontier.py
+   .venv/bin/python scripts/code_build_backend.py
+   .venv/bin/python scripts/build_hqc_growth.py --base-native .native-pq
+   .venv/bin/python scripts/build_hqc_model.py --base-native .native-pq
+   .venv/bin/python -c 'from crucible.registry import validate_registry; validate_registry()'
+
+These are real upstream downloads/builds, not bundled portable binaries. The
+original pins target macOS arm64 and the documented compiler/dependencies.
+The hosted Linux runtime has separate reviewed pins; see deploy/release-runtime.json
+and docs/releasing-beta.txt. Another machine/compiler may not reproduce the exact
+local digests. If validation fails, stop and inspect the documented provenance;
+do not replace digests or disable validation to get a working preview. A trusted
+existing native installation may be copied with its licenses and closure as
+described in native-setup.txt, but never copy its .local database or server key.
+The tracked RAM attack accounts also bind exact scheme manifests, including
+native identities. A successful build with different metadata may therefore
+still require reviewed regeneration of those accounts and their source-note
+pins. The launcher does not silently substitute display metadata. This is not
+yet a one-command portable preview on arbitrary operating systems.
+
+2. Create the isolated fixture and start it
+
+Use a development shell, without DATABASE_URL, CRUCIBLE_SECRET or
+CRUCIBLE_DATA_DIR. Do not source the production environment. The launcher rejects
+those settings and production mode; it disables mail, GitHub OAuth and paid
+publication screening in its own process.
+
+   .venv/bin/python scripts/serve_claims_preview.py --prepare --with-trial
+
+Open:
+
+   http://127.0.0.1:8000/preview
+
+The command applies normal Alembic migrations to .local/claims-preview/crucible.db,
+creates its own private server key and generates eight notes from the tracked
+source evidence. Their sections, statements, arguments and graph links are
+created through the normal notebook API. The source evidence pins are checked.
+The optional --with-trial adds six clearly illustrative notes and a small finite
+counterexample/replacement rehearsal. Omit it for just the eight scheme notes.
+Fixture publication and initial argument rosters are explicitly local draft
+actions, not independent scientific approval or claims of cryptographic security.
+
+The /preview entry selects a synthetic author; no password or real login is
+needed. Reviewer and rehearsal entry points are:
+
+   http://127.0.0.1:8000/preview?persona=reviewer
+   http://127.0.0.1:8000/preview?persona=author&trial=1
+   http://127.0.0.1:8000/preview?persona=reviewer&trial=1
+
+Persona switching is confined to this launcher, with its own cookie. The normal
+application and ./run.sh have no synthetic sign-in route. It binds only
+127.0.0.1, checks the peer and Host, and refuses cross-site persona entry. Do not
+expose this development fixture through a tunnel, proxy or public deployment.
+
+Stop with Ctrl+C. Restart without reseeding:
+
+   .venv/bin/python scripts/serve_claims_preview.py
+
+Use --port 8041 if port 8000 is occupied, and use that port in the browser URLs.
+Use --prepare-only together with --prepare to create the fixture without serving.
+Preparation is repeatable when source notes are unchanged; it does not duplicate
+them. To deliberately update the builder's fixture notes after pulling changes:
+
+   .venv/bin/python scripts/serve_claims_preview.py --prepare --refresh-fixture
+
+This appends revisions and preserves history. The builder refuses to overwrite
+independent edits to its managed notes. Keep your own research in separate notes.
+Rehearsal journal decisions are durable: rerunning --with-trial does not reset a
+previously reviewed request. For a clean replay, stop the server and move the
+whole .local/claims-preview directory aside yourself; the next --prepare creates
+a new isolated fixture. Keep any backup private and out of git.
+
+3. Check the result and continue development
+
+The Schemes page should show eight schemes. Each overview's security/correctness
+arguments and attack-curve points lead to exact readable note sections, with full
+text available in the reader. The notebook starts with these generated notes,
+not somebody else's research history. The optional rehearsal guide links the
+premise, finite check, competing arguments and reviewer decisions.
+
+Data, decisions and the key persist only in this checkout's ignored preview
+directory. Measured resource reports remain tied to their recorded runtime:
+missing or inapplicable measurements must not be presented as locally measured
+timings merely because this preview runs. Benchmarking is a separate operation.
+
+Focused launcher checks (these use a portable test adapter, not native evidence):
+
+   .venv/bin/python -m pytest -q tests/test_claims_preview.py
+
+Architecture and known limits: docs/claim-rosters-local-review.txt. The fixture
+uses a process-local 8 MiB notebook allowance to preserve rehearsal revisions;
+the normal production default is unchanged. This checkpoint is for local review
+and collaboration. Do not enable its local-corpus flag in the hosted beta.
+
+Release boundary
+
+This branch includes main through f9719ab and an additive migration, 0032 after
+0031. The ordinary release-contract check intentionally rejects this development
+checkpoint: its new modules, configuration and schema are outside the currently
+reviewed runtime contract. Do not weaken that guard or use the beta release action
+to preview this branch. Hosted adoption still needs the reviewed-runtime update,
+old/new schema compatibility evidence and PostgreSQL source-withdrawal/review
+concurrency work identified in docs/claim-rosters-local-review.txt.
+
+Local validation on the integration base covered the research/account workflows,
+native-bound note conversion and RAM identities, the standalone frontend tests,
+and 39 selected Chromium desktop/mobile checks. A fresh preview was prepared and
+reprepared without duplicate notes or requests; HTTP sign-in and all eight
+scheme-justification entry points passed. Native artifacts for that check came
+from the existing verified installation, not an independent cross-platform build.
+No hosted release, PostgreSQL concurrency certification or scientific approval
+is implied. Feature-branch pushes alone do not run the repository's main/PR CI;
+opening a PR will run those gates, including the unresolved release-contract gate.
