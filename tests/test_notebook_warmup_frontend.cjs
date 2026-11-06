@@ -302,7 +302,7 @@ const lists=app=>app.requests.filter(row=>row.url.startsWith('/api/notebook/note
   const source=curatedFixture('source','Readable curated body'),status=deferred(),statusEntered=deferred();
   const app=await boot({researchWorkspace:{...emptyResearch,notes:[source]},respond:url=>{if(url.startsWith('/api/notebook/research-requests?source_note_id=')){statusEntered.resolve();return status.promise;}}});
   assert.equal(app.requests.some(row=>row.url==='/map/notes.json'),false);
-  app.q('list').querySelector('.nb-title').click();await flush();assert.equal(app.requests.filter(row=>row.url==='/map/notes.json').length,1);
+  app.q('list').querySelector('.nb-expand').click();await flush();assert.equal(app.requests.filter(row=>row.url==='/map/notes.json').length,1);
   const showing=app.show('curated:source');await within(statusEntered.promise,'curated status request');const body=app.q('full').querySelector('.nb-body');assert.match(body.textContent,/Argument as text/);
   assert.equal(byText(app.q('full'),'Propose a change').disabled,true);const cite=byText(app.q('full'),'Cite this note');cite.focus();
   status.resolve({requests:[],next_after:null});await showing;assert.equal(app.q('full').querySelector('.nb-body'),body);assert.equal(app.document.activeElement,cite);assert.equal(byText(app.q('full'),'Propose a change').disabled,false);

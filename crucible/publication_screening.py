@@ -78,6 +78,7 @@ _FAILURE_COPY = {
 }
 _FIELD_LABELS = {"title": "Title", "claim": "Summary", "conditions": "Conditions",
                  "body": "Body", "tags": "Tags", "references": "References",
+                 "sections": "Readable sections", "statements": "Statements", "arguments": "Arguments",
                  "kind": "Note type", "extensions": "Additional metadata"}
 _CATEGORY_LABELS = {
     "privacy_or_credentials": "Privacy or credentials",

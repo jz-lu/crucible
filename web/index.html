@@ -19,6 +19,7 @@
     <script src="/assumptions.js" defer></script>
     <script src="/proposal-retractions.js" defer></script>
     <script src="/resource-metrics.js" defer></script>
+    <script src="/graph-points.js" defer></script>
     <script src="/app.js" defer>
     </script>
     <link rel="stylesheet" href="/styles.css">
@@ -437,6 +438,10 @@
             <h1 id="overview-title"></h1>
             <p id="overview-summary" hidden></p>
             <p id="overview-beta" class="beta-note" hidden></p>
+            <div id="overview-justifications" class="overview-justifications" aria-label="Scheme arguments" hidden>
+              <a id="overview-security-button" class="overview-assumptions-link" href="#challenge">Security argument</a>
+              <a id="overview-correctness-button" class="overview-assumptions-link" href="#challenge">Correctness argument</a>
+            </div>
           </div>
           <div class="overview-entry">
             <div class="overview-entry-actions">
@@ -1378,6 +1383,14 @@
         </aside>
         <p class="points-help-footnote">Points recognize contributions. They do not certify a claim, compare attack difficulty, or establish a scheme’s security.</p>
       </div>
+    </dialog>
+    <dialog id="scheme-assumptions-dialog" class="scheme-assumptions-dialog" aria-labelledby="scheme-assumptions-title">
+      <div class="dialog-top">
+        <p id="scheme-assumptions-scheme" class="eyebrow"></p>
+        <button class="icon-button" type="button" data-close aria-label="Close scheme argument">×</button>
+      </div>
+      <h2 id="scheme-assumptions-title">Scheme argument</h2>
+      <div id="scheme-assumptions-content" class="scheme-assumptions-content"></div>
     </dialog>
     <dialog id="recovery-dialog" class="wide-dialog" aria-labelledby="recovery-title">
       <div class="dialog-top">

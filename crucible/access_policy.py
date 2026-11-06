@@ -14,7 +14,7 @@ PUBLIC = {
     ("GET", "/vendor/resi/cardo-normal-700-latin.woff2"),
     ("GET", "/vendor/resi/plex-sans-normal-100-700-latin.woff2"),
     ("GET", "/"), ("GET", "/styles.css"), ("GET", "/app.js"), ("GET", "/bootstrap.js"),
-    ("GET", "/math.js"), ("GET", "/assumptions.js"), ("GET", "/proposal-retractions.js"), ("GET", "/resource-metrics.js"), ("GET", "/assets/crucible-logo.png"),
+    ("GET", "/math.js"), ("GET", "/assumptions.js"), ("GET", "/proposal-retractions.js"), ("GET", "/resource-metrics.js"), ("GET", "/graph-points.js"), ("GET", "/assets/crucible-logo.png"),
     ("GET", "/health"), ("GET", "/api/session"), ("GET", "/api/agent/client"),
     ("POST", "/api/auth/register"), ("POST", "/api/auth/login"),
     ("POST", "/api/auth/logout"), ("POST", "/api/agent/connect/start"),
@@ -31,6 +31,11 @@ PUBLIC = {
 # Explicit paths from the existing application. This is deliberately not a
 # prefix exemption: adding a route requires choosing its audience here.
 MEMBER_PATHS = {
+    "/api/notebook/statement-workflow/context", "/api/notebook/statement-workflow/targets",
+    "/api/notebook/statement-workflow/targets/{target_id}",
+    "/api/notebook/statement-workflow/updates", "/api/notebook/statement-workflow/updates/{update_id}",
+    "/api/notebook/statement-workflow/updates/{update_id}/review",
+    "/api/protocol/note-justifications",
     "/api/bounties", "/api/bounties/review-queue", "/api/me/bounty-allowance",
     "/api/bounties/{task_id}", "/api/bounties/{task_id}/revisions",
     "/api/bounties/{task_id}/admission-requests", "/api/bounties/{task_id}/admission-decisions",

@@ -106,7 +106,7 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
     assert.match(chart(app).textContent,/<script>model<\/script>/);
     assert.equal(chart(app).querySelectorAll('a').some(a=>a.href.startsWith('javascript:')),false);
     assert.equal(chart(app).querySelectorAll('a').find(a=>a.textContent==='Primary source').href,'https://example.org/paper');
-    assert.equal(chart(app).querySelectorAll('a').find(a=>a.textContent.includes('assumptions')).href,'#scheme/fixture/v1/assumptions');
+    assert.equal(app.$('#overview-assumptions').href,'#scheme/fixture/v1/assumptions');
   });
   await test('an exact supporting note stays inside the collapsed security disclosure',async()=>{
     const s=scheme();s.evidence_note={id:'curated:security:fixture:v1',revision:2,content_sha256:'a'.repeat(64)};

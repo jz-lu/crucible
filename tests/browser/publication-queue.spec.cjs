@@ -104,7 +104,11 @@ for (const width of [1440,390]) test(`human-attention requests retain cached sum
       await expect(full).not.toContainText('QUEUEAUTHOR_PRIVATE_BROWSER_BODY');
       expect(requests.filter(request=>request.url.pathname==='/api/notebook/notes/'+candidate.id&&request.method==='GET')).toHaveLength(visit+1);
       reader.release();await reader.delivered;await reader.remove();
-      await expect(full).toContainText('QUEUEAUTHOR_PRIVATE_BROWSER_BODY');
+      await expect(full.locator('.nb-readable-unavailable')).toHaveText('No readable explanation has been added.');
+      await expect(full.locator('.nb-body')).toBeHidden();
+      await full.locator('.nb-full-text > summary').click();
+      await expect(full.locator('.nb-body')).toBeVisible();
+      await expect(full.locator('.nb-body')).toContainText('QUEUEAUTHOR_PRIVATE_BROWSER_BODY');
       await expect(full.locator('.nb-publication-review')).toBeVisible();
       if(visit===0){
         await full.locator('[name="decision"]').selectOption('changes_requested');

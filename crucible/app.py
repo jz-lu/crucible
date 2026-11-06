@@ -268,6 +268,9 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     registry.warm_navigation_metadata()
     settings = settings or load_settings()
     db = Database(settings.database_url)
+    # Shared source resolvers also run outside notebook routes. Keep the local
+    # corpus policy on each app-owned session rather than process-global state.
+    db.sessions.configure(info={"local_note_corpus_only": settings.local_note_corpus_only})
     if initialize:  # Explicit test fixture only. Normal startup uses Alembic.
         Base.metadata.create_all(db.engine)
     app = FastAPI(title="Crucible recovery API", version="0.1.0", docs_url=None, redoc_url=None)
@@ -360,7 +363,11 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         access = beta_access.access_payload(session, settings, user) if access is None else access
         return envelope(user={"id": user.id, "handle": user.handle} if user else None, access=access,
                         auth=github_auth.auth_payload(session, settings, user) if auth is None else auth,
-                        capabilities={"manage_beta_access": beta_access.is_admin(settings, user) and access["allowed"],
+                        capabilities={"curated_notes": not settings.local_note_corpus_only,
+                                      "ram_attack_comparison": settings.local_note_corpus_only,
+                                      "local_note_justifications": settings.local_note_corpus_only,
+                                      "statement_workflow_trial": settings.local_note_corpus_only,
+                                      "manage_beta_access": beta_access.is_admin(settings, user) and access["allowed"],
                                       "review_protocol_proposals": protocol_proposals.is_reviewer(settings, user) and access["allowed"],
                                       "self_review_protocol_proposals": protocol_proposals.can_self_review(settings, user) and access["allowed"]},
                         csrf_token=mac(settings.secret, "csrf-v1", raw.encode("ascii")))
@@ -597,6 +604,20 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             response.headers["content-length"] = str(len(response.body))
         return response
 
+    def catalogue_note_metadata(release):
+        if not settings.local_note_corpus_only:
+            return release
+        # Keep shared registry metadata intact. The isolated notebook supplies
+        # its own exact bindings; bundled-note links would point at suppressed
+        # sources even though the underlying scheme evidence remains available.
+        result = dict(release)
+        if "evidence_note" in result:
+            result["evidence_note"] = None
+        if "previous_releases" in result:
+            result["previous_releases"] = [catalogue_note_metadata(item)
+                                           for item in result["previous_releases"]]
+        return result
+
     @app.get("/api/schemes")
     def schemes(request: Request, progress_only: bool = False, projection: str | None = None,
                 scheme_id: str | None = None, version: str | None = None):
@@ -612,11 +633,13 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                 {"id": identifier, "version": version} for identifier, version in registry.CURRENT.items()],
                 catalogue_revision=registry.catalogue_revision()), request.headers.get("accept-encoding"))
         if projection == "release":
-            releases = [registry.descriptor(adapter_for(version, scheme_id))]
+            releases = [catalogue_note_metadata(registry.descriptor(adapter_for(version, scheme_id)))]
             catalogue = None
         else:
             catalogue = (registry.navigation_catalogue() if projection == "navigation" else
                          registry.progress_catalogue() if progress_only else registry.catalogue())
+            if settings.local_note_corpus_only:
+                catalogue = [catalogue_note_metadata(scheme) for scheme in catalogue]
             releases = [release for scheme in catalogue for release in [scheme, *scheme["previous_releases"]]]
         # One bounded-result query for the whole catalogue: first successful
         # receipt per exact scheme/version/profile, using the leaderboard's tie
@@ -1054,6 +1077,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     def javascript(request: Request):
         return public_assets.response(request)
 
+    @app.get("/graph-points.js")
     @app.get("/resource-metrics.js")
     def resource_metrics_javascript(request: Request):
         return public_assets.response(request)
@@ -1078,6 +1102,12 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     def research_map_asset(asset_name: str, request: Request):
         # Curated, read-only research notes; never a directory mount or a view
         # into account-owned notebook data. Beta membership is enforced above.
+        if settings.local_note_corpus_only and asset_name in {"notes.json", "notes-data.js"}:
+            empty = {"format": notebook.FORMAT, "notes": [], "views": [], "extensions": {}}
+            if asset_name == "notes-data.js":
+                return Response("window.CRUCIBLE_NOTES = " + json.dumps(empty) + ";\n",
+                                media_type="text/javascript", headers={"Cache-Control": "no-store"})
+            return JSONResponse(empty, headers={"Cache-Control": "no-store"})
         return protected_assets.response(request)
 
     @app.get("/notebook/{asset_name}")
@@ -1124,7 +1154,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     @app.get("/api/protocol/proposal-guide")
     def proposal_guide(note: bool = False, data: bool = False, evidence_sha256: str | None = None):
         from . import display_notes
-        binding = display_notes.proposal_guide()
+        binding = None if settings.local_note_corpus_only else display_notes.proposal_guide()
         if data:
             evidence = display_notes.evidence(binding, evidence_sha256=evidence_sha256)
             if evidence is None:
@@ -1143,6 +1173,8 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                                revision: int | None = None, sha256: str | None = None,
                                data: bool = False, evidence_sha256: str | None = None):
         from . import display_notes
+        if settings.local_note_corpus_only:
+            raise HTTPException(404, "No bundled supporting note is available in this local corpus.")
         adapter = adapter_for(version, scheme_id)
         binding = display_notes.for_release(adapter.SCHEME_ID, adapter.SCHEME_VERSION)
         if data:
@@ -1160,7 +1192,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         from . import display_notes
         adapter = adapter_for(version, scheme_id)
         return envelope(sheet=assumption_sheets.sheet_for(adapter.SCHEME_ID, adapter.SCHEME_VERSION),
-                        supporting_note=display_notes.for_release(adapter.SCHEME_ID, adapter.SCHEME_VERSION))
+                        supporting_note=None if settings.local_note_corpus_only else display_notes.for_release(adapter.SCHEME_ID, adapter.SCHEME_VERSION))
 
     @app.get("/api/protocol/benchmarks")
     def reference_benchmarks(scheme_id: str, version: str | None = None):
@@ -1169,7 +1201,8 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         # Read only explicitly selected evidence. Timing never runs in a request.
         report = benchmark_reports.report_for(adapter)
         return envelope(method=REFERENCE_METHOD, report=report,
-                        supporting_note=display_notes.for_report(adapter.SCHEME_ID, adapter.SCHEME_VERSION, report))
+                        supporting_note=None if settings.local_note_corpus_only else
+                            display_notes.for_report(adapter.SCHEME_ID, adapter.SCHEME_VERSION, report))
 
     @app.get("/api/protocol/source")
     def protocol_source(version: str | None = None, scheme_id: str = kem.SCHEME_ID):

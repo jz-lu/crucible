@@ -72,6 +72,7 @@
     if (path === '#challenge') return {page: 'catalogue', title: 'Schemes'};
     if (path === '#activity') return {page: 'activity', title: 'My activity'};
     if (path === '#people') return {page: 'people', title: 'Leaderboard'};
+    if (path === '#about') return {page: 'about', title: 'About us'};
     const legacyBounty = path === '#notebook' && !params.has('location') &&
       params.get('review') !== '1' && params.get('research_review') !== '1' &&
       (['bounties', 'guide'].includes(params.get('view')) || params.has('bounty') || params.get('compose') === 'bounty');
@@ -97,7 +98,7 @@
     if (/^#scheme\/[^/]+\/[^/]+$/.test(path)) return {page: 'chart', title: 'Scheme'};
     if (/^#challenge\/[^/]+\/[^/]+$/.test(path)) return {page: 'list', title: 'Challenge'};
     if (path === '#reviews' || (path === '#propose' && params.get('review') === '1')) return {page: 'list', title: 'Review center'};
-    const title = {'#about': 'About us', '#propose': 'Propose a scheme', '#connect': 'Connect an agent',
+    const title = {'#propose': 'Propose a scheme', '#connect': 'Connect an agent',
       '#join': 'Private beta', '#auth': 'Sign in', '#reset-password': 'Reset password'}[path];
     return {page: 'neutral', title: title || 'Crucible'};
   }

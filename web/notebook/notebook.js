@@ -28,17 +28,21 @@
   // Locations address source lines in one immutable body, never a moving title
   // slug or the latest revision. Blank lines and fenced-code lines still count.
   const validLocation = value => /^L[1-9][0-9]{0,6}$/.test(value || '') && Number(value.slice(1)) <= 1000000;
-  function passagePinError(fields) {
-    if (!fields.has('location')) return null;
-    if (!validLocation(fields.get('location'))) return 'This passage location is invalid. Use a citation copied from the saved note.';
+  const validSection = value => /^[a-z][a-z0-9-]{0,63}$/.test(value || '') && !['prototype', 'constructor'].includes(value);
+  const validStructuredId = value => /^[a-z][a-z0-9-]{0,79}$/.test(value || '') && !['prototype','constructor','__proto__'].includes(value);
+  function passagePinError(fields, reviewing = false) {
+    const anchors = ['location','note_section','statement','argument'].filter(key => fields.has(key));
+    if (!anchors.length) return null;
+    if (anchors.length !== 1) return 'An exact citation must select only one passage, section, statement or argument.';
+    const anchor = anchors[0], section = anchor !== 'location', kind = anchor === 'location' ? 'passage' : anchor === 'note_section' ? 'section' : anchor;
+    if (['statement','argument'].includes(anchor) ? !validStructuredId(fields.get(anchor)) : section ? !validSection(fields.get(anchor)) : !validLocation(fields.get(anchor))) return 'This ' + kind + ' location is invalid. Use a citation copied from the saved note.';
     if (!fields.get('note') || !/^(?:[1-9][0-9]?|100)$/.test(fields.get('revision') || '') ||
         !/^[0-9a-f]{64}$/.test(fields.get('sha256') || '') ||
-        ['note', 'revision', 'sha256', 'location'].some(key => fields.getAll(key).length !== 1)) {
-      return 'A passage citation requires one exact note, revision and content hash. Open the original citation; no latest revision has been selected.';
+        ['note', 'revision', 'sha256', anchor].some(key => fields.getAll(key).length !== 1)) {
+      return 'A ' + kind + ' citation requires one exact note, revision and content hash. No latest revision has been selected.';
     }
-    if ([...fields.keys()].some(key => !['note', 'revision', 'sha256', 'location'].includes(key))) {
-      return 'A passage citation cannot select another notebook view. Use the exact passage link without additional route options.';
-    }
+    const allowed = ['note', 'revision', 'sha256', anchor, ...(reviewing ? ['section', 'review'] : [])];
+    if ([...fields.keys()].some(key => !allowed.includes(key) || fields.getAll(key).length !== 1)) return 'A ' + kind + ' citation cannot select another notebook view.';
     return null;
   }
 
@@ -49,7 +53,7 @@
     if (!['https:', 'http:'].includes(target.protocol) || target.username || target.password) return null;
     if (target.origin === new URL(window.location.href).origin && target.pathname === '/' && target.hash.startsWith('#notebook?')) {
       const fields = new URLSearchParams(target.hash.slice('#notebook?'.length));
-      if (target.search || [...fields.keys()].some(key => !['note', 'revision', 'sha256', 'location'].includes(key) || fields.getAll(key).length !== 1)) return null;
+      if (target.search || [...fields.keys()].some(key => !['note', 'revision', 'sha256', 'location', 'note_section', 'statement', 'argument'].includes(key) || fields.getAll(key).length !== 1)) return null;
       if (!fields.get('note') || !/^[1-9][0-9]*$/.test(fields.get('revision') || '')) return null;
       if (fields.has('sha256') && !/^[0-9a-f]{64}$/.test(fields.get('sha256'))) return null;
       if (passagePinError(fields)) return null;
@@ -58,9 +62,16 @@
     if (!/^https?:\/\//i.test(value.trim())) return null;
     return {href:target.href, internal:false};
   }
+  function citationDisplayLabel(reference, target) {
+    if (typeof reference?.title === 'string' && reference.title.trim()) return citationLabel(reference);
+    if (!target?.internal || !target.pinned) return null;
+    const fields = new URLSearchParams(target.href.split('?')[1] || '');
+    return fields.has('statement') ? 'Exact statement' : fields.has('argument') ? 'Exact argument' :
+      fields.has('note_section') ? 'Exact note section' : fields.has('location') ? 'Exact note passage' : 'Exact note revision';
+  }
   const citationGuidance = 'Give every research note a Citations section using references. Spend a separate, deliberate pass checking citations: read the original source, verify the exact claim and version, and record the section, theorem or page and what it supports in scope. Prefer primary sources. Cite Crucible notes by exact revision and content hash, using Cite this note; distinguish their claims and review status from independently established results. Separate borrowed results, your deductions and conjectures. Do not invent citations or imply you read an inaccessible source; mark verification gaps explicitly. A genuine original observation may have no external sources: explain that instead of adding filler citations. Use the optional relation field to explain direct connections: cites, builds_on, supports, challenges, reproduces or responds_to. Pair it with a precise scope; these are authored claims, not review decisions. Exact local note links form the revision graph and backlinks. A citation never grants access to a private note; do not copy private titles or content into shared work without permission.';
 
-  const noteWritingGuidance = "The dropdown summary is for people browsing: briefly explain the question or result, why it matters and any essential caveat. The body is a free-form technical research record for agents and expert reviewers. Use LaTeX, dense notation, prose, code, calculations or any combination that suits the work. No fixed outline or mandatory internal sections are required. Do not shorten, simplify or flatten the body for general readability. Preserve precise definitions, assumptions, evidence and uncertainties wherever they belong. The human-written tag is an explicit, unverified authorship label: never add it automatically or infer it from an account; omit it from agent-written revisions.";
+  const noteWritingGuidance = "The dropdown summary is for people browsing: briefly explain the question or result, why it matters and any essential caveat. Readable sections are optional; add them when a separate explanation helps people. Give each an explicit stable id, a heading in title, and readable Markdown in body. Preserve section IDs when renaming headings; citations pin the section in an exact saved revision. The note body is the complete free-form technical research record, shown under Full text. Use LaTeX, dense notation, prose, code, calculations or any combination that suits the work. No fixed outline or mandatory internal sections are required. Do not shorten, simplify or flatten the body for general readability. Preserve precise definitions, assumptions, evidence and uncertainties wherever they belong. The human-written tag is an explicit, unverified authorship label: never add it automatically or infer it from an account; omit it from agent-written revisions.";
   const importSharingGuidance = 'New notes and revisions start private. Publication requires reviewer approval of an exact saved revision. Import does not publish notes or change review status.';
   const notebookCliGuidance = 'Use the CLI for routine note work: notebook list/show/export/import/create/revise/request-publication/delete. Delete permanently removes an unsubmitted private draft and its saved revisions, requires explicit confirmation, and cannot be undone. Submitted research and review evidence cannot be deleted. An authorized participant can approve login --notebook --no-browser once; the model should not manipulate the browser. Existing connections need explicit notebook permissions. Save through the CLI only when authorized, preserve its retry files and report exact note IDs, revision hashes and publication-request status. If access is unavailable, return portable workspace JSON and report the missing permission.';
 
@@ -173,7 +184,7 @@
     } catch (error) { surface.remove(); throw error; }
   }
 
-  function mount(root, {navigate, api: requestAPI, account, session = () => null, currentReleases = () => [], mapFactory = mountResearchMap, prepareMapCatalogue = () => {}, prepareBounties = async () => {}, canWarm = () => true, reviewOnly = false}) {
+  function mount(root, {navigate, api: requestAPI, account, session = () => null, currentReleases = () => [], mapFactory = mountResearchMap, prepareMapCatalogue = () => {}, prepareBounties = async () => {}, canWarm = () => true, curatedNotesAvailable = () => true, noteOrigin = () => null, statementWorkflowAvailable = () => false, reviewOnly = false}) {
     if (root.notebookController) return root.notebookController;
     let currentAccount = typeof account === 'function' ? account() : account;
     let accountId = currentAccount?.id == null ? null : String(currentAccount.id);
@@ -182,6 +193,7 @@
     let mapController = null, mapPreparation = null, mapRequest = 0, timelineRequest = 0, listLoaded = false, cardAction = 0;
     let bountyController = null, bountyPreparation = null;
     let curatedNotes = [], curatedLoaded = false, curatedPromise = null, timelinePreparation = null, indexPreparation = null;
+    let curatedAllowed = true;
     let pageCursors = [null], pageIndex = 0, knownPageCount = null, searchTimer = null;
     const reviewSection = 'flagged';
     const reviewLabel = () => 'Flagged requests';
@@ -283,6 +295,10 @@
           clearReviewDraft(); if (active) notice(error.message, true);
         }
         throw error;
+      }
+      if (owner === accountId && identity() === owner && credential === currentSession && session() === credential && typeof result?.capabilities?.curated_notes === 'boolean') {
+        curatedAllowed = result.capabilities.curated_notes;
+        if (!curatedAllowed) { curatedNotes = []; curatedLoaded = false; curatedPromise = null; }
       }
       // Keep this known format-only read warm; saves and unknown writes still
       // invalidate local snapshots even with a standalone notebook transport.
@@ -448,7 +464,7 @@
       q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy');
       q('timeline').replaceChildren();
       bountyController?.destroy(); bountyController = null; bountyPreparation = null; q('bounties').replaceChildren();
-      curatedNotes = []; curatedLoaded = false; curatedPromise = null; resetPages(); clearTimeout(searchTimer); searchTimer = null;
+      curatedNotes = []; curatedLoaded = false; curatedPromise = null; curatedAllowed = true; resetPages(); clearTimeout(searchTimer); searchTimer = null;
       mapController?.destroy(); mapController = null; q('map').replaceChildren(); notes = []; nextAfter = null; previewId = null; search = ''; tag = ''; visibility = 'all'; filter.input.value = 'all';
       q('search').value = ''; q('filter').replaceChildren(); q('page').textContent = ''; humanHint.hidden = true;
       closeDialog(true); q('dialog-body').replaceChildren(); q('list').replaceChildren(); q('full').replaceChildren(); q('count').textContent = ''; q('pagination').hidden = true; notice('');
@@ -456,7 +472,16 @@
     function hide() { stopPublicationWatch(); captureReviewDraft(); captureReviewDraft = () => {}; bountyController?.hide(); cancelReviewPagePreparation(); clearPageSpace(); clearViewSpace(); timelinePreparation = null; cancelMapPreparation(); clearTimeout(searchTimer); searchTimer = null; active = false; request++; mapRequest++; timelineRequest++; q('list').removeAttribute('aria-busy'); q('timeline').removeAttribute('aria-busy'); q('timeline').replaceChildren(); mapController?.hide(); if (q('dialog').open) { suspendedDialog = true; q('dialog').close(); } }
     const reviewUrl = (section, extra = {}) => '#reviews?' + new URLSearchParams({section:['schemes', 'research'].includes(section) ? 'proposals' : section === 'publication' ? 'flagged' : section, ...extra});
     function pageGuard() { const current = guard(), token = request; return () => current() && token === request; }
-    function backToNotes() { return button(reviewOnly ? '← ' + reviewLabel() : '← Notes', () => navigate(reviewOnly ? reviewUrl(reviewSection) : '#notebook'), 'nb-link nb-back'); }
+    function backToNotes(note = null) {
+      if (reviewOnly && (params.has('statement_update') || params.has('statement_target'))) {
+        return button('← Proposals', () => navigate(reviewUrl('proposals')), 'nb-link nb-back');
+      }
+      const origin = note && !reviewOnly ? noteOrigin(note) : null;
+      if (typeof origin?.label === 'string' && typeof origin.href === 'string' && /^#scheme\/[^/?#]+\/[^/?#]+(?:\/assumptions)?(?:\?[^#]*)?$/.test(origin.href)) {
+        return button('← ' + origin.label, () => navigate(origin.href), 'nb-link nb-back');
+      }
+      return button(reviewOnly ? '← ' + reviewLabel() : '← Notes', () => navigate(reviewOnly ? reviewUrl(reviewSection) : '#notebook'), 'nb-link nb-back');
+    }
     function url(id, revision) { return '#notebook?' + new URLSearchParams({note:id, ...(revision ? {revision:String(revision)} : {})}); }
     function openNote(id, revision) { navigate(reviewOnly ? reviewUrl(reviewSection, {note:id, ...(revision ? {revision:String(revision)} : {})}) : url(id, revision)); }
     async function show(nextParams = new URLSearchParams()) {
@@ -484,7 +509,7 @@
       if (inShared || params.get('filter') === 'shared') { params.delete('shared'); params.delete('state'); params.delete('filter'); visibility = 'all'; filter.input.value = 'all'; }
       request++; timelineRequest++;
       q('map').hidden = !inMap; q('timeline').hidden = !inTimeline; q('bounties').hidden = !inBounties;
-      const inNote = !inVisualization && Boolean(params.get('note'));
+      const inNote = !inVisualization && (Boolean(params.get('note')) || params.has('statement_update') || params.has('statement_target'));
       root.classList.toggle('nb-note-reader', !reviewOnly && inNote);
       heading.hidden = !reviewOnly && (inBounties || inNote);
       pageTitle.textContent = inMap ? 'Scheme map' : inTimeline ? 'Timeline' : 'Notes';
@@ -509,12 +534,12 @@
       if (!reviewMode && params.get('filter') === 'trash') params.set('filter', 'mine');
       if (!reviewMode && ['all', 'mine', 'human', 'proposals'].includes(params.get('filter'))) { visibility = params.get('filter'); filter.input.value = visibility; resetPages(); }
       if (suspendedDialog) { q('dialog').showModal(); suspendedDialog = false; }
-      const id = params.get('note'), inResearch = params.has('research') || params.has('research_request'); q('library').hidden = inVisualization || Boolean(id) || inResearch; q('full').hidden = inVisualization || (!id && !inResearch);
+      const id = params.get('note'), inResearch = params.has('research') || params.has('research_request') || params.has('statement_update') || params.has('statement_target'); q('library').hidden = inVisualization || Boolean(id) || inResearch; q('full').hidden = inVisualization || (!id && !inResearch);
       if (q('library').hidden) q('list').removeAttribute('aria-busy');
       if (!inTimeline) q('timeline').removeAttribute('aria-busy');
       q('new').disabled = !accountId; q('files').disabled = !accountId; q('publish-all').disabled = !accountId;
       if (!accountId) { q('list').replaceChildren(); q('full').replaceChildren(); notice('Sign in to read your notebook.'); return; }
-      const pinError = passagePinError(params);
+      const pinError = passagePinError(params, reviewOnly);
       if (pinError) {
         mapController?.hide(); bountyController?.hide();
         q('library').hidden = q('map').hidden = q('timeline').hidden = q('bounties').hidden = true;
@@ -523,6 +548,14 @@
       if (inBounties) { await showBounties(); return; }
       if (inMap) { await showMap(); return; }
       if (inTimeline) { await showTimeline(); return; }
+      if (params.has('statement_update') || params.has('statement_target')) {
+        const full = q('full'); full.replaceChildren(backToNotes());
+        if (!statementWorkflowAvailable() || !window.CrucibleStatementWorkflow) { full.append(el('p','nb-error','This local workflow is unavailable.')); return; }
+        const context = statementContext();
+        if (params.has('statement_update')) await window.CrucibleStatementWorkflow.readUpdate(full, params.get('statement_update'), context);
+        else await window.CrucibleStatementWorkflow.readTarget(full, params.get('statement_target'), context);
+        return;
+      }
       if (inResearch) { if (params.has('research_request')) await readResearchRequest(params.get('research_request')); else await listResearchRequests(); return; }
       // A reader's Back control is now hidden. Move keyboard focus to a stable
       // visible control before any background list refresh can complete.
@@ -744,6 +777,7 @@
 
     }
     async function loadCuratedNotes() {
+      if (!curatedAllowed || !curatedNotesAvailable()) return [];
       if (curatedLoaded) return curatedNotes;
       if (curatedPromise) return curatedPromise;
       const owner = accountId, generation = epoch;
@@ -752,7 +786,7 @@
         const workspace = window.TheoryStore.validateSnapshot(snapshot);
         const records = await Promise.all(workspace.notes.map(async source => {
           const revisions = await Promise.all(source.revisions.map(async original => {
-            const content = Object.fromEntries(['title','claim','conditions','body','tags','kind','references','artifacts','extensions'].filter(key => original[key] !== undefined).map(key => [key, original[key]]));
+            const content = Object.fromEntries(['title','claim','conditions','body','tags','kind','references','artifacts','extensions','sections','statements','arguments'].filter(key => original[key] !== undefined).map(key => [key, original[key]]));
             const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical(content)));
             return {revision:original.revision, content, created_at:original.createdAt / 1000,
               content_sha256:Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join(''),
@@ -766,7 +800,7 @@
             ...latest, revisions, revision_count:revisions.length,
             ...references.metadata?.['curated:' + source.id]};
         }));
-        if (epoch !== generation || accountId !== owner || identity() !== owner) throw new Error('Notebook account changed.');
+        if (epoch !== generation || accountId !== owner || identity() !== owner || !curatedAllowed || !curatedNotesAvailable()) throw new Error('Notebook account changed.');
         curatedNotes = records; curatedLoaded = true; return records;
       })();
       curatedPromise = task;
@@ -1092,6 +1126,7 @@
     }
     function prepareNote(note, requested = null) {
       if (reviewOnly || !active || !accountId || note.deletion || navigator.connection?.saveData) return;
+      if (note.id.startsWith('curated:') && (!curatedAllowed || !curatedNotesAvailable())) return;
       for (const [oldKey, entry] of preparingNotes) if (entry.done && Date.now() - entry.at >= 10000) preparingNotes.delete(oldKey);
       const key = 'note:' + JSON.stringify([note.id, requested == null ? null : String(requested), null]);
       if (cachedRead(key) || preparingNotes.has(key) || preparingNotes.size >= 2) return;
@@ -1157,10 +1192,24 @@
           if (!expanded) prepareNote(note, visibility === 'proposals' && proposal ? proposal.revision : null);
           renderList(); q('list').querySelectorAll('.' + source)[index]?.focus({preventScroll:true});
         };
-        const title = button('', () => togglePreview('nb-title'), 'nb-title');
+        const directRead = !reviewOnly && !note.deletion;
+        const title = directRead ? el('a', 'nb-title') : button('', () => togglePreview('nb-title'), 'nb-title');
+        if (directRead) {
+          title.href = visibility === 'proposals' && proposal ? proposalUrl(note, proposal) : url(note.id);
+          title.title = 'Read note';
+          title.addEventListener('click', event => {
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button > 0) return;
+            event.preventDefault(); navigate(title.getAttribute('href'));
+          });
+        }
         const marker = button(expanded ? '−' : '+', () => togglePreview('nb-expand'), 'nb-marker nb-expand');
+        if (directRead) {
+          marker.classList.add('nb-preview-toggle');
+          const icon = el('span', 'nb-preview-icon', expanded ? '−' : '+'); icon.setAttribute('aria-hidden', 'true');
+          marker.replaceChildren(el('span', 'nb-preview-label', 'Preview'), icon);
+        }
         marker.setAttribute('aria-label', (expanded ? 'Collapse' : 'Expand') + ' note: ' + r.title);
-        for (const control of [marker, title]) {
+        for (const control of directRead ? [marker] : [marker, title]) {
           control.setAttribute('aria-expanded', String(expanded)); control.setAttribute('aria-controls', previewIdValue);
         }
         const number = noteNumber(note);
@@ -1251,14 +1300,20 @@
     function focusReader() {
       const location = params.get('location');
       const passage = validLocation(location) ? q('full').querySelector('[data-nb-location="' + location + '"]') : null;
-      (passage || q('full').querySelector('.nb-full-title'))?.focus({preventScroll:true});
-      if (passage) passage.scrollIntoView({block:'center'});
+      const section = validSection(params.get('note_section')) ? q('full').querySelector('[data-note-section="' + params.get('note_section') + '"]') : null;
+      if (passage) { const details = passage.closest('.nb-full-text'); if (details) details.open = true; }
+      const statement = validStructuredId(params.get('statement')) ? q('full').querySelector('[data-note-statement="' + params.get('statement') + '"]') : null;
+      const argument = validStructuredId(params.get('argument')) ? q('full').querySelector('[data-note-argument="' + params.get('argument') + '"]') : null;
+      const selected = passage || section || statement || argument;
+      (selected || q('full').querySelector('.nb-full-title'))?.focus({preventScroll:true});
+      if (selected) selected.scrollIntoView({block:passage ? 'center' : 'start'});
     }
     async function loadNote(id, {quiet = false} = {}) {
       captureReviewDraft(); captureReviewDraft = () => {};
       const current = guard(), token = ++request, requested = params.get('revision'), expectedHash = params.get('sha256'), generation = readEpoch;
-      const pinError = passagePinError(params);
+      const pinError = passagePinError(params, reviewOnly);
       if (pinError) { q('full').replaceChildren(backToNotes(), el('p', 'nb-error', pinError)); return; }
+      if (id.startsWith('curated:') && (!curatedAllowed || !curatedNotesAvailable())) { q('full').replaceChildren(backToNotes(), el('p', 'nb-error', 'This curated note could not be loaded in this notebook.')); return; }
       const key = 'note:' + JSON.stringify([id, requested, expectedHash]), cached = cachedRead(key);
       const prepared = preparingNotes.get(key); preparingNotes.delete(key);
       let unlock = () => {};
@@ -1271,9 +1326,13 @@
       }
       else if (!quiet) q('full').replaceChildren(backToNotes(), reading('Loading note…'));
       try {
+        const noteQuery = new URLSearchParams();
+        if (requested) noteQuery.set('revision', requested);
+        if (params.has('note_section')) { noteQuery.set('sha256', expectedHash); noteQuery.set('section', params.get('note_section')); }
+        for (const anchor of ['statement','argument']) if (params.has(anchor)) { noteQuery.set('sha256', expectedHash); noteQuery.set(anchor, params.get(anchor)); }
         const result = await (prepared && Date.now() - prepared.at < 10000 ? prepared.task : id.startsWith('curated:')
           ? loadCuratedNotes().then(records => ({note:records.find(note => note.id === id)}))
-          : api('/api/notebook/notes/' + encodeURIComponent(id) + (requested ? '?revision=' + encodeURIComponent(requested) : '')));
+          : api('/api/notebook/notes/' + encodeURIComponent(id) + (noteQuery.size ? '?' + noteQuery : '')));
         if (!current() || request !== token || generation !== readEpoch) return;
         let note = result.note;
         if (!note || note.id !== id || !Array.isArray(note.revisions)) throw new Error('The note could not be loaded.');
@@ -1358,13 +1417,94 @@
         content.removeAttribute('aria-busy');
       }
     }
+    function sectionRoute(note, revision, id) {
+      const fields = {note:note.id, revision:String(revision.revision), sha256:revision.content_sha256, note_section:id};
+      return reviewOnly ? reviewUrl(reviewSection, fields) : '#notebook?' + new URLSearchParams(fields);
+    }
+    function readableContent(note, revision) {
+      const sections = revision.content.sections;
+      if (!Array.isArray(sections) || !sections.length) return null;
+      const out = el('div', 'nb-readable'), nav = el('nav', 'nb-note-contents');
+      nav.setAttribute('aria-label', 'In this note');
+      for (const item of sections) {
+        const route = sectionRoute(note, revision, item.id), link = el('a', '', item.title); link.href = route;
+        if (params.get('note_section') === item.id) link.setAttribute('aria-current', 'location');
+        link.addEventListener('click', event => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button > 0) return;
+          event.preventDefault(); navigate(route);
+        }); nav.append(link);
+      }
+      out.append(nav);
+      const focusedArgument = revision.content.arguments?.find(argument => argument.id === params.get('argument'));
+      for (const item of sections) {
+        // The selected argument already presents this exact reasoning section.
+        // Its original section URL remains available through the contents links.
+        if (focusedArgument?.section_id === item.id) continue;
+        const block = el('section', 'nb-readable-section' + (params.get('note_section') === item.id ? ' nb-section-selected' : ''));
+        block.id = 'nb-note-section-' + item.id; block.dataset.noteSection = item.id; block.tabIndex = -1;
+        const premises = Array.isArray(revision.content.extensions?.assumptions) ? revision.content.extensions.assumptions : [];
+        const displayedPremises = premises.slice(0, 64).filter(premise => {
+          // Older drafts included missing arguments in this list. A task or gap
+          // is not a premise, and must not receive an assumption badge.
+          return premise?.section_id === item.id && premise.status !== 'incomplete' &&
+            typeof premise.label === 'string' && premise.label.trim().length > 0 && premise.label.length <= 80;
+        });
+        let displayTitle = item.title;
+        for (const premise of displayedPremises) {
+          // The badge already carries this exact authored prefix. Simplify only
+          // the displayed heading; the title remains intact for editing/citing.
+          if (!displayTitle.startsWith(premise.label)) continue;
+          const rest = displayTitle.slice(premise.label.length).match(/^\s*[·:—–]\s*(\S[\s\S]*)$/);
+          if (rest) { displayTitle = rest[1]; break; }
+        }
+        const heading = el(reviewOnly ? 'h3' : 'h2', '', displayTitle); heading.id = block.id + '-title';
+        block.setAttribute('aria-labelledby', heading.id);
+        const top = el('div', 'nb-readable-section-heading');
+        for (const premise of displayedPremises) {
+          const label = el('span', 'nb-assumption-label', premise.label);
+          label.title = 'Authored premise label; read its exact scope and qualifications below.';
+          heading.prepend(label, ' ');
+        }
+        const cite = button('', () => citeNote(note, revision, null, item), 'nb-link nb-section-cite');
+        cite.setAttribute('aria-label', 'Cite section: ' + item.title);
+        cite.title = 'Cite this section';
+        const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        icon.setAttribute('viewBox', '0 0 24 24'); icon.setAttribute('aria-hidden', 'true');
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', 'M10 13a5 5 0 0 0 7 .5l3-3a5 5 0 0 0-7-7l-2 2M14 11a5 5 0 0 0-7-.5l-3 3a5 5 0 0 0 7 7l2-2');
+        icon.append(path); cite.append(icon);
+        top.append(heading, cite);
+        const body = el('div', 'nb-readable-prose');
+        if (window.CrucibleMath?.markdown) window.CrucibleMath.markdown(body, item.body);
+        else body.append(math('p', '', item.body));
+        block.append(top, body); out.append(block);
+      }
+      return out;
+    }
+    function statementContext() { return {params,api,navigate,openDialog,closeDialog,dialogGuard,field,current:pageGuard(),enabled:statementWorkflowAvailable,reviewOnly,
+      composeRelated:reviewOnly ? null : reference => editNote(null, false, reference),
+      protectDraft:(dirty,message) => { hasUnsavedDraft = dirty; discardMessage = message; }}; }
     function renderFull(note, requested, requestsPending = false) {
-      const full = q('full'); full.replaceChildren(backToNotes());
-      const pinError = passagePinError(params);
+      const full = q('full'); full.replaceChildren(backToNotes(note));
+      const pinError = passagePinError(params, reviewOnly);
       if (pinError) { full.append(el('p', 'nb-error', pinError)); return; }
       const revision = requested ? note.revisions.find(r => String(r.revision) === requested) : note.revisions.find(r => r.revision === note.revision) || note.revisions[note.revisions.length - 1];
       if (!revision) { full.append(el('h2', 'nb-full-title', 'Revision not available')); return; }
       const r = revision.content, heading = el(reviewOnly ? 'h2' : 'h1', 'nb-full-title', r.title); heading.tabIndex = -1;
+      const sections = r.sections;
+      if (sections !== undefined && (!Array.isArray(sections) || sections.length > 32 ||
+          new Set(sections.map(item => item?.id)).size !== sections.length || sections.some(item => !item || !validSection(item.id) || typeof item.title !== 'string' || !item.title.trim() || item.title.length > 240 || typeof item.body !== 'string' || !item.body.trim() || item.body.length > 40000))) {
+        full.append(heading, el('p', 'nb-error', 'This saved revision has invalid readable sections. Its content has not been substituted.')); return;
+      }
+      const selectedSection = params.get('note_section');
+      if (selectedSection && !sections?.some(item => item.id === selectedSection)) {
+        full.append(heading, el('p', 'nb-error', 'This section is not present in the exact saved revision. No other section or newer revision has been selected.')); return;
+      }
+      try {
+        if ((r.statements?.length || r.arguments?.length) && !window.CrucibleStatementWorkflow) throw Error('The structured note reader is unavailable. Reload to read this exact revision.');
+        window.CrucibleStatementWorkflow?.validate(r);
+        for (const kind of ['statement','argument']) if (params.has(kind) && !r[kind === 'statement' ? 'statements' : 'arguments']?.some(item => item.id === params.get(kind))) throw Error('This ' + kind + ' is not present in this exact revision. No replacement has been selected.');
+      } catch (error) { full.append(heading, el('p','nb-error',error.message)); return; }
       const body = bodyContent(r.body, location => citeNote(note, revision, location));
       const location = params.get('location');
       if (location) {
@@ -1397,18 +1537,30 @@
       if (!reviewOnly && note.can_review) full.append(button('Review note', () => navigate(reviewUrl('publication', {note:note.id, revision:String(revision.revision)}))));
       if (note.shared_revision && note.shared_revision.revision !== revision.revision) full.append(button('Read community revision ' + note.shared_revision.revision + ' →', () => openNote(note.id, note.shared_revision.revision), 'nb-link nb-read'));
       full.append(renderTags(r));
-      full.append(section('Summary', r.claim), section('Conditions', r.conditions));
+      if (r.extensions?.illustrative === true && r.extensions?.statement_trial) full.append(el('p','nb-trial-marker','Illustrative trial · not a claim about a deployed KEM'));
+      full.append(reviewOnly ? section('Summary', r.claim) : el('p', 'nb-reader-summary', r.claim), section('Conditions', r.conditions));
+      const structured = window.CrucibleStatementWorkflow?.renderNote(note, revision, statementContext());
+      if (structured) full.append(structured);
+      const readable = readableContent(note, revision);
+      if (readable) full.append(readable);
+      else full.append(el('p', 'nb-readable-unavailable', 'No readable explanation has been added.'));
+      const fullText = el('details', 'nb-details nb-full-text'); fullText.append(el('summary', '', 'Full text'), body);
+      if (location) fullText.open = true;
+      full.append(fullText);
       if (!reviewOnly) full.append(requestPanel(note, revision, requestsPending));
-      const researchTools = el('details', 'nb-details'); researchTools.append(el('summary', '', 'Continue this research'), button('Download agent research task', () => downloadResearchTask(note, revision))); full.append(researchTools, body);
+      const researchTools = el('details', 'nb-details'); researchTools.append(el('summary', '', 'Continue this research'), button('Download agent research task', () => downloadResearchTask(note, revision)));
+      const proposeArgument = window.CrucibleStatementWorkflow?.contributionAction(note, revision, statementContext());
+      if (proposeArgument) researchTools.append(proposeArgument); full.append(researchTools);
       const sources = el('section', 'nb-section nb-citations'); sources.append(el('h3', '', 'Citations'));
       const references = Array.isArray(r.references) ? r.references : r.references == null ? [] : [r.references];
       const list = el('ol', 'nb-research-sources');
       for (const reference of references) {
-        const item = el('li'), target = citationTarget(reference?.url);
-        if (target && typeof reference.title === 'string') {
-          const link = el('a', '', citationLabel(reference)); link.href = target.href;
+        const item = el('li'), target = citationTarget(reference?.url), label = citationDisplayLabel(reference, target);
+        if (target && label) {
+          const link = el('a', '', label); link.href = target.href;
           if (!target.internal) { link.target = '_blank'; link.rel = 'noopener noreferrer'; }
           item.append(link);
+          if (relationLabels[reference.relation]) item.append(el('p', 'nb-hint', relationLabels[reference.relation]));
           if (typeof reference.scope === 'string') item.append(el('p', 'nb-hint', reference.scope));
         } else item.textContent = typeof reference === 'string' ? reference : JSON.stringify(reference);
         list.append(item);
@@ -1440,7 +1592,8 @@
           }
           if (reviewOnly && note.can_moderate && screening.reviewer) publication.append(screeningPanel(screening));
         }
-        full.append(publication);
+        if (!reviewOnly && revision.publication_status === 'approved' && !revision.moderation) details.append(publication);
+        else full.append(publication);
       }
       if (revision.moderation) full.append(section('Moderation withdrawal', revision.moderation.reason), el('p', 'nb-hint', 'Restricted audit copy. This revision is no longer shared with the community; its original content and review history are preserved.'));
       if (reviewOnly && note.can_review && revision.publication_status === 'submitted') publicationForm(note, revision, full, pageGuard());
@@ -1506,9 +1659,8 @@
       if (explicit && Number.isInteger(explicit.revision) && explicit.revision > 0 && typeof explicit.content_sha256 === 'string' && requestRecords(explicit).some(row => proposalKinds.has(row.kind))) return explicit;
       return (note.revisions || []).filter(revision => requestRecords(revision).some(row => proposalKinds.has(row.kind))).reduce((latest, revision) => !latest || revision.revision > latest.revision ? revision : latest, null);
     }
-    function openProposal(note, revision) {
-      navigate(url(note.id, revision.revision) + '&sha256=' + encodeURIComponent(revision.content_sha256));
-    }
+    function proposalUrl(note, revision) { return url(note.id, revision.revision) + '&sha256=' + encodeURIComponent(revision.content_sha256); }
+    function openProposal(note, revision) { navigate(proposalUrl(note, revision)); }
     function requestState(record) {
       if (record.retracted) return 'Retracted by proposer';
       if (retiredRequest(record) && record.status === 'submitted') return 'Retired request type';
@@ -1546,7 +1698,6 @@
       if (note.can_edit) content.append(button('My research requests', () => navigate('#notebook?research=1')));
       if (noteType(revision.content) === 'scheme-proposal' || revision.scheme_review) content.append(schemePanel(note, revision));
       else if (note.can_edit) content.append(button('Propose a scheme or parameter update', () => editNote(note, true)));
-      if (!records.length) content.append(el('p', 'nb-hint', 'A proposal asks for a concrete change, supported by this saved note. Ordinary research notes do not need to make a proposal.'));
       panel.append(content); return panel;
     }
     let requestTypesPromise = null;
@@ -1587,7 +1738,7 @@
         source_access:{publication_status:revision.publication_status},
         request_guidance_url:new URL('/api/agent/guidance/request-types.json', window.location.href).href,
         request_guidance:'A note may support a concrete request. Read the request requirements and identify the exact saved revision. Authored tags or metadata never submit a request, confer approval or award points.',
-        return_format:{format:'crucible-theory-local-v1',notes:[{id:'choose-a-new-local-id',revisions:[{revision:1,createdAt:'current Unix milliseconds',title:'Short title',claim:'Short human-facing dropdown summary',conditions:'Exact assumptions and limitations',body:'Free-form technical research; LaTeX, prose and code welcome. No fixed outline.',tags:['literature','research-lead'],kind:'Describe the evidence actually supplied',references:[],artifacts:[],extensions:{}}]}],views:[]}
+        return_format:{format:'crucible-theory-local-v1',notes:[{id:'choose-a-new-local-id',revisions:[{revision:1,createdAt:'current Unix milliseconds',title:'Short title',claim:'Short human-facing dropdown summary',conditions:'Exact assumptions and limitations',sections:[{id:'explanation',title:'Explanation',body:'Explain the idea, reasoning and limitations for readers.'}],body:'Complete technical research; LaTeX, prose and code welcome. No fixed outline.',tags:['literature','research-lead'],kind:'Describe the evidence actually supplied',references:[],artifacts:[],extensions:{}}]}],views:[]}
       });
     }
     function researchRequestDialog(note, revision, initialPurpose = 'source_check') {
@@ -1727,12 +1878,12 @@
       if (params.get('connections') === '1') explore.click();
       return section;
     }
-    function citeNote(note, revision, location = null) {
-      const container = openDialog(location ? 'Cite this passage' : 'Cite this note'), present = dialogGuard();
-      const link = url(note.id, revision.revision) + '&sha256=' + encodeURIComponent(revision.content_sha256) + (location ? '&location=' + location : '');
+    function citeNote(note, revision, location = null, selectedSection = null) {
+      const container = openDialog(selectedSection ? 'Cite this section' : location ? 'Cite this passage' : 'Cite this note'), present = dialogGuard();
+      const link = url(note.id, revision.revision) + '&sha256=' + encodeURIComponent(revision.content_sha256) + (location ? '&location=' + location : selectedSection ? '&note_section=' + encodeURIComponent(selectedSection.id) : '');
       const number = noteNumber(note);
-      const passageLabel = location ? ' · body line ' + location.slice(1) : '';
-      const reference = {title:(number ? number + ' · ' : '') + revision.content.title + ' · revision ' + revision.revision + passageLabel, url:'/' + link, scope:location ? 'Body, line ' + location.slice(1) + '. ' : '', relation:'cites'};
+      const passageLabel = selectedSection ? ' · ' + selectedSection.title : location ? ' · body line ' + location.slice(1) : '';
+      const reference = {title:(number ? number + ' · ' : '') + revision.content.title + ' · revision ' + revision.revision + passageLabel, url:'/' + link, scope:selectedSection ? 'Section ' + selectedSection.id + ': ' + selectedSection.title + '. ' : location ? 'Body, line ' + location.slice(1) + '. ' : '', relation:'cites'};
       const source = field('Exact revision link', 'citation-link', new URL(window.location.href).origin + '/' + link);
       source.input.readOnly = true;
       const summary = el('p', 'nb-hint'); summary.setAttribute('role', 'status');
@@ -2268,6 +2419,43 @@
       return {wrap, stored, commit, refresh:paintSelected, dirty:() => Boolean(input.value.trim()),
         disable(disabled) { input.disabled = disabled; if (disabled) close(); paintSelected(); }};
     }
+    function readableSectionEditor(original) {
+      const section = el('section', 'nb-sections-editor'), rows = el('div', 'nb-section-editor-rows');
+      section.append(el('h3', '', 'Readable sections (optional)'), el('p', 'nb-hint', 'Add an explanation for readers if useful. Without one, readers see a notice and can open Full text.'), rows);
+      const entries = []; let locked = false, sequence = 0;
+      const value = () => entries.filter(item => !item.removed && (item.existing || item.title.value.trim() || item.body.value.trim()))
+        .map(item => ({id:item.id, title:item.title.value, body:item.body.value}));
+      function add(source = null) {
+        if (locked || entries.filter(item => !item.removed).length >= 32) return;
+        const row = el('div', 'nb-section-editor'), key = sequence++;
+        const title = field('Section heading', 'readable-title-' + key, source?.title || '', {max:240,placeholder:'e.g. Why the construction works'});
+        const body = field('Explanation', 'readable-body-' + key, source?.body || '', {rows:5,max:40000,placeholder:'State the idea, the reasoning and its limits. Markdown and LaTeX are supported.'});
+        const entry = {id:source?.id || 's-' + crypto.randomUUID(), existing:Boolean(source), title:title.input, body:body.input, row, removed:false};
+        const remove = button('Remove section', () => {
+          if (locked) return; entry.removed = true; row.remove(); more.disabled = false; more.focus();
+        }, 'nb-link nb-remove-section');
+        entry.remove = remove; row.append(title.wrap, body.wrap, remove); rows.append(row); entries.push(entry);
+        more.disabled = entries.filter(item => !item.removed).length >= 32;
+        return entry;
+      }
+      const more = button('Add readable section', () => { const added = add(); added?.title.focus(); }, 'nb-button');
+      section.append(more);
+      for (const source of original || []) add(source);
+      const baseline = canonical(value());
+      return {section, dirty:() => canonical(value()) !== baseline,
+        value:() => original === undefined && !value().length ? undefined : value(),
+        validate() {
+          const sections = value(), ids = new Set();
+          if (sections.length > 32) throw Object.assign(Error('Use at most 32 readable sections.'), {status:422});
+          for (const item of sections) {
+            if (!validSection(item.id) || ids.has(item.id) || !item.title.trim() || item.title.length > 240 || !item.body.trim() || item.body.length > 40000) throw Object.assign(Error('Each readable section needs a heading and an explanation.'), {status:422});
+            ids.add(item.id);
+          }
+        },
+        disable(disabled) { locked = disabled; more.disabled = disabled || entries.filter(item => !item.removed).length >= 32;
+          for (const item of entries) for (const input of [item.title,item.body,item.remove]) input.disabled = disabled; }
+      };
+    }
     function editNote(note = null, proposal = false, sourceReference = null) {
       if (!accountId || (note && !note.can_edit)) return;
       const latest = note ? latestRevision(note) : null;
@@ -2285,7 +2473,11 @@
       if (!proposal) form.append(type.wrap);
       form.append(retainedAttachment);
       const add = (label, name, value, options) => { const f = field(label, name, value, options); controls[name] = f.input; return f.wrap; };
-      form.append(add('Title', 'title', r?.title, {required:true,max:240,placeholder:proposal ? 'e.g. A scheme based on structured lattices' : 'e.g. Testing a lattice parameter choice'}), add('Dropdown summary', 'claim', r?.claim, {required:true,rows:3,max:20000,placeholder:'What is the question or result, and why does it matter?',help:'Briefly explain the question or result, why it matters and any essential caveat for people browsing.'}), add('Conditions & scope', 'conditions', r?.conditions, {required:true,rows:2,max:20000,placeholder:'State the assumptions, parameters, and limits of the claim.'}), add('Technical body', 'body', r?.body, {required:true,rows:7,max:40000,placeholder:'Describe the construction, argument, calculations, or experiments in enough detail for someone else to check the work.',help:'Free-form research for agents and expert reviewers. LaTeX, prose, code and calculations are welcome; no required outline or brevity. The full source is preserved even when notation is not rendered.'}));
+      form.append(add('Title', 'title', r?.title, {required:true,max:240,placeholder:proposal ? 'e.g. A scheme based on structured lattices' : 'e.g. Testing a lattice parameter choice'}), add('Dropdown summary', 'claim', r?.claim, {required:true,rows:3,max:20000,placeholder:'What is the question or result, and why does it matter?',help:'Briefly explain the question or result, why it matters and any essential caveat for people browsing.'}), add('Conditions & scope', 'conditions', r?.conditions, {required:true,rows:2,max:20000,placeholder:'State the assumptions, parameters, and limits of the claim.'}));
+      form.append(add('Full text', 'body', r?.body, {required:true,rows:7,max:40000,placeholder:'Preserve the complete construction, argument, calculations, experiments or code.',help:'The full technical record is saved unchanged and is available under Full text, with or without a readable explanation.'}));
+      const readableSections = readableSectionEditor(r?.sections); form.append(readableSections.section);
+      const statementEditor = window.CrucibleStatementWorkflow?.editor(r, field);
+      if (statementEditor) form.append(statementEditor.section);
       const tagPicker = noteTagPicker(r?.tags || (initialType === 'scheme-proposal' ? ['scheme-description', 'proposal'] : []), () => syncHumanWritten()); controls.tags = tagPicker.stored;
       form.append(add('Evidence description', 'kind', r?.kind ?? (initialType === 'scheme-proposal' ? 'Unreviewed construction' : ''), {max:100,placeholder:'e.g. Proof sketch, experiment, or open question'}), tagPicker.wrap);
       const humanWritten = field('Human-written', 'human-written', '', {type:'checkbox'});
@@ -2324,7 +2516,7 @@
       save.type = 'submit';
       if (remove) actions.append(remove);
       actions.append(cancel, save); form.append(actions); container.append(form);
-      const values = () => Object.fromEntries(Object.entries(controls).map(([k,v]) => [k,v.value])); const original = canonical(values()); hasUnsavedDraft = () => selectedType() !== initialType || attachmentChanged || citations.dirty() || tagPicker.dirty() || canonical(values()) !== original;
+      const values = () => Object.fromEntries(Object.entries(controls).map(([k,v]) => [k,v.value])); const original = canonical(values()); hasUnsavedDraft = () => selectedType() !== initialType || attachmentChanged || citations.dirty() || readableSections.dirty() || Boolean(statementEditor?.dirty()) || tagPicker.dirty() || canonical(values()) !== original;
       const present = dialogGuard();
       let busy = false, pending = null;
       let currentType = initialType;
@@ -2368,9 +2560,11 @@
         try {
           if (!pending) {
             if (!await tagPicker.commit() || !present()) return;
-            syncHumanWritten(); citations.validate();
+            syncHumanWritten(); citations.validate(); readableSections.validate();
             const f = values(), content = {...window.TheoryStore.authoredMetadata(r), ...f, tags:JSON.parse(f.tags)};
             if (citations.value() !== undefined) content.references = citations.value();
+            if (readableSections.value() !== undefined) content.sections = readableSections.value();
+            if (statementEditor) Object.assign(content, statementEditor.value());
             if (specification || selectedType() === 'scheme-proposal' || selectedType() !== initialType || ['research-note','scheme-proposal'].includes(r?.extensions?.note_type)) {
               const previous = content.extensions;
               const extensions = previous && typeof previous === 'object' && !Array.isArray(previous) ? previous : previous === undefined ? {} : {previous_metadata:previous};
@@ -2379,7 +2573,7 @@
             }
             pending = {content, idempotency_key:crypto.randomUUID(), ...(note ? {expected_revision:latest.revision, content_sha256:latest.content_sha256} : {})};
           }
-          Object.values(controls).forEach(control => { control.disabled = true; }); type.input.disabled = true; file.input.disabled = true; humanWritten.input.disabled = true; citations.disable(true); tagPicker.disable(true);
+          Object.values(controls).forEach(control => { control.disabled = true; }); type.input.disabled = true; file.input.disabled = true; humanWritten.input.disabled = true; citations.disable(true); readableSections.disable(true); statementEditor?.disable(true); tagPicker.disable(true);
           const result = await api(note ? '/api/notebook/notes/' + encodeURIComponent(note.id) + '/revisions' : '/api/notebook/notes', pending);
           if (!present()) return;
           if (!result.note?.id) throw new Error('The save has no confirmed receipt. Retry the same draft.');
@@ -2390,7 +2584,7 @@
           error.textContent = err.message + (pending ? ' Retry to check the same save; your draft is preserved.' : ' Your draft is still here.');
           if (err.status === 409 && note) { const link = el('a', 'nb-link', 'Open the latest saved revision in another tab'); link.href = url(note.id); link.target = '_blank'; link.rel = 'noopener'; error.append(el('br'), link); }
         } finally {
-          if (present()) { busy = false; save.disabled = false; if (remove) remove.disabled = Boolean(pending); Object.values(controls).forEach(control => { control.disabled = Boolean(pending); }); type.input.disabled = Boolean(pending); file.input.disabled = Boolean(pending); humanWritten.input.disabled = Boolean(pending); citations.disable(Boolean(pending)); tagPicker.disable(Boolean(pending)); save.textContent = pending ? 'Retry the same save' : saveLabel(); }
+          if (present()) { busy = false; save.disabled = false; if (remove) remove.disabled = Boolean(pending); Object.values(controls).forEach(control => { control.disabled = Boolean(pending); }); type.input.disabled = Boolean(pending); file.input.disabled = Boolean(pending); humanWritten.input.disabled = Boolean(pending); citations.disable(Boolean(pending)); readableSections.disable(Boolean(pending)); statementEditor?.disable(Boolean(pending)); tagPicker.disable(Boolean(pending)); save.textContent = pending ? 'Retry the same save' : saveLabel(); }
         }
       });
     }

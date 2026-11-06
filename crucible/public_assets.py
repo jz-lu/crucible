@@ -40,7 +40,7 @@ CONTENT_SECURITY_POLICY = (
 
 PUBLIC_FILES = (
     '/styles.css', '/app.js', '/bootstrap.js', '/math.js', '/assumptions.js',
-    '/proposal-retractions.js', '/resource-metrics.js', '/assets/crucible-logo.png',
+    '/proposal-retractions.js', '/resource-metrics.js', '/graph-points.js', '/assets/crucible-logo.png',
     '/assets/crucible-icon-light.svg', '/assets/crucible-icon-dark.svg', '/assets/crucible-mark.svg',
     '/assets/resi-logo.png', '/vendor/resi/cardo-normal-400-latin.woff2',
     '/vendor/resi/cardo-normal-700-latin.woff2', '/vendor/resi/plex-sans-normal-100-700-latin.woff2',
@@ -91,6 +91,7 @@ PROTECTED_FILES = {
     '/notebook/' + name: media for name, media in {
         'seed.js': 'text/javascript', 'store.js': 'text/javascript',
         'notebook.js': 'text/javascript', 'notebook.css': 'text/css',
+        'statement-workflow.js': 'text/javascript',
         'bounties.js': 'text/javascript', 'bounties-api.js': 'text/javascript', 'bounties.css': 'text/css',
         'request-types.json': 'application/json',
     }.items()

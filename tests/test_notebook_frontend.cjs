@@ -309,13 +309,13 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const calls=app.requests.length,reference=app.q('list').querySelector('.nb-number-action');
   reference.focus();reference.click();await flush();
   assert.equal(app.q('dialog').getAttribute('aria-label'),'Cite this note');
-  assert.equal(app.q('list').querySelector('.nb-title').getAttribute('aria-expanded'),'false');
+  assert.equal(app.q('list').querySelector('.nb-expand').getAttribute('aria-expanded'),'false');
   assert.equal(app.requests.length,calls);
   const listCitation=app.q('dialog-body').querySelector('[name="citation-link"]').value;
   app.q('close').click();await flush();assert.equal(app.document.activeElement,reference);
-  app.q('list').querySelector('.nb-title').click();await flush();
+  app.q('list').querySelector('.nb-expand').click();await flush();
   assert.equal(app.q('list').querySelector('.nb-note-number').textContent,'#1042');
-  app.q('list').querySelector('.nb-title').click();await flush();
+  app.q('list').querySelector('.nb-expand').click();await flush();
   assert.equal(app.q('list').querySelector('.nb-note-number').textContent,'#1042');
   await app.show('note-one',1);
   assert.equal(app.root.querySelector('.nb-heading').hidden,true);
@@ -347,21 +347,21 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
 
  await test('expanding a note prefetches its exact body and the reader shares the in-flight GET',async()=>{
   const late=deferred();const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()]}:url==='/api/notebook/notes/note-one'?late.promise:undefined});
-  app.q('list').querySelector('.nb-title').click();await flush();
+  app.q('list').querySelector('.nb-expand').click();await flush();
   assert.equal(app.requests.filter(row=>row.url==='/api/notebook/notes/note-one').length,1);
   const loading=app.show('note-one');await flush();assert.equal(app.requests.filter(row=>row.url==='/api/notebook/notes/note-one').length,1);
   late.resolve({note:note()});await loading;assert.match(app.q('full').textContent,/Argument as text/);assert.equal(byText(app.q('full'),'Edit').disabled,false);
  });
  await test('note intent results cannot restore private caches after an account switch',async()=>{
   const late=deferred();const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()]}:url==='/api/notebook/notes/note-one'?late.promise:undefined});
-  app.q('list').querySelector('.nb-title').click();await flush();app.setAccount(null);
+  app.q('list').querySelector('.nb-expand').click();await flush();app.setAccount(null);
   late.resolve({note:note()});await flush();assert.equal(app.q('list').textContent,'');assert.equal(app.q('full').textContent,'');
  });
  await test('an older consumed note intent cannot replace a newer cached body',async()=>{
   const old=deferred(),refresh=deferred();let reads=0;
   const newer=note({content:content('Newer saved note')});
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()]}:url==='/api/notebook/notes/note-one'?(++reads===1?old.promise:reads===2?{note:newer}:refresh.promise):undefined});
-  app.q('list').querySelector('.nb-title').click();const first=app.show('note-one');
+  app.q('list').querySelector('.nb-expand').click();const first=app.show('note-one');
   await app.show();await app.show('note-one');assert.match(app.q('full').textContent,/Newer saved note/);
   old.resolve({note:note({content:content('Older saved note')})});await first;await flush();
   assert.match(app.q('full').textContent,/Newer saved note/,'Late intent cannot change the selected reader');
@@ -376,7 +376,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  await test('returning to the same notebook list paints immediately and keeps unchanged expanded content',async()=>{
   const late=deferred();let delay=false;
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?(delay?late.promise:{notes:[note()],next_after:null}):undefined});
-  app.q('list').querySelector('.nb-title').click();const first=app.q('list').firstChild;
+  app.q('list').querySelector('.nb-expand').click();const first=app.q('list').firstChild;
   app.controller.hide();delay=true;const loading=app.show();
   assert.match(app.q('list').textContent,/Private claim/);assert.ok(app.q('list').firstChild===first, 'preserve the loaded list DOM');
   late.resolve({notes:[note()],next_after:null});await loading;
@@ -456,7 +456,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  await test('expanding retained rows cannot reactivate paging or edits before the requested page arrives',async()=>{
   const late=deferred();const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?(listQuery(url).has('after')?late.promise:{notes:[note()],next_after:'page:25'}):undefined});
   app.q('more').click();await flush();assert.equal(listQuery(app.requests.at(-1).url).get('after'),'page:25');
-  app.q('list').querySelector('.nb-title').click();await flush();
+  app.q('list').querySelector('.nb-expand').click();await flush();
   assert.equal(app.q('prev').disabled,true);assert.equal(app.q('more').disabled,true);
   assert.ok(cardActions(app).length);assert.ok(cardActions(app).every(control=>control.disabled));
   late.resolve({notes:[note({id:'next-page',content:content('Next page result')})],next_after:null});await flush();
@@ -650,7 +650,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const records=Array.from({length:75},(_,i)=>note({id:'page-note-'+i,content:content('Summary '+String(i+1).padStart(2,'0'))}));
   for(const record of records){delete record.revisions[0].content.body;delete record.revisions[0].content.conditions;record.revisions[0].summary=true;}
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?summaryPage(url,records):undefined});
-  function check(first,last,page){const entries=app.q('list').querySelectorAll('.nb-entry');assert.equal(entries.length,25);assert.ok(entries.every(e=>!e.hidden&&e.querySelector('.nb-title').getAttribute('aria-expanded')==='false'));assert.match(entries[0].textContent,new RegExp('Summary '+first));assert.match(entries.at(-1).textContent,new RegExp('Summary '+last));assert.equal(app.q('page').textContent,'Page '+page);}
+  function check(first,last,page){const entries=app.q('list').querySelectorAll('.nb-entry');assert.equal(entries.length,25);assert.ok(entries.every(e=>!e.hidden&&e.querySelector('.nb-expand').getAttribute('aria-expanded')==='false'));assert.match(entries[0].textContent,new RegExp('Summary '+first));assert.match(entries.at(-1).textContent,new RegExp('Summary '+last));assert.equal(app.q('page').textContent,'Page '+page);}
   check('01','25',1);assert.equal(app.q('prev').disabled,true);
   app.q('more').click();await flush();check('26','50',2);assert.doesNotMatch(app.q('list').textContent,/Summary 01/);
   app.q('more').click();await flush();check('51','75',3);assert.equal(app.q('more').disabled,true);
@@ -769,7 +769,13 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[own],next_after:null}:url.startsWith('/api/notebook/notes/note-one')?{note:own}:undefined});
   await filterNotes(app,'mine');
   assert.match(app.q('list').textContent,/PRIVATE FUTURE.*Private/);assert.doesNotMatch(app.q('list').textContent,/Approved original/);
-  app.q('list').querySelector('.nb-title').click();byText(app.q('list'),'Read full note →').click();await app.whenNavigated();
+  const title=app.q('list').querySelector('.nb-title');
+  assert.equal(title.tagName,'A');assert.equal(title.getAttribute('aria-expanded'),null);
+  assert.equal(title.getAttribute('href'),'#notebook?note=note-one');
+  assert.equal(app.q('list').querySelector('.nb-preview').hidden,true);
+  const modified={type:'click',ctrlKey:true};title.dispatchEvent(modified);
+  assert.equal(modified.defaultPrevented,undefined);assert.equal(app.q('full').hidden,true);
+  title.click();await app.whenNavigated();
   assert.equal(app.requests.at(-1).url,'/api/notebook/notes/note-one');
   byText(app.q('full'),'Read community revision 1 →').click();await app.whenNavigated();
   assert.equal(app.requests.at(-1).url,'/api/notebook/notes/note-one?revision=1');
@@ -874,6 +880,11 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.match(app.q('list').textContent,/Requests needing human publication review.*Review candidate.*Publish request pending.*Manual review needed/);assert.doesNotMatch(app.q('list').textContent,/Sharing review|Awaiting sharing approval/);assert.equal(app.q('list').querySelectorAll('.nb-literature').length,0);
   assert.equal(listQuery(app.requests.find(row=>row.url.startsWith('/api/notebook/review-queue')).url).get('screening'),'attention');
   assert.equal(app.requests.some(r=>r.url==='/map/notes.json'),false);
+  const title=app.q('list').querySelector('.nb-title');
+  assert.equal(title.tagName,'BUTTON');assert.equal(title.getAttribute('aria-expanded'),'false');
+  title.click();assert.equal(app.q('list').querySelector('.nb-title').getAttribute('aria-expanded'),'true');
+  assert.equal(app.q('list').querySelector('.nb-preview').hidden,false);
+  assert.equal(app.q('full').hidden,true,'Review queue titles retain their existing preview behavior');
  });
  await test('an obsolete notebook cursor restarts at the first bounded page after an explicit retry',async()=>{
   const app=await boot({respond:url=>{if(url.startsWith('/api/notebook/notes?')){if(listQuery(url).has('after'))throw Object.assign(Error('Invalid notebook page cursor. Restart the notebook list.'),{status:422});return{notes:[note()],next_after:'old-cursor'};}}});
@@ -1335,7 +1346,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const reviewed=note({id:'review-only',content:content('A source check'),proposal_revision:{revision:1,content_sha256:'hash-1',requests:[proposalRecord('source-check','source_check')]}});
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?summaryPage(url,[submitted,forged,reviewed]):undefined});
   const entries=app.q('list').querySelectorAll('.nb-entry');
-  assert.equal(entries[0].querySelector('.nb-title').getAttribute('aria-expanded'),'false');
+  assert.equal(entries[0].querySelector('.nb-expand').getAttribute('aria-expanded'),'false');
   assert.equal(entries[0].querySelector('.nb-request-label').textContent,'Proposal');
   assert.equal(entries[1].querySelector('.nb-request-label'),null);
   assert.equal(entries[2].querySelectorAll('.nb-request-label').some(node=>node.textContent==='Proposal'),false);
@@ -1361,14 +1372,22 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   await filterNotes(app,'all');const all=listQuery(app.requests.at(-1).url);assert.equal(all.get('scope'),'all');assert.equal(all.has('proposals_only'),false);assert.equal(all.has('after'),false);
   assert.equal(app.q('page').textContent,'Page 1');assert.match(app.q('list').textContent,/Private claim/);
  });
- await test('an older submitted proposal opens its exact revision and hash instead of the latest draft',async()=>{
+ await test('proposal title opens the exact submitted revision directly and agrees with the preview reader',async()=>{
   const old={...revision(1,'Submitted mathematical claim'),content_sha256:'b'.repeat(64),requests:[proposalRecord()]};
   const latest={...revision(2,'New private draft'),content_sha256:'c'.repeat(64),requests:[]};
   const saved=note({...latest,revisions:[old,latest],proposal_revision:{revision:1,content_sha256:old.content_sha256,requests:old.requests}});
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[saved],next_after:null}:url.startsWith('/api/notebook/notes/note-one')?{note:saved}:undefined});
   assert.match(app.q('list').textContent,/New private draft/);assert.equal(app.q('list').querySelector('.nb-request-label').textContent,'Proposal');
   await filterNotes(app,'proposals');
-  app.q('list').querySelector('.nb-title').click();byText(app.q('list'),'Read full note →').click();await app.whenNavigated();
+  const directRoute=app.q('list').querySelector('.nb-title').getAttribute('href');
+  app.q('list').querySelector('.nb-expand').click();
+  assert.equal(app.q('list').querySelector('.nb-preview').hidden,false);
+  byText(app.q('list'),'Read full note →').click();await app.whenNavigated();
+  assert.equal(app.location.hash,directRoute);
+  byText(app.q('full'),'← Notes').click();await app.whenNavigated();
+  assert.equal(app.root.querySelector('[name="visibility"]').value,'proposals');
+  assert.equal(app.q('list').querySelector('.nb-title').getAttribute('href'),directRoute);
+  app.q('list').querySelector('.nb-title').click();await app.whenNavigated();
   const query=new URLSearchParams(app.location.hash.split('?')[1]);
   assert.equal(query.get('note'),'note-one');assert.equal(query.get('revision'),'1');assert.equal(query.get('sha256'),old.content_sha256);
   assert.match(app.q('full').textContent,/Submitted mathematical claim/);assert.doesNotMatch(app.q('full').textContent,/New private draft/);
@@ -1383,7 +1402,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
    if(url.startsWith('/api/notebook/research-requests?source_note_id='))return{requests:[curatedRequest(source,1)],next_after:null};
   }});
   assert.equal(app.q('list').querySelector('.nb-request-label').textContent,'Proposal');assert.equal(app.requests.some(r=>r.url==='/map/notes.json'||r.url.includes('curated_proposals=')),false);
-  await filterNotes(app,'proposals');app.q('list').querySelector('.nb-title').click();byText(app.q('list'),'Read full note →').click();
+  await filterNotes(app,'proposals');app.q('list').querySelector('.nb-title').click();
   // WebCrypto completes on a worker, not after a fixed number of event-loop turns.
   // Hold it explicitly to verify the reader waits for the exact-revision digest.
   await digestStarted.promise;
@@ -1736,7 +1755,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  await test('Human-written badges follow the displayed revision across accounts and support ordinary tag filtering',async()=>{
   const tagged=note({owner:{id:2,handle:'bob'},can_edit:false,...revision(1,'Human note','approved'),content:{...content('Human note'),tags:['algebra','human-written']}}),untagged=note({id:'other',owner:{id:2,handle:'bob'},can_edit:false,...revision(1,'Other note','approved')});
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?summaryPage(url,[tagged,untagged]):url.startsWith('/api/notebook/notes/note-one')?{note:tagged}:undefined});assert.equal(app.q('list').querySelectorAll('.nb-human-written').length,1);assert.match(app.q('list').querySelector('.nb-human-written').getAttribute('title'),/Self-reported.*not verified/);
-  app.q('list').querySelector('.nb-title').click();byText(app.q('list'),'Human-written').click();await flush();assert.equal(listQuery(app.requests.at(-1).url).get('tag'),'human-written');assert.equal(app.q('list').querySelectorAll('.nb-entry').length,1);
+  app.q('list').querySelector('.nb-expand').click();byText(app.q('list'),'Human-written').click();await flush();assert.equal(listQuery(app.requests.at(-1).url).get('tag'),'human-written');assert.equal(app.q('list').querySelectorAll('.nb-entry').length,1);
   await app.show('note-one');assert.equal(app.q('full').querySelectorAll('.nb-human-written').length,1);assert.equal(byText(app.q('full'),'Edit'),undefined);
   app.setAccount({id:3,handle:'carol'});assert.equal(app.q('full').textContent,'');await app.show('note-one');assert.equal(app.q('full').querySelectorAll('.nb-human-written').length,1);
  });

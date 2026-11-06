@@ -1,0 +1,129 @@
+STATEMENTS, ARGUMENTS AND REVIEWED UPDATES — LOCAL REHEARSAL
+6 November 2026
+
+Scope
+
+This is an illustrative finite sampler audit, not a new KEM, cryptanalytic
+result, proposed real-world correctness bound or independent scientific review.
+It exercises the normal local note/publication/update APIs with an independent
+fixture reviewer. The selected arguments belong to two local display targets.
+No executable scheme definition, numerical curve or reward is modified.
+
+Target identity is deliberately conservative in this trial. Its title, kind,
+scope and configuration coverage are fixed when the first argument is adopted.
+Even a title can contain a quantitative claim, so changing its words requires a
+new target identity rather than being assumed cosmetic. Replacing the argument
+for the unchanged target remains possible. These identity checks do not prove
+that an argument implies the target; that semantic judgment belongs to review.
+
+The experiment
+
+X is uniform on {0,...,255}. Alpha fails when X<1, beta when X<8.
+The exact failure probabilities are 1/256 and 1/32 respectively.
+The illustrative attack experiment succeeds exactly when failure does not occur.
+It aims for success >=7/8, requiring failure <=1/8. The stronger illustrative
+correctness target requires failure <=1/128. These are deliberately simple
+thresholds so that every implication and counterexample can be checked by hand.
+
+Trial A-1 initially claims failure <=1/128 for both configurations. It is an
+intentionally overstrong hypothesis, false at beta. Conditional adoption records
+the implication only, not a verdict that this premise is true. Revision 2 keeps
+the statement's identity but restricts its quantified domain to alpha. The
+definition hash changes. Existing uses continue to cite revision 1 exactly.
+
+The six cases
+
+1. Useful weaker proof. The event containment F(X)=>X<16 proves failure<=1/16.
+   This is sufficient for the attack. It neither proves nor refutes <=1/128.
+   The evidence note is intentionally full-text-only, with no special blocks
+   or readable companion, demonstrating ordinary flexible research notes.
+
+2. Actual contradiction. Enumeration gives beta failure=8/256=1/32>1/128.
+   This refutes the original universally quantified statement. Alpha's exact
+   failure=1/256 still meets the target. One observed failure would not have
+   established this probability contradiction; the entire finite space does.
+
+3. Conditional proof. For a separate distribution Q on the same 256 outcomes,
+   Trial A-2 assumes total variation distance to uniform <=7/256. For E={0}, the
+   event inequality gives Q(E)<=1/256+7/256=1/32. Trial A-2 remains a premise.
+   An A-from-B-from-A cycle cannot discharge itself. The application does not
+   perform automated proof composition or certify arbitrary mathematical prose.
+
+4. Alternative argument. The initial attack argument depends on Trial A-1. A direct
+   event bound provides a second argument for the same success target without
+   Trial A-1. Its proposed adoption is left pending so the user can compare and
+   approve it. A false premise does not automatically make the conclusion false.
+
+5. Definition replacement. Compare Trial A-1 revisions 1 and 2. The original covers
+   both configurations; the revised claim covers alpha only. Old arguments and
+   citations remain exact. New definitions do not repair old dependencies by
+   substitution or merely by retaining a familiar label.
+
+6. A research update is not an operational release. Two local target records
+   carry their own adoption histories. Approving one changes a presentation
+   record, not an instance, deadline, accepted submission or score. The fixture
+   preparation verifies that all pre-existing note revisions, account identities,
+   challenge rows and submission rows are unchanged.
+
+Connection to the eight existing scheme notes
+
+The toy's simplicity makes the lifecycle checkable, not representative of all
+cryptographic mathematics. Each guide section explains its structural analogue:
+  - lattice attack message-failure bounds and stronger key-agreement guarantees
+    can involve distinct events; the shared event in the toy does not equate them;
+  - a distribution-transfer argument needs actual sampler identities and an
+    explicit loss; the toy supplies no bound for a real seeded sampler;
+  - code-based assumptions can depend on different target ensembles, so a
+    familiar assumption label cannot transfer evidence between them;
+  - unconditional correctness of a number-theory construction does not establish
+    its computational hardness, or conversely;
+  - alternative real attack methods retain their own exact specifications and
+    assumptions; this finite proof is not a real attack-cost estimate;
+  - all scheme families need immutable executable identities while scientific
+    presentation evolves. The separate integration pass checks the real scheme
+    metadata against the statement/argument structure.
+
+How to prepare
+
+The builder only permits the already identified readable-note fixture beneath
+this checkout's .local directory. It refuses production settings and an external
+DATABASE_URL. It neither deletes nor edits the eight existing research notes.
+All new notes carry an illustrative-trial tag. The local statement tables are
+created explicitly; this is not a production migration or release procedure.
+
+  python scripts/prepare_statement_trial.py --data-dir .local/note-integration-v2 --check
+  python scripts/prepare_statement_trial.py --data-dir .local/note-integration-v2
+
+--check validates note shapes and exact rational arithmetic without database
+writes. The normal run records each successful API operation in the local
+statement-trial-receipt.json. Deterministic idempotency keys recover a crash
+between a committed operation and its receipt. Existing successful decisions
+are not reset when the builder is run again. Changed fixture operations are
+rejected rather than silently overwriting research. To iterate the fixture's
+scientific content later, add deliberate revisions through the note workflow.
+
+The receipt contains guide_note_id, guide_url, exact pins, proposal IDs and
+preservation checks. It contains no password, API key or session cookie.
+
+Open /preview?persona=author&trial=1 for the guide. It links to the exact notes,
+two current targets and two pending changes. Switch to
+/preview?persona=reviewer&trial=1 to review independently. These personas exist
+only in the loopback launcher, not in the deployed application.
+
+Expected review exercise
+
+Open the attack proposal, compare the shared success target and distinct
+arguments, then Approve and apply. Inspect the target history: the earlier
+conditional argument remains recorded, the newly selected direct proof has
+no unproved premises within this fixed finite model, and the correctness target
+has not changed. Its separate correction proposal is still pending. The
+reviewer's reason is preserved beside the adopted argument.
+
+Verification
+
+tests/test_statement_trial_fixture.py checks the exact rational arithmetic,
+weaker-bound distinction, definition change, shared uses with distinct required
+strength, alternative conclusions and optional full-text-only structure.
+The statement workflow API tests cover access restrictions, publication checks,
+stale proposals, durable decisions and idempotency. Browser checks are performed
+by the integration pass; this document does not claim they have already passed.

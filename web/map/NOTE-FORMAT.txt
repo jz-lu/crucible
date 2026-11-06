@@ -4,17 +4,130 @@ Agent entry point: GET /api/agent/pipeline. Read its task-specific resources
 before contributing. This file describes the note format, not review authority.
 
 The notes use Crucible's existing flexible format:
-  title, claim, conditions, body, tags, kind, references, artifacts, extensions.
+  title, claim, conditions, body, sections, statements, arguments, tags, kind,
+  references, artifacts, extensions.
 
 Title identifies the idea. Claim states the note's main point; for a literature
 summary it is a descriptive statement, not an asserted new theorem. Conditions
-state the scope and limitations. Body explains the mathematics, comparisons,
-research questions and next work. References identify supporting sources.
+state the scope and limitations. Body is the complete Full text: the precise
+mathematics, comparisons, code, evidence, research questions and next work.
+References identify supporting sources. Notes without readable sections show a
+notice that no readable explanation has been added. Full text remains available
+through the same collapsed disclosure used by notes with readable sections.
+No content or hash is rewritten.
+
+READABLE COMPANION AND EXACT SECTIONS
+
+Optional sections is an ordered list of {id,title,body}, at most 32 entries.
+Omit it or use an empty list for a Full-text-only note. A readable companion is
+not required to save, publish, cite, export or contribute an ordinary research
+note. Its absence does not mean the research is incomplete or less rigorous.
+Each id is a stable lowercase slug (letter first, then letters/digits/hyphens,
+at most 64 characters); do not regenerate it when changing the title. Each body
+contains reader-facing Markdown: paragraphs, headings, lists, bold, code, safe
+HTTP(S) links, inline TeX \( ... \) and display TeX \[ ... \]. Display delimiters
+can be on the same line or separate lines. Readable sections support at most
+128 mathematical expressions each; split longer explanations into useful sections.
+Raw HTML and embedded images are inert text. Keep the explanation rigorous but
+accessible; explain the claim, scope, dependencies, uncertainty and sources.
+Choose the sections needed by this note rather than filling a mandatory outline.
+
+The website presents sections first, with the complete body under Full text.
+When sections are absent, it shows the notice rather than automatically exposing
+the body. An exact Full-text passage citation opens its target automatically.
+These are two partitions of one note revision, not independently editable or
+approved documents. Models receive both through the existing notebook API.
+Neither partition is exempt from publication screening or visibility checks.
+
+Link to a section using the exact note revision and full content hash:
+  #notebook?note=UUID&revision=N&sha256=SHA256&note_section=STABLE_ID
+The API can resolve it with GET /api/notebook/notes/UUID?revision=N&sha256=SHA256&section=STABLE_ID.
+Do not combine a section with the older location=L... passage parameter.
+Old line citations continue to address the original Full text and open it when
+followed. An unavailable section never falls back silently to the latest note.
+
+For a scheme explanation, normally include readable security and correctness
+sections. A theoretical attack explanation should identify the algorithm,
+success criterion, cost model, exact parameter coverage and unproved premises.
+Distinguish mathematical lemmas from assumptions and model choices. An attack
+cost estimate is not a lower bound on security. Stable assumption labels can
+appear in these sections, but labels and authored metadata grant no authority
+to approve schemes, change security curves, or invalidate another argument.
 
 The global kind field remains a freeform evidence description (for example,
 Sourced overview or Design rationale). It is not redefined as a rigid note type.
 Optional extensions.research_note records the note's role, origin and associated
 schemes. Arbitrary subjects can be added without changing the global schema.
+
+OPTIONAL STATEMENTS AND ARGUMENTS (LOCAL WORKFLOW TRIAL)
+
+Ordinary notes need neither field. Full text stays free-form, and the readable
+companion remains optional. A statement is one reusable exact definition, not
+a separate document or a compulsory note template. Do not repeat its normative
+definition in independently maintained metadata. The reader and statement link
+render the same saved block. Labels such as A-12 are display names, not access
+tokens or sufficient identities; exact note revision/hash/block ID identify it.
+
+statements: [{id, label, title, definition, definitions?}]
+  definition is mathematical Markdown, including the necessary distributions,
+  parameter domain and quantifiers. definitions optionally pins longer source
+  definitions as {note_id,revision,content_sha256,section_id?}. A definition's
+  fingerprint covers its text and normative pins; title/label changes do not
+  change that fingerprint. Every edit still produces an exact note revision.
+
+arguments: [{id,title,conclusion_statement,scope,status,section_id?,dependencies}]
+  conclusion_statement uses the same exact reference shape as a premise below.
+  It identifies the proposition this argument supports. State the experiment,
+  parameter domain, quantifiers and result in the statement; keep proof steps
+  and discussion in the argument's reasoning. A different note can provide
+  another argument for that same conclusion. Do not duplicate its definition
+  in an independently editable conclusion field. Historical free-form conclusion
+  strings remain supported; exactly one conclusion representation is allowed.
+  status is an authored declaration: conditional, unconditional or incomplete.
+  A declared unconditional argument cannot have unproved dependencies, but the
+  declaration is not verification. Missing dependencies never imply a proof.
+  section_id locates readable reasoning; omit it when reasoning is in Full text.
+  Each dependency has statement, optional configuration_ids and optional use.
+  statement is {statement_id} for this same revision or adds
+  note_id,revision,content_sha256 for an exact external source. configuration_ids
+  are stable native settings, not mutable stage numbers. use explains how this
+  premise applies: substitutions, required strength and justification where
+  needed. Omit use only when the complete exact proposition is the premise as
+  written in the argument's scope. Omission asserts no proved implication.
+  Historical records may retain the complete required/mapping/justification
+  trio instead. Do not combine these two ways of explaining an application.
+  Premises within one argument are required together. Separate arguments keep
+  their own conclusions and scopes; do not merge their premise lists.
+
+Exact reader locations add &statement=ID or &argument=ID to the pinned note URL.
+Use only one location per link. Evidence can cite these with supports/challenges/
+reproduces/responds_to. These are attributed relationships, not truth verdicts.
+
+Scheme entry points are Security argument and Correctness argument. They show
+the selected conclusion and scope, with its exact premises underneath. Following
+Read argument opens that precise note argument and its readable reasoning when
+present; other arguments and statements remain folded. No readable companion
+is invented for a Full-text-only note. The complete body stays behind Full text.
+The local binding manifest initially admits exact note arguments, explicitly
+without independent review. Later proposals can add an alternative argument,
+select a displayed argument or withdraw an admitted one. An old revision's scientific extensions remain readable
+through a compatibility adapter, without changing its saved text or hash.
+
+The opt-in local API is /api/notebook/statement-workflow: context, targets and
+updates. An update requests admit_argument, select_argument or withdraw_argument,
+pins evidence and the expected latest roster event, and needs an independent
+reviewer. Adding an alternative does not select it. Withdrawal may concern any
+admitted argument; withdrawing the selected one leaves no displayed argument
+until a separate selection. Old sources never reappear as an automatic fallback.
+Publication is separate. A withdrawal does not automatically refute the
+conclusion, change numerical accounts or cancel rounds. A retained curve with
+no selected argument is explicitly marked as reference-only.
+Targets preserve their exact original conclusion pin. Byte-identical statement
+definitions (including normative source pins) can retain a roster across a note
+copyedit; a mathematically different proposition gets a separate target. No
+automated rule equates paraphrases or proves that a weaker premise suffices.
+Executable changes still require the tested scheme release pipeline. This trial
+has not enabled hosted adoption or automatic proof composition.
 
 AGENT READING PRIORITY AND UPVOTES
 
@@ -276,9 +389,72 @@ source text or a fenced code block. Do not rewrite mathematics just to fit the U
 Use a JSON encoder for exports so backslashes and newlines survive correctly.
 
 The 40,000-character body bound is a storage guard, not a target or style rule.
-Longer projects can use several exact-revision-linked notes. The notebook stores
-one technical account, not a shorter human version that can drift from an agent
-version. Download agent research task includes the full selected note and citation.
+Longer projects can use several exact-revision-linked notes. The complete technical
+account remains in body. Optional readable sections explain it without replacing
+it; both are stored in the same immutable revision. Keep their claims and
+qualifications consistent. Download agent research task includes the full selected
+note and citation.
+
+For a plotted attack, always provide an exact attack-specification section link.
+Link numbered assumptions only when they are premises needed for that attack's
+stated success or cost. State the computation model and qualifications in the
+specification. Missing arguments are unfinished work, not assumptions; a claim
+that no faster attack exists is not needed merely to describe one attack. KEM
+confidentiality arguments and gaps belong with the scheme's security account.
+An empty list of formalized premises does not certify unconditional analysis.
+
+SECURITY AND CORRECTNESS ARGUMENTS
+
+Each argument states its experiment, exact release/configuration distribution,
+success or failure event, and resource scope. The readable companion explains
+the claim and every unproved premise; Full text gives the derivation, reductions,
+losses, source attribution and reproduction commands. Label original derivations
+as such. A finite test validates neither hardness nor a rare-event tail premise.
+
+In the local exact-note binding format, extensions.scheme_assumptions assigns
+premise IDs separately to security and correctness. extensions.scheme_arguments
+provides each argument's status (conditional, unconditional or incomplete) and
+scope. These are authored claims in the pinned revision, not scientific approval.
+Each assumption may also carry a short plain-language summary, and each argument
+may carry a summary of its scope. These summaries belong to that exact revision,
+not generated display guesses. State what needs to hold in ordinary language;
+keep the quantified statement, distribution, resource budget and proof in the
+linked section. Summaries must not replace a conditional claim with a guarantee.
+
+Prefer a self-contained mathematical assumption over a description of what a
+scheme needs. Name the public parameters and samplers; state the adversary's
+input, required output or distinguishing experiment, and the resource/success
+quantifiers. A reader should understand the problem without knowing its role in
+the construction. Put the exact scheme instantiation and reduction in a separate
+part of the linked section. A parameterized sampler is legitimate, but its public
+algorithm and distribution must be specified, not hidden behind "this scheme".
+
+An assumption may carry kind (hardness, model or distribution-bound) together
+with formal_statement (bounded text with explicit inline/display TeX). The same
+definition belongs in its readable section. The assumption list presents this
+statement before its construction-specific use. Existing summaries remain a
+fallback for notes without a formal statement. These are author claims, never a
+mathematical certification supplied by the interface.
+
+Do not replace an exact seeded distribution by independent LWE, a structured
+code ensemble by uniformly random codes, or a fixed hash by a random oracle
+without an explicit justified bridge. Model extrapolations and correctness-tail
+premises should be formalized honestly; they need not masquerade as standard
+hardness assumptions. Finite playable parameters do not imply asymptotic
+negligibility or an established numeric hardness bound.
+
+An unconditional claim requires an explicit complete argument for its stated
+experiment and an empty premise list. Missing classification or an empty list
+alone is unknown. A conditional claim lists its dependencies; incomplete proof
+steps must not be relabelled as assumptions merely to make it look complete.
+
+Honest mathematical correctness can be unconditional while operational faults
+remain outside its experiment. A passive shared-key recovery theorem is not an
+IND-CCA theorem. A reduction with symbolic hardness/transfer terms supplies no
+numeric security guarantee until those terms are justified at the stated budget.
+An attack-cost upper bound cannot supply a hardness lower bound. Scheme-level
+premises and a particular attack's premises stay separately bound to exact note
+sections; neither list silently inherits the other.
 
 Literature attribution names the original authors. prepared_by identifies the
 compiler, not the inventor. Source IDs in square brackets refer to the Citations

@@ -105,7 +105,24 @@ requests require --permanent; old clients cannot silently take the new action.
 
 create/revise take the content object: nonempty title, claim, conditions and body;
 tags is an array (default []); kind, references, artifacts and extensions are
-optional. Read note-format.txt for citations, exact links and inert metadata.
+optional. Optional sections is an ordered list of {id,title,body}: a readable
+companion, with stable section IDs and Markdown/explicit TeX. The existing body
+remains the complete Full text; never replace it with a shortened summary.
+Both partitions belong to the same immutable revision and content hash.
+Optional statements and arguments supply precise reusable definitions and
+dependency uses without imposing an outline on ordinary research. Full text
+can still stand alone. Read the optional statement/argument contract in
+note-format.txt before authoring these fields; they are included in the exact
+revision, export and publication screen. Exact statement/argument links pin
+note ID, revision, hash and block ID. Prefer conclusion_statement for a precise
+claim and keep the reasoning in the argument; separate notes can support the
+same exact conclusion with different premises. The local statement-workflow API
+tests reviewed admission, selection and withdrawal of explanatory arguments;
+admission adds an alternative without changing the displayed argument.
+Initial local examples explicitly lack independent review. The API is not enabled on
+the hosted site and has no dedicated CLI commands yet. Its updates cannot
+activate code, change curves, score results or declare mathematical truth.
+Read note-format.txt for citations, exact links and inert metadata.
 import takes the existing crucible-theory-local-v1 workspace, including notes,
 consecutive revision history with createdAt milliseconds, and views (usually []).
 All saves/imports start private; import never submits a publication request.

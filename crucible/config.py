@@ -90,8 +90,14 @@ class Settings:
     publication_screening_mode: str = "disabled"
     publication_screening_model: str = "gpt-6-luna"
     publication_screening_monthly_budget_micro_usd: int = 10_000_000
+    local_note_corpus_only: bool = False
+    local_note_bindings_path: str | None = None
 
     def __post_init__(self):
+        if type(self.local_note_corpus_only) is not bool or (self.production and self.local_note_corpus_only):
+            raise RuntimeError("The isolated notebook corpus is a development-only option.")
+        if self.local_note_bindings_path is not None and not self.local_note_corpus_only:
+            raise RuntimeError("Local note bindings require the isolated notebook corpus.")
         if self.publication_screening_mode not in {"disabled", "shadow", "automatic"}:
             raise RuntimeError("Publication screening must be disabled, shadow, or automatic.")
         if self.publication_screening_model not in {"gpt-6-luna", "gpt-5.4-mini", "gpt-6.1-sol"}:
@@ -188,6 +194,9 @@ def load_settings() -> Settings:
         raise RuntimeError("CRUCIBLE_ENV must be exactly development or production.")
     production = environment == "production"
     self_review = os.getenv("CRUCIBLE_ALLOW_SELF_REVIEW", "false")
+    local_notes = os.getenv("CRUCIBLE_LOCAL_NOTE_CORPUS_ONLY", "false")
+    if local_notes not in {"true", "false"} or (production and local_notes == "true"):
+        raise RuntimeError("CRUCIBLE_LOCAL_NOTE_CORPUS_ONLY must be false in production and true or false in development.")
     if self_review not in {"true", "false"}:
         raise RuntimeError("CRUCIBLE_ALLOW_SELF_REVIEW must be exactly true or false.")
     if production and self_review == "true":
@@ -256,6 +265,8 @@ def load_settings() -> Settings:
     if github_enabled not in {"true", "false"}:
         raise RuntimeError("CRUCIBLE_GITHUB_ENABLED must be true or false.")
     return Settings(database_url=database_url, secret=secret, origins=origins, production=production,
+                    local_note_corpus_only=local_notes == "true",
+                    local_note_bindings_path=str(data_dir / "scheme-note-bindings.json") if local_notes == "true" else None,
                     reviewer_ids=reviewers, allow_self_review=self_review == "true",
                     access_mode=os.getenv("CRUCIBLE_ACCESS_MODE", "beta" if production else "open"),
                     access_admin_ids=admins,

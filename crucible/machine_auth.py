@@ -103,6 +103,10 @@ def required_scope(method, path):
         # applies only to the fixed documentation paths, never account data.
         return SCOPES
     if method == "GET":
+        if path in {"/api/notebook/statement-workflow/context", "/api/notebook/statement-workflow/targets",
+                    "/api/notebook/statement-workflow/updates"} or re.fullmatch(
+                r"/api/notebook/statement-workflow/(?:targets/[a-z][a-z0-9-]{0,79}|updates/[0-9a-f-]{36})", path):
+            return "notebook:read"
         if path in {"/api/bounties", "/api/me/bounty-allowance"} or re.fullmatch(rf"/api/bounties/{_UUID}", path):
             return "bounties:read"
         if path in {"/api/notebook/notes", "/api/notebook/export", "/api/notebook/publication-policy", "/api/notebook/publication-status"} or re.fullmatch(
@@ -125,6 +129,8 @@ def required_scope(method, path):
                         rf"/api/protocol/proposals/{_UUID}(?:/revisions)?", path):
             return "proposals:read"
     if method == "POST":
+        if path == "/api/notebook/statement-workflow/updates":
+            return "notebook:write"
         if re.fullmatch(rf"/api/bounties/{_UUID}/(?:admission-requests|boosts)", path):
             return "bounties:spend"
         if path == "/api/bounties" or re.fullmatch(rf"/api/bounties/{_UUID}/(?:revisions|withdrawals|submissions|cancellations)", path):

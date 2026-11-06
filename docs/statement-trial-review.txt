@@ -1,0 +1,100 @@
+STATEMENTS AND ARGUMENTS — LOCAL REVIEW CHECKPOINT
+6 November 2026
+
+Open the trial
+
+http://127.0.0.1:8000/preview?persona=author&trial=1
+
+The guide links six short cases together. To exercise the pending decisions,
+use its local-reviewer link. Two proposals are deliberately still pending:
+replace the attack justification with a direct bound, and withdraw the separate
+correctness justification. These are isolated preview accounts and records.
+
+Recommended structure
+
+1. Notes remain the durable research record. Full text is enough. An author may
+   add readable sections, precise statements and explicit arguments when useful;
+   none is a mandatory template for ordinary research.
+
+2. A statement is an optional, separately addressable block inside a note. Its
+   exact citation includes note ID, revision, content hash and statement ID.
+   A label such as A-1 is a reading aid, never a substitute for that identity.
+   Normative definitions can also be pinned. Editing a statement creates a new
+   note revision and leaves its earlier uses attached to the earlier definition.
+
+3. An argument states a conclusion and scope, then records which precise
+   statements it needs, how their variables apply, and the strength required.
+   Multiple premises in one argument are used together. Alternative arguments
+   are separate records. The implementation does not infer equivalence or
+   certify prose proofs.
+
+4. Research can support, challenge or respond to an exact statement. These are
+   attributed research claims. A challenging note does not itself revoke every
+   use, and a weaker sufficient proof does not settle a stronger assumption.
+
+5. A reviewed update selects or withdraws the explanatory argument for one
+   fixed result. Its title, kind, scope and configuration coverage stay fixed.
+   A reviewer checks the proposed argument against that result; equality of
+   metadata is not a proof of implication. Decisions retain exact sources and
+   history. Stale proposals cannot overwrite intervening decisions.
+
+6. Adopting an explanation and changing an executable scheme are distinct
+   operations. This trial implements only the former, in local tables. It does
+   not alter challenge instances, curves, deadlines, submissions or points.
+
+Why this design
+
+Keeping everything as unstructured prose would make exact dependencies and
+their affected uses difficult to find. A separate global assumptions database
+would duplicate research and impose structure too early. Optional blocks in
+versioned notes keep prose flexible while allowing selected claims to have
+precise citations and a controlled adoption history.
+
+The finite sampler example is deliberately checkable by hand. One strong claim
+fails for one configuration; a weaker bound still suffices for an attack; a
+different argument retains an explicit distribution premise; and a revised
+definition does not silently repair old citations. This is workflow evidence,
+not a new cryptographic result.
+
+Breadth beyond the example
+
+scripts/check_scheme_statement_fit.py checks representation against all eight
+current releases and 379 native configurations. It preserves native identities,
+off-progression configurations, method-specific premises, and the distinction
+between attack upper bounds and security lower bounds. It produces 34 candidate
+statement records and 26 argument records without writing or adopting them.
+
+The report explicitly lists remaining authoring tasks such as exact published
+source pins and mappings. Its ready_for_adoption field is false. Passing this
+check does not scientifically validate the existing scheme arguments or convert
+all of the real-scheme notes to the new structure.
+
+Validation at this checkpoint
+
+- Exact finite arithmetic and fixture hashes; all seven saved trial revisions
+  match the generator. The creation receipt records 27 successful operations.
+- Existing local notes, accounts, challenge rows and submissions preserved.
+- Backend tests for precise references, scoped updates, reviewer independence,
+  publication requirements, revocation, retry receipts, stale/ABA decisions,
+  agent permissions and additive migration behavior.
+- Frontend tests for ordinary notes, exact focus, safe mathematics and links,
+  optional editing, proposal routing, withdrawn sources and permission changes.
+- Desktop and 390-pixel-wide reader inspection; exact statement navigation,
+  old/new definition separation, full-text-only reading, reviewer entry,
+  pending attack replacement and correctness-withdrawal presentation.
+
+Remaining limits
+
+Argument authoring still uses an optional advanced JSON editor, suited to agent
+preparation. The current related-use scan is bounded and reports incompleteness;
+it is not a production dependency index. There is no automatic theorem proving,
+proof-cycle detection, global truth verdict or operational scheme rollback.
+
+The additive schema change has been exercised locally. Production PostgreSQL
+rollout compatibility, production load and integration with actual scheme
+adoption are not established by this trial. Nothing was deployed. All real
+scheme adoption should remain deliberate and separately reviewed.
+
+The next design review should test whether readers can answer three questions
+quickly: What exactly is assumed? Which argument needs it, and how strongly?
+What changes if the assumption fails? The six-case guide is the starting point.

@@ -1,0 +1,187 @@
+CRUCIBLE — EXACT CLAIMS AND ARGUMENT ROSTERS
+Local implementation review, 2026-11-06
+
+Purpose
+
+A note remains free-form research. Optional statement blocks identify precise
+propositions; optional argument records link one conclusion to its reasoning
+and scoped premises. A scheme entry or an attack curve can point to a claim and
+its argument roster without creating another editable copy of the mathematics.
+This is a local presentation trial, gated by local_note_corpus_only. It does not
+activate schemes, change challenge instances, change curve values or award points.
+
+Canonical content and historical compatibility
+
+New argument records use conclusion_statement, an exact local statement ID or
+an external note/revision/content-hash/statement-ID reference. Historical prose
+conclusion records remain readable and retain their original content hashes.
+The two authoring forms are mutually exclusive. API responses may include a
+derived conclusion string for older renderers, but the referenced statement is
+the authority. Reasoning can have an exact readable-section link or remain in
+Full text. An optional human-facing companion is not required for an ordinary
+note or statement.
+
+Premises use exact statement references. Bound scheme uses identify their native
+configurations explicitly; free-form notes need not have configuration IDs.
+A use explanation is optional. Absence does not certify an implication, sampler
+mapping, mathematical proof or implementation correctness. A declared
+unconditional argument has no listed unproved premises; that declaration is
+not an automatic certification. Incomplete arguments can be saved but cannot
+be approved as a selected or admitted justification.
+
+Initial local admissions
+
+The trusted local binding manifest supplies initial arguments for each scheme
+security/correctness claim and each complete bit-RAM account. The current real
+fixture has 26 initial admissions: 16 scheme claims and 10 RAM accounts. Its 13
+historical or qualitative reference arguments remain incomplete and are not
+silently admitted. Initial admissions are virtual records with deterministic
+IDs, explicitly marked initial_admission and independent_review=false. They do
+not manufacture a reviewer identity, publication decision or database event.
+All exact source notes must already be published and visible to the reader.
+
+Target names include the scheme and claim/attack title. Target identity uses
+the release, role/model slot, exact configuration set and canonical definition
+fingerprint, including pinned normative definitions. Once there are events,
+the original exact target and baseline are preserved inside the frozen packet.
+A note copyedit retaining that definition does not fork its roster. A changed
+proposition creates a different target. No semantic equivalence or implication
+between differently worded mathematical propositions is inferred.
+
+An alternative may reference the original conclusion or a byte-identical
+canonical definition in another exact source. Both sources are authorized and
+pinned. Context discovery can recognize that identical definition while showing
+the target's original pin; this does not grant access to a hidden source.
+
+Second-level review
+
+Publishing a note makes it readable; it does not admit its argument. A separate
+frozen update packet requests one of three operations:
+
+- admit_argument: add an independently reviewed alternative, leaving the
+  displayed argument unchanged.
+- select_argument: admit and select the exact argument for display.
+- withdraw_argument: withdraw an admitted argument. If it was displayed,
+  leave the selection withdrawn; do not choose another argument automatically.
+
+Withdrawal concerns the argument in that target, not the global truth of its
+conclusion or premises. Readmitting an argument after withdrawal does not
+implicitly select it again. Other admitted alternatives and historical reviews
+remain available.
+
+Every approved operation advances one roster-head event token. Proposals pin
+that expected head, so an intervening admission, selection or withdrawal makes
+an older proposal stale. Selection provenance is recorded separately from the
+latest roster head. Idempotency keys preserve a committed decision across an
+ambiguous retry; a later source withdrawal returns only a safe decision receipt
+to its author or the original human reviewer, not the withdrawn text.
+
+Configured independent humans decide these requests. The proposer, argument
+or evidence author, conclusion author, premise author, and authors of their
+normative definitions cannot review their own dependent update in this trial.
+Machine credentials cannot inherit human-review authority. notebook:read alone
+remains owner-only; shared published sources require notes:read as well.
+
+Relationship to numerical curves
+
+Each current RAM conclusion identifies its release, computation model, named
+attack, exact analysis SHA-256, native configurations, work/storage integers and
+complete-key success event. Review can change the chosen justification and its
+premises for that exact claim; it cannot change those numerical values or select
+a different analysis artifact. The scheme endpoint first validates the original
+catalogue binding, then overlays the reviewed argument selection. An unavailable
+or withdrawn source never falls back silently to the initial argument.
+
+This verifies identities and permissions, not proof correctness. A reviewer must
+still check that the alternative reasoning actually establishes the pinned
+claim in its stated computation model and configuration scope. Unrelated note
+metadata cannot select another numerical account. A new estimate/model or a
+stronger/different claim needs its own exact claim and later catalogue review.
+
+The old curve is retained after justification withdrawal as reference data. Its
+presentation must identify that loss of currently selected justification rather
+than imply that the claim is still independently supported.
+
+Bounds and hosted-rollout limits
+
+Existing local_statement_updates/current/adoptions tables hold frozen packets
+and events. This pass adds JSON fields and a read projection; no new SQL table,
+production migration, hosted configuration or destructive data operation is
+introduced. Existing note revisions remain immutable.
+
+Roster reconstruction follows the event chain with a limit of 50 events per
+target and a 2 MiB reconstruction budget (not a total HTTP-response limit). If reconstruction would exceed a
+bound or a chain is inconsistent, it fails closed rather than supplying a
+partial roster that could revive a withdrawn argument. This is a deliberate
+local-trial limit, not a scalable archival policy. A hosted version needs a
+verified checkpoint/materialized projection or another bounded full-history
+strategy before targets can accumulate unrestricted histories.
+
+Local SQLite writes use BEGIN IMMEDIATE, serializing publication withdrawal and
+review mutation. The PostgreSQL review path locks the update and roster head,
+but does not serialize all source-note rows against simultaneous publication
+withdrawal. Subsequent reads recheck source visibility and fail closed, so a
+recorded decision cannot restore access. Nevertheless an approval could be
+recorded during that concurrent withdrawal window. Before hosted enablement,
+add and test a consistent source-lock/revalidation strategy, including overlap,
+retry, deadlock handling and negative access cases. Current SQLite tests do not
+establish that PostgreSQL concurrency property.
+
+Validation and remaining review
+
+Targeted tests cover optional legacy content, exact conclusions, normative
+sources, publication and independent-review gates, private-source denial,
+agent scopes, stale updates, idempotent decisions, admission without selection,
+withdrawal of selected and nonselected arguments, no automatic fallback,
+readmission without selection, copyedit continuity, changed-proposition identity,
+configuration coverage, initial provenance and migration compatibility.
+
+This document records engineering behavior, not a cryptographic endorsement.
+
+Integrated local checkpoint
+
+All eight scheme notes are at revision 12. They contain 34 premise statements,
+39 conclusion statements and 39 arguments. Sixteen scheme arguments and ten
+RAM attack arguments have explicit initial admission. Thirteen historical or
+qualitative references remain incomplete. The two previous demonstration
+targets, four update requests and two decisions remain untouched.
+
+All 87 note revisions present before this pass remain byte-for-byte unchanged;
+all 103 resulting revision hashes were verified. The eight notes' Full text is
+unchanged from revision 10. Accounts, notes and numerical submissions were not
+removed. All 379 numerical RAM accounts retain their original values.
+
+The 16 security/correctness claims now state experiments, quantified bounds,
+symbol definitions and limits rather than copying the proof narrative. Proof
+exposition or assumption-label edits no longer change a conclusion's identity.
+Semantic reformulations still require explicit consideration; text matching is
+not mathematical equivalence checking.
+
+Checks passed: the backend workflow/binding/migration suites and final roster
+regressions; 64 conversion/catalogue/claim checks; 29 structured-reader checks;
+25 scheme-dialog checks; 12 RAM-chart checks; 22 graph-interaction checks; and
+the ordinary notebook, store, readable-section and review-workspace regressions.
+The live loopback API returned every scheme's revision-12 bindings and all 26
+initial rosters, alongside the two existing demonstration targets.
+
+Desktop Chrome inspection confirmed separate security/correctness entry points,
+rendered equations, exact claim/argument navigation, compact roster premises,
+initial-review provenance and the return-to-scheme link. This checkpoint does
+not claim a fresh mobile-device audit or PostgreSQL production certification.
+
+Review at http://127.0.0.1:8000/. Start with a scheme's Security argument or
+Correctness argument, then Arguments & proposals. A selected attack point also
+links to its specification and argument roster. Adding an alternative, selecting
+one or withdrawing one uses the separate proposal review flow. Write an argument
+note begins an ordinary private note with an exact conclusion citation; structured
+argument records can be supplied through the optional editor or notebook API.
+
+Publication and mathematical review remain different decisions. A theorem may
+be conditional: no automatic theorem badge follows from an empty premise list.
+The neutral Claim label describes the proposition; review provenance describes
+what the pipeline has actually done.
+
+This implementation remains local and uncommitted. Nothing in this pass was
+deployed or pushed. Local validation receipts are in
+.local/note-integration-v2/claim-rosters-validation.json and
+.local/note-integration-v2/claim-rosters-http-validation.json.

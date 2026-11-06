@@ -15,12 +15,12 @@ from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, Query, Request
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, and_, case, cast, event, func, literal, or_, select, tuple_, union_all
 from sqlalchemy.orm import Mapped, aliased, load_only, mapped_column
 
 from .db import Base, User
-from . import protocol_proposals, proposal_notes, proposal_retractions, notebook_sharing, notebook_moderation, notebook_graph, note_ratings, machine_auth, notebook_trash, notebook_numbers, publication_screening
+from . import protocol_proposals, proposal_notes, proposal_retractions, notebook_sharing, notebook_moderation, notebook_graph, note_ratings, machine_auth, notebook_trash, notebook_numbers, publication_screening, note_sections, statement_workflow
 
 
 FORMAT = "crucible-theory-local-v1"
@@ -31,7 +31,7 @@ MAX_NOTES = 200
 MAX_REVISIONS = 100
 SUMMARY_INDEX_MAX_NOTES = 500
 SUMMARY_INDEX_MAX_BYTES = 512 * 1024
-CONTENT_FIELDS = {"title", "claim", "conditions", "body", "tags", "kind", "references", "artifacts", "extensions"}
+CONTENT_FIELDS = {"title", "claim", "conditions", "body", "sections", "statements", "arguments", "tags", "kind", "references", "artifacts", "extensions"}
 FORBIDDEN_KEYS = {"__proto__", "prototype", "constructor"}
 CURATED_NOTES_PATH = Path(__file__).resolve().parents[1] / "web/map/notes.json"
 
@@ -172,11 +172,25 @@ class NoteContent(BaseModel):
     claim: str = Field(min_length=1, max_length=20000)
     conditions: str = Field(min_length=1, max_length=20000)
     body: str = Field(min_length=1, max_length=40000)
+    sections: list[note_sections.ReadableSection] = Field(default_factory=list, max_length=32)
+    statements: list[statement_workflow.Statement] = Field(default_factory=list, max_length=32)
+    arguments: list[statement_workflow.Argument] = Field(default_factory=list, max_length=32)
     tags: list[str] = Field(default_factory=list, max_length=40)
     kind: str = Field(default="", max_length=100)
     references: Any = None
     artifacts: Any = None
     extensions: Any = None
+
+    @model_validator(mode="after")
+    def statement_links(self):
+        return statement_workflow.validate_content(self)
+
+    @field_validator("sections")
+    @classmethod
+    def distinct_sections(cls, values):
+        if len({item.id for item in values}) != len(values):
+            raise ValueError("Each readable section needs a distinct stable identifier.")
+        return values
 
     @field_validator("title", "claim", "conditions", "body")
     @classmethod
@@ -453,7 +467,9 @@ def _curated_collection(path, identity):
     return tuple(records)
 
 
-def curated_collection():
+def curated_collection(session=None):
+    if session is not None and session.info.get("local_note_corpus_only"):
+        return ()
     try:
         path = CURATED_NOTES_PATH.resolve()
         return _curated_collection(str(path), _file_identity(path.stat()))
@@ -767,7 +783,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             undated = sum(count for number, count in rows if number is None)
             # First bundled revision dates describe catalogue authoring, not
             # the publication dates of papers discussed in those notes.
-            for note in curated_collection():
+            for note in curated_collection(session):
                 timestamp = note["created_at"]
                 if math.isfinite(timestamp) and 0 < timestamp <= now:
                     number = int(timestamp // 86400)
@@ -789,9 +805,10 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             account(request, session)
             if "authorization" in request.headers:
                 raise HTTPException(403, "Use the community research interface for curated notes.")
-            collection = curated_collection()
+            collection = curated_collection(session)
             totals = note_ratings.curated_scores(session, collection)
-            return {"numbers": notebook_numbers.ensure(session.connection(), [note["id"] for note in collection]),
+            return {"capabilities": {"curated_notes": not settings.local_note_corpus_only},
+                "numbers": notebook_numbers.ensure(session.connection(), [note["id"] for note in collection]),
                 "metadata": {note["id"]: {"rating": totals.get(note["id"], note_ratings.empty_score()),
                     "published_at": note["created_at"]} for note in collection}}
 
@@ -824,7 +841,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                      (canonical.ilike(escaped + "%", escape="\\"), 1), else_=2),
                 func.lower(canonical), canonical).limit(50)
             found = list(session.scalars(query))
-            for note in curated_collection():
+            for note in curated_collection(session):
                 found.extend(tag for tag in note["revisions"][-1]["content"].get("tags", [])
                              if term.lower() in tag.lower())
             unique = {}
@@ -878,7 +895,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 order = "recent"
             cursor = _read_browse_cursor(after, order) if after is not None else None
             snapshot = cursor[0] if cursor else clock()
-            capabilities = {"review_publication": not agent and protocol_proposals.is_reviewer(settings, user),
+            capabilities = {"curated_notes": not agent and not settings.local_note_corpus_only,
+                            "review_publication": not agent and protocol_proposals.is_reviewer(settings, user),
                             "self_review_publication": not agent and protocol_proposals.can_self_review(settings, user)}
             if settings.publication_screening_mode != "disabled":
                 capabilities["publication_policy"] = publication_screening.public_policy(settings)
@@ -963,7 +981,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             curated, curated_requests = [], {}
             curated_totals = {}
             if include_curated and scope not in {"mine", "trash"}:
-                collection = curated_collection()
+                collection = curated_collection(session)
                 curated_totals = note_ratings.curated_scores(session, collection)
                 numbers = notebook_numbers.ensure(session.connection(), [note["id"] for note in collection])
                 for source in collection:
@@ -1061,12 +1079,23 @@ def register_routes(app, db, settings, clock, user_for, throttle):
     notebook_sharing.register_routes(app, db, settings, clock, account, throttle)
     notebook_moderation.register_routes(app, db, settings, clock, account, throttle)
     notebook_graph.register_routes(app, db, settings, account, visible)
+    note_sections.register_routes(app, db, settings, account, visible)
+    statement_workflow.register_routes(app, db, settings, clock, account, visible, throttle)
     notebook_trash.register_routes(app, db, clock, account, throttle)
     note_ratings.register_routes(app, db, clock, user_for, throttle)
 
     @app.get("/api/notebook/notes/{note_id}")
     def get_note(note_id: UUID, request: Request, revision: int | None = Query(default=None, ge=1, le=MAX_REVISIONS),
-                 include_deleted: bool = False):
+                 include_deleted: bool = False,
+                 sha256: str | None = Query(default=None, pattern=r"^[0-9a-f]{64}$"),
+                 section: str | None = Query(default=None, pattern=note_sections.SECTION_PATTERN),
+                 statement: str | None = Query(default=None, pattern=statement_workflow.IDENTIFIER),
+                 argument: str | None = Query(default=None, pattern=statement_workflow.IDENTIFIER)):
+        if (any(len(request.query_params.getlist(key)) > 1 for key in ("revision", "sha256", "section", "statement", "argument"))
+                or sha256 is not None and revision is None
+                or sum(value is not None for value in (section, statement, argument)) > 1
+                or any(value is not None for value in (section, statement, argument)) and (revision is None or sha256 is None)):
+            raise HTTPException(422, "Choose one note location with an exact revision and content hash.")
         with db.transaction() as session:
             user = account(request, session)
             agent = "authorization" in request.headers
@@ -1091,9 +1120,18 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             if not revisions:
                 raise HTTPException(404, "Note not found.")
             result = note_data(session, note, user, revisions, selected=revision, agent=agent, screening_detail=True)
+            if sha256 is not None:
+                selected = next(item for item in revisions if item.revision == revision)
+                if selected.content_sha256 != sha256 or _hash(selected.content) != sha256:
+                    raise HTTPException(409, "The pinned content hash does not match this note revision.")
+            if section is not None:
+                result["selected_section"] = note_sections.section_record(selected.content, section)
+            if statement is not None or argument is not None:
+                kind, identifier = ("statement", statement) if statement is not None else ("argument", argument)
+                result["selected_" + kind] = statement_workflow.selected_record(selected.content, kind, identifier)
             if not agent:
                 result.update(note_ratings.notebook_metadata(session, [note.id])[note.id])
-            return {"note": result}
+            return {"note": result, "capabilities": {"curated_notes": not settings.local_note_corpus_only}}
 
     @app.post("/api/notebook/notes")
     def create_note(body: CreateInput, request: Request):

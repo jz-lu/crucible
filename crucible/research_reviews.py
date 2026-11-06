@@ -102,7 +102,7 @@ class AssessmentInput(BaseModel):
 
 def source_snapshot(session, user, ref):
     if ref.note_id.startswith('curated:'):
-        note = next((n for n in notebook.curated_collection() if n['id'] == ref.note_id), None)
+        note = next((n for n in notebook.curated_collection(session) if n['id'] == ref.note_id), None)
         revision = next((r for r in note['revisions'] if r['revision'] == ref.revision), None) if note else None
         if revision is None:
             raise HTTPException(404, 'Source revision not found.')

@@ -20,7 +20,7 @@ for (const width of [1440,390]) test(`note votes and publication age fit beside 
     await route.fulfill({response,json:data});
   });
   await page.locator('.brand').first().click();await page.locator('#nav-notebook').click();
-  const row=page.locator('.nb-entry').filter({has:page.getByRole('button',{name:new RegExp('A long research note title')})});
+  const row=page.locator('.nb-entry').filter({has:page.getByRole('link',{name:new RegExp('A long research note title')})});
   await expect(row.locator('.nb-note-votes')).toHaveText('▲4');
   await expect(row.locator('time')).toHaveText('1 hr ago');
   await expect(row.locator('time')).toHaveAttribute('datetime',new Date(timestamp*1000).toISOString());
@@ -33,9 +33,10 @@ for (const width of [1440,390]) test(`note votes and publication age fit beside 
   });
   expect(bounds.titleRight).toBeLessThanOrEqual(bounds.asideLeft);expect(bounds.right).toBeLessThanOrEqual(bounds.rowRight);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
-  await row.locator('.nb-title').click();
+  await row.locator('.nb-expand').click();
+  await expect(row.locator('.nb-preview')).toBeVisible();
   await page.screenshot({path:testInfo.outputPath('note-votes-'+width+'.png'),fullPage:true});
-  await row.getByRole('button',{name:'Read full note →'}).click();
+  await row.locator('.nb-title').click();
   await expect(page.locator('[data-nb="full"] .nb-note-votes')).toHaveText('▲4');
   await expect(page.locator('[data-nb="full"] time')).toHaveAttribute('title',/^Published /);
 });

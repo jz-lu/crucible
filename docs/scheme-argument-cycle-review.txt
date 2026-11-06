@@ -1,0 +1,152 @@
+SCHEME ARGUMENT CYCLE — 5 NOVEMBER 2026
+
+Local result
+
+The eight current scheme notes now contain original, scoped security reductions
+and detailed honest-correctness arguments, with readable premises and Full text.
+Separate Security and Correctness buttons appear below the scheme title. Each
+opens only its own argument. Numbered premise links open exact note sections.
+Unconditional appears only for an explicitly scoped argument with no premises;
+missing metadata, empty unassessed lists and incomplete arguments remain distinct.
+
+This is a local research draft. It is not scientific admission, formal proof,
+independent cryptographer approval, or a change to an adapter's advertised status.
+The application remains on the same eight releases and the same parameters.
+No hosted data, deployment, commit or push was changed in this pass.
+
+What each argument establishes
+
+Finite-field DH, teaching-dh-kem@7
+  Correctness: exponent equality, exact prime/subgroup certificates, valid
+  nonidentity encodings and identical framed hash input; zero disagreement in
+  the stated mathematical honest experiment.
+  Security: interval-CDH on the exact fixed group and exponent distribution.
+  A classical hash-query extractor loses Q in success, giving whole-key
+  recovery <= 2^-256 + Q*epsilon + delta, capped at one. Delta is an explicit
+  concrete-hash transfer premise, not a result about SHA-256.
+
+RSA, rsa-kem@4
+  Correctness: CRT inversion for every residue, including zero and nonunits,
+  after successful certified bounded key generation.
+  Security: unit-RSA inversion for the actual emitted modulus distribution.
+  Public verification of queried preimages avoids Q success loss, but its work
+  is charged. Sampling all residues adds rho=E[1/p+1/q-1/(pq)]; the proof
+  preserves the modulus distribution when weighting the unit event.
+
+Elliptic-curve DH, dhkem-x25519@curve-compressed-v2
+  Correctness: exact curve/group certificates, prime-order group identity and
+  injective compressed-point encoding. These are custom curves, not X25519.
+  Security: CDH on each actual registered curve, with the same Q-query loss and
+  explicit SHA-256 transfer premise as finite-field DH.
+
+Module lattice, ml-kem@compressed-research-v4
+  Correctness: deterministic support proofs at degrees 8/16. The statistical
+  bounds at 32/64 use concrete-to-independent-noise tail domination; 128/256
+  additionally require the stated independent-rounding surrogate to bound the
+  relevant residual event. Deterministic tensors are not literally independent.
+  Security: two exact seeded noisy-equation hybrid premises, retaining the
+  public seed, actual expander and joint noise correlations. Whole-key recovery
+  <= epsilon_key + epsilon_ephemeral + Q_G/2^n + 2^-256 in the transform ROM;
+  concrete inference needs an additional hash-transfer term.
+
+Frodo, frodokem@anchor-research-v3
+  Correctness: support proof at n=8; all larger registered n have an exact
+  rational 2^-133 ceiling in the declared independent finite-CDF experiment.
+  Transfer to seeded execution remains a visible one-sided premise.
+  Security: two seeded noisy-matrix hybrids and distinct transform-hash roles.
+  The final 128-bit key introduces Q_F/2^128 in addition to the native-message
+  query and final-guess terms. Public salt is not counted as secret entropy.
+
+Streamlined NTRU Prime, sntrup@3
+  Correctness: coefficient bound 8w<q/2, exact centered lifting, mod-3 recovery
+  and deterministic confirmation; all 27 configurations, including two outside
+  the default progression, are covered by the stated mathematical argument.
+  Security: exact rounded-core one-wayness with actual input prehash and
+  confirmation retained. Query hiding gives the conservative term
+  OW_core(T_B)+(2Q+1)/2^256, where Q counts all relevant domains and phases.
+
+HQC, hqc@modeled-research-v3
+  Correctness: stages 1–4 have a deterministic residual-support proof. Stages
+  5–66 retain finite-expansion and decoder-event domination premises for the
+  exact rational modeled bound. Average honest failure is not a worst-message
+  CCA correctness guarantee.
+  Security: exact native-PKE message recovery. Guessing the first target
+  transform query loses q_G, but needs neither hidden encryption coins nor a
+  candidate-verification oracle. The proof stops before answering that query.
+
+Classic McEliece, classic-mceliece@length-research-v1
+  Correctness: the binary Goppa distance argument, uniqueness through shortening,
+  and the specified bounded-distance decoder cover all fifty lengths.
+  Security: exact seeded-Goppa syndrome one-wayness, including structural
+  attacks. Public weight/syndrome checks extract the target without a query
+  success loss; candidate-check work is charged. No random-code hardness claim
+  is substituted for the actual distribution.
+
+Shared limits
+
+Security statements concern one fresh honest ciphertext, classical queries and
+recovery of the entire encapsulator key. DH/RSA/EC also give explicitly defined
+one-challenge key indistinguishability. No decapsulation/answer-checking oracle,
+leakage, quantum-query, multi-target or full IND-CCA theorem is claimed.
+Mathematical correctness concerns valid successful generation and faithful
+execution of specified algorithms. Native-code refinement, faults and resource
+aborts are not established by an algebraic proof or finite test.
+
+The hardness/transfer terms have no instantiated small values. Small playable
+stages may give vacuous bounds. These reductions supply neither numerical
+security levels nor lower bounds from the plotted attack-cost upper bounds.
+Fixed hashes are not proved to be random oracles. Conventional independent LWE
+is motivation, not an automatically applicable reduction for seeded variants.
+
+Attribution and reproducibility
+
+Readable sections and Full text distinguish locally authored reductions from
+primary-source construction/theorem context. The source_refs entries retain
+URLs and exact local file hashes. Reproducibility lives in:
+
+  scripts/check_scheme_number_theory.py
+  scripts/check_scheme_lattice_arguments.py
+  scripts/check_scheme_code_arguments.py
+  docs/evidence/scheme-number-theory-20261105.json
+  docs/evidence/scheme-lattice-arguments-20261105.json
+  docs/evidence/scheme-code-arguments-20261105.json
+
+Finite checks cover 150 DH pairs, 100 EC pairs, 1,384 toy RSA residues;
+60 module certificates, independent equation/sampler checks and all 80 Frodo
+certificates; 12,150 tiny ring products, current parameter inequalities and a
+toy Goppa distance/syndrome calculation. Existing tests passed 57 classical
+checks, 230 selected lattice checks, 27 current NTRU checks, 67 current HQC
+checks, 11 HQC support checks and all fifty McEliece length exchanges. The
+Frodo full 80-worker sweep and optional Sage work were excluded from the
+selected lattice run. Two upstream source/KAT-dependent code checks could
+not pass because their extracted fixtures are absent; installed workers alone
+do not replace that missing evidence. See the evidence receipt for details.
+
+Another agent scrutinized the reductions; no material flaw was found within
+the stated scope. This is useful adversarial review, not external scientific
+endorsement. The unproved premises remain unproved.
+
+Integration validation
+
+87 focused backend checks and 55 frontend checks passed. Real local API checks
+validated all eight exact note bindings, status/group membership and consistent
+human/model labels. All forty previous revisions and their hashes remain;
+eight revision-6 records were added. Note identities, numbers, accounts and
+resource publication/activation/event counts are unchanged.
+
+Browser checks confirmed separate dialogs, conditional premise lists, explicit
+unconditional correctness, exact revision-6 section navigation and accessible
+Full text. Desktop dark and 390px mobile layouts were inspected. Re-running
+fixture preparation retained the exact fixture without duplicating or revising
+notes. The final whitespace check passed.
+
+Full text now contains current arguments followed by the complete RAM account,
+with an exact reproducible archival-source reference. It does not repeatedly
+embed the full older research record. Earlier immutable revisions retain it.
+The 379-profile attack artifact check passes, and its proof/table content and
+graph bindings are unchanged except authored label renumbering. Existing
+durable note labels are preserved by premise ID during fixture preparation.
+
+The local-only 8 MiB workspace allowance retains this iterated fixture history;
+application/hosted quotas are unchanged. Publishing these note-level claims to
+the hosted catalogue remains a separate reviewed integration step.

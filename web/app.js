@@ -251,6 +251,7 @@ const submissionDialog = $('#submission-dialog');
 const recoveryDialog = $('#recovery-dialog');
 const findingDialog = $('#finding-dialog');
 const pointsHelpDialog = $('#points-help-dialog');
+const schemeAssumptionsDialog = $('#scheme-assumptions-dialog');
 const research = {
   visible: false, targets: [], target: null, kind: 'scheme', findings: [],
   nextBefore: null, request: 0, editing: null, followup: null, saving: false, recoveries: [], recoveriesRequest: 0
@@ -449,6 +450,13 @@ function initialSecurityEstimate(scheme, profile) {
     Number.isFinite(estimate.bits) && estimate.bits >= 0 ? estimate.bits : null;
 }
 function securityReferences(scheme, metric) {
+  if (metric === 'ram') {
+    const evidence = graphNoteSource(scheme)?.attack_comparison;
+    return state.ramAttackComparisons && evidence?.format === 'crucible-ram-attack-comparison-v1' &&
+      evidence.scheme_id === scheme.id && String(evidence.version) === String(scheme.version) &&
+      evidence.computation_model_id === 'crucible-bit-ram-v1' && /^[a-f0-9]{64}$/.test(evidence.analysis_sha256 || '') &&
+      Array.isArray(evidence.models) && Array.isArray(evidence.estimates) ? evidence : null;
+  }
   const evidence = scheme?.security_references;
   const value = evidence?.metrics?.[metric];
   return evidence?.format === 'crucible-security-references-v1' && evidence.scheme_id === scheme.id &&
@@ -464,8 +472,16 @@ function securityReference(scheme, profile, metric) {
   if (estimates.length !== 1) return null;
   const estimate = estimates[0];
   const models = evidence.models.filter(model => model?.id === estimate.model_id);
+  const binding = metric === 'ram' ? graphNoteSource(scheme)?.graph_models?.[estimate.model_id] : null;
+  const retainedReference = binding?.presentation?.numeric_curve_unchanged === true &&
+    ['withdrawn', 'unselected'].includes(binding.presentation.current_status) &&
+    argumentRosterRoute(binding.presentation) && exactNoteRoute(binding.presentation.conclusion_source);
+  if (metric === 'ram' && (estimate.computation_model_id !== 'crucible-bit-ram-v1' ||
+      estimate.success_lower_bound !== '1/2' || binding?.metric !== 'ram' ||
+      (!exactNoteRoute(binding?.source) && !retainedReference) ||
+      models.some(model => model.computation_model_id !== 'crucible-bit-ram-v1' || model.unit !== 'log2 bit operations'))) return null;
   return models.length === 1 && ['id', 'label', 'unit'].every(key => typeof models[0][key] === 'string' && models[0][key].trim()) && typeof estimate.bits === 'number' && Number.isFinite(estimate.bits) && estimate.bits >= 0 ?
-    {bits: estimate.bits, model: models[0]} : null;
+    {bits: estimate.bits, model: models[0], estimate} : null;
 }
 function supportingNoteLink(note) {
   if (typeof note?.id !== 'string' || !note.id.startsWith('curated:') || !Number.isSafeInteger(note.revision) ||
@@ -645,9 +661,11 @@ function renderAccessGate() {
   if (state.invitationToken && !blocked && state.invitationPresented !== state.invitationToken) void presentInvitation();
 }
 function clearProtectedState() {
+  clearSchemeAssumptions();
   resetResearcherEditor();
   invalidateReadViews();
   referenceTimings.clear(); window.CrucibleResources?.clear();
+  window.CrucibleGraphPoints?.clear(); noteJustifications.clear(); state.noteOrigin = null;
   assumptionsWorkspace?.clear();
   notebookWorkspace?.setAccount(null);
   reviewNotebookWorkspace?.setAccount(null);
@@ -933,7 +951,7 @@ function reviewerRoute(section = 'flagged', values = {}) {
 function reviewSurface() {
   if (state.reviewSection !== 'proposals') return state.reviewSection;
   const query = new URLSearchParams(window.location.hash.split('?')[1] || '');
-  return query.has('proposal') ? 'scheme-detail' : query.has('research_request') ? 'change-detail' : 'proposals';
+  return query.has('proposal') ? 'scheme-detail' : query.has('statement_update') || query.has('statement_target') ? 'statement-detail' : query.has('research_request') ? 'change-detail' : 'proposals';
 }
 function proposalPageActive() {
   return state.screen === 'propose' || (state.screen === 'reviews' && reviewSurface() === 'scheme-detail' && state.canReviewProposals);
@@ -945,6 +963,7 @@ function renderReviewAccountLink() {
 let reviewProposalsGeneration = 0;
 function clearReviewProposals() {
   reviewProposalsGeneration++;
+  $('#review-argument-updates')?.remove();
   for (const kind of ['schemes', 'changes']) {
     $('#review-' + kind + '-list').replaceChildren();
     $('#review-' + kind + '-list').removeAttribute('aria-busy');
@@ -957,6 +976,13 @@ function showReviewProposals() {
   const owns = () => ownsDocument(lifecycle) && state.user?.id === account && state.csrf === credential && reads === readViewEpoch;
   const current = () => generation === reviewProposalsGeneration && ownsDocument(lifecycle) && hasAccess() &&
     state.canReviewProposals && state.user?.id === account && state.csrf === credential && state.screen === 'reviews' && reviewSurface() === 'proposals';
+  if (state.statementWorkflowAvailable) {
+    const target = node('div'); target.id = 'review-argument-updates';
+    $('#review-proposals-workspace').append(target);
+    void ensureNotebookAssets().then(() => {
+      if (current()) return window.CrucibleStatementWorkflow?.updatesList(target, {api, navigate, current, reviewOnly:true});
+    }).catch(() => { if (current()) showInlineError(target, 'Argument updates could not be opened.', showReviewProposals); });
+  }
   const changeTypes = {visualization_nomination:'Content or visualization change', procedure:'Pipeline or process change',
     scoring_nomination:'Challenge scoring', map_nomination:'Scheme map inclusion', highlight_nomination:'Highlight a result', source_check:'Source check'};
   for (const kind of ['schemes', 'changes']) {
@@ -1096,7 +1122,7 @@ function ensureNotebookAssets() {
       // succeed while a removed, timed-out script request is still stalled.
       const results = await Promise.allSettled([
         loadNotebookAsset('/notebook/notebook.css', true),
-        ...['/notebook/seed.js', '/notebook/store.js', '/notebook/notebook.js'].map(src => loadNotebookAsset(src))
+        ...['/notebook/seed.js', '/notebook/store.js', '/notebook/statement-workflow.js', '/notebook/notebook.js'].map(src => loadNotebookAsset(src))
       ]);
       const failed = results.find(result => result.status === 'rejected');
       if (failed) throw failed.reason;
@@ -1115,6 +1141,9 @@ function notebookAPI(path, body, options) {
 function getNotebookWorkspace(reviewing = false) {
   const target = $(reviewing ? '#review-notebook-workspace' : '#notebook-workspace');
   const options = {navigate, api: reviewing ? api : notebookAPI,
+    curatedNotesAvailable: () => state.curatedNotesAvailable !== false,
+    statementWorkflowAvailable: () => state.statementWorkflowAvailable === true,
+    noteOrigin: note => state.noteOrigin?.noteId === note.id ? state.noteOrigin : null,
     account: () => hasAccess() && (!reviewing || state.canReviewProposals) ? state.user : null,
     prepareMapCatalogue: loadMapCatalogue,
     prepareBounties: () => Promise.all([loadNotebookAsset('/notebook/bounties.css', true), loadNotebookAsset('/notebook/bounties-api.js'), loadNotebookAsset('/notebook/bounties.js')]),
@@ -1727,8 +1756,10 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
       const unrelatedToResources = method === 'PUT' && path === '/api/me/profile' || method === 'POST' && (
         ['/api/notebook/notes', '/api/notebook/import', '/api/challenges', '/api/methods'].includes(path) ||
         /^\/api\/notebook\/notes\/[^/?]+\/(?:revisions|publication-requests|publication-reviews)$/.test(path) ||
+        /^\/api\/notebook\/statement-workflow\/updates(?:\/[^/?]+\/review)?$/.test(path) ||
         /^\/api\/challenges\/[^/?]+\/submit$/.test(path));
       invalidateReadViews({resourceReports: !unrelatedToResources}); notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
+      if (path.startsWith('/api/notebook/')) invalidateNoteJustifications();
     }
     if (!raw && ownsDocument(lifecycle) && (!initialSession || sessionOwner === state.sessionRevision) && (!recoverRead || ownsRead())) absorbClock(data);
     return data;
@@ -1762,6 +1793,12 @@ function setSession(data) {
   document.body.setAttribute('data-access-view', hasAccess() ? 'workspace' : 'gate');
   window.CruciblePendingPage?.remember(hasAccess());
   state.canManageBetaAccess = Boolean(state.user && data.capabilities?.manage_beta_access);
+  state.curatedNotesAvailable = data.capabilities?.curated_notes !== false;
+  state.statementWorkflowAvailable = data.capabilities?.statement_workflow_trial === true;
+  const hadRamComparisons = state.ramAttackComparisons === true;
+  state.ramAttackComparisons = data.capabilities?.ram_attack_comparison === true;
+  if (state.ramAttackComparisons && !hadRamComparisons) state.overviewMetrics.security = 'ram';
+  if (!state.ramAttackComparisons && state.overviewMetrics.security === 'ram') state.overviewMetrics.security = 'classical';
   state.canReviewProposals = Boolean(state.user && data.capabilities?.review_protocol_proposals);
   state.canSelfReviewProposals = Boolean(state.canReviewProposals && data.capabilities?.self_review_protocol_proposals);
   if (previousId !== state.user?.id || !hasAccess()) resetResearcherEditor();
@@ -1781,7 +1818,9 @@ function setSession(data) {
     if (navigationProjection) state.catalogueLoaded = false;
   }
   if (previousId !== state.user?.id) {
+    clearSchemeAssumptions();
     referenceTimings.clear(); window.CrucibleResources?.clear();
+  window.CrucibleGraphPoints?.clear(); noteJustifications.clear(); state.noteOrigin = null;
     assumptionsWorkspace?.clear();
     state.invitationDelivery = null;
     $('#access-code').value = '';
@@ -3142,11 +3181,302 @@ function renderTimingDetails(target, scheme, metric) {
   renderReferenceMethod(content, entry?.method);
   details.append(content); target.append(details);
 }
+// Exact note sources are an explicit local integration fixture. No title matching,
+// latest-revision fallback, or inference from a similarly named scheme.
+const noteJustifications = new Map();
+const NOTE_JUSTIFICATIONS_FRESH_MS = 15000;
+function invalidateNoteJustifications() {
+  noteJustifications.clear();
+  clearSchemeAssumptions();
+  if (state.screen === 'overview' && hasAccess()) {
+    const scheme = selectedScheme();
+    if (scheme) { applySchemeNoteLink(scheme); void loadNoteJustifications(scheme); }
+  }
+}
+function exactNoteRoute(source) {
+  if (typeof source?.id !== 'string' || !source.id.trim() || !Number.isSafeInteger(source.revision) || source.revision < 1 ||
+      !/^[a-f0-9]{64}$/.test(source.content_sha256) ||
+      (source.note_section !== undefined && (typeof source.note_section !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(source.note_section)))) return null;
+  const anchors = ['note_section', 'statement', 'argument'].filter(key => source[key] !== undefined);
+  if (anchors.length > 1 || ['statement', 'argument'].some(key => source[key] !== undefined &&
+      (typeof source[key] !== 'string' || !/^[a-z][a-z0-9-]{0,79}$/.test(source[key]) || ['constructor', 'prototype', '__proto__'].includes(source[key])))) return null;
+  const query = new URLSearchParams({note: source.id, revision: source.revision, sha256: source.content_sha256});
+  for (const key of anchors) query.set(key, source[key]);
+  return '#notebook?' + query;
+}
+function graphNoteSource(scheme) { return noteJustifications.get(releaseKey(scheme.id, scheme.version))?.value || null; }
+function argumentRosterRoute(presentation) {
+  const id = presentation?.target_id;
+  return typeof id === 'string' && /^[a-z][a-z0-9-]{0,159}$/.test(id) ? '#notebook?' + new URLSearchParams({statement_target:id}) : null;
+}
+function argumentAdmissionLabel(presentation) {
+  if (presentation?.current_status === 'withdrawn') return 'Displayed argument withdrawn';
+  if (presentation?.current_status === 'unselected') return 'No argument selected';
+  if (presentation?.origin === 'initial_admission') return 'Initial admission · not independently reviewed';
+  if (presentation?.independent_review === true) return 'Admitted after independent review';
+  return '';
+}
+function schemeArgument(data, category) {
+  // Prefer the argument contract. Older in-memory packets remain readable, but
+  // a malformed new argument must not silently fall back to a different source.
+  if (data?.scheme_arguments && Object.hasOwn(data.scheme_arguments, category)) {
+    const argument = data.scheme_arguments[category];
+    return argument && typeof argument === 'object' && !Array.isArray(argument) ? argument : null;
+  }
+  const group = data?.scheme_assumptions?.[category];
+  if (!group || !Array.isArray(group.assumptions) || typeof group.incomplete !== 'boolean' || !exactNoteRoute(group.source)) {
+    return {source:data?.sections?.[category], status:null, dependencies:null};
+  }
+  return {source:group.source, summary:group.summary, scope:group.scope,
+    status:group.incomplete ? 'incomplete' : group.argument_status,
+    dependencies:group.assumptions.map(premise => premise && typeof premise === 'object' ?
+      {statement:{...premise, definition:premise.formal_statement}, stages:premise.stages} : null)};
+}
+function applySchemeNoteLink(scheme) {
+  const anchor = $('#overview-assumptions');
+  const local = state.curatedNotesAvailable === false;
+  anchor.hidden = local;
+  $('#overview-justifications').hidden = !local;
+  for (const category of ['security', 'correctness']) {
+    const button = $('#overview-' + category + '-button'), argument = schemeArgument(graphNoteSource(scheme), category);
+    const href = local && (exactNoteRoute(argument?.source) || argumentRosterRoute(argument?.presentation));
+    button.setAttribute('aria-haspopup', 'dialog');
+    button.setAttribute('aria-controls', 'scheme-assumptions-dialog');
+    if (href) { button.href = href; button.removeAttribute('aria-disabled'); }
+    else { button.removeAttribute('href'); button.setAttribute('aria-disabled', 'true'); }
+  }
+}
+function clearSchemeAssumptions() {
+  dialogTriggers.delete(schemeAssumptionsDialog);
+  if (schemeAssumptionsDialog.open) schemeAssumptionsDialog.close();
+  $('#scheme-assumptions-content').replaceChildren();
+  setText('#scheme-assumptions-title', 'Scheme argument');
+  setText('#scheme-assumptions-scheme', '');
+  delete schemeAssumptionsDialog.dataset.release;
+  delete schemeAssumptionsDialog.dataset.route;
+  delete schemeAssumptionsDialog.dataset.category;
+}
+function assumptionTitle(premise) {
+  const title = typeof premise.title === 'string' ? premise.title.trim() : '';
+  const prefix = premise.label + ' · ';
+  return title.startsWith(prefix) ? title.slice(prefix.length) : title;
+}
+function assumptionScope(premise) {
+  const stages = Array.isArray(premise.stages) ? [...new Set(premise.stages)].filter(n => Number.isSafeInteger(n) && n > 0).sort((a,b) => a-b) : [];
+  if (!stages.length) return '';
+  if (stages.length === 1) return 'Stage ' + stages[0];
+  const ranges = []; let start = stages[0], end = start;
+  for (const n of stages.slice(1)) { if (n === end + 1) end = n; else { ranges.push(start === end ? String(start) : `${start}–${end}`); start = end = n; } }
+  ranges.push(start === end ? String(start) : `${start}–${end}`);
+  return 'Stages ' + ranges.join(', ');
+}
+function assumptionLink(premise, origin, {expanded = false} = {}) {
+  const href = exactNoteRoute(premise?.source);
+  if (!href || premise.status === 'incomplete' || typeof premise.label !== 'string' || !premise.label.trim()) return null;
+  const label = premise.label, title = assumptionTitle(premise);
+  const link = node('a', undefined, 'chart-assumption-link' + (expanded ? ' scheme-assumption-link' : ''));
+  link.href = href;
+  link.append(node('span', label, 'assumption-number'));
+  if (expanded) {
+    const description = node('span', undefined, 'assumption-description');
+    if (title && title !== label) description.append(node('span', title, 'assumption-name'));
+    const kinds = {hardness: 'Hardness assumption', model: 'Model assumption', 'distribution-bound': 'Probability bound'};
+    if (typeof premise.formal_statement === 'string' && premise.formal_statement.trim()) {
+      const statement = node('span', undefined, 'assumption-formal-statement');
+      let expressions = 0;
+      for (const paragraph of premise.formal_statement.split(/\n\s*\n/).filter(part => part.trim())) {
+        const part = node('span', undefined, 'assumption-formal-paragraph');
+        const displayMode = paragraph.trim().startsWith('\\[') && paragraph.trim().endsWith('\\]');
+        expressions += (paragraph.match(/\\[([]/g) || []).length;
+        if (window.CrucibleMath && expressions <= 64) window.CrucibleMath.render(part, paragraph, {displayMode});
+        else part.textContent = paragraph;
+        statement.append(part);
+      }
+      description.append(statement);
+    } else if (typeof premise.summary === 'string' && premise.summary.trim()) description.append(node('span', premise.summary, 'assumption-summary'));
+    const scope = assumptionScope(premise);
+    const meta = [kinds[premise.kind], scope && 'Used at ' + scope.toLowerCase()].filter(Boolean).join(' · ');
+    if (meta) description.append(node('span', meta, 'assumption-scope'));
+    link.append(description);
+    const arrow = node('span', '↗', 'assumption-link-arrow'); arrow.setAttribute('aria-hidden', 'true'); link.append(arrow);
+  } else if (title) link.setAttribute('aria-label', label + ' — ' + title);
+  link.title = [title, assumptionScope(premise)].filter(Boolean).join(' · ') || 'Read the scoped premise';
+  link.addEventListener('click', event => {
+    state.noteOrigin = {noteId: premise.source.id, ...origin};
+    if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.button && schemeAssumptionsDialog.open) schemeAssumptionsDialog.close();
+  });
+  return link;
+}
+function openSchemeAssumptions(trigger, category) {
+  const scheme = selectedScheme();
+  if (!['security', 'correctness'].includes(category) || !hasAccess() || state.screen !== 'overview' || !scheme || state.curatedNotesAvailable !== false) return;
+  const data = graphNoteSource(scheme);
+  const argument = schemeArgument(data, category), source = argument?.source, href = exactNoteRoute(source);
+  const rosterHref = argumentRosterRoute(argument?.presentation);
+  if (!data || !href && !rosterHref) return;
+  const content = $('#scheme-assumptions-content'); content.replaceChildren();
+  const title = category === 'security' ? 'Security' : 'Correctness';
+  setText('#scheme-assumptions-title', title + ' argument');
+  setText('#scheme-assumptions-scheme', scheme.name);
+  schemeAssumptionsDialog.dataset.release = releaseKey(scheme.id, scheme.version);
+  schemeAssumptionsDialog.dataset.route = window.location.hash;
+  schemeAssumptionsDialog.dataset.category = category;
+  const origin = {href: window.location.hash || overviewRoute(scheme), label: scheme.name};
+  {
+    const section = node('section', undefined, 'scheme-assumptions-category'); section.dataset.assumptionCategory = category;
+    section.setAttribute('aria-labelledby', 'scheme-assumptions-title');
+    const introduction = node('div', undefined, 'scheme-argument-introduction');
+    const statement = argument.resolved_conclusion_statement;
+    const conclusion = typeof statement?.definition === 'string' ? statement.definition :
+      typeof argument.conclusion === 'string' && argument.conclusion.trim() ? argument.conclusion : argument.summary;
+    const prose = (text, className) => {
+      const element = node('div', undefined, className);
+      if (window.CrucibleMath?.markdown) window.CrucibleMath.markdown(element, text);
+      else element.textContent = text;
+      return element;
+    };
+    if (typeof conclusion === 'string' && conclusion.trim()) {
+      if (argument.conclusion || statement) introduction.append(node('h3', 'Claim', 'scheme-argument-label'));
+      introduction.append(prose(conclusion, 'scheme-argument-conclusion'));
+    }
+    if (typeof argument.scope === 'string' && argument.scope.trim()) {
+      const scope = node('div', undefined, 'scheme-argument-scope');
+      scope.append(node('span', 'Scope', 'scheme-argument-label'), prose(argument.scope, 'scheme-argument-scope-text'));
+      introduction.append(scope);
+    }
+    const actions = node('div', undefined, 'scheme-argument-actions');
+    const action = (label, route, noteSource, className = 'scheme-argument-link') => {
+      const link = node('a', label, className); link.href = route;
+      link.addEventListener('click', event => {
+        if (noteSource?.id) state.noteOrigin = {noteId:noteSource.id, ...origin};
+        if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.button) schemeAssumptionsDialog.close();
+      }); return link;
+    };
+    if (href) {
+      const read = action('Read argument →', href, source); read.setAttribute('aria-label', 'Read ' + category + ' argument'); actions.append(read);
+    }
+    const claimSource = argument.presentation?.conclusion_source || statement?.source, claimHref = exactNoteRoute(claimSource);
+    if (claimHref) actions.append(action('Exact statement', claimHref, claimSource));
+    if (rosterHref) actions.append(action('Arguments & proposals', rosterHref));
+    if (actions.childElementCount) introduction.append(actions);
+    const admission = argumentAdmissionLabel(argument.presentation);
+    if (admission) introduction.append(node('p', admission, 'scheme-argument-admission'));
+    section.append(introduction);
+    if (rosterHref && !href) {
+      section.append(node('p', 'No argument is currently displayed for this claim. Its statement and review history remain available.', 'scheme-assumptions-empty'));
+      content.append(section); openDialog(schemeAssumptionsDialog, trigger); return;
+    }
+    const assumptions = node('div', undefined, 'scheme-argument-premises');
+    assumptions.append(node('h3', 'Assumptions'));
+    if (!Array.isArray(argument.dependencies)) assumptions.append(node('p', 'Premises have not been recorded.', 'scheme-assumptions-empty'));
+    else {
+      const list = node('ul', undefined, 'scheme-assumptions-list');
+      const uses = argument.dependencies.filter(use => use?.statement && typeof use.statement === 'object')
+        .sort((a,b) => String(a.statement.label).localeCompare(String(b.statement.label), undefined, {numeric:true}));
+      for (const use of uses) {
+        const premise = {...use.statement, formal_statement:use.statement.definition, stages:use.stages};
+        const link = assumptionLink(premise, origin, {expanded:true});
+        if (link) {
+          const item = node('li'); item.append(link);
+          const application = typeof use.use === 'string' && use.use.trim() ? use.use : use.required;
+          if (typeof application === 'string' && application.trim()) item.append(prose(application, 'scheme-premise-use'));
+          list.append(item);
+        }
+      }
+      if (list.childElementCount) assumptions.append(list);
+      if (list.childElementCount < argument.dependencies.length) assumptions.append(node('p', list.childElementCount ? 'Some listed premises are unavailable.' : 'The listed premises are unavailable.', 'scheme-assumptions-empty'));
+      else if (!argument.dependencies.length) assumptions.append(node('p', argument.status === 'unconditional' ? 'The source argument states no unproved premises within this scope.' : 'Premises have not been established.', 'scheme-assumptions-empty'));
+    }
+    if (argument.status === 'incomplete') assumptions.append(node('p', title + ' argument incomplete', 'scheme-assumptions-incomplete'));
+    section.append(assumptions);
+    content.append(section);
+  }
+  openDialog(schemeAssumptionsDialog, trigger);
+}
+async function loadNoteJustifications(scheme) {
+  if (state.curatedNotesAvailable !== false) return;
+  const key = releaseKey(scheme.id, scheme.version);
+  const previous = noteJustifications.get(key);
+  if (previous?.pending || previous?.value && Date.now() - previous.loadedAt < NOTE_JUSTIFICATIONS_FRESH_MS ||
+      previous?.unavailable && (previous.attempts >= 3 || Date.now() - previous.failedAt < 5000)) return;
+  const entry = {value: previous?.value || null, pending:true, attempts: (previous?.unavailable ? previous.attempts : 0) + 1}, account = state.user?.id, epoch = documentEpoch;
+  noteJustifications.set(key, entry);
+  try {
+    const value = await api('/api/protocol/note-justifications?' + new URLSearchParams({scheme_id: scheme.id, version: scheme.version}));
+    if (!ownsDocument(epoch) || account !== state.user?.id || noteJustifications.get(key) !== entry) return;
+    if (value?.scheme_id !== scheme.id || String(value.version) !== String(scheme.version) || value.format !== 'crucible-note-justifications-v1') throw new Error('Mismatched note source');
+    const changed = JSON.stringify(entry.value) !== JSON.stringify(value);
+    entry.value = value; entry.loadedAt = Date.now(); entry.pending = false;
+    const current = selectedScheme();
+    if (state.screen === 'overview' && current?.id === scheme.id && String(current.version) === String(scheme.version)) {
+      applySchemeNoteLink(current); if (changed) renderOverviewChart(current, 'security');
+      if (changed && schemeAssumptionsDialog.open && schemeAssumptionsDialog.dataset.release === key) {
+        const category = schemeAssumptionsDialog.dataset.category;
+        if (['security', 'correctness'].includes(category)) openSchemeAssumptions($('#overview-' + category + '-button'), category);
+      }
+    }
+  } catch (_) { if (noteJustifications.get(key) === entry) {
+    entry.value = null; entry.pending = false; entry.unavailable = true; entry.failedAt = Date.now();
+    const current = selectedScheme();
+    if (state.screen === 'overview' && current?.id === scheme.id && String(current.version) === String(scheme.version)) {
+      clearSchemeAssumptions(); applySchemeNoteLink(current); renderOverviewChart(current, 'security');
+    }
+  } }
+}
+function renderPointSources(scheme, point, target) {
+  const model = graphNoteSource(scheme)?.graph_models?.[point.model?.id];
+  if (!model) return;
+  const href = exactNoteRoute(model.source);
+  const rosterHref = argumentRosterRoute(model.presentation);
+  if (!href && !rosterHref) return;
+  const links = node('span', undefined, 'chart-note-links');
+  const originProfile = (scheme.profiles || []).find(p => profileId(p) === point.id);
+  const origin = {href: overviewRoute(scheme, originProfile), label: scheme.name + ' · ' + point.label};
+  if (href) {
+    const remember = () => { state.noteOrigin = {noteId: model.source.id, ...origin}; };
+    const source = node('a', 'Attack specification', 'chart-specification-link'); source.href = href; source.addEventListener('click', remember);
+    const arrow = node('span', '↗'); arrow.setAttribute('aria-hidden', 'true'); source.append(arrow); links.append(source);
+  } else links.append(node('span', 'Reference only · no selected argument', 'chart-argument-status'));
+  if (rosterHref) {
+    const roster = node('a', 'Arguments & proposals', 'chart-specification-link'); roster.href = rosterHref;
+    roster.title = argumentAdmissionLabel(model.presentation) || 'View the claim and its arguments'; links.append(roster);
+  }
+  const premises = (Array.isArray(model.assumptions) ? model.assumptions : []).filter(premise => premise && typeof premise === 'object' && premise.status !== 'incomplete')
+    .sort((a, b) => String(a.label).localeCompare(String(b.label), undefined, {numeric: true}));
+  const assumptionGroup = node('span', undefined, 'chart-assumption-group');
+  assumptionGroup.append(node('span', 'Assumptions', 'chart-assumption-caption'));
+  for (const premise of premises) {
+    if (Array.isArray(premise.profile_ids) ? !premise.profile_ids.includes(point.id) : Array.isArray(premise.stages) && !premise.stages.includes(point.position)) continue;
+    const link = assumptionLink(premise, origin);
+    if (link) assumptionGroup.append(link);
+  }
+  if (assumptionGroup.childElementCount > 1) links.append(assumptionGroup);
+  target.append(links);
+}
+function renderAttackReadout(point, target, descriptor, metric) {
+  target.append(node('span', point.label, 'chart-point-stage'));
+  if (!Number.isFinite(point.value)) { target.append(node('span', 'No estimate for this configuration', 'chart-point-unavailable')); return; }
+  const stat = (label, value, unit, power = false) => {
+    const item = node('span', undefined, 'chart-point-stat');
+    item.append(node('span', label, 'chart-point-caption'));
+    const amount = node('strong', power ? '≤ 2' : value.toLocaleString('en-US', {maximumFractionDigits: 2}), 'chart-point-value');
+    if (power) {
+      // Round exponents upward so the displayed upper bound stays conservative.
+      const exponent = Math.ceil(value * 10) / 10;
+      amount.append(node('sup', exponent.toLocaleString('en-US', {maximumFractionDigits: 1})));
+      amount.setAttribute('aria-label', 'at most 2 to the power ' + exponent + ' ' + unit);
+    }
+    amount.append(node('span', ' ' + unit, 'chart-point-unit')); item.append(amount); target.append(item);
+  };
+  stat(metric === 'ram' ? 'Work' : 'Estimate', point.value, metric === 'ram' ? 'bit ops' : descriptor.unit.toLowerCase(), metric === 'ram');
+  if (metric === 'ram' && Number.isFinite(point.memoryLog2)) stat('Memory', point.memoryLog2, 'bits', true);
+}
 function renderSecurityModels(target, scheme, metric, plottedModels) {
   const evidence = securityReferences(scheme, metric);
   const content = node('div', undefined, 'reference-timing-content');
-  const supportingNote = supportingNoteLink(scheme.evidence_note);
-  if (supportingNote) content.append(supportingNote);
+  const boundNote = graphNoteSource(scheme)?.sections?.security;
+  const supportingNote = state.curatedNotesAvailable === false ? (boundNote ? node('a', 'Read the security note') : null) : supportingNoteLink(scheme.evidence_note);
+  if (supportingNote) { if (boundNote) supportingNote.href = exactNoteRoute(boundNote); content.append(supportingNote); }
   if (typeof evidence?.explanation === 'string') content.append(node('p', evidence.explanation));
   const models = new Map(plottedModels);
   for (const model of evidence?.models || []) if (typeof model?.id === 'string' && model.id && !models.has(model.id)) models.set(model.id, model);
@@ -3173,17 +3503,16 @@ function renderSecurityModels(target, scheme, metric, plottedModels) {
     if (sources.childElementCount) section.append(sources);
     content.append(section);
   }
-  const assumptions = node('a', 'View the scheme’s assumptions →', 'text-button');
-  assumptions.href = assumptionsRoute(scheme);
-  content.append(assumptions); target.append(content);
+  target.append(content);
 }
 const OVERVIEW_METRICS = {
+  ram: {label: 'Classical', title: 'Classical attack work', unit: 'log2 bit operations', kind: 'attack-bound'},
   public_key_bytes: {label: 'Public key', title: 'Public-key size', unit: 'Bytes', kind: 'encoding'},
   ciphertext_bytes: {label: 'Ciphertext', title: 'Ciphertext size', unit: 'Bytes', kind: 'encoding'},
   keygen: {label: 'Key generation', title: 'Key generation', unit: 'Seconds', kind: 'timing'},
   encapsulate: {label: 'Encapsulation', title: 'Encapsulation', unit: 'Seconds', kind: 'timing'},
   decapsulate: {label: 'Decapsulation', title: 'Decapsulation', unit: 'Seconds', kind: 'timing'},
-  classical: {label: 'Classical reference', title: 'Initial classical reference', unit: 'Reference work (bits)', kind: 'baseline'},
+  classical: {label: 'Classical', title: 'Initial classical reference', unit: 'Reference work (bits)', kind: 'baseline'},
   quantum: {label: 'Quantum', title: 'Quantum security estimate', unit: 'Estimated security (bits)', kind: 'security'}
 };
 const OVERVIEW_CARDS = {
@@ -3198,7 +3527,7 @@ function overviewProfiles(scheme) {
     .slice().sort((a, b) => stagePosition(a) - stagePosition(b));
 }
 function overviewValue(scheme, profile, metric) {
-  if (['classical', 'quantum'].includes(metric)) return securityReference(scheme, profile, metric)?.bits ?? null;
+  if (['classical', 'quantum', 'ram'].includes(metric)) return securityReference(scheme, profile, metric)?.bits ?? null;
   if (OVERVIEW_METRICS[metric]?.kind === 'timing') {
     const result = timingResult(scheme, profile, metric);
     return plottedTiming(result) ? result.median_seconds : null;
@@ -3235,8 +3564,10 @@ function redrawResourceCharts(scheme) {
 }
 function renderOverviewChart(scheme, cardId) {
   const target = $('#overview-chart-' + cardId);
+  const chartFocused = document.activeElement === target.querySelector('.overview-svg');
+  const previewState = chartFocused ? window.CrucibleGraphPoints?.capturePreview(document.activeElement) : null;
   if (cardId !== 'security') {
-    window.CrucibleResources?.render({scheme, cardId, target, profiles: overviewProfiles(scheme),
+    window.CrucibleResources?.render({scheme, cardId, target, profiles: overviewProfiles(scheme), cleanPresentation: state.curatedNotesAvailable === false,
         profileId, profileLabel, stagePosition, named: namedParameters(scheme), api,
         recoveryFor: points => overviewRecovery(scheme, points, namedParameters(scheme)),
         redraw: () => redrawResourceCharts(scheme)});
@@ -3250,13 +3581,13 @@ function renderOverviewChart(scheme, cardId) {
   const profiles = overviewProfiles(scheme);
   const named = namedParameters(scheme);
   const axisLabel = named ? 'Parameter set' : 'Challenge stage';
-  const security = ['classical', 'quantum'].includes(metric);
+  const security = ['classical', 'quantum', 'ram'].includes(metric);
   const evidence = security ? securityReferences(scheme, metric) : null;
   const polynomialQuantum = metric === 'quantum' && evidence?.models?.some(model => model?.id === 'shor-polynomial-quantum-v1');
-  const values = profiles.map((profile, index) => ({tier: named ? index : stagePosition(profile), intermediate: intermediateConfiguration(profile), label: profileLabel(profile, scheme), profileId: profileId(profile), value: overviewValue(scheme, profile, metric), model: security ? securityReference(scheme, profile, metric)?.model : null, conditional: descriptor.kind === 'timing' && conditionalTiming(timingResult(scheme, profile, metric)), timingResult: descriptor.kind === 'timing' ? timingResult(scheme, profile, metric) : null}));
+  const values = profiles.map((profile, index) => ({tier: named ? index : stagePosition(profile), intermediate: intermediateConfiguration(profile), label: profileLabel(profile, scheme), profileId: profileId(profile), value: overviewValue(scheme, profile, metric), model: security ? securityReference(scheme, profile, metric)?.model : null, memoryLog2: metric === 'ram' ? securityReference(scheme, profile, metric)?.estimate?.memory_log2_bits : null, conditional: descriptor.kind === 'timing' && conditionalTiming(timingResult(scheme, profile, metric)), timingResult: descriptor.kind === 'timing' ? timingResult(scheme, profile, metric) : null}));
   const referenceModels = new Map(values.filter(point => point.model).map(point => [point.model.id, point.model]));
   const singleModel = referenceModels.size === 1 ? [...referenceModels.values()][0] : null;
-  const literatureOnly = security && singleModel && (metric !== 'classical' || !profiles.some(profile => initialSecurityEstimate(scheme, profile) !== null));
+  const literatureOnly = security && metric !== 'ram' && singleModel && (metric !== 'classical' || !profiles.some(profile => initialSecurityEstimate(scheme, profile) !== null));
   if (literatureOnly) {
     descriptor.title = metric === 'quantum' ? 'Quantum attack reference' : 'Classical attack reference';
     descriptor.unit = singleModel.unit;
@@ -3278,6 +3609,7 @@ function renderOverviewChart(scheme, cardId) {
   svg.append(svgNode('title', {id: 'graph-title-' + cardId}, descriptor.title + ' by ' + axisLabel.toLowerCase()));
   const summary = measured.length ? `${measured.length} published values; ${descriptor.unit.toLowerCase()} on the vertical axis.` : 'No values have been published. This chart shows axes only.';
   svg.append(svgNode('desc', {id: 'graph-description-' + cardId}, `${summary} ${named ? 'Distinct named parameter sets on the horizontal axis; points are not interpolated.' : values.length ? `Challenge stages ${minTier} to ${maxTier} on the horizontal axis.` : 'No challenge stages published.'}${recoveredLabel ? ` ${recoveredLabel}. ${recoveryMeaning}` : ''}`));
+  if (metric === 'ram') svg.querySelector('desc').textContent += ' Baseline upper bounds in the classical bit-RAM model for at least 50% probability of recovering the complete shared key under the linked premises. Faster attacks may exist; these values are not security levels.';
   const left = 48, right = 465, top = 43, bottom = 190;
   const x = tier => minTier === maxTier ? (left + right) / 2 : left + (tier - minTier) / (maxTier - minTier) * (right - left);
   const maximum = measured.length ? Math.max(...measured.map(point => point.value)) : 0;
@@ -3307,32 +3639,40 @@ function renderOverviewChart(scheme, cardId) {
     let path = '', connected = false, previousModel = null;
     for (const point of values) {
       if (point.value === null || point.conditional) { connected = false; continue; }
-      path += `${connected && (!security || previousModel === point.model?.id) ? 'L' : 'M'}${x(point.tier).toFixed(2)} ${y(point.value).toFixed(2)} `;
+      path += `${connected && (!security || previousModel === (metric === 'ram' ? point.model?.computation_model_id : point.model?.id)) ? 'L' : 'M'}${x(point.tier).toFixed(2)} ${y(point.value).toFixed(2)} `;
       connected = true;
-      previousModel = point.model?.id;
+      previousModel = metric === 'ram' ? point.model?.computation_model_id : point.model?.id;
     }
     if (!named) svg.append(svgNode('path', {d: path.trim(), class: 'chart-series'}));
     for (const point of measured) {
-      const dot = svgNode('circle', {cx: x(point.tier), cy: y(point.value), r: named || measured.length === 1 ? 4 : values.length > 60 ? 1.6 : 2.8, class: 'chart-point' + (point.conditional ? ' chart-point-conditional' : ''), 'data-tier': point.tier, 'data-profile-id': point.profileId, 'data-value': point.value});
+      const dot = svgNode('circle', {cx: x(point.tier), cy: y(point.value), r: named || measured.length === 1 ? 4 : values.length > 60 ? 1.6 : 2.8, class: 'chart-point' + (measured.length > 20 ? ' chart-idle-muted' : '') + (point.conditional ? ' chart-point-conditional' : ''), 'data-tier': point.tier, 'data-profile-id': point.profileId, 'data-value': point.value, 'aria-hidden': 'true'});
       dot.append(svgNode('title', {}, `${point.label}: ${descriptor.kind === 'timing' ? timingNumber(point.value) : point.value.toLocaleString('en-US')} ${descriptor.unit.toLowerCase()}${point.conditional ? '; median of ' + point.timingResult.samples + ' successful exchanges only; ' + timingAbortLabel(point.timingResult) : ''}`));
       svg.append(dot);
     }
   } else {
     const timingLabel = timing?.status === 'loading' ? '' : timing?.status === 'error' ? 'Timings unavailable' : 'No timings published';
     svg.append(svgNode('text', {x: (left + right) / 2, y: 106, 'text-anchor': 'middle', class: 'chart-empty-label'}, polynomialQuantum ? 'Polynomial-time quantum attack' : ['security', 'baseline'].includes(descriptor.kind) ? 'No estimates published' : descriptor.kind === 'timing' ? timingLabel : 'No values published'));
-    svg.append(svgNode('text', {x: (left + right) / 2, y: 128, 'text-anchor': 'middle', class: 'chart-empty-detail'}, polynomialQuantum ? 'Shor’s algorithm · not a zero-cost estimate' : descriptor.kind === 'timing' ? timing?.status === 'loading' ? '' : timing?.status === 'error' ? 'Retry in Method and results' : 'No completed measurements for this operation' : evidence?.explanation ? 'See model and values below' : 'Awaiting evidence'));
+    svg.append(svgNode('text', {x: (left + right) / 2, y: 128, 'text-anchor': 'middle', class: 'chart-empty-detail'}, polynomialQuantum ? 'Shor’s algorithm · not a zero-cost estimate' : descriptor.kind === 'timing' ? timing?.status === 'loading' ? '' : timing?.status === 'error' ? 'Retry in Method and results' : 'No completed measurements for this operation' : ''));
   }
   for (const point of recoveredPoints) {
     const marker = svgNode('line', {x1: x(point.tier), y1: top, x2: x(point.tier), y2: bottom, class: 'chart-recovery-line', 'data-tier': point.tier, 'data-profile-id': point.profileId});
     marker.append(svgNode('title', {}, named ? 'Recovered · ' + point.label : recoveredLabel));
     svg.append(marker);
   }
-  target.replaceChildren(svg);
+  const readout = node('div', undefined, 'chart-point-readout chart-attack-readout');
+  target.replaceChildren(svg, readout);
+  window.CrucibleGraphPoints?.attach({svg, readout, key: releaseKey(scheme.id, scheme.version),
+    interactionKey: cardId + ':' + metric, previewState,
+    points: values.map(p => ({...p, id: p.profileId, position: p.tier})), x, y,
+    describe: p => p.label + ' · ' + (p.value === null ? 'No estimate for this configuration' : p.value.toLocaleString('en-US', {maximumFractionDigits: 2}) + ' ' + descriptor.unit.toLowerCase()),
+    onReadout: state.curatedNotesAvailable === false ? (p, destination) => renderAttackReadout(p, destination, descriptor, metric) : null,
+    onSelection: (p, destination) => { if (p.value !== null) renderPointSources(scheme, p, destination); }});
+  if (chartFocused) svg.focus({preventScroll: true});
   if (recoveredLabel) {
     const label = node('p', recoveredLabel, 'overview-recovery-note');
     target.append(label);
   }
-  const note = literatureOnly ? `${singleModel.label}. ${measured.length} of ${values.length} configurations. Published attack-model reference, not full-KEM security bits; see model and values.` : descriptor.kind === 'timing' ? timing?.report ? 'Median wall time · ' + [timing.report.implementation?.language, timing.report.implementation?.performance_level].filter(Boolean).join(' · ') + '. ' + (named ? '' : 'Lines join adjacent measured configurations. ') + 'See method and results for the environment and spread.' : 'Reference implementation timings use a shared measurement method. Missing measurements are left empty.' :
+  const note = metric === 'ram' ? 'Classical bit-RAM v1 · baseline upper bounds · at least 50% shared-key recovery under the linked premises. Faster attacks may exist; these values are not security levels.' : literatureOnly ? `${singleModel.label}. ${measured.length} of ${values.length} configurations. Published attack-model reference, not full-KEM security bits; see model and values.` : descriptor.kind === 'timing' ? timing?.report ? 'Median wall time · ' + [timing.report.implementation?.language, timing.report.implementation?.performance_level].filter(Boolean).join(' · ') + '. ' + (named ? '' : 'Lines join adjacent measured configurations. ') + 'See method and results for the environment and spread.' : 'Reference implementation timings use a shared measurement method. Missing measurements are left empty.' :
     descriptor.kind === 'baseline' ? (measured.length ? attackReferenceModel(scheme) ? 'A stated classical attack reference, not a security lower bound. Other attacks may be faster.' : 'Frozen classical reference; not a measured security guarantee.' : 'No initial classical estimate is published for this release.') :
     descriptor.kind === 'security' ? 'An estimate needs a stated security game, attack model, and source. Recovery records are not estimates.' :
     'Canonical encoded bytes. Excludes JSON and shared domain parameters. ' + (named ? 'Dots mark distinct parameter sets; no interpolation is implied.' : 'Dots mark reviewed configurations; intermediate configurations sit between the surrounding stages.');
@@ -3341,22 +3681,33 @@ function renderOverviewChart(scheme, cardId) {
     for (const point of values) legend.append(node('li', point.label));
     target.append(legend);
   }
-  target.append(node('p', note, 'overview-chart-note'));
+  if (!security) target.append(node('p', note, 'overview-chart-note'));
   if (descriptor.kind === 'timing' && timing?.report) {
     const incomplete = profiles.filter(profile => { const result = timingResult(scheme, profile, metric); return result && !plottedTiming(result); });
     if (values.some(point => point.conditional)) target.append(node('p', 'Hollow points: medians conditional on successful key generation. Aborted attempts are retained in Method and results; these points are not joined by lines.', 'overview-chart-note chart-conditional-note'));
     if (incomplete.length) target.append(node('p', `${incomplete.length} incomplete ${incomplete.length === 1 ? 'run' : 'runs'} left empty: ${incomplete.map(profile => profileLabel(profile, scheme)).join(', ')}. Recorded aborts or incomplete trials are listed in Method and results.`, 'overview-chart-note chart-coverage-note'));
   } else if (security && measured.length && measured.length < values.length && !literatureOnly) {
-    target.append(node('p', `${measured.length} of ${values.length} configurations have a reference. Gaps are not interpolated; see model and values.`, 'overview-chart-note'));
+    target.append(node('p', `${measured.length} of ${values.length} configurations have a reference. Gaps are not interpolated.`, 'overview-chart-note'));
   }
   const badge = $('#overview-badge-' + cardId);
-  badge.textContent = literatureOnly ? 'Published reference' : descriptor.kind === 'timing' ? timing?.report ? 'Local pilot' : timing?.status === 'loading' ? 'Loading' : timing?.status === 'error' ? 'Unavailable' : 'Not measured' : measured.length ? (descriptor.kind === 'baseline' ? attackReferenceModel(scheme) ? 'Attack reference' : 'Initial model' : 'Published values') : 'Not reported';
+  badge.textContent = metric === 'ram' ? 'Baseline bound' : literatureOnly ? 'Published reference' : descriptor.kind === 'timing' ? timing?.report ? 'Local pilot' : timing?.status === 'loading' ? 'Loading' : timing?.status === 'error' ? 'Unavailable' : 'Not measured' : measured.length ? (descriptor.kind === 'baseline' ? attackReferenceModel(scheme) ? 'Attack reference' : 'Initial model' : 'Published values') : 'Not reported';
+  if (metric === 'ram') {
+    const presentations = graphNoteSource(scheme)?.graph_models || {};
+    const unsupported = measured.filter(point => ['withdrawn', 'unselected'].includes(presentations[point.model?.id]?.presentation?.current_status));
+    if (unsupported.length) {
+      badge.textContent = unsupported.length === measured.length ? 'Reference only' : 'Partly unsupported';
+      target.append(node('p', 'A displayed attack argument has been withdrawn or deselected. These recorded values remain for reference; select a point to inspect its history.', 'overview-chart-note chart-argument-status'));
+    }
+  }
   badge.classList.toggle('is-empty', !measured.length);
   if (descriptor.kind === 'timing' && timing?.status === 'loading') quietReadStatus(badge, 'Loading timings');
-  if ((descriptor.kind === 'encoding' || security) && values.length) {
+  if (state.curatedNotesAvailable !== false && (descriptor.kind === 'encoding' || security) && values.length) {
     const details = node('details', undefined, 'overview-values');
     details.append(node('summary', security ? 'Model and values' : 'View values'));
-    if (security) renderSecurityModels(details, scheme, metric, referenceModels);
+    if (security) {
+      details.append(node('p', note, 'overview-chart-note'));
+      renderSecurityModels(details, scheme, metric, referenceModels);
+    }
     else {
       const supportingNote = supportingNoteLink(scheme.evidence_note);
       if (supportingNote) { const source = node('p', undefined, 'overview-chart-note'); source.append(supportingNote); details.append(source); }
@@ -3364,12 +3715,13 @@ function renderOverviewChart(scheme, cardId) {
     const table = node('table');
     const caption = node('caption', descriptor.title + ' · version ' + scheme.version);
     const head = node('thead'), row = node('tr');
-    for (const label of [axisLabel, descriptor.unit]) { const th = node('th', label); th.scope = 'col'; row.append(th); }
+    for (const label of [axisLabel, descriptor.unit, ...(metric === 'ram' ? ['log2 memory bits'] : [])]) { const th = node('th', label); th.scope = 'col'; row.append(th); }
     head.append(row);
     const body = node('tbody');
     for (const point of values) {
       const row = node('tr');
       row.append(node('td', named || point.intermediate ? point.label : point.tier), node('td', point.value === null ? 'Not reported' : point.value.toLocaleString('en-US')));
+      if (metric === 'ram') row.append(node('td', Number.isFinite(point.memoryLog2) ? point.memoryLog2.toLocaleString('en-US', {maximumFractionDigits: 2}) : 'Not reported'));
       body.append(row);
     }
     table.append(caption, head, body);
@@ -3383,6 +3735,8 @@ function renderOverviewChart(scheme, cardId) {
   if (detailsOpen && target.querySelector('details')) target.querySelector('details').open = true;
 }
 function renderOverview(scheme, contextProfile = null) {
+  if (schemeAssumptionsDialog.open && schemeAssumptionsDialog.dataset.release !== releaseKey(scheme.id, scheme.version)) clearSchemeAssumptions();
+  if (contextProfile) window.CrucibleGraphPoints?.select(releaseKey(scheme.id, scheme.version), profileId(contextProfile));
   setText('#overview-title', scheme.name);
   setText('#overview-summary', scheme.summary || '');
   $('#overview-beta').hidden = scheme.review_status !== 'local-beta';
@@ -3393,6 +3747,7 @@ function renderOverview(scheme, contextProfile = null) {
   setText('#overview-release', `${archived ? 'Archived release ' + scheme.version + ' · ' : ''}${namedParameters(scheme) ? profiles.length : scheme.default_progression?.stage_count ?? profiles.length} ${namedParameters(scheme) ? 'parameter set' + (profiles.length === 1 ? '' : 's') : 'challenge stages'}`);
   const entry = contextProfile || profiles.find(profile => profileId(profile) === scheme.next_profile_id) || profiles[0];
   $('#overview-assumptions').href = assumptionsRoute(scheme, contextProfile);
+  applySchemeNoteLink(scheme); void loadNoteJustifications(scheme);
   const challengeLink = $('#overview-challenges');
   challengeLink.hidden = !entry;
   challengeLink.href = entry ? schemeRoute(scheme, entry) : '#challenge';
@@ -3413,7 +3768,7 @@ function renderOverview(scheme, contextProfile = null) {
       const badge = node('span', undefined, 'overview-badge'); badge.id = 'overview-badge-' + id;
       heading.append(title, badge);
       card.append(heading);
-      const metrics = OVERVIEW_CARDS[id];
+      const metrics = id === 'security' && state.ramAttackComparisons ? ['ram', 'quantum'] : OVERVIEW_CARDS[id];
       if (id === 'security' && metrics.length > 1) {
         const options = node('div', undefined, 'overview-metric-options');
         options.setAttribute('role', 'group'); options.setAttribute('aria-label', id === 'computation' ? 'Choose operation to time' : 'Choose metric for ' + id + ' chart');
@@ -4340,6 +4695,11 @@ for (const dialog of document.querySelectorAll('dialog')) {
       $('#recovery-content').replaceChildren();
       setText('#recovery-context', '');
       setText('#recovery-title', 'Submission details');
+    }
+    if (dialog === schemeAssumptionsDialog) {
+      $('#scheme-assumptions-content').replaceChildren();
+      delete schemeAssumptionsDialog.dataset.release;
+      delete schemeAssumptionsDialog.dataset.route;
     }
     if (dialog === authDialog) {
       $('#auth-password').value = '';
@@ -5985,6 +6345,7 @@ function showWorkspace(name) {
   if (name !== 'people' && pointsHelpDialog.open) {
     dialogTriggers.delete(pointsHelpDialog); pointsHelpDialog.close();
   }
+  if (schemeAssumptionsDialog.open && (name !== 'overview' || schemeAssumptionsDialog.dataset.route !== window.location.hash)) clearSchemeAssumptions();
   if (!ownResearcherProfile() && researcherEditor.open) suspendResearcherEditor();
   if (name !== 'person') renderResearcherProfile(null);
   researcherEditorControls();
@@ -6529,6 +6890,10 @@ if (typeof landingMark.decode === 'function') landingMark.decode().then(startLog
 else if (landingMark.complete) startLogoAnimation();
 else landingMark.addEventListener('load', startLogoAnimation, {once: true});
 $('#brand-animate').addEventListener('click', igniteLandingLogo);
+for (const category of ['security', 'correctness']) $('#overview-' + category + '-button').addEventListener('click', event => {
+  if (state.curatedNotesAvailable !== false || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button) return;
+  event.preventDefault(); openSchemeAssumptions(event.currentTarget, category);
+});
 for (const brand of document.querySelectorAll('a.brand, a.brand-wordmark')) brand.addEventListener('click', event => {
   if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   event.preventDefault();
@@ -6580,7 +6945,7 @@ for (const event of ['pointerenter', 'focus']) {
   $('#nav-notebook').addEventListener(event, () => {
     if (!hasAccess() || navigator.connection?.saveData || notebookAssetsReady) return;
     void loadNotebookAsset('/notebook/notebook.css', true).catch(() => {});
-    for (const path of ['/notebook/seed.js', '/notebook/store.js', '/notebook/notebook.js']) void loadNotebookAsset(path).catch(() => {});
+    for (const path of ['/notebook/seed.js', '/notebook/store.js', '/notebook/statement-workflow.js', '/notebook/notebook.js']) void loadNotebookAsset(path).catch(() => {});
   });
   $('#nav-bounties').addEventListener(event, () => {
     if (!bountyFeatureAvailable() || !browseWarmAllowed() || navigator.connection?.saveData) return;

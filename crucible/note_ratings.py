@@ -174,7 +174,7 @@ def register_routes(app, db, clock, user_for, throttle):
 
     def resolve(session, identifier, number=None, digest=None):
         if identifier.startswith("curated:"):
-            source = next((item for item in notebook.curated_collection() if item["id"] == identifier), None)
+            source = next((item for item in notebook.curated_collection(session) if item["id"] == identifier), None)
             selected = next((item for item in reversed(source["revisions"]) if number is None or item["revision"] == number), None) if source else None
             if not selected or digest is not None and selected["content_sha256"] != digest:
                 raise HTTPException(404, "Published note revision not found.")
@@ -250,7 +250,7 @@ def register_routes(app, db, clock, user_for, throttle):
                 **{key: row[key] for key in ("revision", "content_sha256", "created_at")},
                 "content": {key: row[key] for key in ("title", "claim", "tags", "kind")}, "summary": True,
                 "rating": {key: row[key] for key in empty_score()}} for row in rows]
-            bundled = notebook.curated_collection()
+            bundled = notebook.curated_collection(session)
             curated_totals = curated_scores(session, bundled)
             for source in bundled:
                 selected = source["revisions"][-1]

@@ -65,6 +65,22 @@
       if (focused) card?.querySelector('select[aria-label="' + caption + '"]')?.focus();
     }); label.append(select); return label;
   }
+  function operationButtons(current, change) {
+    const group = element('div', undefined, 'overview-metric-options resource-operation-options');
+    group.setAttribute('role', 'group'); group.setAttribute('aria-label', 'Operation');
+    for (const [value, text] of operations) {
+      const button = element('button', text); button.type = 'button'; button.dataset.resourceOperation = value;
+      button.setAttribute('aria-pressed', String(value === current));
+      button.addEventListener('click', () => {
+        if (value === current) return;
+        const card = button.closest('.overview-card'), focused = document.activeElement === button;
+        change(value);
+        if (focused) card?.querySelector('[data-resource-operation="' + value + '"]')?.focus({preventScroll: true});
+      });
+      group.append(button);
+    }
+    return group;
+  }
   function load(scheme, api, changed, {refresh = false, publicationId = null, speculative = false} = {}) {
     const id = requestKey(scheme, publicationId), old = cache.get(id);
     if (old?.status === 'loading') {
@@ -171,9 +187,10 @@
     refresh.addEventListener('click', () => load(scheme, api, redraw, {refresh: true, publicationId: choice.report === 'current' ? null : choice.report}));
     return refresh;
   }
-  function render({scheme, cardId, target, profiles, profileId, profileLabel, stagePosition, named, recoveryFor, redraw, api}) {
+  function render({scheme, cardId, target, profiles, profileId, profileLabel, stagePosition, named, recoveryFor, redraw, api, cleanPresentation = false}) {
     if (!views[cardId]) return false;
     const choice = selection(scheme, cardId);
+    if (cleanPresentation) { choice.view = views[cardId][0][0]; choice.report = 'current'; }
     const historical = choice.report !== 'current', publicationId = historical ? choice.report : null;
     const entry = cache.get(requestKey(scheme, publicationId)), data = usable(entry);
     if (!data) load(scheme, api, redraw, {publicationId});
@@ -194,10 +211,13 @@
     const rss = view === 'rss' ? rssScope(record) : null;
     const points = profiles.map((profile, index) => ({...point(rows.get(mapping.get(profileId(profile))), view, choice.op, method, binding?.implementation), label: profileLabel(profile, scheme), x: named ? index + 1 : stagePosition(profile), id: profileId(profile)}));
     const recovery = recoveryFor?.(points.map(p => ({tier: p.x, profileId: p.id, label: p.label}))) || {points: [], tier: null, label: '', meaning: ''};
-    const renderKey = JSON.stringify([key(scheme), cardId, choice, entry?.revision, Boolean(data), entry?.status === 'error', cache.get(requestKey(scheme))?.revision, profiles.map(p => [profileId(p), profileLabel(p, scheme), stagePosition(p)]), named, recovery]);
+    const renderKey = JSON.stringify([key(scheme), cardId, choice, cleanPresentation, entry?.revision, Boolean(data), entry?.status === 'error', cache.get(requestKey(scheme))?.revision, profiles.map(p => [profileId(p), profileLabel(p, scheme), stagePosition(p)]), named, recovery]);
     if (target.dataset.resourceRenderKey === renderKey) return true;
     const focused = document.activeElement?.closest('.resource-chart') === target ? document.activeElement : null;
-    const focusLabel = focused?.getAttribute('aria-label'), focusRefresh = focused?.dataset.resourceRefresh === 'true';
+    const focusChart = focused?.matches?.('.overview-svg') === true;
+    const previewState = focusChart ? window.CrucibleGraphPoints?.capturePreview(focused) : null;
+    const focusLabel = focusChart ? null : focused?.getAttribute('aria-label'), focusRefresh = focused?.dataset.resourceRefresh === 'true';
+    const focusOperation = focused?.dataset.resourceOperation;
     const focusSummary = focused && !focusLabel && !focusRefresh;
     const detailsOpen = target.querySelector('details')?.open === true;
     target.replaceChildren();
@@ -205,9 +225,11 @@
     target.classList.add('resource-chart');
     document.querySelector('#overview-title-' + cardId).textContent = computational ? 'Computation' : labels[view];
     document.querySelector('#overview-badge-' + cardId).textContent = historical ? reportLabel : stateLabels[data?.state] || '';
-    const controls = element('div', undefined, 'resource-controls');
-    if (views[cardId].length > 1) controls.append(control('Measure', views[cardId], view, value => { choice.view = value; redraw(); }));
-    if (computational) controls.append(control('Operation', operations, choice.op, value => { choice.op = value; redraw(); }));
+    const controls = element('div', undefined, 'resource-controls' + (cleanPresentation ? ' resource-clean-controls' : ''));
+    if (!cleanPresentation && views[cardId].length > 1) controls.append(control('Measure', views[cardId], view, value => { choice.view = value; redraw(); }));
+    if (computational) controls.append(cleanPresentation
+      ? operationButtons(choice.op, value => { choice.op = value; redraw(); })
+      : control('Operation', operations, choice.op, value => { choice.op = value; redraw(); }));
     if (controls.childElementCount) target.append(controls);
     const measured = points.filter(p => p.value !== null && Number.isFinite(p.x));
     const xs = points.map(p => p.x).filter(Number.isFinite), low = Math.min(...xs), high = Math.max(...xs);
@@ -217,7 +239,7 @@
     const chartLabel = labels[view] + (rss?.includesLauncher ? ' · includes launcher memory' : '');
     const chart = svg('svg', {viewBox: '0 0 480 240', role: 'img', class: 'overview-svg', 'aria-label': `${chartLabel} by ${named ? 'parameter set' : 'stage'}`});
     const positions = !points.length ? ' No challenge stages published.' : named ? ' Distinct named parameter sets are not interpolated.' : xs.length ? ` Challenge stages ${low} to ${high}.` : ' No valid stage coordinates published.';
-    chart.append(svg('title', {}, chartLabel), svg('desc', {}, `${measured.length} comparable observations. Missing values are gaps.${positions}${timed ? ' Dots show medians. Sample variation is retained in Values, method & source.' : ''}${rss?.text ? ' ' + rss.text : ''}${recovery.label ? ' ' + recovery.label + '. ' + recovery.meaning : ''}`));
+    chart.append(svg('title', {}, chartLabel), svg('desc', {}, `${measured.length} comparable observations. Missing values are gaps.${positions}${timed ? ' Dots show medians. Sample variation is retained in ' + (cleanPresentation ? 'the measurement report.' : 'Values, method & source.') : ''}${rss?.text ? ' ' + rss.text : ''}${recovery.label ? ' ' + recovery.label + '. ' + recovery.meaning : ''}`));
     chart.append(svg('text', {x: 48, y: 19, class: 'chart-axis-title'}, unit));
     if (Number.isFinite(recovery.tier) && x(recovery.tier) > 48) chart.append(svg('rect', {x: 48, y: 43, width: x(recovery.tier) - 48, height: 147, class: 'chart-recovery-area', 'aria-hidden': 'true'}));
     for (let i = 0; i <= 3; i++) chart.append(svg('line', {x1: 48, x2: 465, y1: 43 + i * 49, y2: 43 + i * 49, class: 'chart-gridline'}));
@@ -232,7 +254,7 @@
     }
     if (!named && path) chart.append(svg('path', {d: path, class: 'chart-series'}));
     for (const p of measured) {
-      const dot = svg('circle', {cx: x(p.x), cy: y(p.value), r: 3, class: 'chart-point', 'data-profile-id': p.id, 'data-tier': p.x, 'data-value': p.value});
+      const dot = svg('circle', {cx: x(p.x), cy: y(p.value), r: 3, class: 'chart-point' + (measured.length > 20 ? ' chart-idle-muted' : ''), 'data-profile-id': p.id, 'data-tier': p.x, 'data-value': p.value, 'aria-hidden': 'true'});
       dot.append(svg('title', {}, pointDescription(p, unit, timed) + (rss?.includesLauncher ? ' Includes pre-exec launcher memory.' : ''))); chart.append(dot);
     }
     if (!measured.length) {
@@ -243,8 +265,36 @@
       const marker = svg('line', {x1: x(p.tier), x2: x(p.tier), y1: 43, y2: 190, class: 'chart-recovery-line', 'data-tier': p.tier, 'data-profile-id': p.profileId});
       marker.append(svg('title', {}, named ? 'Recovered · ' + p.label : recovery.label)); chart.append(marker);
     }
-    target.append(chart);
+    const readout = element('div', undefined, 'chart-point-readout');
+    target.append(chart, readout);
+    window.CrucibleGraphPoints?.attach({svg: chart, readout,
+      key: JSON.stringify([scheme.id, String(scheme.version)]),
+      interactionKey: JSON.stringify([cardId, view, choice.op, choice.report]), previewState,
+      points: points.map(p => ({...p, position: p.x})), x, y,
+      onReadout: cleanPresentation ? (p, content) => {
+        content.append(element('span', p.label, 'chart-point-stage'));
+        const value = element('span', undefined, 'chart-point-value');
+        if (p.value === null) value.append(element('span', 'Not measured', 'chart-point-unit'));
+        else {
+          value.append(element('strong', p.value.toLocaleString('en-US', {maximumSignificantDigits: 4})));
+          value.append(element('span', timed ? 'µs' : 'bytes', 'chart-point-unit'));
+        }
+        content.append(value);
+      } : undefined,
+      describe: p => p.label + ' · ' + (p.value === null ? 'No comparable measurement' : p.value.toLocaleString('en-US', {maximumSignificantDigits: 4}) + (timed ? ' µs' : ' bytes'))});
     if (recovery.label) target.append(element('p', recovery.label, 'overview-recovery-note'));
+    if (cleanPresentation) {
+      const actions = element('div', undefined, 'resource-evidence-links resource-chart-actions');
+      if (entry?.status === 'error') {
+        target.append(element('p', data ? 'Refresh failed · retained measurements shown.' : 'Measurements unavailable.', 'overview-chart-note resource-summary'));
+        const retry = retryControl(scheme, choice, api, redraw); retry.textContent = 'Try again'; retry.dataset.resourceRefresh = 'true'; actions.append(retry);
+      }
+      if (actions.childElementCount) target.append(actions);
+      if (focusChart) chart.focus({preventScroll: true});
+      else if (focusOperation) target.querySelector('[data-resource-operation="' + focusOperation + '"]')?.focus({preventScroll: true});
+      else if (focusRefresh) target.querySelector('[data-resource-refresh]')?.focus({preventScroll: true});
+      return true;
+    }
     const notes = {
       public_key: 'Complete serialized public key. Shared built-in parameters are recorded in the evidence.',
       private_key: 'Serialized private-key storage. This is local storage, not transmitted communication.',
@@ -261,8 +311,10 @@
     if (measured.length && timed) summaryText += ' Median.';
     if (measured.length && rss?.includesLauncher) summaryText += ' Includes pre-exec launcher memory.';
     if (entry?.status === 'error') summaryText = data ? 'Refresh failed. Retained report shown; retry below.' : 'The resource report could not be retrieved. Retry below.';
-    target.append(element('p', summaryText, 'overview-chart-note resource-summary'));
+    const showSummary = !publication || historical || measured.length < points.length || rss?.includesLauncher || entry?.status === 'error';
+    if (showSummary && summaryText) target.append(element('p', summaryText, 'overview-chart-note resource-summary'));
     const details = element('details'), summary = element('summary', 'Values, method & source'); details.append(summary); details.open = detailsOpen;
+    if (!showSummary && summaryText) details.append(element('p', summaryText, 'overview-chart-note resource-summary'));
     const evidenceControls = element('div', undefined, 'resource-controls');
     const reports = reportControl(scheme, choice, redraw);
     if (reports) evidenceControls.append(reports);
@@ -307,7 +359,8 @@
     }
     details.append(links, element('p', 'Repository workflow provenance and receipt consistency checks. Security, correctness guarantees and side-channel resistance are assessed separately.', 'overview-chart-note'));
     const refresh = retryControl(scheme, choice, api, redraw); refresh.dataset.resourceRefresh = 'true'; details.append(refresh); target.append(details);
-    if (focusLabel) target.querySelector('select[aria-label="' + focusLabel + '"]')?.focus({preventScroll: true});
+    if (focusChart) chart.focus({preventScroll: true});
+    else if (focusLabel) target.querySelector('select[aria-label="' + focusLabel + '"]')?.focus({preventScroll: true});
     else if (focusRefresh) refresh.focus({preventScroll: true});
     else if (focusSummary) summary.focus({preventScroll: true});
     return true;

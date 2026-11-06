@@ -63,7 +63,7 @@
     // Only authored supporting material transfers through the simple editor.
     // Assessment/check status belongs to an exact revision, never its successor.
     const retained = {};
-    if (revision) for (const key of ['references', 'artifacts', 'extensions']) {
+    if (revision) for (const key of ['references', 'artifacts', 'extensions', 'sections', 'statements', 'arguments']) {
       if (Object.hasOwn(revision, key)) retained[key] = clone(revision[key]);
     }
     return retained;
@@ -91,6 +91,38 @@
     text(revision.claim, 'Claim');
     text(revision.conditions, 'Conditions');
     text(revision.body, 'Supporting body', 40000);
+    if (revision.sections !== undefined) {
+      if (!Array.isArray(revision.sections) || revision.sections.length > 32) fail('invalid_snapshot', 'Use at most 32 readable sections.');
+      const ids = new Set();
+      for (const section of revision.sections) {
+        object(section, 'Readable section');
+        if (typeof section.id !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(section.id) || forbidden.has(section.id) || ids.has(section.id)) fail('invalid_snapshot', 'Readable sections need unique stable IDs.');
+        if (Object.keys(section).some(key => !['id', 'title', 'body'].includes(key))) fail('invalid_snapshot', 'Unsupported readable section field.');
+        ids.add(section.id); text(section.title, 'Section heading', 240); text(section.body, 'Section text', 40000);
+      }
+    }
+    for (const key of ['statements', 'arguments']) {
+      if (revision[key] === undefined) continue;
+      const values = revision[key], ids = new Set();
+      if (!Array.isArray(values) || values.length > 32) fail('invalid_snapshot', 'Use at most 32 ' + key + '.');
+      for (const item of values) {
+        object(item, key); text(item.id, 'Stable identifier', 80);
+        if (!/^[a-z][a-z0-9-]{0,79}$/.test(item.id) || forbidden.has(item.id) || ids.has(item.id)) fail('invalid_snapshot', 'Use unique stable identifiers.');
+        ids.add(item.id); text(item.title, 'Title', 240);
+        if (key === 'statements') text(item.definition, 'Precise statement', 12000);
+        else {
+          if (item.conclusion_statement != null) {
+            if (item.conclusion != null) fail('invalid_snapshot', 'Use one conclusion statement, not a second copy of its text.');
+            const ref = item.conclusion_statement; object(ref, 'Conclusion statement');
+            if (typeof ref.statement_id !== 'string' || !/^[a-z][a-z0-9-]{0,79}$/.test(ref.statement_id) || forbidden.has(ref.statement_id)) fail('invalid_snapshot', 'Identify the exact conclusion statement.');
+            const external = ['note_id','revision','content_sha256'].filter(key => ref[key] != null);
+            if (external.length && (external.length !== 3 || typeof ref.note_id !== 'string' || !ref.note_id.trim() || !Number.isSafeInteger(ref.revision) || ref.revision < 1 || !/^[a-f0-9]{64}$/.test(ref.content_sha256))) fail('invalid_snapshot', 'An external conclusion needs its exact note revision and hash.');
+            if (!external.length && !revision.statements?.some(statement => statement.id === ref.statement_id)) fail('invalid_snapshot', 'The local conclusion statement is missing.');
+          } else text(item.conclusion, 'Conclusion', 6000);
+          text(item.scope, 'Scope', 6000); if (!Array.isArray(item.dependencies) || item.dependencies.length > 32) fail('invalid_snapshot', 'Bound the exact dependency list.');
+        }
+      }
+    }
     tags(revision.tags);
     if (revision.kind !== undefined) text(revision.kind, 'Author label', 100, true);
     time(revision.createdAt);

@@ -1,0 +1,276 @@
+CRUCIBLE — A PROPOSED STRUCTURE FOR RESEARCH THAT EVOLVES
+6 November 2026 · design proposal, not an implemented or deployed workflow
+
+Recommendation
+
+Keep notes as the source of research. Let a note optionally contain precisely
+addressable statements and arguments. Record which exact argument Crucible has
+adopted for each scheme property or attack result. Preserve the existing reader
+and review center as the human interfaces.
+
+The participant should mainly encounter three familiar things: a note, a
+statement, and an update proposal. Definitions, dependency uses and adoption
+records supply precision underneath; they need not become separate dashboards.
+
+Options considered
+
+A. Annotated ordinary notes
+   Assumptions remain pinned passages, with relationships described in prose.
+   Best for: unrestricted exploration and a small editorial research collection.
+   Advantage: almost no new authoring machinery; existing citations do the work.
+   Cost: determining identity, affected uses and required bounds remains manual.
+   Verdict: preserve this mode for ordinary research. It is insufficient by
+   itself for the dependable update workflow requested here.
+
+B. Canonical statements inside notes — recommended
+   An optional statement block supplies its exact definition once. Arguments
+   reference such blocks; reviewed selections determine the current presentation.
+   Best for: notebook-first research with precise reuse and lifecycle tracking.
+   Advantage: the card, note and machine interface share a definition. No second
+   independent research document needs to be maintained.
+   Cost: a small authoring/API contract and persistent adoption records are needed.
+   Verdict: the best balance for Crucible's current direction.
+
+C. Independent assumption records, explained by notes
+   Definitions have their own authoritative records and versions. Notes provide
+   explanation, proofs and criticism around them.
+   Best for: a large independently curated collection with separate ownership,
+   alias management and definition governance.
+   Advantage: strong independent reuse; ownership need not follow one note.
+   Cost: authors must understand whether to change the definition or its note.
+   Research acquires a second source of authority and a second editing surface.
+   Verdict: a credible later direction if governance demands it. It does not
+   require a global assumptions page, but that is not its main tradeoff here.
+
+What belongs inside a note
+
+Full text remains the free-form technical record. The reader-facing companion
+remains optional. Neither ordinary publication nor research participation
+requires a companion, assumption block, fixed outline or special note type.
+
+A statement block is optional structure, like a numbered theorem inside a paper:
+  - stable identity and a short title;
+  - the exact mathematical statement;
+  - pinned definitions needed to interpret it, where applicable;
+  - a mathematical category, distinct from an assessment of truth.
+
+It can define a hardness conjecture, a probability inequality or a modeling
+premise. Its complete definition includes the distribution, parameter domain,
+quantifiers, goal and model, whether inline or in pinned normative references.
+Do not force every claim into a rigid collection of formula fields; arbitrary
+mathematics remains text plus exact references.
+
+The same block renders in the note and its compact card. Explanation surrounds
+or links to it, rather than manually copying its definition. A full-text-only
+note can still expose a statement through a generated formal view. It does not
+need an extra human-written article. Existing section and line citations remain
+valid; generated blocks must not be inserted into historical stored body text.
+
+An assumption is a role, not a permanent verdict
+
+A statement can be assumed in one argument and justified in another. A proof
+does not require deleting its A-number or replacing its original definition
+with a theorem-shaped rewrite. Keep identity, evidence and current use separate.
+
+An argument records a conclusion and the premises it uses, with scope and an
+exact note location for the reasoning. The conclusion can be the security or
+correctness claim for a scheme release, an attack's success/work account, or
+another mathematical statement. This need not create another top-level page.
+
+Within an argument, the listed premises are required together. Different
+arguments can independently justify the same conclusion:
+
+  Claim C
+    Argument 1 uses A and B
+    Argument 2 uses D
+
+If A fails, Argument 1 loses that justification. Argument 2 is unaffected unless
+the evidence also addresses it. Choose one argument for the main presentation;
+make alternatives quietly reachable when they exist. Do not flatten all three
+premises into one list or build a general Boolean proof engine.
+
+A use is more precise than a citation
+
+Each use connects an argument to an exact statement definition and identifies:
+  - parameter substitution and actual target distribution;
+  - configuration coverage using stable IDs, with stages as display labels;
+  - the required threshold or strength;
+  - the exact justification for applying it in this setting.
+
+For example: a named attack requires native-message decoding failure <=1/8
+for particular configurations. A stronger key-agreement claim has a different
+event/bound. Sharing a title or A-label cannot make evidence transferable.
+Symbolic hardness statements with unspecified epsilon are still useful, but
+must not silently become numerical security claims.
+
+An empty dependency list is not evidence of an unconditional result. Distinguish
+"dependencies not recorded" from a reviewed argument establishing its conclusion
+without unproved premises, within its stated model and scope. Likewise, an
+estimated attack-work curve is not a lower bound on security against all attacks.
+Keep these meanings explicit in the result metadata and its focused reader.
+
+Reading layout options
+
+1. Inline expansion beneath the graph
+   Fast for one short statement, but long mathematics makes the graph page tall
+   and duplicates information. Keep compact previews, not the full workflow here.
+
+2. A side panel retaining the graph
+   Good spatial continuity, but cramped for proofs and requires a different
+   mobile design. Useful only if later testing shows frequent short comparisons.
+
+3. The existing focused note reader — recommended
+   Spacious mathematics, one familiar reading surface, exact source context.
+   Requires reliable back navigation preserving the selected point and scroll.
+
+Proposed reader hierarchy
+
+  A-12   [Short mathematical title]
+  [Canonical formal statement]
+
+  Used here: [the selected result, coverage and required strength]
+  [Optional explanation, followed by its full technical source when requested]
+
+  Related research
+    [Proof/support/challenge notes, attributed and precisely targeted]
+    [Any scoped assessment, with its reason and evidence]
+
+  Other uses                         History
+  Propose update
+
+This is an information hierarchy, not five permanent tabs. Omit empty secondary
+sections. A normal visit to the note has no artificial "Used here" strip; that
+context arrives when following a scheme or curve point. Exact citations never
+depend on the transient navigation context. Full text stays one action away
+whether or not a readable companion exists. When absent, a short notice states
+that no readable explanation has been added. Exact Full-text passage links still
+open the cited passage directly.
+
+Keep the current scheme Security assumptions / Correctness assumptions buttons
+and point-specific Attack specification plus A-labels. The overview remains
+quiet. The main reading view answers the more detailed questions.
+
+Contributing research versus proposing a change
+
+Publishing a proof, objection or experiment does not require an update proposal.
+Notes can cite an exact statement/use and say supports, challenges, reproduces
+or responds to. These are attributed research relationships, not verdicts.
+
+Use "Propose update" when asking Crucible to change its adopted presentation.
+Starting from a note, premise or claim prefills the exact context. Ask for:
+  Evidence — an existing note, or a new note to write.
+  Requested change — what argument, bound or assessment should be replaced.
+  Applies to — exact uses/configurations, with a clear preview.
+
+Example preview:
+  "Use this proof for the enumeration attack at these configurations.
+   Its required failure bound is satisfied. The scheme's stronger correctness
+   claim and other configurations are not part of this update."
+
+There is no separate prove/refute/replace portal. Do not require the participant
+to retype IDs or copy information from a browser into an agent prompt. The agent
+obtains the same exact context through the API and submits the same proposal.
+If publication and proposing are combined in one explicit author action, their
+durable states remain separate: screening is not scientific review.
+
+Review should feel like reviewing a concrete change
+
+  WHAT CHANGES       Current argument/definition -> proposed argument/definition
+  WHY                Exact evidence, reproduction, remaining premises
+  IMPACT             Uses, configurations, alternatives and release work
+
+Use the existing review center. For an explicitly scoped, validated display-only
+update, one "Approve and apply" action may atomically record the assessment and
+the adoption. Separate records do not require two human clicks.
+
+This is a new, deliberately authorized operation; existing historical
+"recommend" assessments must not suddenly acquire application authority.
+An update to executable algorithms, parameters or challenge policy instead
+becomes approved/awaiting release, with the ordinary tested deployment process.
+Scientific approval never executes code embedded in a note.
+
+Application rechecks exact source pins, visibility, reviewer authority and the
+expected current adoption event/version. Use that event identity, not only a
+content hash, so a revert/reapply sequence cannot make a stale proposal current.
+An outdated proposal gets a clear comparison/refresh path, not a silent overwrite.
+Retries produce the same committed effect. No automatic changes to scores.
+
+Version and ownership policy
+
+* Every saved note edit creates a new note revision, as now.
+* Changing normative definition text or its pinned definitions creates a new
+  statement version. Do not infer mathematical equivalence automatically.
+* Changes confined to titles/explanation leave the definition identity intact,
+  while still creating a new note revision. Old citation routes stay exact.
+* Existing uses stay pinned until a reviewed update selects a replacement.
+  "New version available" does not mean better, accepted or used everywhere.
+* A different author can propose an alternative from their own note. They do
+  not overwrite the first author's statement or need that author's permission
+  to publish criticism. Copies do not acquire identity by copying an A-label.
+* Retraction, source unavailability and mathematical refutation are different.
+  A withdrawn/private source must not leak through cached text or reverse links.
+
+Lifecycle rehearsals
+
+Case 1 — a weaker proof is useful
+  A proof establishes delta_m<=2^-100 where an attack needs <=1/8. Review can
+  adopt it for the attack. It neither refutes nor establishes a stronger
+  key-agreement guarantee such as delta_K<=2^-128. The events differ too.
+
+Case 2 — a scoped contradiction
+  Evidence establishes an actual contradiction for stated parameters. The
+  proposed update identifies the affected argument and alternatives. A single
+  failure is not automatically a refutation of a probabilistic guarantee.
+  Accepted evidence changes the current assessment with a precise explanation;
+  it does not automatically declare the whole scheme broken or erase history.
+
+Case 3 — a proof uses another premise
+  A follows from B. Show a conditional justification and keep B discoverable.
+  The reviewer identifies the remaining dependency set. A-from-B-from-A does
+  not discharge either premise. No automatic theorem composition is needed.
+
+Case 4 — one argument fails, another survives
+  The selected proof uses A; an independent accepted argument uses D. Review
+  can select the latter if its scope fits. Do not automatically switch methods,
+  merge dependencies or claim the conclusion false because the first proof failed.
+
+Case 5 — a definition changes or another researcher offers a replacement
+  Compare exact versions, parameter maps and affected uses. Adopt for selected
+  uses only. An abandoned author cannot block progress; attribution and original
+  definitions survive. Older curves remain reproducible and clearly historical.
+
+Case 6 — an active round overlaps an update
+  An evidence-only change does not silently alter the instance, key, deadline
+  or accepted submission. Malformed/unverifiable instances need an explicit
+  operational decision. Changed algorithms/parameters get new release identities.
+
+All these are workshop scenarios, not claimed new scientific discoveries.
+
+Implementation shape and order
+
+1. Add an optional canonical statement-block contract to note revisions. Render
+   both card and note from it; preserve old notes and their hashes. Supporting
+   ordinary notes require no conversion. Provide a compact human authoring
+   affordance and an equivalent structured agent representation.
+2. Add exact argument/dependency-use references, including cross-note reuse.
+   Build a small derived index for visible related evidence and "Used by".
+   Include two uses of one premise and two alternative arguments for one claim.
+3. Add explicit update/adoption records through the existing review path, with
+   scoped impact previews and concurrency/idempotency checks. Do not treat the
+   local fixture manifest or its illustrative publication decisions as admission.
+4. Rehearse the cases through real local APIs and UI. Keep the scenarios separate
+   from actual research notes. Test withdrawal/privacy and conflicting updates.
+5. Prepare production migration, compatibility, storage/screening bounds and
+   release checks only after this workflow is usable. No extra service, graph
+   database or LLM-based mathematical adjudicator is needed for the first version.
+
+Defer: global catalogue navigation, automatic semantic merging, automatic proof
+composition or argument fallback, an interactive universal dependency graph,
+new reward rules, and splitting human/model text into separate publication units.
+
+Evidence and predecessor
+
+This proposal refines assumptions-workflow-audit-20261106.txt. It is grounded in
+the inspected notebook, exact-source binding, reference graph and review code.
+The optional companion UX fixes described in that audit are implemented locally.
+The statement/use/argument/adoption architecture proposed here is not yet built.

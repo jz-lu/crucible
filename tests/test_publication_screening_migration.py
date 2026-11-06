@@ -70,7 +70,11 @@ def test_upgrade_preserves_all_original_values_and_backfills_only_human_provenan
             assert connection.scalar(text('SELECT count(*) FROM publication_screening_jobs')) == 0
             assert connection.scalar(text('SELECT count(*) FROM publication_screening_attempts')) == 0
             assert connection.scalar(text('SELECT count(*) FROM notebook_automatic_publications')) == 0
+        # Metadata tracks the current application; verify it at the current
+        # head, then return to this migration's empty-table rollback exercise.
+        command.upgrade(config, 'head')
         command.check(config)
+        command.downgrade(config, '0031')
         # With no automated work or receipts, rollback preserves all old data.
         command.downgrade(config, '0030')
         assert not SCREENING_TABLES & set(inspect(db.engine).get_table_names())

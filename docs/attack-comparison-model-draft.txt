@@ -1,0 +1,220 @@
+COMPARABLE ATTACK CURVES — DESIGN DRAFT, 2026-11-05
+
+Status: historical design proposal, followed by a local implementation cycle.
+See ram-attack-cycle-review.txt for what now runs, its validation and limits.
+All eight current research releases have explicit bit-RAM baseline accounts;
+production adoption, competitive attack coverage and an AES reference remain
+unfinished. Existing parameters, legacy references and scores are unchanged.
+The implementation plots a sufficient work budget W with success >=1/2; it does
+not claim the optimized minimum C_50 discussed below.
+
+Human-facing meaning
+
+For each exact scheme configuration, ask how much work a specified attack needs
+to recover the encapsulated key with a stated probability. Use one computation
+model and one experiment for a comparison. The curve is an account of identified
+attacks; it does not claim that unexamined attacks cost at least as much.
+
+Following the user's request for a choice grounded in NIST practice, the
+preferred first common profile is now classical bit-operation RAM. Retain
+Bernstein and Chou's CryptAttackTester (CAT) approach to checking algorithms,
+cost predictors and success predictors. Its pure circuit cost model remains a
+separate profile. Quantum models remain separate. Models, algorithms and
+hypotheses should have exact, readable notebook references.
+
+1. Computation model and cost
+
+Default proposal: a precisely specified bit-operation RAM profile. NIST IR
+8413-upd1 Appendix B describes counting operations on at most two bits, with
+each one-bit memory read/write costing one operation irrespective of memory
+size. NIST's December 2023 Kyber512 FAQ confirms this interpretation of its
+classical gate-count metric. This is a recognized abstraction, not a complete
+machine specification or a mandate to use one model for every purpose.
+
+Crucible should name the unit "bit operations" and identify the profile version.
+The proposed headline is "Classical attack work (log2 bit operations)". Before
+admission, define the Boolean instruction basis, register/copy rules, address
+construction and manipulation, branching/control, randomness, input/output,
+initialization and termination. Long-integer and field arithmetic, hashes and
+comparison/sorting must have explicit accounts. A large arithmetic operation
+does not become one bit operation. The special constant-cost assumption applies
+to the addressed memory transfer; it must not silently exempt computations
+needed to construct addresses.
+
+Record peak stored bits and counts of memory reads/writes in addition to work.
+State the initial profile permits unbounded memory capacity; do not describe it
+as feasible hardware. Any bounded-memory comparison requires an explicit shared
+cap and reoptimization of the attacks. A later locality-aware profile can price
+communication differently without rewriting the baseline or its history.
+
+NIST alignment does not establish NIST approval of Crucible's profile or a
+scheme's security category. The full scheme security assessment and quantum
+analysis are separate from this recovery-attack graph.
+
+Optional separate circuit profile: CAT defines a circuit as a fixed sequence
+of Boolean operations with zero, one
+or two input bits. Its stated cost counts each two-input operation and unary
+NOT as one unit. Constants and copies are free. Operations on long integers,
+field elements, hashes, branches, sorting and variable-index memory must be
+implemented in this model; an arithmetic operation or RAM access is not itself
+one Boolean operation. The circuit generator and cost predictor are separately
+identified artifacts.
+
+The circuit metric is also an abstraction of work, not physical runtime or money.
+For it, record peak live bits and circuit depth with explicit definitions. Never
+mix it with bit-RAM work on one numerical comparison. Neither abstraction alone
+measures every cost of storing and moving information in physical hardware.
+
+Before a first profile is admitted, freeze the complete operational semantics,
+allowed constants and advice, random-input convention, program/circuit-generation
+rules, and exact source/version. Do not call a custom counter CAT-compatible or
+an imported estimate compatible with the bit-RAM profile without checking its
+semantics and success convention.
+
+2. Common attack experiment
+
+Proposed initial comparison:
+  - Exact registered release, configuration, samplers and encodings.
+  - One fresh honest public key and encapsulation.
+  - Attacker receives the public challenge inputs.
+  - Output is the complete encapsulated shared secret, checked byte-for-byte.
+  - No decapsulation oracle or implementation side channel.
+
+This matches Crucible's recovery task, not an IND-CCA distinguishing game.
+Primitive recovery must include the final conversion to the KEM secret, along
+with any required candidate verification and hashing, in its cost account.
+
+Preprocessing is explicit. The initial cold-attack profile charges attack setup
+and online work together. A separate amortized profile may identify a fixed
+public group and a stated number/distribution of target challenges. Never divide
+preprocessing by an unspecified number of targets. A target-specific answer,
+table or other advice cannot enter through unpriced program/circuit generation.
+The allowed uniformity/advice rules need review before calling this profile
+complete; counting elementary operations alone does not settle them.
+
+3. Success and the plotted quantity
+
+Retain the underlying cost and success statement, not only a logarithm. Declare
+whether the cost is fixed, bounded, expected or a quantile, and identify the
+probability space (keys, encapsulations, public setup, attacker randomness).
+
+Proposed main display: log2(C_50), where C_50 is a documented bit-operation budget
+for an explicitly specified attack strategy whose success probability in that
+experiment is at least 1/2. For a specified attack family A_theta, this can be defined
+over its admitted settings theta as:
+
+  C_50 = min { cost(A_theta) : Pr[A_theta returns the challenge key] >= 1/2 }.
+
+The minimum is over the documented, evaluated strategy/settings, not every
+possible attack. A proved or conditional bound must state its direction. A
+heuristic prediction is labelled as such; measured success includes statistical
+evidence. Do not quietly treat an empirical point estimate as a proved bound.
+
+CAT also reports log2(C/p) cost/probability ratios. Preserve that quantity under
+its own metric identity. It is not automatically C_50 or expected recovery work.
+Repeated attempts on the same target can remain correlated or fail on the same
+subset of keys. A normalization needs its own justified repetition, verification
+and stopping analysis. Low-success attacks remain valuable records even when
+they do not yet qualify for the 50%-success view.
+
+For interpretation, add a separately reviewed AES-128 exhaustive-key-search
+reference analyzed under the same cost and success conventions. A 128-bit key
+does not imply an attack costs 2^128 elementary operations. NIST's evaluation
+criteria use AES/SHA reference primitives across several resource metrics; their
+published approximate gate thresholds must not be silently imported into a
+different success or computation profile. Do not subtract a universal fixed
+offset and rename every result "bits of security".
+
+4. Evidence pipeline and assumptions
+
+Adapt CAT's separation to the chosen execution model:
+  A: precise executable attack family;
+  C: fast predictor of A's cost at cryptographic sizes;
+  P: fast predictor or justified bound on A's success probability.
+
+For small supported instances, compare C to counted executions, and P to
+success observations. Publish seeds/input generation, source revisions, exact
+commands, counted transcripts and statistical results. Verify attack correctness
+and the success event independently. Small-instance agreement is a check, not a
+proof that heuristic extrapolations at large sizes are correct.
+
+Every displayed attack has an Attack specification link. Numbered assumptions
+link only to hypotheses needed for its success/cost analysis. Definitions of the
+model, proven lemmas, missing arguments and the absence of faster attacks are
+not automatically assumptions. A KEM security reduction belongs to the scheme's
+separate security account. Assumption changes create new analysis identities;
+they do not overwrite prior evidence or silently replace an adopted curve.
+
+5. Integration contract
+
+An admitted comparison record needs exact identities for:
+  scheme release + profile + input distribution;
+  experiment + computation model + cost metric + preprocessing/reuse profile;
+  attack implementation/circuit generator + C/P predictors;
+  success target and evidence status;
+  specification section + genuine premise sections;
+  resource account + reproducible validation evidence.
+
+Compare records only when experiment/model/metric/preprocessing profiles agree.
+Memory/depth constraints, if imposed, must also agree. An envelope is labelled
+the lowest documented attack cost among eligible records, with the winning
+attack and dependencies retained per point. No absent value is interpolated
+into a calibrated claim, and no legacy operation count is silently converted.
+
+Reuse existing exact notebook citations and reviewed visualization adoption.
+An ordinary note publication does not admit an attack curve. The website stores
+records and results; it does not execute participant-uploaded attack code.
+
+6. First implementation milestones
+
+First prove the accounting path on a small, complete enumeration baseline with
+exact success accounting. Then implement a specified baby-step–giant-step attack
+for custom EC and finite-field DH in the same model, including table generation,
+sorting/lookup, arithmetic, storage accounting and shared-key derivation. These
+give cross-family comparisons without claiming to be the best known attacks.
+
+Separately reproduce one CAT information-set-decoding example in its original
+circuit model. Its counts require a new account before entering the bit-RAM
+comparison; reproducing it alone is not a conversion. A generic decoding
+analysis does not automatically cover structural attacks or HQC's quasi-cyclic
+speedups. Lattice/NFS references require their own complete cost accounts; do not
+multiply Core-SVP or normalized NFS exponents by an unexplained correction.
+
+Current inventory: DH/RSA/EC references, ML-KEM Core-SVP endpoints, Frodo lattice
+references and NTRU free-memory estimates do not share a common cost/success
+contract. HQC and McEliece currently have no numerical calibration in the app.
+Adopting a common model therefore requires new analysis, not new axis labels.
+
+Primary sources consulted
+
+NIST, Status Report on the Third Round of the Post-Quantum Cryptography
+Standardization Process, IR 8413-upd1, Appendix B (printed pages 81-83):
+  https://nvlpubs.nist.gov/nistpubs/ir/2022/NIST.IR.8413-upd1.pdf
+Use the errata-updated report, not the withdrawn original PDF.
+NIST, FAQ on Kyber512, December 2023, especially pages 1 and 3-4:
+  https://csrc.nist.gov/csrc/media/Projects/post-quantum-cryptography/documents/faq/Kyber-512-FAQ.pdf
+These are dated model discussions, not a claim that their scheme-specific
+attack estimates are the latest available estimates. The FAQ also explicitly
+warns against treating Core-SVP values as concrete gate counts.
+NIST PQC Evaluation Criteria, section 4.A.5, reference-based security categories:
+  https://csrc.nist.gov/Projects/Post-Quantum-Cryptography/Post-Quantum-Cryptography-Standardization/Evaluation-Criteria/Security-%28Evaluation-Criteria%29
+
+Bernstein and Chou, CryptAttackTester: high-assurance attack analysis (CRYPTO
+2024). Project and final-paper locations supplied by the authors:
+  https://cat.cr.yp.to/
+  https://cat.cr.yp.to/cryptattacktester-20240612.pdf
+  https://eprint.iacr.org/2023/940
+Official presentation: circuit definition slides 2–3, A/C/P slides 3–4,
+indexed memory slide 8, cost/probability results slide 13:
+  https://iacr.org/submit/files/slides/2024/crypto/crypto2024/407/slides.pdf
+The presentation was retrieved and read. Direct final-PDF retrieval was blocked
+in this environment; no claim of line-by-line final-paper verification is made.
+
+Bernstein and Lange, Non-uniform cracks in the concrete, Appendix A, for the
+distinction between computation models and nonuniformity/advice:
+  https://cr.yp.to/nonuniform/nonuniform-20130914.pdf
+Michael Wiener, The Full Cost of Cryptanalytic Attacks, for hardware, memory,
+communication and full-cost considerations:
+  https://cr.yp.to/2005-590/wiener.pdf
+These last two are follow-up reading for profile admission, not a claim that
+either proposed metric measures all physical costs.

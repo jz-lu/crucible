@@ -14,6 +14,10 @@ for (const width of [1440, 390]) {
     const route = '/#notebook?' + new URLSearchParams({note: note.id, revision: '1', sha256: note.content_sha256});
     await page.goto(route);
     const reader = page.locator('#notebook-workspace [data-nb="full"]');
+    await expect(reader.locator('.nb-readable-unavailable')).toHaveText('No readable explanation has been added.');
+    await expect(reader.locator('.nb-body')).toBeHidden();
+    await reader.locator('.nb-full-text > summary').click();
+    await expect(reader.locator('.nb-body')).toBeVisible();
     await expect(reader.locator('.nb-passage')).toHaveCount(4);
     await expect(reader.locator('[data-nb-location="L3"] .katex')).toHaveCount(2);
     await expect(reader.locator('[data-nb-location="L7"] pre')).toHaveText('A literal <tag>, not markup.');
@@ -33,6 +37,8 @@ for (const width of [1440, 390]) {
     await dialog.locator('[data-nb="close"]').click();
     await page.goto(citation);
     const selected = reader.locator('.nb-passage-selected');
+    await expect(reader.locator('.nb-full-text')).toHaveAttribute('open','');
+    await expect(selected).toBeVisible();
     await expect(selected).toHaveAttribute('data-nb-location', 'L5');
     await expect(selected).toBeFocused();
     await expect(selected).toContainText('Second statement');
@@ -49,6 +55,9 @@ for (const width of [1440, 390]) {
     await expect(reader.locator('.nb-error')).toContainText('not present in this saved revision');
     await expect(reader.locator('.nb-body')).toHaveCount(0);
     await reader.getByRole('button', {name: 'Read this exact revision'}).click();
+    await expect(reader.locator('.nb-readable-unavailable')).toHaveText('No readable explanation has been added.');
+    await expect(reader.locator('.nb-body')).toBeHidden();
+    await reader.locator('.nb-full-text > summary').click();
     await expect(reader.locator('.nb-body')).toBeVisible();
     expect(page.url()).not.toContain('location=');
     expect(page.url()).toContain('sha256=' + note.content_sha256);

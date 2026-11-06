@@ -24,7 +24,7 @@ for (const width of [1440, 390, 320]) {
     const dialog = workspace.locator('dialog[data-nb="dialog"]');
     await row.locator('.nb-number-action').click();
     await expect(dialog).toHaveAttribute('aria-label','Cite this note');
-    await expect(row.locator('.nb-title')).toHaveAttribute('aria-expanded','false');
+    await expect(row.locator('.nb-expand')).toHaveAttribute('aria-expanded','false');
     const listCitation=await dialog.locator('[name="citation-link"]').inputValue();
     expect(listCitation).toContain('revision=1');expect(listCitation).toContain('sha256='+note.content_sha256);
     await page.keyboard.press('Escape');await expect(row.locator('.nb-number-action')).toBeFocused();
@@ -47,13 +47,13 @@ for (const width of [1440, 390, 320]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({path: testInfo.outputPath('expanded-reference.png'), fullPage: true});
 
-    await row.locator('.nb-title').click();
+    await row.locator('.nb-expand').click();
+    await expect(row.locator('.nb-expand')).toHaveAttribute('aria-expanded','false');
     await expect(row.locator('.nb-note-number')).toHaveText(label);
     await workspace.locator('[data-nb="search"]').fill(label);
     await expect(workspace.locator('.nb-entry')).toHaveCount(1);
     await expect(row).toContainText(title);
     await row.locator('.nb-title').click();
-    await row.locator('.nb-read').click();
     const reader = workspace.locator('[data-nb="full"]');
     await expect(reader.locator('.nb-full-title')).toHaveText(title);
     await expect(reader.getByRole('heading',{level:1,name:title,exact:true})).toBeVisible();

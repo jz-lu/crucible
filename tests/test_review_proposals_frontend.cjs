@@ -217,5 +217,35 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
     assert.equal(app.sandbox.cachedRead('review-proposals:changes:'), null);
   });
 
+  await test('local argument updates join Proposals and open in the dedicated reviewer reader', async () => {
+    const shows=[],notebook={mount(){return{show:async p=>shows.push(new URLSearchParams(p)),warm:async()=>({bytes:0}),setAccount(){},hide(){}};}};
+    const app=await boot({hash:'#about',notebook,hook:url=>url.pathname==='/api/notebook/statement-workflow/updates'?{updates:[
+      {id:'argument-update',target:{id:'trial',title:'<img onerror=unsafe()> scoped update'},status:'pending'},
+      {id:'older-argument-update',target:{id:'trial',title:'An earlier adoption'},status:'approved'},
+      {id:'declined-argument-update',target:{id:'trial',title:'An earlier decision'},status:'declined'}
+    ]}:undefined});
+    vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../web/notebook/statement-workflow.js'),'utf8'),app.sandbox,{filename:'statement-workflow.js'});
+    app.sandbox.setSession(app.envelope({user:reviewer,csrf_token:'test-csrf',access:{mode:'beta',allowed:true,status:'active'},capabilities:{review_protocol_proposals:true,statement_workflow_trial:true}}));
+    await app.navigate('#reviews?section=proposals');await flush();
+    const group=app.$('#review-argument-updates');assert.match(group.textContent,/Argument updates.*scoped update.*Awaiting review/s);assert.equal(group.querySelectorAll('img').length,0);
+    const list=group.querySelector('.nb-argument-update-list'),history=group.querySelector('.nb-past-argument-updates');
+    assert.equal(list.children.filter(item=>item.classList.contains('nb-research-request')).length,1);
+    assert.ok(history);assert.ok(!history.open);assert.equal(history.querySelector('summary').textContent,'Past argument updates');
+    assert.equal(history.querySelectorAll('.nb-research-request').length,2);assert.match(history.textContent,/An earlier adoption.*Applied.*An earlier decision.*Not adopted/s);
+    group.querySelector('a').click();await flush();
+    assert.equal(app.location.hash,'#reviews?section=proposals&statement_update=argument-update');assert.equal(app.$('#review-notebook-workspace').hidden,false);assert.equal(app.$('#review-proposals-workspace').hidden,true);
+    assert.equal(shows.at(-1).get('statement_update'),'argument-update');
+  });
+
+  await test('late local argument summaries cannot repaint after reviewer access is removed', async () => {
+    const held=deferred();const app=await boot({hash:'#about',hook:url=>url.pathname==='/api/notebook/statement-workflow/updates'?held.promise:undefined});
+    vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../web/notebook/statement-workflow.js'),'utf8'),app.sandbox,{filename:'statement-workflow.js'});
+    app.sandbox.setSession(app.envelope({user:reviewer,csrf_token:'test-csrf',capabilities:{review_protocol_proposals:true,statement_workflow_trial:true}}));
+    await app.navigate('#reviews?section=proposals');
+    app.sandbox.setSession(app.envelope({user:reviewer,csrf_token:'test-csrf',capabilities:{review_protocol_proposals:false,statement_workflow_trial:true}}));
+    held.resolve({updates:[{id:'late',target:{id:'private',title:'LATE_PRIVATE_ARGUMENT'},status:'pending'}]});await flush();
+    assert.doesNotMatch(app.$('#review-proposals-workspace').textContent,/LATE_PRIVATE_ARGUMENT/);assert.equal(app.$('#review-proposals-workspace').hidden,true);
+  });
+
   console.log(`${passed} review-proposals frontend checks passed.`);
 })().catch(error => {console.error(error); process.exitCode = 1;});

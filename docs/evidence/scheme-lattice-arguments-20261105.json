@@ -1,0 +1,901 @@
+{
+  "format": "crucible-scheme-lattice-argument-evidence-v1",
+  "frodo_all_sampler_words_verified": 65536,
+  "frodo_registered_certificates": [
+    {
+      "bound": "0",
+      "kind": "perfect",
+      "n": 8,
+      "support_bound": 2316
+    },
+    {
+      "bound": "2^-255",
+      "bound_exponent": 255,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 16,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-253",
+      "bound_exponent": 253,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 24,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-251",
+      "bound_exponent": 251,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 32,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-250",
+      "bound_exponent": 250,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 40,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-248",
+      "bound_exponent": 248,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 48,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-247",
+      "bound_exponent": 247,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 56,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-245",
+      "bound_exponent": 245,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 64,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-244",
+      "bound_exponent": 244,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 72,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-242",
+      "bound_exponent": 242,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 80,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-241",
+      "bound_exponent": 241,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 88,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-239",
+      "bound_exponent": 239,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 96,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-237",
+      "bound_exponent": 237,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 104,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-236",
+      "bound_exponent": 236,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 112,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-234",
+      "bound_exponent": 234,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 120,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-233",
+      "bound_exponent": 233,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 128,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-231",
+      "bound_exponent": 231,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 136,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-230",
+      "bound_exponent": 230,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 144,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-228",
+      "bound_exponent": 228,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 152,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-227",
+      "bound_exponent": 227,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 160,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-225",
+      "bound_exponent": 225,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 168,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-223",
+      "bound_exponent": 223,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 176,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-222",
+      "bound_exponent": 222,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 184,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-220",
+      "bound_exponent": 220,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 192,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-219",
+      "bound_exponent": 219,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 200,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-217",
+      "bound_exponent": 217,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 208,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-216",
+      "bound_exponent": 216,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 216,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-214",
+      "bound_exponent": 214,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 224,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-212",
+      "bound_exponent": 212,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 232,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-211",
+      "bound_exponent": 211,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 240,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-209",
+      "bound_exponent": 209,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 248,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-208",
+      "bound_exponent": 208,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 256,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-206",
+      "bound_exponent": 206,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 264,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-205",
+      "bound_exponent": 205,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 272,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-203",
+      "bound_exponent": 203,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 280,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-202",
+      "bound_exponent": 202,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 288,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-200",
+      "bound_exponent": 200,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 296,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-198",
+      "bound_exponent": 198,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 304,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-197",
+      "bound_exponent": 197,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 312,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-195",
+      "bound_exponent": 195,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 320,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-194",
+      "bound_exponent": 194,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 328,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-192",
+      "bound_exponent": 192,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 336,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-191",
+      "bound_exponent": 191,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 344,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-189",
+      "bound_exponent": 189,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 352,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-188",
+      "bound_exponent": 188,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 360,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-186",
+      "bound_exponent": 186,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 368,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-184",
+      "bound_exponent": 184,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 376,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-183",
+      "bound_exponent": 183,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 384,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-181",
+      "bound_exponent": 181,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 392,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-180",
+      "bound_exponent": 180,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 400,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-178",
+      "bound_exponent": 178,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 408,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-177",
+      "bound_exponent": 177,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 416,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-175",
+      "bound_exponent": 175,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 424,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-174",
+      "bound_exponent": 174,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 432,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-172",
+      "bound_exponent": 172,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 440,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-170",
+      "bound_exponent": 170,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 448,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-169",
+      "bound_exponent": 169,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 456,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-167",
+      "bound_exponent": 167,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 464,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-166",
+      "bound_exponent": 166,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 472,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-164",
+      "bound_exponent": 164,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 480,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-163",
+      "bound_exponent": 163,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 488,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-161",
+      "bound_exponent": 161,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 496,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-159",
+      "bound_exponent": 159,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 504,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-158",
+      "bound_exponent": 158,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 512,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-156",
+      "bound_exponent": 156,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 520,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-155",
+      "bound_exponent": 155,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 528,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-153",
+      "bound_exponent": 153,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 536,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-152",
+      "bound_exponent": 152,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 544,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-150",
+      "bound_exponent": 150,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 552,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-149",
+      "bound_exponent": 149,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 560,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-147",
+      "bound_exponent": 147,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 568,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-145",
+      "bound_exponent": 145,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 576,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-144",
+      "bound_exponent": 144,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 584,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-142",
+      "bound_exponent": 142,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 592,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-141",
+      "bound_exponent": 141,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 600,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-139",
+      "bound_exponent": 139,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 608,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-138",
+      "bound_exponent": 138,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 616,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-136",
+      "bound_exponent": 136,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 624,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-135",
+      "bound_exponent": 135,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 632,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    },
+    {
+      "bound": "2^-133",
+      "bound_exponent": 133,
+      "formula": "128*M_chi(r)*M_product(r)^(2*n)/r^4096",
+      "kind": "statistical",
+      "n": 640,
+      "proof": "Exact integer numerator/denominator comparison; includes both tails and all 64 coordinates",
+      "r": "1071/1024"
+    }
+  ],
+  "module_all_saved_certificates_verified": 60,
+  "module_equation_fixtures": [
+    {
+      "ciphertext_equations": true,
+      "fixed_fixture_message_decodes": true,
+      "n": 8,
+      "public_key_equations": true,
+      "support_bound": 442
+    },
+    {
+      "ciphertext_equations": true,
+      "fixed_fixture_message_decodes": true,
+      "n": 16,
+      "public_key_equations": true,
+      "support_bound": 778
+    },
+    {
+      "ciphertext_equations": true,
+      "fixed_fixture_message_decodes": true,
+      "n": 32,
+      "public_key_equations": true,
+      "support_bound": 1450
+    },
+    {
+      "ciphertext_equations": true,
+      "fixed_fixture_message_decodes": true,
+      "n": 64,
+      "public_key_equations": true,
+      "support_bound": 2794
+    },
+    {
+      "ciphertext_equations": true,
+      "fixed_fixture_message_decodes": true,
+      "n": 128,
+      "public_key_equations": true,
+      "support_bound": 5482
+    },
+    {
+      "ciphertext_equations": true,
+      "fixed_fixture_message_decodes": true,
+      "n": 256,
+      "public_key_equations": true,
+      "support_bound": 10858
+    }
+  ],
+  "module_registered_certificates": [
+    {
+      "argument": "deterministic-support",
+      "du": 10,
+      "dv": 4,
+      "eta1": 3,
+      "eta2": 2,
+      "failure_bound": "0",
+      "meets_target": true,
+      "mode": "conservative-compression",
+      "n": 8,
+      "q": 3329,
+      "rank": 2,
+      "support_bound": 442,
+      "target_bits": 128
+    },
+    {
+      "argument": "deterministic-support",
+      "du": 10,
+      "dv": 4,
+      "eta1": 3,
+      "eta2": 2,
+      "failure_bound": "0",
+      "meets_target": true,
+      "mode": "conservative-compression",
+      "n": 16,
+      "q": 3329,
+      "rank": 2,
+      "support_bound": 778,
+      "target_bits": 128
+    },
+    {
+      "approximate_chernoff_bits": 367.936412683,
+      "argument": "exact-rational-chernoff-union-bound",
+      "certified_dyadic_bits": 367,
+      "du": 10,
+      "dv": 4,
+      "eta1": 3,
+      "eta2": 2,
+      "failure_bound": "2^-367",
+      "meets_target": true,
+      "mode": "conservative-compression",
+      "n": 32,
+      "q": 3329,
+      "rank": 2,
+      "rational_bound_sha256": "59aee9aa2717e086be3bd2f233083370109161945bb38f1acf32aae6ac98532e",
+      "support_bound": 1450,
+      "target_bits": 128,
+      "threshold_after_v_compression": 728,
+      "witness": {
+        "denominator": 1000000,
+        "numerator": 1953861
+      }
+    },
+    {
+      "approximate_chernoff_bits": 193.401610204,
+      "argument": "exact-rational-chernoff-union-bound",
+      "certified_dyadic_bits": 193,
+      "du": 10,
+      "dv": 4,
+      "eta1": 3,
+      "eta2": 2,
+      "failure_bound": "2^-193",
+      "meets_target": true,
+      "mode": "conservative-compression",
+      "n": 64,
+      "q": 3329,
+      "rank": 2,
+      "rational_bound_sha256": "38aa97ceb4f55018cf6f555ddf456c5eabe8d870c5254d16f92fb03ef1e1de00",
+      "support_bound": 2794,
+      "target_bits": 128,
+      "threshold_after_v_compression": 728,
+      "witness": {
+        "denominator": 1000000,
+        "numerator": 1444871
+      }
+    },
+    {
+      "approximate_chernoff_bits": 236.062499352,
+      "argument": "exact-rational-chernoff-union-bound",
+      "certified_dyadic_bits": 236,
+      "du": 10,
+      "dv": 4,
+      "eta1": 3,
+      "eta2": 2,
+      "failure_bound": "2^-236",
+      "meets_target": true,
+      "mode": "independent-uniform-u-compression",
+      "n": 128,
+      "q": 3329,
+      "rank": 2,
+      "rational_bound_sha256": "01e77a3a8256d42d9098a726aa780621a5925d752f129d73d66d3fde27fe3437",
+      "support_bound": 5482,
+      "target_bits": 128,
+      "threshold_after_v_compression": 728,
+      "witness": {
+        "denominator": 500000,
+        "numerator": 752321
+      }
+    },
+    {
+      "approximate_chernoff_bits": 128.041429812,
+      "argument": "exact-rational-chernoff-union-bound",
+      "certified_dyadic_bits": 128,
+      "du": 10,
+      "dv": 4,
+      "eta1": 3,
+      "eta2": 2,
+      "failure_bound": "2^-128",
+      "meets_target": true,
+      "mode": "independent-uniform-u-compression",
+      "n": 256,
+      "q": 3329,
+      "rank": 2,
+      "rational_bound_sha256": "a73397f3b27873ad70119003b4d2df0821d91299e5af24bc417ce8085206555c",
+      "support_bound": 10858,
+      "target_bits": 128,
+      "threshold_after_v_compression": 728,
+      "witness": {
+        "denominator": 500000,
+        "numerator": 640523
+      }
+    }
+  ],
+  "scope": "Exact certificate arithmetic and selected implementation-equation checks. No verification of seeded hardness, random-oracle transfer, noise-model transfer, or all-input code correctness.",
+  "source_sha256": {
+    "crucible/lattice_frodo_v3.py": "9b89ce0ee1ee971f3f4455ed26477ebe8d878c667c88416af6bb14acd745f697",
+    "crucible/lattice_module_v4.py": "b3bd1e34b22a93e1e049868dfcd29b7e4f134793b411b1619029c8ad0dca452c",
+    "crucible/module_compressed_v4_core.py": "5dbada3df32060952556c48bd5d1ec6a7ab8862f18de5a7513d2590dcc42d982",
+    "scripts/check_scheme_lattice_arguments.py": "3933000cfeec9e2d499ed6c4ff49c7b9606ec2429843a7a09452141c6a6e6962",
+    "scripts/lattice_calibrate_frodo.py": "7f064aea3a23bb0b1833eab5e4ef8f09a4a7528f7ec7a7474927a3d1e905ddad",
+    "scripts/mlkem_correctness_certificate.py": "97cf0a4a18337d328ec70d5da83ced73258b60d9cc26a98f741c69fa2266d77c"
+  }
+}
