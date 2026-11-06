@@ -1374,7 +1374,8 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   app.q('files').click();byText(app.q('dialog-body'),'Copy prompt').click();await flush();
   assert.match(copied[0],/^Before working, read the Crucible agent contract at http:\/\/127\.0\.0\.1:8000\/api\/agent\/pipeline/);
   assert.match(copied[0],/Do not request passwords or tokens/);
-  assert.match(copied[0],/New notes and revisions start private.*Publication requires reviewer approval of an exact saved revision/);
+  assert.match(copied[0],/New notes and revisions start private.*Publication requires a request for an exact saved revision under the current publication policy/);
+  assert.match(copied[0],/Automatic screening can publish a passing revision; scientific proposals still need separate review/);
   assert.doesNotMatch(app.q('dialog-body').textContent,/Imported work stays private|Import adds private notes or revisions/);
   assert.equal(app.requests.some(r=>r.url==='/api/agent/pipeline'||r.body),false);
   const blobs=[];app.sandbox.URL=class extends URL{static createObjectURL(blob){blobs.push(blob);return'blob:fixture';}static revokeObjectURL(){}};
