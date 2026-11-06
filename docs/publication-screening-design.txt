@@ -73,16 +73,43 @@ rewriting history. The human path can approve a pending request or ask for chang
 REQUEST, CONSENT AND VISIBILITY
 
 Saving, importing, reading, searching, reloading and browsing never call a model.
-Only an explicit publication request can enqueue work. Publish all submits exact
+Ordinary screening begins with an explicit publication request. Publish all submits exact
 eligible revisions under the same consent, ownership, quota and rate limits; it
 does not scan the whole notebook. Existing publication requests are not backfilled
 by the migration, by changing settings, or by starting the worker.
+
+An explicitly authorized platform review-process change can adopt older pending
+requests into the lightweight automated filter. Those authors already asked for
+publication review; this changes how their original request is processed, rather
+than creating a new request or asking them to publish again. The trusted host
+operator uses publication_screening_adoption to preview at most 25 exact original
+requests, then apply that reviewed plan. There is no participant or reviewer HTTP
+endpoint for bulk adoption and no automatic scan during normal service startup.
+
+Each adoption writes a publication_screening_adopted AccessEvent atomically with
+its ScreeningJob. AccessEvent here records a publication-access process change,
+not a membership grant. It distinguishes the configured active operator from the
+affected author and records authority_basis=platform_policy_migration,
+publication_basis=original_publication_request and
+fresh_author_consent_recorded=false. The exact original request ID, timestamp,
+revision/hash, policy/job, plan hash and authorization reference remain auditable;
+no note body, title or model result is copied into that event. A screening job
+alone must therefore not be described as proof of fresh author notice consent.
+
+The operation preserves original request and note records. Any existing screening
+job under any policy is excluded, so retries cannot reset attempts or costs or
+upgrade an earlier shadow policy. Reviewed, cancelled, withdrawn, deleted or
+inactive-author requests are excluded and rechecked under the existing mutation
+lock order. A later private revision remains private: only the older explicitly
+submitted revision may enter screening. Jobs and audit events commit together;
+adoption makes no provider call, reserves no budget, and does not enable dispatch.
 
 GET /api/notebook/publication-policy returns the current mode and, when enabled,
 the processor notice, model and exact policy_id. The author must submit
 screening_consent=true and that screening_policy_id when making a new request in
 shadow or automatic mode. The notice discloses external processing and whether a
 pass can publish. Disabled mode retains the existing human-review request path.
+That ordinary new-request notice is unchanged by the bounded platform migration.
 
 An earlier submitted revision may finish while its author works on a newer private
 draft. The worker uses the submitted ID and canonical content hash, never the
