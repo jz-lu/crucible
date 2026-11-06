@@ -534,7 +534,9 @@
       "test_publication_screening_findings.py",
       "test_publication_screening_queue.py",
       "test_publication_screening_database.py",
-      "test_publication_screening_supervisor.py",
+      "test_publication_screening_supervisor.py"
+    ],
+    "publication-cancellation": [
       "test_notebook_publication_cancellation.py"
     ],
     "records": [

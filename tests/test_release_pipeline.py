@@ -501,7 +501,8 @@ def test_promotion_preserves_exact_manifest_and_immutable_receipts(promotion):
 
 
 @pytest.mark.parametrize('invalid', ['verify-only', 'failed-test', 'incomplete-tests', 'wrong-run',
-                                    'receipt-drift', 'foreign-registry', 'bad-digest', 'config-drift'])
+                                    'receipt-drift', 'foreign-registry', 'bad-digest', 'config-drift',
+                                    'missing-cancellation', 'failed-cancellation'])
 def test_unverified_or_mismatched_release_never_starts_promotion(promotion, invalid):
     root = promotion['root']
     published = promotion['published']
@@ -510,6 +511,15 @@ def test_unverified_or_mismatched_release_never_starts_promotion(promotion, inva
         (root / 'published.json').unlink()
     elif invalid in {'failed-test', 'incomplete-tests'}:
         checked['native_checks']['runtime'] = 'failed' if invalid == 'failed-test' else 'skipped'
+        published['native_checks'] = checked['native_checks']
+        release.write_json(root / 'verified.json', checked)
+    elif invalid in {'missing-cancellation', 'failed-cancellation'}:
+        # A separately isolated native batch remains mandatory evidence. A
+        # successful screening receipt must not silently stand in for it.
+        if invalid == 'missing-cancellation':
+            del checked['native_checks']['publication-cancellation']
+        else:
+            checked['native_checks']['publication-cancellation'] = 'failed'
         published['native_checks'] = checked['native_checks']
         release.write_json(root / 'verified.json', checked)
     elif invalid == 'wrong-run': published['registry_tag'] = 'git-' + promotion['revision'] + '-122-1'
