@@ -144,6 +144,35 @@ def test_synthetic_cases_all_fit_and_roundtrip_without_expected_labels():
     assert len(cases) >= 49
 
 
+def test_v3_boundary_cases_use_the_real_blind_export_and_result_contract():
+    from pathlib import Path
+    import crucible
+    from scripts.publication_screening_eval import cases_from, prepare_cases
+    root = Path(crucible.__file__).resolve().parents[1]
+    cases = cases_from(json.loads((root / 'docs/publication-screening-v3-cases.json').read_text()))
+    exported = prepare_cases(cases, model='synthetic', reasoning_effort='none')
+    assert {case['expected']['outcome'] for case in cases} == {'no_concern_found', 'human_review_needed'}
+    for case, record in zip(cases, exported['cases']):
+        prepared = prepare_input(case['input'])
+        assert reconstruct(prepared) == case['input']
+        assert 'request' in record and record['input_sha256'] == prepared.input_sha256
+        assert record['request']['input'][0]['content'][0]['text'] == prepared.input_json
+        assert case['id'] not in json.dumps(record) and case['rationale'] not in json.dumps(record)
+        assert set(case['expected']['categories']) <= set(CATEGORIES)
+
+
+def test_hostile_language_has_a_bounded_concern_with_real_field_evidence():
+    prepared = prepare_input({'body': 'Synthetic hostile passage.\nA technical observation.'})
+    verdict = concern(prepared)
+    verdict['concerns'][0].update(category='gratuitous_hostility', line_end=1,
+        explanation='The first line is a degrading attack.',
+        next_step='Remove the insult while retaining the technical observation.')
+    assert validate_verdict(verdict, prepared) == verdict
+    verdict['concerns'][0]['category'] = 'low_quality_research'
+    with pytest.raises(ScreeningValidationError):
+        validate_verdict(verdict, prepared)
+
+
 def evaluation_cases():
     return [
         {'id': 'DO_NOT_SEND_BENIGN_LABEL', 'input': {'body': 'ordinary crypto'},

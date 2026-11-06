@@ -114,8 +114,20 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.match(panel.textContent,/<img src=x onerror=alert\(1\)> PRIVATE_MODEL_FINDING/);
   assert.match(panel.textContent,/Screening limitation.*Additional metadata/);
   assert.equal(panel.querySelectorAll('a,img,script,button').length,0);
-  assert.match(app.q('full').textContent,/Review concrete abuse, unwanted disclosure of private information and harmful misuse/);
+  assert.match(app.q('full').textContent,/Review concrete abuse, unwanted disclosure of private information, harmful misuse, obvious spam and gratuitously hostile language/);
+  assert.match(app.q('full').textContent,/Terse questions.*blunt technical criticism.*not a research-quality check/);
   assert.doesNotMatch(app.q('full').textContent,/suitability for research discussion/);
+  assert.equal(app.root.querySelector('[name="reason"]').value,'');assert.equal(app.requests.some(row=>row.body),false);
+ });
+ await test('hostile-language findings remain scoped to private reviewer evidence',async()=>{
+  const findings=screeningDetail();findings.reviewer.concerns[0].category='gratuitous_hostility';
+  const stored=note({...revision(1,'Language review','submitted'),can_edit:false,can_review:true,can_moderate:true,
+   owner:{id:2,handle:'bob'},publication:{requested_at:99,screening:findings}});
+  const app=await boot({reviewOnly:true,initialParams:new URLSearchParams('section=publication&note=note-one'),
+   respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});
+  const panel=app.q('full').querySelector('.nb-screening');
+  assert.match(panel.textContent,/Possible hostile language.*Body.*f00003.*lines 1–2/);
+  assert.ok(!panel.open);assert.equal(panel.querySelectorAll('a,img,script,button').length,0);
   assert.equal(app.root.querySelector('[name="reason"]').value,'');assert.equal(app.requests.some(row=>row.body),false);
  });
  for(const audience of ['author','other member','reviewer normal reader']) await test(audience+' reader does not render private screening findings',async()=>{
@@ -156,6 +168,52 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   complete=true;await app.advanceTimers(4000);assert.equal(statusReads,2);assert.match(app.q('list').textContent,/Published/);
   assert.equal(app.requests.some(row=>row.url.startsWith('/api/notebook/notes/')),false,'List refresh never loads bodies');
   await app.advanceTimers(30000);assert.equal(statusReads,2,'Completed work stops polling');
+ });
+ await test('returning to an unchanged pending list resumes its existing bounded watch without repainting',async()=>{
+  const id='30000000-0000-4000-8000-000000000051';let complete=false,statusReads=0;
+  const stored=()=>note({...revision(1,'Still processing',complete?'approved':'submitted'),publication:{id,requested_at:99}});
+  const app=await boot({respond:url=>{
+   if(url.startsWith('/api/notebook/publication-status?')){statusReads++;return{publications:[{id,note_id:'note-one',revision:1,content_sha256:'hash-1',status:complete?'approved':'submitted',screening_status:complete?'published':'running'}]};}
+   if(url.startsWith('/api/notebook/notes?'))return{notes:[stored()],next_after:null,capabilities:{publication_policy:screeningPolicy('automatic')}};
+  }});
+  await app.advanceTimers(2000);assert.equal(statusReads,1);
+  const row=app.q('list').firstChild;app.controller.hide();await app.show();
+  assert.equal(app.q('list').firstChild,row,'An unchanged return keeps the existing DOM');
+  await app.advanceTimers(2000);assert.equal(statusReads,1,'Returning does not reset the current backoff');
+  complete=true;await app.advanceTimers(4000);assert.equal(statusReads,2);
+  assert.match(app.q('list').textContent,/Published/);
+  await app.advanceTimers(30000);assert.equal(statusReads,2);
+ });
+ for(const reader of [false,true]) await test('a previously manual request starts polling after adoption on '+(reader?'reader':'list')+' return',async()=>{
+  const id='30000000-0000-4000-8000-000000000052';let stage='manual',statusReads=0;
+  const stored=()=>note({...revision(1,'Former manual request',stage==='published'?'approved':'submitted'),
+   publication_policy:screeningPolicy('automatic'),publication:{id,requested_at:99,...(stage==='manual'?{}:{screening:{
+    revision:1,content_sha256:'hash-1',status:stage,message:'Awaiting automated screening.'}})}});
+  const app=await boot({initialParams:reader?new URLSearchParams('note=note-one'):new URLSearchParams(),respond:url=>{
+   if(url.startsWith('/api/notebook/publication-status?')){statusReads++;return{publications:[{id,note_id:'note-one',revision:1,content_sha256:'hash-1',status:stage==='published'?'approved':'submitted',screening_status:stage==='manual'?null:stage}]};}
+   if(url.startsWith('/api/notebook/notes?')){const value=stored();delete value.revisions[0].publication.screening;
+    return{notes:[value],next_after:null,capabilities:{publication_policy:screeningPolicy('automatic')}};}
+   if(url.startsWith('/api/notebook/notes/note-one'))return{note:stored()};
+  }});
+  await app.advanceTimers(2000);assert.equal(statusReads,1);
+  await app.advanceTimers(30000);assert.equal(statusReads,1,'A manual request does not poll continuously');
+  stage='queued';app.controller.hide();await app.show(reader?'note-one':undefined);
+  await app.advanceTimers(2000);assert.equal(statusReads,2,'Only one bounded status check starts on return');
+  stage='published';await app.advanceTimers(4000);assert.equal(statusReads,3);
+  assert.match(app.q(reader?'full':'list').textContent,/Published/);
+  await app.advanceTimers(30000);assert.equal(statusReads,3);
+ });
+ await test('an unchanged human-review result does not restart polling on a fresh reader return',async()=>{
+  const id='30000000-0000-4000-8000-000000000053';let statusReads=0;
+  const stored=note({...revision(1,'Needs human review','submitted'),publication_policy:screeningPolicy('automatic'),
+   publication:{id,requested_at:99,screening:{revision:1,content_sha256:'hash-1',status:'human_review',message:'Awaiting human publication review.'}}});
+  const app=await boot({initialParams:new URLSearchParams('note=note-one'),respond:url=>{
+   if(url.startsWith('/api/notebook/publication-status?')){statusReads++;return{publications:[{id,note_id:'note-one',revision:1,content_sha256:'hash-1',status:'submitted',screening_status:'human_review'}]};}
+   if(url.startsWith('/api/notebook/notes/note-one'))return{note:stored};
+  }});
+  await app.advanceTimers(2000);assert.equal(statusReads,1);
+  app.controller.hide();await app.show('note-one');await app.advanceTimers(30000);
+  assert.equal(statusReads,1);assert.match(app.q('full').textContent,/Awaiting human publication review/);
  });
  for(const stop of ['hide','account','hidden','expired','human-review']) await test('screening status refresh stops for '+stop,async()=>{
   const id='30000000-0000-4000-8000-000000000002';let statusReads=0;

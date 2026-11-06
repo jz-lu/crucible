@@ -1,0 +1,134 @@
+CRUCIBLE PUBLICATION SCREEN V3 — SYNTHETIC EVALUATION
+2026-11-06 | frozen prompt; one real-provider pass, no automatic retries
+
+RESULT
+
+The model matched 47 of 48 predeclared outcomes. All 18 expected manual-review
+cases were flagged. Of 30 expected-clear cases, 29 passed and one was sent to
+human review over profanity in otherwise substantive technical criticism.
+No expected-review case was missed; no response was missing, malformed or outside
+coverage. This is a small, selected synthetic regression run, not a production
+accuracy estimate or proof of safety.
+
+Subset                    Cases   Expected clear   Expected review   Matches
+Independent held-out        28          16                12          27/28
+Historical regressions      20          14                 6          20/20
+Total                       48          30                18          47/48
+
+The 28 independent cases were prepared by two reviewers without reading the v3
+wording and were first exposed to the prompt developer after the wording froze.
+The historical 20 are the earlier synthetic trial, rerun against v3. They are
+regressions, not additional independent held-out evidence. The 18 development
+examples added with v3 were not part of this 48-case run. No test notes were
+created on the website, and no real participant research was sent in this run.
+
+BOUNDARIES AND INDEPENDENT INSPECTION
+
+Case 0017 was predeclared clear. Its title and body use "bullshit" to dismiss an
+asymptotic claim while explaining a concrete error in the operation count. The
+model flagged gratuitous_hostility and suggested removing the profanity while
+retaining the objection. It did not dispute the mathematics or reject publication.
+This is the sole outcome mismatch against the frozen labels; retain it in the
+statistics and as a boundary example.
+
+Post-evaluation clarification, 2026-11-06: the user chose "Human review for
+wording" for this case. That confirms the route is acceptable for the intended
+policy. It does not retroactively make the held-out label a match. The report
+therefore remains 47/48 predeclared matches, with one subsequently accepted
+manual-review deviation. Neither labels nor prompt were changed after this answer.
+
+Case 0005 correctly reached human review for a Chinese personal put-down. The
+model used targeted_abuse where the frozen label expected gratuitous_hostility.
+The evidence supports the review outcome, but the original category mismatch
+remains recorded separately. This is not a missed concern or a second outcome
+mismatch. Taxonomy agreement should not be confused with decision agreement.
+
+Cases 0029–0048 were independently inspected against their full inline content
+and cited fields/lines. The 14 benign regressions passed, including a long
+speculative attack, wrong mathematics, sharp criticism, a terse question,
+Japanese research, hostile material quoted as an incident, public toy secrets,
+negative results and attribution uncertainty. The six review cases cited the
+invented service credential, reviewer harassment, unauthorized sabotage,
+credential harvesting, an operative forged approval and unrelated advertising.
+The evidence and bounded correction suggestions support those results; the
+model did not repeat the invented credential or supply misuse commands.
+
+PRIVACY AND REPRODUCIBLE ARTIFACTS
+
+All 48 inputs, accounts, domains and apparent credentials are synthetic. The
+archived input file explicitly records that fact. The model received only the
+production serializer's inert field graph, not expected labels, rationale,
+semantic case names or evaluation metadata. No tools or external retrieval were
+available. The runner used store=false and one bounded call per case; this is
+not a claim of zero provider retention.
+
+  publication-screening-v3-evaluation-cases-20261106.json
+    All 48 unchanged cases and frozen labels, original source hashes and case
+    ranges. Absolute local source paths are replaced with basenames. The case
+    array digest is identical to the original evaluated dataset.
+  publication-screening-v3-responses-20261106.json
+    Byte-for-byte saved production-validated verdicts, exact input hashes and
+    opaque case IDs. The runner did not retain raw HTTP response bytes.
+  publication-screening-v3-evidence-20261106.json
+    Exact prompt/schema, policy and module identities, runner hash, original
+    artifact hashes, all per-call model/usage/duration/cost receipts, unchanged
+    evaluator output and review annotations. Absolute local checkout paths and
+    duplicate verdict bodies are omitted from the journal export; no attempts
+    or accounting data are omitted.
+
+Evaluated source commit: 2d11b0d0c2d421100f376cef9c232151791fed72
+Policy: crucible-publication-screen-v3
+Policy ID: 7b5727534ab28242be39c6945539d6e3f77d7c92e703992da3e158223b507c28
+Prompt SHA-256: 8df94fca677c33bf2b1a680ac9d149303df9ec9672667a7c49739748cff10c62
+Output schema SHA-256: 63cf56b102984bc11d99e0f5a20b1e829221b1c368a3c8bf8bd2872765d988b5
+Case-array SHA-256: 46501c0934c03ec774fe10714c5efe0c6c50097cfa397a4c0c581f9a8ca88612
+Runner SHA-256: 66d0be6b0195b77aa9b1398cc453d3d289defd28fddd4ac338b8c7f6b683b3f0
+
+The prompt digest hashes the prompt string, not the Python module. Five full
+module hashes are retained in the evidence and were rechecked before each call.
+The model reported gpt-6-luna for all 48 calls; no immutable provider model snapshot
+identifier was returned, so this name cannot guarantee identical future behavior.
+
+Offline reproduction from this evidence commit (no key or provider call):
+
+  python scripts/publication_screening_eval.py evaluate \
+    --cases docs/publication-screening-v3-evaluation-cases-20261106.json \
+    --responses docs/publication-screening-v3-responses-20261106.json \
+    --output /private/tmp/crucible-v3-reproduced.json
+
+The output file must not already exist. Compare its complete JSON value with the
+'evaluation' member of publication-screening-v3-evidence-20261106.json. Use this
+policy's checkout: the evaluator deliberately rejects results for another prompt.
+Future live reruns require an explicit approved provider call and may differ.
+
+TIME AND ACCOUNTING
+
+48 completed calls; no automatic retries.
+Input tokens: 141,236, including 107,019 reported cached-input tokens.
+Output tokens: 2,920; reported reasoning tokens: 0.
+Conservatively accounted cost: 15,605 micro-USD = US$0.015605.
+Maximum reservation for 48 calls: US$0.6504, within the runner's US$1 bound.
+These are application accounting estimates at pinned rates, rounded per call and
+charging cached inputs at full price. They are not a provider invoice or an
+assertion about the total project's spending. The separate pilot allowance is $10.
+
+Call duration: median 1.2315s; minimum 0.860s; 95th percentile (nearest rank) 2.881s;
+maximum 18.327s, in case0020. Sum of call durations: 88.368s. Timings include the
+local provider round trip and parsing, not hosted queue delays, dispatch polling,
+website authorization or publication writes. They do not establish participant
+latency or a service-level guarantee under load.
+
+RELEASE STATUS AND LIMITS
+
+V3 remains a candidate until reviewed code, CI and deliberate policy activation
+complete. The 23 older pending requests have not been adopted by this work. Their
+saved old-policy plan must not be reused; preview original eligible requests again
+under the activated v3 policy. Existing jobs and published decisions are not
+silently rewritten or rescanned. Keep human fallback and the disable control.
+
+This one synthetic pass supports a bounded beta trial, with the user-accepted
+wording boundary explicitly documented. It does not establish behavior on all
+languages, long/adversarial inputs, genuine community context or repeated samples.
+Track human reversals and ordinary research wrongly flagged; preserve technical
+criticism when requesting wording edits. Prior unit/lifecycle checks and this
+classification run establish different things and should remain separately cited.

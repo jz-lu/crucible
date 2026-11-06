@@ -119,6 +119,34 @@ def test_shadow_consent_cannot_be_promoted_by_later_automatic_configuration(scre
     assert counts(screened, (AutomaticPublication,)) == {'notebook_automatic_publications': 0}
 
 
+def test_v3_does_not_retarget_a_v2_publication_request(screened, monkeypatch):
+    current = worker.policy_for(screened.app.state.settings)
+    prior_configuration = {**current.model_configuration,
+        'output_schema_sha256': 'c3d4235ada5acb9978c429027927e084bcfec2d3933be22608b0aa11ae3f23b6'}
+    prior = replace(current, policy_version='crucible-publication-screen-v2',
+        prompt_sha256='ab624be768ba898299dad9f7fd7d47b02625efc06983dea5c55eef141a0a1126',
+        model_configuration=prior_configuration)
+    assert current.policy_version == 'crucible-publication-screen-v3' and prior.id != current.id
+    saved = create(screened.owner)
+    with monkeypatch.context() as patch:
+        # Submit normally under the exact historical policy; never rewrite a
+        # current job into a legacy fixture or send a note through an old model.
+        patch.setattr(worker, 'policy_for', lambda settings: prior)
+        assert request(screened.owner, saved).status_code == 200
+    before = publication(screened, saved)
+    configure(screened)
+    provider = SyntheticProvider()
+    run(screened, provider)
+    assert provider.inputs == [] and publication(screened, saved) == before
+    with screened.app.state.db.transaction() as session:
+        job = session.scalar(select(ScreeningJob))
+        assert job.policy_id == prior.id and job.policy == prior.configuration
+        assert job.content_sha256 == saved['content_sha256'] and job.attempt_count == 0
+        assert job.status == 'human_review' and job.error_code == 'policy_changed'
+    assert counts(screened, (ScreeningAttempt, AutomaticPublication)) == {
+        'publication_screening_attempts': 0, 'notebook_automatic_publications': 0}
+
+
 def test_inflight_shadow_pass_cannot_publish_after_operator_switch(screened):
     shadow, saved = shadow_request(screened)
     jobs.configure(screened.app.state.db, policy=worker.policy_for(shadow), mode='shadow',

@@ -37,7 +37,8 @@ def public_policy(settings):
     return {"mode": mode, "screening_required": True,
             "policy_id": policy_for(settings).id, "processor": "OpenAI",
             "model": settings.publication_screening_model,
-            "notice": "This exact revision will be sent to OpenAI for a publication-safety check. "
+            "notice": "This exact revision will be sent to OpenAI to check for abuse, privacy exposure, "
+                      "harmful misuse, spam and gratuitously hostile language. "
                       "Private drafts are not sent. API data is not used for training by default; "
                       "standard monitoring retention can be up to 30 days, with exceptions.",
             "privacy_url": "https://developers.openai.com/api/docs/guides/your-data",
@@ -83,9 +84,10 @@ _FIELD_LABELS = {"title": "Title", "claim": "Summary", "conditions": "Conditions
 _CATEGORY_LABELS = {
     "privacy_or_credentials": "Privacy or credentials",
     "targeted_abuse": "Targeted abuse",
+    "gratuitous_hostility": "Hostile language",
     "unauthorized_harm": "Unauthorized harm",
     "deceptive_content": "Deceptive content",
-    "spam": "Spam",
+    "spam": "Spam or off-topic content",
     "other_concrete_harm": "Other concrete harm",
 }
 

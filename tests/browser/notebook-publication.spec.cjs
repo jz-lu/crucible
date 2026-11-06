@@ -94,7 +94,7 @@ for (const [width, actor, mode] of [[1440, 'alice', 'automatic'], [390, 'bob', '
       idempotency_key:crypto.randomUUID(), content:{title:'Synthetic screening consent fixture',
         claim:'Browser confirmation only.', conditions:'Disposable local data.', body:'No model call occurs.', tags:['fixture']}})).note);
     const policy = {mode, screening_required:true, policy_id:'a'.repeat(64), processor:'OpenAI', model:'gpt-6-luna',
-      notice:'This exact revision will be sent to OpenAI for a publication-safety check. Private drafts are not sent. API data is not used for training by default; standard monitoring retention can be up to 30 days, with exceptions.',
+      notice:'This exact revision will be sent to OpenAI to check for abuse, privacy exposure, harmful misuse, spam and gratuitously hostile language. Private drafts are not sent. API data is not used for training by default; standard monitoring retention can be up to 30 days, with exceptions.',
       privacy_url:'https://developers.openai.com/api/docs/guides/your-data'};
     // The server remains disabled and never runs a provider. Overlay only the
     // synthetic notice to exercise the real browser form; backend worker tests

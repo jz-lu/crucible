@@ -121,7 +121,7 @@ async function test(name, run) {
     const app=await boot(url=>url.startsWith('/api/notebook/review-queue?')?result:undefined,{initial:false});
     await app.show({section:'flagged'});
     assert.match(app.q('list').textContent,/Flagged <img src=x onerror=alert\(1\)>/);
-    assert.equal(app.q('list').querySelector('.nb-screening-summary').textContent,'Possible spam (2) · Screening limitation');
+    assert.equal(app.q('list').querySelector('.nb-screening-summary').textContent,'Possible spam or off-topic content (2) · Screening limitation');
     assert.doesNotMatch(app.q('list').textContent,/PRIVATE_REASON|PRIVATE_LABEL|PRIVATE_UNKNOWN|PRIVATE_MODEL_TEXT/);
     assert.equal(app.q('list').querySelectorAll('img,script').length,0);assert.equal(app.root.querySelector('.nb-publication-review'),null);
     assert.equal(app.requests.some(row=>row.body||row.url.startsWith('/api/notebook/notes/')),false);
@@ -145,7 +145,7 @@ async function test(name, run) {
     });
     const app=await boot(url=>url.startsWith('/api/notebook/review-queue?')?result:undefined);
     const summaries=app.q('list').querySelectorAll('.nb-screening-summary').map(node=>node.textContent);
-    assert.deepEqual(summaries,['Possible spam','Screening unavailable · Manual review needed','Manual review needed']);
+    assert.deepEqual(summaries,['Possible spam or off-topic content','Screening unavailable · Manual review needed','Manual review needed']);
     assert.doesNotMatch(app.q('list').textContent,/UNTRUSTED_LABEL|UNTRUSTED_REASON/);
     await app.show({section:'flagged',research:'1',research_request:'old-research'});
     assert.equal(app.requests.some(row=>row.url.includes('/research-requests')),false);
