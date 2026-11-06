@@ -6,9 +6,9 @@ import hmac
 import json
 import secrets
 import time
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy import and_, delete, func, or_, select
@@ -1026,15 +1026,29 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             })
 
     @app.get("/api/me/submissions")
-    def history(request: Request):
+    def history(request: Request, limit: int = Query(default=50, ge=1, le=100),
+                after: UUID | None = None):
         with db.transaction() as session:
             user = user_for(request, session)
-            records = session.execute(select(Submission, Method.name, Challenge.scheme_id, Challenge.manifest).join(Method, Submission.method_id == Method.id)
-                      .join(Challenge, Submission.challenge_id == Challenge.id)
-                      .where(Submission.user_id == user.id).order_by(Submission.received_at.desc()).limit(50)).all()
+            query = (select(Submission, Method.name, Challenge.scheme_id, Challenge.manifest)
+                .join(Method, Submission.method_id == Method.id)
+                .join(Challenge, Submission.challenge_id == Challenge.id)
+                .where(Submission.user_id == user.id))
+            if after is not None:
+                anchor = session.execute(select(Submission.received_at, Submission.id).where(
+                    Submission.id == str(after), Submission.user_id == user.id)).first()
+                if anchor is None:
+                    raise HTTPException(422, "Invalid submissions cursor. Refresh your submissions and try again.")
+                query = query.where(or_(Submission.received_at < anchor.received_at,
+                    and_(Submission.received_at == anchor.received_at, Submission.id < anchor.id)))
+            records = session.execute(query.order_by(Submission.received_at.desc(), Submission.id.desc())
+                .limit(limit + 1)).all()
+            page = records[:limit]
             return {"submissions": [{**submission_data(record), **standard_schemes.profile_presentation(manifest), "profile_id": record.profile_id,
-                    "scheme_id": scheme_id, "scheme_version": record.scheme_version, "round_id": record.round_id, "method_name": name}
-                    for record, name, scheme_id, manifest in records]}
+                    "scheme_id": scheme_id, "scheme_name": people._release_name(scheme_id, record.scheme_version),
+                    "scheme_version": record.scheme_version, "round_id": record.round_id, "method_name": name}
+                    for record, name, scheme_id, manifest in page],
+                    "next_after": page[-1][0].id if len(records) > limit else None}
 
     @app.get("/health")
     def health():

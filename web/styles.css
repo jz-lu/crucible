@@ -240,7 +240,8 @@ html[data-pending-page=neutral] .pending-page-preview[data-pending-layout=neutra
 html[data-pending-page=catalogue] .pending-page-preview[data-pending-layout=catalogue],
 html[data-pending-page=people] .pending-page-preview[data-pending-layout=people],
 html[data-pending-page=profile] .pending-page-preview[data-pending-layout=profile],
-html:is([data-pending-page=list],[data-pending-page=activity]) .pending-page-preview[data-pending-layout=list],
+html[data-pending-page=list] .pending-page-preview[data-pending-layout=list],
+html[data-pending-page=activity] .pending-page-preview[data-pending-layout=activity],
 html[data-pending-page=chart] .pending-page-preview[data-pending-layout=chart],
 html[data-pending-page=timeline] .pending-page-preview[data-pending-layout=timeline] { display: block; }
 html[data-pending-page=gate] .pending-page-preview[data-pending-layout=gate] { display: block; }
@@ -2572,22 +2573,48 @@ dialog h2 {
 .history-preview .history-item-meta .catalogue-placeholder { height: 11px; width: 42%; }
 .history-preview .history-item-meta:last-child .catalogue-placeholder { width: 32%; }
 .history-preview .history-item:hover { background: transparent; }
-.activity-section { margin-top: 36px; }
-.activity-section-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px 24px; }
-.activity-section-heading h2 { font:700 24px/1.25 var(--display); color:var(--ink); }
-.activity-description { margin-top:8px; color:var(--muted); font-size:13px; line-height:1.6; }
-.activity-list { margin-top:16px; min-height:80px; }
-.activity-list .empty-state { padding:24px 0; text-align:left; }
-.activity-list .history-item { padding:20px 0; align-items:center; flex-wrap:wrap; outline-offset:4px; text-decoration:none; }
-.activity-list .history-item-copy { flex:1 1 220px; }
-.activity-list .history-item-title { font:600 19px/1.4 var(--display); color:var(--ink); }
-.activity-item-heading { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; }
+/* Activity starts with its actual public layout; these inert controls reveal
+   no account data and remain subordinate to the normal session gate. */
+html[data-pending-page=activity] .access-workspace[aria-busy=true] .access-heading-space { visibility:visible; }
+#activity-frame .activity-tabs button:disabled { opacity:1; }
+#activity-frame .activity-section-heading span { text-decoration:underline; }
+.activity-tabs { display:flex; gap:25px; margin-top:24px; border-bottom:1px solid var(--line); }
+.activity-tabs button { padding:9px 0 12px; border-bottom:2px solid transparent; font:500 15px/1.4 var(--sans); color:var(--muted); }
+.activity-tabs button[aria-pressed="true"] { border-bottom-color:var(--primary); color:var(--ink); }
+.activity-section { margin-top:18px; }
+.activity-section-heading { display:flex; justify-content:flex-end; min-height:25px; }
+.activity-section-heading :is(a,span) { font-size:12px; }
+.activity-list { margin-top:8px; border-top:1px solid var(--line); }
+.activity-list .empty-state { padding:24px 3px; text-align:left; }
+.activity-item { border-bottom:1px solid var(--line); }
+.activity-row-heading { display:flex; align-items:center; gap:16px; padding:0 3px; }
+.activity-toggle { display:flex; flex:1; min-width:0; align-items:center; gap:16px; padding:15px 0; background:transparent; text-align:left; color:var(--ink); }
+.activity-toggle:hover { color:var(--primary); }
+.activity-toggle:focus-visible,.activity-detail:focus-visible { outline:2px solid var(--primary); outline-offset:4px; }
+.activity-list .history-item-copy { flex:1; min-width:0; }
+.activity-list .history-item-title { font:500 17px/1.45 var(--sans); }
+.activity-list .history-item-meta { font:400 12px/1.5 var(--sans); margin-top:3px; }
+.activity-item-heading { display:flex; align-items:center; flex-wrap:wrap; gap:6px 12px; }
 .activity-scheme-tag { color:var(--success); background:var(--success-bg); border-color:var(--success-border); }
-.activity-list .history-item-meta { font-size:12px; line-height:1.6; }
-.activity-list .status-tag { flex-shrink:0; }
-.activity-list .history-item:focus-visible { background:var(--light); }
-.activity-more { margin-top:16px; }
+.activity-row-heading>.status-tag { max-width:150px; text-align:center; flex-shrink:0; font-size:10px; }
+.activity-marker { color:var(--muted); font-size:18px; font-weight:400; flex-shrink:0; }
+.activity-preview { padding:0 3px 20px; }
+.activity-summary { font:400 13px/1.7 var(--sans); white-space:pre-wrap; overflow-wrap:anywhere; max-width:780px; }
+.activity-tags { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0; }
+.activity-tag { border:1px solid var(--line); border-radius:4px; padding:3px 7px; color:var(--muted); font-size:11px; }
+.activity-detail { display:inline-block; margin-top:12px; font-size:12px; }
+.activity-pagination { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:22px; }
+.activity-pagination select { font:400 13px/1.4 var(--sans); background:transparent; color:var(--text); border:1px solid var(--line); border-radius:4px; padding:7px 10px; }
+.activity-pagination button { font-size:13px; }
 .activity-read-error { margin-top:16px; }
+.activity-list .history-preview { gap:0; }
+.activity-list .history-preview .activity-row-heading { height:78px; border-bottom:1px solid var(--line); }
+@media(max-width:650px) {
+  .activity-list .history-item-title { font-size:16px; }
+  .activity-row-heading { gap:10px; }
+  .activity-row-heading>.status-tag { max-width:95px; }
+  .activity-tabs { gap:24px; }
+}
 
 .urgent {
   color: var(--warning)!important;
@@ -4346,6 +4373,7 @@ html[data-bounties-enabled="false"] #nav-bounties { display:none!important; }
 .bty-shell-heading h2,
 html[data-pending-page=catalogue] #access-title,
 html[data-pending-page=people] #access-title,
+html[data-pending-page=activity] #access-title,
 .access-workspace[aria-busy=true] .notebook-frame .nb-title-row>h1 {
   display:flex;align-items:center;min-height:45px;margin:0;
   font:var(--page-title-font);letter-spacing:-.3px;color:var(--ink);

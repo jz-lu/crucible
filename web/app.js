@@ -85,9 +85,19 @@ let browseWarmScheduled = null, browseWarmRunning = false, browseWarmState = nul
 let browseWarmIntent = null;
 const BROWSE_WARM_BYTES = 4 * 1024 * 1024, BROWSE_WARM_JOBS = 24;
 let readViewEpoch = 0;
+// Page coordinates contain only cursors. Authorized summary rows use the same
+// bounded, expiring in-memory cache as other views, never browser storage.
+const activityPages = new Map();
+let activityKind = 'schemes';
 let renderedReads = new WeakMap();
-function invalidateReadViews({resourceReports = true} = {}) {
-  readViews.clear(); pendingReads.clear(); intendedReads.clear(); renderedReads = new WeakMap(); readViewEpoch++;
+function invalidateReadViews({resourceReports = true, activityKinds = null} = {}) {
+  const preservedActivity = activityKinds === null ? [] : [...readViews].filter(([key]) =>
+    key.startsWith('activity:') && !activityKinds.some(kind => key.startsWith('activity:' + kind + ':')));
+  if (activityKinds === null) activityPages.clear();
+  else for (const kind of activityKinds) activityPages.delete(kind);
+  readViews.clear();
+  for (const [key, entry] of preservedActivity) readViews.set(key, entry);
+  pendingReads.clear(); intendedReads.clear(); renderedReads = new WeakMap(); readViewEpoch++;
   warmedReads.clear(); notebookEarlyReads.clear(); referenceTimings.clear(); clearReviewProposals();
   if (resourceReports) window.CrucibleResources?.clear();
   browseWarmScheduled = null; browseWarmIntent = null;
@@ -216,8 +226,14 @@ function browseWarmJobs() {
   add('people', () => warmRead('people', '/api/people?limit=50&offset=0&include_records=false', data =>
     Array.isArray(data.people) && data.people.every(person => typeof person.handle === 'string' && person.handle) ?
       {people: data.people, pagination: data.pagination, scoring: data.scoring} : null));
-  add('history', () => warmRead('history:' + (state.catalogueRevision || ''), '/api/me/submissions', data =>
-    Array.isArray(data.submissions) && data.submissions.every(item => typeof item?.id === 'string' && item.id) ? {submissions: data.submissions} : null));
+  const activity = activityPageState(activityKind);
+  const firstActivity = activityFirstPath(activityKind);
+  add('activity:first:' + activityKind, () => warmActivityPage(activityKind, firstActivity));
+  // At most one page ahead of the selected page, scheduled under the existing
+  // idle/concurrency/byte bounds. Warming never recursively follows cursors.
+  const nextActivity = activity.paths[activity.index + 1];
+  if (state.screen === 'activity' && nextActivity) add('activity:next:' + activityKind + ':' + nextActivity,
+    () => warmActivityPage(activityKind, nextActivity));
   for (const scheme of ordered.slice(1)) releaseJobs(scheme);
   if (bountyFeatureAvailable()) add('notebook:bounties', () => notebookWorkspace?.warm?.('bounties'));
   return jobs;
@@ -1735,7 +1751,11 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
         ['/api/notebook/notes', '/api/notebook/import', '/api/challenges', '/api/methods'].includes(path) ||
         /^\/api\/notebook\/notes\/[^/?]+\/(?:revisions|publication-requests|publication-reviews)$/.test(path) ||
         /^\/api\/challenges\/[^/?]+\/submit$/.test(path));
-      invalidateReadViews({resourceReports: !unrelatedToResources}); notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
+      const activityKinds = /^\/api\/notebook\//.test(path) ? ['notes', 'bounties'] :
+        /^\/api\/bounties(?:\/|$)/.test(path) ? ['bounties'] :
+        /^\/api\/challenges\/[^/?]+\/submit$/.test(path) ? ['schemes'] :
+        ['/api/challenges', '/api/methods', '/api/me/profile'].includes(path) ? [] : null;
+      invalidateReadViews({resourceReports: !unrelatedToResources, activityKinds}); notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
     }
     if (!raw && ownsDocument(lifecycle) && (!initialSession || sessionOwner === state.sessionRevision) && (!recoverRead || ownsRead())) absorbClock(data);
     return data;
@@ -5035,99 +5055,27 @@ function historyPreview() {
   const preview = node('div', undefined, 'history-preview');
   preview.setAttribute('aria-hidden', 'true');
   for (let index = 0; index < 4; index++) {
-    const item = node('div', undefined, 'history-item');
+    const item = node('div', undefined, 'activity-row-heading');
     const copy = node('span', undefined, 'history-item-copy');
-    for (const className of ['history-item-title', 'history-item-meta', 'history-item-meta']) {
-      const line = node('span', undefined, className);
-      line.append(node('span', undefined, 'catalogue-placeholder'));
-      copy.append(line);
+    for (const className of ['history-item-title', 'history-item-meta']) {
+      const line = node('span', undefined, className); line.append(node('span', undefined, 'catalogue-placeholder')); copy.append(line);
     }
-    item.append(copy); preview.append(item);
+    item.append(copy, node('span', '+', 'activity-marker')); preview.append(item);
   }
   return preview;
 }
-function activityFocusTarget() {
-  return $('#refresh-activity').disabled ? $('#activity-workspace') : $('#refresh-activity');
+function activityFocusTarget() { return $('#activity-tab-' + activityKind); }
+function activityTarget(kind) { return $(kind === 'schemes' ? '#history-content' : '#activity-' + kind); }
+function activityFirstPath(kind) {
+  return kind === 'schemes' ? '/api/me/submissions?limit=25' : kind === 'notes' ?
+    '/api/notebook/notes?scope=mine&summary=true&limit=25' : '/api/bounties?status=mine&sort=concrete&offset=0&limit=25';
 }
-async function loadActivityHistory() {
-  if (!hasAccess() || !state.user || state.screen !== 'activity') return;
-  const request = ++state.historyRequest;
-  const accountId = state.user?.id, epoch = readViewEpoch;
-  const current = () => hasAccess() && epoch === readViewEpoch && request === state.historyRequest && state.screen === 'activity' && state.user?.id === accountId;
-  const target = $('#history-content');
-  const key = 'history:' + (state.catalogueRevision || ''), cached = cachedRead(key);
-  const paint = data => {
-    const focused = document.activeElement?.closest('#history-content') === target ? document.activeElement : null;
-    target.querySelector('.activity-read-error')?.remove();
-    const detailsTrigger = dialogTriggers.get(recoveryDialog);
-    const detailsId = detailsTrigger?.closest('#history-content') === target ? detailsTrigger.dataset.submissionId : null;
-    paintRead(key, target, data, data => {
-      if (!data.submissions?.length) return showEmpty(target, 'No submissions yet. Your received answers will appear here.');
-      const items = [];
-      for (const submission of data.submissions) {
-        const item = node('button', undefined, 'history-item');
-        item.type = 'button';
-        item.dataset.submissionId = submission.id;
-        item.setAttribute('aria-haspopup', 'dialog');
-        const copy = node('span', undefined, 'history-item-copy');
-        const scheme = availableReleases().find(release => release.id === submission.scheme_id &&
-          String(release.version) === String(submission.scheme_version));
-        const profile = scheme?.profiles?.find(profile => profileId(profile) === submission.profile_id);
-        const name = scheme?.name || state.schemes.find(release => release.id === submission.scheme_id)?.name || submission.scheme_id;
-        const title = `${name || 'Scheme'} (${profile ? profileLabel(profile, scheme) : recordProfileLabel(submission)})`;
-        copy.append(node('span', title, 'history-item-title'), node('span', submission.method_name || 'Submitted method', 'history-item-meta'), node('span', utcDate(submission.received_at), 'history-item-meta'));
-        item.setAttribute('aria-label', 'View submission for ' + title + ' received ' + utcDate(submission.received_at));
-        item.addEventListener('click', () => openSubmissionDetails(submission.id, item));
-        item.append(copy, node('span', submission.status === 'correct' ? 'Recovered' : 'Incorrect', 'status-tag' + (submission.status === 'correct' ? '' : ' error-tag')));
-        items.push(item);
-      }
-      target.replaceChildren(...items);
-    });
-    const replacement = id => [...target.querySelectorAll('[data-submission-id]')].find(item => item.dataset.submissionId === id) || activityFocusTarget();
-    if (focused && !focused.isConnected && !recoveryDialog.open) replacement(focused.dataset.submissionId).focus({preventScroll: true});
-    if (detailsId && !detailsTrigger.isConnected) dialogTriggers.set(recoveryDialog, replacement(detailsId));
-  };
-  if (cached) paint(cached);
-  else {
-    const focused = document.activeElement?.closest('#history-content') === target ? document.activeElement : null;
-    quietReadStatus(target, 'Loading your submissions…'); target.append(historyPreview());
-    if (focused && !recoveryDialog.open) activityFocusTarget().focus({preventScroll: true});
-  }
-  target.setAttribute('aria-busy', 'true');
-  try {
-    const data = await readAgain(key, '/api/me/submissions');
-    if (!current()) return;
-    if (!Array.isArray(data.submissions) || data.submissions.some(item => !item || typeof item.id !== 'string' || !item.id)) throw new Error('Your submissions could not be loaded. Please try again.');
-    rememberRead(key, {submissions: data.submissions});
-    paint({submissions: data.submissions});
-  } catch (error) {
-    if (current()) {
-      if (cached && !forbiddenRead(error)) {
-        target.querySelector('.activity-read-error')?.remove();
-        const notice = node('div', undefined, 'activity-read-error');
-        showInlineError(notice, error.message, loadActivityHistory); target.append(notice);
-      } else readRefreshError(key, target, error, loadActivityHistory, null);
-    }
-  } finally {
-    if (current()) target.setAttribute('aria-busy', 'false');
-  }
+function activityPageKey(kind, path) { return 'activity:' + kind + ':' + path; }
+function activityPageState(kind) {
+  if (!activityPages.has(kind)) activityPages.set(kind, {index: 0, paths: [activityFirstPath(kind)]});
+  return activityPages.get(kind);
 }
-const activityRequests = {bounties: 0, notes: 0};
-let activityRefreshRequest = 0;
-async function showActivity() {
-  if (!hasAccess() || !state.user || state.screen !== 'activity') return;
-  const request = ++activityRefreshRequest;
-  $('#refresh-activity').disabled = true;
-  try {
-    await Promise.all([loadActivityHistory(), loadActivityCollection('notes'),
-      ...(bountyFeatureAvailable() ? [loadActivityCollection('bounties')] : [])]);
-  } finally {
-    if (request === activityRefreshRequest) $('#refresh-activity').disabled = false;
-  }
-}
-function activityNoteRevision(note) {
-  return note.revisions?.find(revision => revision.revision === note.revision);
-}
+function activityNoteRevision(note) { return note.revisions?.find(revision => revision.revision === note.revision); }
 function activityNoteType(note) {
   const revision = activityNoteRevision(note), content = revision?.content || {};
   const requests = [...(note.proposal_revision?.requests || []), ...(revision?.requests || [])];
@@ -5136,106 +5084,197 @@ function activityNoteType(note) {
   return content.tags?.includes('attack-analysis') ? 'Attack' : 'Note';
 }
 function activityCollectionPage(kind, data, path) {
-  const records = data?.[kind];
-  if (!Array.isArray(records) || records.length > 25 || records.some(item => !item || typeof item.id !== 'string' || !item.id))
-    throw new Error('Your ' + kind + ' could not be loaded. Please try again.');
+  let records = data?.[kind === 'schemes' ? 'submissions' : kind];
+  const bad = () => { throw new Error('Your ' + (kind === 'schemes' ? 'submissions' : kind) + ' could not be loaded. Please try again.'); };
+  // During an ordinary rolling release an older server may still return its
+  // unpaginated first50. Keep those rows readable without inventing a cursor;
+  // the paginated contract is always bounded to the requested25.
+  const pageLimit = kind === 'schemes' && !Object.hasOwn(data || {}, 'next_after') ? 50 : 25;
+  if (!Array.isArray(records) || records.length > pageLimit || records.some(item => !item || typeof item.id !== 'string' || !item.id)) bad();
   let next = null;
-  if (kind === 'notes') {
-    if (data.next_after !== null && (typeof data.next_after !== 'string' || !data.next_after || data.next_after.length > 768) ||
-        records.some(note => typeof activityNoteRevision(note)?.content?.title !== 'string')) throw new Error('Your notes could not be loaded. Please try again.');
-    if (data.next_after) next = '/api/notebook/notes?' + new URLSearchParams({scope: 'mine', limit: '25', after: data.next_after});
+  if (kind !== 'bounties') {
+    if (data.next_after != null && (typeof data.next_after !== 'string' || !data.next_after || data.next_after.length > 768)) bad();
+    if (data.next_after) next = activityFirstPath(kind) + '&after=' + encodeURIComponent(data.next_after);
+    if (kind === 'notes') {
+      if (records.some(note => typeof activityNoteRevision(note)?.content?.title !== 'string')) bad();
+      // Retain only fields needed by this summary list, even if an old server
+      // ignores summary=true. Full bodies, private attachments and evidence are
+      // fetched by the existing reader only when explicitly opened.
+      records = records.map(note => {
+        const revision = activityNoteRevision(note), content = revision.content;
+        return {id: note.id, number: note.number, revision: note.revision, created_at: note.created_at,
+          publication_status: note.publication_status, proposal_revision: note.proposal_revision && {
+            requests: (note.proposal_revision.requests || []).map(request => ({kind: request.kind}))},
+          revisions: [{revision: revision.revision, created_at: revision.created_at,
+            requests: (revision.requests || []).map(request => ({kind: request.kind})),
+            content: {title: content.title, claim: typeof content.claim === 'string' ? content.claim : '',
+              tags: Array.isArray(content.tags) ? content.tags.filter(tag => typeof tag === 'string') : []}}]};
+      });
+    }
   } else {
     const pagination = data.pagination, offset = Number(new URL(path, window.location.href).searchParams.get('offset'));
     if (!pagination || pagination.offset !== offset || pagination.limit !== 25 || typeof pagination.has_more !== 'boolean' ||
-        records.some(task => typeof task.title !== 'string')) throw new Error('Your bounties could not be loaded. Please try again.');
+        records.some(task => typeof task.title !== 'string')) bad();
     if (pagination.has_more) next = '/api/bounties?' + new URLSearchParams({status: 'mine', sort: 'concrete', offset: String(offset + 25), limit: '25'});
+    records = records.map(task => ({id: task.id, title: task.title, summary: task.summary,
+      status: task.status, owner: task.owner && {id: task.owner.id}, created_at: task.created_at, updated_at: task.updated_at}));
   }
-  if (next && !records.length) throw new Error('Your ' + kind + ' could not be loaded. Please try again.');
+  if (next && !records.length) bad();
   return {path, records, next};
 }
-function paintActivityCollection(kind, key, data) {
-  const target = $('#activity-' + kind), more = $('#more-activity-' + kind);
-  const focused = document.activeElement?.closest('#activity-' + kind) === target ? document.activeElement : null;
+async function warmActivityPage(kind, path) {
+  const key = activityPageKey(kind, path);
+  if (cachedRead(key)) return 0;
+  const epoch = readViewEpoch, account = state.user?.id;
+  const response = await readAgain(key, path);
+  if (!hasAccess() || epoch !== readViewEpoch || state.user?.id !== account) return 0;
+  const page = activityCollectionPage(kind, response, path), bytes = warmBytes(response);
+  if (bytes <= 500000) {
+    rememberRead(key, page);
+    // Consume this just-warmed result once, as other browse warmups do. Keep
+    // only projected summaries here as well, never the raw note response.
+    warmedReads.set(key, {at: Date.now(), data: kind === 'bounties' ?
+      {bounties: page.records, pagination: response.pagination} :
+      {[kind === 'schemes' ? 'submissions' : 'notes']: page.records,
+        ...(kind === 'schemes' && !Object.hasOwn(response, 'next_after') ? {} : {next_after: response.next_after || null})}});
+  }
+  return bytes;
+}
+function activityRowCopy(kind, record) {
+  if (kind === 'schemes') {
+    const scheme = availableReleases().find(release => release.id === record.scheme_id && String(release.version) === String(record.scheme_version));
+    const profile = scheme?.profiles?.find(profile => profileId(profile) === record.profile_id);
+    const name = record.scheme_name || scheme?.name || state.schemes.find(release => release.id === record.scheme_id)?.name || record.scheme_id;
+    return {title: `${name || 'Scheme'} (${profile ? profileLabel(profile, scheme) : recordProfileLabel(record)})`,
+      meta: utcDate(record.received_at), summary: record.method_name || 'Submitted method',
+      status: record.status === 'correct' ? 'Recovered' : 'Incorrect'};
+  }
+  if (kind === 'notes') {
+    const revision = activityNoteRevision(record), type = activityNoteType(record);
+    return {title: revision.content.title, meta: (type === 'Proposed scheme' ? '' : type + ' · ') +
+        'Revision ' + record.revision + ' · ' + utcDate(revision.created_at || record.created_at),
+      summary: revision.content.claim, tags: revision.content.tags, proposal: type === 'Proposed scheme',
+      status: ({approved: 'Published', accepted: 'Published', submitted: 'Publish request pending', private: 'Private',
+        cancelled: 'Publish request cancelled', changes_requested: 'Changes requested', rejected: 'Not published', withdrawn: 'Withdrawn'})[record.publication_status] || 'Private',
+      href: '#notebook?' + new URLSearchParams({note: record.id, revision: String(record.revision)}), action: 'Read full note →'};
+  }
+  return {title: record.title, meta: (record.owner?.id === state.user?.id ? 'Proposed by you' : 'You contributed') +
+      ' · ' + utcDate(record.updated_at || record.created_at), summary: record.summary,
+    status: ({pending: 'Awaiting review', submitted: 'Awaiting review', changes_requested: 'Changes requested', open: 'Open',
+      under_review: 'Under assessment', frozen: 'Under assessment', completed: 'Completed', closed: 'Completed',
+      rejected: 'Not accepted', declined: 'Not admitted', withdrawn: 'Withdrawn', cancelled: 'Cancelled', draft: 'Draft'})[record.status] || 'Draft',
+    href: '#bounties?' + new URLSearchParams({status: 'mine', bounty: record.id}), action: 'View bounty →'};
+}
+function paintActivityPage(kind, key, page) {
+  const target = activityTarget(kind), focused = document.activeElement?.closest('.activity-item');
+  const focusedId = focused?.dataset.activityId;
+  const focusAction = document.activeElement?.dataset.activityAction;
+  const trigger = dialogTriggers.get(recoveryDialog), triggerId = trigger?.closest('.activity-item')?.dataset.activityId;
+  const expanded = new Set([...target.querySelectorAll('.activity-toggle')].filter(button => button.getAttribute('aria-expanded') === 'true')
+    .map(button => button.closest('.activity-item').dataset.activityId));
   target.querySelector('.activity-read-error')?.remove();
-  paintRead(key, target, data, data => {
-    const records = [...new Map(data.pages.flatMap(page => page.records).map(record => [record.id, record])).values()];
-    if (!records.length) return showEmpty(target, kind === 'notes' ? 'No notes yet. Your attacks, proposed schemes and other notes will appear here.' : 'No bounty activity yet. Bounties you propose or contribute to will appear here.');
-    const items = records.map(record => {
-      const item = node('a', undefined, 'history-item activity-item');
-      item.dataset.activityId = record.id;
-      const copy = node('span', undefined, 'history-item-copy');
-      let title, meta, status, schemeProposal = false;
-      if (kind === 'notes') {
-        const revision = activityNoteRevision(record);
-        const type = activityNoteType(record);
-        schemeProposal = type === 'Proposed scheme';
-        title = revision.content.title;
-        meta = (schemeProposal ? '' : type + ' · ') + 'Revision ' + record.revision + ' · ' + utcDate(revision.created_at || record.created_at);
-        status = record.publication_status === 'accepted' ? 'Published' : record.publication_status === 'submitted' ? 'Awaiting review' : record.publication_status === 'private' ? 'Private' : (record.publication_status || 'Private').replaceAll('_', ' ');
-        item.href = '#notebook?' + new URLSearchParams({note: record.id, revision: String(record.revision)});
-      } else {
-        title = record.title;
-        meta = (record.owner?.id === state.user?.id ? 'Proposed by you' : 'You contributed') + ' · ' + utcDate(record.updated_at || record.created_at);
-        status = ({pending: 'Awaiting review', changes_requested: 'Changes requested'})[record.status] || (record.status || 'Draft').replaceAll('_', ' ');
-        status = status.charAt(0).toUpperCase() + status.slice(1);
-        item.href = '#bounties?' + new URLSearchParams({status: 'mine', bounty: record.id});
+  paintRead(key, target, page, data => {
+    if (!data.records.length) return showEmpty(target, kind === 'schemes' ? 'No submissions yet.' : kind === 'notes' ? 'No notes yet.' : 'No bounty activity yet.');
+    target.replaceChildren(...data.records.map((record, index) => {
+      const copy = activityRowCopy(kind, record), row = node('article', undefined, 'activity-item'); row.dataset.activityId = record.id;
+      const heading = node('div', undefined, 'activity-row-heading'), toggle = node('button', undefined, 'activity-toggle'); toggle.type = 'button';
+      const labels = node('span', undefined, 'history-item-copy'), title = node('span', undefined, 'activity-item-heading');
+      title.append(node('span', copy.title, 'history-item-title'));
+      if (copy.proposal) title.append(node('span', 'Proposed scheme', 'status-tag activity-scheme-tag'));
+      labels.append(title, node('span', copy.meta, 'history-item-meta'));
+      const marker = node('span', '+', 'activity-marker'); marker.setAttribute('aria-hidden', 'true');
+      toggle.append(labels, marker); toggle.setAttribute('aria-label', copy.title + ', ' + copy.meta);
+      const details = node('div', undefined, 'activity-preview'); details.id = 'activity-preview-' + kind + '-' + index;
+      toggle.setAttribute('aria-controls', details.id); toggle.dataset.activityAction = 'toggle';
+      const setOpen = open => {details.hidden = !open; toggle.setAttribute('aria-expanded', String(open)); marker.textContent = open ? '−' : '+';};
+      setOpen(expanded.has(record.id)); toggle.addEventListener('click', () => setOpen(details.hidden));
+      heading.append(toggle, node('span', copy.status, 'status-tag' + (copy.status === 'Incorrect' ? ' error-tag' : '')));
+      if (copy.summary) details.append(node('p', copy.summary, 'activity-summary'));
+      if (copy.tags?.length) {
+        const tags = node('div', undefined, 'activity-tags');
+        for (const tag of copy.tags) tags.append(node('span', tag, 'activity-tag')); details.append(tags);
       }
-      const titleLine = node('span', undefined, 'activity-item-heading');
-      titleLine.append(node('span', title, 'history-item-title'));
-      if (schemeProposal) titleLine.append(node('span', 'Proposed scheme', 'status-tag activity-scheme-tag'));
-      copy.append(titleLine, node('span', meta, 'history-item-meta'));
-      item.append(copy, node('span', status, 'status-tag'));
-      return item;
-    });
-    target.replaceChildren(...items);
+      const action = node(copy.href ? 'a' : 'button', copy.action || 'View submission details →', 'text-button activity-detail');
+      action.dataset.activityAction = 'detail';
+      if (copy.href) action.href = copy.href;
+      else {action.type = 'button'; action.dataset.submissionId = record.id; action.setAttribute('aria-haspopup', 'dialog');
+        action.addEventListener('click', () => openSubmissionDetails(record.id, action));}
+      details.append(action); row.append(heading, details); return row;
+    }));
   });
-  more.hidden = !data.pages.at(-1)?.next;
-  if (focused && !focused.isConnected) {
-    const replacement = [...target.querySelectorAll('[data-activity-id]')].find(item => item.dataset.activityId === focused.dataset.activityId);
-    (replacement || activityFocusTarget()).focus({preventScroll: true});
+  const replacement = (id, action) => [...target.querySelectorAll('.activity-item')].find(item => item.dataset.activityId === id)
+    ?.querySelector(action === 'detail' ? '.activity-detail' : '.activity-toggle') || activityFocusTarget();
+  if (focused && !focused.isConnected && !recoveryDialog.open) replacement(focusedId, focusAction).focus({preventScroll: true});
+  if (triggerId && !trigger.isConnected) dialogTriggers.set(recoveryDialog, replacement(triggerId, 'detail'));
+}
+function paintActivityPages(busy = false) {
+  const paging = activityPageState(activityKind), select = $('#activity-page-select');
+  const values = [...select.querySelectorAll('option')];
+  if (values.length !== paging.paths.length) {
+    select.replaceChildren(...paging.paths.map((path, index) => {const option = node('option', 'Page ' + (index + 1)); option.value = String(index); return option;}));
+  }
+  select.value = String(paging.index); select.disabled = busy || paging.paths.length < 2;
+  $('#activity-previous').disabled = busy || paging.index === 0;
+  $('#activity-next').disabled = busy || !paging.paths[paging.index + 1];
+}
+async function showActivity() {
+  if (!hasAccess() || !state.user || state.screen !== 'activity') return;
+  const requested = new URLSearchParams(window.location.hash.split('?')[1] || '').get('kind');
+  if (['schemes', 'notes', 'bounties'].includes(requested)) activityKind = requested;
+  if (activityKind === 'bounties' && !bountyFeatureAvailable()) activityKind = 'schemes';
+  for (const kind of ['schemes', 'notes', 'bounties']) {
+    $('#activity-' + kind + '-section').hidden = kind !== activityKind;
+    $('#activity-tab-' + kind).setAttribute('aria-pressed', String(kind === activityKind));
+  }
+  $('#activity-tab-bounties').hidden = !bountyFeatureAvailable();
+  await loadActivityPage(activityKind);
+}
+async function loadActivityPage(kind) {
+  if (!hasAccess() || !state.user || state.screen !== 'activity' || kind !== activityKind) return;
+  const paging = activityPageState(kind), path = paging.paths[paging.index], key = activityPageKey(kind, path);
+  const request = ++state.historyRequest, account = state.user.id, epoch = readViewEpoch;
+  const current = () => hasAccess() && state.user?.id === account && epoch === readViewEpoch && request === state.historyRequest &&
+    state.screen === 'activity' && activityKind === kind;
+  const target = activityTarget(kind), cached = cachedRead(key);
+  const paint = page => {
+    // Changed first-page cursors retire the old continuation; never mix pages
+    // from different note snapshots, or follow a repeated server cursor.
+    const next = page.next && !paging.paths.slice(0, paging.index + 1).includes(page.next) ? page.next : null;
+    if (paging.paths[paging.index + 1] !== next) paging.paths.splice(paging.index + 1, Infinity, ...(next ? [next] : []));
+    paintActivityPage(kind, key, page); target.style.minHeight = ''; paintActivityPages();
+  };
+  if (cached) paint(cached);
+  else {
+    if (document.activeElement?.closest('.activity-list') === target && !recoveryDialog.open) activityFocusTarget().focus({preventScroll: true});
+    const trigger = dialogTriggers.get(recoveryDialog);
+    if (trigger?.closest('.activity-list') === target) dialogTriggers.set(recoveryDialog, activityFocusTarget());
+    // Preserve the outgoing page's height during a cold request so pagination
+    // near the bottom cannot clamp the viewport to a four-row placeholder.
+    // Release it on arrival: a short final page must not keep empty padding.
+    const height = target.getBoundingClientRect?.().height || 0;
+    if (height) target.style.minHeight = height + 'px';
+    target.replaceChildren(historyPreview()); paintActivityPages(true);
+  }
+  target.setAttribute('aria-busy', 'true'); $('#refresh-activity').disabled = true;
+  try {
+    const page = activityCollectionPage(kind, await readAgain(key, path), path);
+    if (!current()) return;
+    rememberRead(key, page); paint(page); scheduleBrowseWarmup();
+  } catch (error) {
+    if (!current()) return;
+    const retry = () => { if (error.status === 422) activityPages.delete(kind); return loadActivityPage(kind); };
+    if (cached && !forbiddenRead(error)) {
+      target.querySelector('.activity-read-error')?.remove();
+      const notice = node('div', undefined, 'activity-read-error'); showInlineError(notice, error.message, retry); target.append(notice);
+    } else readRefreshError(key, target, error, retry, null);
+  } finally {
+    if (current()) {target.style.minHeight = ''; target.setAttribute('aria-busy', 'false'); $('#refresh-activity').disabled = false; paintActivityPages();}
   }
 }
-async function loadActivityCollection(kind, more = false) {
-  if (!hasAccess() || !state.user || state.screen !== 'activity') return;
-  const request = ++activityRequests[kind], account = state.user.id, epoch = readViewEpoch;
-  const current = () => hasAccess() && state.user?.id === account && epoch === readViewEpoch &&
-    request === activityRequests[kind] && state.screen === 'activity';
-  const target = $('#activity-' + kind), button = $('#more-activity-' + kind), key = 'activity:' + kind;
-  const cached = cachedRead(key), ownedMoreFocus = more && document.activeElement === button;
-  const first = kind === 'notes' ? '/api/notebook/notes?scope=mine&limit=25' : '/api/bounties?status=mine&sort=concrete&offset=0&limit=25';
-  if (more && !cached) more = false;
-  else if (more && !cached.pages.at(-1)?.next) return;
-  if (cached) paintActivityCollection(kind, key, cached);
-  else {
-    if (document.activeElement?.closest('#activity-' + kind) === target) activityFocusTarget().focus({preventScroll: true});
-    quietReadStatus(target, 'Loading your ' + kind + '…'); target.append(historyPreview()); button.hidden = true;
-  }
-  target.setAttribute('aria-busy', 'true'); button.disabled = true;
-  try {
-    const paths = more ? [cached.pages.at(-1).next] : (cached?.pages.map(page => page.path) || [first]);
-    const pages = await Promise.all(paths.map(async path => activityCollectionPage(kind, await readAgain(key + ':' + path, path), path)));
-    if (!current()) return;
-    const data = {pages: more ? [...cached.pages, ...pages] : pages};
-    // A repeated cursor must never make Load more loop over the same page.
-    if (data.pages.at(-1).next && data.pages.some(page => page.path === data.pages.at(-1).next)) data.pages.at(-1).next = null;
-    rememberRead(key, data); paintActivityCollection(kind, key, data);
-    if (ownedMoreFocus && more) {
-      const nextRow = target.querySelectorAll('[data-activity-id]')[cached.pages.reduce((count, page) => count + page.records.length, 0)];
-      (nextRow || activityFocusTarget()).focus({preventScroll: true});
-    }
-  } catch (error) {
-    if (current()) {
-      if (cached && !forbiddenRead(error)) {
-        const old = target.querySelector('.activity-read-error'); old?.remove();
-        const notice = node('div', undefined, 'activity-read-error');
-        showInlineError(notice, error.message, () => loadActivityCollection(kind, more)); target.append(notice);
-      } else {
-        readRefreshError(key, target, error, () => loadActivityCollection(kind), null); button.hidden = true;
-      }
-    }
-  } finally {
-    if (current()) { target.setAttribute('aria-busy', 'false'); button.disabled = false; }
-  }
+function selectActivityPage(index) {
+  const paging = activityPageState(activityKind);
+  if (!Number.isInteger(index) || index < 0 || index >= paging.paths.length || index === paging.index) return;
+  paging.index = index; void loadActivityPage(activityKind);
 }
 async function copyInstance() {
   if (!state.challenge) return;
@@ -5330,7 +5369,12 @@ $('#method-select').addEventListener('change', updateMethodFields);
 $('#refresh-leaderboard').addEventListener('click', refreshLeaderboard);
 $('#history-button').addEventListener('click', () => navigateTop('#activity'));
 $('#refresh-activity').addEventListener('click', showActivity);
-for (const kind of ['bounties', 'notes']) $('#more-activity-' + kind).addEventListener('click', () => loadActivityCollection(kind, true));
+for (const kind of ['schemes', 'bounties', 'notes']) $('#activity-tab-' + kind).addEventListener('click', () => {
+  if (kind !== activityKind) window.location.hash = '#activity?kind=' + kind;
+});
+$('#activity-previous').addEventListener('click', () => selectActivityPage(activityPageState(activityKind).index - 1));
+$('#activity-next').addEventListener('click', () => selectActivityPage(activityPageState(activityKind).index + 1));
+$('#activity-page-select').addEventListener('change', event => selectActivityPage(Number(event.target.value)));
 $('#retry-button').addEventListener('click', () => state.ready ? synchronizeSession() : initialize());
 $('#refresh-catalogue').addEventListener('click', async () => {
   $('#refresh-catalogue').disabled = true;
@@ -6040,7 +6084,7 @@ function showWorkspace(name) {
   $('#proposal-workspace').hidden = name !== 'propose' && !(name === 'reviews' && reviewSurface() === 'scheme-detail' && state.canReviewProposals);
   $('#people-workspace').hidden = name !== 'people';
   $('#activity-workspace').hidden = name !== 'activity';
-  $('#activity-bounties-section').hidden = !bountyFeatureAvailable();
+  $('#activity-tab-bounties').hidden = !bountyFeatureAvailable();
   $('#history-button').classList.toggle('selected', name === 'activity');
   if (name === 'activity') $('#history-button').setAttribute('aria-current', 'page');
   else $('#history-button').removeAttribute('aria-current');

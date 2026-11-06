@@ -35,6 +35,12 @@ async function publicButton(app) {
   assert.equal(app.$('#person-workspace').hidden,false);
   return app.$('#person-content').querySelector('.history-item');
 }
+function activityButton(app) {
+  const row=app.$('#history-content').querySelector('.activity-item');
+  const toggle=row.querySelector('.activity-toggle');
+  if(toggle.getAttribute('aria-expanded')==='false')toggle.click();
+  return row.querySelector('.activity-detail');
+}
 const detailCalls = app => app.requests.filter(r=>r.url.pathname.startsWith('/api/submissions/'));
 const closeDetails = app => app.$('#recovery-dialog').querySelector('[data-close]').click();
 const fact = (app,label) => app.$('#recovery-content').querySelectorAll('div').find(row=>row.querySelector('dt')?.textContent===label)?.querySelector('dd')?.textContent;
@@ -90,17 +96,24 @@ async function test(name,run) {await run();console.log('PASS '+name);passed++;}
       assert.match(app.$('#recovery-content').textContent, /unreported model does not establish that no AI was used/);
     }
   });
-  await test('activity entries are keyboard buttons and owner-only incorrect details return to the page',async()=>{
+  await test('activity entries expand with keyboard buttons and owner-only incorrect details return to the page',async()=>{
     const app=await boot();
     const historyTrigger=app.$('#history-button');
     historyTrigger.focus();historyTrigger.click();await flush();
     const history=app.$('#activity-workspace');
-    const row=app.$('#history-content').querySelector('.history-item');
-    assert.equal(row.tagName,'BUTTON');
-    assert.equal(row.type,'button');
-    assert.equal(row.getAttribute('aria-haspopup'),'dialog');
+    const row=app.$('#history-content').querySelector('.activity-item');
+    const toggle=row.querySelector('.activity-toggle');
+    assert.equal(toggle.tagName,'BUTTON');
+    assert.equal(toggle.type,'button');
+    assert.equal(toggle.getAttribute('aria-expanded'),'false');
     assert.match(row.querySelector('.history-item-title').textContent,/Original Alpha.*Stage 20/);
-    row.focus();row.click();await flush();
+    const button=activityButton(app);
+    assert.equal(toggle.getAttribute('aria-expanded'),'true');
+    assert.equal(detailCalls(app).length,0,'Expanding a summary does not fetch private evidence');
+    assert.equal(button.tagName,'BUTTON');
+    assert.equal(button.type,'button');
+    assert.equal(button.getAttribute('aria-haspopup'),'dialog');
+    button.focus();button.click();await flush();
     assert.equal(history.hidden,false);
     assert.equal(app.$('#recovery-dialog').open,true);
     assert.equal(detailCalls(app).at(-1).url.pathname,'/api/submissions/owner-incorrect');
@@ -112,7 +125,7 @@ async function test(name,run) {await run();console.log('PASS '+name);passed++;}
     closeDetails(app);await flush();
     assert.equal(history.hidden,false);
     assert.equal(app.document.body.style.overflow,'');
-    assert.equal(app.document.activeElement===row,true,'Focus returns to the history row');
+    assert.equal(app.document.activeElement===button,true,'Focus returns to the submission detail button');
     assert.equal(app.$('#recovery-content').textContent,'');
     await app.navigate('#about');
     app.history.back();await flush();
@@ -173,7 +186,7 @@ async function test(name,run) {await run();console.log('PASS '+name);passed++;}
     (await publicButton(app)).click();await flush();
     closeDetails(app);
     app.$('#history-button').click();await flush();
-    app.$('#history-content').querySelector('.history-item').click();await flush();
+    activityButton(app).click();await flush();
     assert.equal(app.$('#recovery-title').textContent,'Private unsuccessful method');
     pending.resolve();await flush();
     assert.equal(app.$('#recovery-title').textContent,'Private unsuccessful method');
@@ -185,7 +198,7 @@ async function test(name,run) {await run();console.log('PASS '+name);passed++;}
       const pending=deferred();
       const app=await boot({hook:(url,options,envelope)=>url.pathname==='/api/me/submissions' && changed ? envelope({submissions:[]}) : url.pathname==='/api/submissions/owner-incorrect' ? pending.promise.then(()=>envelope({submission:receipt(privateReceipt)})) : undefined});
       app.$('#history-button').click();await flush();
-      app.$('#history-content').querySelector('.history-item').click();await flush();
+      activityButton(app).click();await flush();
       changed=true;app.sandbox.setSession(app.envelope({user:nextUser,csrf_token:'new-session'}));
       pending.resolve();await flush();
       assert.equal(app.$('#recovery-dialog').open,false);
@@ -198,7 +211,7 @@ async function test(name,run) {await run();console.log('PASS '+name);passed++;}
   await test('already rendered owner-only details are removed immediately on sign-out',async()=>{
     const app=await boot();
     app.$('#history-button').click();await flush();
-    app.$('#history-content').querySelector('.history-item').click();await flush();
+    activityButton(app).click();await flush();
     assert.match(app.$('#recovery-content').textContent,/PRIVATE_PSEUDOCODE/);
     app.sandbox.setSession(app.envelope({user:null,csrf_token:'signed-out'}));
     assert.equal(app.$('#recovery-dialog').open,false);

@@ -26,6 +26,7 @@ SUITES = (
     "test_publication_screening_status.py", "test_publication_screening_findings.py",
     "test_publication_screening_queue.py",
     "test_notebook_cli.py",
+    "test_submission_history.py",
     "test_note_ratings.py", "test_notebook_discovery.py", "test_machine_auth.py",
     "test_researcher_profiles.py", "test_researcher_profiles_migration.py",
     "test_bounties.py", "test_bounties_migration.py",

@@ -141,6 +141,13 @@ state, not a claim of exhaustive cryptographic correctness, production capacity
 or a full backend suite. The portable source checks run first. Published images
 are the exact tested images, not a second rebuild.
 
+Each named native batch starts in a separate read-only container with its own
+128 MiB temporary filesystem. Pytest retains per-test SQLite fixtures until the
+batch ends; this space must cover the whole batch, not just one test. Publication
+cancellation has a separate required batch so its databases cannot exhaust the
+screening batch's scratch space. No checks are dropped and the container limits
+are unchanged; both batch receipts must pass before publication or promotion.
+
 Publishing records the full Git SHA, unique run/attempt tag, immutable registry
 digest, config digest and test evidence. A digest-pinned remote manifest must
 match the tested build's exact image configuration. The summary and downloadable

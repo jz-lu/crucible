@@ -41,8 +41,11 @@ test('participant downloads public inputs, submits a real recovery and finds its
 
   await page.getByRole('button', {name:'My activity', exact:true}).click();
   await expect(page).toHaveURL(/#activity$/);
-  const record = page.locator('#history-content [data-submission-id]').filter({hasText:'Disposable browser recovery journey'});
-  await expect(record).toHaveCount(1); await record.click();
+  const record = page.locator('#history-content [data-activity-id="' + body.submission.id + '"]');
+  await expect(record).toHaveCount(1);
+  await record.locator('.activity-toggle').click();
+  await expect(record.locator('.activity-preview')).toContainText('Disposable browser recovery journey');
+  await record.locator('[data-submission-id]').click();
   await expect(page.locator('#recovery-dialog')).toBeVisible();
   await expect(page.locator('#recovery-title')).toHaveText('Disposable browser recovery journey');
   await expect(page.locator('#recovery-content')).toContainText('Not measured');

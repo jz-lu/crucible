@@ -510,7 +510,8 @@
       "test_catalogue_progress.py",
       "test_recovery_summary.py",
       "test_read_performance.py",
-      "test_busy_http.py"
+      "test_busy_http.py",
+      "test_submission_history.py"
     ],
     "generation-lifecycle": [
       "test_generation_concurrency.py"
@@ -533,7 +534,9 @@
       "test_publication_screening_findings.py",
       "test_publication_screening_queue.py",
       "test_publication_screening_database.py",
-      "test_publication_screening_supervisor.py",
+      "test_publication_screening_supervisor.py"
+    ],
+    "publication-cancellation": [
       "test_notebook_publication_cancellation.py"
     ],
     "records": [

@@ -265,6 +265,27 @@
               </div>
             </section>
           </div>
+          <div id="activity-frame" class="pending-page-preview" data-pending-layout="activity" aria-hidden="true" inert>
+            <div class="activity-tabs">
+              <button class="text-button" type="button" data-activity-frame-kind="schemes" aria-pressed="true" disabled>Schemes</button>
+              <button class="text-button" type="button" data-activity-frame-kind="bounties" aria-pressed="false" disabled>Bounties</button>
+              <button class="text-button" type="button" data-activity-frame-kind="notes" aria-pressed="false" disabled>Notes</button>
+            </div>
+            <div class="activity-section">
+              <div class="activity-section-heading"><span class="text-button" data-activity-frame-link>Browse schemes →</span></div>
+              <div class="activity-list"><div class="history-preview">
+                <div class="activity-row-heading"><span class="history-item-copy"><span class="history-item-title"><span class="catalogue-placeholder"></span></span><span class="history-item-meta"><span class="catalogue-placeholder"></span></span></span><span class="activity-marker">+</span></div>
+                <div class="activity-row-heading"><span class="history-item-copy"><span class="history-item-title"><span class="catalogue-placeholder"></span></span><span class="history-item-meta"><span class="catalogue-placeholder"></span></span></span><span class="activity-marker">+</span></div>
+                <div class="activity-row-heading"><span class="history-item-copy"><span class="history-item-title"><span class="catalogue-placeholder"></span></span><span class="history-item-meta"><span class="catalogue-placeholder"></span></span></span><span class="activity-marker">+</span></div>
+                <div class="activity-row-heading"><span class="history-item-copy"><span class="history-item-title"><span class="catalogue-placeholder"></span></span><span class="history-item-meta"><span class="catalogue-placeholder"></span></span></span><span class="activity-marker">+</span></div>
+              </div></div>
+            </div>
+            <div class="activity-pagination">
+              <button class="text-button" type="button" disabled>← Previous</button>
+              <select disabled aria-label="Activity page"><option>Page 1</option></select>
+              <button class="text-button" type="button" disabled>Next →</button>
+            </div>
+          </div>
           <div class="pending-page-preview loading-preview" data-pending-layout="list" aria-hidden="true">
             <div class="pending-list-row"><span class="catalogue-placeholder"></span><span class="catalogue-placeholder"></span></div>
             <div class="pending-list-row"><span class="catalogue-placeholder"></span><span class="catalogue-placeholder"></span></div>
@@ -343,23 +364,29 @@
           <h1 id="activity-title">My activity</h1>
           <button id="refresh-activity" class="text-button" type="button">Refresh <span aria-hidden="true">↻</span></button>
         </div>
-        <section class="activity-section" aria-labelledby="activity-schemes-title">
-          <div class="activity-section-heading"><h2 id="activity-schemes-title">Schemes</h2><a class="text-button" href="#challenge">Browse schemes →</a></div>
-          <p class="activity-description">Your recent submitted answers and recovery receipts.</p>
+        <nav class="activity-tabs" aria-label="Activity categories">
+          <button id="activity-tab-schemes" type="button" class="text-button" aria-pressed="true" aria-controls="activity-schemes-section">Schemes</button>
+          <button id="activity-tab-bounties" type="button" class="text-button" aria-pressed="false" aria-controls="activity-bounties-section">Bounties</button>
+          <button id="activity-tab-notes" type="button" class="text-button" aria-pressed="false" aria-controls="activity-notes-section">Notes</button>
+        </nav>
+        <section id="activity-schemes-section" class="activity-section" aria-labelledby="activity-tab-schemes">
+          <div class="activity-section-heading"><a class="text-button" href="#challenge">Browse schemes →</a></div>
           <div id="history-content" class="activity-list" aria-live="polite"></div>
         </section>
-        <section id="activity-bounties-section" class="activity-section" aria-labelledby="activity-bounties-title">
-          <div class="activity-section-heading"><h2 id="activity-bounties-title">Bounties</h2><a class="text-button" href="#bounties?status=mine">All your bounties →</a></div>
-          <p class="activity-description">Bounties you proposed or contributed to.</p>
+        <section id="activity-bounties-section" class="activity-section" aria-labelledby="activity-tab-bounties" hidden>
+          <div class="activity-section-heading"><a class="text-button" href="#bounties?status=mine">All your bounties →</a></div>
           <div id="activity-bounties" class="activity-list" aria-live="polite"></div>
-          <button id="more-activity-bounties" class="text-button activity-more" type="button" hidden>Load more bounties</button>
         </section>
-        <section class="activity-section" aria-labelledby="activity-notes-title">
-          <div class="activity-section-heading"><h2 id="activity-notes-title">Notes</h2><a class="text-button" href="#notebook?filter=mine">All your notes →</a></div>
-          <p class="activity-description">Your notes, including attacks and proposed schemes.</p>
+        <section id="activity-notes-section" class="activity-section" aria-labelledby="activity-tab-notes" hidden>
+          <div class="activity-section-heading"><a class="text-button" href="#notebook?filter=mine">All your notes →</a></div>
           <div id="activity-notes" class="activity-list" aria-live="polite"></div>
-          <button id="more-activity-notes" class="text-button activity-more" type="button" hidden>Load more notes</button>
         </section>
+        <nav id="activity-pagination" class="activity-pagination" aria-label="Activity pages">
+          <button id="activity-previous" class="text-button" type="button" disabled>← Previous</button>
+          <label class="sr-only" for="activity-page-select">Activity page</label>
+          <select id="activity-page-select" aria-label="Activity page"><option value="0">Page 1</option></select>
+          <button id="activity-next" class="text-button" type="button" disabled>Next →</button>
+        </nav>
       </section>
       <section id="people-workspace" class="people-workspace" aria-labelledby="people-title" tabindex="-1" hidden>
         <div class="catalogue-heading leaderboard-heading">

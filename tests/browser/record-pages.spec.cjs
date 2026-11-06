@@ -52,7 +52,7 @@ async function historyGeometry(page) {
 // checks; denied responses are never changed into successful fixture data.
 async function historyFixture(page, count = 30) {
   const rows = Array.from({length:count}, (_, index) => ({id:'browser-layout-' + index,
-    scheme_id:'teaching-dh-kem', scheme_version:'4', profile_id:'tier-1', instance_size:1,
+    scheme_id:'teaching-dh-kem', scheme_name:'Finite-field Diffie–Hellman', scheme_version:'4', profile_id:'tier-1', instance_size:1,
     method_name:'Synthetic layout method ' + index, received_at:1700000000 - index,
     status:index % 2 ? 'incorrect' : 'correct'}));
   const fixture = {rows, reads:0, next:null, failNext:false};
@@ -62,17 +62,24 @@ async function historyFixture(page, count = 30) {
       arrive:arrived.resolve, released:release.promise, deliver:delivered.resolve};
     fixture.next = pending; return pending;
   };
-  await page.route('**/api/me/submissions', async route => {
+  await page.route('**/api/me/submissions*', async route => {
     fixture.reads++;
-    const pending = fixture.next, selected = fixture.rows.slice(), fail = fixture.failNext;
+    const pending = fixture.next, all = fixture.rows.slice(), fail = fixture.failNext;
+    const url = new URL(route.request().url()), after = url.searchParams.get('after');
+    const offset = after ? all.findIndex(row=>row.id===after)+1 : 0, limit = Number(url.searchParams.get('limit') || 50);
+    const selected = all.slice(offset,offset+limit), next_after = offset+limit < all.length ? selected.at(-1).id : null;
     fixture.next = null; fixture.failNext = false;
     try {
-      const response = await route.fetch();
+      // Synthetic row IDs are not stored cursors. Authorize each request using
+      // the real first-page endpoint; cursor isolation is tested against actual
+      // database rows in test_submission_history.py, not fabricated here.
+      const authorized = new URL(url); authorized.searchParams.delete('after');
+      const response = await route.fetch({url: authorized.href});
       if (response.status() !== 200) return await route.fulfill({response});
       if (fail) return await route.fulfill({response,status:503,json:{detail:'Synthetic temporary history failure.'}});
       const data = await response.json();
       if (pending) {pending.arrive(); await pending.released;}
-      await route.fulfill({response, json:{...data, submissions:selected}});
+      await route.fulfill({response, json:{...data, submissions:selected,next_after}});
     } finally {pending?.deliver();}
   });
   return fixture;
@@ -151,18 +158,20 @@ for (const width of [1440, 390]) {
       expect(before.overflow).toBe(false);
       await page.screenshot({path:testInfo.outputPath('activity-cold-' + width + '.png')});
     } finally {pending.release(); await pending.delivered;}
-    await expect(historyContent(page).locator('button.history-item')).toHaveCount(30);
+    await expect(historyContent(page).locator('.activity-item')).toHaveCount(25);
+    await expect(historyContent(page).locator('.history-item-title').first()).toHaveText('Finite-field Diffie–Hellman (Stage 1)');
     await expect(page.locator('#activity-notes')).not.toHaveAttribute('aria-busy','true');
     const many = await historyGeometry(page);
     for (const key of ['title','refresh']) sameRect(many[key],before[key],key);
     expect(many.overflow).toBe(false);
     expect(await historyContent(page).evaluate(element => getComputedStyle(element).overflowY)).toBe('visible');
     await page.screenshot({path:testInfo.outputPath('activity-many-' + width + '.png'),fullPage:true});
-    await expect(page.locator('#activity-workspace h2')).toHaveText(['Schemes','Bounties','Notes']);
+    await expect(history(page).locator('.activity-tabs button')).toHaveText(['Schemes','Bounties','Notes']);
+    await expect(page.locator('#activity-frame')).toBeHidden();
     fixture.rows=[];await page.locator('#nav-about').click();const empty=fixture.holdNext();
     try {
       await page.locator('#history-button').click();await empty.arrived;
-      await expect(historyContent(page).locator('button.history-item')).toHaveCount(30);
+      await expect(historyContent(page).locator('.activity-item')).toHaveCount(25);
       empty.release();await empty.delivered;
       await expect(historyContent(page)).toContainText('No submissions yet.');
       const after=await historyGeometry(page);for(const key of ['title','refresh'])sameRect(after[key],before[key],key);
@@ -170,6 +179,40 @@ for (const width of [1440, 390]) {
     await page.reload();await expect(history(page)).toBeVisible();
     await expect(page.locator('#activity-title')).toHaveText('My activity');
     await expect(historyContent(page)).toContainText('No submissions yet.');
+  });
+
+  test('activity pagination preserves its '+width+'px viewport and cached page while short final pages shrink',async({page},testInfo)=>{
+    await page.setViewportSize({width,height:850});await startAtAbout(page);const fixture=await historyFixture(page,52);
+    await page.locator('#history-button').click();await expect(historyContent(page).locator('.activity-item')).toHaveCount(25);
+    await page.locator('#activity-pagination').scrollIntoViewIfNeeded();
+    const before=await page.evaluate(()=>scrollY), initialHeight=await historyContent(page).evaluate(el=>el.getBoundingClientRect().height);
+    const pending=fixture.holdNext();
+    try {
+      await page.locator('#activity-next').click();await pending.arrived;
+      await expect(historyContent(page).locator('.history-preview')).toBeVisible();
+      expect(Math.abs(await page.evaluate(()=>scrollY)-before)).toBeLessThanOrEqual(2);
+      pending.release();await pending.delivered;await expect(historyContent(page).locator('.activity-item')).toHaveCount(25);
+      expect(Math.abs(await page.evaluate(()=>scrollY)-before)).toBeLessThanOrEqual(2);
+      await expect(page.locator('#activity-page-select')).toHaveValue('1');
+    } finally {pending.release();await pending.delivered;}
+    const again=fixture.holdNext();
+    try {
+      await page.locator('#activity-previous').click();await again.arrived;
+      await expect(historyContent(page).locator('.activity-item')).toHaveCount(25);
+      await expect(historyContent(page).locator('.history-preview')).toHaveCount(0);
+      expect(Math.abs(await page.evaluate(()=>scrollY)-before)).toBeLessThanOrEqual(2);
+    } finally {again.release();await again.delivered;}
+    await expect(page.locator('#refresh-activity')).toBeEnabled();
+    await page.locator('#activity-page-select').selectOption('1');await expect(page.locator('#refresh-activity')).toBeEnabled();
+    await page.locator('#activity-next').click();await expect(historyContent(page).locator('.activity-item')).toHaveCount(2);
+    expect(await historyContent(page).evaluate(el=>el.getBoundingClientRect().height)).toBeLessThan(initialHeight/4);
+    expect(await historyContent(page).evaluate(el=>el.style.minHeight)).toBe('');
+    await expect(page.locator('#activity-next')).toBeDisabled();
+    await page.screenshot({path:testInfo.outputPath('activity-final-page-'+width+'.png'),fullPage:true});
+    const reads=fixture.reads;await page.locator('#nav-about').click();await page.locator('#history-button').click();
+    await expect(page.locator('#activity-page-select')).toHaveValue('2');await expect(historyContent(page).locator('.activity-item')).toHaveCount(2);
+    await expect.poll(()=>fixture.reads).toBe(reads+1);
+    await expect(page.locator('#refresh-activity')).toBeEnabled();
   });
 
   test('populated activity includes attacks, proposed schemes and bounty participation at ' + width + 'px',async({page},testInfo)=>{
@@ -187,8 +230,10 @@ for (const width of [1440, 390]) {
       await route.fulfill({response,json:{bounties:[{id:'fixture-own',title:'Document the scheme assumptions',status:'pending',owner:session.user,created_at:1700000000},{id:'fixture-contribution',title:'Reproduce the reference analysis',status:'open',owner:{id:'other'},created_at:1700000000}],pagination:{offset:0,limit:25,has_more:false}}});
     });
     await page.locator('#history-button').click();
+    await page.locator('#activity-tab-notes').click();
     await expect(page.locator('#activity-notes')).toContainText('Proposed scheme');await expect(page.locator('#activity-notes')).toContainText('Attack');
     await expect(page.locator('#activity-notes .activity-scheme-tag')).toHaveText('Proposed scheme');
+    await page.locator('#activity-tab-bounties').click();
     await expect(page.locator('#activity-bounties')).toContainText('Proposed by you');await expect(page.locator('#activity-bounties')).toContainText('You contributed');
     expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
     await page.screenshot({path:testInfo.outputPath('activity-populated-'+width+'.png'),fullPage:true});
@@ -205,6 +250,37 @@ for (const width of [1440, 390]) {
   });
 }
 
+test('a full note reader returns to the same activity page, expansion and scroll position',async({page})=>{
+  await page.setViewportSize({width:390,height:850});await startAtAbout(page);
+  const sourceData=await(await page.request.get('/api/notebook/notes?scope=mine&summary=true&limit=25')).json();
+  const source=sourceData.notes.find(note=>note.owner?.handle==='browser_alice');expect(source).toBeTruthy();
+  const readCounts=[];page.on('request',request=>readCounts.push(new URL(request.url()).pathname));
+  await page.route(url=>url.pathname==='/api/notebook/notes'&&url.searchParams.get('scope')==='mine',async route=>{
+    const url=new URL(route.request().url()),second=url.searchParams.has('after');url.searchParams.delete('after');
+    const response=await route.fetch({url:url.href});if(response.status()!==200)return route.fulfill({response});
+    const data=await response.json();
+    const notes=Array.from({length:25},(_,i)=>second&&i===15?source:{...source,id:'summary-'+Number(second)+'-'+i,
+      revisions:source.revisions.map(revision=>({...revision,content:{...revision.content,title:'Activity summary '+Number(second)+'-'+i}}))});
+    await route.fulfill({response,json:{...data,notes,next_after:second?null:'second-page'}});
+  });
+  try {
+    await page.locator('#history-button').click();await page.locator('#activity-tab-notes').click();
+    await expect(page.locator('#activity-notes .activity-item')).toHaveCount(25);await page.locator('#activity-next').click();
+    await expect(page.locator('#activity-page-select')).toHaveValue('1');
+    const row=page.locator('#activity-notes .activity-item').nth(15);await row.locator('.activity-toggle').click();
+    await row.locator('.activity-detail').scrollIntoViewIfNeeded();const before=await page.evaluate(()=>scrollY);
+    await row.locator('.activity-detail').click();await expect(page.locator('#notebook-workspace .nb-full-title')).toBeVisible();
+    expect(readCounts.filter(path=>path==='/api/notebook/notes/'+source.id).length).toBeGreaterThan(0);
+    await page.goBack();await expect(page.locator('#activity-workspace')).toBeVisible();
+    await expect(page.locator('#activity-page-select')).toHaveValue('1');await expect(row.locator('.activity-toggle')).toHaveAttribute('aria-expanded','true');
+    await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(before);
+  } finally {
+    // Back paints its cached page immediately, before the fresh read completes.
+    // Finish that intercepted read before Playwright disposes its response.
+    await page.unrouteAll({behavior:'wait'});
+  }
+});
+
 test('submission details return to activity and late reads cannot restore a departed page',async({page})=>{
   await startAtAbout(page);const fixture=await historyFixture(page,1);
   await page.route('**/api/submissions/browser-layout-0',async route=>{
@@ -212,7 +288,8 @@ test('submission details return to activity and late reads cannot restore a depa
     await route.fulfill({response,status:200,json:{submission:{...fixture.rows[0],handle:'browser_alice',elapsed_seconds:1,
       method:{name:'Synthetic detail fixture',pseudocode:'Display-only fixture; no attack executed.'},compute:{}}}});
   });
-  await page.locator('#history-button').click();const row=historyContent(page).locator('button.history-item').first();await expect(row).toBeVisible();
+  await page.locator('#history-button').click();const entry=historyContent(page).locator('.activity-item').first();await expect(entry).toBeVisible();
+  await entry.locator('.activity-toggle').click();const row=entry.locator('.activity-detail');
   await row.click();await expect(page.locator('#recovery-title')).toHaveText('Synthetic detail fixture');
   await page.keyboard.press('Escape');await expect(row).toBeFocused();await expect(history(page)).toBeVisible();
   fixture.rows=[{...fixture.rows[0],method_name:'Updated synthetic method'}];
@@ -221,7 +298,7 @@ test('submission details return to activity and late reads cannot restore a depa
     await activityRefresh(page).click();await refreshed.arrived;await row.click();
     const close=page.locator('#recovery-dialog [data-close]');await close.focus();
     refreshed.release();await refreshed.delivered;
-    await expect(historyContent(page)).toContainText('Updated synthetic method');await expect(close).toBeFocused();
+    await expect(historyContent(page).locator('.activity-preview')).toContainText('Updated synthetic method');await expect(close).toBeFocused();
     await page.keyboard.press('Escape');await expect(row).toBeFocused();
   } finally {refreshed.release();await refreshed.delivered;}
   await page.locator('#nav-about').click();const pending=fixture.holdNext();
@@ -235,7 +312,7 @@ test('submission details return to activity and late reads cannot restore a depa
 
 test('revoked access clears every activity section and retires pending reads',async({page,context})=>{
   await startAtAbout(page);const fixture=await historyFixture(page,1);await page.locator('#history-button').click();
-  await expect(historyContent(page)).toContainText('Synthetic layout method 0');
+  await expect(historyContent(page).locator('.activity-item')).toHaveCount(1);
   const pending=fixture.holdNext();
   try {
     await activityRefresh(page).click();await pending.arrived;
