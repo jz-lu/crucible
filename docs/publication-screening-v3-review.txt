@@ -25,6 +25,16 @@ crucible/publication_screening_policy.py. V3 adds one output enum value, not a
 new database table, score, automatic sanction, scientific review or provider call.
 The publication notice and reviewer labels describe the expanded scope.
 
+The reviewed release contract pins the two changed modules to these exact bytes:
+  crucible/publication_screening_policy.py
+    1778646410d75319aca2eb4ecc4074337aaa6d32c3e921a65a74b1993cc3b45d
+  crucible/publication_screening.py
+    e12408d1e1fb4ff776e1acc04e7fa5fd091431d1a0b59a35cb2f3ba8fde8601a
+Only those two reviewed-overlay hashes change. They remain immutable release
+inputs; no allowlist, worker/provider pin, native manifest or guard is relaxed.
+The first is the full module digest, distinct from the prompt-string digest in
+the evaluation report. A source-contract pass does not run native verification.
+
 IDENTITY AND OLD WORK
 
 The version, prompt hash and output-schema hash all change the policy identity.
