@@ -143,6 +143,16 @@
     root.classList.toggle('pending-notebook', ['Notes', 'Scheme map', 'Timeline', 'Bounties'].includes(route.title));
     const title = document.querySelector('#access-title');
     if (title) { title.textContent = route.title; title.removeAttribute('aria-hidden'); title.setAttribute('aria-level', route.page === 'gate' ? '2' : '1'); }
+    if (route.page === 'activity') {
+      const requested = new URLSearchParams((window.location?.hash || '').split('?')[1] || '').get('kind');
+      const kind = requested === 'notes' ? 'notes' : requested === 'bounties' && bountyAvailable() ? 'bounties' : 'schemes';
+      for (const name of ['schemes', 'bounties', 'notes']) {
+        const tab = document.querySelector('#activity-frame [data-activity-frame-kind=' + name + ']');
+        if (tab) {tab.setAttribute('aria-pressed', String(kind === name)); tab.hidden = name === 'bounties' && !bountyAvailable();}
+      }
+      const link = document.querySelector('#activity-frame [data-activity-frame-link]');
+      if (link) link.textContent = kind === 'notes' ? 'All your notes →' : kind === 'bounties' ? 'All your bounties →' : 'Browse schemes →';
+    }
     const notebookTitle = document.querySelector('#notebook-frame-template .nb-heading h1');
     if (notebookTitle) notebookTitle.textContent = route.title;
     const selected = route.page === 'gate' ? null : section();

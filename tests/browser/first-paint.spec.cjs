@@ -297,3 +297,47 @@ test('About access failure stays gated, retry respects an expired session and th
     expect(reads).toEqual([]);
   } finally { await held.close(); }
 });
+
+for (const [width, kind] of [[1440, 'schemes'], [390, 'notes']]) {
+  test('activity hard reload keeps its '+kind+' frame at '+width+'px before access and data',async({page},testInfo)=>{
+    await page.setViewportSize({width,height:1000});await page.emulateMedia({reducedMotion:'reduce'});await useDataSaver(page);
+    await page.goto('/#about');await signIn(page,'alice',{navigate:false});await page.goto('about:blank');
+    const startup=await holdAboutStartup(page), reads=trackProtectedReads(page);
+    const data=await holdResponse(page,url=>kind==='schemes'?url.pathname==='/api/me/submissions':url.pathname==='/api/notebook/notes'&&url.searchParams.get('scope')==='mine');
+    let dataArrived=false;void data.arrived.then(()=>{dataArrived=true;});
+    const bounds=async(live=false)=>page.evaluate(({live,kind})=>{
+      const root=document.querySelector(live?'#activity-workspace':'#access-workspace');
+      const selectors=[live?'#activity-title':'#access-title','.activity-tabs',live?'#activity-'+kind+'-section .activity-section-heading':'#activity-frame .activity-section-heading',live?(kind==='schemes'?'#history-content':'#activity-'+kind)+' .history-preview .activity-row-heading':'#activity-frame .activity-row-heading'];
+      return selectors.map(selector=>{const box=root.querySelector(selector).getBoundingClientRect();return {x:box.x,y:box.y,width:box.width,height:box.height};});
+    },{live,kind});
+    try {
+      await page.goto('/?activity-first-paint='+width+(kind==='schemes'?'#activity':'#activity?kind=notes'),{waitUntil:'commit'});await startup.arrived;
+      await page.evaluate(()=>document.fonts.ready);
+      await page.screenshot({path:testInfo.outputPath('activity-before-access-'+width+'.png')});
+      await expect(page.locator('#activity-frame')).toBeVisible();await expect(page.locator('#activity-frame')).toHaveAttribute('inert','');
+      await expect(page.locator('#activity-frame [data-activity-frame-kind='+kind+']')).toHaveAttribute('aria-pressed','true');
+      await expect(page.locator('[data-pending-layout=list]')).toBeHidden();expect(reads).toEqual([]);
+      const before=await bounds();startup.app.release();await startup.app.delivered;
+      await expect(page.locator('#activity-frame')).toBeVisible();expect(await bounds()).toEqual(before);expect(reads).toEqual([]);
+      startup.session.release();await startup.session.delivered;await data.arrived;
+      await expect(page.locator('#activity-workspace')).toBeVisible();await expect(page.locator('#activity-frame')).toBeHidden();
+      const after=await bounds(true);
+      for(let i=0;i<before.length;i++)for(const key of ['x','y','width','height'])expect(Math.abs(after[i][key]-before[i][key]),i+' '+key).toBeLessThanOrEqual(1);
+      expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+      data.release();await data.delivered;await expect(page.locator('#refresh-activity')).toBeEnabled();
+      await expect(page.locator('#activity-tab-'+kind)).toHaveAttribute('aria-pressed','true');
+    } finally {data.release();await startup.close();if(dataArrived)await data.delivered;await data.remove();}
+  });
+}
+
+test('a remembered private gate suppresses the activity frame and performs no private reads',async({page})=>{
+  await useDataSaver(page);await page.goto('/#activity?kind=notes');await expect(page.locator('#access-sign-in')).toBeVisible();
+  const startup=await holdAboutStartup(page),reads=trackProtectedReads(page);
+  try {
+    await page.reload({waitUntil:'commit'});await startup.arrived;
+    await expect(page.locator('html')).toHaveAttribute('data-pending-page','gate');await expect(page.locator('#access-title')).toHaveText('Private beta');
+    await expect(page.locator('#activity-frame')).toBeHidden();expect(reads).toEqual([]);
+    startup.app.release();await startup.app.delivered;startup.session.release();await startup.session.delivered;
+    await expect(page.locator('#access-sign-in')).toBeVisible();await expect(page.locator('#activity-workspace')).toBeHidden();expect(reads).toEqual([]);
+  } finally {await startup.close();}
+});

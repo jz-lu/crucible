@@ -240,7 +240,8 @@ html[data-pending-page=neutral] .pending-page-preview[data-pending-layout=neutra
 html[data-pending-page=catalogue] .pending-page-preview[data-pending-layout=catalogue],
 html[data-pending-page=people] .pending-page-preview[data-pending-layout=people],
 html[data-pending-page=profile] .pending-page-preview[data-pending-layout=profile],
-html:is([data-pending-page=list],[data-pending-page=activity]) .pending-page-preview[data-pending-layout=list],
+html[data-pending-page=list] .pending-page-preview[data-pending-layout=list],
+html[data-pending-page=activity] .pending-page-preview[data-pending-layout=activity],
 html[data-pending-page=chart] .pending-page-preview[data-pending-layout=chart],
 html[data-pending-page=timeline] .pending-page-preview[data-pending-layout=timeline] { display: block; }
 html[data-pending-page=gate] .pending-page-preview[data-pending-layout=gate] { display: block; }
@@ -2572,12 +2573,17 @@ dialog h2 {
 .history-preview .history-item-meta .catalogue-placeholder { height: 11px; width: 42%; }
 .history-preview .history-item-meta:last-child .catalogue-placeholder { width: 32%; }
 .history-preview .history-item:hover { background: transparent; }
+/* Activity starts with its actual public layout; these inert controls reveal
+   no account data and remain subordinate to the normal session gate. */
+html[data-pending-page=activity] .access-workspace[aria-busy=true] .access-heading-space { visibility:visible; }
+#activity-frame .activity-tabs button:disabled { opacity:1; }
+#activity-frame .activity-section-heading span { text-decoration:underline; }
 .activity-tabs { display:flex; gap:25px; margin-top:24px; border-bottom:1px solid var(--line); }
 .activity-tabs button { padding:9px 0 12px; border-bottom:2px solid transparent; font:500 15px/1.4 var(--sans); color:var(--muted); }
 .activity-tabs button[aria-pressed="true"] { border-bottom-color:var(--primary); color:var(--ink); }
 .activity-section { margin-top:18px; }
 .activity-section-heading { display:flex; justify-content:flex-end; min-height:25px; }
-.activity-section-heading a { font-size:12px; }
+.activity-section-heading :is(a,span) { font-size:12px; }
 .activity-list { margin-top:8px; border-top:1px solid var(--line); }
 .activity-list .empty-state { padding:24px 3px; text-align:left; }
 .activity-item { border-bottom:1px solid var(--line); }
@@ -4367,6 +4373,7 @@ html[data-bounties-enabled="false"] #nav-bounties { display:none!important; }
 .bty-shell-heading h2,
 html[data-pending-page=catalogue] #access-title,
 html[data-pending-page=people] #access-title,
+html[data-pending-page=activity] #access-title,
 .access-workspace[aria-busy=true] .notebook-frame .nb-title-row>h1 {
   display:flex;align-items:center;min-height:45px;margin:0;
   font:var(--page-title-font);letter-spacing:-.3px;color:var(--ink);
