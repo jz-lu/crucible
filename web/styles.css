@@ -357,7 +357,7 @@ button {
   margin: auto;
   min-height: 94px;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 36px;
   padding: 18px 46px;
 }
@@ -369,10 +369,7 @@ button {
   text-decoration: none;
   color: var(--ink);
 }
-.site-header .brand { position:relative;isolation:isolate;align-items:baseline;min-height:54px; }
-/* Align the text, then optically center the complete mark and its glow. */
-.site-header .brand-icon-button { align-self:center;transform:translateY(-8px); }
-.site-header .primary-nav,.site-header .account-actions { align-items:baseline; }
+.site-header .brand { position:relative;isolation:isolate;min-height:54px; }
 .brand-icon-button {
   appearance:none;display:block;position:relative;flex:none;
   margin:0;padding:0;border:0;border-radius:0;background:transparent;color:inherit;
@@ -2674,7 +2671,6 @@ html[data-pending-page=activity] .access-workspace[aria-busy=true] .access-headi
     height: 46px;
   }
   .site-header .brand { min-height:46px; }
-  .site-header .brand-icon-button { transform:translateY(-6px); }
   .account-actions {
     gap: 12px;
   }

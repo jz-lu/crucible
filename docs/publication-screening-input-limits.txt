@@ -1,0 +1,97 @@
+PUBLICATION SCREENING INPUT ADMISSION — 2026-11-06
+
+Problem and change
+------------------
+Four previously submitted exact revisions stopped before provider generation.
+They contained 105,051–273,509 canonical bytes, 158–558 nodes and depth 3–6.
+All hit input_budget_exceeded, not content-size or structure limits. The old
+128,000-unit admission test counted serialized UTF-8 bytes plus framing, not
+model tokens. JSON escaping and the field graph increased those estimates.
+The diagnostic retained numeric measurements only, not private note content.
+
+Small inputs still take one generation request. When the conservative estimate
+is above budget, the worker asks the provider to count the exact supported
+request inputs, then permits generation only at <=128,000 input tokens. The
+same complete content, instructions, model settings and output schema are used.
+Truncation is explicitly disabled. Counting cannot grant publication authority:
+author, exact revision, pending request, policy and lease are rechecked before
+sending generation, and again before committing any publication.
+
+The v3 prompt, output schema and input-v1 bytes/field IDs are unchanged. The
+policy snapshot pins the new admission method; existing jobs are not silently
+retargeted. Historical evidence reconstructs its versioned input independently
+of a later prompt size or admission budget. No schema migration is needed.
+
+The arbitrary 4,096-node cutoff becomes the five-digit field-ID ceiling (99,999).
+The existing 384 KiB source limit and depth 32 guard remain. Notebook storage rules
+are unchanged. A local worst-case synthetic graph with 99,999 nodes used approximately 114 MB
+process peak RSS and constructed in 0.237 seconds on this Mac; this is not a hosted
+benchmark. A native release check remains required. The field graph itself
+still consumes tokens, so this does not claim to eliminate all representation
+overhead or support arbitrary inline datasets.
+
+Real provider checks
+--------------------
+Two synthetic attempts used the existing authorized team key, no production
+notes/database, no retry and four HTTP requests total. Both count results
+exactly matched subsequent generation input usage.
+
+Case                       Canonical bytes  Nodes  Byte estimate  Actual tokens
+Escaping-heavy math         105,087           20     135,759       59,790
+Numeric metadata + ending     9,197        4,279     326,763       83,773
+
+The mathematical note passed in 5.207 seconds. The structured note's hostile postscript
+was flagged at its correct field f04273 in 2.932 seconds. The latter establishes one
+observed late-content check, not universal attention/full semantic coverage.
+The two attempts account for $0.014414 at the pinned conservative generation
+rates. Counting reports no billing usage; no claim that counting is free or
+that this ledger is a complete invoice follows from those generation totals.
+
+Frozen evaluation policy:
+  ec0393b2084185cc9024c7e3e2a361d479bfaa77f79272325f7d924bebeeeb0f
+Input-admission version:
+  utf8-bound-or-responses-count-v1
+Prompt SHA256:
+  8df94fca677c33bf2b1a680ac9d149303df9ec9672667a7c49739748cff10c62
+Provider implementation SHA256:
+  2ff7bffb1c42143f2c1a2eaa0ce0435b9812722da85d5320a0269e38ea90f5d9
+
+Reproducible evidence is in publication-screening-input-evidence-20261106.json.
+The original local receipts are in .local/input-admission-evaluation-20261106.
+They retain exact synthetic inputs,
+source/prompt/schema/request hashes, counts, validated outputs, usage and timing.
+This small transport/coverage check supplements the earlier v3 classifier tests;
+it does not estimate a production error rate or justify changing safety policy.
+
+Bounds and verification
+-----------------------
+One existing global lease/reservation covers count plus generation. Both calls
+share 45 seconds; each attempt makes at most one count and one generation request.
+Count failures go to human attention without repeated blind calls. Ambiguous
+generation still retains its reserved charge. Validated actual generation costs
+are preserved even if a provider unexpectedly exceeds the reserved cap; such a
+result cannot publish. Publication remains exact-revision and idempotent.
+
+Focused regressions cover complete round trips, metadata beyond 4,096 nodes,
+count-request identity, malformed/oversized counts, no implicit truncation,
+mid-count cancellation/revocation/human decisions/policy changes/expiry, known
+overspend, historical findings and bounded operator repair. Header-centering
+has 11 focused desktop/mobile Chromium checks. Full CI and native image release
+checks are separately recorded in GitHub, not implied by this local report.
+
+Repair of the four earlier preflight failures
+--------------------------------------------
+publication_screening_retry is a separate trusted-host operator action. Preview
+requires an explicit list of at most 25 publication IDs; applying requires the
+same fresh SHA-bound plan, current automatic policy and active access admin.
+Only an exact still-pending automatic-mode request with a single zero-generation
+preflight attempt is eligible. No model flag, shadow-only consent, ambiguous
+usage, human decision, cancellation, withdrawn/deleted note or inactive author
+can enter repair. Old jobs/attempts/costs remain; a new policy creates a new job
+and audit event atomically. Replaying the plan never creates a second job.
+There is no participant API, startup scan or automatic requeue of terminal jobs.
+
+Official request/counting references
+-----------------------------------
+https://developers.openai.com/api/docs/guides/token-counting
+https://developers.openai.com/api/reference/resources/responses/subresources/input_tokens/methods/count

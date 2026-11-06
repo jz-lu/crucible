@@ -5,7 +5,7 @@ to publish by itself. Output explanations remain untrusted private text.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import hashlib
 import json
 import math
@@ -15,7 +15,10 @@ from typing import Any
 POLICY_VERSION = "crucible-publication-screen-v3"
 INPUT_FORMAT_VERSION = "crucible-publication-screen-input-v1"
 MAX_CONTENT_BYTES = 384 * 1024
-MAX_FIELDS = 4096
+# Five-digit evidence IDs are part of input-v1's immutable format. The content
+# byte cap and actual token admission handle normal note sizes; this ceiling
+# only bounds graph construction and prevents identifier/schema overflow.
+MAX_FIELDS = 99999
 MAX_DEPTH = 32
 DEFAULT_MAX_INPUT_TOKENS = 128000
 MAX_VERDICT_BYTES = 16384
@@ -257,18 +260,18 @@ class ScreeningInput:
     input_format_version: str = INPUT_FORMAT_VERSION
 
 
-def prepare_input(content: dict, *, max_input_tokens: int = DEFAULT_MAX_INPUT_TOKENS) -> ScreeningInput:
-    """Serialize ALL plain-JSON inline values and keys, or refuse coverage.
+def reconstruct_input(content: dict, *, input_format_version: str = INPUT_FORMAT_VERSION) -> ScreeningInput:
+    """Reconstruct the complete versioned field graph without admission checks.
 
-    UTF-8 bytes plus policy/schema/framing form a deliberately conservative
-    input budget, not a tokenizer measurement. Long inputs go to human review;
-    never summarize/truncate to fit. Only pass the exact note content, not a
-    database/account/publication envelope. No top-level whitelist drops fields.
+    Stored findings are bound to these deterministic bytes, not today's prompt
+    length or token budget. Keep this format's ordering, field IDs and exact
+    strings stable; a future representation needs its own version and reader.
+    Resource bounds still apply. No provider or database is consulted here.
     """
+    if input_format_version != INPUT_FORMAT_VERSION:
+        raise ScreeningCoverageError("unsupported_input_format")
     if type(content) is not dict or not content:
         raise ScreeningCoverageError("invalid_content")
-    if type(max_input_tokens) is not int or not 1024 <= max_input_tokens <= 128000:
-        raise ScreeningCoverageError("invalid_input_budget")
     nodes, locations, ancestors = [], {}, set()
     accumulated_bytes = 0
 
@@ -324,20 +327,37 @@ def prepare_input(content: dict, *, max_input_tokens: int = DEFAULT_MAX_INPUT_TO
         raise ScreeningCoverageError("unsupported_json_encoding") from None
     if len(canonical) > MAX_CONTENT_BYTES:
         raise ScreeningCoverageError("content_size_limit")
+    return ScreeningInput(input_json, hashlib.sha256(canonical).hexdigest(),
+                          hashlib.sha256(encoded).hexdigest(),
+                          MappingProxyType(locations), 0)
+
+
+def prepare_input(content: dict, *, max_input_tokens: int = DEFAULT_MAX_INPUT_TOKENS,
+                  allow_token_count: bool = False) -> ScreeningInput:
+    """Prepare all inline content; never summarize or truncate it to fit.
+
+    The byte upper bound keeps small requests on the fast path. A worker opting
+    into token counting may retain a larger complete input, but the provider
+    must count and admit that exact request before generating a verdict. The
+    default preserves the legacy offline-export admission behavior.
+    """
+    if type(max_input_tokens) is not int or not 1024 <= max_input_tokens <= 128000:
+        raise ScreeningCoverageError("invalid_input_budget")
+    if type(allow_token_count) is not bool:
+        raise ScreeningCoverageError("invalid_input_budget")
+    prepared = reconstruct_input(content)
     # Counts the serialized message envelope (including JSON escaping), policy
     # and output schema, plus a reserve for model/configuration/protocol framing.
     # This deliberately overestimates input tokens; it is not a tokenizer count.
     envelope = {"instructions": POLICY_PROMPT,
                 "input": [{"role": "user", "content": [
-                    {"type": "input_text", "text": input_json}]}],
+                    {"type": "input_text", "text": prepared.input_json}]}],
                 "text": {"format": {"type": "json_schema", "name": "crucible_publication_screen",
                                       "strict": True, "schema": OUTPUT_SCHEMA}}}
     units = len(canonical_json(envelope).encode()) + 1024
-    if units > max_input_tokens:
+    if units > max_input_tokens and not allow_token_count:
         raise ScreeningCoverageError("input_budget_exceeded")
-    return ScreeningInput(input_json, hashlib.sha256(canonical).hexdigest(),
-                          hashlib.sha256(encoded).hexdigest(),
-                          MappingProxyType(locations), units)
+    return replace(prepared, input_budget_units=units)
 
 
 def strict_json(raw: str | bytes, *, max_bytes: int = MAX_VERDICT_BYTES):

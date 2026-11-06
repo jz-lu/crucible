@@ -221,17 +221,32 @@ def test_provider_failure_remains_private_with_a_bounded_human_fallback(screened
     assert publication(screened, saved)['decision_source'] == 'human'
 
 
-def test_oversized_input_is_not_truncated_or_sent_to_provider(screened):
+def test_measured_oversized_input_is_not_truncated_or_sent_for_generation(screened):
+    import httpx
+    from crucible.publication_screening_provider import COUNT_ENDPOINT, OpenAIResponsesProvider
     configure(screened)
     extensions = {f'part-{number}': 'Y' * 50_000 for number in range(3)}
     saved = create(screened.owner, content(body='X' * 40_000, extensions=extensions))
     assert request(screened.owner, saved).status_code == 200
-    provider = SyntheticProvider()
-    run(screened, provider)
-    assert provider.inputs == []
+    requests = []
+    def count_only(incoming):
+        import json
+        assert str(incoming.url) == COUNT_ENDPOINT
+        payload = json.loads(incoming.content)
+        graph = json.loads(payload['input'][0]['content'][0]['text'])
+        strings = [node.get('text') for node in graph['fields']]
+        assert 'X' * 40_000 in strings and 'Y' * 50_000 in strings
+        requests.append(incoming)
+        return httpx.Response(200, json={'object': 'response.input_tokens', 'input_tokens': 128001})
+    provider = OpenAIResponsesProvider(model='gpt-6-luna', api_key='synthetic-test',
+        reasoning_effort='none', transport=httpx.MockTransport(count_only))
+    assert run(screened, provider)['error_code'] == 'input_token_limit'
+    assert len(requests) == 1
     assert publication(screened, saved)['decision'] is None
     with screened.app.state.db.transaction() as session:
         assert session.scalar(select(ScreeningJob.status)) == 'human_review'
+        attempt = session.scalar(select(ScreeningAttempt))
+        assert attempt.result is None and attempt.charged_micro_usd == 0 and attempt.usage_known
     original = screened.owner.client.get(f'/api/notebook/notes/{saved["id"]}').json()['note']
     assert original['revisions'][0]['content']['body'] == 'X' * 40_000
     assert original['revisions'][0]['content']['extensions'] == extensions

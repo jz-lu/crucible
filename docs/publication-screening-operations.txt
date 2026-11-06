@@ -3,6 +3,15 @@ PUBLICATION SCREENING — OPERATOR GUIDE
 
 CURRENT STATE
 
+The input-admission update retains the v3 safety prompt and input-v1 exact field
+graph. Its policy identity pins the input-admission method
+utf8-bound-or-responses-count-v1. See publication-screening-input-limits.txt for
+the bounded real-provider evaluation. No schema, hosting secret or environment
+change is needed. Deploy through the normal tested-image release, verify the
+serving source, then explicitly configure the new policy with the existing
+automatic mode and monthly cap. Do not reset leases or cost buckets. Older
+decisions and attempts remain immutable; changing control alone retries nothing.
+
 This checkout contains the v3 policy candidate. Its separate 48-case synthetic
 evaluation is recorded in publication-screening-v3-evaluation-20261106.txt,
 including the one predeclared outcome mismatch and subsequent user clarification.

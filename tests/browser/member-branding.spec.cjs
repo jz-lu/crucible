@@ -16,6 +16,20 @@ for (const width of [1440, 640, 390]) for (const theme of ['light', 'dark']) {
     const mark = page.locator('#site-brand .brand-mark'), brand = page.locator('#site-brand');
     await expect(mark).toBeVisible();await expect(mark).toHaveAttribute('data-logo-ready', 'true');
     expect(await mark.evaluate(element => element.naturalWidth)).toBeGreaterThan(0);
+    await page.evaluate(() => document.fonts.ready);
+    const alignment = await page.evaluate(() => {
+      const center = element => { const box = element.getBoundingClientRect();return box.y + box.height / 2; };
+      const wordmark = document.querySelector('#site-brand .brand-wordmark');
+      return {wordmark:center(wordmark),mark:center(document.querySelector('#brand-animate')),
+        navigation:[...document.querySelectorAll('.primary-nav .nav-button')].filter(element => element.getClientRects().length).map(center),
+        account:center(document.querySelector('.account-actions')),font:getComputedStyle(wordmark).fontFamily,
+        overflow:document.documentElement.scrollWidth > innerWidth};
+    });
+    expect(alignment.font).toContain('Georgia');expect(alignment.overflow).toBe(false);
+    expect(Math.abs(alignment.wordmark - alignment.mark), 'wordmark and complete icon share a centre').toBeLessThan(1);
+    const navigationCenter = width > 700 ? alignment.wordmark : alignment.navigation[0];
+    for (const center of alignment.navigation) expect(Math.abs(center - navigationCenter), 'navigation labels share their row centre').toBeLessThan(1);
+    if (width > 700) expect(Math.abs(alignment.account - alignment.wordmark), 'account controls share the title centre').toBeLessThan(1);
     const wording = page.locator('#home-title .scrutiny-wording');
     await expect(wording).toHaveCSS('animation-name','scrutiny-reveal');
     await expect(wording).toHaveCSS('animation-duration','0.52s');

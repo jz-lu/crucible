@@ -22,7 +22,7 @@ SUITES = (
     "test_publication_queue_summary.py",
     "test_publication_screening_worker.py", "test_publication_screening_integration.py",
     "test_publication_screening_supervisor.py",
-    "test_publication_screening_adoption.py",
+    "test_publication_screening_adoption.py", "test_publication_screening_retry.py",
     "test_publication_screening_database.py",
     "test_publication_screening_status.py", "test_publication_screening_findings.py",
     "test_publication_screening_queue.py",

@@ -239,21 +239,40 @@ every inline JSON field and key, retaining exact strings, container structure an
 opaque field IDs. Account metadata, unrelated notes and private revision history
 are excluded. External resources are outside this screen's scope.
 
-The input budget is 128,000 conservative units: UTF-8 bytes of the serialized
-request envelope, including prompt, schema and input, plus framing allowance.
-This is a conservative token ceiling, not a tokenizer measurement or permission
-to silently truncate. Oversize, unsupported or uncovered input goes to a human.
+The input budget is 128,000 tokens for the complete review request. Small inputs
+use a conservative UTF-8 byte bound of the serialized envelope, including prompt,
+schema and framing allowance. Exceeding that estimate no longer rejects a note:
+the provider counts the exact supported request inputs before generation. It
+includes the same model, instructions, full field graph, schema, reasoning and
+tool settings. Truncation is disabled. A measured count above the budget goes to
+a human; a failed count is a service limitation, not a content flag. There is no
+extra count request for inputs that already fit the conservative bound.
+
+The old 4,096-node cutoff has been replaced by the existing five-digit field-ID
+ceiling (99,999). The 384 KiB source cap and depth guard remain, so construction
+is bounded before any provider call. Ordinary tables are judged by the complete
+request's tokens, not an arbitrary low field count. Nothing is summarized,
+flattened, omitted or silently truncated. Exact v1 field IDs and graph bytes
+remain stable; historical findings reconstruct that format without applying a
+later prompt's size or admission rules.
 The output cap is 1,500 tokens. Validation checks exact output structure, categories,
 field IDs, line ranges and consistency; a clear verdict must contain no findings.
 This validates form and coverage, not the model's semantic judgment.
 
-The provider applies a 45-second asynchronous deadline to the complete HTTP
-send/receive operation, including headers and body, with cancellation and transport
-cleanup. The database lease is 120 seconds. Process/OS stalls can still exceed a
+The provider applies one 45-second asynchronous deadline across counting and
+generation, including headers and bodies, with cancellation and transport
+cleanup. Authorization, publication state and lease validity are checked again
+after counting and before generation, outside the HTTP calls. The database
+lease is 120 seconds. Process/OS stalls can still exceed a
 wall-clock target, so lease checks remain authoritative. An expired/stale result
 cannot publish. Canceling transport cannot recall a request already received by
 the provider, so ambiguous timeouts may incur billable duplicates. The ledger
-charges the full reserved maximum when usage is unknown. These limits must be
+charges the full reserved generation maximum when generation usage is unknown.
+Known generation usage is retained even if it unexpectedly exceeds the reservation;
+that request cannot publish. Counting has at most one call per attempt and no
+internal retries. Its endpoint reports no billable-usage field; zero generation
+charges do not establish that counting is free or that this ledger equals the
+provider invoice. Reconcile provider billing separately. These limits must be
 exercised before hosted activation.
 
 At most two attempts are allowed. Only transient service errors or expired leases

@@ -540,7 +540,8 @@
       "test_notebook_publication_cancellation.py"
     ],
     "publication-adoption": [
-      "test_publication_screening_adoption.py"
+      "test_publication_screening_adoption.py",
+      "test_publication_screening_retry.py"
     ],
     "records": [
       "test_milestones.py"
@@ -776,14 +777,15 @@
     "crucible/data/display_note_bindings.json": "d21ad3249fbc75978b0df7c44946fff4684ecd1daee6c5f6b3666bd92caf6de4",
     "crucible/notebook_numbers.py": "46b25b5d455682be3f718de9897792909b24983a76972f9be162442c1920f151",
     "crucible/notebook_publication_lifecycle.py": "6fa9699e8f134af719af8c8b4c691970111ea2a9f8dbf2c3e3f38cb0745f008d",
-    "crucible/publication_screening.py": "e12408d1e1fb4ff776e1acc04e7fa5fd091431d1a0b59a35cb2f3ba8fde8601a",
+    "crucible/publication_screening.py": "325e7ade033010601be6b57ba326bc3f798a526a2897bc6d3447aefd5e365422",
     "crucible/publication_screening_adoption.py": "35d6ab53c393840ce0563e45a8ffeab87115873e9b583390ca744f1abba79756",
-    "crucible/publication_screening_jobs.py": "0ca5252e644f7167cbb1f5993659fc57740b55083f500303995b5b57672db175",
+    "crucible/publication_screening_jobs.py": "a724803b49a11f6726887f47151d59f91d7a0c75e2c49b23515ecbb5a673b26e",
     "crucible/publication_screening_models.py": "a3cd552772c455a92c14776e8fbf0beac5fa24151e504837b1a1064e8b440375",
-    "crucible/publication_screening_policy.py": "1778646410d75319aca2eb4ecc4074337aaa6d32c3e921a65a74b1993cc3b45d",
-    "crucible/publication_screening_provider.py": "6fd863fc7402553166a77c986ef30779def59f2d6cd13e9faa3596beda51f049",
+    "crucible/publication_screening_policy.py": "ce724fd56a6d119a521c9d378c0c6a4b33d1fc430d4a0394df94922fddfd43c1",
+    "crucible/publication_screening_provider.py": "2ff7bffb1c42143f2c1a2eaa0ce0435b9812722da85d5320a0269e38ea90f5d9",
+    "crucible/publication_screening_retry.py": "3136da5ab13703d2e48616c74bf4353be066922900ee684c1ea8f749fdaa7648",
     "crucible/publication_screening_supervisor.py": "f604ba03361fdb913d4f5b0d78046b72b3e454ec96e02524febf5cae442a4fcb",
-    "crucible/publication_screening_worker.py": "c5852df4e716f2507ebef1a1bace19e9532a9b54bd9ebd29220362ca27ee71a7",
+    "crucible/publication_screening_worker.py": "681f913b2d106c1ac0b73785d0516517decc31a3d44074c311f6466476650aad",
     "crucible/researcher_profiles.py": "18e50b6ee29c0931346ba794f10e52530e461b2ba0f646d9832c28eb02d715cb",
     "crucible/resource_identity.py": "068fd102a41e924a45e276699c6f816993d585d3b184a79f3a8d78288f59c553",
     "crucible/resource_publications.py": "1a5ceeffcb532f6eb732b5660efc39c11707d79e6f50f2742b7c158f216522bf",
