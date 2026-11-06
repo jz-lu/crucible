@@ -108,6 +108,7 @@
 .nb-note-actions{justify-content:flex-end;gap:8px;margin:0;padding-top:3px}
 .nb-note-actions .nb-button,.nb-card-actions .nb-button{white-space:nowrap}
 .nb-note-actions .nb-button{font-size:12px;padding:6px 12px}
+.nb-note-actions .nb-publication-cancel{max-width:100%;white-space:normal;text-align:center}
 .nb-human-written{color:var(--muted);background:var(--light)}
 .nb-human-option,.nb-proposal-option{display:grid;grid-template-columns:18px 1fr;gap:6px 9px;align-items:center}
 .nb-human-option input,.nb-proposal-option input{grid-column:1;grid-row:1;width:16px;height:16px;padding:0;accent-color:var(--primary)}

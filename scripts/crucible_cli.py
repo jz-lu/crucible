@@ -1276,11 +1276,12 @@ def notebook_command(client, args):
         body = {"deletion_id": notebook_id(args.deletion_id)}
     else:
         notebook_pin(args.revision, args.sha256)
-        endpoint += "/delete" if action == "delete" else "/publication-requests"
+        endpoint += {"delete": "/delete", "cancel-publication": "/publication-cancellations",
+                     "request-publication": "/publication-requests"}[action]
         body = {"revision": args.revision, "content_sha256": args.sha256}
         if action == "delete":
             if not getattr(args, "permanent", False):
-                raise ClientError("Deletion permanently removes this private draft and all its saved revisions. Repeat with --permanent only after explicit authorization.", "permanent_delete_confirmation_required")
+                raise ClientError("Deletion permanently erases this private note's content and cancels pending publication. Minimal audit and usage records remain. Repeat with --permanent only after explicit authorization.", "permanent_delete_confirmation_required")
             body["permanent"] = True
         if action == "request-publication":
             policy_id = getattr(args, "screening_policy_id", None)
@@ -1317,6 +1318,14 @@ def notebook_command(client, args):
             raise ClientError("The server did not confirm permanent deletion. Preserve the retry file and update the server before retrying.")
         receipt = {**deletion, "deletion_id": deletion["id"], "deleted": response["deleted"],
                    "permanent": response.get("permanent", False)}
+    elif action == "cancel-publication":
+        receipt = response.get("publication")
+        if (not isinstance(receipt, dict) or receipt.get("note_id") != identifier
+                or (receipt.get("revision"), receipt.get("content_sha256")) != (args.revision, args.sha256)
+                or receipt.get("status") != "cancelled"):
+            raise ClientError("The cancellation receipt does not match the requested revision. Preserve the retry file.")
+        notebook_id(receipt.get("id"))
+        notebook_pin(receipt.get("revision"), receipt.get("content_sha256"))
     elif action == "import":
         mapping = response.get("id_map")
         expected = {note["id"] for note in value["notes"]}
@@ -1332,7 +1341,7 @@ def notebook_command(client, args):
         expected_revision = 1 if action == "create" else args.revision + 1 if action == "revise" else args.revision
         expected_hash = hashlib.sha256(encode(content)).hexdigest() if action in {"create", "revise"} else args.sha256
         note = checked_notebook_note(response, identifier=identifier, revision=expected_revision, digest=expected_hash, owner=owner)
-        if action == "request-publication" and note.get("publication_status") not in {"submitted", "approved", "changes_requested", "withdrawn"}:
+        if action == "request-publication" and note.get("publication_status") not in {"submitted", "approved", "changes_requested", "withdrawn", "cancelled"}:
             raise ClientError("The server did not return a recorded publication request. Preserve the retry file.")
         receipt = {key: note[key] for key in ("id", "revision", "content_sha256", "publication_status")}
         receipt["note_url"] = client.server + "/#notebook?" + urlencode({
@@ -1763,12 +1772,12 @@ def parser():
     notebook = commands.add_parser("notebook", help="Read, save and submit your own research notes through the API")
     common(notebook, True)
     actions = notebook.add_subparsers(dest="notebook_action", required=True)
-    for name in ("list", "show", "export", "import", "create", "revise", "publication-policy", "request-publication", "delete", "restore"):
+    for name in ("list", "show", "export", "import", "create", "revise", "publication-policy", "request-publication", "cancel-publication", "delete", "restore"):
         item = actions.add_parser(name)
         common(item, True)
-        if name in {"show", "revise", "request-publication", "delete", "restore"}:
+        if name in {"show", "revise", "request-publication", "cancel-publication", "delete", "restore"}:
             item.add_argument("note_id", help="Full saved note UUID")
-        if name in {"show", "revise", "request-publication", "delete"}:
+        if name in {"show", "revise", "request-publication", "cancel-publication", "delete"}:
             item.add_argument("--revision", type=int, required=name != "show")
             item.add_argument("--sha256", required=name != "show")
         if name in {"show", "export"}:
@@ -1778,7 +1787,7 @@ def parser():
         if name in {"list", "show"}:
             item.add_argument("--deleted", action="store_true", help="Read drafts removed by the former recoverable-deletion workflow")
         if name == "delete":
-            item.add_argument("--permanent", action="store_true", help="Explicitly confirm irreversible removal of this private draft and all revisions")
+            item.add_argument("--permanent", action="store_true", help="Confirm irreversible content erasure and pending-publication cancellation; minimal audit and usage records remain")
         if name == "restore":
             item.add_argument("--deletion-id", required=True, help="Exact deletion UUID from the delete receipt or notebook list --deleted")
         if name == "request-publication":
@@ -1790,7 +1799,7 @@ def parser():
             item.add_argument("--after")
         if name in {"import", "create", "revise"}:
             item.add_argument("--file", required=True, help="Workspace JSON for import, or note content JSON for create/revise")
-        if name in {"import", "create", "revise", "request-publication", "delete", "restore"}:
+        if name in {"import", "create", "revise", "request-publication", "cancel-publication", "delete", "restore"}:
             item.add_argument("--retry", help="Durable retry file; reuse unchanged after a lost response")
     bounty = commands.add_parser("bounty", help="Read research tasks, save drafts and explicitly allocate monthly allowance")
     common(bounty, True)

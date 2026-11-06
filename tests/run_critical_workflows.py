@@ -17,6 +17,7 @@ SUITES = (
     "test_notebook.py", "test_notebook_access.py", "test_notebook_moderation.py",
     "test_notebook_browse.py", "test_notebook_summary_index.py", "test_notebook_timeline.py",
     "test_notebook_agents.py", "test_notebook_trash.py", "test_notebook_graph.py",
+    "test_notebook_publication_cancellation.py",
     "test_notebook_numbers.py", "test_notebook_tags.py",
     "test_publication_queue_summary.py",
     "test_publication_screening_worker.py", "test_publication_screening_integration.py",

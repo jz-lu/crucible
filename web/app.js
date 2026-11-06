@@ -1746,6 +1746,7 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
   }
 }
 function setSession(data) {
+  const enteringBeta = state.sessionResolved && !hasAccess();
   document.body.removeAttribute('data-access-pending');
   $('.primary-nav').removeAttribute('inert');
   state.sessionRevision++;
@@ -1764,6 +1765,8 @@ function setSession(data) {
   state.access = data.access || (state.access?.mode === 'beta' ?
     {mode: 'beta', allowed: false, status: state.user ? 'pending' : 'anonymous'} :
     {mode: 'open', allowed: true, status: state.user ? 'active' : 'anonymous'});
+  if (!hasAccess()) logoBetaEntryPending = false;
+  else if (enteringBeta) logoBetaEntryPending = true;
   // Presentation only: the next reload can keep the gate or route frame in
   // place, but every reload still waits for its fresh session before any data.
   document.body.setAttribute('data-access-view', hasAccess() ? 'workspace' : 'gate');
@@ -2634,6 +2637,7 @@ function personStats(person) {
     const role = node('div', undefined, 'person-role-stat');
     role.append(node('dt', 'Role'), node('dd', 'Reviewer'));
     stats.append(role);
+    return stats;
   } else {
     const place = profileRankParts(person), link = node('a', undefined, 'person-place-link');
     link.id = 'person-leaderboard-rank'; link.href = '#people';
@@ -2643,7 +2647,7 @@ function personStats(person) {
     const rankValue = node('dd'); rankValue.append(link);
     const rankStat = node('div', undefined, 'person-place-stat'); rankStat.append(node('dt', 'Place on leaderboard'), rankValue); stats.append(rankStat);
   }
-  for (const [label, key] of [...(reviewer ? [] : [['Points', 'points']]), ['Accepted proposals', 'accepted_proposal_count']]) {
+  for (const [label, key] of [['Points', 'points'], ['Accepted proposals', 'accepted_proposal_count']]) {
     const value = node('dd', person ? peopleNumber(person[key], key === 'points' ? 'Pending' : '—') : undefined);
     if (!person) value.append(node('span', undefined, 'catalogue-placeholder'));
     const term = node('dt', label);
@@ -2864,17 +2868,13 @@ function profileRankParts(person) {
   const suffix = lastTwo >= 11 && lastTwo <= 13 ? 'th' : ({1: 'st', 2: 'nd', 3: 'rd'})[rank % 10] || 'th';
   return {rank, suffix};
 }
-function renderPerson(person) {
-  const target = $('#person-content');
-  setText('#person-title', person.handle);
-  renderResearcherProfile(person.researcher_profile);
-  target.replaceChildren(personStats(person));
-  if (person.score_status !== 'reviewer' && !Number.isFinite(person.points)) target.append(node('p', 'Scoring is being finalized. Verified results are recorded below.', 'people-score-note'));
+function renderPersonAchievements(person, target) {
+  if (!Number.isFinite(person.points)) target.append(node('p', 'Scoring is being finalized. Verified results are recorded below.', 'people-score-note'));
   target.append(renderFirstRecords(person));
   const {section: records, content: recordContent} = personDisclosure('Personal records',
     `${peopleNumber(person.records?.length || 0)} scheme${person.records?.length === 1 ? '' : 's'}`);
   records.id = 'personal-records';
-  if (person.records?.length) recordContent.append(personalRecordTable(person.records, {showPoints: person.score_status !== 'reviewer'}));
+  if (person.records?.length) recordContent.append(personalRecordTable(person.records));
   else recordContent.append(node('div', 'No solved challenges yet.', 'empty-state'));
   target.append(records);
   const {section: recent, content: recentContent} = personDisclosure('Recent solves',
@@ -2899,6 +2899,13 @@ function renderPerson(person) {
     recentContent.append(list);
   } else recentContent.append(node('div', 'No solved challenges yet.', 'empty-state'));
   target.append(recent);
+}
+function renderPerson(person) {
+  const target = $('#person-content');
+  setText('#person-title', person.handle);
+  renderResearcherProfile(person.researcher_profile);
+  target.replaceChildren(personStats(person));
+  if (person.score_status !== 'reviewer') renderPersonAchievements(person, target);
   state.personDataKey = JSON.stringify(person);
   renderAgentSettings();
   renderReviewAccountLink();
@@ -6059,6 +6066,7 @@ function showWorkspace(name) {
   if (transferLoadingFocus) $(workspaceSelector(name)).focus({preventScroll: true});
   if (enteringResearch && !research.targets.length) loadResearch();
   else if (enteringResearch && research.target) loadFindings();
+  playBetaEntryGlow();
 }
 function researchError(message) {
   setText('#research-error-text', message);
@@ -6506,7 +6514,7 @@ window.addEventListener('pointercancel', clearTaglinePointer);
 window.addEventListener('blur', clearTaglinePointer);
 const landingBrand = $('#site-brand'), landingMark = landingBrand.querySelector('.brand-mark'), landingFire = landingBrand.querySelector('.brand-fire-ghost');
 const logoMotionPreference = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-let logoAnimationRun = 0, logoStartupTimer = null;
+let logoAnimationRun = 0, logoStartupTimer = null, logoBetaEntryPending = false;
 function stopLogoAnimation() {
   clearTimeout(logoStartupTimer); logoStartupTimer = null;
   logoAnimationRun++;
@@ -6525,6 +6533,14 @@ function igniteLandingLogo() {
   if (animation) animation.finished.then(finish, finish);
   else finish();
 }
+function playBetaEntryGlow() {
+  // Wait for the visible workspace, including the invitation's final dialog.
+  // Session refreshes and ordinary routes do not create another entry event.
+  if (!logoBetaEntryPending || !hasAccess() || authDialog.open || !$('#access-workspace').hidden) return;
+  logoBetaEntryPending = false;
+  igniteLandingLogo();
+}
+authDialog.addEventListener('close', playBetaEntryGlow);
 logoMotionPreference?.addEventListener?.('change', event => { if (event.matches) stopLogoAnimation(); });
 const startLogoAnimation = () => {
   if (logoAnimationRun !== 0 || logoStartupTimer !== null) return;
@@ -6533,8 +6549,8 @@ const startLogoAnimation = () => {
     if (logoAnimationRun === 0) igniteLandingLogo();
   }, 500);
 };
-// Pause briefly after decoding, once per document. Routes never replay it;
-// clicking the icon starts immediately and cancels any pending startup animation.
+// Pause briefly after decoding, once per document. Entering beta and icon
+// clicks start immediately and cancel any pending startup animation.
 if (typeof landingMark.decode === 'function') landingMark.decode().then(startLogoAnimation, () => {});
 else if (landingMark.complete) startLogoAnimation();
 else landingMark.addEventListener('load', startLogoAnimation, {once: true});

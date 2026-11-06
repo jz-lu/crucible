@@ -15,7 +15,9 @@ import time
 
 from sqlalchemy import event, func, select
 
-from . import publication_screening_jobs as jobs
+# Register the notebook FK targets before the first claim flush. A standalone
+# worker has not imported the web application, unlike in-process worker tests.
+from . import notebook, publication_screening_jobs as jobs
 from .publication_screening_models import ScreeningAttempt, ScreeningBudget, ScreeningControl, ScreeningJob
 from .publication_screening_policy import (
     DEFAULT_MAX_INPUT_TOKENS, INPUT_FORMAT_VERSION, OUTPUT_SCHEMA_SHA256, POLICY_VERSION,
@@ -103,7 +105,7 @@ class _Unavailable(Exception):
 
 def _target(session, identity):
     """Lock account → note → publication, as in normal notebook mutations."""
-    from . import beta_access, notebook, notebook_moderation, notebook_trash
+    from . import beta_access, notebook_moderation, notebook_trash
     user = beta_access.lock_user(session, identity.author_id)
     if user is None:
         raise _Unavailable()

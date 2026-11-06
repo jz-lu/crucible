@@ -74,14 +74,16 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
     assert.equal(app.$('#person-content').querySelector('.person-score-breakdown'), null);
     assert.ok(app.document.activeElement === app.$('#person-workspace'));
   });
-  await test('becoming a reviewer removes score controls without leaving focus or an error behind', async () => {
-    for (const selector of ['#person-leaderboard-rank', '.person-score-breakdown']) {
+  await test('becoming a reviewer removes achievements without leaving focus or an error behind', async () => {
+    for (const selector of ['#person-leaderboard-rank', '.person-score-breakdown', '#first-records', '#personal-records', '#recent-solves']) {
       const {app, change, refresh} = await boot();
       const control = profileElement(app, selector);
       (control.querySelector('summary') || control).focus();
       change({score_status:'reviewer', rank:null, points:0}); await refresh();
       assert.equal(app.$('#person-content').querySelector('#person-leaderboard-rank'), null);
       assert.equal(app.$('#person-content').querySelector('.person-score-breakdown'), null);
+      assert.equal(app.$('#person-content').querySelector('.person-section'), null);
+      assert.equal(app.$('#person-content').querySelector('.person-proposals-stat'), null);
       assert.equal(app.$('#person-content').querySelector('.person-role-stat').querySelector('dd').textContent, 'Reviewer');
       assert.ok(app.document.activeElement === app.$('#person-workspace'));
       assert.equal(app.$('#person-content').querySelector('.inline-error'), null);

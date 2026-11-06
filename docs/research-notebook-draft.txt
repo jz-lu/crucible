@@ -36,17 +36,24 @@ With schema 0031 they also include screening jobs, cost records and automated
 publication provenance. The migration creates no historical screening jobs.
 Durability does not substitute for operator backups or redundant hosting.
 
-An author can permanently delete an unsubmitted private draft from Edit → Delete,
+An author can permanently delete an eligible private note from Edit → Delete,
 after a confirmation, or with CLI notebook delete --permanent and its exact
-latest revision/hash. All live revisions, derived outgoing references and copies
+latest revision/hash. Pending publish requests are cancelled atomically. All
+revision content, derived outgoing references and copies
 of that note/bindings in the author's stored import archives are erased. A
 content-free note identity, permanent number reservation and deletion receipt
-remain for safe retries. Backup retention and separately authored quotations or
+remain for safe retries. Requests, required revision shells, content hashes and
+screening usage commitments remain; stored model findings are erased.
+Backup retention and separately authored quotations or
 exports are not erased by this action. Permanently deleted notes cannot restore,
 reappear through old retries/imports, or consume active-note capacity.
 
-Notes ever submitted for publication, scheme admission or as research-request
-evidence cannot be deleted, including newer private revisions. Moderator
+Notes with publication decisions other than author cancellation, scheme admission
+submissions or research-request evidence cannot be deleted, including newer
+private revisions. An author can cancel a still-pending exact publication request
+from its expanded row/full reader or CLI notebook cancel-publication. Cancellation
+keeps the note private and rejects delayed automated or human publication. A new
+saved revision is needed to request publication again. Moderator
 withdrawal and proposal retraction remain separate. Earlier recoverable removals
 are preserved and visible to their owner in My notes as Previously removed;
 they may be explicitly permanently deleted. Legacy read/restore APIs remain for

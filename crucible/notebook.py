@@ -659,7 +659,9 @@ def register_routes(app, db, settings, clock, user_for, throttle):
         if review and protocol_proposals.is_reviewer(settings, user):
             permitted.append(NotebookPublication.id.is_not(None))
             permitted.append(NotebookRevision.id.in_(select(proposal_notes.ProposalNoteLink.note_revision_id)))
-        query = query.where(or_(*permitted))
+        # Permanent deletion can retain content-free revision shells for audit
+        # FKs. They are not readable notes, including through legacy trash URLs.
+        query = query.where(or_(*permitted), NotebookNote.latest_revision > 0)
         if not include_deleted:
             query = query.where(NotebookNote.id.not_in(notebook_trash.deleted_ids()))
         if note_id is not None:
@@ -1062,6 +1064,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
     notebook_moderation.register_routes(app, db, settings, clock, account, throttle)
     notebook_graph.register_routes(app, db, settings, account, visible)
     notebook_trash.register_routes(app, db, clock, account, throttle)
+    from . import notebook_publication_lifecycle
+    notebook_publication_lifecycle.register_routes(app, db, clock, account, throttle)
     note_ratings.register_routes(app, db, clock, user_for, throttle)
 
     @app.get("/api/notebook/notes/{note_id}")

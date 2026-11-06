@@ -1052,7 +1052,7 @@ html[data-pending-page=profile] .access-title-row { display:flex; }
 .person-stats > div > dt { display: flex; align-items: center; gap: 4px; min-height: 32px; color: var(--muted); font: 400 14px/1.5 var(--sans); }
 .person-stats > div > dd { margin: 9px 0 0; font: 600 36px/1.2 var(--sans); }
 .person-stats > div:first-child > dd,.person-points-stat > dd { color:var(--primary); }
-.person-reviewer-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.person-reviewer-stats { grid-template-columns:minmax(0,1fr); }
 .person-stats > .person-role-stat > dd { font-size:28px; }
 .person-place-link { color:inherit; font:inherit; white-space:nowrap; text-decoration:none; }
 .person-place-link:hover { text-decoration:underline; }

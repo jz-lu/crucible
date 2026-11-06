@@ -15,6 +15,7 @@ test('a pasted expired invitation reports expiry and keeps existing sign-in avai
 });
 
 test('a new password account completes real mailbox verification using local test mail', async ({page}, testInfo) => {
+  await page.emulateMedia({reducedMotion:'no-preference'});
   const outbox = process.env.CRUCIBLE_BROWSER_OUTBOX;
   expect(outbox).toBeTruthy();
   await page.goto('/');
@@ -28,6 +29,7 @@ test('a new password account completes real mailbox verification using local tes
   const before = new Set(readdirSync(outbox));
   await page.locator('#auth-submit').click();
   await expect(page.locator('#auth-title')).toHaveText('Verify your email');
+  await expect(page.locator('#site-brand')).not.toHaveClass(/brand-ignited/, {timeout:3000});
   const delivered = () => readdirSync(outbox).filter(name => name.endsWith('.eml') && !before.has(name))
     .map(name => readFileSync(join(outbox, name), 'utf8'))
     .find(message => message.includes('invite-verification@example.invalid'));
@@ -36,7 +38,9 @@ test('a new password account completes real mailbox verification using local tes
   await page.locator('#access-code').fill(code);
   await page.locator('#access-code-form button[type=submit]').click();
   await expect(page.locator('#auth-title')).toHaveText("You're in.");
+  await expect(page.locator('#site-brand')).not.toHaveClass(/brand-ignited/);
   await page.locator('#auth-enter').click();
+  await expect(page.locator('#site-brand')).toHaveClass(/brand-ignited/);
   await expect(page.locator('#access-workspace')).toBeHidden();
   await expect(page.locator('#account-handle')).toHaveText('mail_flow_preview');
   await expect(page.locator('.primary-nav')).toBeVisible();
