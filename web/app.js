@@ -5135,7 +5135,8 @@ async function warmActivityPage(kind, path) {
     // only projected summaries here as well, never the raw note response.
     warmedReads.set(key, {at: Date.now(), data: kind === 'bounties' ?
       {bounties: page.records, pagination: response.pagination} :
-      {[kind === 'schemes' ? 'submissions' : 'notes']: page.records, next_after: response.next_after || null}});
+      {[kind === 'schemes' ? 'submissions' : 'notes']: page.records,
+        ...(kind === 'schemes' && !Object.hasOwn(response, 'next_after') ? {} : {next_after: response.next_after || null})}});
   }
   return bytes;
 }

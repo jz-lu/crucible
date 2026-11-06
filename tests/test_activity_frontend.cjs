@@ -82,6 +82,17 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
   assert.equal(rows(app,'schemes').length,50);assert.equal(app.$('#activity-next').disabled,true);
   assert.throws(()=>vm.runInContext("activityCollectionPage('schemes',{submissions:Array.from({length:26},(_,i)=>({id:String(i)})),next_after:null},activityFirstPath('schemes'))",app.sandbox),/could not be loaded/);
  });
+ await test('warming an old-server first fifty preserves its missing pagination marker',async()=>{
+  const values=Array.from({length:50},(_,i)=>({...submission,id:'legacy-warm-'+i}));
+  const app=await boot({hash:'#about',hook:(url,options,envelope)=>url.pathname==='/api/me/submissions'?envelope({submissions:values}):undefined});
+  await vm.runInContext("warmActivityPage('schemes',activityFirstPath('schemes'))",app.sandbox);
+  assert.equal(vm.runInContext("Object.hasOwn(warmedReads.get(activityPageKey('schemes',activityFirstPath('schemes'))).data,'next_after')",app.sandbox),false);
+  await app.navigate('#activity');
+  assert.equal(rows(app,'schemes').length,50);assert.equal(app.$('#activity-next').disabled,true);
+  assert.equal(reads(app,'/api/me/submissions').length,1);
+  assert.equal(app.$('#history-content').querySelector('.activity-read-error'),null);
+  assert.doesNotMatch(app.$('#history-content').textContent,/could not be loaded/);
+ });
  await test('cached unchanged rows keep expansion, identity and focus during a quiet refresh',async()=>{
   const held=deferred();let slow=false;const app=await boot({hash:'#activity?kind=notes',hook:url=>slow&&url.pathname==='/api/notebook/notes'?held.promise:undefined});
   const row=rows(app,'notes')[0],toggle=row.querySelector('.activity-toggle');toggle.click();await app.navigate('#about');slow=true;await select(app,'notes');toggle.focus();
