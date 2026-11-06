@@ -74,7 +74,17 @@ for (const width of [1440, 1000, 700, 390]) {
       await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
     }
     await page.evaluate(() => scrollTo(0, 25));
-    await page.locator('#nav-about').click();
+    // The aligned header can leave the button's top edge just above the
+    // viewport. Locator.click() scrolls it into view before dispatch, changing
+    // the very history position this check intends to preserve. Click its
+    // visible center as a user would, without that automation-only adjustment.
+    const about = await page.locator('#nav-about').boundingBox();
+    expect(about).not.toBeNull();
+    const point = {x: about.x + about.width / 2, y: about.y + about.height / 2};
+    expect(point.x).toBeGreaterThan(0); expect(point.x).toBeLessThan(width);
+    expect(point.y).toBeGreaterThan(0); expect(point.y).toBeLessThan(800);
+    expect(await page.evaluate(() => scrollY)).toBe(25);
+    await page.mouse.click(point.x, point.y);
     await expect(page.locator('#about-title')).toBeVisible();
     await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
     await page.goBack(); await notebookReady(page);
