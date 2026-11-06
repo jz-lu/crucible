@@ -106,7 +106,8 @@ jobs:
   frontend-checks:
     name: Standalone frontend regressions
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # The complete sequential gate can exceed ten minutes on shared runners.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
