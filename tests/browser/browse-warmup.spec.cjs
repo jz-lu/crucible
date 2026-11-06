@@ -86,7 +86,7 @@ test('ordinary background preparation makes the first People and submissions vis
   // These views are intentionally not mounted during preparation. Wait for
   // actual in-memory completion, not a delay or a response-header event that
   // may run before the response body has been parsed. No cache is injected.
-  await page.waitForFunction(()=>warmedReads.has('people')&&warmedReads.has('history:'+(state.catalogueRevision||'')));
+  await page.waitForFunction(()=>warmedReads.has('people')&&warmedReads.has(activityPageKey('schemes',activityFirstPath('schemes'))));
   await expect(page.locator('#about-workspace')).toBeVisible();
   await expect(page.locator('#people-workspace')).toBeHidden();
   await expect(page.locator('#people-content .person-link')).toHaveCount(0);
