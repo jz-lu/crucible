@@ -241,7 +241,7 @@ def test_damaged_summary_keeps_pending_triage_without_category_claims(screened, 
         if damage == 'category': value['concerns'][0]['category'] = 'MODEL_CONTROLLED_LABEL'
         if damage == 'excess': value['concerns'] *= 5
         if damage == 'prose': value['concerns'][0]['explanation'] = 'x' * 601
-        if damage == 'field': value['concerns'][0]['field_id'] = 'f99999'
+        if damage == 'field': value['concerns'][0]['field_id'] = 'f100000'
         if damage == 'line_type': value['concerns'][0]['line_start'] = True
         attempt.result = value
         attempt.result_sha256 = '0' * 64 if damage == 'result_digest' else digest(value)

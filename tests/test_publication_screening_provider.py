@@ -7,7 +7,8 @@ import pytest
 
 from crucible.publication_screening_policy import canonical_json, prepare_input
 from crucible.publication_screening_provider import (
-    ENDPOINT, MAX_ERROR_BYTES, MAX_RESPONSE_BYTES, OpenAIResponsesProvider, ScreeningProviderError,
+    COUNT_ENDPOINT, ENDPOINT, MAX_COUNT_RESPONSE_BYTES, MAX_ERROR_BYTES, MAX_RESPONSE_BYTES,
+    OpenAIResponsesProvider, ScreeningProviderError, count_request, validate_admission,
     parse_response, response_request,
 )
 
@@ -38,16 +39,19 @@ def test_mocked_request_is_stateless_tool_free_full_input_strict_schema():
         payload = json.loads(request.content)
         assert str(request.url) == ENDPOINT and request.method == 'POST'
         assert payload['store'] is False and payload['stream'] is False
+        assert payload['truncation'] == 'disabled'
         assert payload['tools'] == [] and payload['tool_choice'] == 'none'
         assert payload['input'][0]['content'][0]['text'] == prepared.input_json
         assert payload['text']['format']['strict'] is True
         assert payload['text']['format']['schema']['additionalProperties'] is False
         assert payload['max_output_tokens'] == 1500
         assert set(payload) == {'model', 'store', 'stream', 'instructions', 'input', 'tools',
-                                'tool_choice', 'max_output_tokens', 'text'}
+                                'tool_choice', 'max_output_tokens', 'text', 'truncation'}
         return httpx.Response(200, json=completed())
     result = provider(handler).screen(prepared)
     assert len(calls) == 1 and result.verdict == PASS
+    assert result.admission == {'method': 'utf8_upper_bound', 'budget_units': prepared.input_budget_units,
+                                 'input_tokens': None, 'count_request_sha256': None}
     assert result.usage == {'input_tokens': 120, 'output_tokens': 50,
                             'cached_input_tokens': 20, 'reasoning_tokens': 10}
     assert 'reasoning' not in result.__dict__
@@ -214,3 +218,101 @@ def test_sync_worker_boundary_rejects_running_event_loop_before_any_transport():
             candidate.screen(prepare_input({'body': 'x'}))
     asyncio.run(invoked_from_event_loop())
     assert calls == []
+
+
+def large_input():
+    return prepare_input({'body': '数学\\equation\n' * 10000}, allow_token_count=True)
+
+
+def test_large_note_count_and_generation_use_identical_supported_input_fields():
+    prepared = large_input()
+    assert prepared.input_budget_units > 128000
+    calls, authorized = [], []
+    def handler(request):
+        payload = json.loads(request.content)
+        calls.append((str(request.url), payload))
+        if str(request.url) == COUNT_ENDPOINT:
+            assert not authorized
+            assert set(payload) == {'model', 'input', 'instructions', 'text', 'reasoning', 'tools', 'tool_choice', 'truncation'}
+            return httpx.Response(200, json={'object': 'response.input_tokens', 'input_tokens': 50000})
+        assert authorized == [True]
+        assert count_request(payload) == calls[0][1]
+        assert payload['input'][0]['content'][0]['text'] == prepared.input_json
+        assert payload['truncation'] == 'disabled'
+        return httpx.Response(200, json=completed())
+    result = provider(handler, reasoning_effort='none').screen(prepared, before_generation=lambda: authorized.append(True))
+    assert [url for url, _ in calls] == [COUNT_ENDPOINT, ENDPOINT]
+    assert result.admission['input_tokens'] == 50000
+    assert validate_admission(result.admission, prepared, model='synthetic-model', reasoning_effort='none') == result.admission
+    for damaged in (None, {**result.admission, 'input_tokens': True},
+                    {**result.admission, 'count_request_sha256': '0' * 64}):
+        with pytest.raises(ScreeningProviderError, match='invalid_input_admission'):
+            validate_admission(damaged, prepared, model='synthetic-model', reasoning_effort='none')
+
+
+@pytest.mark.parametrize('raw', [
+    '{}', '{"object":"other","input_tokens":1}',
+    '{"object":"response.input_tokens","input_tokens":true}',
+    '{"object":"response.input_tokens","input_tokens":-1}',
+    '{"object":"response.input_tokens","input_tokens":1,"input_tokens":2}',
+    '{"object":"response.input_tokens","input_tokens":1,"secret":"untrusted"}',
+    'x' * (MAX_COUNT_RESPONSE_BYTES + 1),
+])
+def test_bad_count_never_sends_generation_or_retains_response_text(raw):
+    calls = []
+    def handler(request):
+        calls.append(str(request.url))
+        return httpx.Response(200, content=raw, headers={'content-type': 'application/json'})
+    with pytest.raises(ScreeningProviderError) as error:
+        provider(handler).screen(large_input())
+    assert calls == [COUNT_ENDPOINT]
+    assert error.value.code == 'provider_count_unavailable'
+    assert error.value.generation_started is False and error.value.retryable is False
+    assert 'untrusted' not in repr(error.value.__dict__)
+
+
+def test_actual_token_limit_stops_before_authorization_or_generation():
+    calls = []
+    def handler(request):
+        calls.append(str(request.url))
+        return httpx.Response(200, json={'object': 'response.input_tokens', 'input_tokens': 128001})
+    with pytest.raises(ScreeningProviderError, match='input_token_limit') as error:
+        provider(handler).screen(large_input(), before_generation=lambda: pytest.fail('Over-budget input cannot generate.'))
+    assert calls == [COUNT_ENDPOINT] and error.value.generation_started is False
+
+
+@pytest.mark.parametrize('status,code', [(301, 'provider_count_unavailable'), (401, 'provider_authentication_failed'),
+    (403, 'provider_access_denied'), (429, 'provider_count_unavailable'), (503, 'provider_count_unavailable')])
+def test_count_http_failure_has_no_generation_or_internal_retry(status, code):
+    calls = []
+    def handler(request):
+        calls.append(str(request.url))
+        return httpx.Response(status, text='PRIVATE_PROVIDER_ERROR', headers={'location': 'https://other.invalid'})
+    with pytest.raises(ScreeningProviderError) as error:
+        provider(handler).screen(large_input())
+    assert calls == [COUNT_ENDPOINT]
+    assert error.value.code == code and error.value.generation_started is False and not error.value.retryable
+
+
+def test_count_and_generation_share_one_absolute_deadline():
+    calls = []
+    async def handler(request):
+        calls.append(str(request.url))
+        await asyncio.sleep(.65)
+        if str(request.url) == COUNT_ENDPOINT:
+            return httpx.Response(200, json={'object': 'response.input_tokens', 'input_tokens': 10000})
+        return httpx.Response(200, json=completed())
+    with pytest.raises(ScreeningProviderError, match='provider_timeout') as error:
+        provider(handler, timeout_seconds=1).screen(large_input())
+    assert calls == [COUNT_ENDPOINT, ENDPOINT]
+    assert error.value.generation_started is True
+
+
+def test_count_timeout_stops_before_generation():
+    calls = []
+    async def handler(request):
+        calls.append(str(request.url))
+        await asyncio.Event().wait()
+    with pytest.raises(ScreeningProviderError, match='provider_count_unavailable') as error:
+        provider(handler, timeout_seconds=1).screen(large_input())
+    assert calls == [COUNT_ENDPOINT] and error.value.generation_started is False

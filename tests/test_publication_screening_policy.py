@@ -6,7 +6,7 @@ import pytest
 
 from crucible.publication_screening_policy import (
     CATEGORIES, POLICY_PROMPT, PROMPT_SHA256, ScreeningCoverageError,
-    ScreeningValidationError, canonical_json, prepare_input, validate_verdict,
+    ScreeningValidationError, canonical_json, prepare_input, reconstruct_input, validate_verdict,
 )
 
 
@@ -80,7 +80,7 @@ def test_cycles_limits_and_full_budget_do_not_truncate():
     with pytest.raises(ScreeningCoverageError, match='input_structure_limit'):
         prepare_input(nested)
     with pytest.raises(ScreeningCoverageError, match='input_structure_limit'):
-        prepare_input({'x': [0] * 4100}, max_input_tokens=128000)
+        reconstruct_input({'x': [0] * 100000})
     with pytest.raises(ScreeningCoverageError, match='content_size_limit'):
         prepare_input({'secret': 'X' * (384 * 1024 + 1)}, max_input_tokens=128000)
     baseline = prepare_input({'body': 'private passage'})
@@ -88,6 +88,42 @@ def test_cycles_limits_and_full_budget_do_not_truncate():
         prepare_input({'body': 'private passage'}, max_input_tokens=baseline.input_budget_units - 1)
     assert baseline.input_budget_units > len(baseline.input_json.encode()) + len(POLICY_PROMPT.encode())
     assert PROMPT_SHA256 == hashlib.sha256(POLICY_PROMPT.encode()).hexdigest()
+
+
+def test_counting_path_retains_complete_math_text_without_changing_v1_graph():
+    content = {'body': ('Let x \\in \\mathbb{F}_q.\n' * 1800),
+               'extensions': {'evidence': ['long but ordinary research. ' * 1100] * 5}}
+    with pytest.raises(ScreeningCoverageError, match='input_budget_exceeded'):
+        prepare_input(content)
+    prepared = prepare_input(content, allow_token_count=True)
+    reconstructed = reconstruct_input(content)
+    assert prepared.input_budget_units > 128000
+    assert prepared.input_sha256 == reconstructed.input_sha256
+    assert prepared.input_json == reconstructed.input_json
+    assert reconstruct(prepared) == content
+    assert reconstructed.input_budget_units == 0
+
+
+def test_metadata_tables_have_no_old_4096_node_cutoff():
+    content = {'extensions': {'measurements': [list(range(50)) for _ in range(100)]}}
+    prepared = prepare_input(content, allow_token_count=True)
+    assert len(prepared.fields) > 4096
+    assert reconstruct(prepared) == content
+    assert all(len(identifier) == 6 for identifier in prepared.fields)
+
+
+def test_historical_reconstruction_never_uses_current_prompt_or_admission(monkeypatch):
+    from crucible import publication_screening_policy as policy
+    content = {'body': 'Two lines\nwith a mathematical observation.'}
+    original = prepare_input(content)
+    monkeypatch.setattr(policy, 'POLICY_PROMPT', 'future prompt' * 20000)
+    with pytest.raises(ScreeningCoverageError, match='input_budget_exceeded'):
+        prepare_input(content)
+    historical = reconstruct_input(content, input_format_version=original.input_format_version)
+    assert historical.input_sha256 == original.input_sha256
+    assert historical.input_json == original.input_json
+    with pytest.raises(ScreeningCoverageError, match='unsupported_input_format'):
+        reconstruct_input(content, input_format_version='unknown-version')
 
 
 def test_valid_pass_review_and_limitation():

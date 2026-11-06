@@ -26,7 +26,8 @@ ERRORS = TRANSIENT_ERRORS | {'invalid_response', 'input_too_large', 'coverage_in
     'unsupported_input', 'provider_unconfigured', 'publication_unavailable', 'policy_changed',
     'disabled', 'budget_exhausted', 'lease_expired', 'usage_invalid', 'usage_exceeded_reservation',
     'internal_error', 'provider_authentication_failed', 'provider_access_denied',
-    'provider_quota_exhausted', 'provider_configuration_error'}
+    'provider_quota_exhausted', 'provider_configuration_error', 'input_token_limit',
+    'input_content_size_limit', 'input_structure_limit', 'provider_count_unavailable'}
 ACTOR = 'system:publication-screening'
 
 
