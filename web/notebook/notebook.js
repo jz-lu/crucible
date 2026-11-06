@@ -205,9 +205,18 @@
         /^[0-9a-f-]{36}$/.test(revision.publication?.id || '')).slice(0, 25).map(({note, revision}) => ({
           id:revision.publication.id, note_id:note.id, revision:revision.revision, content_sha256:revision.content_sha256}));
       if (!pins.length) return;
-      for (const pin of pins) if (!publicationWindows.has(pin.id)) {
-        publicationWindows.set(pin.id, {deadline:Date.now() + 300000, attempts:0, done:false});
-        if (publicationWindows.size > 500) publicationWindows.delete(publicationWindows.keys().next().value);
+      for (const pin of pins) {
+        const previous = publicationWindows.get(pin.id);
+        const status = records.find(({revision}) => revision.publication?.id === pin.id)?.revision.publication?.screening?.status ?? null;
+        // A manual request can acquire its first screening job later. A fresh
+        // presentation may recheck that exact request once; an observed queued
+        // transition can also reopen a stopped reader watch. Terminal jobs and
+        // an unchanged active job never receive a new polling budget on repaint.
+        if (!previous || previous.done && (previous.screeningStatus === null ||
+            ['queued', 'running'].includes(status) && !['queued', 'running'].includes(previous.screeningStatus))) {
+          publicationWindows.set(pin.id, {deadline:Date.now() + 300000, attempts:0, done:false, screeningStatus:status});
+          if (publicationWindows.size > 500) publicationWindows.delete(publicationWindows.keys().next().value);
+        }
       }
       publicationWatch = {pins, readerId, current:pageGuard(), credential:currentSession,
         screeningStatuses:new Map(records.map(({revision}) => [revision.publication?.id, revision.publication?.screening?.status ?? null]))};
@@ -237,6 +246,7 @@
             !['submitted', 'approved', 'changes_requested', 'withdrawn', 'cancelled'].includes(row.status))) throw Error('Invalid publication status.');
           let changed = false;
           for (const row of result.publications) {
+            publicationWindows.get(row.id).screeningStatus = row.screening_status ?? null;
             if (row.status !== 'submitted') changed = true;
             if (watch.readerId && row.screening_status && row.screening_status !== watch.screeningStatuses.get(row.id)) changed = true;
             if (row.status !== 'submitted' || !['queued', 'running'].includes(row.screening_status)) publicationWindows.get(row.id).done = true;
@@ -1006,7 +1016,7 @@
         const signature = JSON.stringify(result);
         if (listStamp?.key !== key || listStamp.signature !== signature || listStamp.child !== q('list').firstChild) {
           updateList(renderList); listStamp = {key, signature, generation: readEpoch, child: q('list').firstChild};
-        }
+        } else watchPublications(notes.map(note => ({note, revision:selectedRevision(note)})), listPublicationPolicy);
       };
       notice(''); listRefreshing = Boolean(cached || retained);
       q('list').setAttribute('aria-busy', 'true');
