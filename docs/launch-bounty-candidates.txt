@@ -1,15 +1,20 @@
 Launch bounty shortlist — 16 November 2026
 =========================================
 
-For the editorial owner's selection. These are proposed research tasks, not
-published or funded bounties. No account allowance has been allocated.
+For the editorial owner's selection. These are proposed hosted research tasks;
+none has been published or funded on the hosted site. No hosted account
+allowance has been allocated.
 
 Local review
-  All three proposals are saved as ordinary private drafts under the synthetic
-  research-preview account at http://127.0.0.1:8041/#bounties?status=mine.
+  At the owner's request, all three proposals now appear on the ordinary local
+  board at http://127.0.0.1:8041/#bounties under the synthetic research-preview
+  account. The fixture's normal request/reviewer workflow opened them with
+  100 local points each, consuming three synthetic allowance units in total.
   Their local IDs and exact terms hashes are retained in the ignored
-  .local/claims-preview/launch-bounty-receipt.json. Each has zero reward points;
-  creation left the allowance ledger unchanged. No hosted records were created.
+  .local/claims-preview/launch-bounty-receipt.json. Review history explicitly
+  records a display rehearsal, not independent scientific or hosted admission.
+  No hosted records were created. The terms and baseline decisions below remain
+  proposals for final review before any real admission.
 
 Recommendation
 --------------

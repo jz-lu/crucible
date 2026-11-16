@@ -1247,7 +1247,7 @@
         if (expanded) {
           preview.append(renderTags(r), math('p', 'nb-claim', r.claim));
           if (proposal && proposal.revision !== shown.revision) preview.append(el('p', 'nb-hint', 'Proposal attached to revision ' + proposal.revision + '. This is revision ' + shown.revision + '.'));
-          if (!note.deletion) preview.append(button('Read full note →', () => visibility === 'proposals' && proposal ? openProposal(note, proposal) : openNote(note.id, reviewMode ? shown.revision : undefined), 'nb-link nb-read'));
+          if (!note.deletion) preview.append(button('Read note →', () => visibility === 'proposals' && proposal ? openProposal(note, proposal) : openNote(note.id, reviewMode ? shown.revision : undefined), 'nb-link nb-read'));
           if (canCancelPublication(note, shown)) {
             const cancel = button('Cancel publish request', () => cancellationDialog(note, shown));
             cancel.disabled = listRefreshing; preview.append(cancel);

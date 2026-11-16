@@ -5537,7 +5537,7 @@ function activityRowCopy(kind, record) {
       summary: revision.content.claim, tags: revision.content.tags, proposal: type === 'Proposed scheme',
       status: ({approved: 'Published', accepted: 'Published', submitted: 'Publish request pending', private: 'Private',
         cancelled: 'Publish request cancelled', changes_requested: 'Changes requested', rejected: 'Not published', withdrawn: 'Withdrawn'})[record.publication_status] || 'Private',
-      href: '#notebook?' + new URLSearchParams({note: record.id, revision: String(record.revision)}), action: 'Read full note →'};
+      href: '#notebook?' + new URLSearchParams({note: record.id, revision: String(record.revision)}), action: 'Read note →'};
   }
   return {title: record.title, meta: (record.owner?.id === state.user?.id ? 'Proposed by you' : 'You contributed') +
       ' · ' + utcDate(record.updated_at || record.created_at), summary: record.summary,

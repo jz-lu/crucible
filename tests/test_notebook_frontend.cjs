@@ -1507,7 +1507,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const directRoute=app.q('list').querySelector('.nb-title').getAttribute('href');
   app.q('list').querySelector('.nb-expand').click();
   assert.equal(app.q('list').querySelector('.nb-preview').hidden,false);
-  byText(app.q('list'),'Read full note →').click();await app.whenNavigated();
+  byText(app.q('list'),'Read note →').click();await app.whenNavigated();
   assert.equal(app.location.hash,directRoute);
   byText(app.q('full'),'← Notes').click();await app.whenNavigated();
   assert.equal(app.root.querySelector('[name="visibility"]').value,'proposals');

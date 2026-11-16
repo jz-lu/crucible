@@ -129,7 +129,7 @@ async function test(name, run) {
   await test('flagged readers preserve exact links and back navigation without granting self-review',async()=>{
     const app=await boot(url=>{if(url.startsWith('/api/notebook/notes/candidate')){const own=record('Own flagged request',true);own.owner=reviewer;own.can_review=false;return{note:own};}},{initial:false});
     await app.show({section:'flagged'});app.q('list').querySelector('.nb-title').click();
-    byText(app.q('list'),'Read full note →').click();await app.navigateDone();
+    byText(app.q('list'),'Read note →').click();await app.navigateDone();
     assert.equal(app.lastRoute(),'#reviews?section=flagged&note=candidate&revision=2');
     assert.equal(app.root.querySelector('.nb-publication-review'),null);assert.match(app.q('full').textContent,/Another reviewer/);
     byText(app.q('full'),'← Flagged requests').click();await app.navigateDone();
