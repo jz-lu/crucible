@@ -1,0 +1,71 @@
+name: Prepare note runtime evidence
+on:
+  workflow_dispatch:
+  push:
+    branches: [release/crucible-launch-20261116]
+    paths:
+      - .github/workflows/note-runtime-evidence.yml
+      - deploy/note_runtime_evidence.py
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set isolated evidence and registry directories
+        run: |
+          printf '%s\n' "NOTE_EVIDENCE_DIR=$RUNNER_TEMP/crucible-note-evidence" "DOCKER_CONFIG=$RUNNER_TEMP/crucible-note-registry" >> "$GITHUB_ENV"
+      - name: Obtain short-lived registry credentials
+        env:
+          DIGITALOCEAN_REGISTRY_TOKEN: ${{ secrets.DIGITALOCEAN_REGISTRY_TOKEN }}
+        run: python3 -B deploy/release.py authenticate --output "$DOCKER_CONFIG"
+      - name: Pull and verify the fixed reviewed image
+        run: |
+          python3 - <<'PY'
+          import json, subprocess
+          contract = json.load(open('deploy/release-runtime.json'))
+          docker = ['docker', '--host', 'unix:///var/run/docker.sock']
+          subprocess.run([*docker, 'pull', '--platform', 'linux/amd64', contract['app_base']], check=True, timeout=240)
+          manifest = json.loads(subprocess.check_output([*docker, 'manifest', 'inspect', contract['app_base']], timeout=60))
+          assert manifest['config']['digest'] == contract['app_base_config']
+          image, = json.loads(subprocess.check_output([*docker, 'image', 'inspect', contract['app_base']], timeout=60))
+          assert image['Os'] == 'linux' and image['Architecture'] == 'amd64' and image['Config']['User'] == '10001:10001'
+          PY
+      - name: Generate and compare evidence without network or application state
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          contract = json.load(open('deploy/release-runtime.json'))
+          output = pathlib.Path(os.environ['NOTE_EVIDENCE_DIR'])
+          output.mkdir(mode=0o777)
+          output.chmod(0o777)  # Empty nonsecret artifact directory for image UID10001.
+          subprocess.run(['docker', '--host', 'unix:///var/run/docker.sock', 'run', '--rm',
+              '--network', 'none', '--read-only', '--user', '10001:10001', '--cap-drop', 'ALL',
+              '--security-opt', 'no-new-privileges', '--pids-limit', '64', '--memory', '512m', '--cpus', '2',
+              '--tmpfs', '/tmp:rw,noexec,nosuid,size=64m',
+              '--mount', 'type=bind,source=' + os.environ['GITHUB_WORKSPACE'] + ',target=/source,readonly',
+              '--mount', 'type=bind,source=' + str(output) + ',target=/evidence',
+              '--entrypoint', '/opt/venv/bin/python', contract['app_base'],
+              '-B', '/source/deploy/note_runtime_evidence.py', '--source', '/source',
+              '--output', '/evidence', '--revision', os.environ['GITHUB_SHA']], check=True, timeout=240)
+          PY
+      - name: Retain generated scientific evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: note-runtime-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/crucible-note-evidence
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove ephemeral registry credentials
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, shutil
+          directory = pathlib.Path(os.environ['DOCKER_CONFIG'])
+          assert directory.parent == pathlib.Path(os.environ['RUNNER_TEMP']) and directory.name == 'crucible-note-registry'
+          shutil.rmtree(directory, ignore_errors=True)
+          PY

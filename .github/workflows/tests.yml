@@ -75,6 +75,7 @@ jobs:
           tests/test_password_recovery.py
           tests/test_password_recovery_races.py
           tests/test_release_pipeline.py
+          tests/test_note_runtime_evidence.py
           tests/test_source_ci.py
           tests/test_reuse_release.py
           tests/test_verify_deployment.py
