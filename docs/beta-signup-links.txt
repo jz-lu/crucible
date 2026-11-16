@@ -79,10 +79,20 @@ tests/test_beta_signup_links_migration.py exercises actual upgrade preservation,
 metadata parity, empty rollback and refusal to erase admission provenance.
 tests/browser/signup-links.spec.cjs exercises real browser signup/mail proof,
 desktop/mobile management, lost responses and abandoned navigation.
+tests/test_github_auth.py also verifies that closing the parent link during
+either the provider callback or account-completion step prevents registration;
+existing-member sign-in retains its established behavior.
 tests/test_beta_signup_links_postgresql.py is wired into the fixed PostgreSQL17
 CI job for simultaneous issuance, closure/registration locks and role grants.
 It skips locally without that dedicated disposable service; collection is not
 evidence that PostgreSQL concurrency passed.
+
+Recorded evidence (16 November): the PostgreSQL17 job passed on source0ab0a4f,
+including the new signup suite, in run43803993487:
+https://github.com/jz-lu/crucible/actions/runs/43803993487/job/133090428224
+The subsequent GitHub-validation consolidation passed63 local authentication
+checks; two existing local-PostgreSQL tests were skipped. This evidence does
+not cover a hosted migration, exact release image, rollback or restore.
 
 This candidate is for local iteration. No hosted link or access grant has been
 created. Migration 0032 is outside the current reviewed runtime contract. See
