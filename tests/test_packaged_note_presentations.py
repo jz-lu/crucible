@@ -14,7 +14,8 @@ from crucible.config import Settings
 from crucible.db import User
 from test_note_presentations import Actor, ORIGIN
 
-ROOT = Path(__file__).resolve().parents[1]
+# Release checks are mounted at /tests, separately from the installed package.
+ROOT = Path(notebook.__file__).resolve().parents[1]
 
 
 def test_all_eight_packaged_hosted_bindings_have_exact_context_and_native_accounts(tmp_path):
