@@ -10,30 +10,23 @@ The November 2026 presentation uses light mode, without visible RESI branding.
 
 Starting collection
 -------------------
-Six starter guides live in web/map/notes.json, under IDs starter-01-purpose
-through starter-06-automated-review. The home page links to the first guide;
-the start-here tag collects the whole set. They cover purpose, a draft
-constitution, the contribution workflow, evidence standards, repository layout,
-and the limits of automated first-pass review. References pin the inspected
-repository revision. Revise these guides when the documented behavior changes.
+Twelve bundled notes remain featured in web/map/notes.json: four guides and
+eight scheme dossiers. The guides explain getting started, resource estimation,
+posing a new assumption, and how proposals are accepted. Keep their operational
+instructions aligned with the implemented pipeline.
 
-Thirteen bundled notes remain featured: the six guides and seven detailed scheme
-evidence notes. Twenty-eight older bundled entries are archived from discovery: fifteen short map/orientation summaries,
-eight preliminary literature-reading agendas, the outdated Streamlined NTRU
-evidence compilation, the older proposal-guidance compilation and the final
-three literature notes, removed at the editorial owner’s request. The guides
-are also under editorial review; replacement candidates must be workshopped
-before they are adopted.
-These decisions reduce duplication and unfinished reading lists; they do not
-declare the mathematics false. Every existing record, revision and map binding
-is retained. Exact old citations continue to resolve.
+Older bundled entries remain archived through extensions.editorial_selection.
+The exact revisions of 21 published account notes are excluded from discovery
+through web/notebook/editorial-selection.json, following the editorial owner's
+selection on 16 November. Three are operational test posts; eighteen are earlier
+research notes. This is a release-owned selection policy, not a database mutation.
+It takes effect when the application release containing it is deployed.
 
-The live notebook review on 16 November identified three published operational
-test posts (#0064, #0065 and #0066). Their exact IDs, revisions, content hashes
-and editorial reasons are in web/notebook/editorial-selection.json. This is a
-release-owned selection policy, not a database mutation. It takes effect only
-when the application release containing it is deployed. Other research notes
-have not been independently certified by this editorial pass.
+These choices keep the opening collection small. They do not declare research
+false or certify the remaining claims. Existing records, revisions and map
+bindings are retained, exact citations continue to resolve, and owners retain
+access through My notes. A later published revision needs a fresh editorial
+selection; the current exclusion never silently follows changed content.
 
 How to update or restore the collection
 --------------------------------------

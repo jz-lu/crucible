@@ -20,6 +20,114 @@
       "revision": 1,
       "content_sha256": "786b8f14ec6ea2345aeef78731737432409bb85b72677012fad134960968ee07",
       "reason": "Temporary publication-screening check, explicitly identified by its author as operational rather than research evidence."
+    },
+    {
+      "note_id": "2377ce5a-4d37-55bb-b6c9-a50fab0560aa",
+      "revision": 1,
+      "content_sha256": "394b3757a86ff8e218a5470f3a08c7493265080f2b033a7d88318cdb1921e913",
+      "reason": "Excluded from the featured collection at the editorial owner’s request."
+    },
+    {
+      "note_id": "39f83f0c-e9e6-5344-9fbb-39d461477fce",
+      "revision": 2,
+      "content_sha256": "24f6d30b7a9057e690afc4964d0ed361dc96370ce8de464b271e8091466ebf1b",
+      "reason": "Excluded from the featured collection at the editorial owner’s request."
+    },
+    {
+      "note_id": "3bf972f9-ba65-5955-a248-74a41f1a0ce0",
+      "revision": 1,
+      "content_sha256": "91c616c684d3df8f5e8d9624296578bcda3507f50b43d7a804726fd0886cc96a",
+      "reason": "Excluded from the featured collection at the editorial owner’s request."
+    },
+    {
+      "note_id": "5a14ddae-ca71-544e-a291-8a83aee47504",
+      "revision": 1,
+      "content_sha256": "9f08ddb2c2f404e62b1c8f512be449b7e773ba782e467adb643adf768c8f062c",
+      "reason": "Excluded from the featured collection at the editorial owner’s request."
+    },
+    {
+      "note_id": "65f2c566-739c-4318-82a4-f5e38bd1ed69",
+      "revision": 1,
+      "content_sha256": "9b13425d8b588de01d530c1f154b0549d805056b8f25b553cb2770bbc006447f",
+      "reason": "Excluded from the featured collection at the editorial owner’s request."
+    },
+    {
+      "note_id": "7eabb56b-2b21-5ea5-8f17-5ab54d2adc30",
+      "revision": 2,
+      "content_sha256": "283ff5cab15eed48e700e6df4fde638fd56a19c1320592578fbab6d053746c01",
+      "reason": "Excluded from the featured collection at the editorial owner’s request."
+    },
+    {
+      "note_id": "841ff2d6-940c-57ed-8010-38c2261208df",
+      "revision": 2,
+      "content_sha256": "d462be6968ae2da30d9435fe50f8d0e51b6a646dbeef4be298fbd7570850da20",
+      "reason": "Excluded from the featured collection at the editorial owner’s request."
+    },
+    {
+      "note_id": "885c6e51-ed2c-5fe4-867f-21572c17ccbc",
+      "revision": 4,
+      "content_sha256": "ce5b5232f379e5a699e197e86317699c6317b047e02a927845c7ee0e1fc9a17b",
+      "reason": "Excluded from the featured collection at the editorial owner’s request."
+    },
+    {
+      "note_id": "8d21c442-3115-5057-ab11-feef7922a338",
+      "revision": 2,
+      "content_sha256": "e2c5f702d90dd8adcc93eee2747042b58313f906b0fa08602aa3ab3083119168",
+      "reason": "Excluded from the featured collection at the editorial owner’s request."
+    },
+    {
+      "note_id": "8d3557f6-bbeb-5dc8-adda-396b8286d06e",
+      "revision": 2,
+      "content_sha256": "c2a1255115a5eb3abe899184af324c1d448b531f3e8f1c2c7376a855d45a9042",
+      "reason": "Excluded from the featured collection at the editorial owner’s request."
+    },
+    {
+      "note_id": "98585df3-b75a-40e9-87ff-30a10cd6f127",
+      "revision": 3,
+      "content_sha256": "e12f106553d2a86efeaf4a65ac1b76934921e3cabb4e0a34d52570a7deb5e3a7",
+      "reason": "Excluded from the featured collection at the editorial owner’s request."
+    },
+    {
+      "note_id": "b2c4d219-7349-5e51-8242-e3f1b036013b",
+      "revision": 1,
+      "content_sha256": "7112f53ecaa0636f718c50a647485fe0ed14b20aa8692871b6c2b4e85fef6b0a",
+      "reason": "Excluded from the featured collection at the editorial owner’s request."
+    },
+    {
+      "note_id": "b8a9c396-2ec2-5988-a81f-89f58e17113b",
+      "revision": 1,
+      "content_sha256": "08dbe03ff25b5b9093b03cd4557d58cfad913435f80495f4d8b9142615678312",
+      "reason": "Excluded from the featured collection at the editorial owner’s request."
+    },
+    {
+      "note_id": "b96fad2e-16e0-5af5-9717-3f06979be9f5",
+      "revision": 1,
+      "content_sha256": "dbbeb247f8ea9c96bb3b31d08e8a1b825a3a65aeb983764718e270191b4d165e",
+      "reason": "Excluded from the featured collection at the editorial owner’s request."
+    },
+    {
+      "note_id": "bb6c4236-266f-5e1f-90eb-4e066adb6a8f",
+      "revision": 1,
+      "content_sha256": "d1e29aaecb8a7605b2b05ca1e14d5db316cbdd9258a9651e8297b220ddd7dd5b",
+      "reason": "Excluded from the featured collection at the editorial owner’s request."
+    },
+    {
+      "note_id": "ccde9ef6-66ad-59ed-b801-3e4be43ec641",
+      "revision": 1,
+      "content_sha256": "e00f7a08df636ca53a664214563f099457a14f9e469bbe73de4440b1391fa5d2",
+      "reason": "Excluded from the featured collection at the editorial owner’s request."
+    },
+    {
+      "note_id": "f8885598-8c21-5aeb-a67b-0e65b4c251da",
+      "revision": 1,
+      "content_sha256": "980bffcbe1f161469f9ec0c6aeafc272ea56401a908eb29f9609338a73902731",
+      "reason": "Excluded from the featured collection at the editorial owner’s request."
+    },
+    {
+      "note_id": "ff578879-b2a8-4c3d-bd4e-d00e4961636c",
+      "revision": 1,
+      "content_sha256": "e0e3ea8aa050666c51734ca40d6346de4c4c1a32bdd14a2cd92227ea05734921",
+      "reason": "Excluded from the featured collection at the editorial owner’s request."
     }
   ]
 }
