@@ -7,7 +7,6 @@ and never replaces registry manifests or bypasses implementation verification.
 import base64
 from dataclasses import replace
 import json
-import os
 from pathlib import Path
 from uuid import uuid4
 
@@ -24,9 +23,18 @@ ROOT = Path(notebook.__file__).resolve().parents[1]
 def test_all_eight_packaged_hosted_bindings_have_exact_context_and_native_accounts(tmp_path, monkeypatch):
     path = ROOT / "crucible/data/scheme_note_bindings.json"
     manifest = json.loads(path.read_text())
-    for name in tuple(os.environ):
-        if name in {"DATABASE_URL", "OPENAI_API_KEY"} or name.startswith("CRUCIBLE_"):
-            monkeypatch.delenv(name)
+    # Keep the image's reviewed native-worker paths. Isolate only application
+    # service settings; clearing every CRUCIBLE_* variable breaks native builds.
+    for name in ("OPENAI_API_KEY", "CRUCIBLE_NOTE_PRESENTATION_BINDINGS", "CRUCIBLE_BETA_RELEASES",
+                 "CRUCIBLE_GITHUB_CLIENT_ID", "CRUCIBLE_GITHUB_CLIENT_SECRET",
+                 "CRUCIBLE_SMTP_USERNAME", "CRUCIBLE_SMTP_PASSWORD"):
+        monkeypatch.delenv(name, raising=False)
+    for name, value in {"CRUCIBLE_MAIL_BACKEND":"disabled", "CRUCIBLE_GITHUB_ENABLED":"false",
+                        "CRUCIBLE_PUBLICATION_SCREENING_MODE":"disabled",
+                        "CRUCIBLE_PUBLICATION_SCREENING_WORKER":"false",
+                        "CRUCIBLE_ALLOW_SELF_REVIEW":"false", "CRUCIBLE_LOCAL_NOTE_CORPUS_ONLY":"false",
+                        "CRUCIBLE_REVIEWER_IDS":"", "CRUCIBLE_ACCESS_ADMIN_IDS":""}.items():
+        monkeypatch.setenv(name,value)
     monkeypatch.setenv("CRUCIBLE_ENV", "production")
     monkeypatch.setenv("DATABASE_URL", "postgresql://native-check-only.invalid/test")
     monkeypatch.setenv("CRUCIBLE_SECRET", base64.b64encode(b"t" * 32).decode())
