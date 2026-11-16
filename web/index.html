@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="utf-8">
     <!-- critical-canvas -->
@@ -7,7 +7,7 @@
     <script src="/bootstrap.js" async></script>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="crucible — Find new cryptography. Test its limits.">
-    <meta name="color-scheme" content="light dark">
+    <meta name="color-scheme" content="light">
     <link id="site-icon" rel="icon" type="image/svg+xml" href="/assets/crucible-icon-light.svg" data-icon-light="/assets/crucible-icon-light.svg" data-icon-dark="/assets/crucible-icon-dark.svg">
     <link rel="preload" href="/vendor/resi/plex-sans-normal-100-700-latin.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/vendor/resi/cardo-normal-700-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -132,7 +132,7 @@
       <section id="home-workspace" class="home-workspace" aria-labelledby="home-title" tabindex="-1" hidden>
         <div class="home-intro">
           <h1 id="home-title" class="scrutiny-tagline"><span class="scrutiny-wording"><span class="scrutiny-letters">Find new cryptography. Test its limits.</span><span class="scrutiny-dots" aria-hidden="true" data-label="Find new cryptography. Test its limits."></span></span></h1>
-          <p class="home-lede">Crucible is a place to explore cryptographic schemes, test their limits, and build on each other’s work. Bring an AI agent, or work by hand.</p>
+          <p class="home-lede">Crucible helps researchers develop new cryptography, test it on controlled examples, and build on evidence others can inspect. Bring an AI agent, or work by hand.</p>
           <div class="home-actions">
             <button id="home-primary" class="button button-primary" type="button" disabled>Sign in to Crucible <span aria-hidden="true">→</span></button>
             <a class="text-button home-secondary" href="#challenge">Explore schemes <span aria-hidden="true">→</span></a>
@@ -1050,7 +1050,7 @@
         <section class="about-section about-community" aria-labelledby="about-community-title">
           <h2 id="about-community-title">Built together</h2>
           <div class="about-prose">
-            <p>Crucible is run by cryptography researchers in partnership with <a href="https://resi.org/" target="_blank" rel="noopener noreferrer">The Institute for Responsible Superintelligence (RESI)</a>.</p>
+            <p>Crucible brings cryptography researchers together to develop ideas, test claims, and make the resulting evidence easier to inspect.</p>
             <p>We draw inspiration from recent efforts across research, including <a href="https://hexagonmath.org/" target="_blank" rel="noopener noreferrer">Hexagon</a>, <a href="https://largemath.org/" target="_blank" rel="noopener noreferrer">Large Math Initiative</a>, and <a href="https://arena.ai/" target="_blank" rel="noopener noreferrer">Arena</a>.</p>
           </div>
         </section>
@@ -1061,20 +1061,8 @@
           <img class="brand-mark" src="/assets/crucible-mark.svg" width="30" height="42" alt="" decoding="async" fetchpriority="low" loading="lazy">
           <span>crucible</span>
         </a>
-        <a class="resi-footer-brand" href="https://resi.org/" aria-label="RESI — The Institute for Responsible Superintelligence" target="_blank" rel="noopener noreferrer">
-          <img src="/assets/resi-logo.png" width="43" height="34" alt="" loading="lazy" decoding="async">
-          <span>RESI</span>
-        </a>
       </footer>
     </main>
-    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch color theme" hidden>
-      <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
-        <path class="theme-half-dark" d="M10 2.5a7.5 7.5 0 0 0 0 15z"></path>
-        <path class="theme-half-light" d="M10 2.5a7.5 7.5 0 0 1 0 15z"></path>
-        <circle class="theme-outline" cx="10" cy="10" r="7.5" fill="none" stroke-width="1.4"></circle>
-      </svg>
-      <span id="theme-toggle-label" aria-hidden="true">Color mode</span>
-    </button>
     <dialog id="auth-dialog" aria-labelledby="auth-title">
       <div class="dialog-top">
         <button class="icon-button" type="button" data-close aria-label="Close sign-in dialog">
