@@ -206,12 +206,16 @@ def test_binding_agent_reads_have_one_explicit_scope_and_no_method_wildcard(host
 
 def test_beta_membership_and_revocation_protect_both_readers(hosted):
     app, _, _, reader, _, _, _ = hosted
-    assert TestClient(app, base_url=ORIGIN).get(binding_url()).status_code == 401
+    anonymous = TestClient(app, base_url=ORIGIN)
+    assert anonymous.get(binding_url()).status_code == 401
+    assert not any(anonymous.get("/api/session").json()["capabilities"].values())
+    anonymous.close()
     agent = machine(app, reader, ["notes:read"])
     assert agent.get(binding_url()).status_code == 200
     with app.state.db.transaction(write=True) as session:
         beta_access.set_membership(session, reader.identifier, "revoked", app.state.clock())
     assert reader.client.get(binding_url()).status_code == agent.get(binding_url()).status_code == 401
+    assert not any(reader.client.get("/api/session").json()["capabilities"].values())
 
 
 def test_hosted_configuration_is_explicit_and_does_not_relax_local_guards(hosted, tmp_path, monkeypatch):
