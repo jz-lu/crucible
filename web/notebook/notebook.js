@@ -1216,7 +1216,7 @@
         const marker = button(expanded ? '−' : '+', () => togglePreview('nb-expand'), 'nb-marker nb-expand');
         if (directRead) {
           marker.classList.add('nb-preview-toggle');
-          const icon = el('span', 'nb-preview-icon', expanded ? '−' : '+'); icon.setAttribute('aria-hidden', 'true');
+          const icon = el('span', 'nb-preview-icon'); icon.setAttribute('aria-hidden', 'true');
           marker.replaceChildren(el('span', 'nb-preview-label', 'Preview'), icon);
         }
         marker.setAttribute('aria-label', (expanded ? 'Collapse' : 'Expand') + ' note: ' + r.title);
