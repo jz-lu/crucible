@@ -4542,6 +4542,7 @@ html[data-beta-landing] #access-workspace { animation:landing-arrive 350ms ease 
 .chart-hover-halo { fill: var(--accent, #27836a); opacity: .14; }
 .chart-idle-muted { opacity: 0; pointer-events: none; }
 .overview-svg[tabindex] { cursor: crosshair; touch-action: pan-y; }
+.overview-svg[tabindex]:focus:not(:focus-visible) { outline: none; }
 .overview-svg[tabindex]:focus-visible { outline: 2px solid var(--accent, #27836a); outline-offset: 2px; border-radius: 4px; }
 .chart-point-readout { min-height: 4.3rem; display: grid; align-content: start; gap: 14px; margin-top: 14px; padding: 16px 0 8px; border-top: 1px solid var(--line); font-size: .86rem; line-height: 1.5; }
 .chart-point-readout.is-empty { visibility: hidden; }
