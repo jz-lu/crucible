@@ -42,11 +42,21 @@ def references(content):
             if url.scheme or url.netloc or url.path not in ("", "/") or url.query or not url.fragment.startswith("notebook?"):
                 continue
             fields = parse_qs(url.fragment[len("notebook?"):], strict_parsing=True, keep_blank_values=True, max_num_fields=4)
-            if (set(fields) not in ({"note", "revision", "sha256"}, {"note", "revision", "sha256", "location"})
+            if (set(fields) not in ({"note", "revision", "sha256"}, {"note", "revision", "sha256", "location"},
+                                    {"note", "revision", "sha256", "note_section"},
+                                    {"note", "revision", "sha256", "statement"},
+                                    {"note", "revision", "sha256", "argument"})
                     or any(len(items) != 1 for items in fields.values())):
                 continue
             location = fields.get("location", [None])[0]
             if location is not None and (not re.fullmatch(r"L[1-9][0-9]{0,6}", location) or int(location[1:]) > 1_000_000):
+                continue
+            section = fields.get("note_section", [None])[0]
+            if section is not None and not re.fullmatch(r"[a-z][a-z0-9-]{0,63}", section):
+                continue
+            block = fields.get("statement", fields.get("argument", [None]))[0]
+            if block is not None and (not re.fullmatch(r"[a-z][a-z0-9-]{0,79}", block)
+                                      or block in {"constructor", "prototype", "__proto__"}):
                 continue
             identifier, number, digest = (fields[key][0] for key in ("note", "revision", "sha256"))
             if not 1 <= len(identifier) <= 100 or identifier != identifier.strip() or any(ord(c) < 32 for c in identifier):
@@ -127,7 +137,7 @@ def register_routes(app, db, settings, account, visible):
         with db.transaction() as session:
             user = account(request, session)
             readable = visible(session, user).with_only_columns(revision.id)
-            curated = notebook.curated_collection()
+            curated = notebook.curated_collection(session)
             bundled = {(item["id"], rev["revision"], rev["content_sha256"]): rev
                        for item in curated for rev in item["revisions"]}
             root_revision = None

@@ -1,0 +1,283 @@
+CRUCIBLE ASSUMPTIONS AND NOTES — WORKFLOW AUDIT
+6 November 2026 · local prototype · proposals below are not deployed policy
+
+Follow-up: assumptions-structure-proposal.txt compares alternative architectures
+and reading layouts, and refines this audit with explicit alternative arguments
+and a one-action approval/application path for scoped display-only changes.
+
+Verdict
+
+The reading interface is a useful foundation: exact note locations, readable
+mathematics, separate security/correctness entry points and attack-specific
+dependencies. It is not yet a complete scientific dependency workflow. The
+important next work is to exercise a small lifecycle end to end, rather than
+add more cards, statuses or examples that only work through the fixture script.
+
+Scope of this audit: the current eight-release local integration, its 88
+readable sections, 23 scheme premises and seven attack-premise uses, plus the
+notebook, reference graph and proposal/review paths. This is an engineering and
+scientific-framing review, not an independent proof audit or a new cryptanalytic
+result. All case studies below are fictional. No live data or hosting changed.
+
+What to preserve
+
+* Notes remain flexible research documents. Full text can contain dense math,
+  code, experiments, proofs, questions and incomplete work. A readable companion
+  is optional. A small list summary is not a mandatory explanatory article.
+* The companion and Full text belong to one immutable note revision and share
+  publication/access rules. Neither is an authority to change the website.
+* Exact revisions, hashes and stable locations preserve what was actually used.
+  A later private edit must not change a current claim or leak through a link.
+* Publishing a note, accepting a scientific argument and activating an executable
+  scheme are different decisions. Reuse the existing review machinery.
+* An empty premise list is not proof. Unknown evidence, an incomplete argument
+  and an argument with no unproved dependencies must remain distinct.
+* Keep the current entry points. No global assumptions catalogue or large graph
+  is needed to make these relationships useful.
+
+A useful qualification
+
+Make premises easy to understand, investigate, cite, prove consequences from,
+or refute. Do not promise that cryptographic hardness will be easy to prove.
+Correctness inequalities, reductions and finite certificates may be resolved
+by proofs. A hardness conjecture can remain open while gaining useful attack
+evidence and reductions. A proof conditional on B does not discharge B.
+
+The core separation
+
+1. Statement: the exact mathematical proposition, including normative sampler,
+   parameter domain, probability space, quantifiers and computation model.
+2. Use: which exact result needs it, for which configurations, at which strength,
+   with an explicit parameter mapping and argument explaining the implication.
+3. Evidence: a published note offering a proof, challenge, reproduction,
+   comparison or correction about that exact statement/use.
+4. Adoption: a recorded review chooses the argument currently displayed for a
+   result. Changing an implementation or issuing policy is a separate operation.
+
+These are distinct concepts, not a demand for four new services or four long
+forms. Statements and evidence should stay in notes. A small persistent record
+can bind exact references to claims; the ordinary review center can manage it.
+
+Priority findings
+
+P1 — One authoritative formal statement
+
+The same premise currently appears as a card's formal_statement, additional
+assumption_statements metadata, readable prose and sometimes Full text. Editing
+readable prose retains extensions, so the card can disagree with its source
+within the very same revision. Exact hashes preserve that discrepancy; they do
+not resolve it. The fixture's correspondence checks are not a general editor
+or adoption guarantee.
+
+Store the normative statement once inside its note revision and render that
+block wherever needed. Let surrounding explanation remain ordinary optional
+prose. Definitions can pin longer sampler specifications rather than repeat
+them. Until such blocks exist, adoption should reject inconsistent copies.
+No automatic model decision that two mathematical statements are equivalent.
+
+P1 — Reusable definitions, parameter-specific uses
+
+Current ReleaseBinding has one note for a release; every premise must be a
+section of it. The premise owns stage/profile lists. This mixes the abstract
+question with its use and prevents clean reuse across notes and schemes.
+
+Allow a claim to cite premises in several accessible notes. Put configuration
+coverage, parameter substitution and required bound on the use. Stable A-labels
+are convenient names, not sufficient identities. Pin the complete definition
+and its normative references; the same label must not silently change meaning.
+
+For example, the same abstract Prange rank-density condition can be instantiated
+for Goppa and quasi-cyclic distributions. A theorem about one does not establish
+the other. Likewise, an attack that only needs message-decoding failure <=1/8
+does not need the much stronger scheme correctness target.
+
+P1 — Reviewed adoption and exact impact
+
+The current binding is a local JSON manifest; the API explicitly reports
+scientific_adoption=false. Existing research reviews are recommendations, and
+scheme proposal specifications primarily carry prose rather than these typed
+dependency references. A production implementation must bridge this deliberately.
+
+An update proposal should pin the old/current claim, proposed replacements,
+evidence, parameter scope and reason. Review shows the before/after difference
+and affected uses. Approval and application must have distinguishable states.
+The apply operation checks that its expected current binding is still current,
+rechecks source access/publication and permissions, and records one idempotent
+decision. It must not overwrite unrelated concurrent changes.
+
+P1 — Exact challenges and evidence, without automatic verdicts
+
+The note graph already recognizes supports/challenges/reproduces/responds_to,
+but indexes section citations at whole-note granularity. Preserve statement/use
+identity in a derived index, so "Used by" and relevant responses can be accurate.
+Respect access on each traversal, including labels and counts.
+
+A published challenge is an attributed claim, not a refutation. A scientific
+assessment needs evidence, scope and a reason. Refuting a premise removes that
+justification for its dependent conclusion; it does not logically disprove the
+conclusion or invalidate the conditional implication itself. Determine impact
+at each use, not through a global red/green switch.
+
+P2 — Scientific specificity and limits
+
+Many current hardness cards define games precisely but leave epsilon(T) or
+hash-transfer delta unspecified. Those are symbolic conditional arguments,
+not instantiated numerical security guarantees. Argument details should say
+when a quantitative bound has not been supplied. An attack-work upper bound
+cannot fill that gap or establish a security lower bound.
+
+The seeded-to-ideal failure comparisons are strong unproved hypotheses. A future
+research contribution might establish the actual event bound needed downstream,
+or a transfer inequality with explicit slack, instead of an unnecessarily strong
+zero-slack comparison. That is a new scientific result/revision, not a cosmetic
+edit. Keep the current named classical bit-RAM baseline framing: these curves
+are not automatically best-known attacks or a ranking of actual security.
+
+P2 — Durability limits
+
+The ordinary notebook allows 2 MiB including all revisions, 100 revisions per
+note, and 40k characters in Full text. The local iterative fixture already needed
+an isolated 8 MiB override. Dual-layer duplication makes this worse. Before
+hosting, measure realistic notebooks and choose explicit storage/import/screening
+bounds; preserve history rather than deleting it to make an edit fit. Do not
+assume the local override is a production capacity policy. Consider bounded
+artifact storage when demonstrated needs exceed text, not a new document system.
+
+Workshop case A: a useful weaker proof
+
+Suppose a scheme claim seeks key disagreement delta_K <=2^-128, while an attack
+needs native-message decoding failure delta_m <=1/8. These are different events.
+A participant proves delta_m <=2^-100 for one exact actual seeded distribution.
+
+The contribution can discharge the attack's threshold after its scope and the
+argument are checked. Under the correct-message agreement implication it also
+gives delta_K <=2^-100. It does NOT refute the stronger 2^-128 claim: a weaker
+upper bound is not a counterexample. The review can adopt the proof for the
+attack only. Other configurations and the stronger guarantee remain unresolved.
+
+UI: the attack point opens its specification, the now-supported dependency and
+the proof note. The correctness entry continues to show its distinct outstanding
+premise. Do not turn both green or red simply because they concern one scheme.
+
+Workshop case B: an actual scoped contradiction
+
+A participant supplies a proof that delta_K >=2^-100 for an exact configuration
+whose stated guarantee is <=2^-128. It must cover actual shared-key disagreement,
+with the correct sampler/conditioning and justified probability mass. One failed
+exchange, or a failure under an altered sampler, does not ordinarily refute a
+probabilistic bound. A message-decoding failure alone is also not sufficient.
+
+First publish the evidence and submit a targeted change proposal. Before review,
+show the challenge as attributed discussion. If review accepts the contradiction,
+mark the affected guarantee as withdrawn/unsupported with the exact reason.
+Do not imply other configurations are validated. If one universal proposition
+covered every configuration, its restriction needs an explicit new statement;
+it cannot silently become the original proposition minus the counterexample.
+
+The attack may still be justified by an independent delta_m <=1/8 result. Keep
+that result separately. An operator decides whether the executable challenge is
+still well-defined; malformed/unverifiable instances may need quarantine, while
+a changed scientific assessment alone must not silently cancel deadlines or
+erase accepted submissions. Historical curves remain inspectable and annotated;
+current claims must not continue to present withdrawn justification as valid.
+
+Workshop case C: a proof under another premise
+
+A new note proves A from B. After review, display "Justified conditional on B"
+with exact scope, not "proved unconditionally." A proposal can adopt the composed
+argument for a scheme or attack. Its unresolved premises include B; A remains
+available as the intermediate result. A future challenge to B reaches those uses.
+
+The first version can require reviewers to supply the resulting dependency set.
+Do not build automatic theorem composition. Reject an attempt to discharge a
+cycle A-from-B-from-A without an independent basis.
+
+Workshop case D: an improved replacement
+
+An author supplies a weaker rank-density theorem for an exact McEliece target
+distribution. It may support an attack with more trials, despite not establishing
+the old conjectured density. It does not refute that conjecture. The new work
+account needs regeneration with the new trial budget and remaining losses.
+
+A proposal compares old/new work, success, memory, assumptions and scope. Adopt
+it deliberately; do not change HQC's separate use or unrelated configurations.
+A curve moving upward means this justified attack account uses more work, not
+that the scheme was proved more secure. Preserve the old account as historical.
+
+Workshop case E: editorial updates and ordinary notes
+
+A clearer explanation creates a new note revision. It can retain the premise
+version only if the complete normative definition and its pinned dependencies
+are unchanged. Changes to a distribution, bound, model or parameter domain create
+a new premise version. Existing uses keep their old exact reference until an
+update is adopted. "New version available" is information, not endorsement.
+
+An ordinary note can be Full text only. Adding or removing a readable companion
+does not change its permissions or research eligibility. A concise statement is
+needed when displaying a dependency card; that does not require a bespoke human
+article for every supporting note.
+
+Human interface to workshop
+
+Keep Security assumptions, Correctness assumptions and point-specific attack
+links. Within the existing reading surface, prioritize:
+  Statement — precise and self-contained where possible.
+  This use — result, parameters and required bound.
+  Evidence — relevant supporting/challenging notes with attributed assessments.
+  Used by — exact affected claims, not every vaguely related scheme.
+  History — quiet access to definitions, decisions and replacements.
+
+Use one "Propose update" action from the relevant note/premise/claim, prefilled
+with its exact target. The structured agent path should submit the same object.
+The human reviewer sees what changes, why, affected uses and evidence, rather
+than reconstructing context from raw JSON. A challenge and its proposed repair
+can use the same research contribution without duplicating the note.
+
+Avoid a universal "secure / broken" status, mandatory human summaries for every
+technical section, automatic adoption of the latest note, automatic changes to
+scores, and a large status vocabulary before the cases justify it. Publication
+screening must never be presented as scientific approval.
+
+Recommended next local build
+
+One standalone premise, two uses, one separate evidence note, a scoped proposal,
+a review, and deliberate adoption for only one use. Include an editorial revision,
+a new mathematical version, an unreviewed challenge and a conditional proof.
+Keep the workshop data explicitly illustrative and separate from real findings.
+Use the actual notebook/review APIs, not a second in-memory assumptions app.
+
+Acceptance checks:
+  * Old exact links still show old content after edits and adoption.
+  * Card and linked formal statement cannot disagree.
+  * Private/withdrawn notes do not leak through names, counts or reverse links.
+  * Only covered configurations and selected uses change.
+  * Weaker evidence is not mislabelled as a refutation.
+  * A conditional proof exposes its remaining premises and cannot close a cycle.
+  * Concurrent edits, retries and restart produce no duplicate adoption effects.
+  * Publication approval does not confer scientific or operational authority.
+  * Existing instances, deadlines, scores and historical evidence are preserved.
+  * Full-text-only notes work in browser, agent, export and review paths.
+
+Small fixes made during this audit
+
+Full-text-only notes now display their body directly, including in the reviewer
+reader. Notes with readable sections retain the Full text disclosure. New notes
+start without an empty readable section; the section editor is explicitly optional.
+No scientific claims, note content, database records or production state changed.
+Eighteen focused section checks plus notebook/store/publication-queue regressions
+passed. The opt-in editor was also checked in the local browser without saving.
+
+Implementation evidence
+
+crucible/note_sections.py:145-205 — local one-note binding and exact source checks.
+crucible/note_sections.py:239-332 — premise grouping, scopes and explicit local status.
+crucible/notebook.py:27-31,169-204 — capacity and optional content sections.
+web/notebook/notebook.js:1389 onward — companion, reader and exact navigation.
+web/notebook/notebook.js: editNote — preserved extensions and section editing.
+scripts/prepare_note_integration.py:150,225 — duplicated statements/version1 fixture.
+crucible/notebook_graph.py:13,63-69 — relations and whole-note reference indexing.
+crucible/research_reviews.py:22,54 — frozen evidence, recommendation-only authority.
+crucible/protocol_specs.py: CorrectnessJustification/Security — existing prose contracts.
+crucible/attack_models/lattice.py:160-169 — exact message-decoding attack premise.
+crucible/attack_models/codes.py:87 onward — structured rank-density condition.
+docs/scheme-argument-cycle-review.txt:85-99 — limits of current scientific claims.

@@ -1,0 +1,172 @@
+# Resource estimates: models, measurements and reproduction
+
+Crucible's graphs answer three different questions: how much data a construction sends, how long an identified implementation took to run, and how much work a specified attack is budgeted to use. Keeping those questions separate lets a researcher improve one part of the picture without silently changing the others. Every useful point should lead back to its exact construction, method, evidence and assumptions.
+
+Use the short explanation above for orientation and the procedure below to reproduce, critique or propose an improvement to a curve. The full text provides the specifications needed to carry out that work, including through an agent. It describes the November assumptions trial and its retained measurement reports. It does not confer approval on a proposed estimate.
+
+## 1. Resolve the target before calculating
+
+Read the connected server's /api/agent/pipeline and relevant guidance first. Resolve the exact scheme_id, release/version and profile_id from /api/schemes. A stage is a position on a versioned progression; it is neither a security level nor a stable replacement for profile_id. Preserve the full algorithms, distributions, parameter tuple, encodings and KDF.
+
+Identify which quantity is requested:
+
+- Encoded sizes: public key, ciphertext, private key or explicitly defined exchange total, in bytes.
+- Honest computation: KeyGen, Encaps or Decaps, for one identified implementation and measurement profile, in time units.
+- Attack work: a specified recovery experiment, computation model, success condition and resource budget.
+- Memory: an algorithmic storage bound or a particular measured instrument, with its own unit and scope.
+
+Record the selected report or analysis identity before reading values. A changed parameter set, sampler, encoding or implementation can invalidate a comparison even when the family name is unchanged.
+
+## 2. Encoded sizes and communication
+
+The size graph uses the canonical serialized object length in the selected resource report. Inspect the declaration and exact codec. Count actual byte allocations and packing rules, including required seeds, tags and confirmation fields; do not replace a packed representation with an arbitrary host-language object size.
+
+For the fixed-format report path, fresh_exchange_bytes is the declared setup delivery plus one public key and one ciphertext. cached_exchange_bytes excludes setup already shared under that report's convention. Public-key and ciphertext cards show their individual sizes. Framing, transport handshakes, certificates, authentication and application traffic belong only in a metric that explicitly includes them. There is no universal conversion from the size of a public key to a security level.
+
+For a new variable-length encoding, state whether a value is exact, a maximum or a sampled distribution; retain paired observations when calculating an exchange total. Do not add unrelated marginal medians and call the result a measured median exchange. The current fixed-format publication contract must be extended and reviewed before presenting a new variable-length protocol through it.
+
+Why: encoding is part of the protocol. Exact lengths are independently checkable, while unstated setup or framing choices can make an apparent improvement disappear.
+
+## 3. Honest-operation timing
+
+Use GET /api/protocol/resources?scheme_id=SCHEME&version=VERSION. Follow the selected publication's exact download link and preserve its ZIP hash. The current plot reads a complete resource publication matching the selected release, profile mapping, implementation and active binding. Historical reports require explicit selection. An absent current report is missing evidence.
+
+The retained standard publication schedule contains five worker runs, three warm-up sequences per worker and twenty measured sequences per worker: 100 measured samples per operation. Key generation, encapsulation and decapsulation are measured separately. The receiver also requires the specified memory-instrument coverage for a complete publication: five RSS samples, five stack attempts and two Massif attempts per operation/configuration. Read the actual plan and method in the selected report; these are versioned choices, not universal benchmark constants.
+
+The computation card plots the warm-operation sample median. Stored duration_ns values are converted to microseconds by dividing by 1000. The numerical table retains sample counts and the middle 50% of observations. Quartiles describe variation within that run, not confidence in a claim about all machines. First-call timings, initialization and additional memory evidence remain in the full report.
+
+Reproduction must retain:
+
+- Exact construction, configuration, implementation source, dependency and build identities.
+- Compiler/runtime, options, CPU and OS, thread/worker settings, and any affinity or host observations provided.
+- Sampling plan, warm-up policy, operation boundary, raw samples, failures, timeouts, and resource limits.
+- Whether randomness, validation, allocation and setup occur inside the timed call. Never assume two drivers exclude the same overhead.
+- A comparison-profile identity and a clear distinction between original collection and independent reproduction.
+
+Do not average KeyGen, Encaps and Decaps into a single unlabeled operation. Do not use an instrumented memory run as a timing benchmark. Keep failed and partial runs; do not select successful retries to fill gaps. One implementation's measured speed does not establish an intrinsic ordering of cryptographic families.
+
+Why: medians give a readable summary of observed operation latency, and retained samples expose variability and failures. Hardware and implementation choices remain part of the claim, so another researcher can distinguish an algorithmic improvement from a changed measurement environment.
+
+## 4. Memory has several meanings
+
+An attack's memory_bits is a modeled bound on stored bits under its algorithm and layout. A benchmark's process RSS is observed process memory, including runtime and dependency effects. Stack watermark and heap instrumentation measure other scopes. These quantities are not interchangeable or generally additive.
+
+Keep any no-operation RSS baseline alongside the observation; the current reports do not subtract it. In historical Linux profiles, pre-exec launcher usage can contribute to RSS. An observed peak is not a guarantee that the algorithm always fits in that amount of RAM. Report an unknown component as unknown.
+
+The main computation graph uses operation time. Memory evidence remains inspectable in the report. A future memory-constrained attack comparison must fix one common cap and reject candidates without an adequate bound before selecting an envelope.
+
+## 5. The classical attack experiment in this trial
+
+The implemented experiment is one fresh honest KEM key pair and encapsulation at an exact registered configuration. The attacker receives the public transcript and returns the complete encapsulated shared secret. The experiment grants no decapsulation oracle. Include the final conversion from a recovered algebraic value or message to the actual shared secret, including verification, encoding and hashing.
+
+The comparison model is crucible-bit-ram-v1; its experiment identifier is one-fresh-honest-kem-shared-secret-v1. All attack setup is charged to this single target. No answer-dependent advice or unspecified multi-target amortization is allowed.
+
+A point displays log2(W), where W is a conservative finite work budget for a documented strategy with success at least 1/2 under its stated premises. Preserve the stronger success statement when one is available. W is an upper bound for that strategy; it is not a lower bound against all attacks, a proof of optimality, an expected runtime or an achieved security category. Some current strategies deliberately use elementary and very inefficient baselines.
+
+Earlier design material can describe different experiments, including a 75% distinguishing-game threshold. Those records cannot be imported by relabeling their axes. Bind this trial to the experiment and model above. Keep quantum estimates in their own explicit models; never obtain them by halving a classical exponent.
+
+## 6. The bit-RAM accounting rules
+
+An elementary Boolean operation on at most two bit-register inputs costs one. A dynamically addressed one-bit read or write costs one independently of memory capacity. Fixed wiring, constants and fixed permutations are free. Computing an address, arithmetic, comparisons, loop control, candidate generation, verification and key derivation are charged.
+
+There is no memory-cap constraint in the baseline. Report peak stored bits separately. A whole hash, group operation, unbounded integer operation or word transfer never costs one elementary operation. Registers and program layout are fixed by the public configuration rather than an unknown answer. Random sampling and rejection need a finite work budget or a stated success-loss treatment.
+
+For positive bit width w and nonnegative counter width b, common.py implements these conservative macro bounds:
+
+    ADD(w) = SUB(w) = CMP(w) = 8w
+    MUX(w) = 3w
+    LOOP(b) = 16(b+1)
+    MODADD(w) = 24(w+1)
+    MUL(w) = 16(w+1)^2
+    DIVMOD(w) = 64(w+1)^2
+    MODMUL(w) = 80(w+1)^2
+    MODPOW(w,e) = e[2 MODMUL(w) + MUX(w) + LOOP(e)] + 2w
+    READ(b) = WRITE(b) = b
+
+These accounts use ripple/schoolbook arithmetic, restoring division and double-and-add multiplication. For example, the 8w addition allowance includes the five basic full-adder operations per bit plus bookkeeping. The modular-add allowance covers an extended sum, subtraction, selection and control. The quadratic division and multiplication allowances count their loops and bit operations. These are implementation bounds to scrutinize, not optimality claims.
+
+A 32-bit addition on already available registers has an allowance of 256 operations. Fetching two 32-bit operands from addressed memory and writing the result adds 96 bit transfers, giving 352 before any separately required address calculation or loop control. State the storage schedule so those transfers are neither silently free nor counted twice.
+
+SHA-256 and SHA-512 use the specified SHA-2 schedule and compression rounds. Let n be input bytes, w the word width (32 or 64), r the round count (64 or 80), B=2w the block length in bytes and L=w/4 the encoded length field. The current account uses:
+
+    blocks = ceil((n + 1 + L) / B)
+    schedule = (r-16)[4w + 3 ADD(w)]
+    rounds = r[11w + 7 ADD(w) + LOOP(bit_length(r))]
+    feedforward = 8 ADD(w)
+    SHA2(n) = blocks[schedule + rounds + feedforward + 16B] + 8n + 8w
+
+For Keccak, a 24-round permutation has a 200000-operation allowance including control. For input n bytes, output o bytes and rate R bytes:
+
+    absorbs = floor(n/R) + 1
+    squeezes = max(0, ceil(o/R) - 1)
+    work = (absorbs + squeezes)200000 + absorbs(16R) + 8o
+
+The rates are 136 for SHAKE256 and SHA3-256, 168 for SHAKE128, and 72 for SHA3-512. Preserve domain separation and padding in the actual algorithm. These constants account for specified algorithms; the hash standards do not certify Crucible's chosen cost bounds.
+
+NIST IR 8413 Appendix B and the December 2023 Kyber512 FAQ describe a bit-RAM convention with elementary bit operations and capacity-independent bit-memory access. That motivates a common comparison basis. Crucible's complete instruction prices and derivations remain its own reviewable specification. Physical memory locality, energy, hardware latency and bounded storage require additional models.
+
+## 7. Which attacks currently produce the curves
+
+- Finite-field DH: interval baby-step–giant-step on the actual exponent range, including sorting/search, modular arithmetic, storage, shared-element reconstruction and transcript hashing. It omits number-field-sieve improvements and fixed-group amortization.
+- Elliptic-curve DH: baby-step–giant-step with both coordinates and infinity handling, decoding, inversions, table work and exact shared-key derivation. These are the registered custom curves, not an assertion about X25519. Affine arithmetic and storage are unoptimized.
+- RSA: trial division over the specified smaller-factor domain, followed by exponent reconstruction, inversion, checking and hashing. This is an especially loose baseline and must not be advertised as the best known attack cost.
+- Module lattice: native-message enumeration with complete ciphertext/key recomputation. Small configurations have deterministic decoding support; others use an explicit bound on actual decoding failure. This is not a converted Core-SVP estimate.
+- Frodo: the lower documented budget among native-message enumeration and bounded secret-column enumeration, with the applicable decoding and misleading-secret premises. Preserve the winning strategy per point.
+- NTRU Prime: enumeration of the fixed-weight input space of size binom(p,w)2^w, including ring arithmetic, rounding, confirmation and final key derivation. Changes in this search-space size can make this particular curve decrease along the established progression.
+- HQC: private-support enumeration or bounded Prange decoding, plus the actual RM/RS decoder and key derivation. Premises concern uniqueness, rank density and decoding where needed. Current stages 1–4 have a separate support argument eliminating the decoding-transfer premise there.
+- Classic McEliece: bounded Prange decoding and complete shared-key hashing. The support-hit probability is exact; the stated target-wise rank-density premise remains unproved. Improved ISD and structural attacks are outside this baseline.
+
+Read the exact profile's technical explanation, account and assumptions. A summary for one stage cannot establish applicability to another. The source of record is crucible/data/ram_attack_curves.json with its model/source digests and per-release analysis_sha256. Each point preserves work_bound, memory_bits, breakdown, manifest_sha256, algorithm/model IDs and success information. Large integers are decimal strings; do not round them through a floating-point JSON number. The logarithm is a display approximation.
+
+## 8. Reproduce an attack account
+
+In the matching reviewed checkout:
+
+    python scripts/build_ram_attack_notes.py --check
+
+This checks regeneration of the analytic accounts; it does not execute cryptographic-size attacks or publish a new curve. Read common.py, classical.py, lattice.py and codes.py under crucible/attack_models, and the exact generator revision. Verify their hashes against source_sha256 before relying on the result.
+
+For an exact release, use catalogue.for_release with the registry's presentation manifests. Check the declared analysis digest, exact profile set and manifest hashes, sum of integer breakdown components, positive storage bound, success target and derived logarithm. The existing focused suites are test_ram_common.py, test_ram_classical_attacks.py, test_ram_lattice_attacks.py, test_ram_code_attacks.py, test_ram_catalogue.py and test_ram_note_bindings.py.
+
+Small executable checks test algorithm paths and the accounting implementation. They do not prove a heuristic premise at cryptographic parameters or turn manually reasoned bounds into a formal verification certificate. If you run new experiments, use an explicitly bounded local workload and preserve seeds, source, commands, counted outcomes and negative results.
+
+## 9. Propose an improvement
+
+First freeze the comparison: release/profile set, exact input distribution, experiment, success threshold, cost model, preprocessing treatment and any storage constraint. Identify the baseline strategy and why improving it would be useful. A tenfold improvement over a deliberately poor baseline may not advance the state of knowledge.
+
+Supply an executable attack specification where feasible, a fast cost predictor, and a separately justified success predictor or bound. Derive every new macro and its storage schedule. Document parameter search and excluded alternatives. For a claimed factor-10 work improvement under unchanged conditions, show W_new <= W_old/10 at the agreed targets; the corresponding plotted decrease is log2(10), approximately 3.322. Do not increase success losses, omit memory transfers or switch the target while retaining the same headline.
+
+Never infer a 50%-success budget merely from cost divided by average one-shot success. Repetition can be correlated through the target. State the target-wise success argument, verification and stopping rule.
+
+A curve proposal must identify exact source revisions, extraction rules, units, missing points, applicable premises, conflicts and the requested display change. Save the analysis as a note. Publication of that note is separate from adoption of a numerical curve. The current local argument-selection workflow changes the explanatory argument, not resource measurements or numerical attack accounts.
+
+## 10. Agent completion packet
+
+Return a concise human explanation followed by a structured evidence packet containing:
+
+    target: scheme_id, version, profile_ids, manifest hashes
+    quantity: metric, unit, operation or experiment
+    method: model/profile ID, implementation and source identities
+    value: exact bytes/work budget or measured statistic; null if unsupported
+    evidence_kind: exact count / observation / proved bound / conditional bound / heuristic
+    probability: success event, distribution, target and conditioning
+    resources: preprocessing, storage and parallelism conventions
+    dependencies: exact statement pins and the steps that use them
+    reproduction: commands, environment, inputs, raw outcomes and artifact hashes
+    comparison: fixed baseline and precisely stated differences
+    uncertainty: missing checks, unsupported regimes and competing evidence
+    proposed_action: correction, new measurement, new analysis or display request
+
+This packet is an authoring checklist, not an additional server endpoint or accepted API payload. Submit through the current documented workflow. On a pin mismatch or uncertain write, retain the original evidence and operation identity, resolve the discrepancy, and report the remaining gap.
+
+## Source map
+
+Website trial: crucible/attack_models/common.py, classical.py, lattice.py, codes.py and catalogue.py; scripts/build_ram_attack_notes.py; crucible/data/ram_attack_curves.json; docs/ram-attack-cycle-review.txt; crucible/resource_publications.py; crucible/resource_state.py; web/resource-metrics.js; docs/resource-publications.txt. Exact file hashes accompany this draft's source manifest.
+
+Retained measurement run: countableclouds/crucible-schemes, commit 27b78aa7bd2ae464fb4579d91eb44eb505903ece, run 40770844682, attempt 1. Its original ZIPs and acceptance receipts were checked before replay into the local preview. That replay is not a new benchmark or new provider authentication. Original machine and method context remain in each report.
+
+Primary method references:
+- NIST IR 8413-upd1, Appendix B: https://nvlpubs.nist.gov/nistpubs/ir/2022/NIST.IR.8413-upd1.pdf#page=90
+- NIST Kyber512 FAQ, December 2023: https://csrc.nist.gov/csrc/media/Projects/post-quantum-cryptography/documents/faq/Kyber-512-FAQ.pdf
+- SHA-2 specification: https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf
+- SHA-3/SHAKE specification: https://csrc.nist.gov/pubs/fips/202/final

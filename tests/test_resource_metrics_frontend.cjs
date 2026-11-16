@@ -280,5 +280,49 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
     assert.equal(publicChart.querySelectorAll('.chart-point').length, 0, 'denied reads cannot retain previously visible data');
     assert.equal(app.requests.length, readsBefore, 'render after denied access respects the retry guard');
   }
-  console.log('PASS resource states, explicit historical evidence, incomplete reports, zero values, profile isolation, focus, cache and retired-account requests');
+  // Local note presentation shows the measurements without report links,
+  // expandable drawers or dropdowns. The legacy report/history UI is unchanged.
+  const cleanReport = structuredClone(report);
+  for (const row of cleanReport.resources.configurations) {
+    row.native_evidence[0].computation.encapsulate = {complete: true, duration_ns: {median: 4000, q1: 3000, q3: 5000, n: 100}};
+  }
+  const cleanApp = await createApp({schemes: [scheme], hash: '#scheme/resource-fixture/1', responder: url => url.pathname === '/api/protocol/resources' ? cleanReport : undefined});
+  const cleanModel = cleanApp.window.CrucibleResources, attachments = new Map();
+  cleanApp.window.CrucibleGraphPoints = {attach(options) {attachments.set(options.svg.parentElement.id, options);}};
+  const cleanRender = () => {
+    for (const cardId of ['public', 'cipher', 'computation']) cleanModel.render({scheme, cardId,
+      target: cleanApp.$('#overview-chart-' + cardId), profiles, profileId: p => p.id,
+      profileLabel: p => 'Stage ' + p.instance_size, stagePosition: p => p.instance_size,
+      named: false, redraw: cleanRender, api: async () => {throw new Error('Unexpected clean-mode fetch');}, cleanPresentation: true});
+  };
+  cleanRender();
+  for (const cardId of ['public', 'cipher', 'computation']) {
+    const target = cleanApp.$('#overview-chart-' + cardId);
+    assert.equal(target.querySelector('details'), null);
+    assert.equal(target.querySelector('select'), null);
+    assert.equal(target.querySelector('table'), null);
+    assert.equal(target.querySelector('.resource-chart-actions'), null);
+    assert.equal(target.querySelector('[data-resource-refresh]'), null, 'healthy cards need no refresh action');
+  }
+  assert.deepEqual(cleanApp.$('#overview-chart-public').querySelectorAll('.chart-point').map(p => p.dataset.value), ['32', '33']);
+  const cleanChart = cleanApp.$('#overview-chart-computation');
+  assert.deepEqual(cleanChart.querySelectorAll('[data-resource-operation]').map(button => button.dataset.resourceOperation), ['keygen', 'encapsulate', 'decapsulate']);
+  assert.equal(cleanChart.querySelector('[data-resource-operation="keygen"]').getAttribute('aria-pressed'), 'true');
+  const encapButton = cleanChart.querySelector('[data-resource-operation="encapsulate"]'); encapButton.focus(); encapButton.click();
+  assert.deepEqual(cleanChart.querySelectorAll('.chart-point').map(p => p.dataset.value), ['4', '4']);
+  assert.equal(cleanChart.querySelector('[data-resource-operation="encapsulate"]').getAttribute('aria-pressed'), 'true');
+  assert.equal(cleanApp.document.activeElement, cleanChart.querySelector('[data-resource-operation="encapsulate"]'));
+  const cleanAttachment = attachments.get('overview-chart-computation'), readout = cleanApp.document.createElement('span');
+  cleanAttachment.onReadout(cleanAttachment.points[0], readout);
+  assert.equal(readout.querySelector('.chart-point-stage').textContent, 'Stage 1');
+  assert.equal(readout.querySelector('.chart-point-value').querySelector('strong').textContent, '4');
+  assert.equal(readout.querySelector('.chart-point-unit').textContent, 'µs');
+  const focusedOperation = cleanApp.document.activeElement; cleanRender();
+  assert.equal(cleanApp.document.activeElement, focusedOperation, 'unchanged rendering keeps the focused operation');
+  assert.equal(cleanApp.requests.filter(r => r.url.pathname === '/api/protocol/resources').length, 1, 'operation buttons reuse the report');
+  await cleanModel.load(scheme, async () => {throw new Error('Fixture offline');}, cleanRender, {refresh:true});
+  assert.match(cleanChart.textContent, /Refresh failed · retained measurements shown/);
+  assert.equal(cleanChart.querySelector('[data-resource-refresh]').textContent, 'Try again');
+  assert.deepEqual(cleanChart.querySelectorAll('.chart-point').map(p => p.dataset.value), ['4', '4']);
+  console.log('PASS resource states, explicit historical evidence, incomplete reports, zero values, profile isolation, focus, cache, clean graph presentation and retired-account requests');
 })().catch(error => { console.error(error); process.exitCode = 1; });

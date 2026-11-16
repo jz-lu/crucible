@@ -63,7 +63,7 @@
     // Only authored supporting material transfers through the simple editor.
     // Assessment/check status belongs to an exact revision, never its successor.
     const retained = {};
-    if (revision) for (const key of ['references', 'artifacts', 'extensions']) {
+    if (revision) for (const key of ['references', 'artifacts', 'extensions', 'sections', 'statements', 'arguments']) {
       if (Object.hasOwn(revision, key)) retained[key] = clone(revision[key]);
     }
     return retained;
@@ -84,6 +84,62 @@
     if (!Array.isArray(value) || value.length > 40) fail('invalid_snapshot', 'Use at most 40 text tags.');
     value.forEach(item => text(item, 'Tag', 100));
   }
+  function readableStatementBlocks(body) {
+    text(body, 'Section text', 40000);
+    const blocks = [], buffer = [];
+    let fence = null, ticks = 0, math = null;
+    const flush = () => { if (buffer.length) { blocks.push({kind:'text', text:buffer.join('\n')}); buffer.length = 0; } };
+    for (const line of body.replace(/\r\n?/g, '\n').split('\n')) {
+      if (fence) {
+        const close = /^ {0,3}(`+|~+)[ \t]*$/.exec(line);
+        if (close && close[1][0] === fence[0] && close[1].length >= fence[1]) fence = null;
+        buffer.push(line); continue;
+      }
+      if (!ticks && !math) {
+        const opened = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+        if (opened) { fence = [opened[1][0],opened[1].length]; buffer.push(line); continue; }
+        const marker = /^ {0,3}\[\[statement:([a-z][a-z0-9-]{0,79})\]\][ \t]*$/.exec(line);
+        if (marker) { flush(); blocks.push({kind:'statement',id:marker[1]}); continue; }
+        if (/^ {0,3}\\\[\[statement:[a-z][a-z0-9-]{0,79}\]\][ \t]*$/.test(line)) { buffer.push(line); continue; }
+        if (/^(?: {4}|\t)/.test(line)) { buffer.push(line); continue; }
+      }
+      for (let i = 0, slashes = 0; i < line.length;) {
+        if (ticks) {
+          if (line[i] === '`') {
+            let end = i + 1; while (line[end] === '`') end++;
+            if (end - i === ticks) ticks = 0;
+            slashes = 0;
+            i = end; continue;
+          }
+        } else {
+          const escaped = slashes % 2 === 1;
+          if (math) {
+            if (!escaped && line.startsWith(math, i)) { i += math.length; math = null; slashes = 0; continue; }
+          } else if (!escaped) {
+            if (line[i] === '`') {
+              let end = i + 1; while (line[end] === '`') end++;
+              ticks = end - i; slashes = 0; i = end; continue;
+            }
+            const opening = ['\\[','\\(','$$'].find(token => line.startsWith(token, i));
+            if (opening) { math = {'\\[':'\\]','\\(':'\\)','$$':'$$'}[opening]; i += opening.length; slashes = 0; continue; }
+          }
+        }
+        slashes = line[i] === '\\' ? slashes + 1 : 0; i++;
+      }
+      buffer.push(line);
+    }
+    flush(); return blocks;
+  }
+  function statementPlacements(content) {
+    const ids = new Set((content.statements || []).map(item => item.id)), placements = new Map();
+    for (const section of content.sections || []) for (const block of readableStatementBlocks(section.body)) {
+      if (block.kind !== 'statement') continue;
+      if (!ids.has(block.id)) fail('invalid_snapshot', 'A statement placement must name a canonical statement in this note.');
+      if (placements.has(block.id)) fail('invalid_snapshot', 'Place each statement only once across the readable sections; use exact links for later references.');
+      placements.set(block.id, section.id);
+    }
+    return placements;
+  }
   function validateRevision(revision, expected) {
     object(revision, 'Revision');
     if (revision.revision !== expected) fail('invalid_snapshot', 'Note revisions must be consecutive, starting at one.');
@@ -91,6 +147,39 @@
     text(revision.claim, 'Claim');
     text(revision.conditions, 'Conditions');
     text(revision.body, 'Supporting body', 40000);
+    if (revision.sections !== undefined) {
+      if (!Array.isArray(revision.sections) || revision.sections.length > 32) fail('invalid_snapshot', 'Use at most 32 readable sections.');
+      const ids = new Set();
+      for (const section of revision.sections) {
+        object(section, 'Readable section');
+        if (typeof section.id !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(section.id) || forbidden.has(section.id) || ids.has(section.id)) fail('invalid_snapshot', 'Readable sections need unique stable IDs.');
+        if (Object.keys(section).some(key => !['id', 'title', 'body'].includes(key))) fail('invalid_snapshot', 'Unsupported readable section field.');
+        ids.add(section.id); text(section.title, 'Section heading', 240); text(section.body, 'Section text', 40000);
+      }
+    }
+    for (const key of ['statements', 'arguments']) {
+      if (revision[key] === undefined) continue;
+      const values = revision[key], ids = new Set();
+      if (!Array.isArray(values) || values.length > 32) fail('invalid_snapshot', 'Use at most 32 ' + key + '.');
+      for (const item of values) {
+        object(item, key); text(item.id, 'Stable identifier', 80);
+        if (!/^[a-z][a-z0-9-]{0,79}$/.test(item.id) || forbidden.has(item.id) || ids.has(item.id)) fail('invalid_snapshot', 'Use unique stable identifiers.');
+        ids.add(item.id); text(item.title, 'Title', 240);
+        if (key === 'statements') text(item.definition, 'Precise statement', 12000);
+        else {
+          if (item.conclusion_statement != null) {
+            if (item.conclusion != null) fail('invalid_snapshot', 'Use one conclusion statement, not a second copy of its text.');
+            const ref = item.conclusion_statement; object(ref, 'Conclusion statement');
+            if (typeof ref.statement_id !== 'string' || !/^[a-z][a-z0-9-]{0,79}$/.test(ref.statement_id) || forbidden.has(ref.statement_id)) fail('invalid_snapshot', 'Identify the exact conclusion statement.');
+            const external = ['note_id','revision','content_sha256'].filter(key => ref[key] != null);
+            if (external.length && (external.length !== 3 || typeof ref.note_id !== 'string' || !ref.note_id.trim() || !Number.isSafeInteger(ref.revision) || ref.revision < 1 || !/^[a-f0-9]{64}$/.test(ref.content_sha256))) fail('invalid_snapshot', 'An external conclusion needs its exact note revision and hash.');
+            if (!external.length && !revision.statements?.some(statement => statement.id === ref.statement_id)) fail('invalid_snapshot', 'The local conclusion statement is missing.');
+          } else text(item.conclusion, 'Conclusion', 6000);
+          text(item.scope, 'Scope', 6000); if (!Array.isArray(item.dependencies) || item.dependencies.length > 32) fail('invalid_snapshot', 'Bound the exact dependency list.');
+        }
+      }
+    }
+    statementPlacements(revision);
     tags(revision.tags);
     if (revision.kind !== undefined) text(revision.kind, 'Author label', 100, true);
     time(revision.createdAt);
@@ -331,5 +420,5 @@
     };
     return api;
   }
-  return { FORMAT, DEFAULT_NAMESPACE, MAX_BYTES, StoreError, validateSnapshot, clone, authoredMetadata, create };
+  return { FORMAT, DEFAULT_NAMESPACE, MAX_BYTES, StoreError, validateSnapshot, clone, authoredMetadata, readableStatementBlocks, statementPlacements, create };
 });

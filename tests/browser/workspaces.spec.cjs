@@ -208,7 +208,6 @@ test('a response authorized for Alice cannot reappear after logout and Bob signs
   try {
     await page.locator('#nb-note-list .nb-title').filter({hasText: 'Alice browser-only private note'}).click();
     await pending.arrived;
-    await page.getByRole('button', {name: 'Read full note →', exact: true}).click();
     await page.locator('#logout-button').click();
     await expect(page.locator('#access-auth-actions')).toBeVisible();
     await signIn(page, 'bob', {navigate: false});
@@ -223,7 +222,6 @@ test('a response authorized for Alice cannot reappear after logout and Bob signs
 test('notebook Back restores visible focus and changing linked filters survives navigation', async ({page}) => {
   await signIn(page); await notebookReady(page);
   await page.locator('#nb-note-list .nb-title').filter({hasText: 'Alice browser-only private note'}).click();
-  await page.getByRole('button', {name: 'Read full note →', exact: true}).click();
   const back = page.getByRole('button', {name: '← Notes', exact: true});
   await back.focus(); await back.press('Enter');
   await expect(page.locator('[data-nb="notes-title"]')).toBeFocused();
@@ -352,14 +350,11 @@ test('mobile note navigation fits the viewport and moves keyboard focus into the
   await signIn(page); await notebookReady(page);
   const title = page.locator('#nb-note-list .nb-title').filter({hasText: 'Alice browser-only private note'});
   await title.click();
-  const read = page.getByRole('button', {name: 'Read full note →', exact: true});
-  await read.focus(); await page.keyboard.press('Enter');
   await expect(page.locator('.nb-full-title')).toHaveText('Alice browser-only private note');
   await expect(page.locator('.nb-full-title')).toBeFocused();
   await page.getByRole('button', {name: '← Notes', exact: true}).click();
   await notebookReady(page);
-  if (!await read.isVisible()) await title.click();
-  await read.focus(); await page.keyboard.press('Enter');
+  await title.focus(); await page.keyboard.press('Enter');
   await expect(page.locator('.nb-full-title')).toBeVisible();
   await expect(page.locator('.nb-full-title')).toBeFocused();
   const width = await page.evaluate(() => ({scroll: document.documentElement.scrollWidth, viewport: innerWidth}));

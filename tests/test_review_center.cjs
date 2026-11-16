@@ -137,7 +137,7 @@ async function test(name, run) {await run(); passed++; console.log('PASS '+name)
     assert.match(root.textContent,/Requests needing human publication review.*Exact publication candidate/);
     assert.equal(root.querySelector('[data-nb="new"]'),null); assert.equal(root.querySelector('[data-nb="notes-view"]'),null);
     root.querySelector('.nb-title').click();
-    buttonText(root,'Read full note →').click(); await flush();
+    buttonText(root,'Read note →').click(); await flush();
     assert.equal(app.location.hash,'#reviews?section=flagged&note=publication-one&revision=3');
     assert.equal(app.requests.filter(row=>row.url.pathname==='/api/notebook/notes/publication-one').at(-1).url.searchParams.get('revision'),'3');
     assert.match(root.textContent,/Publication decision/); assert.equal(root.querySelector('[data-nb="dialog"]').open,false);
@@ -197,7 +197,7 @@ async function test(name, run) {await run(); passed++; console.log('PASS '+name)
     installRealNotebook(app);
     await app.navigate('#reviews?section=flagged');await app.navigate('#reviews?section=flagged');
     const root=app.$('#review-notebook-workspace');
-    root.querySelector('.nb-title').click();buttonText(root,'Read full note →').click();await flush();
+    root.querySelector('.nb-title').click();buttonText(root,'Read note →').click();await flush();
     assert.equal(app.location.hash,'#reviews?section=flagged&note=flagged-one&revision=2');
     root.querySelector('[name="reason"]').value='Checked the exact submitted revision in context.';
     root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();

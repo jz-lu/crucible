@@ -1,0 +1,314 @@
+COMPARABLE BIT-RAM ATTACKS — LOCAL CYCLE REVIEW
+5 November 2026
+
+Status and scope
+
+This cycle adds a common attack-accounting path for the eight current research
+releases: 379 configurations, including 377 default stages. It does not change
+their parameters, samplers, hourly challenge rules, numerical records or scores.
+It does not cover the separately registered historical or published-reference
+releases. It is a local research draft, not hosted deployment, independent
+scientific approval, NIST certification or a deployment recommendation.
+
+The implementation now produces integer work/storage accounts, readable attack
+sections, explicit scoped premises, Full text arguments, exact source identities
+and model-specific graph points. The purpose is to test the entire scientific
+presentation pipeline on real registered constructions. It succeeds at common
+accounting and traceability; it does not yet supply a complete best-known attack
+comparison. Some elementary baselines are deliberately much too slow for that.
+
+What a plotted point means
+
+The experiment is one fresh honestly generated public key and encapsulation from
+an exact release/profile. The attacker receives the public transcript and must
+return the entire encapsulated shared secret. There is no decapsulation oracle.
+All setup is charged to that target; no unspecified multi-target amortization or
+answer-dependent advice is allowed. This is a recovery experiment, not a complete
+IND-CPA/IND-CCA assessment.
+
+The graph displays log2(W), where W is a conservative budget for a documented
+strategy whose success is at least 1/2 under its stated premises. It is not the
+minimum budget over every attack, nor even a promise that this particular
+strategy was optimized to stop at exactly 50% success. Several strategies recover
+every honest input and overachieve the shared target. Raw integer W, its cost
+components, storage, stronger success statement and applicable premises remain
+in crucible/data/ram_attack_curves.json. Large integers are preserved as decimal
+strings for safe transport; logarithms are derived display values.
+
+crucible-bit-ram-v1 gives one unit to an elementary Boolean operation on at most
+two bit-register inputs and to an indirect one-bit memory read/write. Fixed
+wiring and constants are free. Address arithmetic, loop/control, initialization,
+arithmetic, sampling, verification and key derivation have explicit accounts.
+Memory capacity is unlimited in this abstraction; peak stored bits are reported.
+This follows the bit-RAM approach described in NIST's classical cost discussions.
+It is different from CAT's pure circuit accounting for indexed memory access.
+
+The primitive budgets identify elementary ripple/schoolbook arithmetic,
+restoring division, double-and-add modular multiplication, binary exponentiation
+and specified SHA-2/SHA-3/SHAKE algorithms. Bounds are conservative and include
+control allowances. Table/matrix layouts and pointer conventions prevent treating
+unbounded word transfers or address calculations as single operations. See
+crucible/attack_models/common.py for the exact versioned rules and derivations.
+
+Per-scheme analyses
+
+Finite-field DH — teaching-dh-kem@7; 50 configurations
+  Interval baby-step–giant-step searches the actual exponent range 1..M.
+  Sorting, binary search, table storage, modular arithmetic, shared-element
+  reconstruction and the exact transcript hash are charged. Public certificates
+  establish the necessary group facts. Recovery succeeds on every honest input;
+  no unproved attack premise is introduced. This large-memory baseline excludes
+  number-field-sieve improvements and amortized fixed-group preparation.
+
+Elliptic-curve DH — dhkem-x25519@curve-compressed-v2; 50 configurations
+  Baby-step–giant-step uses both affine coordinates and an infinity flag, so it
+  does not lose the sign of a compressed point. It includes decoding, affine
+  inversions, table operations, shared-point multiplication and hashing. The
+  registered order/prime certificates establish the group facts; the stated
+  attack succeeds on every honest input. These custom curves are not X25519.
+  Affine arithmetic and exponential table storage are intentionally unoptimized.
+
+RSA — rsa-kem@4; 50 configurations
+  Trial division visits every odd candidate of the smaller factor's exact bit
+  length. It reconstructs the private exponent, inverts the ciphertext, checks
+  the result and hashes the exact transcript. The argument covers nonunits and
+  the actual nonuniform certified-prime sampler. It succeeds on every honest
+  input. Its top-stage budget is extraordinarily loose: known factoring methods
+  are vastly faster. This curve must never be described as RSA security strength.
+
+Module lattice — ml-kem@compressed-research-v4; 6 configurations
+  Enumerate all 2^n native messages and reproduce each complete ciphertext and
+  derived key, with NTT, sampling, compression, hashing and comparisons charged.
+  At n=8/16 the retained correctness argument is deterministic. At n>=32 the
+  attack assumes actual message-decoding failure at most 1/8. The first-match
+  enumeration lemma then gives success at least 3/4. Ideal-noise calculations
+  motivate this weak actual-event premise; at n=128/256 the supporting analysis
+  also models rounding. Literal independence of fixed finite-seed expansions is
+  not claimed. This is not a converted Core-SVP estimate.
+
+Frodo — frodokem@anchor-research-v3; 80 configurations
+  Use the cheaper documented bound from native 128-bit message enumeration and
+  bounded secret-column enumeration. Both include actual salted encapsulation
+  completion. For column recovery, the visible premise bounds the probability
+  of a misleading short secret by 1/8 under the actual seeded distribution. Its
+  ideal-uniform-matrix lemma is supporting reasoning, not a literal description
+  of a fixed SHAKE image. At n=8 message decoding is deterministic; larger n
+  uses actual decoding failure at most 1/8. The combined column attack succeeds
+  with probability at least 3/4 (7/8 at n=8); message enumeration gives at least
+  3/4. The nearly flat large-stage ceiling comes from the fixed message space.
+
+NTRU Prime — sntrup@3; 27 configurations / 25 default stages
+  Enumerate the fixed-weight input space, of size binom(p,w)*2^w, then compute
+  the ring product, rounding, encodings, confirmation and final shared key.
+  The specified perfect-correctness argument supplies injectivity/recovery for
+  honest native inputs; no extra hardness hypothesis is needed. This baseline
+  is very loose relative to known lattice attacks. Its curve is nonmonotone:
+  the actual (p,q,w) progression can reduce this particular input-space count.
+  Do not smooth those decreases, reorder the established progression, or infer
+  that overall security falls by the same amount. Two nondefault configurations
+  are retained separately; exact profile IDs determine premise applicability.
+
+HQC — hqc@modeled-research-v3; 66 configurations
+  Use private-support enumeration or bounded Prange decoding, whichever has the
+  smaller specified budget, then recover the message with the explicit RM/RS
+  decoder and derive the full 2025-format shared key. The visible premises bound
+  ambiguity of the small secret by 1/64 and actual decoding failure by 2^-128.
+  Prange points additionally require the rank-density premise below. The ideal
+  random-multiplier uniqueness lemma motivates the concrete ambiguity premise;
+  it does not assert that fixed SHAKE outputs have unlimited independent entropy.
+  Tie conventions and transfer to the actual correlated error distribution
+  remain explicit. Specialized quasi-cyclic and improved ISD attacks are omitted.
+
+Classic McEliece — classic-mceliece@length-research-v1; 50 configurations
+  Bounded Prange decoding recovers the weight-64 syndrome error and evaluates
+  the complete shared-key hash. Goppa distance ensures uniqueness of an accepted
+  error. The support-hit probability is exact. The unproved rank-density premise
+  says that on at least 7/8 of honest targets, at least 1/8 of support-containing
+  column selections are invertible. Bounded unbiased sampling and independent
+  trials conditional on the target give success at least 21/32. This does not
+  infer repeatability from an average single-attempt success rate. Improved ISD
+  and structural Goppa attacks are outside this deliberately simple baseline.
+
+Notes, assumptions and identity
+
+The eight existing local fixture notes are revised; they are not duplicated.
+Their readable sections contain the attack idea, quantitative unproved premises
+and scope. Full text retains the computation rules, proofs, worked configuration,
+parameterized accounting formulas, results table and reproduction commands.
+The Full text excerpt omits duplicated size/configuration and operation-timing
+display tables from the earlier compilation, while keeping its mathematical
+arguments and qualifications. Original source pins and every old revision remain.
+An attack specification always has a link. Numbered A-links appear only when an
+actual unproved premise applies to that exact profile. Proven facts, definitions,
+missing scheme-security arguments and the absence of faster attacks are not
+manufactured into attack assumptions.
+
+Both readable sections and Full text belong to one immutable note revision/hash.
+Graph bindings select exact sections in that revision. The generated analysis
+pins the computation model, five accounting/generator source files, exact scheme
+manifests, all cost components and its own digest. The local API rechecks source
+identity, model/units, profile set/manifests, account arithmetic, note visibility
+and revision/section bindings. A publication event alone cannot change a scheme
+or admit an attack. This cycle's local fixture publication is not independent
+scientific approval or a production adoption workflow.
+
+Validation and its limits
+
+The tests check integer accounts, small executable attack paths, shared-secret
+completion, algebraic lemmas, finite probability identities, scope and tampering,
+access restrictions, exact citations and graph behavior. Instrumented Python
+references count primitive/macro operations with stated expansion bounds. They
+do not measure CPython instructions or constitute machine-checked proofs of
+the entire RAM program. Cryptographic-size attacks are not executed. Small
+examples cannot establish the unproved rank, uniqueness or decoding-transfer
+premises across the full parameter range.
+
+The common arithmetic and complete attack counts remain manually reasoned
+research accounts needing independent review. Their exact identities make that
+review reproducible. This is stronger evidence than an unlabeled asymptotic
+exponent, but it is not a formal-verification certificate. No published NFS,
+Core-SVP or CAT circuit count has been silently converted by an offset.
+
+Final validation on this local worktree:
+  - 131 focused Python tests passed: primitive/family accounts, catalogue
+    integrity, note bindings, access restrictions and legacy security references.
+    One dependency deprecation warning remains (Starlette TestClient/httpx).
+  - 57 named frontend checks passed: 21 graph interactions, 16 readable-note
+    sections, 10 RAM comparisons and 10 legacy-security-reference checks.
+    The resource-metrics frontend suite also passed.
+  - The generator's --check reproduced all 379 exact-profile accounts.
+  - Browser checks displayed all eight RAM curves and exercised exact attack
+    and premise links, Full text, legacy metric separation, shared selection,
+    dark/light themes and the 390px mobile layout without horizontal overflow.
+    The browser reported no warnings/errors during the checked interactions.
+  - Browser testing exposed duplicate premise labels and a keyboard preview
+    lost during asynchronous redraw. Both were fixed with regression checks.
+    Same-chart redraw now preserves the exact focused keyboard preview without
+    committing it or carrying it across accounts, routes, metrics or releases.
+  - All 16 earlier note revisions were byte-for-byte preserved; eight revision-3
+    notes were added. The two users, eight note numbers, submission table and
+    fourteen resource publications were unchanged from the local backup.
+  - git diff --check passed. No commit, push or hosted deployment was performed.
+
+Preview: http://127.0.0.1:8000/
+Workspace screenshots: outputs/ram-attack-cycle/hqc-ram-preview.jpg and
+outputs/ram-attack-cycle/visible-assumption.jpg. The temporary mobile viewport
+was reset and the original dark theme restored after inspection.
+
+UI follow-up: the local selector now contains only Classical and Quantum.
+Classical uses the bit-RAM account, named explicitly in Model and values; the
+older differently normalized reference is no longer a parallel selectable
+classical curve. The legacy estimates remain in retained evidence/history.
+The 20 RAM/reference frontend checks passed after this adjustment.
+
+Reproducibility packaging limitation: the named Python sources exist in this
+local checkout. Notes pin their hashes and commands, but do not yet attach a
+self-contained downloadable source/dependency bundle. Reproduction currently
+requires this checkout and its reviewed runtime environment.
+
+Scope correction after the spot-review: the existing HQC support argument
+already establishes zero decoding loss whenever
+2*w*wr + we < 32*r*(delta+1). The attack account now checks that strict condition
+from the actual parameters and omits the decoding-transfer premise there
+(current stages 1–4). The uniqueness/rank assumptions remain as applicable.
+Stage 5 onward still carries the decoding premise. The code tests include the
+strict boundary and pinned prior proof sources; 20 code-family tests passed.
+Generated accounts and all eight local note bindings were revised to revision 4,
+preserving revision 3. Browser checking confirmed stage 1 shows only A-26 and
+the endpoint retains A-26/A-27/A-28. The outdated HQC paragraph about an empty
+curve now distinguishes the earlier catalogue from the new baseline accounts.
+
+Additional AI-assisted spot-review (not external scientific approval)
+
+Two fresh read-only reviews found no confirmed failure in the checked BSGS/RSA
+success arguments, first-match enumeration lemma, Frodo ideal-matrix union
+bound or conditional Prange amplification. This is a spot-check, not an audit
+certificate. The exact numerical accounting constants still need independent
+instruction-level checking; current macro counters share their primitive cost
+functions with the predictors.
+
+The main unresolved attack premises are substantive: rank density of the actual
+structured matrices, absence of misleading alternative short secrets under
+the actual seeded distribution, and transfer of conditional decoding bounds.
+Small fixture recoveries establish mechanics, not those large-profile claims.
+An ideal-model exponentially small tail cannot automatically be transferred to
+the corresponding exhaustive existential event using ordinary computational
+pseudorandomness alone. The readable premises must retain that distinction.
+
+The first-match lemma's 1-2*delta bound is valid but conservative. For uniform
+native inputs, one first representative per ciphertext fiber gives success at
+least |image F|/|domain F| >= 1-delta. The implemented weaker bound still exceeds
+the common 1/2 target and has not been silently strengthened in existing notes.
+
+Reproduction from the source checkout
+
+  python scripts/build_ram_attack_notes.py --check
+
+This reads the registry and regenerates in memory. It requires the checkout's
+reviewed runtime/artifact environment. Use the same command without --check only
+when intentionally updating the two generated source artifacts; it makes no
+database or hosted change and performs no paid model call.
+
+  python -m pytest tests/test_ram_common.py tests/test_ram_classical_attacks.py tests/test_ram_lattice_attacks.py tests/test_ram_code_attacks.py tests/test_ram_catalogue.py tests/test_ram_note_bindings.py tests/test_note_sections.py tests/test_security_references.py
+  node --test tests/test_ram_comparison_frontend.cjs tests/test_graph_points_frontend.cjs tests/test_note_sections_frontend.cjs tests/test_security_references_frontend.cjs tests/test_resource_metrics_frontend.cjs
+
+To revise the existing isolated preview's notes through ordinary revision and
+local fixture review paths, first check the intended local data directory:
+
+  python scripts/prepare_note_integration.py --data-dir .local/note-integration-v2 --revise-fixture --check
+  python scripts/prepare_note_integration.py --data-dir .local/note-integration-v2 --revise-fixture
+
+The second command writes new local revisions and bindings. It must not be
+pointed at a production database or an unrelated notebook. The guard rejects
+unrelated identities and independent edits rather than overwriting them. A
+browser inspection remains necessary after a reader/graph change.
+
+Next scientific work
+
+For another attack note, the readable part should state the actual recovery
+strategy and result, the experiment/model, and every quantitative unproved
+premise needed by the analysis. Give each premise a stable section identifier
+and exact profile scope. Place the full algorithm, finite success argument,
+cost/storage derivation, source attribution and reproducible evidence in Full
+text. The note and analysis must agree about their exact parameter manifests.
+Definitions and established lemmas do not become A-labels merely to fill a list.
+Do not assume independent retries on a fixed target from a mean success rate.
+Changes to a premise or algorithm need a new note revision and analysis digest.
+The current loader is a reviewed-source local demonstration, not a public API
+for uploading arbitrary counters or automatically admitting new curves.
+
+Keep the common contract and replace weak baselines with stronger, individually
+reviewed attack accounts. The most important omissions are modern factoring
+for RSA, finite-field index calculus, modern lattice attacks and improved ISD.
+Retain old analyses and exact note revisions; adoption of an improvement should
+be an explicit reviewed change. Add a same-model AES reference only after its
+cost and success conventions have been accounted for. Quantum and memory-aware
+alternatives require separately identified models, not relabeled classical
+numbers. A memory cap also requires reoptimizing each attack, rather than hiding
+the memory of an otherwise faster strategy.
+
+Primary sources and specification boundaries
+
+NIST's bit-operation RAM discussion and qualified multi-metric comparison:
+  https://nvlpubs.nist.gov/nistpubs/ir/2022/NIST.IR.8413-upd1.pdf
+  https://csrc.nist.gov/csrc/media/Projects/post-quantum-cryptography/documents/faq/Kyber-512-FAQ.pdf
+Bernstein and Chou's attack/cost/success-predictor methodology (not the same
+memory model as this RAM account):
+  https://iacr.org/submit/files/slides/2024/crypto/crypto2024/407/slides.pdf
+Elementary discrete logarithms/factoring and arithmetic:
+  https://cacr.uwaterloo.ca/hac/about/chap3.pdf
+  https://cacr.uwaterloo.ca/hac/about/chap14.pdf
+Underlying KEM specifications; reduced research releases still require their
+own exact implementation sources and arguments:
+  https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf
+  https://cic.iacr.org/p/2/3/25/pdf
+  https://ntruprime.cr.yp.to/ntruprime-20201007.pdf
+  https://pqc-hqc.org/doc/hqc_specifications_2025_08_22.pdf
+  https://classic.mceliece.org/mceliece-spec-20221023.pdf
+  https://classic.mceliece.org/mceliece-security-20221023.pdf
+Hash operation accounting follows the specified algorithms:
+  https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf
+  https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.202.pdf
+
+These sources motivate algorithms and conventions; none independently certifies
+the new Crucible counts, assumptions or adapted research constructions.

@@ -17,7 +17,7 @@ async function boot({hash='#notebook',respond}={}){
   }});
 }
 async function finishAssets(app){
-  for(const file of ['store.js','seed.js','notebook.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../web/notebook',file),'utf8'),app.sandbox,{filename:file});
+  for(const file of ['store.js','seed.js','statement-workflow.js','notebook.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../web/notebook',file),'utf8'),app.sandbox,{filename:file});
   for(const node of app.document.querySelectorAll('link,script')){
     if((node.src||node.href||'').startsWith('/notebook/'))node.onload();
   }
@@ -115,6 +115,19 @@ async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
     let calls=0;const app=await boot({respond:url=>url.pathname==='/api/notebook/notes'?{notes:[summary(++calls===1?'Old response':'Fresh response')]}:undefined});
     vm.runInContext('Date.now = () => '+(Date.now()+11000),app.sandbox);await finishAssets(app);
     assert.equal(calls,2);assert.match(app.$('#nb-note-list').textContent,/Fresh response/);assert.doesNotMatch(app.$('#nb-note-list').textContent,/Old response/);
+  });
+  await test('returning from another page preserves cached exact statement focus inside its explanation',async()=>{
+    const hash='a'.repeat(64),content={title:'Scoped argument',claim:'A declared premise.',conditions:'Only this experiment.',body:'Full record.',tags:[],
+      statements:[{id:'first',label:'A-1',title:'First premise',definition:'The first exact definition.'},{id:'second',label:'A-2',title:'Second premise',definition:'The second exact definition.'}],
+      sections:[{id:'reasoning',title:'Reasoning',body:'Before.\n\n[[statement:first]]\n\nBetween.\n\n[[statement:second]]\n\nAfter.'}]};
+    const revision={revision:1,content_sha256:hash,publication_status:'approved',content};
+    const app=await boot({respond:url=>url.pathname==='/api/notebook/notes/note-one'?{note:{id:'note-one',owner:alice,can_edit:false,revision:1,content_sha256:hash,revisions:[revision]}}:undefined});
+    await finishAssets(app);
+    const route=id=>'#notebook?'+new URLSearchParams({note:'note-one',revision:'1',sha256:hash,statement:id});
+    await app.navigate(route('first'));assert.equal(app.document.activeElement.dataset.noteStatement,'first');
+    await app.navigate('#about');await app.navigate(route('second'));
+    assert.equal(app.document.activeElement.dataset.noteStatement,'second');
+    assert.equal(app.document.activeElement.closest('.nb-readable-section').dataset.noteSection,'reasoning');
   });
   console.log(`\n${passed} notebook startup checks passed.`);
 })().catch(error=>{console.error(error);process.exitCode=1;});

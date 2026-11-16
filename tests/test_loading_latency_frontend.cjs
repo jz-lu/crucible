@@ -23,7 +23,7 @@ async function test(name, run) {await run(); passed++; console.log('PASS '+name)
       const assets = () => app.document.querySelectorAll('link,script').filter(element => (element.src || element.href || '').startsWith('/notebook/'));
       assert.equal(app.requests.length, 1); assert.equal(assets().length, 0);
       session.resolve(app.envelope({user, csrf_token:'first', access:{mode:'beta', allowed:true, status:'active'}})); await flush();
-      assert.equal(assets().length, 4);
+      assert.equal(assets().length, 5);
       assert.equal(app.requests.filter(item => item.url.pathname === path).length, 1);
       assert.match(app.$('#notebook-workspace').textContent, /Notes/);
       app.window.CrucibleNotebook = {mount(target, options) { return {show:async () => {
@@ -101,7 +101,7 @@ async function test(name, run) {await run(); passed++; console.log('PASS '+name)
     const assets=()=>app.document.querySelectorAll('link,script').filter(element=>(element.src||element.href||'').startsWith('/notebook/'));
     assert.equal(app.requests.length,1);assert.equal(assets().length,0,'No protected work before access resolves');
     session.resolve(app.envelope({user,csrf_token:'first',access:{mode:'beta',allowed:true,status:'active'}}));await flush();
-    assert.equal(assets().length,4);
+    assert.equal(assets().length,5);
     assert.deepEqual(app.requests.filter(r=>r.url.pathname==='/api/schemes').map(r=>r.url.searchParams.get('projection')),['map'],
       'Tiny index starts before any notebook asset has loaded');
     app.window.CrucibleNotebook={mount(target,value){mounted++;options=value;return {
@@ -123,7 +123,7 @@ async function test(name, run) {await run(); passed++; console.log('PASS '+name)
     old.resolve(app.envelope({projection:'map',schemes:[{id:'old-session',version:'0'}]}));await flush();
     app.window.CrucibleNotebook={mount(target,value){mounted++;options=value;return {show:async()=>{},hide(){},setAccount(){}};}};
     const assets=app.document.querySelectorAll('link,script').filter(element=>(element.src||element.href||'').startsWith('/notebook/'));
-    assert.equal(assets.length,4,'Rotation reuses code downloads without reusing old rights');
+    assert.equal(assets.length,5,'Rotation reuses code downloads without reusing old rights');
     assets.forEach(asset=>asset.onload());await flush();
     assert.equal(mounted,1);assert.equal(options.currentReleases().length,0);
     fresh.resolve(app.envelope({projection:'map',schemes:[{id:'fixture',version:'1'}]}));await flush();

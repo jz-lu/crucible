@@ -73,7 +73,7 @@ test('a maximum-length unbroken tag wraps without clipping in mobile previews, r
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole('button', {name: '← Notes', exact: true}).click();
   const entry = page.locator('#nb-note-list .nb-entry').filter({hasText: title});
-  await entry.locator('.nb-title').click();
+  await entry.locator('.nb-expand').click();
   const chip = entry.getByRole('button', {name: tag, exact: true});
   await expect(chip).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

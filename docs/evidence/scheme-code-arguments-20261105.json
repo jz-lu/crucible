@@ -1,0 +1,71 @@
+{
+  "format": "crucible-scheme-code-argument-evidence-v1",
+  "review_date": "2026-11-05",
+  "finite_checks": {
+    "format": "crucible-scheme-code-argument-checks-v1",
+    "goppa_toy_minimum_distance": 5,
+    "goppa_toy_nonzero_codewords": 3,
+    "goppa_toy_weight_two_unique_syndromes": 28,
+    "hqc_current_profiles_checked": 66,
+    "hqc_deterministic_stages": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "mceliece_lengths_checked": 50,
+    "ntru_profiles_checked": 27,
+    "ntru_tiny_ring_products_exhausted": 12150,
+    "scope": "Finite arithmetic/domain checks; not formal proofs, hardness validation, oracle-model validation or source-code refinement",
+    "source_sha256": {
+      "crucible/code_hqc_v3.py": "404fda38d083d53139928b95b4dc38dae8f3854e6b84cca39638edd10785ee91",
+      "crucible/code_native.py": "edcb89bbb3eecb6f93f1036fe5b57e286fb6c033077c59c9cdbec1a2870ca140",
+      "crucible/code_parameters.py": "acad8f1e6c39e59e53e2fa5a7769e720380a66976aba952f28b860db1a734b7b",
+      "crucible/data/hqc_model_profiles.json": "f3b203d83894bbcdf8186d66119714c30caf7fd7500150560d44f2984fd36ff2",
+      "crucible/data/ntru_frontier_profiles.json": "5ce65e7785a6dee839c8a46de39153873c54fbbd426c4e1f1df558f68f8f0767",
+      "crucible/hqc_model_correctness.py": "5cca352647c324c68b08dc50a608c902a6c8403a6da11df2d90ecc90694c9bcf",
+      "crucible/ntru_frontier.py": "794bec7ecad5478eafe944ba8db955acc872df06821d87308712e59e9054be00",
+      "crucible/ntru_reference.py": "a18478c044a538221d6255f6211487e39ed872a8eeb713df44ca6d612b41d0ed",
+      "scripts/code_build_backend.py": "25a83188fde66c00daddde2649747d09116d79d5b7d41fe5a8dec735640d80a7"
+    }
+  },
+  "tests": [
+    {
+      "command": "python -m pytest -q tests/test_ntru_frontier.py -k native_and_independent_python_agreement",
+      "result": "27 passed; 21 deselected",
+      "scope": "All 27 current NTRU v3 native/independent Python honest comparisons"
+    },
+    {
+      "command": "python -m pytest -q tests/test_hqc_model.py -k 'every_tier_exact_sizes_and_unconditioned_honest_agreement or frozen_parameter_certificates'",
+      "result": "67 passed; 55 deselected in combined invocation",
+      "scope": "All 66 current HQC v3 tuples and exact certificate replay"
+    },
+    {
+      "command": "python -m pytest -q tests/test_hqc_support_review.py",
+      "result": "11 passed",
+      "scope": "Supplemental deterministic scope, ties, certificate binding"
+    },
+    {
+      "command": "python -m pytest -q tests/test_ntru_frontier.py -k 'native_and_independent_python_agreement or published_653_known_answer_decapsulation' tests/test_code_research.py -k 'mceliece_sampler or mceliece_endpoint or every_research_profile' tests/test_hqc_support_review.py",
+      "result": "77 passed, 2 failed, 60 deselected",
+      "scope": "Last -k selected all50 current McEliece and27 oldHQC honest cases; two tests could not run because extracted source/KAT fixtures were absent. This does not establish endpoint KAT or sampler-source conformance in this pass.",
+      "failures": [
+        {
+          "test": "test_mceliece_sampler_matches_published_general_parameter_rule",
+          "reason": "Missing .native-code/source/mceliece-*/encrypt.c"
+        },
+        {
+          "test": "test_mceliece_endpoint_exactly_matches_published_known_answer",
+          "reason": "Missing .native-pq/build/tests/kat_kem"
+        }
+      ]
+    }
+  ],
+  "scientific_limits": [
+    "Proofs are manually authored and cross-reviewed, not mechanized.",
+    "No finite tests establish the exact-distribution hardness functions or concrete-hash transfer slack.",
+    "HQC conditional rare-event transfer and model-domination premises remain unproved.",
+    "Installed native binaries are available; extracted original source/KAT trees are not all retained locally.",
+    "No hosted data, source algorithm, challenge generation policy or parameter selection was changed."
+  ]
+}

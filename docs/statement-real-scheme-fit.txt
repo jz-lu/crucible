@@ -1,0 +1,207 @@
+OPTIONAL STATEMENTS — FIT ACROSS THE EIGHT CURRENT SCHEME NOTES
+6 November 2026 · read-only contract check, not scientific approval or adoption
+
+Result
+
+The proposed statement/argument structure represents the existing eight release
+notes without treating their mathematical questions as the same question.
+The adapter retains 379 registered configurations, including two off-progression
+NTRU configurations, 34 statement definitions, eight security arguments, eight
+correctness arguments and ten named RAM attack methods. It validates the
+generated candidate shapes against the actual backend models.
+
+No source note, database, curve, challenge, score or current adoption was changed.
+The resulting records are authoring candidates. Schema compatibility does not
+establish the scientific validity of the existing arguments.
+
+Release                        Configurations  Security / correctness distinctions
+teaching-dh-kem@7               50              Interval-CDH and hash-transfer premises;
+                                               exact honest mathematical agreement.
+rsa-kem@4                      50              Exact emitted-key inversion and hash
+                                               transfer; agreement includes nonunits.
+dhkem-x25519@curve-compressed-v2 50              Registered-curve CDH and hash transfer;
+                                               exact scalar/encoding agreement.
+ml-kem@compressed-research-v4    6              Seeded joint equation distributions;
+                                               correctness premises start at stage3,
+                                               with extra rounding premise at5–6.
+frodokem@anchor-research-v3     80              Two seeded matrix premises and hash
+                                               transfer; noise premise from stage2.
+sntrup@3                      27              Exact rounded-product recovery and
+                                               hash model; deterministic lifting.
+hqc@modeled-research-v3        66              Native message recovery and hash model;
+                                               two correctness premises from stage5.
+classic-mceliece@length-
+research-v1                   50              Seeded Goppa syndrome recovery and
+                                               hash transfer; unique decoding.
+
+These descriptions summarize what the source notes claim, not independent
+certification of those claims or the corresponding native implementations.
+
+Important cases the fit check preserves
+
+* Module-lattice attack enumeration needs an actual message-decoding failure
+  bound of 1/8. It must not inherit a key-agreement bound merely because it is
+  stronger numerically. Early configurations need no listed attack premise;
+  the later four do. The correctness argument has its own two scoped premises.
+* Frodo has two different RAM methods selected across the progression: bounded
+  secret-column search at three configurations and message enumeration at77.
+  Each method keeps its own dependency set and every exact per-profile account.
+* HQC has exhaustive support recovery at three configurations and Prange at63.
+  The latter may need rank density, unique-key transfer and decoding transfer;
+  their conjunction is not interchangeable with the Goppa decoding argument.
+* HQC and McEliece use similarly named rank-density premises. They remain in
+  different exact release contexts, with different native configuration IDs
+  and target distributions. A shared label is never evidence of equivalence.
+* NTRU's registered configuration set contains27 entries but its default human
+  progression has25. Two valid off-progression entries have no stage number.
+  The adapter retains them by stable native IDs. Stage numbers are not identities.
+* The no-premise correctness cases inherit an explicit authored unconditional
+  status and exact scope. The adapter does not infer this status merely from an
+  empty dependency list. The RAM cases similarly require explicit authored
+  analytical-success metadata when no unproved premise is recorded.
+* Every RAM point keeps its original manifest hash, native parameter manifest,
+  attack work, memory, success bound, technical argument and source identity.
+  These are attack-work upper bounds, not lower bounds against all attacks.
+* Historical classical and quantum references retain their existing types.
+  They are not relabelled as current comparable bit-RAM accounts.
+
+What still needs deliberate authorship
+
+The candidate schema fits, but the source corpus is not already a fully
+structured dependency graph. The check records105 field-level authoring tasks,
+many repeated across uses; this is not105 mathematical defects:
+
+1. Normative definitions: pin any sampler/algorithm definitions to actual note
+   revisions. The adapter has exact source-file and manifest identities, but
+   cannot invent a published statement's note ID or revision.
+2. Required strength: for non-RAM uses, the entire authored premise is retained
+   verbatim as the sufficient assumption. Authors must isolate the actual
+   threshold where a weaker premise would suffice. This cannot be recovered
+   safely from a familiar name such as LWE or from an unrelated correctness target.
+3. Parameter maps: all native manifests and configuration IDs are retained,
+   but variable-by-variable substitutions and exact sampler references need
+   explicit authored pins. The application should not guess these from prose.
+4. Reviewed adoption: these records have no independent assessment. The current
+   local scientific presentation and every historical research record remain
+   untouched. Publication and selecting an argument remain separate decisions.
+
+This supports implementing one reusable representation. It does not support
+silently converting every existing assumption into an approved reusable theorem.
+The finite trial exercises the lifecycle; these source-derived candidates test
+whether the same representation retains the real families' distinctions.
+
+Reproduce
+
+  python scripts/check_scheme_statement_fit.py
+  python scripts/check_scheme_statement_fit.py --output .local/statement-fit-report.json
+  python -m pytest tests/test_scheme_statement_fit.py tests/test_statement_trial_fixture.py -q
+
+The optional JSON includes every original per-configuration RAM account and
+native manifest, so it is intentionally more detailed than a browser payload.
+It is an offline audit artifact, not a new resource the web page must fetch.
+
+Validation in this checkout:19 focused tests passed (8 real-scheme fit checks
+and11 finite-trial checks). Existing source identities are checked against the
+registered manifests and generated RAM catalogue before candidates are emitted.
+
+Canonical local conversion (6 November 2026)
+
+The later implementation deliberately narrows the authoring requirement. A
+statement use now needs the exact proposition and its native configuration IDs;
+one optional use explanation may retain authored scope. With no extra prose,
+the complete proposition is used as written in the argument's scope. This does
+not infer a weaker sufficient threshold, prove a variable substitution, or claim
+that an unspecified sampler matches a standard assumption. The earlier detailed
+fit report remains a useful list of future authoring questions, not a mandatory
+form to fill with guessed answers.
+
+The initial canonical conversion emitted34 premise statements and39 arguments
+for all8 releases:8 security,8 correctness,10 RAM attack methods and13 separately
+qualified historical/quantum references. Premise statements copy the existing formal
+text (or the whole short RAM-premise section). The HQC decoder-tail statement
+also contains its already-authored complete bound definition, including the
+finite sums, sampler law, tie/bias corrections and rounding; it does not leave
+"the formula below" in an unlinked companion. Its companion retains application
+and provenance. Arguments preserve the authored
+conclusions, statuses, reasoning sections and exact configuration coverage.
+Historical/quantum references are now all marked incomplete as quantified
+claims; a dependency list alone cannot turn a reference curve into a complete
+common-model attack guarantee. The379 numerical RAM accounts are unchanged.
+The regenerated source/analysis hashes change because the reproducible builder
+itself is part of their recorded identity.
+
+The local prepare command writes a new revision through the ordinary note APIs.
+Generated notes use top-level statements and arguments; they do not retain the
+parallel extension assumption/argument lists as another scientific authority.
+The old input format remains only in the authoring source and historical note
+revisions, with a compatibility reader. Exact formal prefixes move out of the
+readable companion into the canonical statement; remaining explanatory prose,
+Full text and exact source pins are preserved. Unrelated extension metadata,
+additional references and artifacts survive the revision. Stable historical
+A-number labels are reused. The manifest switches only after every new exact
+revision has completed the explicitly local publication fixture.
+
+This is a representational conversion, not independent scientific review,
+proof, assumption discharge or scheme admission. Publication of this local
+fixture remains distinct from adoption. Account data, other notes, earlier
+revisions, challenges and numerical records are outside the conversion.
+
+Validation:
+  python scripts/build_ram_attack_notes.py --check
+  python scripts/prepare_note_integration.py --data-dir .local/note-integration-v2 --revise-fixture --check
+  python -m pytest tests/test_scheme_note_conversion.py tests/test_ram_note_bindings.py tests/test_ram_catalogue.py tests/test_scheme_statement_fit.py -q
+
+The conversion tests exercise all8 actual generated notes through the canonical
+binding API, verify the published exact note/argument/statement pins, preserve
+per-profile RAM assumptions, and reject missing configuration coverage. They
+also check that explanatory text and unrelated metadata are not dropped.
+
+
+Canonical conclusions and local initial admissions (6 November 2026)
+
+The actual scheme notes now have39 additional conclusion statements (73 total
+statement blocks, including34 premises). Each of the39 arguments refers to one
+conclusion_statement by its stable note-local claim-<argument-id> identifier;
+new arguments have no separate authoritative conclusion prose. In an exact
+revision this resolves to an exact statement pin. Neutral labels distinguish
+Security claim, Correctness claim, Attack claim and Reference claim; existing
+A-number premise labels are retained without renumbering.
+
+Security and correctness conclusions state the exact experiment, quantifiers,
+formula, symbol definitions and exclusions. They omit proof steps, premise
+A-labels, repeated Scope summaries and references to what Full text proves.
+Those explanations remain unchanged in the argument sections. This matters to
+identity: improving a proof or renaming a premise should not create a different
+mathematical conclusion. Tests vary both and require the claim to stay identical.
+The argument still preserves conditional and unconditional distinctions. The
+three code-family security summaries now also expose their already-written
+Full-text inequalities, including the explicit concrete-hash transfer slack.
+No small hardness value or new proof was supplied. A source-inequality check
+stops regeneration if these underlying derivations change unexpectedly.
+
+RAM conclusions name the exact release, common model, algorithm, configuration
+IDs and generated analysis digest. Their W_j and M_j are the exact recorded
+work/storage integers for that configuration; the success event remains recovery
+of the complete shared key with probability at least1/2. They remain upper
+bounds for specified methods, never a security lower bound or best-known claim.
+All379 numerical accounts and parameter manifests remain unchanged. Historical
+classical/quantum references retain their qualifications and are incomplete as
+quantified common-model claims.
+
+The local workflow may treat the initially selected authored arguments as
+admitted baselines at the user's request. This is an explicit initial admission,
+not a fabricated independent reviewer decision, proof certificate or claim that
+the premises are true. The26 complete local arguments receive initial rosters; the13 reference-only
+entries remain incomplete and unadmitted. Alternatives must target the exact
+conclusion or a byte-identical canonical definition (including all normative
+definition pins); no equivalence is inferred from a title or paraphrase. A
+first workflow mutation freezes the original baseline source pin. Cosmetic
+changes can retain the same target identity; changing the proposition or its
+configuration coverage creates a new context. Neither can rewrite an earlier
+admission or the sources cited by historical records.
+
+The preparation script keeps conclusion labels out of its historical A-number
+allocator and reports premise, statement and argument counts separately. It
+preserves all old revisions and outside metadata as before. Local publication
+and initial admission still do not certify native runtime implementations or
+change live challenge parameters, rounds, submissions or scores.

@@ -3575,15 +3575,20 @@ html[data-pending-page=activity] .access-workspace[aria-busy=true] .access-headi
 }
 #overview-challenges { font-size: 16px; }
 .overview-assumptions-link {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   margin-top: 14px;
-  color: var(--ink);
-  font-size: 14px;
+  padding: 9px 14px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  font-size: 15px;
   font-weight: 600;
   text-decoration: none;
-  border-bottom: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--line));
+  border-radius: 6px;
 }
-.overview-assumptions-link:hover { border-color: var(--ink); }
+.overview-assumptions-link:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
 
 /* The assumptions sheet opens progressively; the catalogue stays unchanged. */
 .assumptions-workspace { width: 100%; max-width: 860px; margin: 0 auto; padding: 26px 0 56px; outline: none; }
@@ -3718,12 +3723,12 @@ dialog.assumption-reader { width: min(760px, calc(100% - 40px)); padding: 0; bor
   margin-bottom: 16px;
 }
 .overview-metric-options button {
-  padding: 6px 9px;
+  padding: 8px 10px;
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.4;
 }
 .overview-metric-options button:hover {
@@ -4529,3 +4534,110 @@ html[data-beta-landing] #access-workspace { animation:landing-arrive 350ms ease 
   .site-header .brand-ember-effect { display:none; }
   html[data-beta-landing] #access-workspace { animation:none; }
 }
+
+/* Selected configurations share a quiet guide across the existing graph grid. */
+.chart-interaction-markers { pointer-events: none; }
+.chart-selection-guide { stroke: currentColor; stroke-width: 1; stroke-dasharray: 3 5; opacity: .28; }
+.chart-selected-dot, .chart-hover-dot { fill: var(--accent, #27836a); stroke: var(--surface, #fff); stroke-width: 1; }
+.chart-hover-halo { fill: var(--accent, #27836a); opacity: .14; }
+.chart-idle-muted { opacity: 0; pointer-events: none; }
+.overview-svg[tabindex] { cursor: crosshair; touch-action: pan-y; }
+.overview-svg[tabindex]:focus:not(:focus-visible) { outline: none; }
+.overview-svg[tabindex]:focus-visible { outline: 2px solid var(--accent, #27836a); outline-offset: 2px; border-radius: 4px; }
+.chart-point-readout { min-height: 4.3rem; display: grid; align-content: start; gap: 14px; margin-top: 14px; padding: 16px 0 8px; border-top: 1px solid var(--line); font-size: .86rem; line-height: 1.5; }
+.chart-point-readout.is-empty { visibility: hidden; }
+.chart-point-values { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 26px; }
+.chart-point-stage { color: var(--muted); font: 500 13px/1.5 var(--sans); white-space: nowrap; }
+.chart-point-stat { display: grid; gap: 2px; }
+.chart-point-caption { color: var(--muted); font: 400 12px/1.4 var(--sans); }
+.chart-point-value { color: var(--ink); font: 600 18px/1.45 var(--sans); font-variant-numeric: tabular-nums; }
+.chart-point-value strong { font-weight: 600; }
+.chart-point-value sup { font-size: 12px; line-height: 0; vertical-align: super; margin-left: 1px; }
+.chart-point-unit { margin-left: 5px; color: var(--muted); font: 400 12px/1.4 var(--sans); }
+.chart-point-unavailable { color: var(--muted); font: 400 13px/1.5 var(--sans); }
+.chart-attack-readout { min-height: 8.3rem; }
+.chart-selected-sources:empty { display: none; }
+.chart-note-links { display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: center; }
+.chart-note-links a { text-decoration: none; }
+.chart-note-links > a:hover { text-decoration: underline; }
+.chart-specification-link { display: inline-flex; align-items: center; gap: 7px; color: var(--accent); font: 500 13px/1.4 var(--sans); }
+.chart-assumption-group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
+.chart-assumption-caption { color: var(--muted); font: 500 .82rem/1.4 var(--sans); margin-right: .15rem; }
+.chart-assumption-link { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line)); background: color-mix(in srgb, var(--accent) 9%, var(--surface)); color: var(--accent); border-radius: 5px; padding: .25rem .65rem; font: 650 .9rem/1.4 var(--sans); text-decoration: none; }
+.chart-assumption-link:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--surface)); text-decoration: none; }
+.chart-assumption-link:focus-visible, .overview-assumptions-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.resource-chart-actions { margin-top: 8px; font: 400 12px/1.5 var(--sans); }
+.resource-clean-controls { margin: 0; }
+.resource-operation-options { margin-bottom: 16px; }
+.overview-computation .resource-operation-options button { border-color: transparent; color: var(--muted); }
+.overview-computation .resource-operation-options button[aria-pressed="true"] { border-color: var(--line); color: var(--ink); }
+.overview-assumptions-link[aria-disabled="true"] { opacity: .55; pointer-events: none; }
+.overview-justifications { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+dialog.scheme-assumptions-dialog { width: min(680px, calc(100% - 32px)); padding: 28px 32px; }
+.scheme-assumptions-dialog .dialog-top { margin-bottom: 12px; }
+.scheme-assumptions-dialog .dialog-top .eyebrow { font-size: 11px; letter-spacing: .06em; }
+.scheme-assumptions-dialog h2 { margin: 0 0 24px; font: 600 30px/1.25 var(--display); overflow-wrap: anywhere; }
+.scheme-assumptions-content { display: block; }
+.scheme-assumptions-category { min-width: 0; }
+.scheme-assumptions-category h3 { margin: 0 0 12px; font: 600 13px/1.5 var(--sans); color: var(--ink); }
+.scheme-argument-introduction { margin-bottom: 24px; }
+.scheme-assumptions-category .scheme-argument-headline { margin-bottom: 10px; font: 500 21px/1.35 var(--display); }
+.scheme-argument-scope, .scheme-argument-summary { color: var(--text); font: 400 14px/1.7 var(--sans); overflow-wrap: anywhere; }
+.scheme-argument-summary { margin-bottom: 12px; }
+.scheme-argument-scope-text > :first-child, .scheme-argument-summary > :first-child { margin-top: 0; }
+.scheme-argument-scope-text > :last-child, .scheme-argument-summary > :last-child { margin-bottom: 0; }
+.scheme-argument-premises { margin-bottom: 24px; }
+.scheme-assumptions-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.scheme-assumption-link { width: 100%; justify-content: flex-start; align-items: center; gap: 12px; padding: 12px 14px; border-color: var(--line); background: var(--surface); }
+.scheme-assumption-link:hover { border-color: var(--border); background: var(--light); }
+.scheme-assumption-link .assumption-number { flex-shrink: 0; border-radius: 4px; background: var(--light); padding: 4px 6px; font: 500 12px/1.4 var(--mono); }
+.assumption-description { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.assumption-name { color: var(--ink); font: 500 14px/1.45 var(--sans); overflow-wrap: anywhere; }
+.assumption-summary { color: var(--ink); font: 400 14px/1.5 var(--sans); overflow-wrap: anywhere; }
+.assumption-formal-statement { display: grid; gap: 9px; color: var(--ink); font: 400 14px/1.65 var(--sans); overflow-wrap: anywhere; min-width: 0; }
+.assumption-formal-paragraph { display: block; min-width: 0; }
+.assumption-formal-statement .katex { font-size: 1.05em; }
+.assumption-formal-statement .math-inline { display: inline; overflow: visible; vertical-align: baseline; }
+.assumption-formal-statement .math-display { display: block; max-width: 100%; }
+.assumption-formal-statement .katex-display { margin: .35em 0; }
+.assumption-formal-statement .katex-display > .katex > .katex-html { white-space: normal; }
+.assumption-scope { color: var(--muted); font: 400 11px/1.5 var(--sans); }
+.assumption-link-arrow { color: var(--muted); font-size: 15px; }
+.scheme-assumptions-empty, .scheme-assumptions-incomplete { margin: 0 0 14px; font: 400 14px/1.6 var(--sans); color: var(--muted); }
+.scheme-assumptions-incomplete { color: var(--ink); font-weight: 500; }
+.scheme-argument-details { border-top: 1px solid var(--line); }
+.scheme-argument-details > summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 46px; padding: 12px 0; list-style: none; cursor: pointer; color: var(--muted); font: 500 13px/1.5 var(--sans); }
+.scheme-argument-details > summary::-webkit-details-marker { display: none; }
+.scheme-argument-details > summary::after { content: '+'; font: 400 18px/1 var(--sans); }
+.scheme-argument-details[open] > summary::after { content: '−'; }
+.scheme-argument-details > summary:hover { color: var(--ink); }
+.scheme-argument-details > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+.scheme-argument-conclusion { margin: 4px 0 16px; color: var(--text); font: 400 14px/1.75 var(--sans); overflow-wrap: anywhere; }
+.scheme-argument-conclusion > :first-child { margin-top: 0; }
+.scheme-argument-conclusion > :last-child { margin-bottom: 0; }
+.scheme-argument-conclusion .math-display { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+.scheme-premise-use { margin: 4px 0 20px; color: var(--text); font: 400 13px/1.65 var(--sans); overflow-wrap: anywhere; }
+.scheme-premise-use h4 { margin: 0 0 6px; font: 600 12px/1.5 var(--sans); color: var(--ink); }
+.scheme-premise-use-text > :first-child { margin-top: 0; }
+.scheme-premise-use-text > :last-child { margin-bottom: 0; }
+.scheme-argument-footer { margin-top: 16px; padding-top: 4px; }
+.scheme-argument-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 20px; }
+.scheme-argument-link { display: inline-flex; align-items: center; min-height: 40px; font: 500 13px/1.5 var(--sans); color: var(--accent); text-decoration: none; }
+.scheme-argument-link:hover { text-decoration: underline; }
+.scheme-argument-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+.scheme-argument-admission { margin: 5px 0 0; color: var(--muted); font: 400 11px/1.5 var(--sans); }
+.chart-argument-status { color: var(--muted); font: 400 13px/1.5 var(--sans); }
+@media (max-width: 620px) {
+  dialog.scheme-assumptions-dialog { padding: 22px; }
+  .scheme-argument-introduction { margin-bottom: 20px; }
+  .scheme-assumptions-dialog h2 { font-size: 26px; margin-bottom: 22px; }
+  .chart-assumption-link { min-height: 38px; padding-inline: .75rem; }
+  .scheme-assumption-link { gap: 10px; padding: 11px; }
+  .scheme-assumption-link .assumption-number { align-self: start; }
+  .scheme-assumptions-category .scheme-argument-headline { font-size: 20px; }
+  .scheme-assumption-link .assumption-link-arrow { display: none; }
+  .chart-point-values { gap: 12px 18px; }
+  .chart-point-value { font-size: 17px; }
+}
+.nb-reading-equation { display: block; overflow-x: auto; overflow-y: hidden; margin: 1rem 0; padding: .25rem 0; }
+.nb-reading-equation .katex-display { margin: .2rem 0; }

@@ -2,6 +2,10 @@
 
 Find new cryptography. Test its limits.
 
+Local statements/arguments preview: follow [the collaborator setup](docs/claims-local-setup.txt)
+on `feature/assumptions-note-integration`. It creates independent synthetic data;
+the workflow remains a local development trial and is not enabled on the beta.
+
 Agent entry point: `GET /api/agent/pipeline`, or `python3 scripts/crucible_cli.py guide`.
 The [model-facing contract](web/agent/pipeline.json) defines the mission, task-specific
 reading plan, evidence rules and supported workflows. CLI workspaces include a

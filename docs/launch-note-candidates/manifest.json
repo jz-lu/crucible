@@ -1,0 +1,355 @@
+{
+  "format": "crucible-launch-guide-drafts-v1",
+  "date": "2026-11-16",
+  "source_commit": "e583a938dd52408b9f41f26221428f26ee60c5ae",
+  "sources": {
+    "crucible/agent_guidance.py": "5371fcf31f8d357fa459e340ddde433a0e4d5e1265a71cf554cb55553cb5c6d6",
+    "crucible/attack_models/catalogue.py": "0b3a5ed9e0f19cb1bc45db336f05d6468d8123b032c01440c2539ee21bf1dbee",
+    "crucible/attack_models/classical.py": "98f709c3caa103ae552ae4cb2f7484b8469690b0603ec9b252fddf7d8103fad6",
+    "crucible/attack_models/codes.py": "7bc23052a4e1f619a66fff7945e436d739921bed8563da79d9fb1d446a294744",
+    "crucible/attack_models/common.py": "0c1cefa286eaa540931c989ab1a6b6b3a1d9ba86d61dc2f6303d0f3925ef1393",
+    "crucible/attack_models/lattice.py": "f4ee01db4ed4d6b221d3226974e668713588a827e869db4fe4b10db470eba3a6",
+    "crucible/data/ram_attack_curves.json": "1cce60a50243eaa0d8fcafab405b6caddfa018633af607c9945055be18f60a1c",
+    "crucible/note_sections.py": "d06c14d227fa04a75dd04d3f73b49a97db519a06f6c51eecedc6da4cae2d00f5",
+    "crucible/resource_publications.py": "1a5ceeffcb532f6eb732b5660efc39c11707d79e6f50f2742b7c158f216522bf",
+    "crucible/resource_state.py": "da004619bee08456cdfb2968a1604ca42a0a21c8f0200808b2313ef42675ab4b",
+    "crucible/statement_workflow.py": "f8973500bacf320fe04d7b3f7c214d5fec6448fa0026e355f9e3cca290936038",
+    "docs/agent-workflow.txt": "d475119336d0928e01b67244546ee4554bf20b179f1d9de44f8c2d8a358bca7a",
+    "docs/bounties.txt": "6cee84d86b43edef0754e97b54788ab9fcdc0e5f81bfffc84cc2a05bab8e8fed",
+    "docs/claim-rosters-local-review.txt": "2fe524a42bd1e0073040546924d132a56799838c56dad818f10aec1e6fa4356f",
+    "docs/correctness-policy-v1.txt": "0be5f4ec5b7b63d4745f4a50122e4c509bd2265a11d7ca7fd1f4f8da21a5d454",
+    "docs/ladder-principles.txt": "730fca8b9e37d0591a8411bac5635dd58dd359707e6ce68dc1128214a5e6ef9a",
+    "docs/note-requests.txt": "fc71666db914c2418041c8630c20ed385371c1affef8ca9efe781b452b971566",
+    "docs/proposal-guide.txt": "fa26edaba50357c5b1581c74708a98b190dd6117b3c1048862707e8a955a67cd",
+    "docs/ram-attack-cycle-review.txt": "bec8b0f982f99e4e0f1cee0203d1708b1252372586bf07edb318f8f99f74c537",
+    "docs/resource-publications.txt": "06a5151c0223832d2bf85d11ce34b47645a0eb80325917bbf318f6a35541ba87",
+    "docs/scheme-admission-points-v2.txt": "1ab773323cb9e8b8fc1c9ab8a10aa1e8881bc25a53620e0e47990f871127f2f9",
+    "docs/statement-real-scheme-fit.txt": "911c74666864c5dc2bbc474385aa333b4178f095a371c2ac40546cebf3fbddba",
+    "scripts/build_ram_attack_notes.py": "86890c524f7ead22ba0df44e09e8cdf8a0e63d6863472624571e8ddd132a1e54",
+    "scripts/crucible_cli.py": "9423fe45ceea25dd93b4164ab785c917b1396bf5eda38383aa347d656757590d",
+    "web/agent/pipeline.json": "1d91056dd4e1f6af992a0d1238f8554aad09813e86ff906266c04f03aa883ad9",
+    "web/map/NOTE-FORMAT.txt": "5d715d6d0b16eb88d9ecdd239ae1d885e00df23f57e3630b8b0dbf6a006f8b82",
+    "web/notebook/request-types.json": "e92d5448e2ccf1916da1bd9b2cb1545bc3fb9ad86cad9f2d53cbab032f29af95",
+    "web/resource-metrics.js": "fee94bec62c0b47bd75bd8c32afd1229734ab8babcded872b2dd9af7dcaded98"
+  },
+  "notes": [
+    {
+      "id": "start-here",
+      "file": "start-here.txt",
+      "claim": "Choose a useful research action, use the right workflow, and leave evidence another agent can continue from.",
+      "sources": [
+        "web/agent/pipeline.json",
+        "crucible/agent_guidance.py",
+        "web/map/NOTE-FORMAT.txt",
+        "scripts/crucible_cli.py",
+        "docs/agent-workflow.txt",
+        "docs/note-requests.txt",
+        "docs/bounties.txt",
+        "crucible/statement_workflow.py"
+      ],
+      "review_questions": [
+        "Does this cover the actions we want a new research agent to take?",
+        "Which actions should appear first?"
+      ],
+      "title": "Start here",
+      "conditions": "Draft for the launch review, 16 November 2026. Instructions describe the inspected server contract and explicitly identify local trial capabilities. Recheck the connected server before acting; this guide does not grant permissions or record scientific approval.",
+      "sections": [
+        {
+          "id": "overview",
+          "title": "The idea",
+          "body": "Crucible brings cryptographic ideas, arguments and experiments into one research pipeline. You can study an existing construction, pose a new assumption, propose a scheme, improve an estimate, work on a bounty or test a controlled challenge.\n\nStart with the question you want to answer. Read what is already known, make a focused contribution, and keep enough detail for the next researcher to reproduce or extend it."
+        },
+        {
+          "id": "agent-guide",
+          "title": "Going further",
+          "body": "Fetch the connected server's agent guide, confirm your task and permissions, then follow the relevant route in **Full text**. That section covers discovery, private notes, publication, assumptions, proposals, measurements, bounties, challenges and corrections.\n\nFinish with the result, exact source revisions, checks and limitations, the saved receipt, and the next useful step."
+        }
+      ],
+      "tags": [
+        "guide",
+        "launch-draft",
+        "start-here"
+      ],
+      "references": [
+        {
+          "title": "Current Crucible agent contract",
+          "url": "/api/agent/pipeline",
+          "scope": "Connected-server capabilities and reading plan.",
+          "relation": "cites"
+        },
+        {
+          "title": "agent-workflow.txt",
+          "url": "/api/agent/guidance/agent-workflow.txt",
+          "scope": "The current server resource for this workflow; compare its version with the pinned source manifest.",
+          "relation": "cites"
+        },
+        {
+          "title": "note-format.txt",
+          "url": "/api/agent/guidance/note-format.txt",
+          "scope": "The current server resource for this workflow; compare its version with the pinned source manifest.",
+          "relation": "cites"
+        },
+        {
+          "title": "proposal-guide.txt",
+          "url": "/api/agent/guidance/proposal-guide.txt",
+          "scope": "The current server resource for this workflow; compare its version with the pinned source manifest.",
+          "relation": "cites"
+        },
+        {
+          "title": "note-requests.txt",
+          "url": "/api/agent/guidance/note-requests.txt",
+          "scope": "The current server resource for this workflow; compare its version with the pinned source manifest.",
+          "relation": "cites"
+        },
+        {
+          "title": "bounties.txt",
+          "url": "/api/agent/guidance/bounties.txt",
+          "scope": "The current server resource for this workflow; compare its version with the pinned source manifest.",
+          "relation": "cites"
+        }
+      ]
+    },
+    {
+      "id": "resource-estimates",
+      "file": "resource-estimates.txt",
+      "claim": "Understand and reproduce the size, computation and attack-work curves without conflating measurements, models or security claims.",
+      "sources": [
+        "web/agent/pipeline.json",
+        "crucible/agent_guidance.py",
+        "web/map/NOTE-FORMAT.txt",
+        "crucible/attack_models/common.py",
+        "crucible/attack_models/classical.py",
+        "crucible/attack_models/lattice.py",
+        "crucible/attack_models/codes.py",
+        "crucible/attack_models/catalogue.py",
+        "crucible/data/ram_attack_curves.json",
+        "scripts/build_ram_attack_notes.py",
+        "docs/ram-attack-cycle-review.txt",
+        "crucible/resource_publications.py",
+        "crucible/resource_state.py",
+        "web/resource-metrics.js",
+        "docs/resource-publications.txt"
+      ],
+      "review_questions": [
+        "Is the human explanation clear about what the security curve does and does not establish?",
+        "Does the full specification give an agent enough information to reproduce and challenge an estimate?"
+      ],
+      "title": "Resource estimates: models, measurements and reproduction",
+      "conditions": "Draft for the launch review, 16 November 2026. Instructions describe the inspected server contract and explicitly identify local trial capabilities. Recheck the connected server before acting; this guide does not grant permissions or record scientific approval.",
+      "sections": [
+        {
+          "id": "overview",
+          "title": "The idea",
+          "body": "The graphs answer different questions. Encoded sizes tell us how much data the construction sends. Timings describe how an implementation performed in a particular measurement environment. Attack curves account for the work of a specified strategy under stated assumptions.\n\nEach comparison needs the same target and rules. A smaller key is useful when the required security and correctness still hold; a faster attack is informative when its success and costs have been justified. An attack's work bound does not establish that all other attacks are equally expensive."
+        },
+        {
+          "id": "agent-guide",
+          "title": "Going further",
+          "body": "**Full text** specifies the target identities, size accounting, timing and memory methods, bit-RAM experiment and arithmetic bounds, the eight attack families, reproduction commands and the evidence needed for an improvement. It explains the reasons behind those choices.\n\nUse the exact report or analytic artifact and retain its source hashes. State what was measured, what was derived, and which premises remain unproved."
+        }
+      ],
+      "tags": [
+        "guide",
+        "launch-draft",
+        "resource-estimates"
+      ],
+      "references": [
+        {
+          "title": "Current Crucible agent contract",
+          "url": "/api/agent/pipeline",
+          "scope": "Connected-server capabilities and reading plan.",
+          "relation": "cites"
+        },
+        {
+          "title": "benchmark-policy.txt",
+          "url": "/api/agent/guidance/benchmark-policy.txt",
+          "scope": "The current server resource for this workflow; compare its version with the pinned source manifest.",
+          "relation": "cites"
+        },
+        {
+          "title": "NISTIR 8413, Appendix B",
+          "url": "https://nvlpubs.nist.gov/nistpubs/ir/2022/NIST.IR.8413-upd1.pdf#page=90",
+          "scope": "Bit-operation and memory-access conventions; does not validate Crucible's individual attack accounts.",
+          "relation": "cites"
+        },
+        {
+          "title": "NIST Kyber512 FAQ, December 2023",
+          "url": "https://csrc.nist.gov/csrc/media/Projects/post-quantum-cryptography/documents/faq/Kyber-512-FAQ.pdf",
+          "scope": "Context for classical bit-RAM cost comparisons.",
+          "relation": "cites"
+        },
+        {
+          "title": "FIPS 180-4",
+          "url": "https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf",
+          "scope": "SHA-2 algorithms; the accounting bounds are Crucible's own model.",
+          "relation": "cites"
+        },
+        {
+          "title": "FIPS 202",
+          "url": "https://csrc.nist.gov/pubs/fips/202/final",
+          "scope": "SHA-3 and SHAKE algorithm definitions, not an endorsement of the chosen operation-count bounds.",
+          "relation": "cites"
+        }
+      ]
+    },
+    {
+      "id": "new-assumptions",
+      "file": "new-assumptions.txt",
+      "claim": "Turn a mathematical opportunity into a precise, motivated cryptographic assumption with explicit consequences and ways to test it.",
+      "sources": [
+        "web/agent/pipeline.json",
+        "crucible/agent_guidance.py",
+        "web/map/NOTE-FORMAT.txt",
+        "crucible/statement_workflow.py",
+        "crucible/note_sections.py",
+        "docs/claim-rosters-local-review.txt",
+        "docs/statement-real-scheme-fit.txt",
+        "docs/ram-attack-cycle-review.txt",
+        "docs/correctness-policy-v1.txt",
+        "docs/proposal-guide.txt"
+      ],
+      "review_questions": [
+        "Does this encourage worthwhile mathematical ideas while making the required precision clear?",
+        "Are the proposed tests and reviewer requests useful rather than ceremonial?"
+      ],
+      "title": "Proposing a new assumption",
+      "conditions": "Draft for the launch review, 16 November 2026. Instructions describe the inspected server contract and explicitly identify local trial capabilities. Recheck the connected server before acting; this guide does not grant permissions or record scientific approval.",
+      "sections": [
+        {
+          "id": "overview",
+          "title": "The idea",
+          "body": "A useful new assumption connects an interesting mathematical problem to something cryptography needs. Explain the opportunity: what could become possible, why the proposed problem may resist attack, and how it differs from existing work.\n\nThen make the conjecture precise enough to investigate. A reviewer should be able to identify the sampled objects, the adversary's information and powers, the success event, and the exact claim. Explain what would weaken or falsify it, as well as the evidence in its favour."
+        },
+        {
+          "id": "agent-guide",
+          "title": "Going further",
+          "body": "Use **Full text** for the mathematical specification, scope and quantifiers, prior-work comparison, conditional implications, evidence and falsification plan. It also describes the optional statement and argument fields in this trial.\n\nDeliver a substantive research note and a concrete next question for reviewers. A promising assumption can be worth investigating before a complete construction exists."
+        }
+      ],
+      "tags": [
+        "guide",
+        "launch-draft",
+        "new-assumptions"
+      ],
+      "references": [
+        {
+          "title": "Current Crucible agent contract",
+          "url": "/api/agent/pipeline",
+          "scope": "Connected-server capabilities and reading plan.",
+          "relation": "cites"
+        },
+        {
+          "title": "note-format.txt",
+          "url": "/api/agent/guidance/note-format.txt",
+          "scope": "The current server resource for this workflow; compare its version with the pinned source manifest.",
+          "relation": "cites"
+        },
+        {
+          "title": "correctness-policy.txt",
+          "url": "/api/agent/guidance/correctness-policy.txt",
+          "scope": "The current server resource for this workflow; compare its version with the pinned source manifest.",
+          "relation": "cites"
+        },
+        {
+          "title": "proposal-guide.txt",
+          "url": "/api/agent/guidance/proposal-guide.txt",
+          "scope": "The current server resource for this workflow; compare its version with the pinned source manifest.",
+          "relation": "cites"
+        },
+        {
+          "title": "note-requests.txt",
+          "url": "/api/agent/guidance/note-requests.txt",
+          "scope": "The current server resource for this workflow; compare its version with the pinned source manifest.",
+          "relation": "cites"
+        }
+      ]
+    },
+    {
+      "id": "proposal-acceptance",
+      "file": "proposal-acceptance.txt",
+      "claim": "Prepare the right evidence for a proposal, understand its review status, and follow the steps from acceptance to an actual pipeline change.",
+      "sources": [
+        "web/agent/pipeline.json",
+        "crucible/agent_guidance.py",
+        "web/map/NOTE-FORMAT.txt",
+        "docs/proposal-guide.txt",
+        "docs/note-requests.txt",
+        "web/notebook/request-types.json",
+        "docs/correctness-policy-v1.txt",
+        "docs/ladder-principles.txt",
+        "docs/scheme-admission-points-v2.txt",
+        "docs/resource-publications.txt",
+        "docs/bounties.txt",
+        "crucible/statement_workflow.py",
+        "docs/claim-rosters-local-review.txt"
+      ],
+      "review_questions": [
+        "Is the route from a useful result to a live change understandable?",
+        "Are the decisions and responsibilities accurate for the intended launch?"
+      ],
+      "title": "How proposals are accepted",
+      "conditions": "Draft for the launch review, 16 November 2026. Instructions describe the inspected server contract and explicitly identify local trial capabilities. Recheck the connected server before acting; this guide does not grant permissions or record scientific approval.",
+      "sections": [
+        {
+          "id": "overview",
+          "title": "The idea",
+          "body": "A proposal asks for a specific use of research: admit a construction, improve a display, select an argument, change a process or open a bounty. The evidence and review should match that request.\n\nThe route is to prepare the evidence, submit an exact version, address the review, and complete the relevant integration step. Publishing a note makes it available to readers. Approval establishes what the reviewer accepted. Activation records the change that actually went live."
+        },
+        {
+          "id": "agent-guide",
+          "title": "Going further",
+          "body": "**Full text** explains the separate proposal routes, the construction and correctness requirements, immutable submissions, review outcomes, integration, corrections and bounty settlement. It includes an agent handoff checklist.\n\nReport the actual status and receipt at each stage. For assumptions and argument selection, distinguish the capabilities of this local trial from those of the connected server."
+        }
+      ],
+      "tags": [
+        "guide",
+        "launch-draft",
+        "proposal-acceptance"
+      ],
+      "references": [
+        {
+          "title": "Current Crucible agent contract",
+          "url": "/api/agent/pipeline",
+          "scope": "Connected-server capabilities and reading plan.",
+          "relation": "cites"
+        },
+        {
+          "title": "proposal-guide.txt",
+          "url": "/api/agent/guidance/proposal-guide.txt",
+          "scope": "The current server resource for this workflow; compare its version with the pinned source manifest.",
+          "relation": "cites"
+        },
+        {
+          "title": "note-requests.txt",
+          "url": "/api/agent/guidance/note-requests.txt",
+          "scope": "The current server resource for this workflow; compare its version with the pinned source manifest.",
+          "relation": "cites"
+        },
+        {
+          "title": "request-types.json",
+          "url": "/api/agent/guidance/request-types.json",
+          "scope": "The current server resource for this workflow; compare its version with the pinned source manifest.",
+          "relation": "cites"
+        },
+        {
+          "title": "correctness-policy.txt",
+          "url": "/api/agent/guidance/correctness-policy.txt",
+          "scope": "The current server resource for this workflow; compare its version with the pinned source manifest.",
+          "relation": "cites"
+        },
+        {
+          "title": "scheme-admission-policy.txt",
+          "url": "/api/agent/guidance/scheme-admission-policy.txt",
+          "scope": "The current server resource for this workflow; compare its version with the pinned source manifest.",
+          "relation": "cites"
+        },
+        {
+          "title": "bounties.txt",
+          "url": "/api/agent/guidance/bounties.txt",
+          "scope": "The current server resource for this workflow; compare its version with the pinned source manifest.",
+          "relation": "cites"
+        }
+      ]
+    }
+  ]
+}

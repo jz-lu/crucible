@@ -1,0 +1,95 @@
+ARGUMENT-FIRST NOTES — LOCAL REVIEW
+6 November 2026
+
+Earlier checkpoint. The subsequent claim/roster integration is documented in
+docs/claim-rosters-local-review.txt. It now connects real scheme presentation
+slots, canonical conclusion statements, alternative admissions and reviewed
+selection/withdrawal. The counts and outstanding items below describe this
+earlier revision-10 checkpoint, not the latest local fixture.
+
+Intent
+
+The scheme page opens a Security argument or Correctness argument. An argument
+states the claim and scope, then shows its assumptions and an exact note link.
+The note is the research record; there is no separate assumption-writing portal.
+
+Reading
+
+Read argument opens the exact argument in the ordinary note reader. If the note
+has a readable reasoning section, that section appears with the argument once.
+Other arguments and the statement list stay folded until requested. Assumption
+links open the precise statement definition in that same versioned system.
+Full text is always available. Notes without a readable companion still say so
+and keep Full text collapsed, except for a direct citation to a full-text passage.
+
+Authoring
+
+Optional statements hold precise definitions. Optional arguments contain a
+conclusion, scope, authored status, reasoning location and exact premise uses.
+An assumption is a statement's role in that argument, not a global truth label.
+Most ordinary notes need neither structure. The existing title, summary, scope,
+full-text and citation fields remain compatible; this pass does not redesign
+the general note API or introduce a document block editor.
+
+A premise use can have one explanation, “How this premise is used”, rather than
+three mandatory prose fields. If omitted, the whole exact proposition is used
+as written in the argument scope. Omission proves no parameter mapping or
+implication. Historical required/mapping/justification records remain readable
+and unchanged. Mixing the old and new explanations is rejected.
+
+Evolution
+
+An edit creates a new note revision. Earlier references still resolve to their
+original text and hash. A challenging note is evidence, not an automatic verdict.
+The local reviewed-selection trial can select or withdraw an exact argument for
+a fixed result. Withdrawn uses appear as previous uses. Empty dependency lists
+never automatically mean unconditional correctness; completeness is authored
+and still needs examination. Incomplete arguments are visibly marked.
+
+Publication and scientific adoption are separate. These local scheme display
+bindings are explicit fixture selections, not independently reviewed adoptions.
+The eight converted scheme notes preserve their scientific limitations and
+numeric attack accounts. The conversion does not prove their mathematics,
+establish best-known attacks or turn attack upper bounds into security bounds.
+
+Compatibility and remaining work
+
+Current scheme presentations read canonical arguments and statements. Historical
+scheme extension metadata has a read-only adapter to the same display contract;
+old revisions and citations are not rewritten. The generator still accepts its
+previous scientific source format as input, with an explicit conversion record.
+
+The local adoption workflow remains a rehearsal, separate from the hosted
+proposal application mechanism. Integrating actual scheme presentation slots,
+the production dependency index and a hosted migration/release remains future
+work. The current update form requires an explicit target; it never silently
+selects an unrelated demonstration result.
+
+Review this local version at http://127.0.0.1:8000/. Nothing from this pass has
+been deployed, committed or pushed.
+
+Validation at this checkpoint
+
+- Eight local scheme notes use 34 canonical statements and 39 argument blocks.
+  All 379 numerical RAM accounts remain unchanged by this representation pass.
+- Each scheme note now has revision 10. All 71 earlier revisions present before
+  this pass remain saved; hashes of all 87 current revisions were recomputed.
+  Note/account/submission counts and the four trial updates/two decisions remain
+  unchanged. A private local SQLite snapshot precedes the conversion.
+- 92 backend binding/conversion tests passed before the final HQC definition
+  correction; its 30 conversion/catalogue checks passed after the correction.
+  The HQC statement now carries the full formula its bound depends on.
+- 38 workflow checks pass, including exact references, rejected ambiguous uses,
+  visibility and adoption permissions. The surrounding graph/fixture/migration
+  tests passed in the preceding combined 49-check run.
+- Frontend checks pass: 193 notebook, 19 structured workflow, 18 readable-section,
+  19 scheme-dialog, 22 graph interaction and 14 scheme-navigation cases.
+- Desktop browser review confirmed security/correctness entry points, focused
+  argument reading, complete HQC premise navigation, rendered mathematics and
+  the absence of an automatic Full-text fallback. This pass does not claim a
+  fresh mobile-device or production-browser certification.
+
+Refreshing the preview picks up deliberate local binding-manifest changes.
+Before reviewed selections control hosted presentations, selection changes must
+also invalidate or version the scheme binding caches; citation links themselves
+must continue to resolve to their older exact records.

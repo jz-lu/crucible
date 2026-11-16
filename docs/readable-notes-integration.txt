@@ -1,0 +1,260 @@
+READABLE NOTES — LOCAL INTEGRATION CHECKPOINT
+
+Latest extension: the bit-RAM cycle in ram-attack-cycle-review.txt adds real
+analytical baseline curves for eight releases and 379 exact configurations.
+The same eight local notes now have revision 8, including readable attack,
+security and correctness arguments. See scheme-argument-cycle-review.txt for
+the latest scientific scope and verification. The earlier
+checkpoints below are retained as history, not the current validation receipt.
+The lifecycle audit and proposed next case studies are recorded in
+assumptions-workflow-audit-20261106.txt. That report distinguishes the local
+reading prototype from the durable proposal/adoption workflow still to build.
+
+Purpose
+
+Merge the accepted assumptions prototype into the existing application, keeping
+its notebook, accounts, immutable revisions, publication controls, citations,
+resource reports, routing and theme. No separate assumptions application or
+synthetic security curve is installed.
+
+What is implemented
+
+- Optional content.sections [{id,title,body}] provides a flexible readable companion.
+  The existing body remains the complete Full text. Both are hashed, saved,
+  exported, screened and permission-checked in the same immutable revision.
+- Sections have stable identifiers, exact-revision citation links and safe local
+  Markdown/KaTeX rendering. Existing body-line citations continue to work.
+- The editor adds/removes sections without deriving their IDs from changing
+  titles. Existing notes/hashes remain unchanged when sections are absent.
+- A small shared graph interaction module provides a hover dot/halo and a
+  committed dot and dashed guide across the existing resource/security renderers.
+  Selection is release/profile scoped; absent values remain absent.
+- Eight sourced readable notes cover current scheme releases. Their 46 sections
+  explain security, correctness, attack references and 10 scoped unproved/model
+  premises. Nine scheme-security gaps remain separate prose, not assumptions.
+  Sources and original evidence revisions are
+  pinned; stronger newer results are distinguished from retained older text.
+- Separate Security and Correctness entries each open their own premise list. Explicit authored
+  scheme_assumptions membership selects exact, titled premise sections; the same
+  premise can serve both contexts. Missing category metadata is unknown, while
+  missing security arguments are labelled separately from numbered premises.
+  Each category also links to its exact justification section. A committed attack point
+  exposes its exact attack section and only the bound applicable premise links.
+  The specification link is present even with no numbered assumptions. Badges
+  sort numerically; existing premise identifiers survive edits and retirement.
+  Missing KEM arguments cannot be bound as an attack premise. The attack is not
+  responsible for establishing the KEM's security, or excluding faster attacks.
+  No plot value is invented, interpolated across a gap, or changed by a note.
+
+Local isolation and reproduction
+
+The development-only CRUCIBLE_LOCAL_NOTE_CORPUS_ONLY=true suppresses the packaged
+legacy notebook and its old display links. It cannot be enabled in production.
+Use a fresh explicit CRUCIBLE_DATA_DIR, run the normal database migrations, then:
+
+  python scripts/prepare_note_integration.py --data-dir PATH_TO_FRESH_LOCAL_DATA
+
+The builder refuses an occupied unrelated notebook, validates every source pin,
+creates notes via the normal API, requests publication and records a clearly
+labelled local fixture publication decision through the normal reviewer API.
+This decision is not independent scientific review or scheme admission. It makes
+no provider calls and deletes no notes/accounts. The same completed fixture is
+not duplicated on rerun. Changed source requires an explicit new fixture or
+--revise-fixture, which validates the existing identities and writes ordinary
+immutable note revisions. --check performs the preflight without writes. The
+builder refuses independent edits and does not overwrite history.
+
+The explicit local scheme-note-bindings.json pins one exact note revision and
+its security/correctness/attack sections for each exact release. The API checks
+visibility, hashes, section existence, scheme context, graph model identity and
+profile scope before returning links. This local binding manifest is a preview
+of display adoption, not a production adoption/review store.
+
+Further work before hosting
+
+- Agree the display/adoption review for binding an exact published note to a
+  live scheme/attack. Publishing a note alone must never alter scheme state.
+- Persistent cross-note assumption identities, version succession, scoped
+  challenges/refutations and adoption history need their own narrow design.
+  Current labels are authored objects in exact notes, not certified verdicts.
+- Extend proposal admission to require exact justification-section references
+  without rewriting older approved proposals or treating links as proof.
+- Review the eight authored explanations scientifically; the present pass checks
+  attribution, scope and source consistency, not independent mathematical proof.
+- Preserve old/new note-reader compatibility during any eventual deployment.
+  This JSON extension requires no database migration, but older clients will
+  not present readable sections and must not silently discard them on edits.
+
+UI principles retained
+
+Human explanation first; complete technical material one disclosure away.
+Consistent, prominent green assumption links; versions and full hashes remain in exact records.
+No unified assumption catalogue, A/B/C comparison controls, stage dropdown in
+overview graphs, fictional examples, or resource-point popups. Existing source
+and measurement detail panels remain available.
+
+Validation checkpoint — 2026-11-05
+
+The isolated app is served on http://127.0.0.1:8000/ from this worktree, using
+.local/note-integration-v2/crucible.db. The local-only preview launcher uses a
+distinct cookie and loopback binding; it is not part of the application release.
+Existing development and hosted research/accounts were not modified.
+
+Backend validation passed 113 focused notebook, citation, access and review
+checks, plus the local metadata and public-asset checks. Frontend validation
+covered notebook editing/reading, store/review lifecycle, real KaTeX rendering
+and the shared graph interaction. The final rerun passed all 14 readable-section
+and 14 graph-interaction checks; git diff --check was clean.
+
+All eight seeded releases returned valid exact section links through the real
+API. Fourteen retained, previously accepted resource publications were replayed
+into this local database after archive/receipt identity and current receiver
+validation. All non-resource tables were unchanged by that replay. These are
+historical measurements, not a new benchmark run or fresh remote attestation.
+
+Desktop and 390px mobile browser checks covered readable sections, Full text,
+editing without saving, exact citations, selected passages and overflow. A graph
+point's premise link opened the exact passage; returning restored the same
+profile and dashed guide across all four graphs. A bug that replaced source
+links during blur/pointerleave was reproduced and fixed with regression tests.
+
+No commit, push or hosted deployment was performed in this pass. The present
+checkpoint is ready for local design review, with the hosting requirements above
+still explicit.
+
+Follow-up UI and responsibility correction — 2026-11-05
+
+Click/Enter pins a dashed guide and stationary dot (radius 5), alongside the moving
+hover dot (radius 5, halo 9), which disappears on pointer leave or blur. Section
+citations use quiet link icons, revealed on heading hover or keyboard focus on
+desktop and available directly on touch devices. Routine complete-report
+captions and settled publication boilerplate live inside existing details;
+partial coverage, failures, scientific qualifications and reviewer views remain.
+
+The eight local notes now have revision 2. Missing scheme-security arguments
+were moved out of assumptions and grouped with the scheme security account.
+Attack-specific hypotheses remain separate, with stable surviving A labels and
+numeric badge order. Empty premise lists preserve the Attack specification link
+and do not certify that an incomplete attack analysis is unconditional.
+
+Validation passed 24 backend section/binding checks, 15 graph-interaction
+checks, 14 readable-section checks, 193 notebook frontend checks and the resource
+frontend suite. The revision preflight also passed after completion. Existing
+note revisions, note numbers, user records and all resource publication,
+activation and event records were compared with the saved local checkpoint and
+were unchanged. Browser checks confirmed the revised elliptic-curve attack link
+opens its revision-2 passage with no spurious obligation badge.
+
+Selected attack values and source links now remain pinned while the preview dot
+moves. Source links are not rebuilt on hover or pointer leave, and readable
+section navigation aligns the section heading at the top instead of centering
+an arbitrarily tall section.
+
+Grouped scheme premises — 2026-11-05
+
+Security & correctness now opens two compact categories using the same green
+assumption-link treatment as the selected attack curve. Rows show the exact
+readable section title, stable A label and authored stage scope. The API returns
+titles only after checking note visibility and the bound revision. Category
+membership is explicit, not guessed from prose. No added fetch is needed to
+reopen the list. Empty categories, unknown classifications and incomplete
+arguments remain distinct; none claims a proof from the absence of a premise.
+
+All eight local notes are at revision 5. Their previous revisions, identifiers
+and numbers are retained. Repeated fixture revisions reached the author's 2 MiB
+workspace capacity; a process-local 8 MiB override in the ignored local launcher
+and one-time preparation invocation retained history without changing application
+or hosted quotas. Bulk local export/import still needs its own capacity review;
+this allowance is not a production sizing decision.
+
+Validation: 41 backend note-section checks and 54 frontend checks passed across
+grouping, exact references, RAM rendering and graph selection. The 379-profile
+RAM artifact check remained unchanged. Browser checks covered desktop light/dark,
+390px mobile, exact passage navigation, keyboard close/focus restoration and
+multiple-premise rendering. Malformed rows cannot become links or appear as an
+explicitly empty category. Route/account changes clear the private dialog.
+Only the loopback preview was restarted; no hosted change, commit or push.
+
+Separate arguments — 2026-11-05
+
+Security and Correctness now sit beneath the scheme title. The exact authored
+scheme_arguments metadata declares a scope and conditional/unconditional/
+incomplete status for each argument. An empty premise list alone cannot produce
+Unconditional. Conflicting claims, missing scopes and inconsistent gaps fail
+closed. The same statement/label correspondence is preserved in model-facing
+metadata and human-facing links. Current complete derivations replace duplicated
+older narrative in Full text; exact source references and all prior revisions
+remain. See scheme-argument-cycle-review.txt for the eight scientific arguments,
+remaining unproved premises, reproducible evidence and validation results.
+
+Assumption clarity and graph readouts — 2026-11-06
+
+The local entry points and dialogs are explicitly Security assumptions and
+Correctness assumptions. All 23 scheme premises now have an authored plain-text
+summary and a clearer title; all 16 arguments have a concise scope summary.
+Exact formal scopes, proof bodies and stable premise IDs are retained. Optional
+summaries are validated and served only from the authorized exact revision.
+The dialog lists each numbered premise directly, with its applicable stages,
+and links to the full argument. Unconditional and unknown remain distinct.
+
+Local graph cards no longer show expandable data drawers or select menus.
+Computation has three visible operation buttons. Selected stage, work and memory
+have separate labels and superscript powers; displayed exponents round upward
+without altering plotted values. Attack specification links remain pinned while
+previewing other points. Resource evidence remains available through the exact
+measurement-report download. Legacy presentation remains available outside the
+local integration mode.
+
+Validation: 93 focused backend checks, 48 graph/assumption frontend checks, ten
+security-reference checks, the resource regression suite and five resource-cache
+checks passed. The 379-profile RAM artifact check passed. Browser checks covered
+desktop light/dark, 390px mobile, exact revision-7 premise navigation and compact
+readouts. All 48 earlier revisions remain, with eight new revision-7 records;
+accounts, note identities/numbers and resource records are unchanged. Repeating
+fixture preparation is a no-op. Only the loopback preview was restarted.
+
+Standalone formal premises — 2026-11-06
+
+All 23 security/correctness premises now start with an explicit mathematical
+experiment or probability inequality: parameters, input distribution, adversary
+information, success event and the claimed resource/success bound. Scheme use
+and exact implementation mappings follow separately in the linked section.
+Hardness, hash-model transfer and probability bounds have distinct labels.
+The optional kind/formal_statement pair is validated together, served from the
+authorized exact revision and rendered as bounded safe mathematics, not HTML.
+Legacy summaries and compact attack links remain compatible.
+
+The definitions preserve seeded correlations, actual RSA/Goppa key distributions,
+rounding residuals and decoder events. Seeded module/matrix equations are not
+silently ordinary independent LWE. Hash transfer compares optimal success within
+the declared resource class; it is an unproved application-specific model premise.
+Regev's LWE survey is cited for the standard definition and comparison only.
+No numerical hardness epsilon or hash-transfer delta has been established.
+These are more precise research statements, not machine-verified theorems or
+independent scientific admission. Existing proof appendices, scopes and curves
+are unchanged.
+
+Validation: 76 focused backend checks; 64 frontend checks plus nine math-safety
+groups; all 1,366 formula occurrences in the revised cards/sections render with
+strict vendored KaTeX. The 379-profile RAM artifact reproduces byte-for-byte.
+Cross-review covered all 23 statements. Browser checks covered light/dark,
+390px mobile without dialog overflow, and exact formal-section navigation.
+The eight local notes are now revision 8; all 56 previous revisions, accounts,
+stable premise labels, note numbers and resource records are preserved. Only
+the existing loopback preview was restarted. No deployment, commit or push.
+
+Readable rendering repair — 2026-11-06
+
+The readable-section renderer now has its own bounded 128-expression allowance;
+individual field rendering retains its 64-expression limit. Five real sections
+needed 68–90 formulas, leaving 61 formulas literal under the former shared cap.
+Compact display delimiters now render as equations too (five affected formulas),
+including mixed prose and multiline closing delimiters followed by text. Code
+literals, escaped delimiters, incomplete source and unsafe commands remain inert.
+Readable h5/h6 subsections now receive the existing subsection typography.
+
+All 88 authored sections pass a regression checking that no mathematical
+delimiters remain outside rendered math/code. Twelve math test groups and 32
+reader/assumption checks pass. Browser checks confirm no raw math or renderer
+errors in the module-lattice and NTRU readable notes. This changes presentation
+only: note revisions, hashes, assumptions and citations are unchanged.

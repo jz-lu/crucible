@@ -23,12 +23,15 @@ def test_signup_migration_is_additive_and_downgrade_preserves_admission_provenan
             ids, _ = seed_original(connection, original)
             before = snapshot(connection, original)
         command.upgrade(config, '0032')
-        command.check(config)
         with db.engine.connect() as connection:
             assert snapshot(connection, original) == before
             assert not connection.execute(text('PRAGMA foreign_key_check')).all()
         assert set(inspect(db.engine).get_table_names()) - {'alembic_version'} == set(original.tables) | {
             'beta_signup_links', 'beta_signup_invitations'}
+        # Compare current ORM metadata only at the integrated application head.
+        command.upgrade(config, 'head')
+        command.check(config)
+        command.downgrade(config, '0032')
         command.downgrade(config, '0031')  # Empty additive tables are safely reversible.
         command.upgrade(config, '0032')
         settings = SimpleNamespace(secret=b's' * 32, origins=('http://testserver',))

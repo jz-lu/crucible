@@ -275,13 +275,11 @@ const lists=app=>app.requests.filter(row=>row.url.startsWith('/api/notebook/note
   const before=lists(app).length;await filterNotes(app,'mine');assert.equal(app.q('list').querySelectorAll('.nb-entry').length,2);
   assert.match(app.q('list').textContent,/Previously removed draft/);assert.equal(lists(app).length,before);
  });
- await test('editorial archives in the warm index remain in My notes but leave discovery',async()=>{
-  const rows=[indexRow('active'),indexRow('archived',{archive_reason:'Operational test.',content:content('Archived operational check')})];
+ await test('editorially archived entries stay out of browsing while owners retain My notes access',async()=>{
+  const rows=[indexRow('active'),indexRow('archived',{archive_reason:'Retired demonstration.',content:content('Earlier demonstration')}),indexRow('other-archive',{owner:{id:2,handle:'other'},archive_reason:'Retired.',content:content('Other archived note')})];
   const app=await boot({respond:url=>url===indexPath?summaryIndex(rows):undefined});await app.controller.warm('list');await app.show();
-  assert.equal(app.q('list').querySelectorAll('.nb-entry').length,1);assert.doesNotMatch(app.q('list').textContent,/Archived operational check/);
-  await filterNotes(app,'mine');assert.equal(app.q('list').querySelectorAll('.nb-entry').length,2);
-  assert.match(app.q('list').textContent,/Archived operational check/);
-  await filterNotes(app,'all');assert.doesNotMatch(app.q('list').textContent,/Archived operational check/);
+  assert.equal(app.q('list').querySelectorAll('.nb-entry').length,1);assert.doesNotMatch(app.q('list').textContent,/Earlier demonstration|Other archived note/);
+  await filterNotes(app,'mine');assert.equal(app.q('list').querySelectorAll('.nb-entry').length,2);assert.match(app.q('list').textContent,/Earlier demonstration/);assert.doesNotMatch(app.q('list').textContent,/Other archived note/);
  });
  await test('server page to complete index to expiry never sends synthetic cursors or wrong cached pages',async()=>{
   const rows=Array.from({length:60},(_,i)=>indexRow('item-'+i,{content:content('Row '+i)}));
@@ -310,7 +308,7 @@ const lists=app=>app.requests.filter(row=>row.url.startsWith('/api/notebook/note
   const source=curatedFixture('source','Readable curated body'),status=deferred(),statusEntered=deferred();
   const app=await boot({researchWorkspace:{...emptyResearch,notes:[source]},respond:url=>{if(url.startsWith('/api/notebook/research-requests?source_note_id=')){statusEntered.resolve();return status.promise;}}});
   assert.equal(app.requests.some(row=>row.url==='/map/notes.json'),false);
-  app.q('list').querySelector('.nb-title').click();await flush();assert.equal(app.requests.filter(row=>row.url==='/map/notes.json').length,1);
+  app.q('list').querySelector('.nb-expand').click();await flush();assert.equal(app.requests.filter(row=>row.url==='/map/notes.json').length,1);
   const showing=app.show('curated:source');await within(statusEntered.promise,'curated status request');const body=app.q('full').querySelector('.nb-body');assert.match(body.textContent,/Argument as text/);
   assert.equal(byText(app.q('full'),'Propose a change').disabled,true);const cite=byText(app.q('full'),'Cite this note');cite.focus();
   status.resolve({requests:[],next_after:null});await showing;assert.equal(app.q('full').querySelector('.nb-body'),body);assert.equal(app.document.activeElement,cite);assert.equal(byText(app.q('full'),'Propose a change').disabled,false);

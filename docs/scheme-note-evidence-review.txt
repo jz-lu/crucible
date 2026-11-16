@@ -1,0 +1,223 @@
+SCHEME NOTE EVIDENCE REVIEW — 5 NOVEMBER 2026
+
+Scope and result
+
+This review supports the local reading candidates in
+crucible/data/scheme_note_presentations.json. It does not publish a note, change
+a registered construction, grant scientific approval, or create attack values.
+The application snapshot is 5914608ba90dfc7edcf54fe6cf33baaba18d3772 plus the
+separately supplied local branding snapshot. No live database or hosted source
+was inspected in this task. The live release must be confirmed separately.
+
+The current registry has eight research releases, 379 configurations and 377
+default stages. It also preserves 24 earlier releases. Across all 32 registered
+releases there are 1,466 configurations. The following scope is deliberate:
+
+  teaching-dh-kem@7                        50 configurations / 50 stages
+  rsa-kem@4                               50 / 50
+  dhkem-x25519@curve-compressed-v2          50 / 50
+  ml-kem@compressed-research-v4             6 / 6
+  frodokem@anchor-research-v3              80 / 80
+  sntrup@3                                27 / 25
+  hqc@modeled-research-v3                  66 / 66
+  classic-mceliece@length-research-v1       50 / 50
+
+The two nondefault NTRU configurations are sntrup-v3-tier-17 and
+sntrup-v3-tier-24. Exact profile_ids, not stage numbers alone, govern premise
+applicability. Fourteen NTRU configurations are calibrated, twelve of which are
+on the default progression. A missing stage must not discard a valid profile.
+
+Earlier registered releases remain separate
+
+  DH: 1(5), 2(17), 3(109), 4(281), 5(50), 6(50)
+  RSA: 1(109), 2(50), 3(50)
+  EC: 1(1), curve-research-v1(50)
+  ML-KEM: fips203-oqs016-v1(3), modulus-research-v1(50),
+          dimension-research-v2(11), packed-research-v3(11)
+  Frodo: salted-oqs016-v1(3), dimension-research-v1(50),
+         frontier-research-v2(74)
+  sntrup: 1(1), 2(50)
+  HQC: 20250822-oqs016-v1(3), weight-research-v1(27),
+       growth-research-v2(27)
+  McEliece: 20221023-oqs016-v1(5)
+
+The six exact published-reference releases contain sixteen configurations:
+RFC9180 DHKEM(X25519, HKDF-SHA256); ML-KEM-512/768/1024; salted
+FrodoKEM-640/976/1344-SHAKE; sntrup761; August2025 HQC-1/3/5; and Classic
+McEliece 348864/460896/6688128/6960119/8192128. They are not enrolled by these
+eight new presentations. No current-family note is silently applied to them.
+
+Provenance and interface
+
+Each presentation selects an existing curated note by id, revision and canonical
+content_sha256 in source_note. Seven source notes are revision2; the ML-KEM note
+is revision3. These exact source revisions must remain available when a new note
+revision is assembled. The aggregate web/map/notes.json is intentionally not
+hashed as a source dependency: appending the resulting notes would create a
+circular or immediately stale aggregate-file pin. Resolve the selected immutable
+content hash instead. Other local source_refs contain real whole-file SHA256
+digests. External URLs provide attributed source context, not local byte pins.
+
+The file contains 46 authored sections, 10 stated premises and 9 separate
+scheme-security gaps. Missing arguments are tasks, not unproved premises.
+All eight notes include security, correctness and attack sections. Further
+sections isolate actual model premises. Known algebraic identities, Goppa
+distance, exact integer comparisons and successful test vectors are not labelled
+as unproved assumptions. A labels are stable global preview labels; exact premise
+IDs are globally distinct across this file. Retiring a premise leaves a numbering
+gap instead of reusing its label, and relevant labels are displayed in numeric
+order. They carry no fabricated review or refutation history. The source's label
+fields are authoring references; the fixture preserves the existing identities
+when it creates a new immutable note revision.
+
+Each graph_models entry binds one exact current model ID to a section and an
+explicit assumption_ids list. An Attack specification link does not depend on
+having an A-labelled premise. The initial DH/RSA/EC material does not isolate
+sufficiently precise additional dependencies to label: its general warnings
+about comparison scope remain prose, not pseudo-assumptions. An empty list does
+not establish that an analysis is unconditional. Qualitative Shor/HQC/McEliece
+entries supply no numerical point. Unknown model IDs must fail closed rather
+than inherit the scheme's generic attack section. Sections retain source_ref_ids
+for editorial provenance; the API may strip them when its strict section schema
+allows only id/title/body, retaining provenance in the surrounding extension.
+
+The caller must bind a selected profile to this exact release before applying
+profile_ids or stages. The source map does not authorize cross-release matching,
+future/current aliases, a security lower bound, or an admission decision.
+
+Scientific distinctions retained
+
+DH7, RSA4 and custom compressed EC have straightforward conditional-zero
+agreement arguments, but custom KDFs and distributions. Their rho/NFS/generic
+references are limited primitive-work models, not full-KEM confidentiality
+theorems. RSA's structured primes are not uniform primes; its correctness proof
+covers nonunits. The EC family identifier is historical: these are custom
+short-Weierstrass curves, not fifty resized X25519 constructions.
+
+ML-KEM release4 has degree8/16 support proofs; degree32/64 conditional bounds
+2^-367 and2^-193; degree128/256 bounds2^-236 and2^-128 with an extra compression
+model. Independent-noise expansion is scoped to stages3–6; independent vector
+rounding only to5–6. The two historical Kyber lattice-reference models apply
+only to stage6, with their own attack-model premise. No values are extrapolated
+to reduced rings. Offline alternate compression choices are not current stages.
+
+Frodo's n8 support argument requires no independent-noise premise. The n16..640
+statistical result is conditional on the finite-CDF independent-noise experiment
+and its concrete expansion bridge. The classical estimator covers n136..640,
+while the separate quantum random-walk reference covers only n640. Theorem
+sample counts and estimator sample conventions are not conflated. Published
+conditional security proofs exist; exact-profile application remains unfinished.
+
+NTRU's coefficient bound supports perfect honest agreement on every certified
+tuple. That known argument is not an assumption. Its exact uniform research
+sampler differs from upstream mappings. The frozen classical model is a bounded
+hybrid-inclusive search with success and free-memory assumptions, not an
+exhaustive security assessment. The endpoint is sntrup653, not sntrup761.
+
+HQC needs a correction relative to the older local preview: the October29
+support argument proves current stages1–4 correct for every supported draw,
+without ideal-XOF or IID-noise assumptions. Their residual maxima6,15,28,45
+are below the63-error guarantee. Stages5–66 keep the conditional-tail route.
+Its two distinct unproved premises are finite-expansion transfer and domination
+of the particular decoder-failure event. Neither asserts actual IID noise or
+negligible total-variation distance. Frozen manifests retain their older
+statistical wording; the stronger first-four result is supplemental evidence.
+
+McEliece's distance argument supports unique honest decoding across the fixed
+m12/t64 shortening study. The Prange support-hit proxy omits trial costs and is
+not a calibrated security curve. October29's nine-tuple partial ISD screen and
+six-point control ray are offline studies, not new registered configurations.
+Structural distinguishers, heuristic key recovery, one-run costs and complete
+success-normalized KEM attacks are different claims. No missing point is filled.
+
+Sources superseded or limited in scope
+
+docs/correctness-audit-reference.txt still describes HQC growth-research-v2 in
+its HQC section. It must not be used as the current modeled-v3 proof inventory.
+docs/implementation-ec-research.txt concerns the prior uncompressed curve release;
+the current ec_compressed.py and its certificates are authoritative here.
+docs/code-research.txt remains useful for its exact McEliece section, but its
+HQC weight-v1 section is not current-v3 evidence. Earlier Frodo frontier papers
+ending at592 do not describe the restored640 endpoint.
+
+The separate crucible-security-model repository at
+c198a90b1a10180dd61015e7512792a6c65688a5 contains additional supplied attack
+arguments for fourteen releases/395 configurations. Its base projection has
+306 records covering206 configurations; the assurance export adds five qualifying
+reduced-ML attack bounds. It records no independently reviewed coverage. Its
+assurance and assumptions-draft exports are partial structured instantiations,
+not a substitute for all application correctness evidence. The earlier local
+assumptions preview covers only ML/HQC/RSA, and its fictional curve-trial data
+must never enter this actual-scheme corpus. Those separate-model numerical
+ceilings have not been mixed into the application's existing heuristic curves.
+
+Primary-source checks performed during this review
+
+The official October12,2026 HQC specification was retrieved directly. Its
+changelog confirms revised weights, DFR analysis and additional construction
+changes relative to August2025. The2025 endpoint cannot inherit the new version.
+https://pqc-hqc.org/doc/hqc_specifications_2026_10_12.pdf
+
+The current GIJS and Weis ePrint pages were retrieved directly. They distinguish
+the public-key distinguisher from heuristic recovery and explicitly retain
+success/accounting assumptions. Neither was converted into a local graph point.
+https://eprint.iacr.org/2026/1630
+https://eprint.iacr.org/2026/1984
+
+FIPS203 was retrieved from NIST. It specifies ML-KEM-512/768/1024; it does not
+specify the five reduced research degrees. Endpoint conformance evidence does
+not confer FIPS certification on this app or certify the whole research path.
+https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf
+
+Other primary references are inherited transparently from the exact pinned
+application evidence corpus and reading sheets. Their inclusion is not a claim
+that a fresh independent proof audit, executable audit, or numerical experiment
+was completed for this editorial task. No provider calls, live configuration
+reads, deployment, notebook publication or remote database access occurred.
+
+Final artifact checks
+
+All eight exact current identities and379 profile IDs were checked against the
+registry. In the original pass, all46 section links,22 premise/task scopes,
+37 local file digests,12 external
+reference URLs, original source-note canonical hashes and current graph-model
+IDs passed structural checks. Inline/display math delimiters are balanced.
+There were3,157 human-text words. Combining each original technical body with all
+its authored sections gives23,943–32,466 characters, below the40,000 limit before
+the caller adds its own wrapper. These checks establish integrity and limits,
+not independent mathematical review.
+
+Follow-up: separate attack analysis from scheme-security obligations
+
+The first integration placed missing full-KEM arguments in the same assumption
+array as actual premises. The reader therefore displayed an "Open obligation"
+badge inside the same note reached from an attack point. No graph binding
+actually depended on those records, but the note ordering and shared labels
+blurred the responsibilities. A successful attack owes its stated success/cost
+analysis, not a proof of the KEM's confidentiality.
+
+The nine missing-argument/assessment records now live in scheme_security_gaps,
+with their existing stable IDs and scopes but no A labels. Their plain readable
+sections appear beside the scheme security explanation and are explicitly titled
+"Scheme security: ...". This retains the gaps for scrutiny without turning them
+into requirements on an attack. Full technical history and exact old citations
+remain immutable; the caller must create new revisions and repin adoption links.
+
+The vague "informative comparison" records for DH, RSA and EC were removed from
+assumptions and their graph assumption_ids. Their limitations remain in the
+cost-model sections. In particular, a faster curve-specific attack could improve
+the best known recovery cost without invalidating rho's own estimated cost. No
+new rho mixing hypothesis, lower bound or numerical security claim was invented.
+
+The retained attack dependencies concern the historical ML-KEM Core-SVP model,
+Frodo Gaussian/BKZ/GSA/Core-SVP and quantum success/cost models, and NTRU's
+nearest-plane success/rotation approximation. Their statements distinguish
+heuristic dependencies from declared memory/search conventions and from claims
+that no faster attack exists. The correctness premises and Frodo's scheme-level
+hash-model premise remain scoped to their original sections/configurations.
+
+The source now has 3,464 readable-body words. Source-note identities, all primary
+source references, stage/profile identities and graph model IDs are unchanged;
+no graph value or construction was changed. This remains an editorial scope
+correction, not a fresh theorem audit or a completed formalization of every
+attack-model premise.

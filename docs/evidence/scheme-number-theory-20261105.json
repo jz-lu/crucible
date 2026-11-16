@@ -1,0 +1,24 @@
+{
+  "format": "crucible-number-theory-argument-checks-v1",
+  "scope": "Algebra/encoding conformance samples, not a formal proof or hardness evidence.",
+  "dh_profiles": 50,
+  "dh_boundary_pairs": 150,
+  "ec_profiles": 50,
+  "ec_boundary_pairs": 100,
+  "rsa_small_moduli": 4,
+  "rsa_exhaustive_residues": 1384,
+  "passed": true,
+  "date": "2026-11-05",
+  "command": "python scripts/check_scheme_number_theory.py",
+  "regression_command": "python -m pytest tests/test_classical_frontier.py -q",
+  "regression_result": {
+    "passed": 57,
+    "seconds": 4.75
+  },
+  "limitations": [
+    "Finite conformance checks do not prove general correctness or implementation refinement.",
+    "Small RSA exhaustive cases are mathematical illustrations, not live profile samples.",
+    "No security hardness or concrete-hash transfer bound is measured.",
+    "No database, challenge instances, production configuration or curve values changed."
+  ]
+}

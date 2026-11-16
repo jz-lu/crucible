@@ -1,0 +1,70 @@
+CRUCIBLE LAUNCH RELEASE AUDIT — 16 NOVEMBER 2026
+================================================
+
+Status: not ready for deployment. This is a maintained work record, not a
+release approval. The user authorized deployment only after the audit passes.
+
+Baseline and scope
+------------------
+The public and provider health endpoints both serve main
+f9719ab5d3a4a99d7040e7d2d83ebc83608dc946. No hosted data, provider settings or
+release tag has been changed in this audit. The local review remains on8041.
+
+The release combines the light Crucible branding, curated launch collection,
+canonical statements within explanatory notes, scheme arguments and curves,
+and a single operator-issued signup window lasting at most seven days. Keep
+beta sign-in. No GitHub account is required to join; linking one later is
+optional. There is no reusable campaign-management UI.
+
+Integrated schema
+-----------------
+Keep the never-hosted signup migration as0032; sequence the never-hosted local
+statement-trial tables after it as0033. Resolve the duplicate revision before
+building an image. Existing preview workspaces retain their own branch/schema;
+do not copy their databases, accounts, decisions or credentials to production.
+
+Verification completed
+----------------------
+118 authentication/operator/recovery/migration checks passed. Three optional
+PostgreSQL cases skipped locally and still require dedicated database evidence.
+Two additional HTTP/DB journey checks passed: signup with a password while
+GitHub is enabled, mailbox proof, logout/login, window expiry or early closure,
+denial of new joins, continuing member access, and later GitHub linking to the
+same account while preserving password login. Provider HTTP is mocked in these
+checks; they do not claim a live GitHub OAuth or mail-provider smoke test.
+
+34 isolated Chromium checks passed on the integrated source, covering shared
+signup at1440px and390px, mailbox proof, abandoned signup requests, existing
+members, and the first-paint/loading/bounty geometry that failed earlier CI.
+These use disposable databases and local mail; no real invitations were sent.
+
+Outstanding release gates
+-------------------------
+1. Separate hosted read-only note bindings from the explicitly local argument
+   proposal/admission/selection/withdrawal trial. Preserve exact source pins,
+   member/agent access checks and the prohibition on production persona entry.
+2. Generate and verify the RAM evidence against the exact reviewed Linux image.
+   The local Python3.11.14 evidence does not match Python3.13.17 manifests for
+   ML-KEM and Frodo. Preserve parameters, numerical accounts and old identities;
+   record regenerated provenance as new immutable content, never relabel it.
+3. Package the four guides and eight scheme dossiers with exact hosted/curated
+   bindings, preserving historical reads and excluding superseded examples.
+   Synthetic local bounty admissions/points are not real published bounties.
+   Freeze actual terms/source pins and obtain ordinary independent admission
+   before representing them as funded open hosted tasks.
+4. Review the runtime source overlay and additive schema release explicitly.
+   Prove old/new startup and rollback compatibility, PostgreSQL migration and
+   grants, fresh recovery evidence, and the bounded migration operation. The
+   current exact-head startup guard must not simply be bypassed.
+5. Pass complete required source CI and exact native image verification. Build
+   and promote only the tested immutable image through the existing workflow.
+6. Verify the deployed revision/access behavior, real login configuration and
+   mail availability. Issue the single signup link only after deployment, using
+   a fresh timezone-aware deadline at most seven days ahead. Keep its token out
+   of Git and CI logs. Existing memberships must survive its expiry.
+
+Operational follow-up
+--------------------
+Main currently reports no branch protection. Backup freshness/restore evidence,
+alerts and deployment overlap remain to be verified against actual hosting;
+older operations documents are dated evidence, not current certification.

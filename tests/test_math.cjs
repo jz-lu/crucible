@@ -46,7 +46,7 @@ const document = {
   createTextNode(text) { return new Node(this, '', String(text)); },
   createDocumentFragment() { return new Node(this, '#fragment'); },
 };
-const context = {document, console};
+const context = {document, console, URL};
 context.window = context;
 vm.createContext(context);
 const web = path.resolve(__dirname, '../web');
@@ -121,6 +121,98 @@ check('missing library and unexpected rendering errors preserve safe text', () =
   assert.equal(node.textContent, text);
   assert.equal(node.querySelectorAll('img').length, 0);
   context.katex = saved;
+});
+
+check('readable sections support display math and safe prose without interpreting HTML', () => {
+  const element = target();
+  context.CrucibleMath.markdown(element, String.raw`## Agreement
+
+The **honest** outputs agree when \(e=0\).
+
+\[
+\Pr[K'=K]=1
+\]
+
+- [Primary source](https://example.org/spec)
+- \`literal\`
+
+<img src=x onerror=alert(1)>
+
+\`\`\`
+<script>unsafe()</script>
+\`\`\``.replaceAll('\\`', '`'));
+  assert.equal(element.querySelectorAll('.katex').length, 2);
+  assert.equal(element.querySelectorAll('.katex-display').length, 1);
+  assert.equal(element.querySelectorAll('strong').length, 1);
+  assert.equal(element.querySelectorAll('a').length, 1);
+  assert.equal(element.querySelector('a').href, 'https://example.org/spec');
+  assert.equal(element.querySelectorAll('img').length, 0);
+  assert.equal(element.querySelectorAll('script').length, 0);
+  assert.ok(element.textContent.includes('<script>unsafe()</script>'));
+});
+
+check('readable sections reject executable and credential-bearing links and bound math', () => {
+  const element = target();
+  context.CrucibleMath.markdown(element, '[unsafe](javascript:alert(1)) [secret](https://user:pass@example.org/)');
+  assert.equal(element.querySelectorAll('a').length, 0);
+  context.CrucibleMath.markdown(element, Array(140).fill(String.raw`\(x\)`).join('\n\n'));
+  assert.equal(element.querySelectorAll('.katex').length, 128);
+});
+
+check('exact internal note links render without permitting cross-origin relative escapes', () => {
+  const element = target();
+  const route = '/#notebook?note=test&revision=1&sha256=' + 'a'.repeat(64) + '&statement=bound';
+  context.CrucibleMath.markdown(element, '[Read the statement](' + route + ') [Review](/#reviews?section=proposals)');
+  assert.deepEqual(element.querySelectorAll('a').map(a => a.href), [route, '/#reviews?section=proposals']);
+  assert.equal(element.textContent, 'Read the statement Review');
+  context.CrucibleMath.markdown(element, String.raw`[bad](//evil.invalid/) [escape](/\evil.invalid/) [code](javascript:alert(1))`);
+  assert.equal(element.querySelectorAll('a').length, 0);
+});
+
+check('readable sections render compact display equations and preserve surrounding prose', () => {
+  const element = target();
+  context.CrucibleMath.markdown(element, String.raw`\[x^2+y^2=z^2\]
+
+Before \[\Pr[E]\le\varepsilon\] after, with \(x\) inline.
+
+\`\[literal code\]\``.replaceAll('\\`', '`'));
+  assert.equal(element.querySelectorAll('.katex-display').length, 2);
+  assert.equal(element.querySelectorAll('.katex').length, 3);
+  assert.ok(element.textContent.includes('Before '));
+  assert.ok(element.textContent.includes(' after, with '));
+  assert.equal(element.querySelector('code').textContent, String.raw`\[literal code\]`);
+});
+
+check('every current human-readable section renders its authored formulas', () => {
+  const corpus = JSON.parse(fs.readFileSync(path.join(web, '../crucible/data/scheme_note_presentations.json'), 'utf8'));
+  const literalText = node => {
+    if (['CODE', 'PRE'].includes(node.tagName) || node.className?.split(/\s+/).includes('katex')) return '';
+    return node.nodeType === 3 ? node.textContent : node.childNodes.map(literalText).join('');
+  };
+  for (const [release, row] of Object.entries(corpus.releases)) for (const section of row.sections) {
+    const element = target();
+    context.CrucibleMath.markdown(element, section.body);
+    assert.doesNotMatch(literalText(element), /\\[([]/, `${release}: ${section.id}`);
+    assert.equal(element.querySelectorAll('.katex-error').length, 0, `${release}: ${section.id}`);
+  }
+});
+
+check('display math preserves trailing prose, escaped delimiters and incomplete source', () => {
+  const element = target();
+  context.CrucibleMath.markdown(element, String.raw`\[
+x+y
+\] followed by \(z\), then \[a\] and \[b\].
+
+Escaped \\[literal\\] and \\(literal\\).
+
+\[
+unfinished`);
+  assert.equal(element.querySelectorAll('.katex-display').length, 3);
+  assert.equal(element.querySelectorAll('.katex').length, 4);
+  assert.ok(element.textContent.includes(' followed by '));
+  assert.ok(element.textContent.includes(String.raw`\\[literal\\]`));
+  assert.ok(element.textContent.includes(String.raw`\\(literal\\)`));
+  assert.ok(element.textContent.endsWith('\\[\nunfinished'));
 });
 
 console.log(`${groups} math rendering groups passed.`);

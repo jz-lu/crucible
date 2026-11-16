@@ -562,6 +562,56 @@ def test_parent_link_closed_during_github_signup_prevents_new_account(system, st
         assert session.scalar(select(User)) is None
 
 
+@pytest.mark.parametrize("window_end", ["expiry", "closure"])
+def test_password_signup_survives_launch_window_and_can_link_github_later(system, window_end):
+    import re
+
+    identifier, token = shared_invitation(system)
+    with system.db.transaction() as session:
+        link = session.get(beta.BetaSignupLink, identifier)
+        deadline = link.expires_at
+        shared_token = beta.signup_link_data(system.settings, link, system.now[0])["url"].split("token=", 1)[1]
+    actor = Actor(system.app)
+    response = actor.post("/api/auth/register", {
+        "handle": "launch_researcher", "password": PASSWORD, "invitation_token": token,
+    })
+    assert response.status_code == 200, response.text
+    registered = response.json()
+    actor.csrf = registered["csrf_token"]
+    user_id = registered["user"]["id"]
+    assert registered["auth"]["password_enabled"] and not registered["auth"]["github_linked"]
+    assert not registered["access"]["allowed"]
+    assert actor.post("/api/access/invitations/verify/start", {"token": token}).status_code == 200
+    mail = next(Path(system.settings.mail_outbox_dir).glob("*.eml")).read_text()
+    code = re.search(r"code is: ([0-9]{8})", mail)[1]
+    admitted = actor.post("/api/access/invitations/redeem", {"token": token, "code": code})
+    assert admitted.status_code == 200 and admitted.json()["access"]["allowed"]
+    assert actor.post("/api/auth/logout", {}).status_code == 200
+    assert actor.client.get("/api/session").json()["user"] is None
+    assert login(system, "launch_researcher").client.get("/api/session").json()["user"]["id"] == user_id
+
+    if window_end == "expiry":
+        system.now[0] = deadline
+    else:
+        with system.db.transaction(write=True) as session:
+            beta.revoke_signup_link(session, identifier, system.now[0])
+    newcomer = Actor(system.app)
+    assert newcomer.post("/api/access/signup-links/invitations", {
+        "token": shared_token, "email": "later@example.org",
+    }).status_code == 403
+    member = login(system, "launch_researcher")
+    existing = member.client.get("/api/session").json()
+    assert existing["user"]["id"] == user_id and existing["access"]["allowed"]
+    assert system.calls == [], "Password signup and continued access must not contact GitHub"
+
+    query = start(system, member, mode="link", return_route="#person/launch_researcher")
+    linked = callback(system, member, query)
+    assert linked.status_code == 303 and linked.headers["location"] == "/#person/launch_researcher"
+    after = member.client.get("/api/session").json()
+    assert after["user"]["id"] == user_id and after["auth"]["github_linked"]
+    assert login(system, "launch_researcher").client.get("/api/session").json()["user"]["id"] == user_id
+
+
 def test_available_shared_link_allows_github_account_but_still_requires_mailbox_proof(system):
     _, token = shared_invitation(system)
     actor = Actor(system.app)

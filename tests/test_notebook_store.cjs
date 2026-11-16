@@ -79,6 +79,18 @@ test('minimal prose content needs no theorem taxonomy, structured game, or proof
   assert.equal(record.revisions[0].kind, undefined);
 });
 
+test('canonical conclusion references survive portable validation without a second prose authority', () => {
+  const snapshot=Store.clone(Seed),revision=snapshot.notes[0].revisions[0];
+  revision.statements=[{id:'claim',label:'S-1',title:'A statement',definition:'The exact scoped proposition.'}];
+  revision.arguments=[{id:'argument',title:'A conditional argument',conclusion_statement:{statement_id:'claim'},scope:'The stated domain.',status:'incomplete',dependencies:[]}];
+  assert.deepEqual(Store.validateSnapshot(snapshot).notes[0].revisions[0].arguments,revision.arguments);
+  assert.deepEqual(Store.authoredMetadata(revision).arguments,revision.arguments);
+  revision.arguments[0].conclusion='Competing text';assert.throws(()=>Store.validateSnapshot(snapshot),/second copy/);delete revision.arguments[0].conclusion;
+  revision.arguments[0].conclusion_statement.note_id='foreign';assert.throws(()=>Store.validateSnapshot(snapshot),/exact note revision/);
+  Object.assign(revision.arguments[0].conclusion_statement,{revision:2,content_sha256:'b'.repeat(64)});
+  assert.equal(Store.validateSnapshot(snapshot).notes[0].revisions[0].arguments[0].conclusion_statement.note_id,'foreign');
+});
+
 test('simple editor retains authored support metadata without inheriting review or check status', () => {
   const { store } = fixture();
   const original = store.createNote(input({
