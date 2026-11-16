@@ -61,6 +61,28 @@ def workspace(root=ROOT):
     return directory
 
 
+def validate_preview_evidence():
+    """Check the saved scientific evidence on restarts as well as first setup."""
+    from crucible import registry
+    from crucible.attack_models import catalogue
+
+    try:
+        registry.validate_registry()
+        for scheme_id, version in sorted(registry.CURRENT.items()):
+            adapter = registry.adapter_for(scheme_id, version)
+            evidence = catalogue.for_release(scheme_id, version,
+                expected_manifests=adapter.manifests())
+            if evidence is None:
+                raise ValueError(f"Missing attack evidence for {scheme_id}@{version}")
+    except (OSError, ValueError, RuntimeError) as error:
+        raise RuntimeError(
+            f"Preview evidence validation failed under Python {sys.version.split()[0]}: {error}. "
+            "Use the matching Python version, locked dependencies and verified native workers "
+            "described in docs/claims-local-setup.txt. Do not replace scientific pins merely "
+            "to start the preview. No server was started."
+        ) from error
+
+
 def attach_preview_entry(app, data_dir):
     """Add persona entry only to this app instance; normal route policy is intact."""
     from fastapi.responses import JSONResponse, RedirectResponse
@@ -125,16 +147,17 @@ def main():
     os.umask(0o077)
     # Validate inherited settings before even creating the local directory.
     environment = preview_environment(os.environ, ROOT / ".local" / "claims-preview")
-    data_dir = workspace()
     os.environ.clear()
     os.environ.update(environment)
+    # Another interpreter can pass native validation but change exact RAM
+    # manifests. Refuse it before DB preparation or serving incomplete panels.
+    validate_preview_evidence()
+    data_dir = workspace()
 
     def run(*arguments):
         subprocess.run([sys.executable, *arguments], cwd=ROOT, env=environment, check=True)
 
     if args.prepare:
-        # Real registry validation: no fake workers or weakened artifact pins.
-        run("-c", "from crucible.registry import validate_registry; validate_registry()")
         run("-m", "crucible.manage", "migrate")
         options = ["--revise-fixture"] if args.refresh_fixture else []
         run("scripts/prepare_note_integration.py", "--data-dir", str(data_dir), *options)

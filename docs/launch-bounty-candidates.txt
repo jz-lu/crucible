@@ -1,0 +1,214 @@
+Launch bounty shortlist — 16 November 2026
+=========================================
+
+For the editorial owner's selection. These are proposed research tasks, not
+published or funded bounties. No account allowance has been allocated.
+
+Local review
+  All three proposals are saved as ordinary private drafts under the synthetic
+  research-preview account at http://127.0.0.1:8041/#bounties?status=mine.
+  Their local IDs and exact terms hashes are retained in the ignored
+  .local/claims-preview/launch-bounty-receipt.json. Each has zero reward points;
+  creation left the allowance ledger unchanged. No hosted records were created.
+
+Recommendation
+--------------
+The owner selected A and B: a new mathematical foundation and substantially
+smaller key exchange. C now asks for compelling evidence against an assumption,
+following the owner's preference over a proof-heavy reliability task. Keep D in
+reserve until its competitive attack baseline has been selected.
+These are broad research outcomes; their verification details belong inside
+the bounty, rather than becoming a collection of tiny outward-facing chores.
+
+A. Build key exchange on a new mathematical foundation
+-----------------------------------------------------
+Public summary
+  Find a promising mathematical problem, formulate the assumption precisely,
+  and show how it can support a new key-exchange construction. The goal is a
+  credible new direction for cryptography that other researchers can test.
+
+Why this is worthwhile
+  Diversity of mathematical foundations is an established objective. NIST's
+  explanation of selecting HQC explicitly describes the value of a different
+  mathematical approach alongside ML-KEM [1]. That supports the motivation;
+  it does not establish the merit or security of any particular new proposal.
+
+Proposed completion criteria
+  Deliver a complete distributional problem and assumption, a substantive
+  comparison with the closest prior work, a concrete key-exchange/KEM design,
+  a correctness argument and a conditional security reduction with quantified
+  losses. Include a reference implementation, reproducible small-parameter
+  experiments and an initial analysis of natural generic/structural attacks.
+  Identify the finite-parameter claims, unproved premises and useful research
+  parameter sets. Supply test vectors and exact artifacts another person can
+  independently run. A new name for an existing assumption does not qualify.
+
+Verification
+  An independent cryptographer assesses novelty, whether the assumption is
+  meaningful rather than a restatement of the desired scheme's security, and
+  whether the claimed implication follows. Reproduce the implementation and
+  experiments and examine obvious reductions to existing easy/hard problems.
+  A positive verdict accepts a research contribution, not production security.
+  Scientific novelty and plausibility require judgment; they are not fully
+  machine-verifiable. This is a difficult, potentially long-running task.
+
+B. Cut the data needed for post-quantum key exchange in half
+----------------------------------------------------------
+Public summary
+  Develop a key-exchange construction that uses at most half the public data
+  of ML-KEM-512 while pursuing the same security target and a practical cost.
+  Make the tradeoff explicit and provide evidence others can reproduce.
+
+Why this is worthwhile
+  FIPS 203 specifies an 800-byte encapsulation key and 768-byte ciphertext for
+  ML-KEM-512 [2]. This gives a stable 1,568-byte single-exchange comparison and
+  a proposed 784-byte target. These numbers alone do not establish equal
+  security between different schemes. The factor of two is a proposed stretch
+  objective, not a claim that such an improvement is currently achievable.
+
+Proposed completion criteria
+  Provide a complete KEM and canonical encoding with public key plus ciphertext
+  plus any per-exchange setup at most 784 bytes. Count required shared data;
+  no uncharged trusted setup, cached peer key, key reuse or batch amortization.
+  Target the same declared NIST category-1 threat level, including quantum
+  attacks, and an honest agreement failure bound at most 2^-128 under explicit
+  premises. Supply a conditional IND-CCA security argument, the strongest
+  applicable attack analyses found, reference code and exact test vectors.
+  Do not infer category-1 security from a Crucible classical baseline curve.
+
+  Proposed practical-cost constraint: no operation's warm median or measured
+  process-memory peak exceeds twice that of the agreed ML-KEM-512 baseline
+  under the same measurement plan, hardware, build and operation boundaries.
+  Separate operation timings; do not average away a slow decapsulation step.
+  A genuine construction/encoding improvement is required; merely deleting
+  validation or suppressing failures is not an improvement.
+
+Verification
+  Check byte lengths and successful/invalid-input behavior independently;
+  rerun comparative measurements from raw samples; review the complete proof,
+  correctness calculation and attack analysis. Distinguish conditional
+  evidence from a guarantee against unknown attacks. Before admitting this
+  bounty, freeze the baseline implementation/report hashes and exact resource
+  constraints in its terms. This task is auditable but very ambitious. If its
+  target is too strong, change it before funding, not after submissions arrive.
+
+C. Find an assumption that fails
+-------------------------------
+Public summary
+  Find compelling, reproducible evidence that an explicit assumption in Crucible
+  does not hold. Show what goes wrong, where the assumption is used, and what
+  the finding changes about the construction or its claimed guarantees.
+
+Why this is worthwhile
+  Useful cryptographic research includes discovering the limits of a model.
+  Work on correlated noise in code-based systems provides a real example of
+  evidence contradicting a modeling assumption without proving the entire
+  cryptosystem insecure [4]. Our task concerns an exact assumption recorded
+  in Crucible; historical criticism of another model is not automatically a
+  counterexample to a current statement.
+
+Proposed completion criteria
+  Identify the exact note ID, revision, hash and statement ID. Explain the
+  quantified claim, distributions, admissible parameter range and the specific
+  consequence the evidence contradicts. Supply either:
+
+  - A mathematical counterexample or exact finite computation that violates
+    the claimed statement inside its declared scope; or
+  - Compelling experimental evidence against a stated probabilistic prediction,
+    with a justified sampling method, raw data, independently rerunnable code,
+    uncertainty analysis and independent replication. State the statistical
+    strength and limitations. Do not describe statistical evidence as a
+    deductive proof of falsity.
+
+  Account for selection effects, repeated testing, correlations and the full
+  failure event when relevant. Freeze the tested hypothesis and experimental
+  plan before the confirmation run. For a tiny failure-probability claim,
+  observing no failures does not verify it; observed failures require analysis
+  under the exact claimed distribution rather than anecdote.
+
+  Trace the result into at least one actual use of that assumption: which
+  argument loses support, which parameter range is affected, and what still
+  follows independently. Propose the narrow correction or withdrawal warranted
+  by the evidence. A successful contribution need not repair the construction
+  or settle its full security. The result must add a material finding not
+  already recorded as resolved in the target note's history.
+
+Verification
+  An independent reviewer reproduces the exact counterexample or confirmation
+  experiment, checks scope and probability conventions, and assesses whether
+  the evidence genuinely contradicts the recorded assumption. Publish the
+  evidence as an owned research note with exact pins and reproducible artifacts.
+  A counterexample to a stronger unstated claim, an out-of-scope toy example,
+  a worse upper bound, a coding bug unrelated to the stated mathematical model,
+  or disagreement with a label is insufficient.
+
+  A bounty award records acceptance of this contribution. Updating the displayed
+  assumption/argument follows the ordinary correction workflow; evidence must
+  remain distinguishable from that subsequent decision. Experiments use public
+  mathematical objects and controlled local fixtures, with no live interception
+  or third-party credentials needed.
+
+D. Improve a meaningful attack-cost curve by at least 10x — reserve
+----------------------------------------------------------------
+Public summary
+  Find a substantially better way to test a research construction's security,
+  and turn the result into a reproducible attack-cost curve.
+
+Vetting decision
+  Do not publish this as a generic 'beat the current graph' task. Current
+  Crucible graphs include exhaustive enumeration and RSA trial division.
+  Beating those by ten is not necessarily a new cryptanalytic result.
+
+  An admissible version must fix the exact research construction/configurations,
+  a reviewed competitive baseline, success probability, classical/quantum
+  computation model, memory budget and preprocessing convention. The goal is
+  W_new <= W_baseline/10 at the frozen targets: a decrease of log2(10), about
+  3.322, on a log2-work axis. It must recover the same complete target with the
+  same success requirement. Merely moving an upper-bound curve upward provides
+  no evidence of improved security. No live-service access or interception is
+  required; submitted evidence is mathematical analysis and controlled fixtures.
+
+  A concrete baseline and novelty review are still needed. This is not ready
+  for admission or a claim of a funded breakthrough opportunity.
+
+Funding and publication
+-----------------------
+The present source policy supplies ten monthly allowance units per eligible
+participant. One admission request reserves one unit; admission uses it and
+starts a 100-point reward. A boost uses another unit for another 100 points.
+These are platform allowance/points, not a promise of a cash prize. Read the
+live account policy and available balance before actually allocating anything.
+
+Recommended initial allocation if A/B/C are selected: three admission units,
+no boosts until the owner chooses rewards. The proposer cannot win their own
+task. The independent review and one-final-award policy still apply. These
+briefs do not promise separate milestone payments that the current product
+cannot settle. Do not introduce a cash obligation through the wording.
+
+Next concrete publication step
+  Choose the tasks and final terms, pin the exact source notes/baseline reports,
+  save ordinary private bounty records under the owner's authorized account,
+  inspect the exact allowance confirmation, and request independent admission.
+  Website deployment alone does not publish or fund these tasks.
+
+Sources checked
+---------------
+[1] NIST, 11 March 2025: diversity motivation for selecting HQC alongside ML-KEM.
+https://www.nist.gov/news-events/news/2025/03/nist-selects-hqc-fifth-algorithm-post-quantum-encryption
+[2] NIST FIPS 203, Table 3: ML-KEM key/ciphertext sizes and the specified schemes.
+https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf
+[3] Kyber v3.02, Section 4.4: explicit modeling assumptions in the historical analysis.
+https://pq-crystals.org/kyber/data/kyber-specification-round3-20210804.pdf
+[4] Bombar, Resch and Wiedijk, On the Independence Assumption in Quasi-Cyclic
+Code-Based Cryptography (2025): limits of an independent-coordinate noise model;
+not a claim that the current HQC specification or Crucible premise is refuted.
+https://arxiv.org/abs/2501.02626
+[5] HQC authors' resources page, checked 16 November 2026, lists a specification
+dated 9 November 2026. The current PDF could not be retrieved in this pass.
+Do not post a bounty claiming an old HQC analysis gap is still open without
+checking that version and subsequent research.
+https://pqc-hqc.org/resources.html
+
+Crucible sources: docs/bounties.txt; crucible/bounties.py;
+crucible/bounty_allowance.py; the current eight scheme dossiers and analytic
+accounts; docs/launch-note-candidates/resource-estimates.txt.

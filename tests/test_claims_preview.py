@@ -11,7 +11,9 @@ from crucible.app import create_app
 from crucible.config import Settings
 from crucible.db import LoginSession, User
 from scripts.prepare_note_integration import AUTHOR, REVIEWER
-from scripts.serve_claims_preview import attach_preview_entry, preview_environment, workspace
+from scripts.serve_claims_preview import (
+    attach_preview_entry, preview_environment, validate_preview_evidence, workspace,
+)
 
 
 @pytest.mark.parametrize("environment", [
@@ -39,6 +41,34 @@ def test_preview_never_inherits_model_mail_or_provider_settings(tmp_path):
     assert clean["CRUCIBLE_LOCAL_NOTE_CORPUS_ONLY"] == "true"
     assert not {"OPENAI_API_KEY", "CRUCIBLE_SMTP_PASSWORD", "CRUCIBLE_GITHUB_CLIENT_SECRET"} & clean.keys()
     assert supplied["OPENAI_API_KEY"] == "not-a-real-key"
+
+
+@pytest.mark.parametrize("catalogue_state", ["matched", "missing", "mismatched"])
+def test_restart_requires_matching_scientific_evidence(monkeypatch, catalogue_state):
+    from crucible.attack_models import catalogue
+
+    # Native validation succeeds even with the wrong Python identity. The
+    # saved RAM accounts must independently accept the actual manifests.
+    manifests = [{"id": "profile", "implementation": {"python": "different-runtime"}}]
+    class Adapter:
+        def manifests(self):
+            return manifests
+    monkeypatch.setattr(registry, "validate_registry", lambda: None)
+    monkeypatch.setattr(registry, "CURRENT", {"example": 1})
+    monkeypatch.setattr(registry, "adapter_for", lambda scheme, version: Adapter())
+    calls = []
+    def read_evidence(scheme, version, *, expected_manifests):
+        calls.append((scheme, version, expected_manifests))
+        if catalogue_state == "mismatched":
+            raise ValueError("Attack point does not match the exact registered profile")
+        return {"verified": True} if catalogue_state == "matched" else None
+    monkeypatch.setattr(catalogue, "for_release", read_evidence)
+    if catalogue_state == "matched":
+        validate_preview_evidence()
+    else:
+        with pytest.raises(RuntimeError, match="Use the matching Python version"):
+            validate_preview_evidence()
+    assert calls == [("example", 1, manifests)]
 
 
 def test_workspace_is_repeatable_but_does_not_adopt_unmarked_data(tmp_path):

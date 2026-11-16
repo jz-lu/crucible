@@ -1,0 +1,110 @@
+# How proposals are accepted
+
+A proposal asks Crucible to do something specific with research: admit a construction, use evidence in a display, select an explanatory argument, change a process or open a bounty. Review should answer whether the supplied evidence justifies that use. A readable note, an approved proposal and a live executable challenge therefore have different meanings.
+
+This note gives a route from a research result to a reviewable change. It describes the current base workflows and labels the extra argument workflow available in the local assumptions trial. Fetch the connected server's current contract and schema before submitting.
+
+## 1. Choose the requested outcome
+
+Ordinary research note
+  Save and, when authorized, request publication. It can pose a question, develop mathematics or report a negative result without seeking any other action. Publication screening is not substantive scientific approval.
+
+New construction or parameter change
+  Prepare an owned note containing the specification at content.extensions.kem_specification. Use the server's current proposal template/schema and proposal guide. The submission names the latest saved note revision/hash and creates a private scheme-review packet.
+
+Content or visualization change
+  Use a visualization_nomination request. Identify the target view, exact release/configurations, proposed extraction, units, scope, dependencies, conflicts and missing values. Pin the source evidence. An accepted recommendation still needs the authorized curatorial/integration action that updates the display.
+
+Pipeline or process change
+  Use a procedure request. State the behavior to change, why it matters, a concrete example, alternatives, operational consequences and a way to evaluate the result. A procedure note does not modify server permissions by itself.
+
+Assumption or argument use
+  A note may define a new statement and its supporting investigation. The local trial can separately review admitting an argument to a target, selecting one of the admitted arguments, or withdrawing one. The scope is explanatory presentation, with exact revisions and current-state checks. This trial capability is not a general production admission path.
+
+Bounty
+  Prepare versioned terms, completion criteria, verification plan and exact sources. Private saving spends no allowance. An admission request reserves the current policy's authorized amount. Independent admission/completion rules govern opening the task and awarding results; a proposer cannot certify their own solution through an agent.
+
+Read request-types.json and the relevant guide for the selected route. The retired generic technical_review request is not an additional universal stage.
+
+## 2. Prepare a complete packet for that decision
+
+Name the exact requested change and its owner. Pin every supplied note by ID, revision and content hash; pin the relevant scheme release, profile IDs, specification and implementation. Explain what the reviewer is being asked to decide and what evidence addresses each requirement.
+
+For a construction or parameter update, include:
+
+- Complete algorithms, sampling distributions, encodings, setup and KDF.
+- A clear correctness statement, probability space, configuration coverage and argument, including unproved premises.
+- The security experiment, resource/adversary model, claimed guarantee, dependencies and known limitations.
+- Exact implementation/source identity, conformance and reproducibility evidence appropriate to the requested stage.
+- Parameter-selection objective, candidate domain, fixed constraints, alternatives, exclusions and tradeoffs.
+- A justified progression through natural configurations, with a consistent correctness target and exact identities.
+
+Intake can represent an unfinished research draft. Approval/admission requires the specified correctness goal for every admitted configuration: perfect honest agreement or a claimed honest-failure probability at most 2^-128, under explicitly identified premises. Statistical declarations use a consistent integer failure_bound_exponent of at least 128; round a fractional exponent down. Perfect claims use bound zero and omit that exponent. A conditional guarantee remains conditional; the validator does not prove its premises.
+
+A parameter improvement must be compared under the same stated experiment and constraints. Report uncertainty and competing attacks. Unknown evidence is a reason to state a gap, not invent a calibrated curve.
+
+## 3. Submit an immutable version
+
+Save the draft, inspect its receipt, and submit that exact revision/hash. The server validates ownership, permissions, the applicable schema and the action's current state. The request captures a fixed evidence packet. Later note edits do not silently change what the reviewer saw.
+
+The first-party proposal CLI supports init/revise, validate, submit, list and show with an approved proposal scope. General research-request and reviewer workflows remain browser-controlled where the server contract says so. An agent can prepare the packet for that handoff without automating a role it has not been granted.
+
+Freeze payload and idempotency identity before a write. On a timeout or lost response, inspect the existing request/status or retry unchanged. A distinct question or new evidence requires the appropriate new revision/request, preserving the prior record.
+
+## 4. Review the requested use
+
+A configured reviewer assesses the exact packet and records a reasoned decision or recommendation. They should distinguish what they checked from what remains unexamined, identify material dependencies and conflicts, and assess the actual proposed use. Machine validation binds syntax and identities; it does not substitute for that judgment.
+
+Changes requested
+  Address the specific gaps. Save a new revision and resubmit through the applicable route. Explain how the new evidence answers the feedback. Do not rewrite the old packet or imply it received approval for the replacement content.
+
+Declined or unsupported
+  Retain the reason. A useful next step may be more evidence, narrower scope, a different application or no further action. A rejected use does not by itself erase the underlying mathematical note.
+
+Approved or recommended
+  Read exactly what was approved. Approval of a scientific packet permits the corresponding next step. It does not grant every downstream action or certify claims beyond the assessed scope.
+
+Independence and conflict rules remain those of the actual review workflow. Development self-review, where explicitly enabled locally, is labeled test-only and cannot be treated as independent production admission.
+
+## 5. Integrate and activate through the right boundary
+
+Executable scheme
+  A trusted maintainer reviews and integrates the implementation, checks its behavior and dependencies, binds exact protocol/source identities and completes the release/admission requirements. Arbitrary submitted code is not executed by an ordinary web request. Scheme availability and reward enrollment follow their own explicit policies.
+
+Numerical resource curve
+  A reviewed measurement binding selects an implementation and exact profile mapping. Collection produces immutable evidence; publication is a separate authorized operation. The current website contract describes deliberate benchmark dispatch. The actual selected producer workflow and deployment configuration must be checked because older producer documents describe automatic triggers. A note or a new repository commit alone is not evidence that a fresh benchmark ran.
+
+Content/visualization
+  The authorized curator/integration step maps the approved exact evidence into the selected display. Preserve model, units, scope and missing points. A critique, tag or support label never changes graph values automatically.
+
+Local argument trial
+  An update identifies a target, exact argument, supporting notes, reason and expected current adoption. Review binds the packet hash. Admission, selection and withdrawal preserve history; stale-current-state checks prevent overwriting a newer choice. This changes the explanation selected for a target, not executable parameters, numerical curves or scores.
+
+Bounty settlement
+  A contribution cites an exact published owned note and declares partial progress or a claimed solution. Independent completion review evaluates the frozen terms and evidence. Check the resulting settlement receipt; do not announce an award from submission alone.
+
+## 6. Correct the record after acceptance
+
+If a premise changes or contrary evidence appears, cite the affected exact claim and explain the consequence. Invalidating a proof step is different from proving the final conclusion false. A looser upper bound does not establish a lower bound on failure probability.
+
+Authors can explicitly retract eligible scientific requests through the supported author flow. Critics can submit evidence and request reconsideration; they cannot silently withdraw another author's work. Moderation withdrawal, scientific retraction, argument withdrawal and live-scheme deactivation are separate operations. Preserve original attribution and the evidence for each decision.
+
+## 7. Agent handoff checklist
+
+Before asking for a decision, return:
+
+    requested action and target
+    current server capability and route
+    exact note/specification/implementation pins
+    current request/status and receipt, if submitted
+    requirement-to-evidence mapping
+    assumptions and unresolved objections
+    checks actually run, with results and limits
+    changes since the previously reviewed version
+    next authorized decision and who can perform it
+
+Use clear status words: draft, submitted, changes requested, approved for the stated use, integrated, active, or settled, according to actual server evidence. Do not collapse those states into a generic claim that the work is accepted.
+
+## Source map
+
+/api/agent/pipeline and guidance resources proposal-guide.txt, note-requests.txt, request-types.json, correctness-policy.txt, ladder-principles.txt, scheme-admission-policy.txt and bounties.txt. Repository sources: docs/proposal-guide.txt, docs/note-requests.txt, docs/correctness-policy-v1.txt, docs/resource-publications.txt, docs/bounties.txt, crucible/statement_workflow.py and docs/claim-rosters-local-review.txt. Exact source hashes accompany this draft.

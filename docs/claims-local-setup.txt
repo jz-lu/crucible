@@ -7,12 +7,15 @@ notes. It does not import the beta database, existing users, private research,
 API credentials or another developer's server key.
 
 The source branch is feature/assumptions-note-integration. Run commands below
-from its checkout root. Python 3.11 or newer is required. No Node build is needed
-to view the application.
+from its checkout root. The application requires Python 3.11 or newer, but this
+saved scientific fixture requires Python 3.11.14: its exact scheme manifests
+include the Python version. Use that interpreter with requirements.lock and the
+verified native workers below. No Node build is needed to view the application.
 
 1. Install the application and verified native workers
 
-   python3 -m venv .venv
+   python3.11 --version  # Must be 3.11.14 for the current saved fixture.
+   python3.11 -m venv .venv
    .venv/bin/python -m pip install -r requirements.lock
    .venv/bin/python -m pip install --no-deps -e .
 
@@ -39,10 +42,17 @@ do not replace digests or disable validation to get a working preview. A trusted
 existing native installation may be copied with its licenses and closure as
 described in native-setup.txt, but never copy its .local database or server key.
 The tracked RAM attack accounts also bind exact scheme manifests, including
-native identities. A successful build with different metadata may therefore
+Python and native identities. A successful build with different metadata may therefore
 still require reviewed regeneration of those accounts and their source-note
 pins. The launcher does not silently substitute display metadata. This is not
 yet a one-command portable preview on arbitrary operating systems.
+
+On every start, including restarts without --prepare, the launcher validates
+the registry and each current release's RAM accounts against the actual profile
+manifests before touching the fixture database or binding a port. A mismatch
+reports the running Python version and stops startup. Native-worker validation
+alone is insufficient: another interpreter can validate the workers while
+changing the manifest identity and making argument/curve evidence unavailable.
 
 2. Create the isolated fixture and start it
 
@@ -112,6 +122,40 @@ timings merely because this preview runs. Benchmarking is a separate operation.
 Focused launcher checks (these use a portable test adapter, not native evidence):
 
    .venv/bin/python -m pytest -q tests/test_claims_preview.py
+
+4. Prepare the launch review collection
+
+The four editable guides live in docs/launch-note-candidates/. Their manifest
+pins the inspected implementation and separates the short readable explanation
+from the full specification. Validate them first, then save and publish them
+through the running local fixture's normal author/reviewer APIs:
+
+   .venv/bin/python scripts/prepare_launch_guides.py
+   .venv/bin/python scripts/prepare_launch_guides.py --apply --publish --port 8041
+
+Publication here is explicitly synthetic local review, not hosted publication
+or independent scientific approval. The helper accepts only the marked local
+fixture, preserves identities and immutable history, and refuses independent
+edits. Repeat it after editing a guide; unchanged content creates no revision.
+If an implementation source changed, review the guide against that source
+before updating its manifest hash. The receipt is saved privately in
+.local/claims-preview/launch-guide-receipt.json.
+
+If the optional six-note rehearsal was previously installed, remove those
+superseded examples from discovery with:
+
+   .venv/bin/python scripts/prepare_launch_collection.py
+   .venv/bin/python scripts/prepare_launch_collection.py --apply
+
+Restart the preview to load that editorial selection. This keeps exact reads
+and all database history available. An independently edited rehearsal note
+stops the operation for review. The result is eight scheme dossiers and four
+guides. This policy never replaces the hosted release's collection.
+
+Proposed bounty terms are maintained in docs/launch-bounty-candidates.json,
+with rationale and open decisions in docs/launch-bounty-candidates.txt. Save
+them as ordinary private drafts; admission and allowance spending are separate
+actions. Local receipt IDs must not be copied into production citations.
 
 Architecture and known limits: docs/claim-rosters-local-review.txt. The fixture
 uses a process-local 8 MiB notebook allowance to preserve rehearsal revisions;

@@ -1,0 +1,59 @@
+{
+  "format": "crucible-launch-bounty-candidates-v1",
+  "date": "2026-11-16",
+  "publication_status": "not submitted",
+  "review_notes": "Pin the selected sources and B performance baseline before admission. Bind live note IDs when preparing owner-account records; local fixture identities are not production citations.",
+  "candidates": [
+    {
+      "candidate": "A",
+      "status": "selected direction; draft terms; no allowance allocated",
+      "terms": {
+        "title": "Build key exchange on a new mathematical foundation",
+        "summary": "Find a promising mathematical problem, formulate the assumption precisely,\nand show how it can support a new key-exchange construction. The goal is a\ncredible new direction for cryptography that other researchers can test.",
+        "background_tags": [
+          "new assumptions",
+          "key exchange",
+          "cryptographic design"
+        ],
+        "scope": 5,
+        "completion_criteria": "Deliver a complete distributional problem and assumption, a substantive\ncomparison with the closest prior work, a concrete key-exchange/KEM design,\na correctness argument and a conditional security reduction with quantified\nlosses. Include a reference implementation, reproducible small-parameter\nexperiments and an initial analysis of natural generic/structural attacks.\nIdentify the finite-parameter claims, unproved premises and useful research\nparameter sets. Supply test vectors and exact artifacts another person can\nindependently run. A new name for an existing assumption does not qualify.",
+        "verification_plan": "An independent cryptographer assesses novelty, whether the assumption is\nmeaningful rather than a restatement of the desired scheme's security, and\nwhether the claimed implication follows. Reproduce the implementation and\nexperiments and examine obvious reductions to existing easy/hard problems.\nA positive verdict accepts a research contribution, not production security.\nScientific novelty and plausibility require judgment; they are not fully\nmachine-verifiable. This is a difficult, potentially long-running task.",
+        "source_notes": []
+      }
+    },
+    {
+      "candidate": "B",
+      "status": "selected direction; draft terms; no allowance allocated",
+      "terms": {
+        "title": "Cut the data needed for post-quantum key exchange in half",
+        "summary": "Develop a key-exchange construction that uses at most half the public data\nof ML-KEM-512 while pursuing the same security target and a practical cost.\nMake the tradeoff explicit and provide evidence others can reproduce.",
+        "background_tags": [
+          "post-quantum",
+          "communication",
+          "key exchange"
+        ],
+        "scope": 5,
+        "completion_criteria": "Provide a complete KEM and canonical encoding with public key plus ciphertext\nplus any per-exchange setup at most 784 bytes. Count required shared data;\nno uncharged trusted setup, cached peer key, key reuse or batch amortization.\nTarget the same declared NIST category-1 threat level, including quantum\nattacks, and an honest agreement failure bound at most 2^-128 under explicit\npremises. Supply a conditional IND-CCA security argument, the strongest\napplicable attack analyses found, reference code and exact test vectors.\nDo not infer category-1 security from a Crucible classical baseline curve.\n\nProposed practical-cost constraint: no operation's warm median or measured\nprocess-memory peak exceeds twice that of the agreed ML-KEM-512 baseline\nunder the same measurement plan, hardware, build and operation boundaries.\nSeparate operation timings; do not average away a slow decapsulation step.\nA genuine construction/encoding improvement is required; merely deleting\nvalidation or suppressing failures is not an improvement.",
+        "verification_plan": "Check byte lengths and successful/invalid-input behavior independently;\nrerun comparative measurements from raw samples; review the complete proof,\ncorrectness calculation and attack analysis. Distinguish conditional\nevidence from a guarantee against unknown attacks. Before admitting this\nbounty, freeze the baseline implementation/report hashes and exact resource\nconstraints in its terms. This task is auditable but very ambitious. If its\ntarget is too strong, change it before funding, not after submissions arrive.",
+        "source_notes": []
+      }
+    },
+    {
+      "candidate": "C",
+      "status": "selected direction; draft terms; no allowance allocated",
+      "terms": {
+        "title": "Find an assumption that fails",
+        "summary": "Find compelling, reproducible evidence that an explicit assumption in Crucible\ndoes not hold. Show what goes wrong, where the assumption is used, and what\nthe finding changes about the construction or its claimed guarantees.",
+        "background_tags": [
+          "assumptions",
+          "falsification",
+          "cryptanalysis"
+        ],
+        "scope": 3,
+        "completion_criteria": "Identify the exact note ID, revision, hash and statement ID. Explain the\nquantified claim, distributions, admissible parameter range and the specific\nconsequence the evidence contradicts. Supply either:\n\n- A mathematical counterexample or exact finite computation that violates\n  the claimed statement inside its declared scope; or\n- Compelling experimental evidence against a stated probabilistic prediction,\n  with a justified sampling method, raw data, independently rerunnable code,\n  uncertainty analysis and independent replication. State the statistical\n  strength and limitations. Do not describe statistical evidence as a\n  deductive proof of falsity.\n\nAccount for selection effects, repeated testing, correlations and the full\nfailure event when relevant. Freeze the tested hypothesis and experimental\nplan before the confirmation run. For a tiny failure-probability claim,\nobserving no failures does not verify it; observed failures require analysis\nunder the exact claimed distribution rather than anecdote.\n\nTrace the result into at least one actual use of that assumption: which\nargument loses support, which parameter range is affected, and what still\nfollows independently. Propose the narrow correction or withdrawal warranted\nby the evidence. A successful contribution need not repair the construction\nor settle its full security. The result must add a material finding not\nalready recorded as resolved in the target note's history.",
+        "verification_plan": "An independent reviewer reproduces the exact counterexample or confirmation\nexperiment, checks scope and probability conventions, and assesses whether\nthe evidence genuinely contradicts the recorded assumption. Publish the\nevidence as an owned research note with exact pins and reproducible artifacts.\nA counterexample to a stronger unstated claim, an out-of-scope toy example,\na worse upper bound, a coding bug unrelated to the stated mathematical model,\nor disagreement with a label is insufficient.\n\nA bounty award records acceptance of this contribution. Updating the displayed\nassumption/argument follows the ordinary correction workflow; evidence must\nremain distinguishable from that subsequent decision. Experiments use public\nmathematical objects and controlled local fixtures, with no live interception\nor third-party credentials needed.",
+        "source_notes": []
+      }
+    }
+  ]
+}
