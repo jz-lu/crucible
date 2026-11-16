@@ -4527,5 +4527,5 @@ html[data-beta-landing] #access-workspace { animation:landing-arrive 350ms ease 
   html[data-beta-landing] .brand-mark,
   html[data-beta-landing] .access-actions .button { transition:none;transform:none!important; }
   .site-header .brand-ember-effect { display:none; }
-  html[data-beta-landing] #access-workspace,
+  html[data-beta-landing] #access-workspace { animation:none; }
 }
