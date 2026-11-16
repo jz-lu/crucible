@@ -1,70 +1,6 @@
 /* Production bounty view. Server records own terms, allowances and decisions. */
 (() => {
   'use strict';
-  // Editorial examples: no task records, allowance spending or funded rewards.
-  const templates = [
-  {
-    "id": "mlkem-vectors",
-    "title": "Reproduce ML-KEM key generation and encapsulation test vectors",
-    "summary": "Build a reproducible local check of ML-KEM-512 against a pinned set of public NIST ACVP vectors. Record what is covered and every mismatch. This is a conformance exercise, not a security certification.",
-    "completion": "Pin the FIPS 203 edition and applicable errata, the exact NIST ACVP-Server commit and vector directory, and the implementation commit. Supply a local runner for key generation and encapsulation/decapsulation cases supported by that vector set. Produce a machine-readable pass/fail report with vector IDs, expected and actual outputs, counts and unsupported cases. Include at least one deliberately corrupted fixture that the runner detects. Use public vectors and locally generated test keys only; no deployed service is a target.",
-    "verification": "An independent reviewer runs the documented command in a clean environment, verifies the source and vector hashes, reproduces the report and checks that the corrupted fixture fails for the intended reason. Explain parameter-set or encoding differences explicitly. The reviewer assesses the artifact and coverage; passing vectors does not establish side-channel resistance, complete correctness or security. Before requesting admission, fix the selected commits and attach an exact published source note.",
-    "tags": [
-      "ml-kem",
-      "reproducibility",
-      "test-vectors"
-    ],
-    "scope": 5,
-    "sources": [
-      [
-        "FIPS 203 and errata",
-        "https://csrc.nist.gov/pubs/fips/203/final"
-      ],
-      [
-        "NIST public ACVP vectors",
-        "https://github.com/usnistgov/ACVP-Server/tree/master/gen-val/json-files"
-      ]
-    ]
-  },
-  {
-    "id": "sampler-audit",
-    "title": "Check a finite sampler against its specified distribution",
-    "summary": "Audit one bounded sampler used by a proposed cryptographic construction. Use exact enumeration at a small setting to check the intended probabilities, rejection rule and boundary cases before relying on the sampler in a new design.",
-    "completion": "Choose and pin one public specification and implementation; FIPS 203's sampling algorithms provide a concrete starting point. Define a small finite input space and the exact output or rejection event. Supply two independently written checks: a direct enumerator and a reference formula or second implementation. Report the complete output histogram, normalization, rejected inputs and any discrepancy. Keep any reduced toy version distinct from the production algorithm. Use generated data and bounded local runs.",
-    "verification": "A reviewer checks that all finite inputs are covered once, verifies the normalization and rejection accounting, and reruns the comparison from the pinned source. Include boundary cases and a deliberately biased or otherwise incorrect implementation that the check catches. State precisely which conclusions transfer to the full sampler and which remain open; empirical agreement is not a pseudorandomness proof. Fix the target and enumeration limit in the bounty terms before admission.",
-    "tags": [
-      "sampling",
-      "correctness",
-      "exact-enumeration"
-    ],
-    "scope": 4,
-    "sources": [
-      [
-        "FIPS 203: specified samplers",
-        "https://csrc.nist.gov/pubs/fips/203/final"
-      ]
-    ]
-  },
-  {
-    "id": "compression-tradeoff",
-    "title": "Measure compression tradeoffs in a small encryption model",
-    "summary": "Make a small, fully specified experiment that compares two compression choices for a lattice-style encryption component. The useful result is an exact correctness and size worksheet that can guide a candidate design, including a negative result.",
-    "completion": "Start with the Compress/Decompress definitions in FIPS 203, but define an explicitly experimental model with odd modulus 17 and bit widths 2 and 3. State the rounding convention, encoding and centered modular error. Enumerate all 17 input residues and record encoded width and reconstruction error for both choices. Then define a tiny encryption/decryption experiment with a bounded noise distribution and enumerate its honest failure probability. Publish the equations, enumerator, raw tables and a comparison explaining what compression gains and what correctness loses. No supplied outcome or improvement is assumed.",
-    "verification": "An independent reviewer verifies all residue counts, round-trip error calculations and normalization, then checks the failure calculation using a separate short implementation or hand-worked cases. The model must keep its samplers, decoder and message distribution explicit. It is not a standard ML-KEM parameter set and inherits no ML-KEM security claim. Before admission, freeze the complete toy experiment and resource limit; retain an unfavorable result as a valid completed comparison.",
-    "tags": [
-      "construction-design",
-      "compression",
-      "correctness"
-    ],
-    "scope": 4,
-    "sources": [
-      [
-        "FIPS 203: compression definitions",
-        "https://csrc.nist.gov/pubs/fips/203/final"
-      ]
-    ]
-  }
-];
   const sorts = {concrete: 'More concrete first', open: 'More open-ended first', 'points-high': 'Highest points first', 'points-low': 'Lowest points first'};
   const statuses = {draft: 'Draft', submitted: 'Submitted for review', pending: 'Submitted for review', changes_requested: 'Changes requested', open: 'Open', under_review: 'Under assessment', frozen: 'Under assessment', completed: 'Completed', closed: 'Completed', withdrawn: 'Withdrawn', declined: 'Not admitted', cancelled: 'Cancelled'};
   const el = (tag, cls, text) => { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = String(text); return node; };
@@ -111,7 +47,7 @@
     const heading = el('div', 'bty-heading'), title = el(reviewOnly ? 'h2' : 'h1', '', 'Bounties'); title.tabIndex = -1;
     const titleRow = el('div', 'bty-title-row'); titleRow.append(title);
     const headingActions = el('div', 'bty-heading-actions'), allowanceNode = el('span', 'bty-allowance');
-    const propose = button('Propose a bounty', () => change({compose: true, template: '', id: ''}, 'bounty-title'), 'nb-button nb-primary');
+    const propose = button('Propose a bounty', () => change({compose: true, id: ''}, 'bounty-title'), 'nb-button nb-primary');
     headingActions.append(allowanceNode, propose); heading.append(titleRow, headingActions);
     const notice = el('div', 'bty-notice'); notice.setAttribute('role', 'status');
     const board = el('section'), listHeading = el('div', 'bty-list-heading'), count = el('span', 'bty-count');
@@ -126,23 +62,7 @@
     const agent = button('Copy agent prompt', () => { void copyAgentPrompt(); }, 'bty-secondary-link'); agent.hidden = reviewOnly;
     secondary.append(mine, agent, past, open); board.append(listHeading, entries, pagination, secondary);
     const reader = el('section', 'bty-reader'), composer = el('section', 'bty-composer'); reader.hidden = composer.hidden = true;
-    const templateGallery = el('section', 'bty-templates');
-    templateGallery.append(el('h2', '', 'Template bounties'), el('p', 'bty-context', 'Concrete starting points for making and testing cryptography. These examples are not open or funded tasks. Adapt the scope, pin the sources and save a private draft before requesting independent review.'));
-    for (const template of templates) {
-      const card = el('details', 'bty-template'), summary = el('summary');
-      summary.append(el('span', 'bty-template-label', 'Template'), el('span', 'bty-template-title', template.title));
-      const content = el('div', 'bty-template-content');
-      content.append(el('p', '', template.summary), el('h3', '', 'Completion criteria'), el('p', '', template.completion),
-        el('h3', '', 'Verification'), el('p', '', template.verification));
-      const links = el('p', 'bty-template-sources');
-      for (const [label, href] of template.sources) {
-        const link = el('a', '', label + ' ↗'); link.href = href; link.target = '_blank'; link.rel = 'noopener noreferrer'; links.append(link);
-      }
-      content.append(links, button('Use this template', () => change({compose: true, template: template.id, id: ''}, 'bounty-title')));
-      card.append(summary, content); templateGallery.append(card);
-    }
-    templateGallery.hidden = reviewOnly;
-    root.append(heading, notice, board, templateGallery, reader, composer);
+    root.append(heading, notice, board, reader, composer);
     function announce(text, error = false) { notice.replaceChildren(); if (text) notice.append(el('p', error ? 'bty-error' : 'nb-notice', text)); }
     function agentPrompt() {
       const origin = new URL(window.location.href).origin;
@@ -170,7 +90,7 @@
       if (next.page > 1) params.set('page', String(next.page));
       if (next.id) params.set('bounty', next.id);
       if (next.detail && next.detail !== 'brief') params.set('detail', next.detail);
-      if (next.compose) { params.set('compose', 'bounty'); if (next.template) params.set('template', next.template); }
+      if (next.compose) params.set('compose', 'bounty');
       return (reviewOnly ? '#reviews' : '#bounties') + (params.size ? '?' + params : '');
     }
     function change(patch, focus) {
@@ -482,10 +402,8 @@
       change(receiptSelection(selected), 'reader-title');
     }
     function proposalForm(task = null) {
-      const template = !task && templates.find(item => item.id === state.template);
-      const key = task ? 'edit:' + task.id : template ? 'template:' + template.id : 'new';
-      const terms = task?.terms || (template ? {title: template.title, summary: template.summary, background_tags: template.tags,
-        scope: template.scope, completion_criteria: template.completion, verification_plan: template.verification + '\n\nSource starting points:\n' + template.sources.map(([label, url]) => label + ': ' + url).join('\n')} : {});
+      const key = task ? 'edit:' + task.id : 'new';
+      const terms = task?.terms || {};
       const sources = (terms.source_notes || []).map(pin => {
         const detail = task?.sources?.find(item => item.note_id === pin.note_id && item.revision === pin.revision && item.content_sha256 === pin.content_sha256);
         return {...pin, number: detail?.number ?? detail?.note_number ?? null, title: detail?.title || ''};
@@ -498,7 +416,6 @@
         const reset = button('Discard local edits and load the latest draft', () => { drafts.delete(key); proposalForm(task); });
         composer.append(el('p', 'bty-form-hint', 'This draft changed elsewhere. Your local edits remain here until you choose to replace them.'), reset);
       }
-      if (template) composer.append(el('p', 'bty-form-hint', 'Template draft · choose exact source versions and adapt the terms before saving. No reward is funded by opening this template.'));
       const form = el('form', 'nb-form bty-form'), v = draft.values;
       const fields = {
         title: field('The task', 'bounty-title', v.title, {max: 160, placeholder:'e.g. Reproduce the reference attack for a scheme'}),
@@ -688,11 +605,10 @@
     async function show(params) {
       if (!owns()) return;
       active = true; request++; clearTimeout(pageTimer); pageTimer = null;
-      const next = {status: ['mine', 'past'].includes(params.get('status')) ? params.get('status') : 'open', sort: Object.hasOwn(sorts, params.get('sort')) ? params.get('sort') : 'concrete', page: Math.max(1, Math.min(1000, parseInt(params.get('page'), 10) || 1)), id: params.get('bounty') || '', detail: ['notes', 'contributions', 'contribute'].includes(params.get('detail')) ? params.get('detail') : 'brief', compose: !reviewOnly && params.get('compose') === 'bounty', template: templates.some(item => item.id === params.get('template')) ? params.get('template') : ''};
+      const next = {status: ['mine', 'past'].includes(params.get('status')) ? params.get('status') : 'open', sort: Object.hasOwn(sorts, params.get('sort')) ? params.get('sort') : 'concrete', page: Math.max(1, Math.min(1000, parseInt(params.get('page'), 10) || 1)), id: params.get('bounty') || '', detail: ['notes', 'contributions', 'contribute'].includes(params.get('detail')) ? params.get('detail') : 'brief', compose: !reviewOnly && params.get('compose') === 'bounty'};
       if (JSON.stringify(next) !== JSON.stringify(state)) { signature = ''; action = null; }
       state = next;
       const inReader = Boolean(state.id) && !state.compose;
-      templateGallery.hidden = reviewOnly || state.status !== 'open' || inReader || state.compose || state.page !== 1;
       board.hidden = inReader || state.compose; reader.hidden = !inReader; composer.hidden = !state.compose; heading.hidden = inReader || state.compose;
       title.textContent = reviewOnly ? 'Bounty reviews' : 'Bounties';
       propose.hidden = reviewOnly; secondary.hidden = reviewOnly; sortField.wrap.hidden = reviewOnly || state.status !== 'open'; sortField.input.value = state.sort;

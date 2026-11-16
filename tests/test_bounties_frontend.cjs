@@ -61,24 +61,6 @@ let passed = 0, complete = false;
 async function test(name, run) {await run(); console.log('PASS ' + name); passed++;}
 process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.error('Bounty checks did not finish'); process.exitCode = 1;}});
 (async () => {
-  await test('templates open isolated editable drafts without spending or creating task records', async () => {
-    const f = fixture();
-    try {
-      await f.show('');
-      assert.equal(f.host.querySelectorAll('.bty-template').length, 3);
-      click(f.host, 'Use this template'); await f.routed();
-      assert.match(f.routes.at(-1), /compose=bounty&template=mlkem-vectors/);
-      assert.match(f.host.querySelector('[name="bounty-title"]').value, /ML-KEM/);
-      fill(f.host, 'bounty-title', 'My scoped conformance task');
-      await f.show('compose=bounty&template=sampler-audit');
-      assert.match(f.host.querySelector('[name="bounty-title"]').value, /sampler/);
-      await f.show('compose=bounty&template=mlkem-vectors');
-      assert.equal(f.host.querySelector('[name="bounty-title"]').value, 'My scoped conformance task');
-      await f.show('compose=bounty');
-      assert.equal(f.host.querySelector('[name="bounty-title"]').value, '');
-      assert.equal(f.requests.filter(item => item.body).length, 0);
-    } finally { f.close(); }
-  });
   await test('cold board is neutral; warm same-query returns retain cards and focus; sorting stays server-owned', async () => {
     const pending = deferred(); let first = true;
     const f = fixture({responder: url => url.pathname === '/api/bounties' && first ? (first = false, pending.promise) : undefined});

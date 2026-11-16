@@ -42,21 +42,6 @@ for (const width of [1440, 390]) test(`bounty board, exact detail and proposal r
   await expect(panel.getByRole('searchbox')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({path:testInfo.outputPath('bounty-board-' + width + '.png'),fullPage:true});
-  const templates = panel.locator('.bty-template');
-  await expect(templates).toHaveCount(3);
-  await templates.first().locator('summary').click();
-  await expect(templates.first()).toContainText('Completion criteria');
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.evaluate(() => scrollTo(0, 0));
-  await page.screenshot({path:testInfo.outputPath('bounty-template-' + width + '.png'),fullPage:true});
-  await templates.first().getByRole('button',{name:'Use this template'}).click();
-  await expect(page).toHaveURL(/template=mlkem-vectors/);
-  await expect(panel.getByLabel('The task',{exact:true})).toHaveValue(/ML-KEM/);
-  await expect(panel.getByLabel('How will it be verified?',{exact:true})).toHaveValue(/NIST/);
-  // The fixture rejects every write: opening a template cannot create a task
-  // or spend the participant's allowance.
-  await page.goto('/#bounties');
-  await expect(panel.locator('.bty-allowance')).toContainText('7 of 10 remaining');
   const before = reads.filter(path => path.startsWith('/api/bounties?')).length;
   await page.locator('#nav-notebook').click();
   await expect(page.locator('#notebook-workspace > .nb-views')).toHaveCount(0);

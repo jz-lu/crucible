@@ -166,18 +166,3 @@
 .bty-note-options:empty[aria-busy=true]{min-height:55px}
 .bty-source-remove:focus-visible,.bty-note-more:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
 @media(max-width:650px){.bty-note-picker>input{font-size:16px}.bty-note-options{max-height:220px}.bty-note-option-title{gap:8px;flex-wrap:wrap}.bty-source-remove{width:32px;height:32px;flex-basis:32px}}
-
-/* Reusable briefs remain distinct from real task and reward records. */
-.bty-templates { margin-top:40px; padding-top:24px; border-top:1px solid var(--line); }
-.bty-templates>h2 { margin:0 0 8px; }
-.bty-template { border-top:1px solid var(--line); padding:16px 0; }
-.bty-template summary { cursor:pointer; display:flex; align-items:baseline; gap:14px; }
-.bty-template summary::after { content:'+'; margin-left:auto; color:var(--primary); }
-.bty-template[open] summary::after { content:'−'; }
-.bty-template-label { font-size:12px; color:var(--muted); }
-.bty-template-title { font:600 17px/1.4 var(--sans); color:var(--ink); }
-.bty-template-content { max-width:74ch; padding:8px 0 10px; }
-.bty-template-content h3 { margin:20px 0 6px; font:600 14px/1.5 var(--sans); }
-.bty-template-sources { display:flex; flex-wrap:wrap; gap:8px 20px; }
-.bty-template summary:focus-visible { outline:2px solid var(--primary); outline-offset:4px; }
-@media(max-width:600px) { .bty-template summary { gap:8px; flex-wrap:wrap; } .bty-template-title { flex-basis:calc(100% - 28px); } }
