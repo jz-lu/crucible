@@ -518,7 +518,7 @@ def test_pg17_legacy_publication_writer_survives_additive_schema_but_old_head_pr
         for old_head in ('0029', '0030'):
             old = beta_preflight.inspect_database(connection, settings, [old_head], None)
             assert old == [{'check': 'database_schema', 'status': 'fail',
-                           'message': "Database schema does not match this checkout's migration head."}]
+                           'message': 'Bridge migration source must remain at 0031.'}]
         assert new[0]['check'] == 'database_schema' and new[0]['status'] == 'pass'
         assert connection.scalar(text('SELECT version_num FROM alembic_version')) == '0031'
 

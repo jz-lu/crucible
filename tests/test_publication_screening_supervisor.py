@@ -242,11 +242,18 @@ def test_shutdown_cancels_stalled_process_creation():
     asyncio.run(scenario())
 
 
-def test_hosted_factory_wires_opt_in_only_at_lifespan_and_keeps_ingress(monkeypatch):
+def test_hosted_factory_wires_opt_in_only_at_lifespan_and_keeps_ingress(monkeypatch, tmp_path):
     from crucible import app as core, app_platform, config
+    from crucible.db import Base, Database
+    from schema_bridge_fixtures import mark_metadata_fixture
+    database_url = f"sqlite:///{tmp_path / 'hosted-factory.db'}"
+    database = Database(database_url)
+    Base.metadata.create_all(database.engine)
+    mark_metadata_fixture(database.engine)
+    database.engine.dispose()
     events = []
     settings = SimpleNamespace(production=True, access_mode='beta', origins=('https://crucible.fail',),
-                               publication_screening_mode='automatic')
+                               publication_screening_mode='automatic', database_url=database_url)
     monkeypatch.setenv('CRUCIBLE_ENV', 'production')
     monkeypatch.setenv('CRUCIBLE_ACCESS_MODE', 'beta')
     monkeypatch.setenv(hosting.WORKER_ENABLED_ENV, 'true')
