@@ -160,6 +160,12 @@ def main():
                        rate_limits=False, reviewer_ids=(REVIEWER,))
     settings = PreviewSettings(**settings.__dict__)
     notebook.MAX_WORKSPACE_BYTES = max(notebook.MAX_WORKSPACE_BYTES, 8 * 1024 * 1024)
+    selection = data_dir / "editorial-selection.json"
+    if selection.exists():
+        # Local editorial choices are pinned to this fixture's generated IDs.
+        # They never replace the hosted release's selection policy.
+        notebook.EDITORIAL_SELECTION_PATH = selection
+        notebook.archived_publications()  # Validate before accepting requests.
     app = attach_preview_entry(create_app(settings), data_dir)
     print(f"Local fixture only: http://127.0.0.1:{args.port}/preview", flush=True)
     print("Synthetic reviewer: add ?persona=reviewer; optional trial: add &trial=1. Stop with Ctrl+C.", flush=True)

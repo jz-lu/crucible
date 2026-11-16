@@ -39,6 +39,9 @@ def curated(tmp_path, monkeypatch):
             revision=1, createdAt=(number * 4 + 1) * 1000)]} for number in range(7)], 'views': []}
     path.write_text(json.dumps(value))
     monkeypatch.setattr(notebook, 'CURATED_NOTES_PATH', path)
+    selection_path = tmp_path / 'editorial-selection.json'
+    selection_path.write_text(json.dumps({'format': 'crucible-editorial-selection-v1', 'archived_publications': []}))
+    monkeypatch.setattr(notebook, 'EDITORIAL_SELECTION_PATH', selection_path)
     notebook._curated_collection.cache_clear()
     yield path, value
     notebook._curated_collection.cache_clear()
@@ -364,3 +367,80 @@ def test_browse_queries_remain_scalar_batched_and_portable(system, curated):
     compiled = [str(statement.compile(dialect=postgresql.dialect())) for statement in expressions]
     assert any('ILIKE' in sql and '->>' in sql for sql in compiled)
     assert all('JSON_EXTRACT' not in sql for sql in compiled)
+
+
+def test_editorial_archive_hides_discovery_but_preserves_exact_reads_and_numbers(system, curated):
+    from test_note_ratings import agent
+    _, owner, _, reader, _ = system
+    path, value = curated
+    original = notebook.curated_collection()[0]
+    identifier = original['id']
+    pin = original['revisions'][-1]
+    numbers = reader.client.get('/api/notebook/curated-note-numbers').json()['numbers']
+    value['extensions'] = {'editorial_selection': {'archived': {value['notes'][0]['id']: 'Background reading; fuller evidence needed.'}}}
+    path.write_text(json.dumps(value))
+    notes, _ = browse(reader, include_curated='true')
+    assert identifier not in {note['id'] for note in notes}
+    assert len(notes) == 6
+    assert reader.client.get('/api/notebook/timeline').json()['total'] == 6
+    metadata = reader.client.get('/api/notebook/curated-note-numbers').json()
+    assert metadata['numbers'] == numbers
+    assert metadata['metadata'][identifier]['archive_reason'].startswith('Background reading')
+    machine = agent(owner)
+    assert identifier not in {note['id'] for note in machine.get('/api/agent/notes').json()['notes']}
+    exact = machine.get('/api/agent/notes/' + identifier, params={'revision': pin['revision'], 'content_sha256': pin['content_sha256']})
+    assert exact.status_code == 200
+    assert exact.json()['note']['content'] == pin['content']
+    assert notebook.curated_collection()[0]['revisions'] == original['revisions']
+    value['extensions']['editorial_selection']['archived'] = {}
+    path.write_text(json.dumps(value))
+    assert len(browse(reader, include_curated='true')[0]) == 7
+    assert reader.client.get('/api/notebook/curated-note-numbers').json()['numbers'] == numbers
+
+
+def test_published_archive_is_exact_reversible_and_preserves_owner_access(system, curated):
+    from test_note_ratings import agent
+    _, owner, reviewer, reader, _ = system
+    path, value = curated
+    old = create(owner, content(title='A placeholder test', tags=['only-in-archive']))
+    request_publication(owner, old); approve(reviewer, old)
+    saved = revise(owner, old, content(title='Another placeholder', tags=['only-in-archive']))
+    request_publication(owner, saved); approve(reviewer, saved)
+    other = create(owner, content(title='A substantial control note', tags=['research']))
+    request_publication(owner, other); approve(reviewer, other)
+    pin = {key: saved[key] for key in ('revision', 'content_sha256')}
+    entry = dict(pin, note_id=saved['id'], reason='Operational test, without research evidence.')
+    selection = {'format': 'crucible-editorial-selection-v1', 'archived_publications': [entry]}
+    notebook.EDITORIAL_SELECTION_PATH.write_text(json.dumps(selection))
+
+    for actor in (owner, reader):
+        records, sizes = browse(actor, limit=1)
+        assert [note['id'] for note in records] == [other['id']]
+        assert sizes == [1]  # Archive filtering happens before pagination.
+        assert actor.client.get('/api/notebook/tags?q=only-in-archive').json()['tags'] == []
+        assert actor.client.get('/api/notebook/timeline').json()['total'] == 8  # 7 curated + control
+    assert saved['id'] in {note['id'] for note in page(owner, scope='mine')['notes']}
+    index = page(owner, projection='index')['notes']
+    assert next(note for note in index if note['id'] == saved['id'])['archive_reason'] == entry['reason']
+    assert saved['id'] not in {note['id'] for note in page(reader, projection='index')['notes']}
+    exact = reader.client.get('/api/notebook/notes/' + saved['id'], params={'revision': saved['revision']})
+    assert exact.status_code == 200
+    selected = next(item for item in exact.json()['note']['revisions'] if item['revision'] == saved['revision'])
+    assert selected['content_sha256'] == pin['content_sha256']
+    assert selected['archive_reason'] == entry['reason']
+    machine = agent(reader)
+    assert saved['id'] not in {note['id'] for note in machine.get('/api/agent/notes').json()['notes']}
+    assert machine.get('/api/agent/notes/' + saved['id'], params=pin).status_code == 200
+
+    # A mismatched hash cannot hide any revision, and removing the selection
+    # restores discovery without editing content or publication decisions.
+    entry['content_sha256'] = '0' * 64
+    notebook.EDITORIAL_SELECTION_PATH.write_text(json.dumps(selection))
+    assert saved['id'] in {note['id'] for note in page(reader)['notes']}
+    entry['content_sha256'] = pin['content_sha256']
+    notebook.EDITORIAL_SELECTION_PATH.write_text(json.dumps(selection))
+    new = revise(owner, saved, content(title='A substantive replacement', tags=['research']))
+    assert saved['id'] not in {note['id'] for note in page(reader)['notes']}  # New draft stays private.
+    request_publication(owner, new); approve(reviewer, new)
+    assert next(note for note in page(reader)['notes'] if note['id'] == saved['id'])['revision'] == new['revision']
+    assert saved['id'] in {note['id'] for note in machine.get('/api/agent/notes').json()['notes']}
