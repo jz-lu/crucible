@@ -58,3 +58,35 @@ Release gates
 * Pin changed backend sources in the release contract after review, and retain
   ordinary migration/backup/runtime gates. Local macOS tests do not qualify a
   Linux image or assert that the hosted publication database contains the curves.
+
+Packaged scheme dossiers
+
+scripts/package_scheme_dossiers.py verifies the separately reviewed Linux
+artifact, then appends the eight dossiers to their existing curated note IDs.
+It preserves original display_evidence metadata, artifacts, references and all
+earlier revision values/hashes. Source compilations are not appended over a later
+dossier when the exact original compilation is rebuilt. New premise labels are
+assigned deterministically from curated dossier history, not local persona data.
+
+The initial package uses source a62f5e58edd57e205556591988f02f56fec7cec4 from
+GitHub Actions run 43822428809. Its 379 analytical accounts retain every numerical
+work/memory value, success bound, parameter and premise. Exactly 229 runtime pins
+changed; companion statements change only their embedded analysis digests.
+The original runtime receipt is retained under docs/evidence without rewriting.
+
+From a checkout containing that Git ancestor, reproduce the no-write check:
+
+  python scripts/package_scheme_dossiers.py --receipt docs/evidence/note-runtime-a62f5e58edd57e205556591988f02f56fec7cec4.json --source-revision a62f5e58edd57e205556591988f02f56fec7cec4 --check
+
+The initial import additionally supplies --evidence-dir with the downloaded
+artifact directory and omits --check. All source/runtime/file-hash comparisons
+and complete corpus validation occur before any output file is changed. No
+database connection, note-publication request, account or admission is created.
+The generated hosted manifest is crucible/data/scheme_note_bindings.json.
+
+tests/test_scheme_dossier_package.py runs portable preservation/idempotence
+checks. tests/test_packaged_note_presentations.py is a separate release-image
+gate: run it with the actual candidate code/native artifacts in the reviewed
+Linux Python runtime. It uses a disposable test database and checks all eight
+hosted endpoints and 379 profiles without mutating hosted data. Its success is
+required independently of the offline provenance check.

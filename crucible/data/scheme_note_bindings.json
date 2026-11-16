@@ -1,0 +1,343 @@
+{
+  "format": "crucible-note-presentation-bindings-v1",
+  "releases": [
+    {
+      "scheme_id": "classic-mceliece",
+      "version": "length-research-v1",
+      "note": {
+        "id": "curated:display-evidence-classic-mceliece-length-research-v1",
+        "revision": 3,
+        "content_sha256": "982292b0a4e5790c481eccc3361e9ee04564ff1a7ee403b8b06641782fd82d58"
+      },
+      "sections": {
+        "security": "security",
+        "correctness": "correctness"
+      },
+      "arguments": {
+        "security": "scheme-security",
+        "correctness": "scheme-correctness"
+      },
+      "graph_models": {
+        "mceliece-structural-reassessment-20261017": {
+          "section_id": "attack",
+          "metric": "classical",
+          "kind": "qualitative",
+          "assumption_ids": [],
+          "argument_id": "mceliece-structural-reassessment-20261017"
+        },
+        "ram-prange-syndrome-decoding-with-bounded-sampling": {
+          "section_id": "ram-prange-syndrome-decoding-with-bounded-sampling",
+          "metric": "ram",
+          "kind": "explicit-attack-work-upper-bound",
+          "assumption_ids": [
+            "ram-prange-structured-rank-density-v1"
+          ],
+          "argument_id": "ram-prange-syndrome-decoding-with-bounded-sampling"
+        }
+      }
+    },
+    {
+      "scheme_id": "dhkem-x25519",
+      "version": "curve-compressed-v2",
+      "note": {
+        "id": "curated:display-evidence-dhkem-x25519-curve-compressed-v2",
+        "revision": 3,
+        "content_sha256": "6279c772c442b6edfeac4507197fbe01cfc7bb61905a0c9fa78f78d7028ce6ce"
+      },
+      "sections": {
+        "security": "security",
+        "correctness": "correctness"
+      },
+      "arguments": {
+        "security": "scheme-security",
+        "correctness": "scheme-correctness"
+      },
+      "graph_models": {
+        "ec-generic-rho-v1": {
+          "section_id": "attack",
+          "metric": "classical",
+          "kind": "heuristic-reference",
+          "assumption_ids": [],
+          "argument_id": "ec-generic-rho-v1"
+        },
+        "shor-polynomial-quantum-v1": {
+          "section_id": "quantum",
+          "metric": "quantum",
+          "kind": "qualitative",
+          "assumption_ids": [],
+          "argument_id": "shor-polynomial-quantum-v1"
+        },
+        "ram-curve-bsgs-v1": {
+          "section_id": "ram-curve-bsgs-v1",
+          "metric": "ram",
+          "kind": "explicit-attack-work-upper-bound",
+          "assumption_ids": [],
+          "argument_id": "ram-curve-bsgs-v1"
+        }
+      }
+    },
+    {
+      "scheme_id": "frodokem",
+      "version": "anchor-research-v3",
+      "note": {
+        "id": "curated:display-evidence-frodokem-anchor-research-v3",
+        "revision": 3,
+        "content_sha256": "1fb9a417b346418730bd8aad2fbe2f5f92c1a178106556e601b2f7ae564813a2"
+      },
+      "sections": {
+        "security": "security",
+        "correctness": "correctness"
+      },
+      "arguments": {
+        "security": "scheme-security",
+        "correctness": "scheme-correctness"
+      },
+      "graph_models": {
+        "frodo-lwe-anchor-core-svp-v3": {
+          "section_id": "attack",
+          "metric": "classical",
+          "kind": "heuristic-reference",
+          "assumption_ids": [
+            "frodo-classical-attack-model"
+          ],
+          "argument_id": "frodo-lwe-anchor-core-svp-v3"
+        },
+        "frodo-qrw-core-svp-quantum-v1": {
+          "section_id": "quantum",
+          "metric": "quantum",
+          "kind": "published-model-reference",
+          "assumption_ids": [
+            "frodo-quantum-attack-model"
+          ],
+          "argument_id": "frodo-qrw-core-svp-quantum-v1"
+        },
+        "ram-frodo-bounded-secret-column-enumeration-v1": {
+          "section_id": "ram-frodo-bounded-secret-column-enumeration-v1",
+          "metric": "ram",
+          "kind": "explicit-attack-work-upper-bound",
+          "assumption_ids": [
+            "ram-frodo-v3-independent-public-matrix",
+            "ram-frodo-v3-message-correctness"
+          ],
+          "argument_id": "ram-frodo-bounded-secret-column-enumeration-v1"
+        },
+        "ram-frodo-native-message-enumeration-v1": {
+          "section_id": "ram-frodo-native-message-enumeration-v1",
+          "metric": "ram",
+          "kind": "explicit-attack-work-upper-bound",
+          "assumption_ids": [
+            "ram-frodo-v3-message-correctness"
+          ],
+          "argument_id": "ram-frodo-native-message-enumeration-v1"
+        }
+      }
+    },
+    {
+      "scheme_id": "hqc",
+      "version": "modeled-research-v3",
+      "note": {
+        "id": "curated:display-evidence-hqc-modeled-research-v3",
+        "revision": 3,
+        "content_sha256": "a561e86443f5c5078a07d63038a55922951db879f39bfba457c719eba3bcea9b"
+      },
+      "sections": {
+        "security": "security",
+        "correctness": "correctness"
+      },
+      "arguments": {
+        "security": "scheme-security",
+        "correctness": "scheme-correctness"
+      },
+      "graph_models": {
+        "hqc2025-endpoint-reassessment-v1": {
+          "section_id": "attack",
+          "metric": "classical",
+          "kind": "qualitative",
+          "assumption_ids": [],
+          "argument_id": "hqc2025-endpoint-reassessment-v1"
+        },
+        "ram-exhaustive-private-support-recovery": {
+          "section_id": "ram-exhaustive-private-support-recovery",
+          "metric": "ram",
+          "kind": "explicit-attack-work-upper-bound",
+          "assumption_ids": [
+            "ram-hqc-unique-key-transfer-v1"
+          ],
+          "argument_id": "ram-exhaustive-private-support-recovery"
+        },
+        "ram-prange-recovery-of-the-quasi-cyclic-private-key": {
+          "section_id": "ram-prange-recovery-of-the-quasi-cyclic-private-key",
+          "metric": "ram",
+          "kind": "explicit-attack-work-upper-bound",
+          "assumption_ids": [
+            "ram-prange-structured-rank-density-v1",
+            "ram-hqc-unique-key-transfer-v1",
+            "ram-hqc-honest-decoding-transfer-v1"
+          ],
+          "argument_id": "ram-prange-recovery-of-the-quasi-cyclic-private-key"
+        }
+      }
+    },
+    {
+      "scheme_id": "ml-kem",
+      "version": "compressed-research-v4",
+      "note": {
+        "id": "curated:display-evidence-ml-kem-compressed-research-v4",
+        "revision": 4,
+        "content_sha256": "8ba015a92536fa33f8716abe044c4340f59ff6c8ba5b66d7c31fe914eb5c779a"
+      },
+      "sections": {
+        "security": "security",
+        "correctness": "correctness"
+      },
+      "arguments": {
+        "security": "scheme-security",
+        "correctness": "scheme-correctness"
+      },
+      "graph_models": {
+        "kyber2021-primal-core-svp-classical": {
+          "section_id": "attack",
+          "metric": "classical",
+          "kind": "historical-reference",
+          "assumption_ids": [
+            "module-endpoint-attack-model"
+          ],
+          "argument_id": "kyber2021-primal-core-svp-classical"
+        },
+        "kyber2021-primal-core-svp-quantum": {
+          "section_id": "attack",
+          "metric": "quantum",
+          "kind": "historical-reference",
+          "assumption_ids": [
+            "module-endpoint-attack-model"
+          ],
+          "argument_id": "kyber2021-primal-core-svp-quantum"
+        },
+        "ram-module-native-message-enumeration-v1": {
+          "section_id": "ram-module-native-message-enumeration-v1",
+          "metric": "ram",
+          "kind": "explicit-attack-work-upper-bound",
+          "assumption_ids": [
+            "ram-module-v4-message-correctness"
+          ],
+          "argument_id": "ram-module-native-message-enumeration-v1"
+        }
+      }
+    },
+    {
+      "scheme_id": "rsa-kem",
+      "version": "4",
+      "note": {
+        "id": "curated:display-evidence-rsa-kem-4",
+        "revision": 3,
+        "content_sha256": "3491d92979a9b2e146adf7c592b283269ddba5698be31a30e59893b71210fc31"
+      },
+      "sections": {
+        "security": "security",
+        "correctness": "correctness"
+      },
+      "arguments": {
+        "security": "scheme-security",
+        "correctness": "scheme-correctness"
+      },
+      "graph_models": {
+        "classical-baseline-v2": {
+          "section_id": "attack",
+          "metric": "classical",
+          "kind": "heuristic-reference",
+          "assumption_ids": [],
+          "argument_id": "classical-baseline-v2"
+        },
+        "shor-polynomial-quantum-v1": {
+          "section_id": "quantum",
+          "metric": "quantum",
+          "kind": "qualitative",
+          "assumption_ids": [],
+          "argument_id": "shor-polynomial-quantum-v1"
+        },
+        "ram-rsa-trial-division-v1": {
+          "section_id": "ram-rsa-trial-division-v1",
+          "metric": "ram",
+          "kind": "explicit-attack-work-upper-bound",
+          "assumption_ids": [],
+          "argument_id": "ram-rsa-trial-division-v1"
+        }
+      }
+    },
+    {
+      "scheme_id": "sntrup",
+      "version": "3",
+      "note": {
+        "id": "curated:display-evidence-sntrup-3",
+        "revision": 3,
+        "content_sha256": "a433e3a4fd0c5eadbe83500f69481c294b7e1a281f2ecdfad64592be16b26f42"
+      },
+      "sections": {
+        "security": "security",
+        "correctness": "correctness"
+      },
+      "arguments": {
+        "security": "scheme-security",
+        "correctness": "scheme-correctness"
+      },
+      "graph_models": {
+        "ntruprime-20200927-hybrid-classical-free-memory-v1": {
+          "section_id": "attack",
+          "metric": "classical",
+          "kind": "heuristic-reference",
+          "assumption_ids": [
+            "ntru-hybrid-attack-model"
+          ],
+          "argument_id": "ntruprime-20200927-hybrid-classical-free-memory-v1"
+        },
+        "ram-ntru-fixed-weight-input-enumeration-v1": {
+          "section_id": "ram-ntru-fixed-weight-input-enumeration-v1",
+          "metric": "ram",
+          "kind": "explicit-attack-work-upper-bound",
+          "assumption_ids": [],
+          "argument_id": "ram-ntru-fixed-weight-input-enumeration-v1"
+        }
+      }
+    },
+    {
+      "scheme_id": "teaching-dh-kem",
+      "version": "7",
+      "note": {
+        "id": "curated:display-evidence-teaching-dh-kem-7",
+        "revision": 3,
+        "content_sha256": "cec22ec5c6dc184c6899dcc488e3133c616c528aafc3101bdcbffcfc6b0abe2f"
+      },
+      "sections": {
+        "security": "security",
+        "correctness": "correctness"
+      },
+      "arguments": {
+        "security": "scheme-security",
+        "correctness": "scheme-correctness"
+      },
+      "graph_models": {
+        "dh-interval-rho-nfs-v1": {
+          "section_id": "attack",
+          "metric": "classical",
+          "kind": "heuristic-reference",
+          "assumption_ids": [],
+          "argument_id": "dh-interval-rho-nfs-v1"
+        },
+        "shor-polynomial-quantum-v1": {
+          "section_id": "quantum",
+          "metric": "quantum",
+          "kind": "qualitative",
+          "assumption_ids": [],
+          "argument_id": "shor-polynomial-quantum-v1"
+        },
+        "ram-interval-bsgs-v1": {
+          "section_id": "ram-interval-bsgs-v1",
+          "metric": "ram",
+          "kind": "explicit-attack-work-upper-bound",
+          "assumption_ids": [],
+          "argument_id": "ram-interval-bsgs-v1"
+        }
+      }
+    }
+  ]
+}

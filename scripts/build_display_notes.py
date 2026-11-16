@@ -251,8 +251,12 @@ def append_revision(workspace, identifier, content, *, now=None):
             metadata = revision.get("extensions", {}).get("display_evidence", {})
             if metadata.get("generator") != GENERATOR:
                 raise ValueError("Refusing existing note ID collision: " + identifier)
-        if content_hash(existing["revisions"][-1]) == content_hash(content):
-            return existing["revisions"][-1]
+        # A later authored dossier may use this exact immutable compilation as
+        # its source. Rebuilding that source must not append it over the dossier.
+        matching = next((revision for revision in existing["revisions"]
+                         if content_hash(revision) == content_hash(content)), None)
+        if matching is not None:
+            return matching
     else:
         existing = {"id": identifier, "revisions": []}
         workspace["notes"].append(existing)

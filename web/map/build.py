@@ -6,7 +6,29 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent
-CONTENT_FIELDS = {'title', 'claim', 'conditions', 'body', 'tags', 'kind', 'references', 'artifacts', 'extensions'}
+CONTENT_FIELDS = {'title', 'claim', 'conditions', 'body', 'sections', 'statements', 'arguments',
+                  'tags', 'kind', 'references', 'artifacts', 'extensions'}
+
+
+def validate_citation(reference, sources):
+    if not isinstance(reference, dict):
+        raise ValueError('A citation must be a bounded source record.')
+    if 'id' in reference:
+        if not isinstance(reference['id'], str) or sources.get(reference['id']) != reference:
+            raise ValueError('Note source metadata must match the source registry.')
+        return
+    if (set(reference) != {'title', 'url'} or not isinstance(reference['title'], str)
+            or not reference['title'].strip() or len(reference['title']) > 500
+            or not isinstance(reference['url'], str) or not 1 <= len(reference['url']) <= 2048
+            or any(ord(char) <= 32 or ord(char) == 127 for char in reference['url'])):
+        raise ValueError('An unregistered citation needs a bounded title and HTTPS URL.')
+    try:
+        url = urlparse(reference['url'])
+        if (url.scheme != 'https' or not url.hostname or url.username or url.password
+                or url.port is not None and not 1 <= url.port <= 65535):
+            raise ValueError
+    except ValueError:
+        raise ValueError('An unregistered citation needs a valid HTTPS URL.') from None
 
 
 def content_hash(revision):
@@ -46,8 +68,7 @@ def validate_notes(workspace, data):
             if not set(metadata['scheme_ids']) <= ids:
                 raise ValueError('A note links to an unknown scheme.')
             for reference in revision['references']:
-                if sources.get(reference['id']) != reference:
-                    raise ValueError('Note source metadata must match the source registry.')
+                validate_citation(reference, sources)
             revisions[note['id'], number] = revision
     if len((json.dumps(workspace, ensure_ascii=False, indent=2) + '\n').encode()) > 2 * 1024 * 1024:
         raise ValueError('Notes must remain portable within the global workspace bound.')

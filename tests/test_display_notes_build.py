@@ -43,6 +43,18 @@ def test_existing_unrelated_identity_is_never_adopted():
     assert workspace == before
 
 
+def test_rebuilding_an_exact_source_does_not_replace_its_later_authored_dossier():
+    workspace = {"notes": []}
+    original = builder.append_revision(workspace, "fixture", content(), now=10)
+    dossier = builder.append_revision(workspace, "fixture", content("A later authored dossier."), now=20)
+    before = deepcopy(workspace)
+    assert builder.append_revision(workspace, "fixture", content(), now=30) is original
+    assert workspace == before and workspace["notes"][0]["revisions"][-1] is dossier
+    changed = builder.append_revision(workspace, "fixture", content("New source evidence."), now=40)
+    assert changed["revision"] == 3 and changed["createdAt"] == 40
+    assert workspace["notes"][0]["revisions"][:2] == before["notes"][0]["revisions"]
+
+
 def test_profile_projection_preserves_absence_null_and_exact_large_integers():
     profiles = [{"id": "a", "parameters": {"p": 2**90}, "stage_context": None},
                 {"id": "b", "parameters": {"p": 2**90}}]
