@@ -10,6 +10,7 @@ from uuid import UUID
 
 ROOT = Path(__file__).resolve().parent.parent
 APPROVED_BETA_RELEASES = ROOT / "crucible" / "data" / "approved_beta_releases.json"
+HOSTED_NOTE_PRESENTATIONS = ROOT / "crucible" / "data" / "scheme_note_bindings.json"
 
 
 def approved_beta_releases() -> tuple[str, ...]:
@@ -274,10 +275,14 @@ def load_settings() -> Settings:
     github_enabled = os.getenv("CRUCIBLE_GITHUB_ENABLED", "false")
     if github_enabled not in {"true", "false"}:
         raise RuntimeError("CRUCIBLE_GITHUB_ENABLED must be true or false.")
+    # The reviewed, read-only corpus travels with the production image. An
+    # explicit empty override disables it; local trial configuration stays opt-in.
+    note_presentations = os.getenv("CRUCIBLE_NOTE_PRESENTATION_BINDINGS",
+                                   str(HOSTED_NOTE_PRESENTATIONS) if production else "") or None
     return Settings(database_url=database_url, secret=secret, origins=origins, production=production,
                     local_note_corpus_only=local_notes == "true",
                     local_note_bindings_path=str(data_dir / "scheme-note-bindings.json") if local_notes == "true" else None,
-                    note_presentation_bindings_path=os.getenv("CRUCIBLE_NOTE_PRESENTATION_BINDINGS"),
+                    note_presentation_bindings_path=note_presentations,
                     reviewer_ids=reviewers, allow_self_review=self_review == "true",
                     access_mode=os.getenv("CRUCIBLE_ACCESS_MODE", "beta" if production else "open"),
                     access_admin_ids=admins,

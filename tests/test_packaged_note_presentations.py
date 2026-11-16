@@ -4,13 +4,16 @@ Run this suite in the reviewed Linux image with the candidate source installed.
 It creates only a disposable test database, never imports fixture publications,
 and never replaces registry manifests or bypasses implementation verification.
 """
+import base64
+from dataclasses import replace
 import json
+import os
 from pathlib import Path
 from uuid import uuid4
 
 from crucible import beta_access, notebook, registry
 from crucible.app import create_app
-from crucible.config import Settings
+from crucible.config import load_settings
 from crucible.db import User
 from test_note_presentations import Actor, ORIGIN
 
@@ -18,12 +21,20 @@ from test_note_presentations import Actor, ORIGIN
 ROOT = Path(notebook.__file__).resolve().parents[1]
 
 
-def test_all_eight_packaged_hosted_bindings_have_exact_context_and_native_accounts(tmp_path):
+def test_all_eight_packaged_hosted_bindings_have_exact_context_and_native_accounts(tmp_path, monkeypatch):
     path = ROOT / "crucible/data/scheme_note_bindings.json"
     manifest = json.loads(path.read_text())
-    settings = Settings(f"sqlite:///{tmp_path / 'read-only-release-check.db'}", b"t" * 32,
-        production=True, access_mode="beta", origins=(ORIGIN,), rate_limits=False,
-        note_presentation_bindings_path=str(path))
+    for name in tuple(os.environ):
+        if name in {"DATABASE_URL", "OPENAI_API_KEY"} or name.startswith("CRUCIBLE_"):
+            monkeypatch.delenv(name)
+    monkeypatch.setenv("CRUCIBLE_ENV", "production")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://native-check-only.invalid/test")
+    monkeypatch.setenv("CRUCIBLE_SECRET", base64.b64encode(b"t" * 32).decode())
+    monkeypatch.setenv("CRUCIBLE_ORIGIN", ORIGIN)
+    # Exercise production defaults, then use only a disposable local database.
+    settings = replace(load_settings(), rate_limits=False,
+                       database_url=f"sqlite:///{tmp_path / 'read-only-release-check.db'}")
+    assert settings.note_presentation_bindings_path == str(path)
     app = create_app(settings, clock=lambda: 3600600.0, initialize=True)
     try:
         identifier = str(uuid4())

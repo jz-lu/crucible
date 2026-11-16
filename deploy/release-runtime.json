@@ -779,7 +779,7 @@
     "crucible/bounties.py": "209c2eca49beb2ddf1a59caceade6642e62d2c87c217282f8d593f53d42c09c0",
     "crucible/bounty_allowance.py": "854d9edd06704daed73233868913232f68556c0f4163da0e601be0a261675d0b",
     "crucible/bounty_models.py": "78af4ef87fcef3644435c38fcef583af55bc937e89f6d61652327e6ba3d30fc0",
-    "crucible/config.py": "18caaaa7108f68cb780d109881a8e74cd04e6131ee233469759ec4dad8edff25",
+    "crucible/config.py": "67f3d03e0dcbe957034674f913f58d5784047c858fb33060e1b2720ea542f6b8",
     "crucible/data/approved_beta_releases.json": "d866a822cb468ac8284a941ba797ac1c87a2d94175c305dca08af41ebd67fe0a",
     "crucible/data/display_evidence/1810c55c7d211c5cc364341589a5375903ee7de41f4d990d76326eac1ab19af7.json": "1810c55c7d211c5cc364341589a5375903ee7de41f4d990d76326eac1ab19af7",
     "crucible/data/display_evidence/5c3fe87412f7908761f3db856dfa9299857901199f9c57c5a33269ca65b77389.json": "5c3fe87412f7908761f3db856dfa9299857901199f9c57c5a33269ca65b77389",

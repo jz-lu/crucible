@@ -30,6 +30,11 @@ Reviewed additions and changes
   trial. Exact curated/published note pins, canonical field hashes, member and
   notes:read boundaries are enforced. Missing or withdrawn sources fail closed.
   The setting cannot publish a note, select an argument or create a persona.
+  Production loads the reviewed packaged binding by default; no provider edit
+  is required for the launch. CRUCIBLE_NOTE_PRESENTATION_BINDINGS can select an
+  explicit absolute binding or disable it with an empty value. Development keeps
+  its existing opt-in behavior. The native presentation gate exercises the real
+  production configuration loader without that environment override.
 * statement_workflow.py contains canonical content validation and the explicitly
   local trial. Hosted mutation routes remain unregistered. The preview launcher
   and fixture builders refuse production/network-database settings and preserve

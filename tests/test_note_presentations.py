@@ -12,7 +12,7 @@ from sqlalchemy import select
 
 from crucible import beta_access, display_notes, notebook, registry
 from crucible.app import create_app
-from crucible.config import Settings, load_settings
+from crucible.config import HOSTED_NOTE_PRESENTATIONS, Settings, load_settings
 from crucible.db import LoginSession, User
 from crucible.machine_auth import MachineToken
 from crucible.security import mac, token_hash
@@ -218,7 +218,7 @@ def test_beta_membership_and_revocation_protect_both_readers(hosted):
     assert not any(reader.client.get("/api/session").json()["capabilities"].values())
 
 
-def test_hosted_configuration_is_explicit_and_does_not_relax_local_guards(hosted, tmp_path, monkeypatch):
+def test_hosted_configuration_uses_reviewed_package_and_preserves_local_guards(hosted, tmp_path, monkeypatch):
     app, _, _, _, manifest, _, _ = hosted
     with pytest.raises(RuntimeError, match="development-only"):
         replace(app.state.settings, local_note_corpus_only=True)
@@ -238,3 +238,10 @@ def test_hosted_configuration_is_explicit_and_does_not_relax_local_guards(hosted
     assert settings.note_presentation_bindings_path == str(manifest)
     assert settings.note_justifications_available and not settings.local_note_corpus_only
     assert settings.local_note_bindings_path is None
+    monkeypatch.delenv("CRUCIBLE_NOTE_PRESENTATION_BINDINGS")
+    assert load_settings().note_presentation_bindings_path == str(HOSTED_NOTE_PRESENTATIONS)
+    monkeypatch.setenv("CRUCIBLE_NOTE_PRESENTATION_BINDINGS", "")
+    assert load_settings().note_presentation_bindings_path is None
+    monkeypatch.delenv("CRUCIBLE_NOTE_PRESENTATION_BINDINGS")
+    monkeypatch.setenv("CRUCIBLE_ENV", "development")
+    assert load_settings().note_presentation_bindings_path is None
