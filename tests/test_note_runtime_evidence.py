@@ -33,3 +33,18 @@ def test_runtime_refresh_refuses_changed_scientific_claim(field, value):
     new["releases"]["example@1"]["estimates"][0][field] = value
     with pytest.raises(ValueError, match="Numerical accounts"):
         evidence.require_unchanged_accounts(old, new)
+
+
+def test_evidence_generation_blocks_database_connections_and_restores_methods():
+    import sqlite3
+    import psycopg
+    from sqlalchemy.engine import Engine
+
+    before = sqlite3.connect, Engine.connect, psycopg.connect
+    with evidence.no_database_connections():
+        for connect in (sqlite3.connect, sqlite3.dbapi2.connect, psycopg.connect):
+            with pytest.raises(RuntimeError, match="must not open a database"):
+                connect("unused")
+        with pytest.raises(RuntimeError, match="must not open a database"):
+            Engine.connect(None)
+    assert (sqlite3.connect, Engine.connect, psycopg.connect) == before

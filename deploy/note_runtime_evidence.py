@@ -6,6 +6,7 @@ Only the separate output directory is written. No application, database, mail,
 model API, registry credential or hosted account is used by this process.
 """
 import argparse
+from contextlib import contextmanager
 from copy import deepcopy
 import hashlib
 import importlib.util
@@ -42,6 +43,28 @@ def require_unchanged_accounts(before, after):
     if original != generated:
         raise ValueError("Numerical accounts, parameters, assumptions or model evidence changed")
     return changes
+
+
+@contextmanager
+def no_database_connections():
+    """Allow model declarations, but fail before any database connection."""
+    import sqlite3
+    from sqlalchemy.engine import Engine
+    import psycopg
+
+    def refused(*args, **kwargs):
+        raise RuntimeError("Scientific evidence generation must not open a database")
+
+    boundaries = [(Engine, "connect"), (Engine, "raw_connection"),
+                  (sqlite3, "connect"), (sqlite3.dbapi2, "connect"), (psycopg, "connect")]
+    original = [(target, name, getattr(target, name)) for target, name in boundaries]
+    try:
+        for target, name in boundaries:
+            setattr(target, name, refused)
+        yield
+    finally:
+        for target, name, value in reversed(original):
+            setattr(target, name, value)
 
 
 def generate(source, output, revision):
@@ -99,7 +122,10 @@ def generate(source, output, revision):
         if not checked:
             raise ValueError("The generated exact release did not validate")
         points += len(checked["estimates"])
-    if {"crucible.app", "crucible.db", "crucible.config"} & sys.modules.keys():
+    # Canonical Statement declarations import db.Base; that does not initialize
+    # application state. The surrounding connection guard checks the actual I/O
+    # boundary instead of confusing a data-model import with a database write.
+    if {"crucible.app", "crucible.config"} & sys.modules.keys():
         raise ValueError("Evidence generation unexpectedly initialized application state")
     receipt = {"format": "crucible-note-runtime-evidence-v1", "source_revision": revision,
         "runtime_image": contract["app_base"], "runtime_config": contract["app_base_config"],
@@ -121,4 +147,5 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--revision", required=True)
     args = parser.parse_args()
-    generate(args.source, args.output, args.revision)
+    with no_database_connections():
+        generate(args.source, args.output, args.revision)
