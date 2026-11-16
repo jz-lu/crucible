@@ -1,0 +1,21 @@
+{
+  "accepted_heads": [
+    "0031",
+    "0032",
+    "0033"
+  ],
+  "baseline_head": "0031",
+  "baseline_source": "f9719ab5d3a4a99d7040e7d2d83ebc83608dc946",
+  "expansion_source": "618c707deeea94ee933ad799495111d575aa616f",
+  "files": {
+    "migrations/versions/0032_signup_links.py": {
+      "copy": "docs/schema-bridge/0032_signup_links.py",
+      "sha256": "b0719a95d5fbaa182451499784903db2395bfe7e00678c4bfdda01539629b80c"
+    },
+    "migrations/versions/0033_statement_workflow_trial.py": {
+      "copy": "docs/schema-bridge/0033_statement_workflow_trial.py",
+      "sha256": "ce0d98462a1d501611a3d7d660dcf64e875e868e24bb49cc886a3df62f98206f"
+    }
+  },
+  "format": "crucible-schema-bridge-expansion-v1"
+}

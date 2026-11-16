@@ -42,6 +42,8 @@ def system(tmp_path, monkeypatch):
         mail_backend="local", mail_outbox_dir=str(tmp_path / "outbox"), mail_from="test@example.org")
     now = [3_600_600.0]
     app = create_app(settings, clock=lambda: now[0], initialize=True)
+    from schema_bridge_fixtures import mark_metadata_fixture
+    mark_metadata_fixture(app.state.db.engine)
     state = SimpleNamespace(app=app, db=app.state.db, settings=settings, now=now, calls=[],
         profile={"id": 123456, "login": "github-person", "type": "User", "email": "ignored@example.org"},
         token={"access_token": ACCESS, "token_type": "bearer", "scope": ""}, response_override=None)

@@ -15,12 +15,14 @@ from sqlalchemy import func, select
 from crucible import beta_access as beta
 from crucible.db import Base, Database, LoginSession, User
 from crucible.machine_auth import DeviceConnection, MachineToken
+from schema_bridge_fixtures import mark_metadata_fixture
 
 
 @pytest.fixture
 def beta_system(tmp_path):
     db = Database(f"sqlite:///{tmp_path / 'beta.db'}")
     Base.metadata.create_all(db.engine)
+    mark_metadata_fixture(db.engine)
     users = {name: str(uuid4()) for name in ("admin", "alice", "bob")}
     now = [1_000_000.0]
     settings = SimpleNamespace(access_mode="beta", access_admin_ids=(users["admin"],),

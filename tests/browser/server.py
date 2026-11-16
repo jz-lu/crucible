@@ -22,6 +22,7 @@ from crucible.config import Settings
 from crucible.db import LoginSession, User
 from crucible.security import passwords, token_hash
 import uvicorn
+from sqlalchemy import text
 
 ORIGIN = "http://127.0.0.1:8029"
 PASSWORD = "Synthetic browser fixture password"
@@ -46,6 +47,9 @@ def main():
                             github_login_enabled=True, github_client_id="synthetic-browser-client",
                             github_client_secret="synthetic-browser-provider-secret")
         app = create_app(settings, initialize=True)
+        with app.state.db.engine.begin() as connection:
+            connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL PRIMARY KEY)"))
+            connection.execute(text("INSERT INTO alembic_version VALUES ('0031')"))
         # Browser tests intercept the provider navigation. The application still
         # performs its real state/binding/session checks; no external token call.
         def fixture_identity(_settings, code, _verifier):

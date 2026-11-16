@@ -16,6 +16,7 @@ from crucible.config import Settings
 from crucible.db import Challenge, LoginSession, User
 from crucible.security import passwords, token_hash
 from test_api import Actor
+from schema_bridge_fixtures import mark_metadata_fixture
 
 PASSWORD = "a separate beta testing password"
 
@@ -28,6 +29,7 @@ def private_app(tmp_path):
         mail_backend="local", mail_outbox_dir=str(tmp_path / "outbox"),
         mail_from="beta@example.org", rate_limits=False)
     app = create_app(settings, clock=lambda:now[0], initialize=True)
+    mark_metadata_fixture(app.state.db.engine)
     encoded = passwords.hash(PASSWORD)
     with app.state.db.transaction(write=True) as session:
         for identifier, handle in ((admin_id,"operator"),(member_id,"participant")):

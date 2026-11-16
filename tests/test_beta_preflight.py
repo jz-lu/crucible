@@ -143,7 +143,7 @@ def platform_database(tmp_path):
     Base.metadata.create_all(db.engine)
     with db.engine.begin() as connection:
         connection.execute(text("CREATE TABLE alembic_version (version_num TEXT)"))
-        connection.execute(text("INSERT INTO alembic_version VALUES ('fixture')"))
+        connection.execute(text("INSERT INTO alembic_version VALUES ('0031')"))
     yield db
     db.engine.dispose()
 
@@ -162,14 +162,14 @@ def test_preflight_checks_additional_candidates_absent_from_saved_table(settings
     configured = replace(settings, reviewer_ids=(), access_admin_ids=())
     with db.engine.connect() as connection:
         before = connection.execute(text("SELECT * FROM adapter_versions")).all()
-        rows = check.inspect_database(connection, configured, ["fixture"], pins)
+        rows = check.inspect_database(connection, configured, ["0031"], pins)
         assert next(row for row in rows if row["check"] == "historical_implementation_pins")["status"] == "fail"
         assert connection.execute(text("SELECT * FROM adapter_versions")).all() == before
         assert connection.execute(text("SELECT COUNT(*) FROM implementation_builds")).scalar_one() == 0
         # A genuinely original release with no history retains the old empty
         # fixture policy; preflight still does not establish a saved baseline.
         pins[("new-kem", "v1")] = runtime_pin(*CANDIDATE)
-        rows = check.inspect_database(connection, configured, ["fixture"], pins)
+        rows = check.inspect_database(connection, configured, ["0031"], pins)
         assert all(row["status"] == "pass" for row in rows)
         assert connection.execute(text("SELECT * FROM adapter_versions")).all() == before
 
@@ -179,7 +179,7 @@ def test_preflight_unknown_marker_fails_even_with_empty_history(settings, platfo
     from test_implementation_builds import ORIGINAL
     with platform_database.engine.connect() as connection:
         rows = check.inspect_database(connection, replace(settings, reviewer_ids=(), access_admin_ids=()),
-            ["fixture"], {("fixture-kem", "v1"): runtime_pin(*ORIGINAL, admission=marker)})
+            ["0031"], {("fixture-kem", "v1"): runtime_pin(*ORIGINAL, admission=marker)})
         assert next(row for row in rows if row["check"] == "historical_implementation_pins")["status"] == "fail"
         assert connection.execute(text("SELECT COUNT(*) FROM adapter_versions")).scalar_one() == 0
 
@@ -193,7 +193,7 @@ def test_preflight_additional_marker_does_not_take_matching_original_pair_shortc
     with platform_database.engine.connect() as connection:
         before = connection.execute(text("SELECT * FROM adapter_versions")).all()
         rows = check.inspect_database(connection, replace(settings, reviewer_ids=(), access_admin_ids=()),
-            ["fixture"], {("fixture-kem", "v1"): runtime_pin(*ORIGINAL, admission=admission())})
+            ["0031"], {("fixture-kem", "v1"): runtime_pin(*ORIGINAL, admission=admission())})
         assert next(row for row in rows if row["check"] == "historical_implementation_pins")["status"] == "fail"
         assert connection.execute(text("SELECT * FROM adapter_versions")).all() == before
 
@@ -205,7 +205,7 @@ def test_database_reports_schema_membership_and_platform_conflicts(settings):
     with engine.begin() as connection:
         for statement in (
             "CREATE TABLE alembic_version (version_num TEXT)",
-            "INSERT INTO alembic_version VALUES ('0019')",
+            "INSERT INTO alembic_version VALUES ('0031')",
             "CREATE TABLE users (id TEXT PRIMARY KEY)",
             "CREATE TABLE beta_memberships (user_id TEXT, status TEXT)",
             "CREATE TABLE account_states (user_id TEXT, suspended_at REAL)",
@@ -221,22 +221,22 @@ def test_database_reports_schema_membership_and_platform_conflicts(settings):
         rows = check.inspect_database(connection, settings, ["different-head"], None)
         assert len(rows) == 1 and rows[0]["status"] == "fail"
         pins = {("example", "1"): runtime_pin("source", "linux-artifact")}
-        rows = check.inspect_database(connection, settings, ["0019"], pins)
+        rows = check.inspect_database(connection, settings, ["0031"], pins)
         assert [row["check"] for row in rows if row["status"] == "fail"] == ["historical_implementation_pins"]
         connection.execute(text("INSERT INTO account_states VALUES (:id, 1)"), {"id": REVIEWER})
         connection.execute(text("UPDATE beta_memberships SET status = 'revoked' WHERE user_id = :id"), {"id": ADMIN})
         pins[("example", "1")] = runtime_pin("source", "mac-artifact")
-        rows = check.inspect_database(connection, settings, ["0019"], pins)
+        rows = check.inspect_database(connection, settings, ["0031"], pins)
         assert {row["check"] for row in rows if row["status"] == "fail"} == {"reviewer_membership", "administrator_membership"}
         assert connection.execute(text("SELECT * FROM adapter_versions")).all() == before
-        assert check.inspect_database(connection, settings, ["0019"], None)[-1]["status"] == "not_checked"
+        assert check.inspect_database(connection, settings, ["0031"], None)[-1]["status"] == "not_checked"
         connection.execute(text("INSERT INTO challenges VALUES ('legacy', '0', :manifest)"), {
             "manifest": json.dumps({"implementation": {"source_sha256": "old-source", "artifact_sha256": "old-artifact"}})})
         pins[("legacy", "0")] = runtime_pin("old-source", "new-artifact")
-        rows = check.inspect_database(connection, settings, ["0019"], pins)
+        rows = check.inspect_database(connection, settings, ["0031"], pins)
         assert rows[-1]["check"] == "legacy_challenge_implementations" and rows[-1]["status"] == "fail"
         pins[("legacy", "0")] = runtime_pin("old-source", "old-artifact")
-        assert check.inspect_database(connection, settings, ["0019"], pins)[-1]["status"] == "pass"
+        assert check.inspect_database(connection, settings, ["0031"], pins)[-1]["status"] == "pass"
     engine.dispose()
 
 
@@ -275,7 +275,7 @@ def test_database_checks_reviewed_builds_without_finishing_outer_transaction(set
     Base.metadata.create_all(db.engine)
     with db.engine.begin() as connection:
         connection.execute(text("CREATE TABLE alembic_version (version_num TEXT)"))
-        connection.execute(text("INSERT INTO alembic_version VALUES ('0020')"))
+        connection.execute(text("INSERT INTO alembic_version VALUES ('0031')"))
     with db.transaction(write=True) as session:
         session.add(AdapterVersion(scheme_id="fixture-kem", version="v1", source_sha256=ORIGINAL[0],
                                    artifact_sha256=ORIGINAL[1], created_at=1))
@@ -295,7 +295,7 @@ def test_database_checks_reviewed_builds_without_finishing_outer_transaction(set
             before = connection.execute(text("SELECT * FROM adapter_versions")).all()
             implementation = runtime_pin(*CANDIDATE, **({"admission": admission()} if marked else {}))
             rows = check.inspect_database(connection, replace(settings, reviewer_ids=(), access_admin_ids=()),
-                                          ["0020"], {("fixture-kem", "v1"): implementation})
+                                          ["0031"], {("fixture-kem", "v1"): implementation})
             assert next(row for row in rows if row["check"] == "historical_implementation_pins")["status"] == expected
             assert outer.is_active and connection.in_transaction()
             assert connection.execute(text("SELECT id FROM users WHERE id='sentinel'")).scalar_one() == "sentinel"

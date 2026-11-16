@@ -94,7 +94,7 @@ class AppPlatformIngress:
 
 
 def create_app():
-    """Explicit hosting-only factory; no database or implementation admission."""
+    """Explicit hosting-only factory; read-only bridge compatibility guard."""
     # Refuse accidental local invocation before configuration loading can create
     # development directories, a server key, or touch any database settings.
     if (os.environ.get("CRUCIBLE_ENV") != "production"
@@ -103,10 +103,18 @@ def create_app():
     from .config import load_settings
     from .app import create_app as application
     from .publication_screening_supervisor import enabled_from_environment, install
+    from .db import Database
+    from .schema_bridge import schema_head
 
     worker_enabled = enabled_from_environment()
     settings = load_settings()
     if not settings.production or settings.access_mode != "beta" or len(settings.origins) != 1:
         raise RuntimeError("This entry point requires an explicitly configured production beta.")
+    database = Database(settings.database_url)
+    try:
+        with database.engine.connect() as connection:
+            schema_head(connection, full=True)
+    finally:
+        database.engine.dispose()
     app = install(application(settings), settings, enabled=worker_enabled)
     return AppPlatformIngress(app, settings.origins[0])

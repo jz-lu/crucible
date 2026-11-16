@@ -54,6 +54,7 @@ jobs:
           tests/test_beta_invitations.py
           tests/test_beta_operator.py
           tests/test_beta_preflight.py
+          tests/test_schema_bridge.py
           tests/test_beta_release_policy.py
           tests/test_beta_migration.py
           tests/test_beta_transfer.py
@@ -244,7 +245,7 @@ jobs:
       - name: Compare metadata queries, profile grants and stable note-number recovery
         env:
           CRUCIBLE_NOTEBOOK_PG_CONTAINER: ${{ job.services.postgres.id }}
-        run: python -m pytest -q tests/test_metadata_relations.py tests/test_researcher_profiles_postgresql.py tests/test_notebook_numbers_postgresql.py tests/test_resource_publications_postgresql.py tests/test_bounties_postgresql.py tests/test_publication_screening_postgresql.py
+        run: python -m pytest -q tests/test_metadata_relations.py tests/test_researcher_profiles_postgresql.py tests/test_notebook_numbers_postgresql.py tests/test_resource_publications_postgresql.py tests/test_bounties_postgresql.py tests/test_publication_screening_postgresql.py tests/test_schema_bridge_postgresql.py
       - name: State verification boundary
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'

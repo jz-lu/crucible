@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
 from crucible.config import load_settings
-from crucible import implementation_builds
+from crucible import implementation_builds, schema_bridge
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -87,10 +87,16 @@ def inspect_runtime(releases):
 
 def inspect_database(connection, settings, heads, runtime_pins):
     """Called only inside a PostgreSQL READ ONLY transaction with timeouts."""
-    actual = set(connection.execute(text("SELECT version_num FROM alembic_version")).scalars())
-    if actual != set(heads):
-        return [result("database_schema", "fail", "Database schema does not match this checkout's migration head.")]
-    checks = [result("database_schema", "pass", "Database schema matches this checkout's migration head.")]
+    # This exception is owned by the temporary bridge release, not provider
+    # configuration. Its active Alembic head remains 0031; final source keeps
+    # the ordinary exact-0033 requirement. Never auto-upgrade either checkout.
+    try:
+        if set(heads) != {schema_bridge.BASELINE_HEAD}:
+            raise schema_bridge.SchemaBridgeError("Bridge migration source must remain at 0031.")
+        head = schema_bridge.schema_head(connection, full=True)
+    except schema_bridge.SchemaBridgeError as error:
+        return [result("database_schema", "fail", str(error))]
+    checks = [result("database_schema", "pass", "Reviewed bridge accepts intact schema " + head + ".")]
     for label, identifiers in (("reviewer_membership", settings.reviewer_ids),
                                ("administrator_membership", settings.access_admin_ids)):
         if not identifiers:

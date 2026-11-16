@@ -15,6 +15,7 @@ from crucible.beta_access import (AccountState, BetaInvitation, BetaMembership, 
                                  invalidate_invitation, invitation_status, set_membership, set_suspension)
 from crucible.config import load_settings
 from crucible.db import Database, User
+from crucible.schema_bridge import launch_link_status
 
 
 def main(argv=None):
@@ -33,14 +34,20 @@ def main(argv=None):
         command.add_argument("handle")
         command.add_argument("--reason", required=True)
     sub.add_parser("list", help="List stable account IDs and current membership")
+    sub.add_parser("launch-link-status", help="Read the one-off launch campaign status; never output or create a token")
+    close_launch = sub.add_parser("close-launch-link", help="Permanently close the launch window; joined accounts keep access")
+    close_launch.add_argument("--reason", required=True)
     args = parser.parse_args(argv)
     settings = load_settings()
     db = Database(settings.database_url)
     try:
         if hasattr(args, "reason") and (not args.reason.strip() or len(args.reason) > 500):
             raise ValueError("Supply a reason between 1 and 500 characters.")
-        with db.transaction(write=args.action not in {"list", "invitations"}) as session:
-            if args.action == "invite":
+        with db.transaction(write=args.action not in {"list", "invitations", "launch-link-status"}) as session:
+            if args.action in {"launch-link-status", "close-launch-link"}:
+                result = launch_link_status(session, time.time(), close_reason=
+                    "Operator: " + args.reason if args.action == "close-launch-link" else None)
+            elif args.action == "invite":
                 invitation, link = create_invitation(session, settings, args.email, time.time())
                 result = {"id": invitation.id, "expires_at": invitation.expires_at, "invitation_url": link}
             elif args.action == "invitations":

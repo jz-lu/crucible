@@ -19,6 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from .db import Base, LoginSession, User
 from .mail_delivery import DeliveryUnavailable, send_verification
 from .security import token_hash
+from . import schema_bridge
 
 INVITATION_SECONDS = 7 * 86400
 VERIFICATION_SECONDS = 600
@@ -197,15 +198,28 @@ def invitation_error(status="unavailable"):
         "message": messages.get(code, "This invitation is unavailable. Sign in if you have already joined, or contact your inviter for a new link.")})
 
 
+def _invitation_source(session, invitation_id):
+    try:
+        return schema_bridge.invitation_source(session, invitation_id)
+    except schema_bridge.SchemaBridgeError:
+        raise HTTPException(503, "Access checks are temporarily unavailable. Please retry shortly.") from None
+
+
 def _find_invitation(session, token, *, lock=False):
     if not isinstance(token, str) or not _INVITATION.fullmatch(token):
         raise invitation_error()
     query = select(BetaInvitation).where(BetaInvitation.token_hash == token_hash(token))
-    if lock:
-        query = query.with_for_update().execution_options(populate_existing=True)
     invitation = session.scalar(query)
     if invitation is None:
         raise invitation_error()
+    if lock:
+        # Match the new issuer/closure lock order: parent campaign, then child.
+        source = _invitation_source(session, invitation.id)
+        if source is not None and schema_bridge.signup_parent(session, source, lock=True) is None:
+            raise invitation_error()
+        invitation = session.scalar(query.with_for_update().execution_options(populate_existing=True))
+        if invitation is None:
+            raise invitation_error()
     return invitation
 
 
@@ -214,6 +228,9 @@ def validate_registration_invitation(session, token, now, *, lock=False):
     status = invitation_status(invitation, now)
     if status != "available":
         raise invitation_error(status)
+    source = _invitation_source(session, invitation.id)
+    if source is not None and schema_bridge.signup_status(schema_bridge.signup_parent(session, source), now) != "available":
+        raise invitation_error()
     return invitation
 
 
@@ -300,6 +317,8 @@ def _code_mac(settings, invitation_id, user_id, code):
 
 def _check_regrant(session, user, invitation):
     membership = session.get(BetaMembership, user.id, populate_existing=True)
+    if membership and membership.status == "revoked" and _invitation_source(session, invitation.id) is not None:
+        raise HTTPException(403, "This signup link cannot restore revoked access. Contact the operator.")
     if membership and membership.status == "revoked" and invitation.created_at <= membership.updated_at:
         raise HTTPException(403, "Access was revoked after this invitation was created. Request a new invitation.")
 

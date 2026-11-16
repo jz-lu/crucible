@@ -523,6 +523,13 @@
       "test_scheme_projections.py",
       "test_math_assets.py"
     ],
+    "publication-adoption": [
+      "test_publication_screening_adoption.py",
+      "test_publication_screening_retry.py"
+    ],
+    "publication-cancellation": [
+      "test_notebook_publication_cancellation.py"
+    ],
     "publication-screening": [
       "test_publication_screening_policy.py",
       "test_publication_screening_provider.py",
@@ -535,13 +542,6 @@
       "test_publication_screening_queue.py",
       "test_publication_screening_database.py",
       "test_publication_screening_supervisor.py"
-    ],
-    "publication-cancellation": [
-      "test_notebook_publication_cancellation.py"
-    ],
-    "publication-adoption": [
-      "test_publication_screening_adoption.py",
-      "test_publication_screening_retry.py"
     ],
     "records": [
       "test_milestones.py"
@@ -766,7 +766,8 @@
   "retained_backup_config": "sha256:5bbaba546a20bbcf8aae1e6efe000d6b22cad6cef9775b8092abfaa7afa8deee",
   "retained_backup_image": "registry.digitalocean.com/crucible-beta/backup@sha256:491572468a1654fb241ab50d2c36f0b34bfb685df308104739dd8fd7ff1b9ac7",
   "reviewed_overlay_files": {
-    "crucible/app_platform.py": "7599115606516508a61cb1402de69fcdcef5c9475212034d1b176eda32ded6f4",
+    "crucible/app_platform.py": "03b79728c2addf375fbb442607c9ad09c48eae6e899dc28e22a6930f1adbd163",
+    "crucible/beta_access.py": "8ec376530613a880c87d24d4b6385f4b5e2bcad8df228fbf962858f17332704d",
     "crucible/bounties.py": "209c2eca49beb2ddf1a59caceade6642e62d2c87c217282f8d593f53d42c09c0",
     "crucible/bounty_allowance.py": "854d9edd06704daed73233868913232f68556c0f4163da0e601be0a261675d0b",
     "crucible/bounty_models.py": "78af4ef87fcef3644435c38fcef583af55bc937e89f6d61652327e6ba3d30fc0",
@@ -790,9 +791,14 @@
     "crucible/resource_identity.py": "068fd102a41e924a45e276699c6f816993d585d3b184a79f3a8d78288f59c553",
     "crucible/resource_publications.py": "1a5ceeffcb532f6eb732b5660efc39c11707d79e6f50f2742b7c158f216522bf",
     "crucible/resource_state.py": "da004619bee08456cdfb2968a1604ca42a0a21c8f0200808b2313ef42675ab4b",
+    "crucible/schema_bridge.py": "08ff0d9516568d494e99b447d8ee37327abe5bb73e4551aba9902fadca4d2307",
     "crucible/scoring.py": "bda0f74706433215786ae61d81682afdb0f986e45a18cf1036a6015243359512",
     "crucible/scoring_awards.py": "c898fb4b581fca2b88d2d34f1616e15a46c932d7cd2c117a4f8a9273aa3e04b5",
     "docs/beta-release-policy.txt": "549c69ce412bde8de427c755959450ce0cbaaf87c2c63297468eb864d2375c8a",
+    "docs/schema-bridge/0032_signup_links.py": "b0719a95d5fbaa182451499784903db2395bfe7e00678c4bfdda01539629b80c",
+    "docs/schema-bridge/0033_statement_workflow_trial.py": "ce0d98462a1d501611a3d7d660dcf64e875e868e24bb49cc886a3df62f98206f",
+    "docs/schema-bridge/README.txt": "3f2ac48457301547342769ddbd96258adf83f1962fe5f973bcd0f63d3e907728",
+    "docs/schema-bridge/expansion.json": "7902dde1e7b8926a556573a42ae1c094548c0d099fcffe0860598a39fe498945",
     "migrations/env.py": "cdd84c98ca4eedb4bfef9385742cf573c5c61ea392ee2491875ce1c7a35e19be",
     "migrations/versions/0024_researcher_profiles.py": "669f3cf7e95618cf245dce4d10d0133a085330d920d189958f31be48b49cbf29",
     "migrations/versions/0025_notebook_numbers.py": "852f7b870b75123e21d8e4b063880c9887e59bbb3e2b5331098b5a2d7c06e317",
@@ -802,7 +808,8 @@
     "migrations/versions/0029_admission_lifecycle.py": "6b5397f000a1da985a2022ccfa6cf69490dedc5af1544686dda3ba67202b5c61",
     "migrations/versions/0030_bounty_independent_completion.py": "e56d6579437914073e5e11ab85d8b2743ca9cbc3734e13800d9ff25be40e80e4",
     "migrations/versions/0031_publication_screening.py": "a48d34e66644b06f140f28a24a1e46e59e0082bb4ee69a21f84053ea27b4c4e5",
-    "scripts/beta_preflight.py": "8511519397e79bbfc0e179b77a670507a19c4a558c46a75cd4de80880ed404d3",
+    "scripts/beta_access.py": "9d18bbce540bd865549d6270617bab2f3d808000948e2a1c8efdd4692f9118bb",
+    "scripts/beta_preflight.py": "29df68f108bcb3cae16279e34ee14b242e2a0c54534efad5acec3deddc44be1e",
     "scripts/beta_transfer.py": "fc4a208bb85d4f36fb191e39643863c07ff980decb730ef3b1e1c64b8e3cb735",
     "scripts/estimate_mceliece_candidates.py": "4400bcd8b1113d9d16754c64186e8387e8b70a05280005e4975d959e8fd4e441",
     "scripts/hqc_module_structure_checks.py": "46fdd4ab11948e52d70dffac27a82d39fe6f06ffe915a27519ed7684516a0741",
