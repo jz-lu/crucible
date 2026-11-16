@@ -516,12 +516,22 @@
     "generation-lifecycle": [
       "test_generation_concurrency.py"
     ],
+    "note-presentations": [
+      "test_packaged_note_presentations.py"
+    ],
     "notebook-numbers": [
       "test_notebook_numbers.py"
     ],
     "projections-math": [
       "test_scheme_projections.py",
       "test_math_assets.py"
+    ],
+    "publication-adoption": [
+      "test_publication_screening_adoption.py",
+      "test_publication_screening_retry.py"
+    ],
+    "publication-cancellation": [
+      "test_notebook_publication_cancellation.py"
     ],
     "publication-screening": [
       "test_publication_screening_policy.py",
@@ -535,13 +545,6 @@
       "test_publication_screening_queue.py",
       "test_publication_screening_database.py",
       "test_publication_screening_supervisor.py"
-    ],
-    "publication-cancellation": [
-      "test_notebook_publication_cancellation.py"
-    ],
-    "publication-adoption": [
-      "test_publication_screening_adoption.py",
-      "test_publication_screening_retry.py"
     ],
     "records": [
       "test_milestones.py"
@@ -767,17 +770,28 @@
   "retained_backup_image": "registry.digitalocean.com/crucible-beta/backup@sha256:491572468a1654fb241ab50d2c36f0b34bfb685df308104739dd8fd7ff1b9ac7",
   "reviewed_overlay_files": {
     "crucible/app_platform.py": "7599115606516508a61cb1402de69fcdcef5c9475212034d1b176eda32ded6f4",
+    "crucible/attack_models/__init__.py": "d9099342262d5722c6ec57114f7153b88cbc73ee5ae089ad71beb29e83b1b6cd",
+    "crucible/attack_models/catalogue.py": "0b3a5ed9e0f19cb1bc45db336f05d6468d8123b032c01440c2539ee21bf1dbee",
+    "crucible/attack_models/classical.py": "98f709c3caa103ae552ae4cb2f7484b8469690b0603ec9b252fddf7d8103fad6",
+    "crucible/attack_models/codes.py": "7bc23052a4e1f619a66fff7945e436d739921bed8563da79d9fb1d446a294744",
+    "crucible/attack_models/common.py": "0c1cefa286eaa540931c989ab1a6b6b3a1d9ba86d61dc2f6303d0f3925ef1393",
+    "crucible/attack_models/lattice.py": "f4ee01db4ed4d6b221d3226974e668713588a827e869db4fe4b10db470eba3a6",
     "crucible/bounties.py": "209c2eca49beb2ddf1a59caceade6642e62d2c87c217282f8d593f53d42c09c0",
     "crucible/bounty_allowance.py": "854d9edd06704daed73233868913232f68556c0f4163da0e601be0a261675d0b",
     "crucible/bounty_models.py": "78af4ef87fcef3644435c38fcef583af55bc937e89f6d61652327e6ba3d30fc0",
-    "crucible/config.py": "3f99e0b1e812b6a67e2e89109ba3d6d9d14ce8614965186afafe5ed251736d4e",
+    "crucible/config.py": "18caaaa7108f68cb780d109881a8e74cd04e6131ee233469759ec4dad8edff25",
     "crucible/data/approved_beta_releases.json": "d866a822cb468ac8284a941ba797ac1c87a2d94175c305dca08af41ebd67fe0a",
     "crucible/data/display_evidence/1810c55c7d211c5cc364341589a5375903ee7de41f4d990d76326eac1ab19af7.json": "1810c55c7d211c5cc364341589a5375903ee7de41f4d990d76326eac1ab19af7",
     "crucible/data/display_evidence/5c3fe87412f7908761f3db856dfa9299857901199f9c57c5a33269ca65b77389.json": "5c3fe87412f7908761f3db856dfa9299857901199f9c57c5a33269ca65b77389",
     "crucible/data/display_note_bindings.json": "d21ad3249fbc75978b0df7c44946fff4684ecd1daee6c5f6b3666bd92caf6de4",
+    "crucible/data/ram_attack_curves.json": "131ce70302e1b49ab26a238960ed4b88e3cf392693fa73c52eba79ccd5cd2207",
+    "crucible/data/scheme_note_bindings.json": "2d0f4a192240c657d780eff14109da50263c63d4ed3499094193d154d7c5e28d",
+    "crucible/data/scheme_note_presentations.json": "f7f6ee98d8e2174ba3d7a32530696dda53e6ccb72b9afa00a81c3993f6b22be9",
+    "crucible/display_notes.py": "bd73166e1edba116d488758801600b8860efcea13eed239370c0a857bbfdcbf0",
+    "crucible/note_sections.py": "36d0bd413529890efd28382508ef1956cd9f536cbc1b83a41de4cf8a723e4673",
     "crucible/notebook_numbers.py": "46b25b5d455682be3f718de9897792909b24983a76972f9be162442c1920f151",
     "crucible/notebook_publication_lifecycle.py": "6fa9699e8f134af719af8c8b4c691970111ea2a9f8dbf2c3e3f38cb0745f008d",
-    "crucible/publication_screening.py": "325e7ade033010601be6b57ba326bc3f798a526a2897bc6d3447aefd5e365422",
+    "crucible/publication_screening.py": "48deed9e6a6fd9fdc0a1b41eefe0cea33ac803fbc7a9f146f4a314c840210496",
     "crucible/publication_screening_adoption.py": "35d6ab53c393840ce0563e45a8ffeab87115873e9b583390ca744f1abba79756",
     "crucible/publication_screening_jobs.py": "a724803b49a11f6726887f47151d59f91d7a0c75e2c49b23515ecbb5a673b26e",
     "crucible/publication_screening_models.py": "a3cd552772c455a92c14776e8fbf0beac5fa24151e504837b1a1064e8b440375",
@@ -792,6 +806,7 @@
     "crucible/resource_state.py": "da004619bee08456cdfb2968a1604ca42a0a21c8f0200808b2313ef42675ab4b",
     "crucible/scoring.py": "bda0f74706433215786ae61d81682afdb0f986e45a18cf1036a6015243359512",
     "crucible/scoring_awards.py": "c898fb4b581fca2b88d2d34f1616e15a46c932d7cd2c117a4f8a9273aa3e04b5",
+    "crucible/statement_workflow.py": "f8973500bacf320fe04d7b3f7c214d5fec6448fa0026e355f9e3cca290936038",
     "docs/beta-release-policy.txt": "549c69ce412bde8de427c755959450ce0cbaaf87c2c63297468eb864d2375c8a",
     "migrations/env.py": "cdd84c98ca4eedb4bfef9385742cf573c5c61ea392ee2491875ce1c7a35e19be",
     "migrations/versions/0024_researcher_profiles.py": "669f3cf7e95618cf245dce4d10d0133a085330d920d189958f31be48b49cbf29",
@@ -802,16 +817,33 @@
     "migrations/versions/0029_admission_lifecycle.py": "6b5397f000a1da985a2022ccfa6cf69490dedc5af1544686dda3ba67202b5c61",
     "migrations/versions/0030_bounty_independent_completion.py": "e56d6579437914073e5e11ab85d8b2743ca9cbc3734e13800d9ff25be40e80e4",
     "migrations/versions/0031_publication_screening.py": "a48d34e66644b06f140f28a24a1e46e59e0082bb4ee69a21f84053ea27b4c4e5",
+    "migrations/versions/0032_signup_links.py": "b0719a95d5fbaa182451499784903db2395bfe7e00678c4bfdda01539629b80c",
+    "migrations/versions/0033_statement_workflow_trial.py": "ce0d98462a1d501611a3d7d660dcf64e875e868e24bb49cc886a3df62f98206f",
+    "scripts/beta_access.py": "3f52a5d897ed879bacf1cccb143fb5965897e83bd305fc315899a19cd271343d",
     "scripts/beta_preflight.py": "8511519397e79bbfc0e179b77a670507a19c4a558c46a75cd4de80880ed404d3",
     "scripts/beta_transfer.py": "fc4a208bb85d4f36fb191e39643863c07ff980decb730ef3b1e1c64b8e3cb735",
+    "scripts/build_display_notes.py": "9591ad7139accb0ff027b1f11f6239cec98842f377616ef46580e7a53b6cbf84",
+    "scripts/build_ram_attack_notes.py": "86890c524f7ead22ba0df44e09e8cdf8a0e63d6863472624571e8ddd132a1e54",
+    "scripts/check_scheme_code_arguments.py": "6dcff30557310b3ad57b09f99751238ed35c795ec80a490b56f39c2ab2b41563",
+    "scripts/check_scheme_lattice_arguments.py": "3933000cfeec9e2d499ed6c4ff49c7b9606ec2429843a7a09452141c6a6e6962",
+    "scripts/check_scheme_number_theory.py": "4a4d1ef344ffb2d5ee7727352f1e9196c2833ed916ceecd390f7afc3a8825321",
+    "scripts/check_scheme_statement_fit.py": "672d1b0a5d77ce70f5fa2c6f7b9156df94ad17f2f4ecf4fec0a423ea1a2aca79",
     "scripts/estimate_mceliece_candidates.py": "4400bcd8b1113d9d16754c64186e8387e8b70a05280005e4975d959e8fd4e441",
     "scripts/hqc_module_structure_checks.py": "46fdd4ab11948e52d70dffac27a82d39fe6f06ffe915a27519ed7684516a0741",
     "scripts/hqc_support_review.py": "6da678cb49a78757959c41da7d88b585d2f798f82091ecd98fedfdab14398449",
     "scripts/mceliece_candidate_screen.py": "0e9807043cd1a677bbf4f99838bc43c3db3a289f8a8c37be3b51072beb0b2082",
     "scripts/mlkem_compression_candidates.py": "90ff4937f88038f6e2eac532d7fd9f7542d5dab9963a1f08a924c69a5e6954a6",
+    "scripts/package_launch_guides.py": "c83b3afa7b3ec795d7df5f41c552a9dbbf28517870fdcb2119884676c3f967ca",
+    "scripts/package_scheme_dossiers.py": "ddd941bb7cd8cebc0066875a3ab9926fed810e21531f2cbcd0b55275a708016b",
+    "scripts/prepare_launch_collection.py": "3e928107f95a9df9eb6824b6a6a4df4dd1784433b6ee899bb8e675d2a21b1e81",
+    "scripts/prepare_launch_guides.py": "1512317fe59380dbf3c2dc8aabca7295a00c90717d9b63e3c20a4c33735f7ef8",
+    "scripts/prepare_note_integration.py": "b496d000a86e7944d1e9d3608a387ab51339bb54781955dc870ec23591da3f4d",
+    "scripts/prepare_statement_trial.py": "9a37df028fc854d16711c7184d47ffba4893ef5b02a4e3f3abfd3340eb452793",
     "scripts/publication_screening_eval.py": "efd2de121f8f9742d9694d033981994ec46ab2f202ce147926792f93e3bda71b",
     "scripts/requirements-mceliece-screen.txt": "d57bba561d3125795e3427205da0783fc522d892a0add2319c92c62bf60da0da",
     "scripts/retire_scheme_credit.py": "9d9002c09fd14b518d7dc74b819242918d1867789258f7da508bb2b46e11a905",
+    "scripts/scheme_note_content.py": "c4730a99b48c7f722fde036fb3427780904271701f1a0bade952c39bfb83beb7",
+    "scripts/serve_claims_preview.py": "baac057d3bde233ba72f25b44234e5f292bfe4d5eca253d9e0550e68479f5baa",
     "scripts/verify_tii254_key.py": "09d2230fd5c44a33935ef4d4d2e6698df35f53074b84f7e3817d76346baaa98f"
   }
 }

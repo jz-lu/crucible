@@ -8,7 +8,7 @@ Baseline and scope
 ------------------
 The public and provider health endpoints both serve main
 f9719ab5d3a4a99d7040e7d2d83ebc83608dc946. No hosted data, provider settings or
-release tag has been changed in this audit. The local review remains on8041.
+release tag has been changed in this audit. The local review remains on 8041.
 
 The release combines the light Crucible branding, curated launch collection,
 canonical statements within explanatory notes, scheme arguments and curves,
@@ -18,15 +18,15 @@ optional. There is no reusable campaign-management UI.
 
 Integrated schema
 -----------------
-Keep the never-hosted signup migration as0032; sequence the never-hosted local
-statement-trial tables after it as0033. Resolve the duplicate revision before
-building an image. Existing preview workspaces retain their own branch/schema;
+The never-hosted signup migration is 0032; the never-hosted local statement-trial
+tables follow as 0033. The duplicate revision has been resolved. Existing preview
+workspaces retain their own branch/schema;
 do not copy their databases, accounts, decisions or credentials to production.
 
 Verification completed
 ----------------------
-118 authentication/operator/recovery/migration checks passed. Three optional
-PostgreSQL cases skipped locally and still require dedicated database evidence.
+118 authentication/operator/recovery/migration checks passed. Dedicated
+PostgreSQL 17 CI also passed in run 43822536861 (source a62f5e5).
 Two additional HTTP/DB journey checks passed: signup with a password while
 GitHub is enabled, mailbox proof, logout/login, window expiry or early closure,
 denial of new joins, continuing member access, and later GitHub linking to the
@@ -34,37 +34,79 @@ same account while preserving password login. Provider HTTP is mocked in these
 checks; they do not claim a live GitHub OAuth or mail-provider smoke test.
 
 34 isolated Chromium checks passed on the integrated source, covering shared
-signup at1440px and390px, mailbox proof, abandoned signup requests, existing
+signup at 1440px and 390px, mailbox proof, abandoned signup requests, existing
 members, and the first-paint/loading/bounty geometry that failed earlier CI.
 These use disposable databases and local mail; no real invitations were sent.
 
+Hosted note bindings now expose only exact curated or published sources to
+members and notes:read agents. Local proposal/admission/persona controls remain
+disabled in production. Focused authority and canonical-content checks passed.
+
+Run 43822428809 regenerated the note evidence in the exact immutable Linux
+AMD64 runtime at source a62f5e5. All 379 analytical accounts, parameters and
+premises were preserved; 229 runtime manifest pins and enclosing digests were
+rebound. All 32 registered releases and 1,466 raw profile identities are unchanged.
+The receipt is tracked under docs/evidence; no database or deployment was used.
+
+The curated corpus now features eight scheme dossiers and four guides: Start
+here, resource estimation, posing assumptions, and proposal acceptance. All 59
+pre-existing revisions remain intact; archived references can still be read by
+exact citation. Both offline packagers pass their no-change checks. 142 release,
+evidence and packaging checks passed locally. Native packaged-note HTTP checks
+remain an image-release gate, not a macOS assertion.
+
+Full source CI at a62f5e5 exposed the expected unreviewed runtime-overlay guard
+and 14 browser failures. The overlay now has 31 explicit reviewed file hashes;
+see docs/launch-runtime-review.txt. The 18 focused browser cases covering those
+failures passed after fixes. The final packaged guides also passed desktop and
+390px browser checks, including readable resource citations and preserved
+archived-note access. Full CI must pass again on the final candidate source.
+
+Live configuration observed, 16 November
+---------------------------------------
+Read-only production preflight passed. The live schema is 0031 on PostgreSQL
+17.11, with a runtime role that cannot CREATE. The app has one dedicated CPU and
+4 GB RAM ($49/month), autodeploy on the beta image tag, no run-command override,
+and readiness configured. No liveness probe or external log forwarding was
+configured. The primary-only database has 22 connections and trusted sources
+restricted to the app, recovery VM and operator IP. Pricing observations live in
+docs/operating-budget.txt; these are dashboard observations, not paid invoices.
+
+Automatic screening is already enabled with gpt-6-luna and a $10 UTC-month app
+reservation cap. SMTP and GitHub settings are present. This release does not
+change their credentials, model or spending cap. Actual mail delivery and OAuth
+still need the post-deployment smoke check.
+
+The encrypted Spaces repository and recovery VM exist. The VM has no running
+containers and no Crucible systemd backup timer. Backup scheduling elsewhere
+has not yet been ruled out, and object-list timestamps do not establish the
+latest complete recovery set. A fresh backup and verified restore are pending.
+
 Outstanding release gates
 -------------------------
-1. Separate hosted read-only note bindings from the explicitly local argument
-   proposal/admission/selection/withdrawal trial. Preserve exact source pins,
-   member/agent access checks and the prohibition on production persona entry.
-2. Generate and verify the RAM evidence against the exact reviewed Linux image.
-   The local Python3.11.14 evidence does not match Python3.13.17 manifests for
-   ML-KEM and Frodo. Preserve parameters, numerical accounts and old identities;
-   record regenerated provenance as new immutable content, never relabel it.
-3. Package the four guides and eight scheme dossiers with exact hosted/curated
-   bindings, preserving historical reads and excluding superseded examples.
+1. Complete the separately based compatibility bridge. Qualify the actual image
+   entrypoint on schemas 0031/0032/0033, ordinary invitations on 0031, source-aware
+   signup expiry/closure and revoked-membership handling after expansion. Do not
+   cache pre-migration fallback or accept an arbitrary newer head. The final
+   candidate still requires exact schema 0033 and never migrates at startup.
+2. Verify current recovery configuration and take a fresh encrypted backup;
+   prove restoration, bounded PostgreSQL migration, grants and rollback using
+   that evidence. The bridge must be active before expanding the live schema.
+3. Resolve the actual hosted bounty publication/admission state.
    Synthetic local bounty admissions/points are not real published bounties.
    Freeze actual terms/source pins and obtain ordinary independent admission
    before representing them as funded open hosted tasks.
-4. Review the runtime source overlay and additive schema release explicitly.
-   Prove old/new startup and rollback compatibility, PostgreSQL migration and
-   grants, fresh recovery evidence, and the bounded migration operation. The
-   current exact-head startup guard must not simply be bypassed.
-5. Pass complete required source CI and exact native image verification. Build
-   and promote only the tested immutable image through the existing workflow.
-6. Verify the deployed revision/access behavior, real login configuration and
+4. Pass complete required source CI and every exact native image batch, including
+   the new production-capability reads for eight dossier bindings and 379
+   analytical profiles. Build and promote only the tested immutable image through
+   the existing workflow. Configure the exact release-owned note-binding path.
+5. Verify the deployed revision/access behavior, real login configuration and
    mail availability. Issue the single signup link only after deployment, using
    a fresh timezone-aware deadline at most seven days ahead. Keep its token out
    of Git and CI logs. Existing memberships must survive its expiry.
 
 Operational follow-up
 --------------------
-Main currently reports no branch protection. Backup freshness/restore evidence,
-alerts and deployment overlap remain to be verified against actual hosting;
+Main currently reports no branch protection. Backup scheduling, alert delivery
+and deployment overlap remain to be verified against actual hosting;
 older operations documents are dated evidence, not current certification.

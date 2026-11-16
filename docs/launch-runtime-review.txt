@@ -1,0 +1,70 @@
+LAUNCH RUNTIME OVERLAY REVIEW — 16 NOVEMBER 2026
+===============================================
+
+Purpose: qualify the candidate image for the reviewed launch presentation and
+one-week signup window. This source review permits candidate builds and tests;
+it is not evidence of a completed migration, backup, rollout or scientific review.
+Remaining deployment gates are maintained in docs/launch-release-audit.txt.
+
+Unchanged runtime boundary
+--------------------------
+The existing immutable Linux AMD64 base, Python version, dependency closure,
+all 32 registered releases and all 1,466 raw profile manifest hashes remain
+unchanged. No scheme implementation, challenge parameter or generation budget
+is admitted or replaced. The original baseline inventory is retained. The new
+source overlay pins individual SHA256s; no mutable migration or script prefix
+is introduced, and ordinary releases still reject changes to these exact files.
+
+Reviewed additions and changes
+------------------------------
+* attack_models/{__init__,catalogue,classical,codes,common,lattice}.py and the
+  two generated analytical/presentation JSON files specify bounded analytical
+  accounts, source checks, units and premises. They are not a new execution
+  service. CI run 43822428809 regenerated them in the pinned Linux image without
+  networking, app initialization or database access. All 379 accounts retained
+  their numbers, parameter coverage and premises; 229 runtime manifest pins and
+  enclosing analysis digests changed. The original receipt is retained in
+  docs/evidence/note-runtime-a62f5e58edd57e205556591988f02f56fec7cec4.json.
+* config.py, display_notes.py, note_sections.py and scheme_note_bindings.json
+  separate read-only hosted presentation from the local scientific-workflow
+  trial. Exact curated/published note pins, canonical field hashes, member and
+  notes:read boundaries are enforced. Missing or withdrawn sources fail closed.
+  The setting cannot publish a note, select an argument or create a persona.
+* statement_workflow.py contains canonical content validation and the explicitly
+  local trial. Hosted mutation routes remain unregistered. The preview launcher
+  and fixture builders refuse production/network-database settings and preserve
+  their exact local identities. They are not deployment import tools.
+* publication_screening.py adds readable labels for sections/statements/arguments.
+  It changes no model, prompt, provider consent, budget, worker or screening policy.
+* migrations 0032/0033 add two signup tables and three local-trial tables. No
+  existing row/column is rewritten and no signup link is created by migration.
+  The integration has one sequential head. These hashes are admitted for image
+  qualification only; actual startup/overlap/grants/recovery remain release gates.
+* scripts/beta_access.py adds the fixed one-time launch operator command. Existing
+  password signup, mailbox proof and later optional GitHub linking are preserved.
+  Explicit expiry/closure tests and real PostgreSQL concurrency/grant tests passed.
+* build_display_notes.py retains an existing exact generated source revision when
+  a later dossier cites it. scheme_note_content.py extracts the already reviewed
+  content conversion; all eight local fixture payloads were checked unchanged.
+  package_scheme_dossiers.py verifies native receipts, source identities, full
+  numeric invariance and every historical revision before appending dossiers.
+  package_launch_guides.py appends four versioned guides and changes reversible
+  editorial selection. Neither packager imports accounts, approvals or points.
+* build_ram_attack_notes.py and check_scheme_{code_arguments,lattice_arguments,
+  number_theory,statement_fit}.py are explicit offline authoring/checking tools.
+  prepare_launch_collection.py, prepare_launch_guides.py, prepare_note_integration.py,
+  prepare_statement_trial.py and serve_claims_preview.py retain local-only guards.
+
+Required evidence
+-----------------
+Complete source CI remains required after this update. Content regeneration is
+checked against its retained Git ancestor in the critical-workflows job. The
+candidate image must then pass every existing native batch plus the new
+note-presentations batch: real production-capability HTTP reads for all eight
+curated dossiers and all 379 exact native profiles, contextual statement pins,
+and disabled trial mutation routes. A macOS run cannot replace that check.
+
+The candidate's exact-head startup rule remains unchanged. Deployment needs the
+separately tested compatibility bridge, bounded migration, actual runtime/backup
+grants, fresh encrypted backup and recovery evidence. Do not promote from this
+document or from a green source-only check.

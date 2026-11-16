@@ -2,12 +2,14 @@ const {test,expect,signIn,useDataSaver}=require('./helpers.cjs');
 
 for (const width of [1440,390]) test(`starter guides and archived citations remain readable at ${width}px`,async({page},testInfo)=>{
   await page.setViewportSize({width,height:1000}); await useDataSaver(page); await signIn(page);
-  await page.goto('/#notebook?tag=start-here');
-  await expect(page.locator('#nb-note-list .nb-entry')).toHaveCount(6);
-  await page.goto('/#notebook?note=curated:starter-01-purpose');
+  await page.goto('/#notebook?tag=guide');
+  await expect(page.locator('#nb-note-list .nb-entry')).toHaveCount(4);
+  await page.goto('/#notebook?note=curated:launch-start-here');
   const reader=page.locator('[data-nb="full"]');
-  await expect(reader.getByRole('heading',{name:'Start here — what Crucible is for',exact:true})).toBeVisible();
+  await expect(reader.getByRole('heading',{name:'Start here',exact:true})).toBeVisible();
   await expect(reader.locator('.nb-body')).not.toContainText('](#');
+  await expect(reader.getByRole('link',{name:'Current Crucible agent contract',exact:true})).toHaveAttribute('href','/api/agent/pipeline');
+  await expect(reader.locator('.nb-research-sources')).not.toContainText('{"title":');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:testInfo.outputPath('starter-guide-'+width+'.png'),fullPage:true});
   await page.goto('/#notebook?note=curated:landscape-hqc');

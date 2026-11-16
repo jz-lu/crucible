@@ -1,7 +1,7 @@
 {
   "format": "crucible-launch-guide-drafts-v1",
   "date": "2026-11-16",
-  "source_commit": "e583a938dd52408b9f41f26221428f26ee60c5ae",
+  "source_commit": "618c707deeea94ee933ad799495111d575aa616f",
   "sources": {
     "crucible/agent_guidance.py": "5371fcf31f8d357fa459e340ddde433a0e4d5e1265a71cf554cb55553cb5c6d6",
     "crucible/attack_models/catalogue.py": "0b3a5ed9e0f19cb1bc45db336f05d6468d8123b032c01440c2539ee21bf1dbee",
@@ -9,8 +9,8 @@
     "crucible/attack_models/codes.py": "7bc23052a4e1f619a66fff7945e436d739921bed8563da79d9fb1d446a294744",
     "crucible/attack_models/common.py": "0c1cefa286eaa540931c989ab1a6b6b3a1d9ba86d61dc2f6303d0f3925ef1393",
     "crucible/attack_models/lattice.py": "f4ee01db4ed4d6b221d3226974e668713588a827e869db4fe4b10db470eba3a6",
-    "crucible/data/ram_attack_curves.json": "1cce60a50243eaa0d8fcafab405b6caddfa018633af607c9945055be18f60a1c",
-    "crucible/note_sections.py": "d06c14d227fa04a75dd04d3f73b49a97db519a06f6c51eecedc6da4cae2d00f5",
+    "crucible/data/ram_attack_curves.json": "131ce70302e1b49ab26a238960ed4b88e3cf392693fa73c52eba79ccd5cd2207",
+    "crucible/note_sections.py": "36d0bd413529890efd28382508ef1956cd9f536cbc1b83a41de4cf8a723e4673",
     "crucible/resource_publications.py": "1a5ceeffcb532f6eb732b5660efc39c11707d79e6f50f2742b7c158f216522bf",
     "crucible/resource_state.py": "da004619bee08456cdfb2968a1604ca42a0a21c8f0200808b2313ef42675ab4b",
     "crucible/statement_workflow.py": "f8973500bacf320fe04d7b3f7c214d5fec6448fa0026e355f9e3cca290936038",
@@ -30,7 +30,8 @@
     "web/agent/pipeline.json": "1d91056dd4e1f6af992a0d1238f8554aad09813e86ff906266c04f03aa883ad9",
     "web/map/NOTE-FORMAT.txt": "5d715d6d0b16eb88d9ecdd239ae1d885e00df23f57e3630b8b0dbf6a006f8b82",
     "web/notebook/request-types.json": "e92d5448e2ccf1916da1bd9b2cb1545bc3fb9ad86cad9f2d53cbab032f29af95",
-    "web/resource-metrics.js": "fee94bec62c0b47bd75bd8c32afd1229734ab8babcded872b2dd9af7dcaded98"
+    "web/resource-metrics.js": "b8c69454b14164736010b45eb430abd979336bb673ccc0bc3d3e62e6108570dd",
+    "docs/note-presentations.txt": "4b08b32b5e10effbc27668398fb1679573493cdaa5bb79ea502c7826fd6a88d8"
   },
   "notes": [
     {
@@ -45,14 +46,15 @@
         "docs/agent-workflow.txt",
         "docs/note-requests.txt",
         "docs/bounties.txt",
-        "crucible/statement_workflow.py"
+        "crucible/statement_workflow.py",
+        "docs/note-presentations.txt"
       ],
       "review_questions": [
         "Does this cover the actions we want a new research agent to take?",
         "Which actions should appear first?"
       ],
       "title": "Start here",
-      "conditions": "Draft for the launch review, 16 November 2026. Instructions describe the inspected server contract and explicitly identify local trial capabilities. Recheck the connected server before acting; this guide does not grant permissions or record scientific approval.",
+      "conditions": "Launch guide, 16 November 2026. Instructions describe the inspected server contract and distinguish the hosted presentation from local-only argument review controls. Recheck the connected server before acting; this guide does not grant permissions or record scientific approval.",
       "sections": [
         {
           "id": "overview",
@@ -128,14 +130,15 @@
         "crucible/resource_publications.py",
         "crucible/resource_state.py",
         "web/resource-metrics.js",
-        "docs/resource-publications.txt"
+        "docs/resource-publications.txt",
+        "docs/note-presentations.txt"
       ],
       "review_questions": [
         "Is the human explanation clear about what the security curve does and does not establish?",
         "Does the full specification give an agent enough information to reproduce and challenge an estimate?"
       ],
       "title": "Resource estimates: models, measurements and reproduction",
-      "conditions": "Draft for the launch review, 16 November 2026. Instructions describe the inspected server contract and explicitly identify local trial capabilities. Recheck the connected server before acting; this guide does not grant permissions or record scientific approval.",
+      "conditions": "Launch guide, 16 November 2026. Instructions describe the inspected server contract and distinguish the hosted presentation from local-only argument review controls. Recheck the connected server before acting; this guide does not grant permissions or record scientific approval.",
       "sections": [
         {
           "id": "overview",
@@ -206,14 +209,15 @@
         "docs/statement-real-scheme-fit.txt",
         "docs/ram-attack-cycle-review.txt",
         "docs/correctness-policy-v1.txt",
-        "docs/proposal-guide.txt"
+        "docs/proposal-guide.txt",
+        "docs/note-presentations.txt"
       ],
       "review_questions": [
         "Does this encourage worthwhile mathematical ideas while making the required precision clear?",
         "Are the proposed tests and reviewer requests useful rather than ceremonial?"
       ],
       "title": "Proposing a new assumption",
-      "conditions": "Draft for the launch review, 16 November 2026. Instructions describe the inspected server contract and explicitly identify local trial capabilities. Recheck the connected server before acting; this guide does not grant permissions or record scientific approval.",
+      "conditions": "Launch guide, 16 November 2026. Instructions describe the inspected server contract and distinguish the hosted presentation from local-only argument review controls. Recheck the connected server before acting; this guide does not grant permissions or record scientific approval.",
       "sections": [
         {
           "id": "overview",
@@ -223,7 +227,7 @@
         {
           "id": "agent-guide",
           "title": "Going further",
-          "body": "Use **Full text** for the mathematical specification, scope and quantifiers, prior-work comparison, conditional implications, evidence and falsification plan. It also describes the optional statement and argument fields in this trial.\n\nDeliver a substantive research note and a concrete next question for reviewers. A promising assumption can be worth investigating before a complete construction exists."
+          "body": "Use **Full text** for the mathematical specification, scope and quantifiers, prior-work comparison, conditional implications, evidence and falsification plan. It also describes the optional statement and argument fields within a note.\n\nDeliver a substantive research note and a concrete next question for reviewers. A promising assumption can be worth investigating before a complete construction exists."
         }
       ],
       "tags": [
@@ -281,14 +285,15 @@
         "docs/resource-publications.txt",
         "docs/bounties.txt",
         "crucible/statement_workflow.py",
-        "docs/claim-rosters-local-review.txt"
+        "docs/claim-rosters-local-review.txt",
+        "docs/note-presentations.txt"
       ],
       "review_questions": [
         "Is the route from a useful result to a live change understandable?",
         "Are the decisions and responsibilities accurate for the intended launch?"
       ],
       "title": "How proposals are accepted",
-      "conditions": "Draft for the launch review, 16 November 2026. Instructions describe the inspected server contract and explicitly identify local trial capabilities. Recheck the connected server before acting; this guide does not grant permissions or record scientific approval.",
+      "conditions": "Launch guide, 16 November 2026. Instructions describe the inspected server contract and distinguish the hosted presentation from local-only argument review controls. Recheck the connected server before acting; this guide does not grant permissions or record scientific approval.",
       "sections": [
         {
           "id": "overview",
@@ -298,7 +303,7 @@
         {
           "id": "agent-guide",
           "title": "Going further",
-          "body": "**Full text** explains the separate proposal routes, the construction and correctness requirements, immutable submissions, review outcomes, integration, corrections and bounty settlement. It includes an agent handoff checklist.\n\nReport the actual status and receipt at each stage. For assumptions and argument selection, distinguish the capabilities of this local trial from those of the connected server."
+          "body": "**Full text** explains the separate proposal routes, the construction and correctness requirements, immutable submissions, review outcomes, integration, corrections and bounty settlement. It includes an agent handoff checklist.\n\nReport the actual status and receipt at each stage. For assumptions and argument selection, distinguish the hosted read-only presentation from the local argument-review trial."
         }
       ],
       "tags": [

@@ -2,6 +2,7 @@
 import json
 import hashlib
 import copy
+import re
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -17,11 +18,17 @@ def validate_citation(reference, sources):
         if not isinstance(reference['id'], str) or sources.get(reference['id']) != reference:
             raise ValueError('Note source metadata must match the source registry.')
         return
-    if (set(reference) != {'title', 'url'} or not isinstance(reference['title'], str)
+    if (not {'title', 'url'} <= set(reference) <= {'title', 'url', 'scope', 'relation'}
+            or not isinstance(reference['title'], str)
             or not reference['title'].strip() or len(reference['title']) > 500
             or not isinstance(reference['url'], str) or not 1 <= len(reference['url']) <= 2048
             or any(ord(char) <= 32 or ord(char) == 127 for char in reference['url'])):
         raise ValueError('An unregistered citation needs a bounded title and HTTPS URL.')
+    if ('scope' in reference and (not isinstance(reference['scope'], str) or len(reference['scope']) > 2000)
+            or 'relation' in reference and reference['relation'] != 'cites'):
+        raise ValueError('Invalid citation scope or relation.')
+    if re.fullmatch(r'/api/agent/(?:pipeline|guidance/[a-z0-9][a-z0-9._-]{0,99})', reference['url']):
+        return
     try:
         url = urlparse(reference['url'])
         if (url.scheme != 'https' or not url.hostname or url.username or url.password

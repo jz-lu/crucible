@@ -76,6 +76,7 @@ jobs:
           tests/test_password_recovery_races.py
           tests/test_release_pipeline.py
           tests/test_note_runtime_evidence.py
+          tests/test_scheme_dossier_package.py tests/test_launch_guide_package.py
           tests/test_source_ci.py
           tests/test_reuse_release.py
           tests/test_verify_deployment.py
@@ -134,6 +135,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
@@ -143,6 +146,10 @@ jobs:
           python -m pip install --no-deps -e .
       - name: Check exact revisions, access, moderation, ratings and agent lifecycle
         run: python tests/run_critical_workflows.py
+      - name: Verify immutable launch content against its retained source
+        run: |
+          python -B scripts/package_scheme_dossiers.py --receipt docs/evidence/note-runtime-a62f5e58edd57e205556591988f02f56fec7cec4.json --source-revision a62f5e58edd57e205556591988f02f56fec7cec4 --check
+          python -B scripts/package_launch_guides.py --check
       - name: State verification boundary
         if: always()
         run: |

@@ -49,6 +49,10 @@
   // References are authored evidence. Links never fetch a source or grant access.
   function citationTarget(value) {
     if (typeof value !== 'string' || !value.trim()) return null;
+    // Only these fixed, read-only agent resources may use a relative API URL.
+    // Check the raw path before URL normalization; never accept traversal or
+    // arbitrary account/action endpoints. Open them like an external source.
+    if (/^\/api\/agent\/(?:pipeline|guidance\/[a-z0-9][a-z0-9._-]{0,99})$/.test(value)) return {href:value, internal:false};
     let target; try { target = new URL(value, new URL(window.location.href).origin + '/'); } catch { return null; }
     if (!['https:', 'http:'].includes(target.protocol) || target.username || target.password) return null;
     if (target.origin === new URL(window.location.href).origin && target.pathname === '/' && target.hash.startsWith('#notebook?')) {

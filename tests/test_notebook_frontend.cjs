@@ -1202,6 +1202,17 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.match(sources.textContent,/correctness only/);assert.match(sources.textContent,/older textual reference/);
   assert.ok(app.requests.every(r=>!r.url.includes('other')&&!r.url.includes('example.org')));
  });
+ await test('guide citations expose only fixed read resources without fetching them',async()=>{
+  const paths=['/api/agent/pipeline','/api/agent/guidance/note-format.txt',
+   '/api/account/delete','/api/agent/guidance/../pipeline','/api/agent/guidance/%2e%2e/pipeline',
+   '//other.example/api/agent/pipeline','/api/agent/pipeline?action=delete','/api/agent/guidance/.'];
+  const refs=paths.map((url,i)=>({title:'Source '+i,url,scope:'Reading guidance.'}));
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:note({content:{...content(),references:refs}})}:undefined});
+  await app.show('note-one');const links=app.q('full').querySelector('.nb-research-sources').querySelectorAll('a');
+  assert.deepEqual(links.map(link=>link.href),paths.slice(0,2));
+  assert.ok(links.every(link=>link.target==='_blank'&&link.rel==='noopener noreferrer'));
+  assert.ok(app.requests.every(row=>!paths.includes(row.url)));
+ });
  await test('a mismatched citation hash never displays the claimed note content or silently selects latest',async()=>{
   const saved=note({content_sha256:'a'.repeat(64)});const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:saved}:undefined});
   await app.controller.show(new URLSearchParams({note:'note-one',revision:'1',sha256:'b'.repeat(64)}));

@@ -40,6 +40,7 @@
 .nb-citation-row{padding:16px;margin:12px 0;border:1px solid var(--line);border-radius:6px;display:grid;gap:12px;background:var(--light)}
 .nb-citations>.nb-link{margin-top:12px}
 .nb-citations .nb-hint{font-size:13px}
+.nb-research-sources{overflow-wrap:anywhere}
 .nb-note-graph{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.85fr) minmax(0,1fr);gap:22px;align-items:start;margin:20px 0}
 .nb-graph-column h4{font-size:12px;color:var(--muted);margin:0 0 12px;font-weight:600}
 .nb-graph-node,.nb-graph-center{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:7px;padding:14px;overflow-wrap:anywhere;background:var(--surface)}
