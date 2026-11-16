@@ -17,11 +17,13 @@ constitution, the contribution workflow, evidence standards, repository layout,
 and the limits of automated first-pass review. References pin the inspected
 repository revision. Revise these guides when the documented behavior changes.
 
-Sixteen bundled notes remain featured: the six guides, seven detailed scheme
-evidence notes and three substantive literature notes. Twenty-five older bundled
-entries are archived from discovery: fifteen short map/orientation summaries,
+Thirteen bundled notes remain featured: the six guides and seven detailed scheme
+evidence notes. Twenty-eight older bundled entries are archived from discovery: fifteen short map/orientation summaries,
 eight preliminary literature-reading agendas, the outdated Streamlined NTRU
-evidence compilation and the older proposal-guidance compilation.
+evidence compilation, the older proposal-guidance compilation and the final
+three literature notes, removed at the editorial owner’s request. The guides
+are also under editorial review; replacement candidates must be workshopped
+before they are adopted.
 These decisions reduce duplication and unfinished reading lists; they do not
 declare the mathematics false. Every existing record, revision and map binding
 is retained. Exact old citations continue to resolve.
@@ -59,18 +61,13 @@ certify a claim. Normal moderation and publication permissions still apply.
 
 Bounty briefs
 -------------
-web/notebook/bounties.js owns three reusable briefs: ML-KEM test-vector
-reproduction, an exact finite sampler audit, and a toy compression/correctness
-trade-off experiment. Each has completion criteria, a verification plan and
-primary source starting points. Adapt exact versions and attach source-note
-citations before requesting admission. Examples are explicitly labelled
-templates, with no promised funding or fabricated completion result.
-
-Opening a template fills an unsaved draft. Draft state is separate for each
-template and the ordinary blank composer. It does not create a task, spend
-allowance, publish terms or award points. Existing admission and independent
-completion review remain authoritative. Keep new briefs constructive and scoped
-to published specifications, synthetic data and controlled research fixtures.
+The board shows actual bounty records. It has no sample/template gallery.
+Launch bounties should be ordinary account-authored proposals with precise scope,
+reproducible completion criteria and a verification plan. The owner will choose
+which briefs to publish and fund from their allowance; no choice, publication or
+spending is implied by discussing a candidate. Independent admission and
+completion review remain authoritative. Prefer useful work on public crypto
+specifications, reproducible comparisons and controlled research fixtures.
 
 Review and release
 ------------------

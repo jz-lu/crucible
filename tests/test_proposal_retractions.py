@@ -171,21 +171,20 @@ def test_supporting_note_access_and_compact_summary_privacy(system, kind):
 
 def test_curated_proposal_metadata_retains_private_withdrawal_flags(system):
     _, owner, reviewer, reader, _ = system
-    source = next(item for item in notebook.curated_collection(include_archived=False)
-                  if 'literature' in item['revisions'][-1]['content'].get('tags', []))
+    source = notebook.curated_collection(include_archived=False)[0]
     ref = source['revisions'][0]
     note = {'id': source['id'], 'revision': ref['revision'], 'content_sha256': ref['content_sha256']}
     record = submit_research(owner, note, purpose='visualization_nomination')
     body = research_body(record, reason='PRIVATE_CURATED_REASON')
     assert owner.post('/api/notebook/research-requests/' + record['id'] + '/retraction', body).status_code == 200
     for actor in (owner, reviewer):
-        page = actor.client.get('/api/notebook/notes?include_curated=true&scope=literature&proposals_only=true').json()
+        page = actor.client.get('/api/notebook/notes?include_curated=true&scope=all&proposals_only=true').json()
         entry = next(n for n in page['notes'] if n['id'] == note['id'])
         assert entry['proposal_revision']['requests'][0]['retracted'] is True
         index = actor.client.get('/api/notebook/research-requests?curated_proposals=true').json()
         assert index['requests'][0]['retracted'] is True
         assert body['reason'] not in json.dumps(page) + json.dumps(index)
-    assert reader.client.get('/api/notebook/notes?include_curated=true&scope=literature&proposals_only=true').json()['notes'] == []
+    assert reader.client.get('/api/notebook/notes?include_curated=true&scope=all&proposals_only=true').json()['notes'] == []
 
 
 def test_concurrent_withdrawal_retries_make_one_terminal_record(system):

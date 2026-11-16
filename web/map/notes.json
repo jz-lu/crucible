@@ -3677,7 +3677,10 @@
         "literature-qfesta": "A preliminary literature reading agenda. A worked derivation, reproduction or fuller technical review is needed before featuring it.",
         "literature-lowms": "A preliminary literature reading agenda. A worked derivation, reproduction or fuller technical review is needed before featuring it.",
         "display-evidence-sntrup-3": "This snapshot predates the current Streamlined NTRU source and timing evidence. Retained as a historical record; regenerate and review the pinned evidence before featuring it as current.",
-        "proposal-advice": "This compiled guide predates the current proposal guidance. Use the starter workflow guide and its pinned repository references; retain this revision for historical citations."
+        "proposal-advice": "This compiled guide predates the current proposal guidance. Use the starter workflow guide and its pinned repository references; retain this revision for historical citations.",
+        "literature-expansion-counterexample": "Removed from the launch collection at the editorial owner’s request on 16 November 2026. Retained for exact historical citations; this selection does not adjudicate the mathematical claims.",
+        "literature-local-prg-pke": "Removed from the launch collection at the editorial owner’s request on 16 November 2026. Retained for exact historical citations; this selection does not adjudicate the mathematical claims.",
+        "literature-semigroup-actions": "Removed from the launch collection at the editorial owner’s request on 16 November 2026. Retained for exact historical citations; this selection does not adjudicate the mathematical claims."
       }
     }
   }
