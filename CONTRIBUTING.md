@@ -32,6 +32,8 @@ up to date when adding a paid dependency, changing a plan/model or increasing a
 usage limit. Schema PRs should use [the migration record](docs/schema-change-template.txt)
 and prove old/new compatibility before claiming uninterrupted rollout; the current
 exact-head startup gate has not been relaxed.
+For starter guides, reversible note selection and bounty templates, follow
+[showcase curation](docs/showcase-curation.txt).
 
 ## Start locally
 

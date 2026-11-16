@@ -1,6 +1,6 @@
 const {test, expect} = require('./helpers.cjs');
 
-test('account controls and RESI appear only after the tagline finishes', async ({page}) => {
+test('account controls appear only after the tagline finishes', async ({page}) => {
   await page.emulateMedia({reducedMotion:'no-preference'});await page.goto('/');
   const samples=await page.evaluate(()=>{
     const animations=document.getAnimations().filter(animation=>['scrutiny-reveal','landing-arrive'].includes(animation.animationName));
@@ -8,18 +8,17 @@ test('account controls and RESI appear only after the tagline finishes', async (
     const reveal=animations.find(animation=>animation.animationName==='scrutiny-reveal'&&animation.effect.target.closest('#access-branding'));
     const finish=reveal.effect.getTiming().delay+reveal.effect.getTiming().duration;
     const card=animations.find(animation=>animation.effect.target.id==='access-workspace');
-    const footer=animations.find(animation=>animation.effect.target.classList.contains('site-footer'));
     const stateAt=time=>{
       for(const animation of animations)animation.currentTime=time;
-      return ['#access-workspace','.site-footer'].map(selector=>{
+      return ['#access-workspace'].map(selector=>{
         const style=getComputedStyle(document.querySelector(selector));return {visibility:style.visibility,opacity:Number(style.opacity)};
       });
     };
-    return {finish,cardStart:card.effect.getTiming().delay,footerStart:footer.effect.getTiming().delay,
+    return {finish,cardStart:card.effect.getTiming().delay,
       before:stateAt(0),afterText:stateAt(finish+1),complete:stateAt(3000)};
   });
   expect(samples.finish).toBeLessThan(600);
-  expect(samples.cardStart).toBeGreaterThan(samples.finish);expect(samples.footerStart).toBeGreaterThan(samples.finish);
+  expect(samples.cardStart).toBeGreaterThan(samples.finish);
   expect(samples.before.every(item=>item.visibility==='hidden'&&item.opacity===0)).toBe(true);
   expect(samples.afterText.every(item=>item.visibility==='hidden'&&item.opacity===0)).toBe(true);
   expect(samples.complete.every(item=>item.visibility==='visible'&&item.opacity===1)).toBe(true);
@@ -156,7 +155,7 @@ test('rapid icon clicks restart the full fire without stale cancellation or leav
 
 test('reduced motion shows the full landing immediately and keeps the logo still',async({page})=>{
   await page.emulateMedia({reducedMotion:'reduce'});await page.goto('/');
-  for(const selector of ['#access-workspace','.site-footer']){
+  for(const selector of ['#access-workspace']){
     await expect(page.locator(selector)).toHaveCSS('animation-name','none');
     await expect(page.locator(selector)).toHaveCSS('opacity','1');
   }
@@ -212,7 +211,7 @@ for(const width of [1440,390])for(const theme of ['light','dark']) {
     await page.screenshot({path:testInfo.outputPath('tagline-dots-'+width+'-'+theme+'.png'),fullPage:true,animations:'allow'});
     await wording.hover({position:{x:box.width*.75,y:box.height/2}});
     await expect.poll(()=>wording.evaluate(element=>parseFloat(element.style.getPropertyValue('--dot-x')))).toBeGreaterThan(point+box.width*.25);
-    await page.locator('.site-footer').hover();
+    await page.mouse.move(0, 0);
     await expect(wording).not.toHaveClass(/is-dotted/);await expect(letters).toHaveCSS('mask-image','none');await expect(dots).toHaveCSS('opacity','0');
   });
 }
@@ -252,7 +251,8 @@ test('browser-appearance tab icons are public SVG assets independent of the site
     expect(response.status()).toBe(200);expect(response.headers()['content-type']).toContain('image/svg+xml');
     expect(response.headers()['cache-control']).toContain('immutable');
     expect(await response.text()).toContain('<path');expect(await response.text()).not.toContain('<image');
-    await page.locator('#theme-toggle').click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme','light');
+    await expect(page.locator('#theme-toggle')).toHaveCount(0);
     await expect(page.locator('#site-icon')).toHaveAttribute('href',href);
   }
 });

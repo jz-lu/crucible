@@ -192,6 +192,7 @@ def register_routes(app, db, clock, user_for, throttle):
         saved, owner, handle = row
         return {"id": identifier, "author": {"id": owner, "handle": handle}, "revision": saved.revision,
                 "content_sha256": saved.content_sha256, "created_at": saved.created_at,
+                "archive_reason": notebook.publication_archive_reason(identifier, saved.revision, saved.content_sha256),
                 "content": saved.content, "publication_status": "approved"}, None
 
     def rating_data(session, user, record, curated=None):
@@ -235,7 +236,8 @@ def register_routes(app, db, clock, user_for, throttle):
                 revision.content["tags"].label("tags"), revision.content["kind"].as_string().label("kind"),
                 *(func.coalesce(totals.c[key], 0).label(key) for key in empty_score())).select_from(note)
                 .join(revision, revision.note_id == note.id).join(latest, and_(latest.c.note_id == note.id, latest.c.number == revision.revision))
-                .join(User, User.id == note.author_id).outerjoin(totals, totals.c.note_id == note.id))
+                .join(User, User.id == note.author_id).outerjoin(totals, totals.c.note_id == note.id)
+                .where(notebook.featured_revision_clause()))
             if cursor:
                 rank, created, identifier = cursor
                 rest = or_(revision.created_at < -created, and_(revision.created_at == -created, note.id > identifier))
@@ -250,7 +252,7 @@ def register_routes(app, db, clock, user_for, throttle):
                 **{key: row[key] for key in ("revision", "content_sha256", "created_at")},
                 "content": {key: row[key] for key in ("title", "claim", "tags", "kind")}, "summary": True,
                 "rating": {key: row[key] for key in empty_score()}} for row in rows]
-            bundled = notebook.curated_collection()
+            bundled = notebook.curated_collection(include_archived=False)
             curated_totals = curated_scores(session, bundled)
             for source in bundled:
                 selected = source["revisions"][-1]

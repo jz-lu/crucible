@@ -275,6 +275,14 @@ const lists=app=>app.requests.filter(row=>row.url.startsWith('/api/notebook/note
   const before=lists(app).length;await filterNotes(app,'mine');assert.equal(app.q('list').querySelectorAll('.nb-entry').length,2);
   assert.match(app.q('list').textContent,/Previously removed draft/);assert.equal(lists(app).length,before);
  });
+ await test('editorial archives in the warm index remain in My notes but leave discovery',async()=>{
+  const rows=[indexRow('active'),indexRow('archived',{archive_reason:'Operational test.',content:content('Archived operational check')})];
+  const app=await boot({respond:url=>url===indexPath?summaryIndex(rows):undefined});await app.controller.warm('list');await app.show();
+  assert.equal(app.q('list').querySelectorAll('.nb-entry').length,1);assert.doesNotMatch(app.q('list').textContent,/Archived operational check/);
+  await filterNotes(app,'mine');assert.equal(app.q('list').querySelectorAll('.nb-entry').length,2);
+  assert.match(app.q('list').textContent,/Archived operational check/);
+  await filterNotes(app,'all');assert.doesNotMatch(app.q('list').textContent,/Archived operational check/);
+ });
  await test('server page to complete index to expiry never sends synthetic cursors or wrong cached pages',async()=>{
   const rows=Array.from({length:60},(_,i)=>indexRow('item-'+i,{content:content('Row '+i)}));
   const app=await boot({respond:url=>url===indexPath?summaryIndex(rows):url.startsWith('/api/notebook/notes?')?summaryPage(url,rows):undefined});

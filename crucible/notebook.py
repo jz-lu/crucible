@@ -34,6 +34,7 @@ SUMMARY_INDEX_MAX_BYTES = 512 * 1024
 CONTENT_FIELDS = {"title", "claim", "conditions", "body", "tags", "kind", "references", "artifacts", "extensions"}
 FORBIDDEN_KEYS = {"__proto__", "prototype", "constructor"}
 CURATED_NOTES_PATH = Path(__file__).resolve().parents[1] / "web/map/notes.json"
+EDITORIAL_SELECTION_PATH = Path(__file__).resolve().parents[1] / "web/notebook/editorial-selection.json"
 
 
 class NotebookNote(Base):
@@ -429,8 +430,8 @@ def _file_identity(stat):
 
 
 @lru_cache(maxsize=2)
-def _curated_collection(path, identity):
-    """Cache only validated, immutable bundled content; never account status."""
+def _curated_workspace(path, identity):
+    """Cache only release-owned content and selection policy, never account status."""
     source = Path(path)
     if _file_identity(source.stat()) != identity:
         raise ValueError("The curated collection changed while opening it.")
@@ -439,6 +440,53 @@ def _curated_collection(path, identity):
     if len(raw) > MAX_WORKSPACE_BYTES or _file_identity(source.stat()) != identity:
         raise ValueError("The curated collection changed or exceeds its limit.")
     workspace = _workspace(json.loads(raw))
+    extensions = workspace.get("extensions") or {}
+    selection = extensions.get("editorial_selection", {}) if isinstance(extensions, dict) else None
+    if not isinstance(selection, dict):
+        raise ValueError("Invalid curated selection metadata.")
+    archived = selection.get("archived", {})
+    if (not isinstance(archived, dict) or not set(archived) <= {note["id"] for note in workspace["notes"]}
+            or any(not isinstance(reason, str) or not reason.strip() for reason in archived.values())):
+        raise ValueError("Invalid curated archive metadata.")
+    return workspace
+
+
+@lru_cache(maxsize=2)
+def _publication_selection(path, identity):
+    source = Path(path)
+    if _file_identity(source.stat()) != identity:
+        raise ValueError("The editorial selection changed while opening it.")
+    with source.open("rb") as stream:
+        raw = stream.read(65537)
+    if len(raw) > 65536 or _file_identity(source.stat()) != identity:
+        raise ValueError("The editorial selection changed or exceeds its limit.")
+    selection = json.loads(raw)
+    if not isinstance(selection, dict) or selection.get("format") != "crucible-editorial-selection-v1":
+        raise ValueError("Invalid editorial selection format.")
+    published = selection.get("archived_publications", [])
+    if not isinstance(published, list) or len(published) > MAX_NOTES:
+        raise ValueError("Invalid published archive metadata.")
+    pins = set()
+    for item in published:
+        if (not isinstance(item, dict) or set(item) != {"note_id", "revision", "content_sha256", "reason"}
+                or not isinstance(item["note_id"], str) or str(UUID(item["note_id"])) != item["note_id"]
+                or type(item["revision"]) is not int or not 1 <= item["revision"] <= MAX_REVISIONS
+                or not isinstance(item["content_sha256"], str) or len(item["content_sha256"]) != 64
+                or any(char not in "0123456789abcdef" for char in item["content_sha256"])
+                or not isinstance(item["reason"], str) or not item["reason"].strip()):
+            raise ValueError("Invalid published archive pin.")
+        pin = (item["note_id"], item["revision"], item["content_sha256"])
+        if pin in pins:
+            raise ValueError("Duplicate published archive pin.")
+        pins.add(pin)
+    return tuple(published)
+
+
+@lru_cache(maxsize=2)
+def _curated_collection(path, identity):
+    """Selection metadata never changes a note's immutable content hash."""
+    workspace = _curated_workspace(path, identity)
+    archived = (workspace.get("extensions") or {}).get("editorial_selection", {}).get("archived", {})
     records = []
     for note in workspace["notes"]:
         revisions = []
@@ -447,18 +495,41 @@ def _curated_collection(path, identity):
             revisions.append({"revision": item["revision"], "content_sha256": _hash(content),
                 "created_at": item["createdAt"] / 1000, "content": content, "publication_status": "curated"})
         records.append({"id": "curated:" + note["id"], "source_id": note["id"],
-            "source_kind": "curated-research", "owner": None, "can_edit": False,
+            "source_kind": "curated-research", "archive_reason": archived.get(note["id"]),
+            "owner": None, "can_edit": False,
             "can_review": False, "can_self_review": False, "created_at": revisions[0]["created_at"],
             "revision_count": len(revisions), "revisions": revisions})
     return tuple(records)
 
 
-def curated_collection():
+def curated_collection(*, include_archived=True):
     try:
         path = CURATED_NOTES_PATH.resolve()
-        return _curated_collection(str(path), _file_identity(path.stat()))
+        records = _curated_collection(str(path), _file_identity(path.stat()))
+        return records if include_archived else tuple(note for note in records if note["archive_reason"] is None)
     except (OSError, ValueError, TypeError, KeyError, HTTPException):
         raise HTTPException(503, "The curated notebook is temporarily unavailable. Retry the complete list.") from None
+
+
+def archived_publications():
+    """Only the checked-in policy can select archives; authored metadata cannot."""
+    try:
+        path = EDITORIAL_SELECTION_PATH.resolve()
+        return _publication_selection(str(path), _file_identity(path.stat()))
+    except (OSError, ValueError, TypeError, KeyError, HTTPException):
+        raise HTTPException(503, "The notebook selection is temporarily unavailable. Retry the complete list.") from None
+
+
+def featured_revision_clause():
+    # Apply AFTER choosing the latest visible revision, BEFORE pagination.
+    # Filtering earlier would silently promote an older archived note revision.
+    return tuple_(NotebookRevision.note_id, NotebookRevision.revision, NotebookRevision.content_sha256).not_in(
+        [(item["note_id"], item["revision"], item["content_sha256"]) for item in archived_publications()])
+
+
+def publication_archive_reason(note_id, revision, digest):
+    return next((item["reason"] for item in archived_publications()
+                 if (item["note_id"], item["revision"], item["content_sha256"]) == (note_id, revision, digest)), None)
 
 
 def curated_request_summaries(session, settings, user, records):
@@ -635,6 +706,10 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 "content_sha256": revision.content_sha256, "content": revision.content,
                 "publication_status": (publication.decision or "submitted") if publication else "private",
                 "imported": revision.source_revision is not None}
+        reason = (publication_archive_reason(revision.note_id, revision.revision, revision.content_sha256)
+                  if publication and publication.decision == "approved" else None)
+        if reason:
+            data["archive_reason"] = reason
         if revision.source_revision is not None:
             data["imported_created_at"] = revision.source_revision["createdAt"]
         if publication:
@@ -758,7 +833,10 @@ def register_routes(app, db, settings, clock, user_for, throttle):
         # date, not an audit of what the reader could access on past dates.
         with db.transaction() as session:
             user = account(request, session)
-            readable = visible(session, user).with_only_columns(NotebookRevision.note_id)
+            latest = visible(session, user).with_only_columns(NotebookRevision.note_id,
+                func.max(NotebookRevision.revision).label("revision")).group_by(NotebookRevision.note_id).subquery()
+            readable = select(NotebookRevision.note_id).join(latest, and_(latest.c.note_id == NotebookRevision.note_id,
+                latest.c.revision == NotebookRevision.revision)).where(featured_revision_clause())
             # IN is a semijoin: multiple visible revisions/publications cannot
             # multiply a note. No account note IDs or bodies leave SQL.
             day = case((and_(NotebookNote.created_at > 0, NotebookNote.created_at <= now),
@@ -769,7 +847,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             undated = sum(count for number, count in rows if number is None)
             # First bundled revision dates describe catalogue authoring, not
             # the publication dates of papers discussed in those notes.
-            for note in curated_collection():
+            for note in curated_collection(include_archived=False):
                 timestamp = note["created_at"]
                 if math.isfinite(timestamp) and 0 < timestamp <= now:
                     number = int(timestamp // 86400)
@@ -795,7 +873,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             totals = note_ratings.curated_scores(session, collection)
             return {"numbers": notebook_numbers.ensure(session.connection(), [note["id"] for note in collection]),
                 "metadata": {note["id"]: {"rating": totals.get(note["id"], note_ratings.empty_score()),
-                    "published_at": note["created_at"]} for note in collection}}
+                    "published_at": note["created_at"], "archive_reason": note["archive_reason"]} for note in collection}}
 
     @app.get("/api/notebook/tags")
     def list_tags(request: Request, q: str = Query(default="", max_length=100)):
@@ -811,7 +889,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 func.max(NotebookRevision.revision).label("revision")).group_by(NotebookRevision.note_id).cte("tag_latest")
             sources = select(NotebookRevision.content["tags"].label("tags")).join(newest,
                 and_(newest.c.note_id == NotebookRevision.note_id,
-                     newest.c.revision == NotebookRevision.revision)).cte("tag_sources")
+                     newest.c.revision == NotebookRevision.revision)).where(featured_revision_clause()).cte("tag_sources")
             # Forty scalar JSON paths preserve SQLite/PostgreSQL parity and
             # never hydrate bodies or truncate the search to a notebook page.
             candidates = union_all(*(select(sources.c.tags[index].as_string().label("tag"))
@@ -826,7 +904,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                      (canonical.ilike(escaped + "%", escape="\\"), 1), else_=2),
                 func.lower(canonical), canonical).limit(50)
             found = list(session.scalars(query))
-            for note in curated_collection():
+            for note in curated_collection(include_archived=False):
                 found.extend(tag for tag in note["revisions"][-1]["content"].get("tags", [])
                              if term.lower() in tag.lower())
             unique = {}
@@ -948,6 +1026,11 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                                   NotebookNote.source_id, raiseload=True),
                          load_only(deletion.id, deletion.note_id, deletion.revision, deletion.content_sha256,
                                    deletion.deleted_at, deletion.restored_at, raiseload=True)))
+            if scope not in {"mine", "trash"}:
+                # The warm index also serves My notes. Retain the owner's
+                # archives there, labelled for the client to filter per view.
+                query = query.where(or_(NotebookNote.author_id == user.id, featured_revision_clause())
+                                    if indexed else featured_revision_clause())
             if cursor:
                 _, boundary_rank, created_at, identifier = cursor
                 rest = or_(sort_time < created_at, and_(sort_time == created_at, NotebookNote.id > identifier))
@@ -965,7 +1048,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
             curated, curated_requests = [], {}
             curated_totals = {}
             if include_curated and scope not in {"mine", "trash"}:
-                collection = curated_collection()
+                collection = curated_collection(include_archived=False)
                 curated_totals = note_ratings.curated_scores(session, collection)
                 numbers = notebook_numbers.ensure(session.connection(), [note["id"] for note in collection])
                 for source in collection:
@@ -1032,6 +1115,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 if kind is not None:
                     content["kind"] = kind
                 records.append({"id": note.id, "number": note_number, "owner": {"id": note.author_id, "handle": handle},
+                    "archive_reason": publication_archive_reason(note.id, number, digest),
                     "can_edit": user.id == note.author_id and deleted is None,
                     "can_delete": user.id == note.author_id and deleted is not None,
                     "can_restore": user.id == note.author_id and deleted is not None,

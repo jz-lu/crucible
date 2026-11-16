@@ -1,0 +1,103 @@
+Showcase content and editorial selection
+=======================================
+
+Purpose
+-------
+Introduce a small, legible research pipeline for making and testing cryptography.
+The showcase retains beta sign-in and the existing application. Its guides are
+working templates, not adopted governance or evidence that a scheme is secure.
+The November 2026 presentation uses light mode, without visible RESI branding.
+
+Starting collection
+-------------------
+Six starter guides live in web/map/notes.json, under IDs starter-01-purpose
+through starter-06-automated-review. The home page links to the first guide;
+the start-here tag collects the whole set. They cover purpose, a draft
+constitution, the contribution workflow, evidence standards, repository layout,
+and the limits of automated first-pass review. References pin the inspected
+repository revision. Revise these guides when the documented behavior changes.
+
+Eighteen bundled notes remain featured: the six guides, eight detailed scheme
+evidence notes, the proposal guide and three substantive literature notes.
+Twenty-three older bundled entries are archived from discovery: fifteen short
+map/orientation summaries and eight preliminary literature-reading agendas.
+These decisions reduce duplication and unfinished reading lists; they do not
+declare the mathematics false. Every existing record, revision and map binding
+is retained. Exact old citations continue to resolve.
+
+The live notebook review on 16 November identified three published operational
+test posts (#0064, #0065 and #0066). Their exact IDs, revisions, content hashes
+and editorial reasons are in web/notebook/editorial-selection.json. This is a
+release-owned selection policy, not a database mutation. It takes effect only
+when the application release containing it is deployed. Other research notes
+have not been independently certified by this editorial pass.
+
+How to update or restore the collection
+--------------------------------------
+Bundled content: edit web/map/notes.json. Append a revision for a substantive
+content change; never rewrite an existing cited revision. Bundled discovery
+choices live outside revisions in extensions.editorial_selection.archived.
+Remove an entry there to feature it again, then run python web/map/build.py.
+Commit notes.json, catalogue.json when its sources change, and both generated
+browser projections together. Do not edit the generated JavaScript directly.
+
+Published account notes: edit web/notebook/editorial-selection.json. Each entry
+must name the exact note UUID, revision, SHA-256 and reason observed in the
+reader's Record details. Removing an entry restores discovery. A different hash
+or a later published revision is not archived by the old decision. Never use
+authored note extensions as editorial authority. The bounded policy is separate
+from bundled note bodies so damage to that catalogue cannot disable account-only
+browsing. There is no new database table or provider-dashboard procedure.
+
+Discovery filters run after choosing the latest readable revision and before
+pagination; an old matching revision must not reappear as a fallback. Apply the
+same policy to notebook lists, the warm summary index, tags, the timeline and
+agent discovery. My notes and authorized exact reads retain access. Archiving
+does not grant access, revoke publication, erase history, alter ratings or
+certify a claim. Normal moderation and publication permissions still apply.
+
+Bounty briefs
+-------------
+web/notebook/bounties.js owns three reusable briefs: ML-KEM test-vector
+reproduction, an exact finite sampler audit, and a toy compression/correctness
+trade-off experiment. Each has completion criteria, a verification plan and
+primary source starting points. Adapt exact versions and attach source-note
+citations before requesting admission. Examples are explicitly labelled
+templates, with no promised funding or fabricated completion result.
+
+Opening a template fills an unsaved draft. Draft state is separate for each
+template and the ordinary blank composer. It does not create a task, spend
+allowance, publish terms or award points. Existing admission and independent
+completion review remain authoritative. Keep new briefs constructive and scoped
+to published specifications, synthetic data and controlled research fixtures.
+
+Review and release
+------------------
+Check desktop and phone layouts, direct archived citations, owner access,
+latest-revision behavior, pagination and the warm index. Existing regression
+suites cover these boundaries. The change uses the ordinary source release path
+in docs/releasing-beta.txt; it needs no migration, provider setting or paid
+service. Keep docs/operating-budget.txt current when a future feature changes
+costs. Automated publication screening and a future scientific review assistant
+are different decisions; neither replaces independent scientific review.
+
+An existing generated-evidence freshness issue remains outside this editorial
+change: build_display_notes would append revisions to display-evidence-sntrup-3
+and proposal-advice. The former changes scientific source/timing evidence. Do
+not silently regenerate these while editing presentation; review their pinned
+sources and release evidence separately. Historical records remain unchanged.
+
+Recovered assumptions design
+----------------------------
+The November 6 feature/assumptions-note-integration draft at commit 14dd592 adds
+exact statement readers, argument views and reviewed roster records. Its local
+serve_claims_preview.py is a disposable preview, not a production sign-in bypass.
+The statement reader is promising; the opening argument view needs a shorter
+explanation before its dense formal details. Carry the current light palette
+and simpler branding into any eventual integration.
+
+Do not treat visual polish as backend readiness. Its own review documents still
+identify schema/runtime-contract work, PostgreSQL review/withdrawal concurrency
+coverage and bounded roster-history reconstruction. Resolve those explicitly
+before integrating the full workflow. Keep publication, editorial featuring,
+scientific review and scheme activation distinct as this feature develops.

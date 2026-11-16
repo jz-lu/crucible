@@ -1,0 +1,25 @@
+{
+  "format": "crucible-editorial-selection-v1",
+  "reviewed_on": "2026-11-16",
+  "purpose": "Editorial discovery only. Exact published revisions remain readable; this is not moderation, deletion, or a scientific review.",
+  "archived_publications": [
+    {
+      "note_id": "46c126c4-0a44-4571-ae0b-f2bc44a049ac",
+      "revision": 1,
+      "content_sha256": "e2974babc12bb36a6db6b6a8e5f23c63877db41a3f0ddef59af7dbc898856f77",
+      "reason": "UI test with placeholder content; no research question or evidence."
+    },
+    {
+      "note_id": "b59475ce-2dd2-44c4-b685-01f835d37386",
+      "revision": 1,
+      "content_sha256": "57d65baa983de50ce8db0337fe6165decf0389f7e14b79bc30d849338b25b00b",
+      "reason": "Placeholder test post; no substantive research content."
+    },
+    {
+      "note_id": "67fd3a6b-2446-4735-993f-ec8144cd37ad",
+      "revision": 1,
+      "content_sha256": "786b8f14ec6ea2345aeef78731737432409bb85b72677012fad134960968ee07",
+      "reason": "Temporary publication-screening check, explicitly identified by its author as operational rather than research evidence."
+    }
+  ]
+}

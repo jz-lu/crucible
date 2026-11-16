@@ -171,7 +171,8 @@ def test_supporting_note_access_and_compact_summary_privacy(system, kind):
 
 def test_curated_proposal_metadata_retains_private_withdrawal_flags(system):
     _, owner, reviewer, reader, _ = system
-    source = notebook.curated_collection()[0]
+    source = next(item for item in notebook.curated_collection(include_archived=False)
+                  if 'literature' in item['revisions'][-1]['content'].get('tags', []))
     ref = source['revisions'][0]
     note = {'id': source['id'], 'revision': ref['revision'], 'content_sha256': ref['content_sha256']}
     record = submit_research(owner, note, purpose='visualization_nomination')

@@ -1,5 +1,20 @@
 const {test,expect,signIn,useDataSaver}=require('./helpers.cjs');
 
+for (const width of [1440,390]) test(`starter guides and archived citations remain readable at ${width}px`,async({page},testInfo)=>{
+  await page.setViewportSize({width,height:1000}); await useDataSaver(page); await signIn(page);
+  await page.goto('/#notebook?tag=start-here');
+  await expect(page.locator('#nb-note-list .nb-entry')).toHaveCount(6);
+  await page.goto('/#notebook?note=curated:starter-01-purpose');
+  const reader=page.locator('[data-nb="full"]');
+  await expect(reader.getByRole('heading',{name:'Start here — what Crucible is for',exact:true})).toBeVisible();
+  await expect(reader.locator('.nb-body')).not.toContainText('](#');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:testInfo.outputPath('starter-guide-'+width+'.png'),fullPage:true});
+  await page.goto('/#notebook?note=curated:landscape-hqc');
+  await expect(reader).toContainText('Archived from the featured collection');
+  await expect(reader.locator('.nb-body')).toBeVisible();
+});
+
 for (const width of [1440,390]) test(`note votes and publication age fit beside titles at ${width}px`,async({page},testInfo)=>{
   await page.setViewportSize({width,height:1000});await useDataSaver(page);
   await signIn(page,width===1440?'discoverydesktop':'discoverymobile');

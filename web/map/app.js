@@ -140,6 +140,7 @@
         }
         article.append(list);
       }
+      if (notes.extensions?.editorial_selection?.archived?.[id]) article.append(el('p', 'detail-footnote', 'Archived background reference. Retained for existing citations.'));
       article.append(el('p', 'detail-footnote', 'Curated research note · revision ' + revision + '. Descriptive source material; not a mathematical certification.'));
       if (state.selected) {
         const back = el('button', 'related-button', '← Back to scheme'); back.type = 'button';
@@ -151,6 +152,7 @@
       const article = el('article', 'map-note'); article.append(el('h2', '', value ? 'Notes tagged ' + window.NoteUI.label(value) : 'Map research notes'));
       const list = el('div', 'map-note-list');
       for (const note of notes.notes) {
+        if (Object.hasOwn(notes.extensions?.editorial_selection?.archived || {}, note.id)) continue;
         const latest = note.revisions[note.revisions.length - 1];
         if (value && !latest.tags.includes(value)) continue;
         const button = el('button', '', latest.title); button.type = 'button';

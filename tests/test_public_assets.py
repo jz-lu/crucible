@@ -375,16 +375,15 @@ def test_critical_canvas_matches_base_typography_with_one_exact_csp_hash(frozen_
     sans, = re.findall(r'--sans:\s*([^;]+);', css)
     assert 'font:14px/1.6 ' + sans + ';' in critical
     assert 'font: 14px/1.6 var(--sans);' in css
-    # The early canvas agrees with both complete palettes, including the OS
-    # fallback before bootstrap has applied an explicit saved preference.
-    for selector in (':root', ':root[data-theme=dark]'):
+    # The early canvas stays light before bootstrap, including on a dark OS.
+    for selector in (':root',):
         palette = re.search(re.escape(selector) + r'\s*\{([^}]+)\}', css).group(1)
         for token in ('paper', 'text'):
             color = re.search('--' + token + r':\s*([^;]+);', palette).group(1)
             assert '--' + token + ':' + color in critical
     assert 'background:var(--paper)' in critical and 'color:var(--text)' in critical
-    assert 'html[data-theme=dark]' in critical
-    assert '@media(prefers-color-scheme:dark){html:not([data-theme=light])' in critical
+    assert 'data-theme=dark' not in critical
+    assert 'prefers-color-scheme' not in critical
     assert '[hidden]{display:none!important}' in critical
     assert 'visibility:' not in critical and 'animation:' not in critical
     digest = base64.b64encode(hashlib.sha256(critical.encode()).digest()).decode()

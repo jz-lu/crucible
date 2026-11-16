@@ -874,6 +874,7 @@
       return index.notes.filter(note => {
         const tags = selectedRevision(note).content.tags;
         return (!note.deletion || visibility === 'mine' && String(note.owner?.id) === accountId) &&
+          (!note.archive_reason || visibility === 'mine' && String(note.owner?.id) === accountId) &&
           (visibility !== 'mine' || String(note.owner?.id) === accountId) &&
           (visibility !== 'human' || tags.includes('human-written')) &&
           (visibility !== 'proposals' || Boolean(note.proposal_revision)) && (!tag || tags.includes(tag));
@@ -1433,6 +1434,8 @@
       else sources.append(el('p', 'nb-hint', 'No citations recorded for this revision.'));
       sources.append(button('Cite this note', () => citeNote(note, revision)));
       full.append(sources, relatedNotes(note, revision));
+      const archiveReason = revision.archive_reason || (note.source_kind === 'curated-research' ? note.archive_reason : null);
+      if (archiveReason) full.append(el('p', 'nb-notice', 'Archived from the featured collection: ' + archiveReason + ' This exact revision remains available for citations.'));
       const provenance = r.extensions?.research_note;
       if (typeof provenance?.evidence_scope === 'string') full.append(el('p', 'nb-hint', provenance.evidence_scope));
       const details = el('details', 'nb-details'); details.append(el('summary', '', 'Record details'));

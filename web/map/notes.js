@@ -3,6 +3,7 @@
   'use strict';
   const {el,tag,label,noteHref,body}=NoteUI;
   const workspace=window.CRUCIBLE_NOTES, map=window.CRUCIBLE_LANDSCAPE;
+  const featured=workspace.notes.filter(n=>!Object.hasOwn(workspace.extensions?.editorial_selection?.archived || {},n.id));
   const notes=new Map(workspace.notes.map(n=>[n.id,n]));
   const schemes=new Map(map.schemes.map(s=>[s.id,s]));
   const library=document.getElementById('note-library'),reader=document.getElementById('note-reader');
@@ -13,18 +14,18 @@
   const originName={literature:'Literature','local-adaptation':'Local challenge adaptation','crucible-design':'Crucible design discussion'};
   const state={query:'',role:'',tag:''};
   const latest=n=>n.revisions[n.revisions.length-1];
-  for(const t of [...new Set(workspace.notes.flatMap(n=>latest(n).tags))].sort()){
+  for(const t of [...new Set(featured.flatMap(n=>latest(n).tags))].sort()){
     const option=el('option','',label(t));option.value=t;tagSelect.append(option);
   }
   function chips(tags){const row=el('div','note-tags');tags.forEach(t=>row.append(tag(t)));return row;}
   function renderList(){
     library.hidden=false;reader.hidden=true;document.title='Research notes · Crucible';
     search.value=state.query;role.value=state.role;tagSelect.value=state.tag;
-    const shown=workspace.notes.filter(n=>{
+    const shown=featured.filter(n=>{
       const r=latest(n),m=r.extensions.research_note;
       return (!state.role||m.role===state.role)&&(!state.tag||r.tags.includes(state.tag))&&[r.title,r.claim,r.conditions,r.body,...r.tags].join(' ').toLowerCase().includes(state.query.toLowerCase());
     });
-    document.getElementById('note-count').textContent=`${shown.length} of ${workspace.notes.length} notes`;
+    document.getElementById('note-count').textContent=`${shown.length} of ${featured.length} notes`;
     clear.hidden=!(state.query||state.role||state.tag);list.replaceChildren();
     for(const n of shown){
       const r=latest(n),m=r.extensions.research_note,row=el('article','note-row');
@@ -45,6 +46,7 @@
     const back=el('a','back-link','← All notes');back.href='notes.html';reader.append(back);
     if(!r){reader.append(el('h1','','Note not found'),el('p','intro','That note revision is not in this local collection.'));return;}
     const m=r.extensions.research_note,article=el('article','full-note');
+    if(workspace.extensions?.editorial_selection?.archived?.[id]) article.append(el('p','intro','Archived background reference. Retained for existing citations.'));
     article.append(el('p','eyebrow',roleName[m.role]||m.role));
     const title=el('h1','',r.title);title.tabIndex=-1;article.append(title);
     article.append(el('p','note-byline',`${originName[m.origin]||m.origin} · ${r.kind} · Revision ${number}`),chips(r.tags));

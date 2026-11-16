@@ -20,6 +20,10 @@ def validate_notes(workspace, data):
     notes = workspace['notes']
     if not 1 <= len(notes) <= 200 or len({n['id'] for n in notes}) != len(notes):
         raise ValueError('Each note needs a unique bounded identity.')
+    archived = workspace.get('extensions', {}).get('editorial_selection', {}).get('archived', {})
+    if (not isinstance(archived, dict) or not set(archived) <= {n['id'] for n in notes}
+            or any(not isinstance(reason, str) or not reason.strip() for reason in archived.values())):
+        raise ValueError('Archive entries need an existing note ID and an editorial reason.')
     ids = {s['id'] for s in data['schemes']}
     sources = {s['id']: s for s in data['sources']}
     revisions = {}

@@ -3357,6 +3357,282 @@
           }
         }
       ]
+    },
+    {
+      "id": "starter-01-purpose",
+      "revisions": [
+        {
+          "revision": 1,
+          "createdAt": 1794787200000,
+          "title": "Start here — what Crucible is for",
+          "claim": "A guided starting point for making, testing and improving cryptographic constructions, with inspectable evidence at every step.",
+          "conditions": "Editorial starter guide and working template. Open governance choices are not adopted policy; no scientific result or independent review is claimed.",
+          "body": "## The goal\n\nCrucible should help researchers produce better constructions, better parameter choices, and well-supported reasons to reject weak candidates. A useful outcome may be a proof, an experiment someone else can repeat, a precise counterexample, or a clear account of why an attractive idea fails. Activity counts and an unsolved challenge are not security guarantees.\n\nThe intended demonstration is constructive: begin with a question, write down the proposed mathematics, test controlled examples, invite criticism, and improve the design. Work on public specifications, experiments you control, and the site's expressly provided challenges. Experiments should use generated test keys and data. A new construction remains experimental until its claims have earned the relevant scrutiny.\n\n## A short tour\n\n1. Read the working constitution: what good contributions and decisions should look like.\n2. Follow the research workflow from an idea to a reviewed contribution.\n3. Use the evidence and note template to make a small contribution checkable.\n4. Read how the repository is built before changing the implementation.\n5. Understand automated first-pass review and the decisions it cannot make.\n6. Open Bounties for concrete example tasks and reusable briefs. A template carries no funded reward or admission decision.\n\nFind all six guides using the start-here tag above. Open Bounties from the main navigation.\n\n## What a successful first contribution looks like\n\nChoose one bounded question. Name the exact construction and version. Supply a claim with its conditions, a derivation or reproducible check, and the remaining uncertainty. Give another researcher enough information to disagree precisely. A modest result with complete evidence is more useful than a broad promise with missing steps.\n\n## Decisions still to make\n\nThe working constitution and starter guides are editorial drafts for discussion. Named stewardship roles, review service levels, funding commitments and launch milestones must be assigned explicitly; this collection does not invent them. The beta still requires sign-in, and publication reaches admitted participants.",
+          "tags": [
+            "start-here",
+            "pipeline",
+            "guidance"
+          ],
+          "kind": "Starter guide / working template",
+          "references": [
+            {
+              "id": "starter-research-principles",
+              "title": "Research design record",
+              "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/docs/design-record.txt",
+              "scope": "The recorded research purpose and separation of mathematical, experimental and operational evidence."
+            },
+            {
+              "id": "starter-note-contract",
+              "title": "Research note format",
+              "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/web/map/NOTE-FORMAT.txt",
+              "scope": "Note revisions, publication, citations and research attribution."
+            }
+          ],
+          "artifacts": [],
+          "extensions": {
+            "research_note": {
+              "role": "procedure",
+              "origin": "crucible-design",
+              "scheme_ids": [],
+              "prepared_by": "Prepared with Codex for editorial review, 16 November 2026.",
+              "evidence_scope": "Grounded in the linked repository contracts. This is guidance and draft policy, not a scientific certification."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "starter-02-constitution",
+      "revisions": [
+        {
+          "revision": 1,
+          "createdAt": 1794787200000,
+          "title": "Working constitution — a template for the pipeline",
+          "claim": "A proposed set of principles for how Crucible records research, allocates attention and changes its own rules.",
+          "conditions": "Editorial starter guide and working template. Open governance choices are not adopted policy; no scientific result or independent review is claimed.",
+          "body": "## Status and purpose\n\nThis is a working constitution template, not an enacted governance decision. Before adoption, identify its steward, independent reviewer, effective date and revision. Record proposed amendments in a new note and link the exact revision being changed.\n\n## Proposed commitments\n\nBuild useful cryptography. Prefer contributions that improve a construction, expose an error, clarify an assumption, or make evidence easier to reproduce. Controlled cryptanalysis and negative results are part of designing trustworthy systems. Featured examples should demonstrate that constructive purpose.\n\nMake claims inspectable. Separate the proposition, its assumptions, its argument and its evidence. Distinguish a measured outcome from a proof and an upper bound for a particular attack from a lower bound against every attack. State what the result leaves unresolved.\n\nPreserve history and attribution. Cite exact sources and note revisions. Credit prior authors, collaborators and tools. Corrections should create a new revision with an explanation; they should not silently rewrite a cited result. Removing a note from the featured collection should preserve its history where access rules allow.\n\nKeep decisions separate. Publishing a note makes it readable. It does not certify correctness, select a graph value, admit a scheme or award a bounty. A vote helps allocate attention; it is not a proof. Model-generated comments have no independent scientific authority.\n\nUse independent judgment. Reviewers should declare relevant involvement and assess the exact submitted evidence. A failed automated operation or an uncertain model classification should be recoverable without forcing authors to submit duplicate work.\n\nKeep the system maintainable. Prefer shared workflows, bounded work, explicit state transitions and repeatable releases. Make ordinary corrections and content updates reviewable in version control. Introduce a new service only when a measured requirement warrants it.\n\n## Adoption fields\n\n- Steward and decision-making authority: to be assigned.\n- Independent review and conflict process: to be agreed.\n- Effective version and amendment route: to be recorded.\n- Review cadence and capacity: to be agreed with actual reviewers.\n- Funding and reward commitments: recorded separately with an owner and budget.\n\nThese open fields are deliberate. The current application enforces its implemented permissions and review rules; this draft cannot override them.",
+          "tags": [
+            "start-here",
+            "pipeline",
+            "guidance"
+          ],
+          "kind": "Starter guide / working template",
+          "references": [
+            {
+              "id": "starter-research-principles",
+              "title": "Research design record",
+              "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/docs/design-record.txt",
+              "scope": "The recorded research purpose and separation of mathematical, experimental and operational evidence."
+            },
+            {
+              "id": "starter-note-contract",
+              "title": "Research note format",
+              "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/web/map/NOTE-FORMAT.txt",
+              "scope": "Note revisions, publication, citations and research attribution."
+            },
+            {
+              "id": "starter-proposal-guide",
+              "title": "Scheme proposal guide",
+              "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/docs/proposal-guide.txt",
+              "scope": "The requirements for proposing a scheme and its evidence."
+            }
+          ],
+          "artifacts": [],
+          "extensions": {
+            "research_note": {
+              "role": "procedure",
+              "origin": "crucible-design",
+              "scheme_ids": [],
+              "prepared_by": "Prepared with Codex for editorial review, 16 November 2026.",
+              "evidence_scope": "Grounded in the linked repository contracts. This is guidance and draft policy, not a scientific certification."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "starter-03-workflow",
+      "revisions": [
+        {
+          "revision": 1,
+          "createdAt": 1794787200000,
+          "title": "From a research question to a reviewed contribution",
+          "claim": "A practical sequence for turning a bounded cryptographic question into a note, reproducible evidence and a separately reviewed proposal.",
+          "conditions": "Editorial starter guide and working template. Open governance choices are not adopted policy; no scientific result or independent review is claimed.",
+          "body": "## 1. Choose a bounded question\n\nStart with a missing argument, a suspected mistake, a construction idea or a reproducibility gap. Check existing notes and bounties for overlapping work. Define an outcome another person could verify, including a useful negative result. Choose a finite resource budget for experiments before launching them.\n\n## 2. Write a private note\n\nState the exact algorithms, parameter set, distributions and success or failure event. Cite the sources you actually read. Keep the conjecture separate from established facts. Use the evidence template to record reasoning, commands, artifacts and uncertainty. Private drafting is separate from requesting publication.\n\n## 3. Produce evidence\n\nFor mathematics, show the logical steps and every unproved premise. For experiments, pin source revisions, test inputs, seeds when appropriate, commands, environment and raw outcomes. Preserve failures and explain exclusions. Use only controlled test targets and appropriately shareable data. Do not run submitted research code inside the website server.\n\n## 4. Request publication of an exact revision\n\nReview the content and the publication-screening notice first. The publication screen can refer a request for human attention. Passing it makes the revision readable to the beta community; it does not establish quality, correctness or safety of deployment. Later changes are new revisions, so cite the one a reader can inspect.\n\n## 5. Invite scrutiny\n\nAsk a concrete review question: does a bound follow, do distributions match, can this command reproduce the result? Review comments and follow-up notes should identify the exact claim or source they address. A counterexample should state its scope. A failed attempt deserves a clear record when it teaches something reusable.\n\n## 6. Make a separate proposal when needed\n\nA candidate scheme needs the full proposal packet and independent admission review. A change to displayed evidence or a selected argument needs its own exact target and review. Bounty admission and solution acceptance remain separate human decisions. A supporting note can inform these decisions without granting them automatically.\n\n## Example path\n\nA researcher notices that compression may increase decryption error in a small experimental encryption model. They define the encoding and decoder, enumerate a tiny case, attach the checked output, and publish a note describing the exact effect. Another researcher reproduces it. A later parameter proposal can cite that evidence; it must still justify why the result transfers to its proposed parameters. No claim about a deployed system follows from the tiny experiment alone.",
+          "tags": [
+            "start-here",
+            "pipeline",
+            "guidance"
+          ],
+          "kind": "Starter guide / working template",
+          "references": [
+            {
+              "id": "starter-note-contract",
+              "title": "Research note format",
+              "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/web/map/NOTE-FORMAT.txt",
+              "scope": "Note revisions, publication, citations and research attribution."
+            },
+            {
+              "id": "starter-proposal-guide",
+              "title": "Scheme proposal guide",
+              "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/docs/proposal-guide.txt",
+              "scope": "The requirements for proposing a scheme and its evidence."
+            },
+            {
+              "id": "starter-screening",
+              "title": "Automated publication screening design",
+              "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/docs/publication-screening-design.txt",
+              "scope": "The implemented screening contract and its separation from scientific review."
+            }
+          ],
+          "artifacts": [],
+          "extensions": {
+            "research_note": {
+              "role": "procedure",
+              "origin": "crucible-design",
+              "scheme_ids": [],
+              "prepared_by": "Prepared with Codex for editorial review, 16 November 2026.",
+              "evidence_scope": "Grounded in the linked repository contracts. This is guidance and draft policy, not a scientific certification."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "starter-04-evidence",
+      "revisions": [
+        {
+          "revision": 1,
+          "createdAt": 1794787200000,
+          "title": "Evidence standards and a reusable research-note template",
+          "claim": "A high-quality starting note should make one contribution checkable, expose its assumptions and provide a clear route to reproduction or criticism.",
+          "conditions": "Editorial starter guide and working template. Open governance choices are not adopted policy; no scientific result or independent review is claimed.",
+          "body": "## The editorial bar\n\nA featured note needs a concrete purpose, useful substance and an honest account of its limits. Length alone is not evidence. A short exact counterexample can be excellent; a long list of ideas can still be preliminary. Literature summaries should cite the primary work, identify what was checked, and contribute more than a catalogue label.\n\nThe publication screen and the featured collection serve different purposes. A legitimate question may be publishable without being a strong introductory example. Archiving a reading lead from the featured collection is an editorial choice, not a finding that its mathematics is false.\n\n## Copy and complete this structure\n\n### Question and contribution\n\nState the precise question. Say what this note establishes, measures, refutes or proposes. Identify which statements are conjectures.\n\n### Target and conditions\n\nName the construction, exact version and parameter tuple. Define the distributions, algorithm access, computational model and success event. State whether probability is over keys, messages, randomness or all of them. Record every assumption needed for the conclusion.\n\n### Argument or method\n\nProvide the proof steps or an executable experimental recipe. Explain how the evidence bears on the claim. A simulation at small parameters cannot establish negligible failure or asymptotic hardness. A recovery by one method does not measure all possible attacks.\n\n### Reproduction packet\n\nRecord source commit, artifact hashes, commands, environment, seeds or public test-vector identifiers, resource limits and expected output checks. Include observed failures and the rule for excluding a run. Separate runtime errors from mathematical failures.\n\n### Sources and attribution\n\nCite exact paper editions and passages, note revisions and hashes, and code releases. Name assistance from people or models. Mark sources not yet read and results not independently reproduced.\n\n### Limits and next review\n\nState where the result applies and where it does not. Identify the weakest step and ask a specific question for an independent reviewer. Record unresolved alternatives and a bounded next experiment.\n\n## Before featuring the note\n\nA curator should be able to answer: what changed in our understanding; where is the supporting evidence; can another person check it; and what uncertainty remains? Avoid presenting a template, an illustrative trial or an initial admission as a completed research result.",
+          "tags": [
+            "start-here",
+            "pipeline",
+            "guidance"
+          ],
+          "kind": "Starter guide / working template",
+          "references": [
+            {
+              "id": "starter-note-contract",
+              "title": "Research note format",
+              "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/web/map/NOTE-FORMAT.txt",
+              "scope": "Note revisions, publication, citations and research attribution."
+            },
+            {
+              "id": "starter-research-principles",
+              "title": "Research design record",
+              "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/docs/design-record.txt",
+              "scope": "The recorded research purpose and separation of mathematical, experimental and operational evidence."
+            }
+          ],
+          "artifacts": [],
+          "extensions": {
+            "research_note": {
+              "role": "procedure",
+              "origin": "crucible-design",
+              "scheme_ids": [],
+              "prepared_by": "Prepared with Codex for editorial review, 16 November 2026.",
+              "evidence_scope": "Grounded in the linked repository contracts. This is guidance and draft policy, not a scientific certification."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "starter-05-repository",
+      "revisions": [
+        {
+          "revision": 1,
+          "createdAt": 1794787200000,
+          "title": "How Crucible is built — a contributor orientation",
+          "claim": "An orientation to the current repository and the principles that keep ordinary development and research updates repeatable.",
+          "conditions": "Editorial starter guide and working template. Open governance choices are not adopted policy; no scientific result or independent review is claimed.",
+          "body": "## The application boundary\n\nThe Python application serves both the website and its API. The browser uses HTML, CSS and JavaScript; it does not need a frontend build system to render ordinary pages. Authentication, beta membership, publication, review and reward decisions belong to the server. The deployed database uses PostgreSQL; local development and many tests use SQLite. Versioned migrations describe database changes.\n\n## Where to look\n\n- web/: the site shell, styles and feature interfaces. web/notebook/ contains Notes and Bounties; web/map/ contains the curated reference corpus and map.\n- crucible/: application routes, permissions, note revisions, publication screening and research workflows. Read the relevant module before changing behavior.\n- migrations/: schema history. A release must account for both the outgoing and incoming application versions during deployment.\n- tests/: backend, frontend and browser checks. Browser fixtures use synthetic accounts and disposable local data.\n- scripts/: research builders, operator utilities and the CLI. A script's presence does not make its output reviewed evidence.\n- deploy/ and .github/workflows/: runtime contracts, release automation and verification. Native cryptographic workers have exact source and artifact identities.\n- docs/: research rules, engineering decisions, budget assumptions and operating instructions. Some documents are historical; check dates and the current implementation.\n\n## Principles to carry forward\n\nKeep one authoritative record and derive displays from it. Preserve exact revisions and source identities. Reuse the existing publication, review and permission boundaries for new features. Give expensive work a bounded queue or worker lifecycle rather than keeping an HTTP request open indefinitely.\n\nPrefer declarative content changes and idempotent operations to repeated dashboard entry. Use the normal release workflow, health checks and an explicit rollback path. Avoid changing native runtime artifacts merely to ship prose or visual changes. Test meaningful user journeys, including denied access and uncertain network outcomes.\n\n## Updating this starter collection\n\nThe source is web/map/notes.json. Editorial archive reasons live outside immutable revisions, in workspace metadata. Regenerate browser projections with python3 web/map/build.py, and verify that historical revision hashes and map bindings still resolve. New content should carry clear attribution and status. No database deletion is needed to change the bundled featured selection.\n\n## Future model features\n\nTreat a model response as input to a narrowly defined workflow. Record the model and prompt version, enforce resource and spending limits, and provide a recoverable human path. Publication screening, scientific evaluation and changes to official records must remain distinct decisions.",
+          "tags": [
+            "start-here",
+            "pipeline",
+            "guidance"
+          ],
+          "kind": "Starter guide / working template",
+          "references": [
+            {
+              "id": "starter-contribution-guide",
+              "title": "Contribution guide",
+              "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/CONTRIBUTING.md",
+              "scope": "Development and verification practices in the current repository."
+            },
+            {
+              "id": "starter-operations",
+              "title": "Deployment and release guide",
+              "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/docs/releasing-beta.txt",
+              "scope": "Reviewed runtime reuse and release verification."
+            },
+            {
+              "id": "starter-screening",
+              "title": "Automated publication screening design",
+              "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/docs/publication-screening-design.txt",
+              "scope": "The implemented screening contract and its separation from scientific review."
+            }
+          ],
+          "artifacts": [],
+          "extensions": {
+            "research_note": {
+              "role": "procedure",
+              "origin": "crucible-design",
+              "scheme_ids": [],
+              "prepared_by": "Prepared with Codex for editorial review, 16 November 2026.",
+              "evidence_scope": "Grounded in the linked repository contracts. This is guidance and draft policy, not a scientific certification."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "starter-06-automated-review",
+      "revisions": [
+        {
+          "revision": 1,
+          "createdAt": 1794787200000,
+          "title": "Automated first-pass review — role and limits",
+          "claim": "The publication screen helps route submitted notes; independent researchers remain responsible for mathematical assessment and consequential research decisions.",
+          "conditions": "Editorial starter guide and working template. Open governance choices are not adopted policy; no scientific result or independent review is claimed.",
+          "body": "## What the current screen does\n\nA publication request identifies an exact note revision. The configured screen examines it for concrete publication concerns such as privacy exposure, unauthorized harmful use, obvious spam or gratuitous hostility. When automatic mode is enabled, a valid no-concern result can publish that revision to admitted participants. A concern or processing failure leaves a human-review path.\n\nThe author should read the provider and consent notice shown when requesting publication. Private drafting and requesting external screening are different actions. Do not put private credentials or unnecessary personal information into a research note.\n\n## What a pass means\n\nIt means the note passed this publication screen. It does not establish correctness, novelty, adequate citations, resistance to cryptanalysis or readiness for deployment. A plausible model explanation is not a proof. A high-quality featured collection still needs editorial judgment; a scientific claim still needs appropriate evidence and review.\n\nThe screen should permit legitimate cryptographic work, including negative results, conjectures and controlled cryptanalysis. Selecting constructive showcase examples does not justify silently censoring rigorous criticism or a useful failure.\n\n## What it cannot authorize\n\nA publication pass cannot admit a new scheme, change parameters, execute submitted code, choose a displayed result, approve a bounty or award points. Those operations retain their existing authority and review requirements. Linking to a model-screened note does not bypass them.\n\n## A sustainable operating model\n\nRequests are tied to immutable revisions. Background processing uses durable jobs, leases and bounded retries. Usage and budgets belong to operator controls, and timeouts or unavailable providers must leave a recoverable request. Avoid duplicate requests after an uncertain response; retain the original operation identity.\n\n## Template for a future scientific assistant\n\nIf a later model helps check mathematical notes, define its scope before connecting it: which claims may it comment on, what sources may it inspect, and what evidence must accompany each comment? Store that output as attributed, versioned assistance. Measure usefulness on representative notes and record failure cases. Give researchers a way to contest it. Any proposal to grant it new decision authority needs a separate explicit design and review.\n\nThis guide describes workflow boundaries. It does not claim that a model can guarantee harmlessness or scientific quality.",
+          "tags": [
+            "start-here",
+            "pipeline",
+            "guidance"
+          ],
+          "kind": "Starter guide / working template",
+          "references": [
+            {
+              "id": "starter-screening",
+              "title": "Automated publication screening design",
+              "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/docs/publication-screening-design.txt",
+              "scope": "The implemented screening contract and its separation from scientific review."
+            },
+            {
+              "id": "starter-note-contract",
+              "title": "Research note format",
+              "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/web/map/NOTE-FORMAT.txt",
+              "scope": "Note revisions, publication, citations and research attribution."
+            }
+          ],
+          "artifacts": [],
+          "extensions": {
+            "research_note": {
+              "role": "procedure",
+              "origin": "crucible-design",
+              "scheme_ids": [],
+              "prepared_by": "Prepared with Codex for editorial review, 16 November 2026.",
+              "evidence_scope": "Grounded in the linked repository contracts. This is guidance and draft policy, not a scientific certification."
+            }
+          }
+        }
+      ]
     }
   ],
   "views": [],
@@ -3372,6 +3648,35 @@
       "compiled_on": "2026-10-17",
       "scope": "First bounded literature seed, not an exhaustive survey or security endorsement. Source limitations are recorded per note.",
       "origin": "External research; summaries and open work compiled for Crucible."
+    },
+    "editorial_selection": {
+      "reviewed_on": "2026-11-16",
+      "purpose": "A concise starting collection for constructive cryptographic research. Editorial selection does not certify mathematics.",
+      "archived": {
+        "landscape-ml-kem": "A short catalogue description or superseded orientation draft; the scheme map retains this background reference.",
+        "landscape-frodokem": "A short catalogue description or superseded orientation draft; the scheme map retains this background reference.",
+        "landscape-saber": "A short catalogue description or superseded orientation draft; the scheme map retains this background reference.",
+        "landscape-sntrup": "A short catalogue description or superseded orientation draft; the scheme map retains this background reference.",
+        "landscape-ntru": "A short catalogue description or superseded orientation draft; the scheme map retains this background reference.",
+        "landscape-ntrulpr": "A short catalogue description or superseded orientation draft; the scheme map retains this background reference.",
+        "landscape-classic-mceliece": "A short catalogue description or superseded orientation draft; the scheme map retains this background reference.",
+        "landscape-hqc": "A short catalogue description or superseded orientation draft; the scheme map retains this background reference.",
+        "landscape-bike": "A short catalogue description or superseded orientation draft; the scheme map retains this background reference.",
+        "landscape-rqc": "A short catalogue description or superseded orientation draft; the scheme map retains this background reference.",
+        "landscape-rsa-kem": "A short catalogue description or superseded orientation draft; the scheme map retains this background reference.",
+        "landscape-teaching-dh-kem": "A short catalogue description or superseded orientation draft; the scheme map retains this background reference.",
+        "landscape-dhkem-x25519": "A short catalogue description or superseded orientation draft; the scheme map retains this background reference.",
+        "landscape-lwe-structure": "A short catalogue description or superseded orientation draft; the scheme map retains this background reference.",
+        "landscape-selection-principles": "A short catalogue description or superseded orientation draft; the scheme map retains this background reference.",
+        "literature-planted-clique-pke": "A preliminary literature reading agenda. A worked derivation, reproduction or fuller technical review is needed before featuring it.",
+        "literature-high-corruption-csp": "A preliminary literature reading agenda. A worked derivation, reproduction or fuller technical review is needed before featuring it.",
+        "literature-hclwe-pke": "A preliminary literature reading agenda. A worked derivation, reproduction or fuller technical review is needed before featuring it.",
+        "literature-mixed-errors-pke": "A preliminary literature reading agenda. A worked derivation, reproduction or fuller technical review is needed before featuring it.",
+        "literature-uniform-minrank": "A preliminary literature reading agenda. A worked derivation, reproduction or fuller technical review is needed before featuring it.",
+        "literature-stationary-minrank": "A preliminary literature reading agenda. A worked derivation, reproduction or fuller technical review is needed before featuring it.",
+        "literature-qfesta": "A preliminary literature reading agenda. A worked derivation, reproduction or fuller technical review is needed before featuring it.",
+        "literature-lowms": "A preliminary literature reading agenda. A worked derivation, reproduction or fuller technical review is needed before featuring it."
+      }
     }
   }
 }

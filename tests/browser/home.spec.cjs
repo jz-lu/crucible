@@ -1,10 +1,8 @@
 const {test,expect,signIn,useDataSaver,holdResponse}=require('./helpers.cjs');
 async function expectFooterClearOfTheme(page) {
  await page.locator('.footer-brand').scrollIntoViewIfNeeded();
- const footer=await page.locator('.footer-brand').boundingBox(),theme=await page.locator('#theme-toggle').boundingBox();
- // The fixed theme control must not cover the footer's real pointer target.
- const overlap=footer.x<theme.x+theme.width&&footer.x+footer.width>theme.x&&footer.y<theme.y+theme.height&&footer.y+footer.height>theme.y;
- expect(overlap,'footer brand stays clear of the theme switcher').toBe(false);
+ await expect(page.locator('.footer-brand')).toBeVisible();
+ await expect(page.locator('#theme-toggle, .resi-footer-brand')).toHaveCount(0);
 }
 for(const width of [1440,390]) {
  test('home stays private while access resolves and offers account creation or sign-in at '+width+'px',async({page},testInfo)=>{

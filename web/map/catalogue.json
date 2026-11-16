@@ -1023,6 +1023,42 @@
       "title": "Improved structural key recovery with explicitly conditional estimates",
       "url": "https://eprint.iacr.org/2026/1984",
       "scope": "Primary source context for the exact release's named model or argument. Applicability, numerical evidence and limitations are stated in the pinned evidence note; citation is not certification."
+    },
+    {
+      "id": "starter-research-principles",
+      "title": "Research design record",
+      "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/docs/design-record.txt",
+      "scope": "The recorded research purpose and separation of mathematical, experimental and operational evidence."
+    },
+    {
+      "id": "starter-contribution-guide",
+      "title": "Contribution guide",
+      "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/CONTRIBUTING.md",
+      "scope": "Development and verification practices in the current repository."
+    },
+    {
+      "id": "starter-note-contract",
+      "title": "Research note format",
+      "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/web/map/NOTE-FORMAT.txt",
+      "scope": "Note revisions, publication, citations and research attribution."
+    },
+    {
+      "id": "starter-proposal-guide",
+      "title": "Scheme proposal guide",
+      "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/docs/proposal-guide.txt",
+      "scope": "The requirements for proposing a scheme and its evidence."
+    },
+    {
+      "id": "starter-screening",
+      "title": "Automated publication screening design",
+      "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/docs/publication-screening-design.txt",
+      "scope": "The implemented screening contract and its separation from scientific review."
+    },
+    {
+      "id": "starter-operations",
+      "title": "Deployment and release guide",
+      "url": "https://github.com/jz-lu/crucible/blob/f9719ab5d3a4a99d7040e7d2d83ebc83608dc946/docs/releasing-beta.txt",
+      "scope": "Reviewed runtime reuse and release verification."
     }
   ],
   "scoring_snapshot": {

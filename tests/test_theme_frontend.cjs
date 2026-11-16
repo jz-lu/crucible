@@ -32,67 +32,27 @@ function fixture({saved, dark = false, blocked = false, parsed = true, noMedia =
 }
 let passed = 0;
 function test(name, run) { run(); console.log('PASS ' + name); passed++; }
-test('stored light overrides a dark OS before the body exists', () => {
-  const f = fixture({saved: 'light', dark: true, parsed: false});
-  assert.equal(f.root.getAttribute('data-theme'), 'light');
-  assert.equal(f.meta.getAttribute('content'), '#ebede6');
-  assert.deepEqual(f.writes, []);
-  f.parse(); assert.equal(f.button.hidden, false);
-  assert.equal(f.button.getAttribute('aria-label'), 'Switch to dark theme');
-  assert.equal(f.label.textContent, 'Dark mode');
-});
-test('stored dark overrides a light OS immediately', () => {
-  const f = fixture({saved: 'dark'});
-  assert.equal(f.root.getAttribute('data-theme'), 'dark');
-  assert.equal(f.meta.getAttribute('content'), '#171a18');
-  assert.equal(f.button.getAttribute('aria-label'), 'Switch to light theme');
-  assert.equal(f.label.textContent, 'Light mode');
-});
-test('unset or invalid preferences follow OS changes without persisting them', () => {
-  for (const saved of [undefined, 'bogus', '<script>']) {
-    const f = fixture({saved, dark: true});
-    assert.equal(f.root.getAttribute('data-theme'), 'dark');
-    f.media.matches = false; f.media.emit('change');
+test('light is applied before parsing despite saved dark or OS preferences', () => {
+  for (const saved of [undefined, 'dark', 'light', 'bogus']) for (const dark of [true, false]) {
+    const f = fixture({saved, dark, parsed: false});
+    assert.equal(f.root.getAttribute('data-theme'), 'light');
+    assert.equal(f.meta.getAttribute('content'), '#ebede6');
+    f.parse(); f.media.matches = !dark; f.media.emit('change');
+    f.window.emit('storage', {key: 'crucible.theme', newValue: 'dark'});
+    f.evaluate();
     assert.equal(f.root.getAttribute('data-theme'), 'light');
     assert.deepEqual(f.writes, []);
   }
 });
-test('toggle persists only a nonsensitive explicit theme and then ignores OS changes', () => {
-  const f = fixture(); f.button.emit('click');
-  assert.equal(f.root.getAttribute('data-theme'), 'dark');
-  assert.equal(f.label.textContent, 'Light mode');
-  assert.deepEqual(f.writes, [['crucible.theme', 'dark']]);
-  f.media.emit('change'); assert.equal(f.root.getAttribute('data-theme'), 'dark');
-  f.button.emit('click'); assert.equal(f.root.getAttribute('data-theme'), 'light');
-  assert.equal(f.label.textContent, 'Dark mode');
-  assert.equal(f.button.getAttribute('data-next-theme'), 'dark');
-});
-test('blocked storage and absent matchMedia do not break paint or toggling', () => {
+test('denied storage and absent matchMedia do not break light first paint', () => {
   const f = fixture({blocked: true, noMedia: true});
   assert.equal(f.root.getAttribute('data-theme'), 'light');
-  f.button.emit('click'); assert.equal(f.root.getAttribute('data-theme'), 'dark');
 });
-test('cross-tab preference changes update theme; removal returns to OS default', () => {
-  const f = fixture({dark: true, saved: 'light'});
-  f.window.emit('storage', {key: 'unrelated', newValue: 'dark'});
-  assert.equal(f.root.getAttribute('data-theme'), 'light');
-  f.window.emit('storage', {key: 'crucible.theme', newValue: 'dark'});
-  assert.equal(f.root.getAttribute('data-theme'), 'dark');
-  f.window.emit('storage', {key: 'crucible.theme', newValue: null});
-  f.media.matches = false; f.media.emit('change');
-  assert.equal(f.root.getAttribute('data-theme'), 'light');
-});
-test('repeated bootstrap and readiness events never double-bind the toggle', () => {
-  const f = fixture({parsed: false}); f.parse(); f.parse(); f.evaluate();
-  f.button.emit('click');
-  assert.equal(f.root.getAttribute('data-theme'), 'dark');
-  assert.equal(f.writes.length, 1);
-});
-test('native button has an accessible name, keyboard focus treatment and no layout shift', () => {
-  assert.match(html, /<button id="theme-toggle"[^>]*type="button"[^>]*aria-label="[^"]+"[^>]*hidden>/);
-  assert.match(css, /\.theme-toggle\s*\{[^}]*position:fixed;[^}]*width:128px;[^}]*height:44px;/);
-  assert.match(css, /\.theme-toggle:focus-visible\s*\{[^}]*outline:2px/);
-  assert.match(html, /name="color-scheme" content="light dark"/);
+test('the shell declares light mode and has no theme control or partner branding', () => {
+  assert.match(html, /<html lang="en" data-theme="light">/);
+  assert.match(html, /name="color-scheme" content="light"/);
+  assert.doesNotMatch(html, /theme-toggle|resi-logo|resi\.org|>RESI</);
+  assert.doesNotMatch(css, /prefers-color-scheme: dark|:root\[data-theme=dark\]|theme-toggle/);
 });
 function tokens(selector) {
   const rule = css.slice(css.indexOf(selector) + selector.length).split('}')[0];
@@ -104,9 +64,9 @@ function luminance(hex) {
     .reduce((sum,v,i) => sum + v * [.2126,.7152,.0722][i], 0);
 }
 function ratio(a,b) { const x=luminance(a),y=luminance(b); return (Math.max(x,y)+.05)/(Math.min(x,y)+.05); }
-test('both palettes keep text and semantic badge contrast at WCAG AA', () => {
-  const light=tokens(':root {'), dark={...light,...tokens(':root[data-theme=dark] {')};
-  for (const [name,p] of [['light',light],['dark',dark]]) {
+test('the light palette keeps text and semantic badge contrast at WCAG AA', () => {
+  const light=tokens(':root {');
+  for (const [name,p] of [['light',light]]) {
     for (const fg of ['ink','text','muted','primary']) for (const bg of ['paper','surface']) {
       assert.ok(ratio(p[fg],p[bg]) >= 4.5, `${name} ${fg}/${bg} ${ratio(p[fg],p[bg])}`);
     }
@@ -117,11 +77,11 @@ test('both palettes keep text and semantic badge contrast at WCAG AA', () => {
     assert.ok(ratio(p['recovery-red'],p.surface) >= 3, `${name} recovery graph line`);
   }
 });
-test('shadow map inherits theme, while standalone map still has a dark OS fallback', () => {
+test('shadow map inherits the light palette and standalone map stays light', () => {
   const map=fs.readFileSync(path.join(__dirname,'../web/map/styles.css'),'utf8');
   assert.match(map, /:root,:host\{--white:var\(--surface\);--focus:var\(--error\)/);
   assert.doesNotMatch(map, /:host\{[^}]*--(?:paper|ink|text):#/);
-  assert.match(map, /prefers-color-scheme: dark/);
+  assert.doesNotMatch(map, /prefers-color-scheme: dark|:root\[data-theme=dark\]/);
   assert.match(map, /\.network-region\{fill:var\(--region-violet\)/);
   assert.match(css, /\.chart-recovery-line\s*\{\s*stroke: var\(--recovery-red\)/);
 });

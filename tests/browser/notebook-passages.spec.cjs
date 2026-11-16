@@ -41,10 +41,10 @@ for (const width of [1440, 390]) {
     await page.reload();
     await expect(selected).toBeFocused();
     await expect(selected).toHaveAttribute('data-nb-location', 'L5');
-    await page.locator('#theme-toggle').click();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await page.emulateMedia({colorScheme: 'dark'});
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
     await expect(selected).toHaveAttribute('data-nb-location', 'L5');
-    await page.screenshot({path: testInfo.outputPath('selected-passage-dark.png'), fullPage: true});
+    await page.screenshot({path: testInfo.outputPath('selected-passage-dark-os.png'), fullPage: true});
     await page.goto(route + '&location=L2');
     await expect(reader.locator('.nb-error')).toContainText('not present in this saved revision');
     await expect(reader.locator('.nb-body')).toHaveCount(0);
