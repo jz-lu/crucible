@@ -47,8 +47,9 @@ for (const width of [1440, 640, 390]) for (const theme of ['light', 'dark']) {
     });
     expect(measurements.overlay).toEqual(measurements.image);
     expect(Number(measurements.fire)).toBe(.5);expect(Number(measurements.key)).toBe(.9);
-    expect(measurements.primary).toBe(theme === 'light' ? '#28513f' : '#a6cbb7');
-    expect(measurements.pigment).toBe(theme === 'light' ? 'rgb(40, 81, 63)' : 'rgb(166, 203, 183)');
+    expect(measurements.primary).toBe('#28513f');
+    expect(measurements.pigment).toBe('rgb(40, 81, 63)');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
     await page.screenshot({path:testInfo.outputPath('member-logo-'+width+'-'+theme+'.png'),fullPage:true,animations:'allow'});
     await page.locator('.brand-fire-ghost').evaluate(element => element.getAnimations().forEach(animation => animation.finish()));
     await expect(brand).not.toHaveClass(/brand-ignited/);

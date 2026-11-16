@@ -179,7 +179,7 @@ for (const width of [1440, 390]) {
       const url = new URL(response.url());
       return url.pathname === '/api/notebook/notes' && url.searchParams.get('projection') === 'index' && response.status() === 200;
     });
-    await signIn(page);
+    await signIn(page, 'pagingwarm');
     const response = await indexRead;
     const index = await response.json();
     expect(index.complete).toBe(true);
@@ -247,7 +247,7 @@ for (const width of [1440, 390]) {
     const writes=[],bodyReads=[];
     page.on('request',request=>{const url=new URL(request.url());if(request.method()!=='GET')writes.push(url.pathname);if(url.pathname.startsWith('/api/notebook/notes/'))bodyReads.push(url.pathname);});
     try{
-      await signIn(page,'bob');
+      await signIn(page,'pagingserver');
       const workspace=page.locator('#notebook-workspace'),list=workspace.locator('#nb-note-list');
       const next=workspace.locator('[data-nb="more"]'),previous=workspace.locator('[data-nb="prev"]');
       await expect(list.locator('.nb-entry')).toHaveCount(25);await expect(next).toBeEnabled();

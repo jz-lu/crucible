@@ -63,7 +63,7 @@ def main():
                 effective_month=bounty_allowance.INITIAL_MONTH,
                 configuration=dict(bounty_allowance.INITIAL_CONFIGURATION), created_at=now))
             for actor in ("alice", "bob", "revoked", "bulkdesktop", "bulkmobile", "queueauthor", "queuereviewer", "numbers",
-                          "discoverydesktop", "discoverymobile", "formsdesktop", "formsmobile"):
+                          "discoverydesktop", "discoverymobile", "formsdesktop", "formsmobile", "pagingwarm", "pagingserver"):
                 user = User(id=queue_reviewer_id if actor == "queuereviewer" else str(uuid4()), handle="browser_" + actor,
                             password_hash=encoded, created_at=now)
                 session.add(user)
@@ -90,6 +90,20 @@ def main():
                     created_at=now, content=content, content_sha256=notebook._hash(content),
                     idempotency_key=str(uuid4()), request_sha256="1" * 64)
                 session.add(revision)
+                if actor in {"pagingwarm", "pagingserver"}:
+                    # Paging coverage must not depend on the editorial catalogue's size.
+                    # Only these disposable accounts can see these private fixtures.
+                    for index in range(20):
+                        page_content = {**content, "title": f"Private paging fixture {index:02d}"}
+                        page_note = notebook.NotebookNote(id=str(uuid4()), author_id=user.id,
+                            created_at=now + index / 1000, latest_revision=1,
+                            idempotency_key=str(uuid4()), request_sha256="6" * 64)
+                        session.add(page_note)
+                        session.flush()
+                        session.add(notebook.NotebookRevision(id=str(uuid4()), note_id=page_note.id,
+                            revision=1, created_at=page_note.created_at, content=page_content,
+                            content_sha256=notebook._hash(page_content), idempotency_key=str(uuid4()),
+                            request_sha256="7" * 64))
                 if actor == "queueauthor":
                     session.flush()
                     session.add(notebook.NotebookPublication(id=str(uuid4()), revision_id=revision.id,
