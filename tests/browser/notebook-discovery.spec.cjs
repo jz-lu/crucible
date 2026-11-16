@@ -12,6 +12,7 @@ for (const width of [1440,390]) test(`starter guides and archived citations rema
   await page.screenshot({path:testInfo.outputPath('starter-guide-'+width+'.png'),fullPage:true});
   await page.goto('/#notebook?note=curated:landscape-hqc');
   await expect(reader).toContainText('Archived from the featured collection');
+  await reader.locator('.nb-full-text > summary').click();
   await expect(reader.locator('.nb-body')).toBeVisible();
 });
 

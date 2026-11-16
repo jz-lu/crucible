@@ -2,7 +2,7 @@
 
 Crucible's graphs answer three different questions: how much data a construction sends, how long an identified implementation took to run, and how much work a specified attack is budgeted to use. Keeping those questions separate lets a researcher improve one part of the picture without silently changing the others. Every useful point should lead back to its exact construction, method, evidence and assumptions.
 
-Use the short explanation above for orientation and the procedure below to reproduce, critique or propose an improvement to a curve. The full text provides the specifications needed to carry out that work, including through an agent. It describes the November assumptions trial and its retained measurement reports. It does not confer approval on a proposed estimate.
+Use the short explanation above for orientation and the procedure below to reproduce, critique or propose an improvement to a curve. The full text provides the specifications needed to carry out that work, including through an agent. It describes the launch display's selected analytical model and the interpretation of retained measurement reports. It does not confer approval on a proposed estimate.
 
 ## 1. Resolve the target before calculating
 
@@ -55,7 +55,7 @@ Keep any no-operation RSS baseline alongside the observation; the current report
 
 The main computation graph uses operation time. Memory evidence remains inspectable in the report. A future memory-constrained attack comparison must fix one common cap and reject candidates without an adequate bound before selecting an envelope.
 
-## 5. The classical attack experiment in this trial
+## 5. The selected classical attack experiment
 
 The implemented experiment is one fresh honest KEM key pair and encapsulation at an exact registered configuration. The attacker receives the public transcript and returns the complete encapsulated shared secret. The experiment grants no decapsulation oracle. Include the final conversion from a recovered algebraic value or message to the actual shared secret, including verification, encoding and hashing.
 
@@ -63,7 +63,7 @@ The comparison model is crucible-bit-ram-v1; its experiment identifier is one-fr
 
 A point displays log2(W), where W is a conservative finite work budget for a documented strategy with success at least 1/2 under its stated premises. Preserve the stronger success statement when one is available. W is an upper bound for that strategy; it is not a lower bound against all attacks, a proof of optimality, an expected runtime or an achieved security category. Some current strategies deliberately use elementary and very inefficient baselines.
 
-Earlier design material can describe different experiments, including a 75% distinguishing-game threshold. Those records cannot be imported by relabeling their axes. Bind this trial to the experiment and model above. Keep quantum estimates in their own explicit models; never obtain them by halving a classical exponent.
+Earlier design material can describe different experiments, including a 75% distinguishing-game threshold. Those records cannot be imported by relabeling their axes. Bind each displayed point to the experiment and model above. Keep quantum estimates in their own explicit models; never obtain them by halving a classical exponent.
 
 ## 6. The bit-RAM accounting rules
 
@@ -161,9 +161,9 @@ This packet is an authoring checklist, not an additional server endpoint or acce
 
 ## Source map
 
-Website trial: crucible/attack_models/common.py, classical.py, lattice.py, codes.py and catalogue.py; scripts/build_ram_attack_notes.py; crucible/data/ram_attack_curves.json; docs/ram-attack-cycle-review.txt; crucible/resource_publications.py; crucible/resource_state.py; web/resource-metrics.js; docs/resource-publications.txt. Exact file hashes accompany this draft's source manifest.
+Website sources: crucible/attack_models/common.py, classical.py, lattice.py, codes.py and catalogue.py; scripts/build_ram_attack_notes.py; crucible/data/ram_attack_curves.json; docs/ram-attack-cycle-review.txt; crucible/resource_publications.py; crucible/resource_state.py; web/resource-metrics.js; docs/resource-publications.txt; docs/note-presentations.txt. Exact file hashes accompany this guide's source manifest.
 
-Retained measurement run: countableclouds/crucible-schemes, commit 27b78aa7bd2ae464fb4579d91eb44eb505903ece, run 40770844682, attempt 1. Its original ZIPs and acceptance receipts were checked before replay into the local preview. That replay is not a new benchmark or new provider authentication. Original machine and method context remain in each report.
+Retained measurement run: countableclouds/crucible-schemes, commit 27b78aa7bd2ae464fb4579d91eb44eb505903ece, run 40770844682, attempt 1. Its original ZIPs and acceptance receipts were checked before replay into the local preview. That replay is not a new benchmark or hosted publication. On the connected server, verify each report's actual publication and active producer binding before relying on a displayed measurement. Original machine and method context remain in each report.
 
 Primary method references:
 - NIST IR 8413-upd1, Appendix B: https://nvlpubs.nist.gov/nistpubs/ir/2022/NIST.IR.8413-upd1.pdf#page=90

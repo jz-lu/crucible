@@ -38,7 +38,9 @@ for (const layout of ['centered', 'left']) for (const width of [1440, 390]) for 
     expect(title).toEqual({lines:1,overflow:false});
     const fontsMatch=await page.evaluate(()=>{
       const tabs=getComputedStyle(document.querySelector('.nav-button'));
-      return [...document.querySelectorAll('dialog h2')].every(element=>{
+      // Authentication keeps the navigation typography. The separate scheme
+      // argument reader deliberately uses the editorial display face.
+      return [...document.querySelectorAll('#auth-dialog h2')].every(element=>{
         const heading=getComputedStyle(element);return heading.fontFamily===tabs.fontFamily&&heading.fontWeight===tabs.fontWeight;
       });
     });

@@ -82,9 +82,9 @@ Prepare one substantive note containing:
 
 The checklist describes the needed information; it need not impose a rigid prose template. Use mathematical notation and code where they make the claim more precise. Attribute collaborators, source authors and model assistance.
 
-## 7. Represent it in the assumptions trial
+## 7. Represent it in a note
 
-Notes remain the authoritative content. A standalone assumption does not require a new global database of truths. In the local trial, optional content.statements stores separately addressable statements alongside the full note body. The fields are:
+Notes remain the authoritative content. A standalone assumption does not require a new global database of truths. Optional content.statements stores separately addressable statements alongside the full note body. The fields are:
 
     id: stable lowercase identifier, at most 80 characters
     label: short display label, at most 30 characters
@@ -105,7 +105,7 @@ An optional content.arguments entry identifies the conclusion, scope and depende
 
 An argument uses either conclusion_statement or the retained historical conclusion prose field, never both. Conditional arguments must identify at least one dependency. Unconditional arguments cannot contain unproved dependencies. Missing reasoning should remain incomplete. A single use explanation can state how the premise is applied; absence of that explanation does not certify that a transfer was proved.
 
-These fields and their limits come from crucible/statement_workflow.py in the trial checkout. Check the connected server's current schema before using them. They are not yet a promise of deployed agent write support. On a server without this schema, retain the complete proposal in an ordinary note and prepare the structural mapping separately; do not change the meaning to fit an older interface.
+These fields and their limits come from crucible/statement_workflow.py. Check the connected server's current note schema before using them. Structured content does not grant scientific approval or select an argument for a scheme. The launch display reads explicitly pinned arguments; the separate admission, selection and withdrawal controls remain local-only. On a server without this content schema, retain the complete proposal in an ordinary note and prepare the structural mapping separately; do not change the meaning to fit an older interface.
 
 ### Place statements in the explanation
 

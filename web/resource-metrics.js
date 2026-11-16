@@ -312,7 +312,9 @@
     if (measured.length && rss?.includesLauncher) summaryText += ' Includes pre-exec launcher memory.';
     if (entry?.status === 'error') summaryText = data ? 'Refresh failed. Retained report shown; retry below.' : 'The resource report could not be retrieved. Retry below.';
     const showSummary = !publication || historical || measured.length < points.length || rss?.includesLauncher || entry?.status === 'error';
-    if (showSummary && summaryText) target.append(element('p', summaryText, 'overview-chart-note resource-summary'));
+    // Reserve the existing two-line status area while the report is pending.
+    // A missing/outdated response must not push the following cards down.
+    target.append(element('p', showSummary ? summaryText : '', 'overview-chart-note resource-summary'));
     const details = element('details'), summary = element('summary', 'Values, method & source'); details.append(summary); details.open = detailsOpen;
     if (!showSummary && summaryText) details.append(element('p', summaryText, 'overview-chart-note resource-summary'));
     const evidenceControls = element('div', undefined, 'resource-controls');

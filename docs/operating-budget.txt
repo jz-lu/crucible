@@ -1,6 +1,6 @@
 CRUCIBLE OPERATING BUDGET
 =======================
-Last reviewed: 2026-11-16 (signup-volume assumptions). Currency: USD, before tax and credits.
+Last reviewed: 2026-11-16 (live hosting and signup-volume audit). Currency: USD, before tax and credits.
 Public rates retain their 2026-11-04 verification date below.
 Planning scale: hundreds of active researchers, with occasional bursts.
 Next review: first full month after screening is enabled, or 2026-12-04,
@@ -15,8 +15,8 @@ put credentials, private invoices, account numbers or submitted note text here.
 Funding assumption
 ------------------
 The initial planning allowance is $125-175/month ($1,500-2,100/year), including a
-proposed $10/month model-screening pilot envelope. This is not an observed bill,
-an enabled spending limit or authorization for additional spending. A retained
+ $10/month model-screening envelope. This is a planning estimate, not an observed
+bill or authorization for additional spending. The live app cap is recorded below. A retained
 helper server and paid email would add about $44/month. Sustained growth, stronger review models or an
 availability requirement should be a deliberate new budget decision.
 
@@ -32,18 +32,32 @@ cash prizes need separate funding; current bounty rewards are participation poin
 
 Cost register and where charges arise
 ------------------------------------
-Except for the Nov 5 screening trial, these entries retain the Nov 4 audit evidence.
+Live app/database and screening configuration were checked on Nov 16. Other
+prices retain their earlier evidence date; dashboard rates are not paid invoices.
 Item                  Baseline / charging point             Evidence (dated below)
-Application           $49/month, 1 dedicated CPU / 4 GiB      Observed in DO dashboard
-Managed PostgreSQL    $15.15/month, entry Standard plan      Prior handoff + public rate
+Application           $49/month, 1 dedicated CPU / 4 GiB      DO dashboard, Nov 16
+Managed PostgreSQL    $15.15/month, 1 GiB / 10 GiB disk       DO dashboard, Nov 16
 Container Registry    Basic $5 or Professional $20/month     Actual tier to confirm
 Spaces                $5/month base                          Recovery configuration
 Domain                .fail $34.50/year standard renewal      Public rate; invoice unknown
 Transactional email   Resend Free $0; Pro $20/month            Actual account usage unknown
 GitHub Actions        Standard Linux 2-core $0.006/min         Plan/allowance to reconcile
 Backup job compute    Chosen job rate x running time           Schedule/runtime unverified
-Helper/recovery VM    About $24/month if retained              Oct 29 handoff; inventory due
-Note screening API    Usage per submitted revision/attempt    Nov 5 local trial; see below
+Helper/recovery VM    About $24/month; still active            Nov 16 inventory; invoice due
+Note screening API    Usage per submitted revision/attempt    Live cap verified Nov 16
+
+Nov 16 live configuration: one app container; managed PostgreSQL17.11 on the
+primary-only plan with a 22-connection limit. Database storage automatically adds
+10 GiB when usage reaches 80%; this configured cost step needs usage monitoring.
+The native-check VM remains active even though ordinary releases now use hosted
+CI. Review its recovery/testing purpose before deciding whether to retain it.
+No resource size or billing plan was changed by this audit.
+
+The live screening worker is enabled in automatic mode with gpt-6-luna and a
+10,000,000 micro-USD ($10) UTC-month reservation cap. This is an observed app
+configuration, not a provider-wide spending limit or a reconciled model invoice.
+The release keeps that model, mode, credential and budget unchanged. The earlier
+pilot cost estimates below remain dated estimates, not current usage totals.
 
 Application: charged while the service exists. CPU/memory or replica changes
 change this fixed cost. Challenge generation, HTTP traffic and background work

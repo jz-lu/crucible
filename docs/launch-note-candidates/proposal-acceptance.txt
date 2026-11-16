@@ -2,7 +2,7 @@
 
 A proposal asks Crucible to do something specific with research: admit a construction, use evidence in a display, select an explanatory argument, change a process or open a bounty. Review should answer whether the supplied evidence justifies that use. A readable note, an approved proposal and a live executable challenge therefore have different meanings.
 
-This note gives a route from a research result to a reviewable change. It describes the current base workflows and labels the extra argument workflow available in the local assumptions trial. Fetch the connected server's current contract and schema before submitting.
+This note gives a route from a research result to a reviewable change. It describes the participant workflows and labels the extra argument workflow available only in the local assumptions trial. The hosted launch display reads reviewed source bindings; it does not enable that trial's admission or selection controls. Fetch the connected server's current contract and schema before submitting.
 
 ## 1. Choose the requested outcome
 
