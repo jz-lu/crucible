@@ -26,6 +26,8 @@ PUBLIC = {
     ("POST", "/api/access/invitations/inspect"),
     ("POST", "/api/access/invitations/verify/start"),
     ("POST", "/api/access/invitations/redeem"),
+    ("POST", "/api/access/signup-links/inspect"),
+    ("POST", "/api/access/signup-links/invitations"),
 }
 
 # Explicit paths from the existing application. This is deliberately not a
@@ -75,6 +77,7 @@ MEMBER_PATHS = {
     "/api/protocol/proposals/{proposal_id}/retraction",
     "/api/protocol/proposals/{proposal_id}",
     "/api/access/invitations", "/api/access/invitations/{invitation_id}/revoke",
+    "/api/access/signup-links", "/api/access/signup-links/{link_id}/revoke",
     "/api/access/members", "/api/access/members/{user_id}/revoke",
     "/api/access/members/{user_id}/suspend",
     "/api/access/members/{user_id}/restore",

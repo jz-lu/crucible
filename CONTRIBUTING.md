@@ -34,6 +34,8 @@ and prove old/new compatibility before claiming uninterrupted rollout; the curre
 exact-head startup gate has not been relaxed.
 For starter guides, reversible note selection and bounty templates, follow
 [showcase curation](docs/showcase-curation.txt).
+For reusable admission links and the disposable local review server, see
+[signup links](docs/beta-signup-links.txt); its schema release remains a separate gate.
 
 ## Start locally
 

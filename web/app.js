@@ -10,6 +10,7 @@ const state = {
   auth: {}, authPanel: 'signin', githubBusy: false, githubPending: false, githubCompleteBusy: false, authCallbackBusy: false, githubLinkContext: null,
   passwordResetToken: null, passwordResetBusy: false, passwordRecoveryBusy: false, authRecoveryEntry: false,
   invitationPresented: null, invitationInspection: 0, invitationRequest: 0, invitationResendAt: 0,
+  signupToken: null, signupPresented: null, signupRequest: 0, signupBusy: false,
   access: null, sessionResolved: false, invitationToken: null, invitationBusy: false, invitationDelivery: null, invitationIssue: null,
   returnRoute: null, protectedLoaded: false, canManageBetaAccess: false,
   user: null, csrf: '', canReviewProposals: false, canSelfReviewProposals: false, schemes: [], profile: null, challenge: null,
@@ -37,7 +38,7 @@ let initializationPending = false, resumeInitialization = false;
 const researcherEditor = {account: null, request: 0, base: null, pending: null, open: false, busy: false, loading: false, conflict: false, contextRequired: false, guarded: false};
 function ownsDocument(epoch) { return !documentRetired && documentEpoch === epoch; }
 window.addEventListener('pagehide', () => {
-  resumeInitialization = initializationPending || !state.sessionResolved || browsingRequests.size > 0;
+  resumeInitialization = initializationPending || !state.sessionResolved || browsingRequests.size > 0 || Boolean(state.signupToken);
   documentRetired = true; documentEpoch++;
   // A restored document must not attach to requests owned by its retired visit.
   // Keep completed snapshots; detach only in-flight handoffs and read owners.
@@ -48,6 +49,9 @@ window.addEventListener('pagehide', () => {
   notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
   window.CrucibleResources?.invalidateReads?.();
   suspendResearcherEditor();
+  resetSignupRequest();
+  signupAdmin.request++;signupAdminBusy(false);
+  if ($('#signup-links-dialog').open) $('#signup-links-dialog').close();
 });
 window.addEventListener('pageshow', event => {
   documentRetired = false;
@@ -569,6 +573,7 @@ const invitationMessages = {
   invitation_unavailable: 'This invitation is unavailable. Sign in if you have already joined, or contact your inviter for a new link.'
 };
 function clearInvitation() {
+  clearSignup();
   resetInvitationRequest();
   state.invitationToken = null; state.invitationDelivery = null; state.invitationIssue = null;
   state.invitationPresented = null;state.invitationInspection++;state.invitationResendAt = 0;
@@ -581,7 +586,7 @@ function resetInvitationRequest() {
 }
 function clearAcceptedInvitation() {
   if (!hasAccess()) return false;
-  const joining = window.location.hash.split('?')[0] === '#join';
+  const joining = ['#join', '#signup'].includes(window.location.hash.split('?')[0]);
   clearInvitation();
   if (joining) window.history.replaceState(null, '', safeAuthReturnRoute(state.returnRoute));
   return joining;
@@ -604,7 +609,7 @@ function showInvitationIssuePanel() {
   setText('#auth-description', 'Ask your inviter for a new link to create your account.');
   showAuthPanel('invitation-issue');
 }
-async function presentInvitation(force = false) {
+async function presentInvitation(force = false, sendVerification = false) {
   const token = state.invitationToken, account = state.user?.id;
   if (!token || hasAccess() || (!force && state.invitationPresented === token)) return;
   state.invitationPresented = token;
@@ -615,7 +620,7 @@ async function presentInvitation(force = false) {
     await api('/api/access/invitations/inspect', {token});
     if (inspection !== state.invitationInspection || state.invitationToken !== token || state.user?.id !== account || !authDialog.open) return;
     state.invitationIssue = null;
-    if (state.user) await openPendingVerification(false);
+    if (state.user) await openPendingVerification(sendVerification);
     else { setAuthMode('register'); openAuth(); }
   } catch (error) {
     if (inspection !== state.invitationInspection || state.invitationToken !== token || state.user?.id !== account || !authDialog.open) return;
@@ -627,6 +632,18 @@ async function presentInvitation(force = false) {
 }
 function captureInvitation() {
   const [path, query = ''] = window.location.hash.split('?');
+  if (path === '#signup') {
+    const token = new URLSearchParams(query).get('token');
+    if (!/^crs_[A-Za-z0-9_-]{43}$/.test(token || '')) {
+      clearInvitation();setError('#access-error', 'This signup link is incomplete. Open the full link you received.');return;
+    }
+    if (token !== state.signupToken) { clearInvitation();state.signupToken = token;setError('#access-error', ''); }
+    return;
+  }
+  if (state.signupToken) {
+    clearSignup();
+    if (['signup', 'signup-check'].includes(state.authPanel) && authDialog.open) authDialog.close();
+  }
   if (path !== '#join') return;
   const token = new URLSearchParams(query).get('token');
   if (!token || token.length > 512 || !/^[A-Za-z0-9_-]+$/.test(token)) {
@@ -652,7 +669,7 @@ function renderAccessGate() {
   $('#access-workspace').removeAttribute('data-catalogue-pending');
   $('#access-loading-preview').hidden = true;
   $('#access-workspace').setAttribute('aria-busy', 'false');
-  if (state.screen !== 'access' && window.location.hash && !window.location.hash.startsWith('#join') && !authenticationRoute()) state.returnRoute = window.location.hash;
+  if (state.screen !== 'access' && window.location.hash && !['#join', '#signup'].includes(window.location.hash.split('?')[0]) && !authenticationRoute()) state.returnRoute = window.location.hash;
   state.screen = 'access'; showWorkspace('access');
   const blocked = ['revoked', 'suspended'].includes(state.access?.status);
   if (isHomeRoute()) state.returnRoute = '#home';
@@ -665,8 +682,135 @@ function renderAccessGate() {
   $('#access-continue').hidden = true;
   renderAuthMethods(); renderVerificationControls();
   document.title = 'Private beta — Crucible';
-  if (state.invitationToken && !blocked && state.invitationPresented !== state.invitationToken) void presentInvitation();
+  if (state.signupToken && !blocked && state.signupPresented !== state.signupToken) void presentSignup();
+  else if (state.invitationToken && !blocked && state.invitationPresented !== state.invitationToken) void presentInvitation();
 }
+function clearSignup() {
+  resetSignupRequest();state.signupToken = null;
+  $('#auth-signup-form').reset();setError('#auth-signup-error', '');
+}
+function resetSignupRequest() {
+  state.signupPresented = null;state.signupRequest++;state.signupBusy = false;
+  $('#auth-signup-submit').disabled = false;
+}
+async function presentSignup(force = false) {
+  const token = state.signupToken, account = state.user?.id, csrf = state.csrf, lifecycle = documentEpoch;
+  if (!token || hasAccess() || (!force && state.signupPresented === token)) return;
+  state.signupPresented = token;
+  const request = ++state.signupRequest;
+  const current = () => ownsDocument(lifecycle) && request === state.signupRequest && token === state.signupToken && account === state.user?.id && csrf === state.csrf && authDialog.open;
+  setText('#auth-title', 'Checking signup link…');setText('#auth-description', '');showAuthPanel('signup-check');
+  try {
+    const link = await api('/api/access/signup-links/inspect', {token});
+    if (!current()) return;
+    setText('#auth-title', 'Join Crucible');
+    setText('#auth-description', 'Enter your email, then create an account or sign in. We’ll verify your email before you enter.');
+    setText('#auth-signup-expiry', 'Join by ' + signupExpiry(link.expires_at) + '. Your account keeps access after the link expires.');
+    showAuthPanel('signup');$('#auth-signup-email').focus();
+  } catch (error) {
+    if (!current()) return;
+    state.invitationIssue = error.code || null;
+    setText('#auth-title', error.code === 'invitation_expired' ? 'Signup link expired' : 'Signup link unavailable');
+    setText('#auth-description', error.message);showAuthPanel('invitation-issue');
+  }
+}
+function signupExpiry(timestamp) {
+  return new Date(timestamp * 1000).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'});
+}
+const signupAdmin = {request: 0, busy: false, pending: null};
+function resetSignupAdmin() {
+  signupAdmin.request++;signupAdmin.busy = false;signupAdmin.pending = null;
+  $('#signup-links-list').replaceChildren();$('#signup-links-form').reset();
+  $('#signup-links-create').disabled = false;$('#signup-links-refresh').disabled = false;
+  setError('#signup-links-error', '');setText('#signup-links-status', '');
+  if ($('#signup-links-dialog').open) $('#signup-links-dialog').close();
+}
+function signupAdminRequest() {
+  const request = ++signupAdmin.request, account = state.user?.id, csrf = state.csrf, lifecycle = documentEpoch;
+  return () => request === signupAdmin.request && account === state.user?.id && csrf === state.csrf && ownsDocument(lifecycle) && hasAccess() && state.canManageBetaAccess && $('#signup-links-dialog').open;
+}
+function signupAdminBusy(busy) {
+  signupAdmin.busy = busy;
+  for (const element of $('#signup-links-dialog').querySelectorAll('button:not([data-close]), input')) element.disabled = busy;
+}
+async function loadSignupLinks() {
+  if (!state.canManageBetaAccess || !hasAccess() || !$('#signup-links-dialog').open || signupAdmin.busy) return;
+  const current = signupAdminRequest();signupAdminBusy(true);setError('#signup-links-error', '');
+  setText('#signup-links-status', 'Loading links…');
+  try {
+    const data = await api('/api/access/signup-links');
+    if (!current()) return;
+    const list = $('#signup-links-list');list.replaceChildren();
+    for (const link of data.links) {
+      const item = node('section', null, 'signup-link');
+      item.append(node('h3', link.label));
+      item.append(node('p', (link.status === 'available' ? 'Open until ' : link.status === 'expired' ? 'Expired ' : 'Closed · original expiry ') + signupExpiry(link.expires_at) + ' · ' + link.joined + ' joined', 'field-hint'));
+      if (link.status === 'available') {
+        if (link.url) {
+          const field = node('input');field.readOnly = true;field.value = link.url;field.setAttribute('aria-label', 'Signup link for ' + link.label);
+          field.addEventListener('focus', () => field.select());item.append(field);
+          const copy = node('button', 'Copy link', 'button button-small button-quiet');copy.type = 'button';
+          copy.addEventListener('click', async () => {
+            try { await navigator.clipboard.writeText(link.url);if (item.isConnected) copy.textContent = 'Copied'; }
+            catch { field.focus();field.select();setText('#signup-links-status', 'Select and copy the link above.'); }
+          });item.append(copy);
+        } else item.append(node('p', 'This link was created before a server key change. Create a new link to share.', 'field-hint'));
+        const close = node('button', 'Close link', 'text-button');close.type = 'button';
+        close.addEventListener('click', async () => {
+          if (signupAdmin.busy || !state.canManageBetaAccess) return;
+          const owns = signupAdminRequest();signupAdminBusy(true);setError('#signup-links-error', '');
+          try {
+            await api('/api/access/signup-links/' + encodeURIComponent(link.id) + '/revoke', {reason: 'Closed from Invite people'});
+            if (owns()) { signupAdminBusy(false);await loadSignupLinks(); }
+          } catch (error) { if (owns()) setError('#signup-links-error', error.message); }
+          finally { if (owns()) signupAdminBusy(false); }
+        });item.append(close);
+      }
+      list.append(item);
+    }
+    setText('#signup-links-status', data.links.length ? 'Most recent links · times shown in your local timezone.' : 'No signup links yet.');
+  } catch (error) { if (current()) { setError('#signup-links-error', error.message);setText('#signup-links-status', ''); } }
+  finally { if (current()) signupAdminBusy(false); }
+}
+$('#signup-links-button').addEventListener('click', () => {
+  if (!state.canManageBetaAccess || !hasAccess()) return;
+  openDialog($('#signup-links-dialog'), $('#signup-links-button'));void loadSignupLinks();
+});
+$('#signup-links-refresh').addEventListener('click', () => { void loadSignupLinks(); });
+$('#signup-links-dialog').addEventListener('close', () => {
+  signupAdmin.request++;signupAdminBusy(false);$('#signup-links-list').replaceChildren();
+});
+$('#signup-links-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!state.canManageBetaAccess || !hasAccess() || signupAdmin.busy || !$('#signup-links-form').reportValidity()) return;
+  const label = $('#signup-links-label').value.trim();
+  if (!label) { setError('#signup-links-error', 'Name this signup link.');return; }
+  if (!signupAdmin.pending || signupAdmin.pending.label !== label) signupAdmin.pending = {request_id: crypto.randomUUID(), label, expires_in_days: 7};
+  const current = signupAdminRequest();signupAdminBusy(true);setError('#signup-links-error', '');
+  try {
+    await api('/api/access/signup-links', signupAdmin.pending);
+    if (!current()) return;
+    signupAdmin.pending = null;$('#signup-links-form').reset();signupAdminBusy(false);await loadSignupLinks();
+  } catch (error) { if (current()) setError('#signup-links-error', error.message + ' You can retry this request.'); }
+  finally { if (current()) signupAdminBusy(false); }
+});
+$('#auth-signup-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (state.authPanel !== 'signup' || state.signupBusy || !$('#auth-signup-form').reportValidity()) return;
+  const token = state.signupToken, account = state.user?.id, csrf = state.csrf, request = ++state.signupRequest, lifecycle = documentEpoch;
+  const current = () => ownsDocument(lifecycle) && request === state.signupRequest && token === state.signupToken && account === state.user?.id && csrf === state.csrf && authDialog.open && state.authPanel === 'signup';
+  state.signupBusy = true;$('#auth-signup-submit').disabled = true;setError('#auth-signup-error', '');
+  try {
+    const result = await api('/api/access/signup-links/invitations', {token, email: $('#auth-signup-email').value.trim()});
+    if (!current()) return;
+    const url = new URL(result.invitation.url);
+    if (url.origin !== siteOrigin() || !/^#join\?token=cri_[A-Za-z0-9_-]{43}$/.test(url.hash)) throw new Error('The invitation could not be opened. Try again.');
+    window.history.replaceState(null, '', url.hash);captureInvitation();
+    await presentInvitation(true, true);
+  } catch (error) { if (current()) setError('#auth-signup-error', error.message); }
+  finally { if (current()) { state.signupBusy = false;$('#auth-signup-submit').disabled = false; } }
+});
+$('#auth-signup-signin').addEventListener('click', () => signInExistingAccount($('#auth-signup-signin')));
 function clearProtectedState() {
   resetResearcherEditor();
   invalidateReadViews();
@@ -689,6 +833,7 @@ function clearProtectedState() {
   state.pendingAttempt = null; state.submissionChallenge = null; state.connection = null; state.round = null;
   state.challengeStartIntent = null; state.challengeLoading = false;
   state.canReviewProposals = false; state.canSelfReviewProposals = false; state.canManageBetaAccess = false;
+  resetSignupAdmin();$('#signup-links-button').hidden = true;
   resetAgentSettings(); resetAgentInstructions(); resetProposalAccount(state.user?.id);
   research.request++; research.recoveriesRequest++; research.targets = []; research.target = null; research.findings = []; research.recoveries = [];
   for (const selector of ['#kem-catalogue', '#people-content', '#person-content', '#leaderboard-content', '#history-content', '#activity-bounties', '#activity-notes', '#recovery-content', '#connect-content', '#overview-graphs', '#target-catalogue', '#home-schemes', '#home-bounties']) $(selector).replaceChildren();
@@ -1222,14 +1367,15 @@ function openCreateAccount(trigger) {
   openInvitationForm(trigger);
 }
 $('#access-create-account').addEventListener('click', () => {
-  if (state.invitationToken) void presentInvitation(true);
+  if (state.signupToken) void presentSignup(true);
+  else if (state.invitationToken) void presentInvitation(true);
   else openCreateAccount($('#access-create-account'));
 });
 $('#auth-create-account').addEventListener('click', () => openCreateAccount($('#auth-create-account')));
 $('#auth-invitation-sign-in').addEventListener('click', () => signInExistingAccount($('#auth-invitation-sign-in')));
 $('#auth-another-invitation').addEventListener('click', () => { clearInvitation();openInvitationForm($('#auth-another-invitation')); });
 $('#auth-issue-signin').addEventListener('click', () => signInExistingAccount($('#auth-issue-signin')));
-$('#access-resume').addEventListener('click', () => { void openPendingVerification(false); });
+$('#access-resume').addEventListener('click', () => { if (state.signupToken) void presentSignup(true);else void openPendingVerification(false); });
 $('#access-pending-signout').addEventListener('click', () => { void logout(); });
 $('#auth-invitation-form').addEventListener('submit', event => {
   event.preventDefault();
@@ -1238,7 +1384,8 @@ $('#auth-invitation-form').addEventListener('submit', event => {
   try { link = new URL($('#auth-invitation-link').value.trim(), siteOrigin() + '/'); } catch {}
   const [path, query = ''] = (link?.hash || '').split('?');
   const token = new URLSearchParams(query).get('token');
-  if (!link || !['http:', 'https:'].includes(link.protocol) || link.username || link.password || path !== '#join' || !/^cri_[A-Za-z0-9_-]{43}$/.test(token || '')) {
+  const validToken = path === '#join' ? /^cri_[A-Za-z0-9_-]{43}$/.test(token || '') : path === '#signup' && /^crs_[A-Za-z0-9_-]{43}$/.test(token || '');
+  if (!link || !['http:', 'https:'].includes(link.protocol) || link.username || link.password || !validToken) {
     setError('#auth-invitation-error', 'Paste the full Crucible invitation link you received.');return;
   }
   if (link.origin !== siteOrigin()) {
@@ -1248,10 +1395,10 @@ $('#auth-invitation-form').addEventListener('submit', event => {
       'This invitation is for crucible.fail. Open it on crucible.fail, or use an invitation created for ' + destination + '.' :
       'This invitation belongs to a different site (' + link.host + '). Use an invitation created for ' + destination + '.');return;
   }
-  state.invitationPresented = null;
-  const destination = '#join?' + new URLSearchParams({token});
+  state.invitationPresented = state.signupPresented = null;
+  const destination = path + '?' + new URLSearchParams({token});
   $('#auth-invitation-form').reset();authDialog.close();
-  if (window.location.hash === destination) { captureInvitation();void presentInvitation(true); }
+  if (window.location.hash === destination) { captureInvitation();if (path === '#signup') void presentSignup(true);else void presentInvitation(true); }
   else window.location.hash = destination;
 });
 $('#access-register').addEventListener('click', () => { setAuthMode('register');openAuth($('#access-register')); });
@@ -1777,6 +1924,7 @@ function setSession(data) {
   state.user = data.user || null;
   state.auth = data.auth || {};
   state.csrf = data.csrf_token || '';
+  if (state.signupToken && (previousId !== state.user?.id || previousCsrf !== state.csrf)) resetSignupRequest();
   if (state.authPanel === 'github-link' && state.githubLinkContext && (state.githubLinkContext.accountId !== state.user?.id || state.githubLinkContext.csrf !== state.csrf)) {
     state.githubLinkContext = null; $('#github-link-password').value = '';
     state.authPanel = 'signin'; if (authDialog.open) authDialog.close();
@@ -1792,6 +1940,8 @@ function setSession(data) {
   document.body.setAttribute('data-access-view', hasAccess() ? 'workspace' : 'gate');
   window.CruciblePendingPage?.remember(hasAccess());
   state.canManageBetaAccess = Boolean(state.user && data.capabilities?.manage_beta_access);
+  if (previousId !== state.user?.id || previousCsrf !== state.csrf || !state.canManageBetaAccess || !hasAccess()) resetSignupAdmin();
+  $('#signup-links-button').hidden = !state.canManageBetaAccess || !hasAccess();
   state.canReviewProposals = Boolean(state.user && data.capabilities?.review_protocol_proposals);
   state.canSelfReviewProposals = Boolean(state.canReviewProposals && data.capabilities?.self_review_protocol_proposals);
   if (previousId !== state.user?.id || !hasAccess()) resetResearcherEditor();
@@ -4377,6 +4527,7 @@ for (const dialog of document.querySelectorAll('dialog')) {
       setText('#recovery-title', 'Submission details');
     }
     if (dialog === authDialog) {
+      if (['signup', 'signup-check'].includes(state.authPanel)) { resetSignupRequest();$('#auth-signup-form').reset(); }
       $('#auth-password').value = '';
       $('#password-reset-form').reset();
       $('#github-link-password').value = ''; state.githubLinkContext = null;
@@ -4433,6 +4584,8 @@ function renderAuthMethods() {
   $('#auth-create-account').hidden = !methods || registering || Boolean(state.user) || Boolean(state.invitationIssue);
   $('#auth-sign-in-methods').hidden = !methods;
   $('#auth-invitation-form').hidden = state.authPanel !== 'invitation';
+  $('#auth-signup-form').hidden = state.authPanel !== 'signup';
+  $('#auth-signup-signin').hidden = Boolean(state.user);
   $('#auth-invitation-sign-in').hidden = Boolean(state.user);
   $('#github-handle-form').hidden = state.authPanel !== 'github-handle';
   $('#github-link-form').hidden = state.authPanel !== 'github-link';$('#github-link-submit').disabled = state.githubBusy;

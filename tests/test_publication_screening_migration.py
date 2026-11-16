@@ -70,6 +70,7 @@ def test_upgrade_preserves_all_original_values_and_backfills_only_human_provenan
             assert connection.scalar(text('SELECT count(*) FROM publication_screening_jobs')) == 0
             assert connection.scalar(text('SELECT count(*) FROM publication_screening_attempts')) == 0
             assert connection.scalar(text('SELECT count(*) FROM notebook_automatic_publications')) == 0
+        command.upgrade(config, 'head')
         command.check(config)
         # With no automated work or receipts, rollback preserves all old data.
         command.downgrade(config, '0030')

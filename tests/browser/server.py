@@ -36,11 +36,13 @@ def main():
     registry.CURRENT = {dh_v4.SCHEME_ID: dh_v4.SCHEME_VERSION}
     with tempfile.TemporaryDirectory(prefix="crucible-browser-checks-") as tmp:
         queue_reviewer_id = str(uuid4())
+        signup_admin_id = str(uuid4())
         outbox = Path(os.environ.get("CRUCIBLE_BROWSER_OUTBOX", tmp + "/outbox"))
         outbox.mkdir(parents=True, exist_ok=True, mode=0o700)
         settings = Settings("sqlite:///" + tmp + "/fixture.db", secrets.token_bytes(32),
                             origins=(ORIGIN,), access_mode="beta", rate_limits=False,
                             reviewer_ids=(queue_reviewer_id,),
+                            access_admin_ids=(signup_admin_id,),
                             mail_backend="local", mail_outbox_dir=str(outbox),
                             mail_from="Crucible preview <preview@example.invalid>",
                             github_login_enabled=True, github_client_id="synthetic-browser-client",
@@ -63,8 +65,8 @@ def main():
                 effective_month=bounty_allowance.INITIAL_MONTH,
                 configuration=dict(bounty_allowance.INITIAL_CONFIGURATION), created_at=now))
             for actor in ("alice", "bob", "revoked", "bulkdesktop", "bulkmobile", "queueauthor", "queuereviewer", "numbers",
-                          "discoverydesktop", "discoverymobile", "formsdesktop", "formsmobile", "pagingwarm", "pagingserver"):
-                user = User(id=queue_reviewer_id if actor == "queuereviewer" else str(uuid4()), handle="browser_" + actor,
+                          "discoverydesktop", "discoverymobile", "formsdesktop", "formsmobile", "pagingwarm", "pagingserver", "signupadmin"):
+                user = User(id=queue_reviewer_id if actor == "queuereviewer" else signup_admin_id if actor == "signupadmin" else str(uuid4()), handle="browser_" + actor,
                             password_hash=encoded, created_at=now)
                 session.add(user)
                 session.flush()
@@ -136,8 +138,12 @@ def main():
                     expires_at=now - 1 if expired else now + 7 * 86400, send_count=0, failed_attempts=0,
                     redeemed_at=now - 30 if used else None, redeemed_by=alice_id if used else None))
             preview_invitation, preview_link = beta_access.create_invitation(session, settings, "preview@example.invalid", now)
+            signup = beta_access.create_signup_link(session, settings, "Browser signup fixture", now, actor_id=signup_admin_id)
+            session.flush()
+            signup_url = beta_access.signup_link_data(settings, signup, now)["url"]
         (outbox / "invitation.json").write_text(json.dumps({"invitation_url": preview_link,
             "email": preview_invitation.email, "expires_at": preview_invitation.expires_at}))
+        (outbox / "signup.json").write_text(json.dumps({"url": signup_url}))
         print("Disposable browser fixture ready; portable DH catalogue only.", flush=True)
         print("Local test invitation and verification emails: " + str(outbox), flush=True)
         try:

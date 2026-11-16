@@ -69,7 +69,7 @@
     if (/^#challenge\/[^/]+\/[^/]+$/.test(path)) return {page: 'list', title: 'Challenge'};
     if (path === '#reviews' || (path === '#propose' && params.get('review') === '1')) return {page: 'list', title: 'Review center'};
     const title = {'#propose': 'Propose a scheme', '#connect': 'Connect an agent',
-      '#join': 'Private beta', '#auth': 'Sign in', '#reset-password': 'Reset password'}[path];
+      '#join': 'Private beta', '#signup': 'Join Crucible', '#auth': 'Sign in', '#reset-password': 'Reset password'}[path];
     return {page: 'neutral', title: title || 'Crucible'};
   }
   function section(hash = window.location?.hash || '') {

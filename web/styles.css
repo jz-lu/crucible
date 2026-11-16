@@ -4508,6 +4508,11 @@ html[data-beta-landing=left] .access-heading { align-items:flex-start; }
   82% { d:path('M95.5 130C68 130 43 115 47 95C50 79 61 65 58 44C76 55 83 72 76 85C92 73 79 54 85 35C91 22 96 15 94 2C96 17 105 23 108 37C114 55 100 73 116 85C110 73 117 55 134 43C130 66 141 79 144 95C148 115 123 130 95.5 130Z'); }
 }
 @keyframes flame-shimmer { from { opacity:.65; } to { opacity:1; } }
+.signup-links-list { display:grid;gap:20px;margin:24px 0; }
+.signup-link { border-top:1px solid var(--border);padding-top:16px;min-width:0; }
+.signup-link h3 { margin:0 0 6px;font-size:1rem; }
+.signup-link input { width:100%;min-width:0;margin:0 0 12px;font-size:.8rem; }
+.signup-link .text-button { margin-left:16px; }
 /* Account controls follow the complete tagline. */
 html[data-beta-landing] #access-workspace { animation:landing-arrive 350ms ease 620ms both; }
 @keyframes landing-arrive {

@@ -1,6 +1,6 @@
 CRUCIBLE OPERATING BUDGET
 =======================
-Last reviewed: 2026-11-06. Currency: USD, before tax and credits.
+Last reviewed: 2026-11-16 (signup-volume assumptions). Currency: USD, before tax and credits.
 Public rates retain their 2026-11-04 verification date below.
 Planning scale: hundreds of active researchers, with occasional bursts.
 Next review: first full month after screening is enabled, or 2026-12-04,
@@ -68,6 +68,20 @@ Email: invitation/account-recovery events consume quota; visits do not. CI:
 pull requests/main checks, deliberate native releases and separate measurement
 workflows consume runner time. Backup jobs charge for execution, not a permanently
 running duplicate web service. Retained VMs continue billing when powered off.
+
+Reusable signup links (local candidate, 16 November): no additional paid service
+or always-running worker. Each new participant still verifies their own mailbox.
+100 successful new signups therefore require at least 100 verification emails;
+resends and account recovery add to that count. Opening a link or entering an
+email sends no message until the existing authenticated verification step.
+The existing limits remain: ten sends per recipient invitation, a 60-second
+resend delay, and ten sends per account per hour. Email provider quotas still
+apply. Check available daily/monthly mail allowance before sharing a link widely.
+The Invite people screen reports successful joins per link, not billable mail
+attempts. Reconcile delivery usage with the provider's dashboard.
+More participants may submit more notes; those screening attempts draw from the
+existing model-review envelope and its configured limits. Link creation does
+not enable model screening, increase its budget, or activate paid email.
 
 Price steps and review triggers
 ------------------------------

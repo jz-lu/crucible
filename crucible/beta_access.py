@@ -4,15 +4,16 @@ An invitation never changes identity: it grants access to the authenticated
 account only after separate mailbox verification. All stored credentials are
 hashes; account IDs and existing contribution ownership remain unchanged.
 """
+import base64
 import hashlib
 import hmac
 import re
 import secrets
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import Float, ForeignKey, Integer, JSON, String, delete, select, update
+from sqlalchemy import Float, ForeignKey, Integer, JSON, String, UniqueConstraint, delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,6 +27,7 @@ MAX_CODE_FAILURES = 10
 MAX_CODE_SENDS = 10
 RESEND_SECONDS = 60
 _INVITATION = re.compile(r"^cri_[A-Za-z0-9_-]{43}$")
+_SIGNUP_LINK = re.compile(r"^crs_[A-Za-z0-9_-]{43}$")
 
 
 class BetaMembership(Base):
@@ -65,6 +67,25 @@ class MailboxVerification(Base):
     code_mac: Mapped[str] = mapped_column(String(64))
     expires_at: Mapped[float] = mapped_column(Float)
     consumed_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class BetaSignupLink(Base):
+    __tablename__ = "beta_signup_links"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    label: Mapped[str] = mapped_column(String(100))
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[float] = mapped_column(Float)
+    expires_at: Mapped[float] = mapped_column(Float, index=True)
+    revoked_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class BetaSignupInvitation(Base):
+    __tablename__ = "beta_signup_invitations"
+    __table_args__ = (UniqueConstraint("signup_link_id", "email", name="uq_signup_link_email"),)
+    invitation_id: Mapped[str] = mapped_column(ForeignKey("beta_invitations.id"), primary_key=True)
+    signup_link_id: Mapped[str] = mapped_column(ForeignKey("beta_signup_links.id"), index=True)
+    email: Mapped[str] = mapped_column(String(254))
 
 
 class VerifiedMailbox(Base):
@@ -201,11 +222,17 @@ def _find_invitation(session, token, *, lock=False):
     if not isinstance(token, str) or not _INVITATION.fullmatch(token):
         raise invitation_error()
     query = select(BetaInvitation).where(BetaInvitation.token_hash == token_hash(token))
-    if lock:
-        query = query.with_for_update().execution_options(populate_existing=True)
     invitation = session.scalar(query)
     if invitation is None:
         raise invitation_error()
+    if lock:
+        # Shared-link issuance/revocation and redemption use the same order:
+        # link, then its recipient invitation. Never invert these row locks.
+        source = session.get(BetaSignupInvitation, invitation.id)
+        if source:
+            session.scalar(select(BetaSignupLink).where(BetaSignupLink.id == source.signup_link_id)
+                           .with_for_update().execution_options(populate_existing=True))
+        invitation = session.scalar(query.with_for_update().execution_options(populate_existing=True))
     return invitation
 
 
@@ -214,20 +241,111 @@ def validate_registration_invitation(session, token, now, *, lock=False):
     status = invitation_status(invitation, now)
     if status != "available":
         raise invitation_error(status)
+    source = session.get(BetaSignupInvitation, invitation.id)
+    if source:
+        link = session.get(BetaSignupLink, source.signup_link_id, populate_existing=True)
+        if link is None or signup_link_status(link, now) != "available":
+            raise invitation_error(signup_link_status(link, now) if link else "unavailable")
     return invitation
 
 
-def create_invitation(session, settings, email, now, *, actor_id=None, expires_in_days=7):
+def create_invitation(session, settings, email, now, *, actor_id=None, expires_in_days=7, _token=None):
     email = normalize_email(email)
     if type(expires_in_days) is not int or not 1 <= expires_in_days <= 7:
         raise ValueError("Invitation expiry must be between one and seven days.")
-    raw = "cri_" + secrets.token_urlsafe(32)
+    raw = _token or "cri_" + secrets.token_urlsafe(32)
+    if not _INVITATION.fullmatch(raw):
+        raise ValueError("Invalid invitation token.")
     invitation = BetaInvitation(id=str(uuid4()), token_hash=token_hash(raw), email=email,
         created_by=actor_id, created_at=now, expires_at=now + expires_in_days * 86400,
         send_count=0, failed_attempts=0)
     session.add(invitation)
     _event(session, None, actor_id, "invitation_created", now, invitation_id=invitation.id)
     return invitation, settings.origins[0] + "/#join?token=" + raw
+
+
+def _signup_token(settings, context, value, prefix):
+    # Separate domains for reusable links and recipient invitations. Only
+    # digests are stored; an authorized operator can recover a link to copy it.
+    digest = hmac.new(settings.secret, ("crucible/" + context + "/v1\0" + value).encode(), hashlib.sha256).digest()
+    return prefix + base64.urlsafe_b64encode(digest).decode().rstrip("=")
+
+
+def signup_link_status(link, now):
+    return "revoked" if link.revoked_at is not None else "expired" if link.expires_at <= now else "available"
+
+
+def signup_link_data(settings, link, now):
+    raw = _signup_token(settings, "signup-link", link.id, "crs_")
+    return {"id": link.id, "label": link.label, "created_at": link.created_at,
+            "expires_at": link.expires_at, "status": signup_link_status(link, now),
+            "url": settings.origins[0] + "/#signup?token=" + raw
+                   if hmac.compare_digest(token_hash(raw), link.token_hash) else None}
+
+
+def create_signup_link(session, settings, label, now, *, actor_id=None, expires_in_days=7, request_id=None):
+    label = label.strip()
+    if not 1 <= len(label) <= 100 or type(expires_in_days) is not int or not 1 <= expires_in_days <= 7:
+        raise ValueError("Use a label and an expiry between one and seven days.")
+    identifier = str(UUID(str(request_id))) if request_id is not None else str(uuid4())
+    existing = session.get(BetaSignupLink, identifier)
+    if existing:
+        if (existing.created_by != actor_id or existing.label != label
+                or existing.expires_at - existing.created_at != expires_in_days * 86400):
+            raise HTTPException(409, "This creation request was already used with different terms.")
+        return existing
+    raw = _signup_token(settings, "signup-link", identifier, "crs_")
+    link = BetaSignupLink(id=identifier, token_hash=token_hash(raw), label=label,
+        created_by=actor_id, created_at=now, expires_at=now + expires_in_days * 86400)
+    session.add(link)
+    _event(session, None, actor_id, "signup_link_created", now, signup_link_id=link.id)
+    return link
+
+
+def find_signup_link(session, token, now, *, lock=False):
+    if not isinstance(token, str) or not _SIGNUP_LINK.fullmatch(token):
+        raise invitation_error()
+    query = select(BetaSignupLink).where(BetaSignupLink.token_hash == token_hash(token))
+    if lock:
+        query = query.with_for_update().execution_options(populate_existing=True)
+    link = session.scalar(query)
+    if link is None or signup_link_status(link, now) != "available":
+        raise invitation_error(signup_link_status(link, now) if link else "unavailable")
+    return link
+
+
+def signup_invitation(session, settings, token, email, now):
+    email = normalize_email(email)
+    link = find_signup_link(session, token, now, lock=True)
+    raw = _signup_token(settings, "signup-recipient", link.id + "\0" + email, "cri_")
+    source = session.scalar(select(BetaSignupInvitation).where(
+        BetaSignupInvitation.signup_link_id == link.id, BetaSignupInvitation.email == email))
+    if source:
+        invitation = session.get(BetaInvitation, source.invitation_id)
+        if not hmac.compare_digest(invitation.token_hash, token_hash(raw)):
+            raise invitation_error()
+        # Retries never reset email/guess limits or extend the deadline.
+        if invitation_status(invitation, now) != "available":
+            raise invitation_error(invitation_status(invitation, now))
+        return invitation, settings.origins[0] + "/#join?token=" + raw
+    # The caller requests this invitation; the parent records its administrator.
+    # Avoid taking an administrator User FK lock after the parent link lock.
+    invitation, url = create_invitation(session, settings, email, now, _token=raw)
+    invitation.expires_at = link.expires_at
+    session.flush()
+    session.add(BetaSignupInvitation(invitation_id=invitation.id, signup_link_id=link.id, email=email))
+    return invitation, url
+
+
+def revoke_signup_link(session, identifier, now, *, actor_id=None, reason=""):
+    link = session.scalar(select(BetaSignupLink).where(BetaSignupLink.id == identifier)
+                          .with_for_update().execution_options(populate_existing=True))
+    if link is None:
+        raise HTTPException(404, "Signup link not found.")
+    if link.revoked_at is None:
+        link.revoked_at = now
+        _event(session, None, actor_id, "signup_link_revoked", now, signup_link_id=link.id, reason=reason[:500])
+    return link
 
 
 def invitation_status(invitation, now):
@@ -300,6 +418,8 @@ def _code_mac(settings, invitation_id, user_id, code):
 
 def _check_regrant(session, user, invitation):
     membership = session.get(BetaMembership, user.id, populate_existing=True)
+    if membership and membership.status == "revoked" and session.get(BetaSignupInvitation, invitation.id):
+        raise HTTPException(403, "This signup link cannot restore revoked access. Contact the operator.")
     if membership and membership.status == "revoked" and invitation.created_at <= membership.updated_at:
         raise HTTPException(403, "Access was revoked after this invitation was created. Request a new invitation.")
 
@@ -308,6 +428,30 @@ class InviteInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     email: str = Field(min_length=3, max_length=254)
     expires_in_days: int = Field(default=7, ge=1, le=7, strict=True)
+    _email = field_validator("email")(normalize_email)
+
+
+class SignupLinkInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    request_id: UUID
+    label: str = Field(min_length=1, max_length=100)
+    expires_in_days: int = Field(default=7, ge=1, le=7, strict=True)
+
+    @field_validator("label")
+    @classmethod
+    def label_text(cls, value):
+        if not value.strip():
+            raise ValueError("Name this signup link.")
+        return value.strip()
+
+
+class SignupTokenInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    token: str = Field(pattern=r"^crs_[A-Za-z0-9_-]{43}$", min_length=47, max_length=47)
+
+
+class SignupEmailInput(SignupTokenInput):
+    email: str = Field(min_length=3, max_length=254)
     _email = field_validator("email")(normalize_email)
 
 
@@ -326,6 +470,24 @@ class ReasonInput(BaseModel):
 
 
 def register_routes(app, db, settings, clock, account_for, throttle, issue_session=None, session_payload=None, identity=None):
+    @app.post("/api/access/signup-links/inspect")
+    def inspect_signup_link(body: SignupTokenInput, request: Request):
+        throttle(request, "signup-inspect", 120, 900)
+        with db.transaction() as session:
+            (identity or account_for)(request, session, mutation=True)
+            link = find_signup_link(session, body.token, clock())
+            return {"status": "available", "label": link.label, "expires_at": link.expires_at}
+
+    @app.post("/api/access/signup-links/invitations")
+    def request_signup_invitation(body: SignupEmailInput, request: Request):
+        # Issuance sends no mail and creates no account or membership. The
+        # existing mailbox flow keeps its own per-account resend/guess limits.
+        throttle(request, "signup-invitation", 200, 3600)
+        with db.transaction(write=True) as session:
+            (identity or account_for)(request, session, mutation=True)
+            invitation, url = signup_invitation(session, settings, body.token, body.email, clock())
+            return {"invitation": {"url": url, "expires_at": invitation.expires_at}}
+
     @app.post("/api/access/invitations/inspect")
     def inspect_invitation(body: TokenInput, request: Request):
         throttle(request, "invite-inspect", 120, 900)
@@ -459,6 +621,41 @@ def register_routes(app, db, settings, clock, account_for, throttle, issue_sessi
         if not is_admin(settings, user):
             raise HTTPException(403, "Beta administration permission is required.")
         return user
+
+    @app.get("/api/access/signup-links")
+    def signup_links(request: Request):
+        with db.transaction() as session:
+            admin(session, request)
+            links = session.scalars(select(BetaSignupLink).order_by(BetaSignupLink.created_at.desc(), BetaSignupLink.id)
+                                    .limit(100)).all()
+            joined = dict(session.execute(select(BetaSignupInvitation.signup_link_id, func.count())
+                .join(BetaInvitation, BetaInvitation.id == BetaSignupInvitation.invitation_id)
+                .where(BetaSignupInvitation.signup_link_id.in_([link.id for link in links]),
+                       BetaInvitation.redeemed_at.is_not(None)).group_by(BetaSignupInvitation.signup_link_id)).all())
+            return {"links": [{**signup_link_data(settings, link, clock()), "joined": joined.get(link.id, 0)} for link in links]}
+
+    @app.post("/api/access/signup-links")
+    def new_signup_link(body: SignupLinkInput, request: Request):
+        with db.transaction() as session:
+            account_id = admin(session, request, mutation=True).id
+        throttle(request, "signup-create", 30, 3600, account_id=account_id)
+        try:
+            with db.transaction(write=True) as session:
+                actor = admin(session, request, mutation=True)
+                if actor.id != account_id:
+                    raise HTTPException(403, "Your session changed. Refresh and try again.")
+                link = create_signup_link(session, settings, body.label, clock(), actor_id=actor.id,
+                    expires_in_days=body.expires_in_days, request_id=body.request_id)
+                return {"link": signup_link_data(settings, link, clock())}
+        except IntegrityError:
+            raise HTTPException(409, "This creation request was already used. Refresh the link list.") from None
+
+    @app.post("/api/access/signup-links/{link_id}/revoke")
+    def close_signup_link(link_id: UUID, body: ReasonInput, request: Request):
+        with db.transaction(write=True) as session:
+            actor = admin(session, request, mutation=True)
+            link = revoke_signup_link(session, str(link_id), clock(), actor_id=actor.id, reason=body.reason)
+            return {"link": signup_link_data(settings, link, clock())}
 
     @app.post("/api/access/invitations")
     def invite(body: InviteInput, request: Request):
