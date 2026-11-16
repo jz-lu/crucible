@@ -3305,7 +3305,7 @@ function assumptionScope(premise) {
   ranges.push(start === end ? String(start) : `${start}–${end}`);
   return 'Stages ' + ranges.join(', ');
 }
-function assumptionLink(premise, origin, {expanded = false} = {}) {
+function assumptionLink(premise, origin, {expanded = false, definition = true} = {}) {
   const href = exactNoteRoute(premise?.source);
   if (!href || premise.status === 'incomplete' || typeof premise.label !== 'string' || !premise.label.trim()) return null;
   const label = premise.label, title = assumptionTitle(premise);
@@ -3316,7 +3316,7 @@ function assumptionLink(premise, origin, {expanded = false} = {}) {
     const description = node('span', undefined, 'assumption-description');
     if (title && title !== label) description.append(node('span', title, 'assumption-name'));
     const kinds = {hardness: 'Hardness assumption', model: 'Model assumption', 'distribution-bound': 'Probability bound'};
-    if (typeof premise.formal_statement === 'string' && premise.formal_statement.trim()) {
+    if (definition && typeof premise.formal_statement === 'string' && premise.formal_statement.trim()) {
       const statement = node('span', undefined, 'assumption-formal-statement');
       let expressions = 0;
       for (const paragraph of premise.formal_statement.split(/\n\s*\n/).filter(part => part.trim())) {
@@ -3328,7 +3328,7 @@ function assumptionLink(premise, origin, {expanded = false} = {}) {
         statement.append(part);
       }
       description.append(statement);
-    } else if (typeof premise.summary === 'string' && premise.summary.trim()) description.append(node('span', premise.summary, 'assumption-summary'));
+    } else if (definition && typeof premise.summary === 'string' && premise.summary.trim()) description.append(node('span', premise.summary, 'assumption-summary'));
     const scope = assumptionScope(premise);
     const meta = [kinds[premise.kind], scope && 'Used at ' + scope.toLowerCase()].filter(Boolean).join(' · ');
     if (meta) description.append(node('span', meta, 'assumption-scope'));
@@ -3370,15 +3370,22 @@ function openSchemeAssumptions(trigger, category) {
       else element.textContent = text;
       return element;
     };
-    if (typeof conclusion === 'string' && conclusion.trim()) {
-      if (argument.conclusion || statement) introduction.append(node('h3', 'Claim', 'scheme-argument-label'));
-      introduction.append(prose(conclusion, 'scheme-argument-conclusion'));
-    }
+    // The source-authored title and scope give the reader an orientation.
+    // Never synthesize a shorter mathematical claim from the full definition.
+    const headline = statement?.title || argument.title;
+    if (typeof headline === 'string' && headline.trim()) introduction.append(node('h3', headline, 'scheme-argument-headline'));
+    if (typeof argument.summary === 'string' && argument.summary.trim()) introduction.append(prose(argument.summary, 'scheme-argument-summary'));
     if (typeof argument.scope === 'string' && argument.scope.trim()) {
       const scope = node('div', undefined, 'scheme-argument-scope');
-      scope.append(node('span', 'Scope', 'scheme-argument-label'), prose(argument.scope, 'scheme-argument-scope-text'));
+      scope.append(prose(argument.scope, 'scheme-argument-scope-text'));
       introduction.append(scope);
     }
+    const disclosure = (label, className) => {
+      const details = node('details', undefined, 'scheme-argument-details ' + className);
+      details.append(node('summary', label)); return details;
+    };
+    const formal = disclosure('Formal statement', 'scheme-argument-formal');
+    if (typeof conclusion === 'string' && conclusion.trim()) formal.append(prose(conclusion, 'scheme-argument-conclusion'));
     const actions = node('div', undefined, 'scheme-argument-actions');
     const action = (label, route, noteSource, className = 'scheme-argument-link') => {
       const link = node('a', label, className); link.href = route;
@@ -3391,18 +3398,22 @@ function openSchemeAssumptions(trigger, category) {
       const read = action('Read argument →', href, source); read.setAttribute('aria-label', 'Read ' + category + ' argument'); actions.append(read);
     }
     const claimSource = argument.presentation?.conclusion_source || statement?.source, claimHref = exactNoteRoute(claimSource);
-    if (claimHref) actions.append(action('Exact statement', claimHref, claimSource));
+    if (claimHref) formal.append(action('Exact statement →', claimHref, claimSource));
     if (rosterHref) actions.append(action('Arguments & proposals', rosterHref));
-    if (actions.childElementCount) introduction.append(actions);
+    const footer = node('footer', undefined, 'scheme-argument-footer');
+    if (actions.childElementCount) footer.append(actions);
     const admission = argumentAdmissionLabel(argument.presentation);
-    if (admission) introduction.append(node('p', admission, 'scheme-argument-admission'));
+    if (admission) footer.append(node('p', admission, 'scheme-argument-admission'));
     section.append(introduction);
     if (rosterHref && !href) {
       section.append(node('p', 'No argument is currently displayed for this claim. Its statement and review history remain available.', 'scheme-assumptions-empty'));
+      if (formal.childElementCount > 1) section.append(formal);
+      section.append(footer);
       content.append(section); openDialog(schemeAssumptionsDialog, trigger); return;
     }
     const assumptions = node('div', undefined, 'scheme-argument-premises');
     assumptions.append(node('h3', 'Assumptions'));
+    const applications = disclosure('How the assumptions are used', 'scheme-argument-uses');
     if (!Array.isArray(argument.dependencies)) assumptions.append(node('p', 'Premises have not been recorded.', 'scheme-assumptions-empty'));
     else {
       const list = node('ul', undefined, 'scheme-assumptions-list');
@@ -3410,11 +3421,15 @@ function openSchemeAssumptions(trigger, category) {
         .sort((a,b) => String(a.statement.label).localeCompare(String(b.statement.label), undefined, {numeric:true}));
       for (const use of uses) {
         const premise = {...use.statement, formal_statement:use.statement.definition, stages:use.stages};
-        const link = assumptionLink(premise, origin, {expanded:true});
+        const link = assumptionLink(premise, origin, {expanded:true, definition:false});
         if (link) {
           const item = node('li'); item.append(link);
           const application = typeof use.use === 'string' && use.use.trim() ? use.use : use.required;
-          if (typeof application === 'string' && application.trim()) item.append(prose(application, 'scheme-premise-use'));
+          if (typeof application === 'string' && application.trim()) {
+            const usage = node('section', undefined, 'scheme-premise-use');
+            usage.append(node('h4', premise.label + ' · ' + assumptionTitle(premise)), prose(application, 'scheme-premise-use-text'));
+            applications.append(usage);
+          }
           list.append(item);
         }
       }
@@ -3424,6 +3439,9 @@ function openSchemeAssumptions(trigger, category) {
     }
     if (argument.status === 'incomplete') assumptions.append(node('p', title + ' argument incomplete', 'scheme-assumptions-incomplete'));
     section.append(assumptions);
+    if (formal.childElementCount > 1) section.append(formal);
+    if (applications.childElementCount > 1) section.append(applications);
+    section.append(footer);
     content.append(section);
   }
   openDialog(schemeAssumptionsDialog, trigger);

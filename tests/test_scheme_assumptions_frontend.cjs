@@ -108,16 +108,21 @@ process.once('beforeExit', () => {
     await open(app, 'security'); assert.equal(rows(group(app, 'security')).length, 2);
     assert.doesNotMatch(content(app).textContent, /Attack-only|A-88|Other stage|proof obligation/);
   });
-  await test('canonical argument introduces its claim and scope before the exact argument link and premises', async () => {
+  await test('canonical argument leads with source scope and compact premises, with the full claim folded below', async () => {
     const data=argumentPacket(), app=await boot({data});await open(app);
     const section=group(app,'security'),intro=section.querySelector('.scheme-argument-introduction');
-    assert.match(intro.querySelector('.scheme-argument-conclusion').textContent,/probability at most epsilon/);
+    const formal=section.querySelector('.scheme-argument-formal');
+    assert.equal(formal.getAttribute('open'),null);
+    assert.match(formal.querySelector('.scheme-argument-conclusion').textContent,/probability at most epsilon/);
+    assert.equal(intro.querySelector('.scheme-argument-conclusion'),null);
     assert.match(intro.querySelector('.scheme-argument-scope').textContent,/Fresh passive shared-key recovery/);
     assert.equal(section.children[0],intro);assert.equal(section.children[1],section.querySelector('.scheme-argument-premises'));
-    const read=intro.querySelector('a');assert.equal(read.textContent,'Read argument →');
+    const read=section.querySelector('[aria-label="Read security argument"]');assert.equal(read.textContent,'Read argument →');
     checkPin(read,canonicalPin('argument','security-argument'));
     const links=rows(section);assert.equal(links.length,2);checkPin(links[0],canonicalPin('statement','algebra'));
-    assert.match(links[0].textContent,/Precisely stated premise/);
+    assert.doesNotMatch(links[0].textContent,/Precisely stated premise/);
+    assert.match(links[0].textContent,/Shared algebraic premise/);
+    assert.equal(section.querySelector('.scheme-argument-uses').getAttribute('open'),null);
     assert.match(section.querySelector('.scheme-premise-use').textContent,/required bound applies/);
     assert.doesNotMatch(content(app).textContent,/scientifically approved|proved secure/i);
     read.click();await flush();assert.equal(dialog(app).open,false);
@@ -131,7 +136,7 @@ process.once('beforeExit', () => {
       assert.equal(content(app).textContent.includes('source argument states no unproved premises'),status==='unconditional');
       assert.equal(content(app).textContent.includes('Correctness argument incomplete'),status==='incomplete');
       assert.doesNotMatch(content(app).textContent,/Unconditional|verified proof/);
-      checkPin(content(app).querySelector('a'),canonicalPin('argument','correctness-argument'));
+      checkPin(content(app).querySelector('[aria-label="Read correctness argument"]'),canonicalPin('argument','correctness-argument'));
     }
   });
   await test('canonical statements stay separate from admission provenance and the argument roster', async () => {
@@ -142,9 +147,9 @@ process.once('beforeExit', () => {
     assert.equal(content(app).querySelector('.scheme-argument-conclusion').textContent,'The exact canonical security statement.');
     assert.match(content(app).querySelector('.scheme-argument-admission').textContent,/Initial admission · not independently reviewed/);
     const actions=content(app).querySelector('.scheme-argument-actions').querySelectorAll('a');
-    assert.equal(actions.length,3);checkPin(actions[1],canonicalPin('statement','security-claim'));
-    assert.equal(new URLSearchParams(actions[2].href.split('?')[1]).get('statement_target'),'scheme-fixture-security');
-    actions[2].click();await flush();assert.equal(dialog(app).open,false);
+    assert.equal(actions.length,2);checkPin(content(app).querySelector('.scheme-argument-formal').querySelector('a'),canonicalPin('statement','security-claim'));
+    assert.equal(new URLSearchParams(actions[1].href.split('?')[1]).get('statement_target'),'scheme-fixture-security');
+    actions[1].click();await flush();assert.equal(dialog(app).open,false);
     assert.equal(new URLSearchParams(app.location.hash.split('?')[1]).get('statement_target'),'scheme-fixture-security');
   });
   await test('withdrawing the displayed argument preserves access to its claim and history without fallback', async () => {
@@ -205,8 +210,9 @@ process.once('beforeExit', () => {
     assert.match(content(app).textContent, /Keeping the shared key secret/);
     assert.match(content(app).querySelector('.scheme-argument-scope').textContent, /Fresh passive shared-key recovery/);
     const links = rows(group(app, 'security'));
-    assert.match(links[0].textContent, /<img src=x onerror=alert\(1\)> must remain literal text/);
-    assert.match(links[1].textContent, /Finding the hidden value must remain difficult/);
+    assert.match(links[0].textContent, /Shared algebraic premise/);
+    assert.match(links[1].textContent, /Structured search remains hard/);
+    assert.equal(links[0].querySelector('.assumption-summary'), null);
     assert.equal(content(app).querySelector('img'), null);
     checkPin(links[0], pin('algebra')); checkPin(links[1], pin('hardness'));
     checkPin(group(app, 'security').querySelector('[aria-label="Read security argument"]'), pin('security'));
@@ -224,7 +230,7 @@ process.once('beforeExit', () => {
     assert.doesNotMatch(content(app).textContent, /undefined|\[object Object\]/);
     checkPin(links[1], pin('hardness'));
   });
-  await test('formal statements lead with safe math while use and exact source stay separate', async () => {
+  await test('compact premise links keep exact source and scope without duplicating the formal definition', async () => {
     const data = packet();
     const p = data.scheme_assumptions.security.assumptions[0];
     p.kind = 'hardness'; p.summary = 'The older descriptive shortcut.';
@@ -234,10 +240,10 @@ process.once('beforeExit', () => {
     app.sandbox.window.CrucibleMath = {render(element, text, options) {calls.push({text, options}); element.textContent = text;}};
     await open(app);
     const link = rows(group(app, 'security'))[1];
-    assert.ok(link.querySelector('.assumption-formal-statement'));
-    assert.equal(link.querySelectorAll('.assumption-formal-paragraph').length, 3);
+    assert.equal(link.querySelector('.assumption-formal-statement'), null);
+    assert.equal(link.querySelectorAll('.assumption-formal-paragraph').length, 0);
     assert.equal(link.querySelector('.assumption-summary'), null);
-    assert.deepEqual(calls.map(c => c.options.displayMode), [false, true, false]);
+    assert.deepEqual(calls, []);
     assert.match(link.textContent, /Hardness assumption.*Used at stages 1–3/);
     assert.doesNotMatch(link.textContent, /older descriptive shortcut/);
     assert.equal(link.querySelector('img'), null);
