@@ -17,10 +17,11 @@ constitution, the contribution workflow, evidence standards, repository layout,
 and the limits of automated first-pass review. References pin the inspected
 repository revision. Revise these guides when the documented behavior changes.
 
-Eighteen bundled notes remain featured: the six guides, eight detailed scheme
-evidence notes, the proposal guide and three substantive literature notes.
-Twenty-three older bundled entries are archived from discovery: fifteen short
-map/orientation summaries and eight preliminary literature-reading agendas.
+Sixteen bundled notes remain featured: the six guides, seven detailed scheme
+evidence notes and three substantive literature notes. Twenty-five older bundled
+entries are archived from discovery: fifteen short map/orientation summaries,
+eight preliminary literature-reading agendas, the outdated Streamlined NTRU
+evidence compilation and the older proposal-guidance compilation.
 These decisions reduce duplication and unfinished reading lists; they do not
 declare the mathematics false. Every existing record, revision and map binding
 is retained. Exact old citations continue to resolve.
@@ -85,7 +86,8 @@ An existing generated-evidence freshness issue remains outside this editorial
 change: build_display_notes would append revisions to display-evidence-sntrup-3
 and proposal-advice. The former changes scientific source/timing evidence. Do
 not silently regenerate these while editing presentation; review their pinned
-sources and release evidence separately. Historical records remain unchanged.
+sources and release evidence separately. Both outdated compilations are excluded from the featured collection. Historical
+records remain unchanged.
 
 Recovered assumptions design
 ----------------------------
