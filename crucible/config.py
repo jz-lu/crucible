@@ -92,12 +92,18 @@ class Settings:
     publication_screening_monthly_budget_micro_usd: int = 10_000_000
     local_note_corpus_only: bool = False
     local_note_bindings_path: str | None = None
+    note_presentation_bindings_path: str | None = None
 
     def __post_init__(self):
         if type(self.local_note_corpus_only) is not bool or (self.production and self.local_note_corpus_only):
             raise RuntimeError("The isolated notebook corpus is a development-only option.")
         if self.local_note_bindings_path is not None and not self.local_note_corpus_only:
             raise RuntimeError("Local note bindings require the isolated notebook corpus.")
+        if self.note_presentation_bindings_path is not None:
+            if (self.local_note_corpus_only or type(self.note_presentation_bindings_path) is not str
+                    or not self.note_presentation_bindings_path.strip()
+                    or not Path(self.note_presentation_bindings_path).is_absolute()):
+                raise RuntimeError("Read-only note presentation requires an explicit absolute manifest path and the ordinary notebook corpus.")
         if self.publication_screening_mode not in {"disabled", "shadow", "automatic"}:
             raise RuntimeError("Publication screening must be disabled, shadow, or automatic.")
         if self.publication_screening_model not in {"gpt-6-luna", "gpt-5.4-mini", "gpt-6.1-sol"}:
@@ -148,6 +154,10 @@ class Settings:
             raise RuntimeError("Beta releases must use scheme_id@version identifiers.")
         if type(self.beta_issuance_disabled) is not bool or (self.beta_issuance_disabled and self.beta_releases):
             raise RuntimeError("Disabled beta issuance cannot select releases.")
+
+    @property
+    def note_justifications_available(self):
+        return self.local_note_corpus_only or self.note_presentation_bindings_path is not None
 
     @property
     def cookie_name(self):
@@ -267,6 +277,7 @@ def load_settings() -> Settings:
     return Settings(database_url=database_url, secret=secret, origins=origins, production=production,
                     local_note_corpus_only=local_notes == "true",
                     local_note_bindings_path=str(data_dir / "scheme-note-bindings.json") if local_notes == "true" else None,
+                    note_presentation_bindings_path=os.getenv("CRUCIBLE_NOTE_PRESENTATION_BINDINGS"),
                     reviewer_ids=reviewers, allow_self_review=self_review == "true",
                     access_mode=os.getenv("CRUCIBLE_ACCESS_MODE", "beta" if production else "open"),
                     access_admin_ids=admins,

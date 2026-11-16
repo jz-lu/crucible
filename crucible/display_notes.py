@@ -71,7 +71,8 @@ def document(binding, *, revision=None, sha256=None):
     selected = next((item for item in source["revisions"] if item["revision"] == number), None) if source else None
     if selected is None:
         return None
-    fields = {"title", "claim", "conditions", "body", "tags", "kind", "references", "artifacts", "extensions"}
+    from .notebook import CONTENT_FIELDS
+    fields = CONTENT_FIELDS
     content = {key: value for key, value in selected.items() if key in fields}
     checksum = digest(content)
     if expected is not None and checksum != expected:

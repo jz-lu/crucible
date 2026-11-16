@@ -36,10 +36,10 @@ const packet = () => ({format:'crucible-note-justifications-v1',scheme_id:'ram-f
     computation_model_id:computation,analysis_sha256:'b'.repeat(64),
     explanation:'Baseline upper bounds; faster attacks may exist.',models:[model('ram-one'),model('ram-two')],
     estimates:[point('p1','ram-one',31),point('p3','ram-two',77)]}});
-async function boot({data=packet(),s=scheme(),enabled=true}={}) {
+async function boot({data=packet(),s=scheme(),enabled=true,hosted=false}={}) {
   const app=await createApp({schemes:[s],hash:'#about',responder:(url,options,envelope)=>{
     if(url.pathname==='/api/session')return envelope({user:null,csrf_token:'fixture-csrf',
-      capabilities:{ram_attack_comparison:enabled,curated_notes:false}});
+      capabilities:{ram_attack_comparison:enabled,curated_notes:hosted,note_justifications:true,statement_workflow_trial:!hosted}});
     if(url.pathname==='/api/protocol/note-justifications')return data;
   }});
   vm.runInContext(graphHelper,app.sandbox,{filename:'graph-points.js'});
@@ -60,6 +60,14 @@ function graph(app) {
 let passed=0;
 async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
 (async()=>{
+  await test('hosted curated presentation uses the reviewed RAM curve and compact readout',async()=>{
+    const app=await boot({hosted:true});
+    assert.deepEqual(points(app),[['p1','31'],['p3','77']]);
+    assert.doesNotMatch(chart(app).textContent,/Model and values/);
+    assert.equal(vm.runInContext('state.curatedNotesAvailable',app.sandbox),true);
+    assert.equal(vm.runInContext('state.statementWorkflowAvailable',app.sandbox),false);
+    assert.equal(chart(app).querySelector('svg').getAttribute('tabindex'),'0');
+  });
   await test('RAM is the enabled default and never substitutes frozen or quantum numbers',async()=>{
     const app=await boot();
     assert.equal(app.$('#overview-title-security').textContent,'Classical attack work');

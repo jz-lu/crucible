@@ -1,0 +1,60 @@
+READ-ONLY SCHEME NOTE PRESENTATION
+
+Hosted presentation is independent of the local statement-workflow trial.
+Set CRUCIBLE_NOTE_PRESENTATION_BINDINGS to the absolute path of a reviewed,
+release-owned JSON file. With no setting, the existing ordinary display remains.
+The setting never publishes content, grants beta access, enables a persona,
+or admits, selects, withdraws or independently approves a scientific argument.
+CRUCIBLE_LOCAL_NOTE_CORPUS_ONLY must remain false in production.
+
+The hosted manifest uses format crucible-note-presentation-bindings-v1. Its
+releases list has the same strict ReleaseBinding schema in note_sections.py:
+scheme_id, exact version, note {id, revision, content_sha256}, optional sections,
+arguments {security, correctness}, and graph_models. Canonical argument IDs and
+graph reasoning sections must already exist in the exact referenced content.
+The manifest cannot override copied assumptions or infer a missing relationship.
+Duplicate fields/releases and oversized manifests are rejected.
+
+Package reviewed source content in the ordinary curated corpus, or reference
+already-published account notes. Curated IDs use the existing curated: prefix;
+the resolver checks the exact revision and recomputes its complete content hash,
+including sections, statements and arguments. Existing revision bodies/hashes
+must survive an append. Curated inclusion is editorial, not scientific review.
+Account sources and external definitions/premises require ordinary approved
+publication even for their owner; private, deleted, withdrawn and development
+self-review revisions cannot become hosted evidence through this manifest.
+Do not copy local databases, persona accounts, fixture publication receipts or
+locally generated admission records into hosted data.
+
+The session advertises note_justifications and ram_attack_comparison when this
+presentation is configured, while curated_notes remains true and both local
+capabilities remain false. The frontend uses the presentation capability for
+the compact argument dialogs, contextual exact-note links and curve readouts.
+The workflow trial remains disabled: no proposal/review routes are registered,
+and no trial roster links are rendered. A missing or mismatched source returns
+404; there is no latest-revision, similarly-named-scheme or old-curve fallback.
+
+GET /api/protocol/note-justifications?scheme_id=...&version=... requires the
+normal member boundary. A machine credential requires the explicit notes:read
+scope; a browser cookie cannot override a bearer token's missing scope. Other
+methods are not authorized by this read scope. The response retains exact note,
+section, statement and argument hashes and distinguishes conditional,
+unconditional and incomplete authored claims. It does not certify their truth.
+
+Release gates
+
+* Validate all configured scheme bindings in the exact reviewed Linux runtime.
+  Analytical RAM evidence includes exact implementation manifests; an artifact
+  made under a different Python/native runtime is not automatically compatible.
+  Preserve complete configuration coverage and the exact premise map.
+* When reproducing analytical evidence, compare numerical work/memory, success,
+  parameters and premises, append reviewed note revisions and update exact pins.
+  Never relabel an old artifact as current by replacing its hashes alone.
+* Measured operation-resource publications are separate. Check their current
+  activation and producer binding; this setting neither imports nor reruns them.
+* Test production capabilities, member/token denial, exact/historical curated
+  hashes, source withdrawal, disabled trial routes and contextual deep links.
+  Exercise desktop/mobile argument and graph presentation with curated notes on.
+* Pin changed backend sources in the release contract after review, and retain
+  ordinary migration/backup/runtime gates. Local macOS tests do not qualify a
+  Linux image or assert that the hosted publication database contains the curves.

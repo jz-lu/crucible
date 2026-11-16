@@ -112,7 +112,7 @@ def required_scope(method, path):
         if path in {"/api/notebook/notes", "/api/notebook/export", "/api/notebook/publication-policy", "/api/notebook/publication-status"} or re.fullmatch(
                 rf"/api/notebook/(?:notes|imports)/{_UUID}", path):
             return "notebook:read"
-        if path == "/api/agent/notes" or re.fullmatch(r"/api/agent/notes/[^/]{1,108}", path):
+        if path in {"/api/agent/notes", "/api/protocol/note-justifications"} or re.fullmatch(r"/api/agent/notes/[^/]{1,108}", path):
             return "notes:read"
         if path in {"/api/schemes", "/api/leaderboard", "/api/challenges",
                     "/api/protocol/source", "/api/protocol/example", "/api/protocol/spec",

@@ -1165,7 +1165,9 @@ def register_routes(app, db, settings, clock, user_for, throttle):
     notebook_sharing.register_routes(app, db, settings, clock, account, throttle)
     notebook_moderation.register_routes(app, db, settings, clock, account, throttle)
     notebook_graph.register_routes(app, db, settings, account, visible)
-    note_sections.register_routes(app, db, settings, account, visible)
+    # Scheme bindings are shared-note reads, with their own explicit agent
+    # scope. They do not grant private-notebook or workflow mutation access.
+    note_sections.register_routes(app, db, settings, user_for, visible)
     statement_workflow.register_routes(app, db, settings, clock, account, visible, throttle)
     notebook_trash.register_routes(app, db, clock, account, throttle)
     from . import notebook_publication_lifecycle

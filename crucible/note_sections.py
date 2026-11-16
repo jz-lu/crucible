@@ -1,6 +1,6 @@
-"""Readable notebook partitions and local, exact-source display bindings.
+"""Readable notebook partitions and exact-source, read-only display bindings.
 
-Sections are authored content, not scientific approval. The optional local
+Sections are authored content, not scientific approval. The optional trusted
 binding manifest selects already-readable revisions and cannot publish a note,
 change a curve, grant access, or adopt an assumption.
 """
@@ -11,7 +11,6 @@ from typing import Literal
 
 from fastapi import HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from sqlalchemy import select
 
 
 SECTION_PATTERN = r"^[a-z][a-z0-9-]{0,63}$"
@@ -236,7 +235,7 @@ class ReleaseBinding(BaseModel):
 
 class BindingManifest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-    format: Literal["crucible-local-note-bindings-v1"]
+    format: Literal["crucible-local-note-bindings-v1", "crucible-note-presentation-bindings-v1"]
     releases: list[ReleaseBinding] = Field(max_length=100)
 
 
@@ -265,23 +264,37 @@ class _ArgumentReader:
     This returns authored research, never an adoption or mathematical verdict.
     Historical payloads and their hashes are not rewritten into the new format.
     """
-    def __init__(self, session, user, visible, profiles):
+    def __init__(self, session, user, visible, profiles, *, published_only=False):
         self.session, self.user, self.visible = session, user, visible
+        self.published_only = published_only
         self.profiles = {row["id"]: row for row in profiles}
         self.cache = {}
 
     def read(self, source):
-        from . import notebook, notebook_moderation
+        from . import notebook, notebook_moderation, publication_screening
         identifier = source.get("note_id", source.get("id"))
         key = (identifier, source["revision"], source["content_sha256"])
         if key not in self.cache:
-            row = self.session.scalar(self.visible(self.session, self.user, identifier).where(
-                notebook.NotebookRevision.revision == source["revision"],
-                notebook.NotebookRevision.content_sha256 == source["content_sha256"]))
-            if (row is None or notebook._hash(row.content) != source["content_sha256"]
-                    or self.session.get(notebook_moderation.PublicationWithdrawal, row.id) is not None):
+            if identifier.startswith("curated:"):
+                note = next((item for item in notebook.curated_collection(self.session)
+                             if item["id"] == identifier), None)
+                row = next((item for item in note["revisions"] if item["revision"] == source["revision"]
+                            and item["content_sha256"] == source["content_sha256"]), None) if note else None
+                content = row["content"] if row else None
+            else:
+                query = self.visible(self.session, self.user, identifier).where(
+                    notebook.NotebookRevision.revision == source["revision"],
+                    notebook.NotebookRevision.content_sha256 == source["content_sha256"])
+                if self.published_only:
+                    # A deployment-owned manifest cannot expose an owner's draft
+                    # or convert a development self-review into publication.
+                    query = query.where(publication_screening.approved_clause(allow_development=False))
+                row = self.session.scalar(query)
+                content = (row.content if row is not None and self.session.get(
+                    notebook_moderation.PublicationWithdrawal, row.id) is None else None)
+            if content is None or notebook._hash(content) != source["content_sha256"]:
                 raise ValueError("An exact argument source is unavailable")
-            self.cache[key] = row.content
+            self.cache[key] = content
         content = self.cache[key]
         if source.get("section_id"):
             section_record(content, source["section_id"])
@@ -477,39 +490,43 @@ def _project_argument_rosters(app, session, user, packet, reader):
 
 
 def register_routes(app, db, settings, account, visible):
-    from . import notebook, registry
+    from . import registry
 
     @app.get("/api/protocol/note-justifications")
     def note_justifications(request: Request,
                             scheme_id: str = Query(min_length=1, max_length=100),
                             version: str = Query(min_length=1, max_length=32)):
-        if not settings.local_note_corpus_only or not settings.local_note_bindings_path:
-            raise HTTPException(404, "No local note justification is available.")
+        path = settings.note_presentation_bindings_path or settings.local_note_bindings_path
+        if not path:
+            raise HTTPException(404, "No note justification is available.")
         with db.transaction() as session:
             user = account(request, session)
             try:
                 if any(len(request.query_params.getlist(key)) != 1 for key in ("scheme_id", "version")):
                     raise ValueError("Ambiguous release")
                 adapter = registry.adapter_for(scheme_id, version)
-                manifest = _manifest(settings.local_note_bindings_path)
+                manifest = _manifest(path)
+                hosted = settings.note_presentation_bindings_path is not None
+                expected_format = ("crucible-note-presentation-bindings-v1" if hosted
+                                   else "crucible-local-note-bindings-v1")
+                if manifest.format != expected_format:
+                    raise ValueError("Use the selected presentation manifest format")
                 binding = next(row for row in manifest.releases
                                if row.scheme_id == scheme_id and row.version == version)
                 source = binding.note
-                revision = session.scalar(visible(session, user, source.id).where(
-                    notebook.NotebookRevision.revision == source.revision,
-                    notebook.NotebookRevision.content_sha256 == source.content_sha256))
-                if revision is None or notebook._hash(revision.content) != source.content_sha256:
-                    raise ValueError("Exact source unavailable")
+                descriptor = registry.descriptor(adapter)
+                reader = _ArgumentReader(session, user, visible, descriptor["profiles"],
+                                         published_only=hosted or "authorization" in request.headers)
+                content = reader.read(source.model_dump())
                 if (binding.arguments is None and set(binding.sections) != {"security", "correctness"}
                         or binding.arguments is not None and not set(binding.sections) <= {"security", "correctness"}):
                     raise ValueError("Both scheme justifications are required")
 
                 def pin(identifier):
-                    selected = section_record(revision.content, identifier)
+                    selected = section_record(content, identifier)
                     return {**source.model_dump(), "note_section": identifier,
                             "section_sha256": selected["section_sha256"]}
 
-                descriptor = registry.descriptor(adapter)
                 allowed_models = {"classical": set(), "quantum": set(), "ram": set()}
                 initial = descriptor.get("initial_security_model") or {}
                 if initial.get("id"):
@@ -520,11 +537,10 @@ def register_routes(app, db, settings, account, visible):
                 stages = {row.get("stage_number") for row in descriptor["profiles"]
                           if type(row.get("stage_number")) is int}
                 profiles = {row["id"] for row in descriptor["profiles"]}
-                extensions = revision.content.get("extensions")
+                extensions = content.get("extensions")
                 if not isinstance(extensions, dict) or extensions.get("scheme_context") != {
                         "scheme_id": scheme_id, "version": version}:
                     raise ValueError("The source is bound to another exact release")
-                reader = _ArgumentReader(session, user, visible, descriptor["profiles"])
                 ram_evidence = None
                 if any(graph.metric == "ram" for graph in binding.graph_models.values()):
                     from .attack_models import catalogue as attack_catalogue
@@ -552,7 +568,7 @@ def register_routes(app, db, settings, account, visible):
                                 len(set(item.profile_ids)) != len(item.profile_ids)
                                 or not set(item.profile_ids) <= profiles)):
                         raise ValueError("Invalid assumption scope")
-                    section = ReadableSection.model_validate(_readable_section(revision.content, item.section_id))
+                    section = ReadableSection.model_validate(_readable_section(content, item.section_id))
                     by_id[item.id] = {**item.model_dump(exclude={"section_id"}, exclude_none=True),
                                      "title": section.title, "source": pin(item.section_id)}
                 scheme_assumptions = None

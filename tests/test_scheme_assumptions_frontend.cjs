@@ -51,16 +51,16 @@ const argumentPacket = () => {
   }
   return data;
 };
-const session = (envelope, nextUser = user, allowed = true) => envelope({user: nextUser, csrf_token: 'fixture-csrf',
+const session = (envelope, nextUser = user, allowed = true, hosted = false) => envelope({user: nextUser, csrf_token: 'fixture-csrf',
   access: {mode: 'beta', allowed, status: allowed ? 'active' : 'revoked'},
-  capabilities: {curated_notes: false, ram_attack_comparison: true}});
+  capabilities: {curated_notes: hosted, ram_attack_comparison: true, note_justifications: true, statement_workflow_trial: !hosted}});
 const deferred = () => {let resolve; const promise = new Promise(r => {resolve = r;}); return {promise, resolve};};
-async function boot({data = packet(), respond} = {}) {
+async function boot({data = packet(), respond, hosted = false} = {}) {
   const app = await createApp({schemes: [scheme()], user, hash: '#about',
     notebook: {mount() {return {show: async () => {}, hide() {}, setAccount() {}, invalidateReads() {}, warm: async () => 0};}},
     responder: (url, options, envelope) => {
       const custom = respond?.(url, options, envelope); if (custom !== undefined) return custom;
-      if (url.pathname === '/api/session') return session(envelope);
+      if (url.pathname === '/api/session') return session(envelope, user, true, hosted);
       if (url.pathname === '/api/protocol/note-justifications') return data;
     }});
   vm.runInContext(graphHelper, app.sandbox, {filename: 'graph-points.js'});
@@ -87,6 +87,33 @@ process.once('beforeExit', () => {
   if (!completed && !process.exitCode) {console.error('Scheme-assumption checks stopped before completion'); process.exitCode = 1;}
 });
 (async () => {
+  await test('hosted curated notes retain crisp exact argument links without trial navigation', async () => {
+    const data = JSON.parse(JSON.stringify(argumentPacket()).replaceAll(pin('unused').id, 'curated:hosted-scheme'));
+    data.scheme_arguments.security.presentation = {target_id:'trial-only-target'};
+    const app = await boot({data, hosted:true}); await open(app);
+    assert.equal(vm.runInContext('state.curatedNotesAvailable', app.sandbox), true);
+    assert.equal(vm.runInContext('state.statementWorkflowAvailable', app.sandbox), false);
+    assert.equal(app.$('#overview-justifications').hidden, false);
+    assert.match(content(app).textContent, /probability at most epsilon/);
+    checkPin(content(app).querySelector('[aria-label="Read security argument"]'), data.scheme_arguments.security.source);
+    assert.equal(content(app).querySelectorAll('a').some(a => a.href.includes('statement_target=')), false);
+    assert.equal(app.requests.every(r => !r.options.method || r.options.method === 'GET'), true);
+    const disabled = session(app.envelope, user, true, true);
+    disabled.capabilities.note_justifications = false;
+    disabled.capabilities.ram_attack_comparison = false;
+    app.sandbox.setSession(disabled); await flush();
+    assert.equal(dialog(app).open, false);
+    assert.equal(app.sandbox.graphNoteSource(scheme()), null);
+    assert.equal(app.$('#overview-justifications').hidden, true);
+    assert.equal(app.$('#overview-graphs').querySelector('[data-overview-metric="ram"]'), null);
+  });
+  await test('curated corpus selection alone cannot enable hosted presentation reads', async () => {
+    const app = await boot({respond:(url, options, envelope) => url.pathname === '/api/session' ? envelope({
+      user, csrf_token:'fixture-csrf', access:{mode:'beta',allowed:true,status:'active'},
+      capabilities:{curated_notes:false,note_justifications:false,statement_workflow_trial:false}}) : undefined});
+    assert.equal(app.requests.some(r => r.url.pathname === '/api/protocol/note-justifications'), false);
+    assert.equal(app.$('#overview-justifications').hidden, true);
+  });
   await test('separate scheme entries open only their own accessible argument without navigation', async () => {
     const app = await boot(), route = app.location.hash; await open(app);
     assert.equal(app.location.hash, route);

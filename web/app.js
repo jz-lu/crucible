@@ -1895,11 +1895,18 @@ function setSession(data) {
   window.CruciblePendingPage?.remember(hasAccess());
   state.canManageBetaAccess = Boolean(state.user && data.capabilities?.manage_beta_access);
   state.curatedNotesAvailable = data.capabilities?.curated_notes !== false;
+  const hadNoteJustifications = state.noteJustificationsAvailable === true;
+  state.noteJustificationsAvailable = data.capabilities?.note_justifications === true;
   state.statementWorkflowAvailable = data.capabilities?.statement_workflow_trial === true;
   const hadRamComparisons = state.ramAttackComparisons === true;
   state.ramAttackComparisons = data.capabilities?.ram_attack_comparison === true;
   if (state.ramAttackComparisons && !hadRamComparisons) state.overviewMetrics.security = 'ram';
   if (!state.ramAttackComparisons && state.overviewMetrics.security === 'ram') state.overviewMetrics.security = 'classical';
+  if (hadNoteJustifications !== state.noteJustificationsAvailable || hadRamComparisons !== state.ramAttackComparisons) {
+    invalidateNoteJustifications();
+    const scheme = state.screen === 'overview' && hasAccess() ? selectedScheme() : null;
+    if (scheme) { $('#overview-graphs').replaceChildren(); renderOverview(scheme); }
+  }
   state.canReviewProposals = Boolean(state.user && data.capabilities?.review_protocol_proposals);
   state.canSelfReviewProposals = Boolean(state.canReviewProposals && data.capabilities?.self_review_protocol_proposals);
   if (previousId !== state.user?.id || !hasAccess()) resetResearcherEditor();
@@ -3287,7 +3294,7 @@ function renderTimingDetails(target, scheme, metric) {
   renderReferenceMethod(content, entry?.method);
   details.append(content); target.append(details);
 }
-// Exact note sources are an explicit local integration fixture. No title matching,
+// Exact note sources use an explicit read-only presentation capability. No title matching,
 // latest-revision fallback, or inference from a similarly named scheme.
 const noteJustifications = new Map();
 const NOTE_JUSTIFICATIONS_FRESH_MS = 15000;
@@ -3312,6 +3319,7 @@ function exactNoteRoute(source) {
 }
 function graphNoteSource(scheme) { return noteJustifications.get(releaseKey(scheme.id, scheme.version))?.value || null; }
 function argumentRosterRoute(presentation) {
+  if (state.statementWorkflowAvailable !== true) return null;
   const id = presentation?.target_id;
   return typeof id === 'string' && /^[a-z][a-z0-9-]{0,159}$/.test(id) ? '#notebook?' + new URLSearchParams({statement_target:id}) : null;
 }
@@ -3340,12 +3348,12 @@ function schemeArgument(data, category) {
 }
 function applySchemeNoteLink(scheme) {
   const anchor = $('#overview-assumptions');
-  const local = state.curatedNotesAvailable === false;
-  anchor.hidden = local;
-  $('#overview-justifications').hidden = !local;
+  const presented = state.noteJustificationsAvailable === true;
+  anchor.hidden = presented;
+  $('#overview-justifications').hidden = !presented;
   for (const category of ['security', 'correctness']) {
     const button = $('#overview-' + category + '-button'), argument = schemeArgument(graphNoteSource(scheme), category);
-    const href = local && (exactNoteRoute(argument?.source) || argumentRosterRoute(argument?.presentation));
+    const href = presented && (exactNoteRoute(argument?.source) || argumentRosterRoute(argument?.presentation));
     button.setAttribute('aria-haspopup', 'dialog');
     button.setAttribute('aria-controls', 'scheme-assumptions-dialog');
     if (href) { button.href = href; button.removeAttribute('aria-disabled'); }
@@ -3415,7 +3423,7 @@ function assumptionLink(premise, origin, {expanded = false, definition = true} =
 }
 function openSchemeAssumptions(trigger, category) {
   const scheme = selectedScheme();
-  if (!['security', 'correctness'].includes(category) || !hasAccess() || state.screen !== 'overview' || !scheme || state.curatedNotesAvailable !== false) return;
+  if (!['security', 'correctness'].includes(category) || !hasAccess() || state.screen !== 'overview' || !scheme || state.noteJustificationsAvailable !== true) return;
   const data = graphNoteSource(scheme);
   const argument = schemeArgument(data, category), source = argument?.source, href = exactNoteRoute(source);
   const rosterHref = argumentRosterRoute(argument?.presentation);
@@ -3518,7 +3526,7 @@ function openSchemeAssumptions(trigger, category) {
   openDialog(schemeAssumptionsDialog, trigger);
 }
 async function loadNoteJustifications(scheme) {
-  if (state.curatedNotesAvailable !== false) return;
+  if (state.noteJustificationsAvailable !== true) return;
   const key = releaseKey(scheme.id, scheme.version);
   const previous = noteJustifications.get(key);
   if (previous?.pending || previous?.value && Date.now() - previous.loadedAt < NOTE_JUSTIFICATIONS_FRESH_MS ||
@@ -3599,7 +3607,7 @@ function renderSecurityModels(target, scheme, metric, plottedModels) {
   const evidence = securityReferences(scheme, metric);
   const content = node('div', undefined, 'reference-timing-content');
   const boundNote = graphNoteSource(scheme)?.sections?.security;
-  const supportingNote = state.curatedNotesAvailable === false ? (boundNote ? node('a', 'Read the security note') : null) : supportingNoteLink(scheme.evidence_note);
+  const supportingNote = state.noteJustificationsAvailable === true ? (boundNote ? node('a', 'Read the security note') : null) : supportingNoteLink(scheme.evidence_note);
   if (supportingNote) { if (boundNote) supportingNote.href = exactNoteRoute(boundNote); content.append(supportingNote); }
   if (typeof evidence?.explanation === 'string') content.append(node('p', evidence.explanation));
   const models = new Map(plottedModels);
@@ -3691,7 +3699,7 @@ function renderOverviewChart(scheme, cardId) {
   const chartFocused = document.activeElement === target.querySelector('.overview-svg');
   const previewState = chartFocused ? window.CrucibleGraphPoints?.capturePreview(document.activeElement) : null;
   if (cardId !== 'security') {
-    window.CrucibleResources?.render({scheme, cardId, target, profiles: overviewProfiles(scheme), cleanPresentation: state.curatedNotesAvailable === false,
+    window.CrucibleResources?.render({scheme, cardId, target, profiles: overviewProfiles(scheme), cleanPresentation: state.noteJustificationsAvailable === true,
         profileId, profileLabel, stagePosition, named: namedParameters(scheme), api,
         recoveryFor: points => overviewRecovery(scheme, points, namedParameters(scheme)),
         redraw: () => redrawResourceCharts(scheme)});
@@ -3789,7 +3797,7 @@ function renderOverviewChart(scheme, cardId) {
     interactionKey: cardId + ':' + metric, previewState,
     points: values.map(p => ({...p, id: p.profileId, position: p.tier})), x, y,
     describe: p => p.label + ' · ' + (p.value === null ? 'No estimate for this configuration' : p.value.toLocaleString('en-US', {maximumFractionDigits: 2}) + ' ' + descriptor.unit.toLowerCase()),
-    onReadout: state.curatedNotesAvailable === false ? (p, destination) => renderAttackReadout(p, destination, descriptor, metric) : null,
+    onReadout: state.noteJustificationsAvailable === true ? (p, destination) => renderAttackReadout(p, destination, descriptor, metric) : null,
     onSelection: (p, destination) => { if (p.value !== null) renderPointSources(scheme, p, destination); }});
   if (chartFocused) svg.focus({preventScroll: true});
   if (recoveredLabel) {
@@ -3825,7 +3833,7 @@ function renderOverviewChart(scheme, cardId) {
   }
   badge.classList.toggle('is-empty', !measured.length);
   if (descriptor.kind === 'timing' && timing?.status === 'loading') quietReadStatus(badge, 'Loading timings');
-  if (state.curatedNotesAvailable !== false && (descriptor.kind === 'encoding' || security) && values.length) {
+  if (state.noteJustificationsAvailable !== true && (descriptor.kind === 'encoding' || security) && values.length) {
     const details = node('details', undefined, 'overview-values');
     details.append(node('summary', security ? 'Model and values' : 'View values'));
     if (security) {
@@ -7053,7 +7061,7 @@ else if (landingMark.complete) startLogoAnimation();
 else landingMark.addEventListener('load', startLogoAnimation, {once: true});
 $('#brand-animate').addEventListener('click', igniteLandingLogo);
 for (const category of ['security', 'correctness']) $('#overview-' + category + '-button').addEventListener('click', event => {
-  if (state.curatedNotesAvailable !== false || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button) return;
+  if (state.noteJustificationsAvailable !== true || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button) return;
   event.preventDefault(); openSchemeAssumptions(event.currentTarget, category);
 });
 for (const brand of document.querySelectorAll('a.brand, a.brand-wordmark')) brand.addEventListener('click', event => {

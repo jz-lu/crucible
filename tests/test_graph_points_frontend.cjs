@@ -197,7 +197,7 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
    const scheme={id:'late-note',version:'1',name:'Late note',profiles,protocol:{},initial_security_model:{id:'fixture',kind:'attack-reference'}};
    let release;const response=new Promise(resolve=>{release=resolve;});
    const app=await createApp({schemes:[scheme],hash:'#about',responder:(url,options,envelope)=>{
-     if(url.pathname==='/api/session')return envelope({user:null,csrf_token:'fixture',capabilities:{curated_notes:false}});
+     if(url.pathname==='/api/session')return envelope({user:null,csrf_token:'fixture',capabilities:{curated_notes:false,note_justifications:true}});
      if(url.pathname==='/api/protocol/note-justifications')return response;
    }});
    vm.runInContext(helper,app.sandbox,{filename:'graph-points.js'});await app.navigate('#scheme/late-note/1');

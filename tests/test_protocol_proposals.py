@@ -408,7 +408,7 @@ def revision_body(record, spec=None, **changes):
 
 def test_reviewer_capability_is_explicit_stable_account_id_and_defaults_false(review_system):
     app, clock, settings, alice, reviewer, bob = review_system
-    expected = {"curated_notes": True, "ram_attack_comparison": False,
+    expected = {"curated_notes": True, "ram_attack_comparison": False, "note_justifications": False,
                 "local_note_justifications": False, "statement_workflow_trial": False,
                 "review_protocol_proposals": False, "self_review_protocol_proposals": False,
                 "manage_beta_access": False}
@@ -714,7 +714,7 @@ def test_development_self_review_requires_explicit_flag_and_remains_test_only(re
         reviewer.client = client
         try:
             assert client.get('/api/session').json()['capabilities'] == {
-                'curated_notes': True, 'ram_attack_comparison': False,
+                'curated_notes': True, 'ram_attack_comparison': False, 'note_justifications': False,
                 'local_note_justifications': False, 'statement_workflow_trial': False,
                 'review_protocol_proposals': True, 'self_review_protocol_proposals': True, 'manage_beta_access': False}
             own = submit(reviewer)

@@ -20,7 +20,7 @@ SUITES = (
     "test_notebook_publication_cancellation.py",
     "test_notebook_numbers.py", "test_notebook_tags.py",
     "test_statement_workflow.py", "test_argument_rosters.py", "test_statement_graph.py",
-    "test_local_note_metadata.py", "test_statement_trial_fixture.py", "test_statement_migration.py",
+    "test_local_note_metadata.py", "test_note_presentations.py", "test_statement_trial_fixture.py", "test_statement_migration.py",
     "test_publication_queue_summary.py",
     "test_publication_screening_worker.py", "test_publication_screening_integration.py",
     "test_publication_screening_supervisor.py",
