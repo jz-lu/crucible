@@ -435,7 +435,6 @@ def test_pg17_migration_preserves_existing_revisions_and_applies_runtime_backup_
         connection.exec_driver_sql(f'GRANT SELECT ON SEQUENCE {sequence} TO {postgres.backup}')
     old_tables = set(metadata.tables)
     command.upgrade(postgres.config, '0031')
-    command.check(postgres.config)
     assert next(column for column in inspect(postgres.owner_engine).get_columns('bounty_awards')
                 if column['name'] == 'poster_decision_id')['nullable'] is True
     assert set(inspect(postgres.owner_engine).get_table_names()) - {'alembic_version'} == old_tables | SCREENING_TABLES
@@ -475,6 +474,8 @@ def test_pg17_migration_preserves_existing_revisions_and_applies_runtime_backup_
         with postgres.backup_engine.begin() as connection:
             connection.exec_driver_sql('UPDATE publication_screening_control SET mode=mode WHERE false')
     assert readonly.value.orig.sqlstate in ('25006', '42501')
+    command.upgrade(postgres.config, 'head')
+    command.check(postgres.config)
     command.downgrade(postgres.config, '0029')
     with postgres.runtime_engine.connect() as connection:
         assert connection.scalar(text('SELECT version_num FROM alembic_version')) == '0029'

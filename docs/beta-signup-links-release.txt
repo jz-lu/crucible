@@ -1,0 +1,46 @@
+SIGNUP LINKS — SCHEMA CHANGE RECORD (LOCAL CANDIDATE)
+===================================================
+16 November 2026. This is preparation, not hosted migration or release evidence.
+
+Purpose and exact versions
+  Reusable, expiring admission URLs backed by the existing mailbox proof.
+  Schema0031 -> 0032, adding beta_signup_links and beta_signup_invitations.
+  No old column changes, backfill, automatic link or membership grant.
+  Old/new/rollback image digests: not selected or published for this candidate.
+
+Compatibility decision
+  The current exact-head startup gate remains unchanged. An old0031 image must
+  not be assumed restartable on0032. No general rolling schema compatibility is
+  claimed. New code reads the new tables even for ordinary invitation validation,
+  so it requires0032 before accepting traffic. The ordinary release contract
+  correctly refuses the unreviewed new migration; its guard is not relaxed here.
+
+Database operation
+  migrations/versions/0032_signup_links.py creates two tables, indexes and foreign
+  keys, under the existing single migration executor. No participant data is
+  rewritten. Hosted lock timing and actual runtime/backup grants remain to verify.
+  Prepare a tested schema0032 bridge/rollback image and a bounded migration plan
+  through the existing schema-review process before scheduling promotion. Any
+  interruption remains unmeasured; this record does not promise zero downtime.
+
+Recovery
+  Fresh encrypted backup, matching original key/config, isolated restore proof
+  and compatible rollback image: pending the release decision.
+  Empty additive tables can be rolled back. Once links or recipients exist,
+  downgrade refuses to erase admission provenance. Preserve0032 and use a
+  compatible app rollback/forward fix; an old tag alone is not recovery evidence.
+
+Verification
+  SQLite preservation and metadata parity, local invitation/access tests and
+  desktop/mobile browser workflows are executable in the tests cited by
+  docs/beta-signup-links.txt. PostgreSQL17 races/grants have a dedicated CI suite.
+  Exact candidate image, old/new overlap and restart, actual provider grants,
+  hosted smoke and fresh restore tests remain release gates.
+
+Contract/removal
+  Review the exact new migration hash through the existing finite runtime
+  overlay mechanism only after its evidence is available. No mutable migration
+  prefix, startup auto-migration or broadened schema acceptance is introduced.
+  This branch uses0032. The separate assumptions prototype also proposes0032;
+  resolve the chain explicitly if that feature is later integrated. Do not
+  alter a migration already applied to a hosted database.

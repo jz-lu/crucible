@@ -216,15 +216,12 @@ def _original_session(session, flow, now, *, lock=False):
 def _invitation_available(session, settings, flow, now, *, lock=False):
     if settings.access_mode != "beta":
         return
-    query = select(beta_access.BetaInvitation).where(beta_access.BetaInvitation.id == flow.invitation_id)
-    if lock:
-        query = query.with_for_update()
-    invitation = session.scalar(query.execution_options(populate_existing=True))
-    if invitation is None:
+    # Use the same parent-link checks and lock order as password registration
+    # and mailbox proof, including when a link closes during the provider flow.
+    invitation = beta_access.validate_registration_invitation(
+        session, _decrypt_invitation(settings, flow), now, lock=lock)
+    if invitation.id != flow.invitation_id:
         raise beta_access.invitation_error()
-    status = beta_access.invitation_status(invitation, now)
-    if status != "available":
-        raise beta_access.invitation_error(status)
 
 
 def register_routes(app, db, settings, clock, identity, issue_session, session_payload, password_operation, throttle):

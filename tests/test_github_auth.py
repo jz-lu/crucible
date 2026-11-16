@@ -536,6 +536,46 @@ def test_pending_signup_rechecks_invitation_and_original_session(system):
     assert actor.client.get("/api/auth/github/pending").json() == {"pending": False}
 
 
+def shared_invitation(system):
+    with system.db.transaction(write=True) as session:
+        link = beta.create_signup_link(session, system.settings, "Shared signup", system.now[0])
+        session.flush()
+        raw = beta.signup_link_data(system.settings, link, system.now[0])["url"].split("token=", 1)[1]
+        _, url = beta.signup_invitation(session, system.settings, raw, "new@example.org", system.now[0])
+        return link.id, url.split("token=", 1)[1]
+
+
+@pytest.mark.parametrize("stage", ["callback", "complete"])
+def test_parent_link_closed_during_github_signup_prevents_new_account(system, stage):
+    identifier, token = shared_invitation(system)
+    actor = Actor(system.app)
+    query = start(system, actor, invitation_token=token)
+    if stage == "complete":
+        assert status(callback(system, actor, query)) == "choose-handle"
+    with system.db.transaction(write=True) as session:
+        beta.revoke_signup_link(session, identifier, system.now[0])
+    if stage == "callback":
+        assert status(callback(system, actor, query)) == "invitation_unavailable"
+    else:
+        assert actor.post("/api/auth/github/complete", {"handle": "closed_shared"}).status_code == 403
+    with system.db.transaction() as session:
+        assert session.scalar(select(User)) is None
+
+
+def test_available_shared_link_allows_github_account_but_still_requires_mailbox_proof(system):
+    _, token = shared_invitation(system)
+    actor = Actor(system.app)
+    query = start(system, actor, invitation_token=token)
+    assert status(callback(system, actor, query)) == "choose-handle"
+    response = actor.post("/api/auth/github/complete", {"handle": "shared_github"})
+    assert response.status_code == 200, response.text
+    assert response.json()["access"]["allowed"] is False
+    with system.db.transaction() as session:
+        user = session.scalar(select(User).where(User.handle == "shared_github"))
+        assert user is not None
+        assert session.get(beta.BetaMembership, user.id) is None
+
+
 @pytest.mark.parametrize("kind", ["scope", "bad_token_type", "invalid_id", "bot", "oversized", "compressed", "deep_json", "redirect", "timeout"])
 def test_provider_failures_use_fixed_errors_without_credentials(system, kind):
     actor = Actor(system.app)
