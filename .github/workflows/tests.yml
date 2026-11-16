@@ -132,7 +132,8 @@ jobs:
   critical-workflows:
     name: Critical research and account workflows
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The full suite can exceed ten minutes on a shared runner while progressing.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
