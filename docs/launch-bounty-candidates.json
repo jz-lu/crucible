@@ -15,7 +15,7 @@
           "key exchange",
           "cryptographic design"
         ],
-        "scope": 5,
+        "scope": 1,
         "completion_criteria": "Deliver a complete distributional problem and assumption, a substantive\ncomparison with the closest prior work, a concrete key-exchange/KEM design,\na correctness argument and a conditional security reduction with quantified\nlosses. Include a reference implementation, reproducible small-parameter\nexperiments and an initial analysis of natural generic/structural attacks.\nIdentify the finite-parameter claims, unproved premises and useful research\nparameter sets. Supply test vectors and exact artifacts another person can\nindependently run. A new name for an existing assumption does not qualify.",
         "verification_plan": "An independent cryptographer assesses novelty, whether the assumption is\nmeaningful rather than a restatement of the desired scheme's security, and\nwhether the claimed implication follows. Reproduce the implementation and\nexperiments and examine obvious reductions to existing easy/hard problems.\nA positive verdict accepts a research contribution, not production security.\nScientific novelty and plausibility require judgment; they are not fully\nmachine-verifiable. This is a difficult, potentially long-running task.",
         "source_notes": []

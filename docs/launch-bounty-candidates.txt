@@ -9,7 +9,10 @@ Local review
   At the owner's request, all three proposals now appear on the ordinary local
   board at http://127.0.0.1:8041/#bounties under the synthetic research-preview
   account. The fixture's normal request/reviewer workflow opened them with
-  100 local points each, consuming three synthetic allowance units in total.
+  100 local points each. Correcting A's openness rating replaced its first
+  admitted card through the normal workflow, preserving that record as
+  cancelled. Four synthetic admission units have been used; three cards are
+  currently open. No real account allowance was used.
   Their local IDs and exact terms hashes are retained in the ignored
   .local/claims-preview/launch-bounty-receipt.json. Review history explicitly
   records a display rehearsal, not independent scientific or hosted admission.
@@ -27,6 +30,12 @@ the bounty, rather than becoming a collection of tiny outward-facing chores.
 
 A. Build key exchange on a new mathematical foundation
 -----------------------------------------------------
+Openness: 1/5 (open-ended)
+  The mathematical foundation, assumption and construction are all left open.
+  Requiring a precise, testable submission does not make the research direction
+  concrete. The rating describes how much of the problem is specified, rather
+  than its difficulty or the rigor required of a result.
+
 Public summary
   Find a promising mathematical problem, formulate the assumption precisely,
   and show how it can support a new key-exchange construction. The goal is a
