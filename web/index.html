@@ -103,7 +103,6 @@
           </button>
         </nav>
         <div class="account-actions">
-          <button id="signup-links-button" class="nav-button" type="button" hidden>Invite people</button>
           <button id="nav-people" class="nav-button" type="button" hidden>
             Leaderboard
           </button>
@@ -1060,19 +1059,6 @@
         </a>
       </footer>
     </main>
-    <dialog id="signup-links-dialog" aria-labelledby="signup-links-title">
-      <div class="dialog-top"><button class="icon-button" type="button" data-close aria-label="Close signup links">×</button></div>
-      <h2 id="signup-links-title">Invite people</h2>
-      <p class="dialog-description">Anyone with a signup link can join after verifying their email. Each link expires seven days after creation. You can close it sooner; people who have joined keep their accounts.</p>
-      <form id="signup-links-form">
-        <div class="form-field"><label for="signup-links-label">Link name</label><input id="signup-links-label" name="label" required maxlength="100" placeholder="November research preview"></div>
-        <button id="signup-links-create" class="button button-primary full-width" type="submit">Create 7-day link</button>
-      </form>
-      <p id="signup-links-error" class="form-error" role="alert" hidden></p>
-      <p id="signup-links-status" class="field-hint" role="status"></p>
-      <div id="signup-links-list" class="signup-links-list"></div>
-      <button id="signup-links-refresh" class="text-button" type="button">Refresh links</button>
-    </dialog>
     <dialog id="auth-dialog" aria-labelledby="auth-title">
       <div class="dialog-top">
         <button class="icon-button" type="button" data-close aria-label="Close sign-in dialog">

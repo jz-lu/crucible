@@ -1,5 +1,7 @@
 """Operator commands exercise only the isolated invitation fixture database."""
 import json
+from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -68,3 +70,58 @@ def test_operator_rejects_missing_reason_unknown_id_and_invalid_listing(cli, cap
     assert "--limit" in capsys.readouterr().err
     assert operator.main(["grant", "alice", "--reason", " "]) == 1
     assert "reason" in capsys.readouterr().err
+
+
+def deadline(s, seconds):
+    return datetime.fromtimestamp(s.now[0] + seconds, timezone.utc).isoformat()
+
+
+def test_launch_link_has_one_immutable_window_and_retries_recover_it(cli, capsys):
+    end = deadline(cli, 6 * 86400)
+    assert operator.main(["launch-link", "--expires-at", end]) == 0
+    original = json.loads(capsys.readouterr().out)
+    assert original["id"] == operator.LAUNCH_SIGNUP_ID
+    assert original["joined"] == 0 and original["status"] == "available"
+    assert original["expires_at"] == cli.now[0] + 6 * 86400
+    cli.now[0] += 90
+    assert operator.main(["launch-link", "--expires-at", end]) == 0
+    assert json.loads(capsys.readouterr().out) == original
+    assert operator.main(["launch-link"]) == 0
+    assert json.loads(capsys.readouterr().out) == original
+    assert operator.main(["launch-link", "--expires-at", deadline(cli, 6 * 86400)]) == 1
+    assert "different terms" in capsys.readouterr().err
+    with cli.db.transaction() as session:
+        assert len(session.scalars(select(beta.BetaSignupLink)).all()) == 1
+        assert len(session.scalars(select(beta.AccessEvent).where(beta.AccessEvent.action == "signup_link_created")).all()) == 1
+    assert not Path(cli.settings.mail_outbox_dir).exists()
+
+
+@pytest.mark.parametrize("closure", ["expire", "revoke"])
+def test_launch_window_never_reopens_on_retry(cli, capsys, closure):
+    end = deadline(cli, 86400)
+    assert operator.main(["launch-link", "--expires-at", end]) == 0
+    original = json.loads(capsys.readouterr().out)
+    if closure == "expire":
+        cli.now[0] = original["expires_at"]
+    else:
+        for _ in range(2):
+            assert operator.main(["close-launch-link", "--reason", "End trial"]) == 0
+            assert json.loads(capsys.readouterr().out)["url"] is None
+    assert operator.main(["launch-link", "--expires-at", end]) == 0
+    closed = json.loads(capsys.readouterr().out)
+    assert closed["status"] == {"expire": "expired", "revoke": "revoked"}[closure]
+    assert closed["url"] is None and closed["expires_at"] == original["expires_at"]
+    assert operator.main(["launch-link", "--expires-at", deadline(cli, 2 * 86400)]) == 1
+    capsys.readouterr()
+    token = original["url"].split("token=", 1)[1]
+    assert cli.post("/api/access/signup-links/inspect", {"token": token}).status_code == 403
+
+
+def test_launch_creation_requires_bounded_explicit_deadline(cli, capsys):
+    for args in (["launch-link"], ["close-launch-link", "--reason", "Absent"],
+                 *(["launch-link", "--expires-at", value] for value in
+                   ["bad", "2026-11-23T12:00:00", deadline(cli, 0), deadline(cli, 7 * 86400 + 1)])):
+        assert operator.main(args) == 1
+        assert capsys.readouterr().err
+    with cli.db.transaction() as session:
+        assert session.scalar(select(beta.BetaSignupLink)) is None

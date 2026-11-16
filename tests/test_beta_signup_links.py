@@ -14,9 +14,10 @@ from test_beta_invitations import beta_system, redeem, start
 
 def create(s, **changes):
     body = {"request_id": str(uuid4()), "label": "November research preview", "expires_in_days": 7, **changes}
-    response = s.post("/api/access/signup-links", body, "admin")
-    assert response.status_code == 200, response.text
-    link = response.json()["link"]
+    with s.db.transaction(write=True) as session:
+        record = beta.create_signup_link(session, s.settings, body["label"], s.now[0],
+            actor_id=s.users["admin"], expires_in_days=body["expires_in_days"], request_id=body["request_id"])
+        link = beta.signup_link_data(s.settings, record, s.now[0])
     return link, link["url"].split("token=", 1)[1], body
 
 
@@ -39,9 +40,6 @@ def test_shared_link_admits_distinct_verified_accounts_and_expiry_keeps_members(
         _, code, _, _ = start(s, child, actor)
         assert redeem(s, child, code, actor).status_code == 200
     assert children[0] != children[1] and token not in children
-    listing = s.client.get("/api/access/signup-links", headers={"x-user": s.users["admin"]}).json()
-    assert listing["links"][0]["joined"] == 2
-    assert "alice@example.org" not in str(listing)
     s.now[0] = link["expires_at"]
     assert s.post("/api/access/signup-links/inspect", {"token": token}).status_code == 403
     assert s.post("/api/access/signup-links/invitations", {"token": token, "email": "next@example.org"}).status_code == 403
@@ -92,7 +90,8 @@ def test_closed_parent_invalidates_pending_registration_and_verification(beta_sy
     if close == "expire":
         s.now[0] = link["expires_at"]
     else:
-        assert s.post(f'/api/access/signup-links/{link["id"]}/revoke', {"reason": "Closed trial"}, "admin").status_code == 200
+        with s.db.transaction(write=True) as session:
+            beta.revoke_signup_link(session, link["id"], s.now[0], reason="Closed trial")
     assert s.post("/api/access/signup-links/inspect", {"token": token}).status_code == 403
     assert s.post("/api/access/signup-links/invitations", {"token": token, "email": "bob@example.org"}).status_code == 403
     assert s.post("/api/access/invitations/inspect", {"token": child}).status_code == 403
@@ -111,7 +110,8 @@ def test_revocation_is_idempotent_and_does_not_revoke_joined_accounts(beta_syste
     _, code, _, _ = start(s, child)
     assert redeem(s, child, code).status_code == 200
     for _ in range(2):
-        assert s.post(f'/api/access/signup-links/{link["id"]}/revoke', {}, "admin").status_code == 200
+        with s.db.transaction(write=True) as session:
+            beta.revoke_signup_link(session, link["id"], s.now[0])
     with s.db.transaction() as session:
         assert session.get(beta.BetaMembership, s.users["alice"]).status == "active"
         assert session.scalar(select(func.count()).select_from(beta.AccessEvent).where(
@@ -129,22 +129,15 @@ def test_shared_link_cannot_restore_an_individually_revoked_membership(beta_syst
     assert redeem(s, child, "12345678").status_code == 403
 
 
-def test_admin_permission_csrf_and_creation_idempotency(beta_system):
+def test_web_has_no_campaign_management_and_recipient_claim_requires_csrf(beta_system):
     s = beta_system
-    body = {"request_id": str(uuid4()), "label": "A trial"}
-    assert s.post("/api/access/signup-links", body).status_code == 403
-    assert s.client.get("/api/access/signup-links", headers={"x-user": s.users["alice"]}).status_code == 403
-    assert s.client.post("/api/access/signup-links", json=body, headers={"x-user": s.users["admin"]}).status_code == 403
-    link, token, body = create(s)
-    s.now[0] += 60
-    replay = s.post("/api/access/signup-links", body, "admin")
-    assert replay.json()["link"] == link
-    assert s.post("/api/access/signup-links", {**body, "label": "Changed"}, "admin").status_code == 409
-    assert s.post(f'/api/access/signup-links/{link["id"]}/revoke', {}, "bob").status_code == 403
+    link, token, _ = create(s)
+    for actor in ("alice", "admin"):
+        assert s.post("/api/access/signup-links", {"label": "Another campaign"}, actor).status_code == 404
+        assert s.client.get("/api/access/signup-links", headers={"x-user": s.users[actor]}).status_code == 404
+        assert s.post(f'/api/access/signup-links/{link["id"]}/revoke', {}, actor).status_code == 404
     assert s.client.post("/api/access/signup-links/invitations", json={"token": token, "email": "a@example.org"},
                          headers={"x-user": s.users["alice"]}).status_code == 403
-    for days in (0, 8, True, 1.5):
-        assert s.post("/api/access/signup-links", {**body, "expires_in_days": days}, "admin").status_code == 422
 
 
 def test_concurrent_recipient_claims_reuse_one_invitation(beta_system):

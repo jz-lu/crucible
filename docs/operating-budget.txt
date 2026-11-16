@@ -69,7 +69,7 @@ pull requests/main checks, deliberate native releases and separate measurement
 workflows consume runner time. Backup jobs charge for execution, not a permanently
 running duplicate web service. Retained VMs continue billing when powered off.
 
-Reusable signup links (local candidate, 16 November): no additional paid service
+One-time launch signup (local candidate, 16 November): no additional paid service
 or always-running worker. Each new participant still verifies their own mailbox.
 100 successful new signups therefore require at least 100 verification emails;
 resends and account recovery add to that count. Opening a link or entering an
@@ -77,7 +77,7 @@ email sends no message until the existing authenticated verification step.
 The existing limits remain: ten sends per recipient invitation, a 60-second
 resend delay, and ten sends per account per hour. Email provider quotas still
 apply. Check available daily/monthly mail allowance before sharing a link widely.
-The Invite people screen reports successful joins per link, not billable mail
+The operator launch-link command reports successful joins, not billable mail
 attempts. Reconcile delivery usage with the provider's dashboard.
 More participants may submit more notes; those screening attempts draw from the
 existing model-review envelope and its configured limits. Link creation does

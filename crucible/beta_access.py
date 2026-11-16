@@ -7,13 +7,14 @@ hashes; account IDs and existing contribution ownership remain unchanged.
 import base64
 import hashlib
 import hmac
+import math
 import re
 import secrets
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import Float, ForeignKey, Integer, JSON, String, UniqueConstraint, delete, func, select, update
+from sqlalchemy import Float, ForeignKey, Integer, JSON, String, UniqueConstraint, delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -283,20 +284,27 @@ def signup_link_data(settings, link, now):
                    if hmac.compare_digest(token_hash(raw), link.token_hash) else None}
 
 
-def create_signup_link(session, settings, label, now, *, actor_id=None, expires_in_days=7, request_id=None):
+def create_signup_link(session, settings, label, now, *, actor_id=None, expires_in_days=7, request_id=None,
+                       expires_at=None):
     label = label.strip()
     if not 1 <= len(label) <= 100 or type(expires_in_days) is not int or not 1 <= expires_in_days <= 7:
         raise ValueError("Use a label and an expiry between one and seven days.")
+    if expires_at is not None and (type(expires_at) not in (int, float) or not math.isfinite(expires_at)):
+        raise ValueError("Supply a finite signup deadline.")
     identifier = str(UUID(str(request_id))) if request_id is not None else str(uuid4())
     existing = session.get(BetaSignupLink, identifier)
     if existing:
-        if (existing.created_by != actor_id or existing.label != label
-                or existing.expires_at - existing.created_at != expires_in_days * 86400):
+        same_deadline = (existing.expires_at == expires_at if expires_at is not None else
+                         existing.expires_at - existing.created_at == expires_in_days * 86400)
+        if existing.created_by != actor_id or existing.label != label or not same_deadline:
             raise HTTPException(409, "This creation request was already used with different terms.")
         return existing
+    deadline = expires_at if expires_at is not None else now + expires_in_days * 86400
+    if not now < deadline <= now + INVITATION_SECONDS:
+        raise ValueError("The signup deadline must be in the next seven days.")
     raw = _signup_token(settings, "signup-link", identifier, "crs_")
     link = BetaSignupLink(id=identifier, token_hash=token_hash(raw), label=label,
-        created_by=actor_id, created_at=now, expires_at=now + expires_in_days * 86400)
+        created_by=actor_id, created_at=now, expires_at=deadline)
     session.add(link)
     _event(session, None, actor_id, "signup_link_created", now, signup_link_id=link.id)
     return link
@@ -429,20 +437,6 @@ class InviteInput(BaseModel):
     email: str = Field(min_length=3, max_length=254)
     expires_in_days: int = Field(default=7, ge=1, le=7, strict=True)
     _email = field_validator("email")(normalize_email)
-
-
-class SignupLinkInput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    request_id: UUID
-    label: str = Field(min_length=1, max_length=100)
-    expires_in_days: int = Field(default=7, ge=1, le=7, strict=True)
-
-    @field_validator("label")
-    @classmethod
-    def label_text(cls, value):
-        if not value.strip():
-            raise ValueError("Name this signup link.")
-        return value.strip()
 
 
 class SignupTokenInput(BaseModel):
@@ -621,41 +615,6 @@ def register_routes(app, db, settings, clock, account_for, throttle, issue_sessi
         if not is_admin(settings, user):
             raise HTTPException(403, "Beta administration permission is required.")
         return user
-
-    @app.get("/api/access/signup-links")
-    def signup_links(request: Request):
-        with db.transaction() as session:
-            admin(session, request)
-            links = session.scalars(select(BetaSignupLink).order_by(BetaSignupLink.created_at.desc(), BetaSignupLink.id)
-                                    .limit(100)).all()
-            joined = dict(session.execute(select(BetaSignupInvitation.signup_link_id, func.count())
-                .join(BetaInvitation, BetaInvitation.id == BetaSignupInvitation.invitation_id)
-                .where(BetaSignupInvitation.signup_link_id.in_([link.id for link in links]),
-                       BetaInvitation.redeemed_at.is_not(None)).group_by(BetaSignupInvitation.signup_link_id)).all())
-            return {"links": [{**signup_link_data(settings, link, clock()), "joined": joined.get(link.id, 0)} for link in links]}
-
-    @app.post("/api/access/signup-links")
-    def new_signup_link(body: SignupLinkInput, request: Request):
-        with db.transaction() as session:
-            account_id = admin(session, request, mutation=True).id
-        throttle(request, "signup-create", 30, 3600, account_id=account_id)
-        try:
-            with db.transaction(write=True) as session:
-                actor = admin(session, request, mutation=True)
-                if actor.id != account_id:
-                    raise HTTPException(403, "Your session changed. Refresh and try again.")
-                link = create_signup_link(session, settings, body.label, clock(), actor_id=actor.id,
-                    expires_in_days=body.expires_in_days, request_id=body.request_id)
-                return {"link": signup_link_data(settings, link, clock())}
-        except IntegrityError:
-            raise HTTPException(409, "This creation request was already used. Refresh the link list.") from None
-
-    @app.post("/api/access/signup-links/{link_id}/revoke")
-    def close_signup_link(link_id: UUID, body: ReasonInput, request: Request):
-        with db.transaction(write=True) as session:
-            actor = admin(session, request, mutation=True)
-            link = revoke_signup_link(session, str(link_id), clock(), actor_id=actor.id, reason=body.reason)
-            return {"link": signup_link_data(settings, link, clock())}
 
     @app.post("/api/access/invitations")
     def invite(body: InviteInput, request: Request):

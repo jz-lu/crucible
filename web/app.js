@@ -50,8 +50,6 @@ window.addEventListener('pagehide', () => {
   window.CrucibleResources?.invalidateReads?.();
   suspendResearcherEditor();
   resetSignupRequest();
-  signupAdmin.request++;signupAdminBusy(false);
-  if ($('#signup-links-dialog').open) $('#signup-links-dialog').close();
 });
 window.addEventListener('pageshow', event => {
   documentRetired = false;
@@ -717,83 +715,6 @@ async function presentSignup(force = false) {
 function signupExpiry(timestamp) {
   return new Date(timestamp * 1000).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'});
 }
-const signupAdmin = {request: 0, busy: false, pending: null};
-function resetSignupAdmin() {
-  signupAdmin.request++;signupAdmin.busy = false;signupAdmin.pending = null;
-  $('#signup-links-list').replaceChildren();$('#signup-links-form').reset();
-  $('#signup-links-create').disabled = false;$('#signup-links-refresh').disabled = false;
-  setError('#signup-links-error', '');setText('#signup-links-status', '');
-  if ($('#signup-links-dialog').open) $('#signup-links-dialog').close();
-}
-function signupAdminRequest() {
-  const request = ++signupAdmin.request, account = state.user?.id, csrf = state.csrf, lifecycle = documentEpoch;
-  return () => request === signupAdmin.request && account === state.user?.id && csrf === state.csrf && ownsDocument(lifecycle) && hasAccess() && state.canManageBetaAccess && $('#signup-links-dialog').open;
-}
-function signupAdminBusy(busy) {
-  signupAdmin.busy = busy;
-  for (const element of $('#signup-links-dialog').querySelectorAll('button:not([data-close]), input')) element.disabled = busy;
-}
-async function loadSignupLinks() {
-  if (!state.canManageBetaAccess || !hasAccess() || !$('#signup-links-dialog').open || signupAdmin.busy) return;
-  const current = signupAdminRequest();signupAdminBusy(true);setError('#signup-links-error', '');
-  setText('#signup-links-status', 'Loading links…');
-  try {
-    const data = await api('/api/access/signup-links');
-    if (!current()) return;
-    const list = $('#signup-links-list');list.replaceChildren();
-    for (const link of data.links) {
-      const item = node('section', null, 'signup-link');
-      item.append(node('h3', link.label));
-      item.append(node('p', (link.status === 'available' ? 'Open until ' : link.status === 'expired' ? 'Expired ' : 'Closed · original expiry ') + signupExpiry(link.expires_at) + ' · ' + link.joined + ' joined', 'field-hint'));
-      if (link.status === 'available') {
-        if (link.url) {
-          const field = node('input');field.readOnly = true;field.value = link.url;field.setAttribute('aria-label', 'Signup link for ' + link.label);
-          field.addEventListener('focus', () => field.select());item.append(field);
-          const copy = node('button', 'Copy link', 'button button-small button-quiet');copy.type = 'button';
-          copy.addEventListener('click', async () => {
-            try { await navigator.clipboard.writeText(link.url);if (item.isConnected) copy.textContent = 'Copied'; }
-            catch { field.focus();field.select();setText('#signup-links-status', 'Select and copy the link above.'); }
-          });item.append(copy);
-        } else item.append(node('p', 'This link was created before a server key change. Create a new link to share.', 'field-hint'));
-        const close = node('button', 'Close link', 'text-button');close.type = 'button';
-        close.addEventListener('click', async () => {
-          if (signupAdmin.busy || !state.canManageBetaAccess) return;
-          const owns = signupAdminRequest();signupAdminBusy(true);setError('#signup-links-error', '');
-          try {
-            await api('/api/access/signup-links/' + encodeURIComponent(link.id) + '/revoke', {reason: 'Closed from Invite people'});
-            if (owns()) { signupAdminBusy(false);await loadSignupLinks(); }
-          } catch (error) { if (owns()) setError('#signup-links-error', error.message); }
-          finally { if (owns()) signupAdminBusy(false); }
-        });item.append(close);
-      }
-      list.append(item);
-    }
-    setText('#signup-links-status', data.links.length ? 'Most recent links · times shown in your local timezone.' : 'No signup links yet.');
-  } catch (error) { if (current()) { setError('#signup-links-error', error.message);setText('#signup-links-status', ''); } }
-  finally { if (current()) signupAdminBusy(false); }
-}
-$('#signup-links-button').addEventListener('click', () => {
-  if (!state.canManageBetaAccess || !hasAccess()) return;
-  openDialog($('#signup-links-dialog'), $('#signup-links-button'));void loadSignupLinks();
-});
-$('#signup-links-refresh').addEventListener('click', () => { void loadSignupLinks(); });
-$('#signup-links-dialog').addEventListener('close', () => {
-  signupAdmin.request++;signupAdminBusy(false);$('#signup-links-list').replaceChildren();
-});
-$('#signup-links-form').addEventListener('submit', async event => {
-  event.preventDefault();
-  if (!state.canManageBetaAccess || !hasAccess() || signupAdmin.busy || !$('#signup-links-form').reportValidity()) return;
-  const label = $('#signup-links-label').value.trim();
-  if (!label) { setError('#signup-links-error', 'Name this signup link.');return; }
-  if (!signupAdmin.pending || signupAdmin.pending.label !== label) signupAdmin.pending = {request_id: crypto.randomUUID(), label, expires_in_days: 7};
-  const current = signupAdminRequest();signupAdminBusy(true);setError('#signup-links-error', '');
-  try {
-    await api('/api/access/signup-links', signupAdmin.pending);
-    if (!current()) return;
-    signupAdmin.pending = null;$('#signup-links-form').reset();signupAdminBusy(false);await loadSignupLinks();
-  } catch (error) { if (current()) setError('#signup-links-error', error.message + ' You can retry this request.'); }
-  finally { if (current()) signupAdminBusy(false); }
-});
 $('#auth-signup-form').addEventListener('submit', async event => {
   event.preventDefault();
   if (state.authPanel !== 'signup' || state.signupBusy || !$('#auth-signup-form').reportValidity()) return;
@@ -833,7 +754,6 @@ function clearProtectedState() {
   state.pendingAttempt = null; state.submissionChallenge = null; state.connection = null; state.round = null;
   state.challengeStartIntent = null; state.challengeLoading = false;
   state.canReviewProposals = false; state.canSelfReviewProposals = false; state.canManageBetaAccess = false;
-  resetSignupAdmin();$('#signup-links-button').hidden = true;
   resetAgentSettings(); resetAgentInstructions(); resetProposalAccount(state.user?.id);
   research.request++; research.recoveriesRequest++; research.targets = []; research.target = null; research.findings = []; research.recoveries = [];
   for (const selector of ['#kem-catalogue', '#people-content', '#person-content', '#leaderboard-content', '#history-content', '#activity-bounties', '#activity-notes', '#recovery-content', '#connect-content', '#overview-graphs', '#target-catalogue', '#home-schemes', '#home-bounties']) $(selector).replaceChildren();
@@ -1940,8 +1860,6 @@ function setSession(data) {
   document.body.setAttribute('data-access-view', hasAccess() ? 'workspace' : 'gate');
   window.CruciblePendingPage?.remember(hasAccess());
   state.canManageBetaAccess = Boolean(state.user && data.capabilities?.manage_beta_access);
-  if (previousId !== state.user?.id || previousCsrf !== state.csrf || !state.canManageBetaAccess || !hasAccess()) resetSignupAdmin();
-  $('#signup-links-button').hidden = !state.canManageBetaAccess || !hasAccess();
   state.canReviewProposals = Boolean(state.user && data.capabilities?.review_protocol_proposals);
   state.canSelfReviewProposals = Boolean(state.canReviewProposals && data.capabilities?.self_review_protocol_proposals);
   if (previousId !== state.user?.id || !hasAccess()) resetResearcherEditor();

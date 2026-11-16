@@ -77,7 +77,6 @@ MEMBER_PATHS = {
     "/api/protocol/proposals/{proposal_id}/retraction",
     "/api/protocol/proposals/{proposal_id}",
     "/api/access/invitations", "/api/access/invitations/{invitation_id}/revoke",
-    "/api/access/signup-links", "/api/access/signup-links/{link_id}/revoke",
     "/api/access/members", "/api/access/members/{user_id}/revoke",
     "/api/access/members/{user_id}/suspend",
     "/api/access/members/{user_id}/restore",

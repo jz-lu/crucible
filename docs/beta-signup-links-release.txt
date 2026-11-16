@@ -3,7 +3,8 @@ SIGNUP LINKS — SCHEMA CHANGE RECORD (LOCAL CANDIDATE)
 16 November 2026. This is preparation, not hosted migration or release evidence.
 
 Purpose and exact versions
-  Reusable, expiring admission URLs backed by the existing mailbox proof.
+  One fixed launch window, backed by the existing mailbox proof. Issued through
+  the trusted operator command; no persistent website invitation management.
   Schema0031 -> 0032, adding beta_signup_links and beta_signup_invitations.
   No old column changes, backfill, automatic link or membership grant.
   Old/new/rollback image digests: not selected or published for this candidate.

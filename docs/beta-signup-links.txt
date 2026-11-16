@@ -1,99 +1,82 @@
-REUSABLE SIGNUP LINKS — LOCAL CANDIDATE, 16 NOVEMBER 2026
-=======================================================
+ONE-TIME LAUNCH SIGNUP — LOCAL CANDIDATE, 16 NOVEMBER 2026
+=========================================================
 
-Use
----
-An active account configured in CRUCIBLE_ACCESS_ADMIN_IDS sees Invite people in
-the header. Name the cohort, choose Create 7-day link, and copy the resulting
-URL. This creates one link that any number of people can use until the displayed
-deadline. The existing beta gate stays in place. Normal members cannot create,
-list or close links, and a signup link grants no reviewer or administrator role.
+Scope
+-----
+One shared link admits multiple people during this launch window. There is no
+Invite people button or website API for creating/listing/closing campaigns.
+The ordinary beta sign-in and recipient-bound invitations remain in place.
+Each visitor enters an email, creates an account or signs in, then completes
+mailbox verification. The link grants no reviewer or administrator permission.
+Inspection and entering an email alone send no mail and grant no membership.
 
-Each visitor enters an email, creates a normal account (or signs in), and proves
-ownership using the existing mailbox code. Password and GitHub account flows
-retain their existing identity rules. Entering an email alone sends no mail,
-creates no account and grants no access. A previously admitted member simply
-returns to their workspace. A mailbox already attached to another account must
-use that account; this flow never merges identities.
+Issue at release, after the schema release gates pass
+---------------------------------------------------
+Use the existing trusted operator environment on the service host. Create the
+launch link once, with an explicit timezone and a deadline no more than seven
+days ahead. The actual deadline is chosen for this deployment; do not copy an
+old sample date. The operator command is:
 
-The deadline is seven full days from server creation time; the UI shows local
-time. A link created on 16 November expires on 23 November at the same time.
-The API supports one to seven days. Closing a link or reaching its deadline
-blocks new admissions, including recipient invitations issued before closure.
-People who already joined keep their accounts. Individual access revocation
-remains separate; a shared link cannot restore a revoked membership.
+  python -m scripts.beta_access launch-link --expires-at <ISO-8601-deadline>
 
-Links cannot be extended or reopened. Create a new link for a new window. A
-retried creation keeps its original request ID and deadline; an uncertain
-response does not create a duplicate link. Re-entering the same email reuses
-the recipient invitation without resetting expiry, resend or guess budgets.
-The management screen shows the latest 100 links and their successful joins.
-Do not put invitation URLs or recipient mailboxes in repository documentation.
+It outputs the secret URL only after committing the record. Share that URL with
+the intended audience; do not put it in Git, CI logs or public documentation.
+This campaign has one fixed identity per database. Repeating the exact command
+recovers the original link and deadline. A different deadline is refused, even
+after expiry or closure: it cannot create a second window or reopen this one.
+
+  python -m scripts.beta_access launch-link
+
+This reports the original deadline, status, successful joins and active URL.
+After closure/expiry it returns no URL. To end the window early:
+
+  python -m scripts.beta_access close-launch-link --reason <reason>
+
+Closure is idempotent. Existing members keep access. New admissions, including
+pending recipient invitations and provider signup flows, check the parent at
+use time. A shared link cannot restore individually revoked access. A previously
+admitted member opening it simply returns to their workspace.
 
 Design and maintenance
 ----------------------
-Two additive tables record link terms and recipient-invitation provenance.
-The established BetaInvitation, mailbox proof, account, membership, audit,
-CSRF/origin and request quota mechanisms do the remaining work. Expiry is checked
-on the server at use time; no cron job, extra server or manual provider entry is
-needed to expire a link. Email and model usage assumptions live in
-docs/operating-budget.txt.
+Two additive tables retain the window terms and recipient-invitation provenance.
+The existing account, mailbox proof, membership, audit, CSRF/origin and quota
+mechanisms do the remaining work. Server-side deadline checks need no cron,
+extra worker or manual provider action. Keep the historical records after expiry;
+do not remove tables that are still needed to explain admission history.
 
-Parent and recipient credentials are separate domain-separated HMAC values;
-only token hashes are stored. This lets an authorized administrator recover a
-URL to copy and makes recipient retries stable. Possession of the server secret
-is sensitive as before. Rotating it prevents recovery of old URLs; the screen
-then asks for a new link. Previously copied links remain subject to their stored
-hash, deadline and revocation. Do not rotate the service secret as a deployment
-step. Creation/closure events retain the administrator's account ID.
-
-Issuance, closure and verification take the parent link lock before its child
-invitation lock. Existing account write locks and mailbox uniqueness still
-apply. These short database operations serialize conflicting admissions; they
-do not hold a database transaction while sending mail. Link inspection is
-read-only. UI requests belong to the current account/session/dialog; abandoned
-responses cannot display another session's links or reopen a departed signup.
+Tokens use domain-separated HMAC values; stored credentials are hashes. Repeated
+claims for the same email reuse one recipient invitation without resetting its
+expiry, resend or guess limits. Parent locks precede recipient locks. Mail is
+sent outside database transactions. One mailbox never merges two identities.
+Rotating the server secret prevents URL recovery; the command returns null.
+It cannot open another campaign. Do not rotate the secret as a release step.
 
 Local review
 ------------
-With the existing native workers built and the project's Python environment:
-
   python -B tests/serve_showcase_preview.py --port 8043
 
-Open http://127.0.0.1:8043/#home. Preview administrator:
+Open http://127.0.0.1:8043/#home. Synthetic account:
   showcase_preview / Local showcase preview
 
-The command prints a local signup URL and a local mail directory. Test with an
-example.invalid address and read the generated .eml for its verification code.
-The preview uses a fresh temporary database, a separate development cookie,
-local mail only, no model API and the normal registered native pin checks.
-Stopping it removes its database and emails. This link works only on this
-computer; it is not the shareable crucible.fail link. Use Invite people on the
-deployed site after the feature's release checks are complete.
+The process prints a local signup URL and local mail directory. It uses a fresh
+temporary database, separate development cookie, local mail only and the normal
+native pin checks. Stopping it removes its database and emails. Its URL cannot
+invite anyone to crucible.fail. No hosted link or access grant has been created.
 
 Validation and release boundary
 -------------------------------
-tests/test_beta_signup_links.py covers multiple recipients, proof, deadlines,
-closure, retries, quotas, administrator/CSRF checks and individual revocation.
-tests/test_beta_signup_links_migration.py exercises actual upgrade preservation,
-metadata parity, empty rollback and refusal to erase admission provenance.
-tests/browser/signup-links.spec.cjs exercises real browser signup/mail proof,
-desktop/mobile management, lost responses and abandoned navigation.
-tests/test_github_auth.py also verifies that closing the parent link during
-either the provider callback or account-completion step prevents registration;
-existing-member sign-in retains its established behavior.
-tests/test_beta_signup_links_postgresql.py is wired into the fixed PostgreSQL17
-CI job for simultaneous issuance, closure/registration locks and role grants.
-It skips locally without that dedicated disposable service; collection is not
-evidence that PostgreSQL concurrency passed.
+test_beta_operator.py covers fixed-window issuance, recovery, immutable deadline,
+closure, expiry and bounded timezone-aware input. test_beta_signup_links.py covers
+multiple recipients, mailbox proof, retries, limits, closure and individual access
+revocation; it also verifies that the campaign management APIs do not exist.
+Browser checks cover desktop/mobile signup, abandoned requests and existing users.
+GitHub tests verify parent closure during callback/account completion. Migration
+tests cover preservation, metadata parity and refusal to drop populated history.
 
-Recorded evidence (16 November): the PostgreSQL17 job passed on source0ab0a4f,
-including the new signup suite, in run43803993487:
+The PostgreSQL17 suite covers concurrent claims, closure locks and role grants.
+The job passed on 0ab0a4f in run43803993487:
 https://github.com/jz-lu/crucible/actions/runs/43803993487/job/133090428224
-The subsequent GitHub-validation consolidation passed63 local authentication
-checks; two existing local-PostgreSQL tests were skipped. This evidence does
-not cover a hosted migration, exact release image, rollback or restore.
-
-This candidate is for local iteration. No hosted link or access grant has been
-created. Migration 0032 is outside the current reviewed runtime contract. See
-docs/beta-signup-links-release.txt for the remaining deployment work.
+That earlier evidence is not a hosted migration or validation of later edits.
+Migration 0032 remains outside the reviewed runtime contract. See
+beta-signup-links-release.txt; no startup or deployment guard is relaxed here.

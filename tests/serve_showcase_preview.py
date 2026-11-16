@@ -38,16 +38,16 @@ def main():
     origin = f'http://127.0.0.1:{args.port}'
     with tempfile.TemporaryDirectory(prefix='crucible-showcase-') as temporary:
         data = Path(temporary)
-        admin_id = str(uuid4())
+        preview_id = str(uuid4())
         settings = PreviewSettings('sqlite:///' + str(data / 'preview.db'), secrets.token_bytes(32),
-            origins=(origin,), access_mode='beta', rate_limits=False, access_admin_ids=(admin_id,),
+            origins=(origin,), access_mode='beta', rate_limits=False,
             generation_concurrency=1, generation_per_account=1,
             mail_backend='local', mail_outbox_dir=str(data / 'outbox'),
             mail_from='Crucible preview <preview@example.invalid>')
         app = create_app(settings, initialize=True)
         now = time.time()
         with app.state.db.transaction(write=True) as session:
-            user = User(id=admin_id, handle='showcase_preview',
+            user = User(id=preview_id, handle='showcase_preview',
                 password_hash=passwords.hash('Local showcase preview'), created_at=now)
             session.add(user)
             session.flush()
@@ -59,7 +59,7 @@ def main():
             session.flush()
             signup = beta_access.signup_link_data(settings, link, now)
         print('Disposable local preview: ' + origin + '/#home', flush=True)
-        print('Preview administrator: showcase_preview / Local showcase preview', flush=True)
+        print('Preview account: showcase_preview / Local showcase preview', flush=True)
         print('Local signup link: ' + signup['url'], flush=True)
         print('Expires (UTC): ' + time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(signup['expires_at'])), flush=True)
         print('Verification emails are written locally, never sent: ' + str(data / 'outbox'), flush=True)

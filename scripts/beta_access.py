@@ -7,14 +7,43 @@ import argparse
 import json
 import sys
 import time
+from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 
-from crucible.beta_access import (AccountState, BetaInvitation, BetaMembership, create_invitation,
-                                 invalidate_invitation, invitation_status, set_membership, set_suspension)
+from crucible.beta_access import (AccountState, BetaInvitation, BetaMembership, BetaSignupInvitation,
+                                 BetaSignupLink, create_invitation, create_signup_link, invalidate_invitation,
+                                 invitation_status, revoke_signup_link, set_membership, set_suspension,
+                                 signup_link_data)
 from crucible.config import load_settings
 from crucible.db import Database, User
+
+# One launch window per database. Retrying cannot mint another campaign or
+# extend/reopen the original one. Ordinary recipient invitations stay separate.
+LAUNCH_SIGNUP_ID = "172f41a6-3691-49ef-b8d4-8d6507b974f0"
+
+
+def launch_link(session, settings, now, expires_at=None):
+    if expires_at is None:
+        link = session.get(BetaSignupLink, LAUNCH_SIGNUP_ID)
+        if link is None:
+            raise ValueError("Create the launch link with --expires-at and an explicit timezone.")
+    else:
+        deadline = datetime.fromisoformat(expires_at)
+        if deadline.tzinfo is None:
+            raise ValueError("The signup deadline must include an explicit timezone.")
+        link = create_signup_link(session, settings, "Crucible launch", now,
+                                  request_id=LAUNCH_SIGNUP_ID, expires_at=deadline.timestamp())
+        session.flush()
+    result = signup_link_data(settings, link, now)
+    if result["status"] != "available":
+        result["url"] = None
+    result["joined"] = session.scalar(select(func.count()).select_from(BetaSignupInvitation)
+        .join(BetaInvitation, BetaInvitation.id == BetaSignupInvitation.invitation_id)
+        .where(BetaSignupInvitation.signup_link_id == link.id, BetaInvitation.redeemed_at.is_not(None)))
+    return result
 
 
 def main(argv=None):
@@ -28,6 +57,10 @@ def main(argv=None):
     revoke_invite = sub.add_parser("revoke-invite", help="Withdraw an invitation; does not revoke an already admitted account")
     revoke_invite.add_argument("invitation_id")
     revoke_invite.add_argument("--reason", required=True)
+    launch = sub.add_parser("launch-link", help="Show the one-time launch link, or create it with a fixed deadline")
+    launch.add_argument("--expires-at", help="ISO-8601 deadline with timezone, at most seven days ahead; immutable")
+    close_launch = sub.add_parser("close-launch-link", help="Permanently close the launch window; joined accounts keep access")
+    close_launch.add_argument("--reason", required=True)
     for action in ("grant", "revoke", "suspend", "restore"):
         command = sub.add_parser(action, help="Change access for one existing account")
         command.add_argument("handle")
@@ -40,7 +73,12 @@ def main(argv=None):
         if hasattr(args, "reason") and (not args.reason.strip() or len(args.reason) > 500):
             raise ValueError("Supply a reason between 1 and 500 characters.")
         with db.transaction(write=args.action not in {"list", "invitations"}) as session:
-            if args.action == "invite":
+            if args.action == "launch-link":
+                result = launch_link(session, settings, time.time(), args.expires_at)
+            elif args.action == "close-launch-link":
+                revoke_signup_link(session, LAUNCH_SIGNUP_ID, time.time(), reason="Operator: " + args.reason)
+                result = launch_link(session, settings, time.time())
+            elif args.action == "invite":
                 invitation, link = create_invitation(session, settings, args.email, time.time())
                 result = {"id": invitation.id, "expires_at": invitation.expires_at, "invitation_url": link}
             elif args.action == "invitations":
@@ -74,6 +112,11 @@ def main(argv=None):
         return 1
     except HTTPException as error:
         print(str(error.detail), file=sys.stderr)
+        return 1
+    except IntegrityError:
+        if args.action != "launch-link":
+            raise
+        print("The launch link may have been created concurrently. Rerun with the same deadline to recover it.", file=sys.stderr)
         return 1
     finally:
         db.engine.dispose()

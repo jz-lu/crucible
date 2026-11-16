@@ -32,9 +32,9 @@ up to date when adding a paid dependency, changing a plan/model or increasing a
 usage limit. Schema PRs should use [the migration record](docs/schema-change-template.txt)
 and prove old/new compatibility before claiming uninterrupted rollout; the current
 exact-head startup gate has not been relaxed.
-For starter guides, reversible note selection and bounty templates, follow
+For starter guides, reversible note selection and launch bounty curation, follow
 [showcase curation](docs/showcase-curation.txt).
-For reusable admission links and the disposable local review server, see
+For the one-time launch signup window and disposable local review server, see
 [signup links](docs/beta-signup-links.txt); its schema release remains a separate gate.
 
 ## Start locally

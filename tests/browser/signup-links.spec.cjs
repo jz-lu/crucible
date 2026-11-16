@@ -33,49 +33,8 @@ for (const width of [1440, 390]) test('one shared link admits a verified new acc
   await page.locator('#auth-enter').click();
   await expect(page.locator('#account-handle')).toHaveText('shared_signup_' + width);
   await expect(page.locator('#home-workspace')).toBeVisible();
-  await expect(page.locator('#signup-links-button')).toBeHidden();
+  await expect(page.locator('#signup-links-button')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-});
-
-for (const width of [1440, 390]) test('an administrator creates and closes a reusable link at ' + width + 'px', async ({page}, testInfo) => {
-  await page.setViewportSize({width,height:1000});await signIn(page, 'signupadmin');
-  await page.locator('#signup-links-button').click();
-  await expect(page.locator('#signup-links-label')).toBeEnabled();
-  const label = 'Preview cohort ' + width;
-  await page.locator('#signup-links-label').fill(label);
-  await page.locator('#signup-links-create').click();
-  const item = page.locator('.signup-link').filter({has:page.getByRole('heading', {name:label,exact:true})});
-  await expect(item).toBeVisible();await expect(item).toContainText('0 joined');
-  const url = await item.getByRole('textbox').inputValue();
-  expect(url).toContain('/#signup?token=crs_');
-  await page.screenshot({path:testInfo.outputPath('manage-signup-links.png'),fullPage:true});
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await item.getByRole('button', {name:'Close link',exact:true}).click();
-  await expect(item).toContainText('Closed');await expect(item.getByRole('textbox')).toHaveCount(0);
-  await page.locator('#signup-links-dialog [data-close]').click();
-  await page.locator('#logout-button').click();
-  await expect(page.locator('#access-workspace')).toBeVisible();
-  await page.goto(url);
-  await expect(page.locator('#auth-title')).toHaveText('Signup link unavailable');
-  await expect(page.locator('#auth-signup-form')).toBeHidden();
-  await expect(page.locator('#auth-issue-signin')).toBeVisible();
-});
-
-test('a lost creation response can be retried without creating another link', async ({page}) => {
-  await signIn(page, 'signupadmin');await page.locator('#signup-links-button').click();
-  await expect(page.locator('#signup-links-label')).toBeEnabled();
-  let loseResponse = true;const requests = [];
-  await page.route('**/api/access/signup-links', async route => {
-    if (route.request().method() !== 'POST') return route.fallback();
-    requests.push(route.request().postDataJSON());
-    if (!loseResponse) return route.fallback();
-    loseResponse = false;await route.fetch();await route.abort('failed');
-  });
-  await page.locator('#signup-links-label').fill('Retry fixture');await page.locator('#signup-links-create').click();
-  await expect(page.locator('#signup-links-error')).toBeVisible();
-  await page.locator('#signup-links-create').click();
-  await expect(page.locator('.signup-link h3').filter({hasText:'Retry fixture'})).toHaveCount(1);
-  expect(requests).toHaveLength(2);expect(requests[0]).toEqual(requests[1]);
 });
 
 test('leaving signup while inspection is pending cannot reopen its dialog', async ({page}) => {
