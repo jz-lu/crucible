@@ -75,6 +75,33 @@ statements: [{id, label, title, definition, definitions?}]
   fingerprint covers its text and normative pins; title/label changes do not
   change that fingerprint. Every edit still produces an exact note revision.
 
+Place a canonical statement inside a readable section using its stable ID on
+a line of its own, for example:
+
+  Explain the experiment and why this premise matters.
+
+  [[statement:bounded-failure]]
+
+  Explain how the bound is used and where it does not apply.
+
+The marker renders content.statements[id] from this same revision at that
+position. It is optional and may appear at most once per statement across all
+readable sections. Unknown or repeated placements are rejected before saving.
+Use exact links for subsequent references, not a second definition or marker.
+Write markers outside lists/quotes and outside code/math. Inline markers,
+indented code, backtick/tilde fences, backtick spans and \(...\), \[...\] or
+$$...$$ math remain literal examples. The Full text body is never expanded.
+Definitions remain canonical in statements; the prose only chooses their
+position. Placement does not alter an assumption's scope, prove an argument
+or confer a review. Keep statement and section IDs stable when editing titles.
+
+The folded Statements index lists titles and exact links, not a glossary of
+duplicate definitions. A statement link focuses its placed block with nearby
+prose visible. Historical notes do not need rewriting: an unplaced statement
+can appear beside an explicitly linked premise or a unique argument section.
+Ambiguous or absent links use a standalone selected statement. No relationship
+is inferred from similar names or text; no old revision or hash is modified.
+
 arguments: [{id,title,conclusion_statement,scope,status,section_id?,dependencies}]
   conclusion_statement uses the same exact reference shape as a premise below.
   It identifies the proposition this argument supports. State the experiment,

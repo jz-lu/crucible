@@ -5,6 +5,7 @@ binding manifest selects already-readable revisions and cannot publish a note,
 change a curve, grant access, or adopt an assumption.
 """
 import json
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -14,6 +15,85 @@ from sqlalchemy import select
 
 
 SECTION_PATTERN = r"^[a-z][a-z0-9-]{0,63}$"
+
+
+def statement_markers(body):
+    """Explicit standalone placements, excluding literal code and math spans.
+
+    This is a bounded presentation syntax, not Markdown execution. Keep its
+    token rules aligned with TheoryStore.readableStatementBlocks and the shared
+    parser fixtures. It never changes the stored source or its content hash.
+    """
+    fence, ticks, math = None, 0, None
+    for line in body.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        if fence:
+            close = re.fullmatch(r" {0,3}(`+|~+)[ \t]*", line)
+            if close and close[1][0] == fence[0] and len(close[1]) >= fence[1]:
+                fence = None
+            continue
+        if not ticks and math is None:
+            opened = re.match(r" {0,3}(`{3,}|~{3,})", line)
+            if opened:
+                fence = (opened[1][0], len(opened[1]))
+                continue
+            marker = re.fullmatch(r" {0,3}\[\[statement:([a-z][a-z0-9-]{0,79})\]\][ \t]*", line)
+            if marker:
+                yield marker[1]
+                continue
+            if re.fullmatch(r" {0,3}\\\[\[statement:[a-z][a-z0-9-]{0,79}\]\][ \t]*", line):
+                continue
+            # Four-space/tab indentation remains literal code, not a placement.
+            if line.startswith(("    ", "\t")):
+                continue
+        i, slashes = 0, 0
+        while i < len(line):
+            if ticks:
+                if line[i] == "`":
+                    end = i + 1
+                    while end < len(line) and line[end] == "`":
+                        end += 1
+                    if end - i == ticks:
+                        ticks = 0
+                    slashes = 0
+                    i = end
+                    continue
+            else:
+                escaped = slashes % 2 == 1
+                if math:
+                    if not escaped and line.startswith(math, i):
+                        i += len(math)
+                        math = None
+                        slashes = 0
+                        continue
+                elif not escaped:
+                    if line[i] == "`":
+                        end = i + 1
+                        while end < len(line) and line[end] == "`":
+                            end += 1
+                        ticks = end - i
+                        slashes = 0
+                        i = end
+                        continue
+                    opening = next((token for token in ("\\[", "\\(", "$$") if line.startswith(token, i)), None)
+                    if opening:
+                        math = {"\\[": "\\]", "\\(": "\\)", "$$": "$$"}[opening]
+                        i += len(opening)
+                        slashes = 0
+                        continue
+            slashes = slashes + 1 if line[i] == "\\" else 0
+            i += 1
+
+
+def validate_statement_placements(sections, statement_ids):
+    placed = set()
+    for section in sections:
+        for identifier in statement_markers(section.body):
+            if identifier not in statement_ids:
+                raise ValueError("A statement placement must name a canonical statement in this note.")
+            if identifier in placed:
+                raise ValueError("Place each statement only once across the readable sections; use exact links for later references.")
+            placed.add(identifier)
+    return placed
 
 
 class ReadableSection(BaseModel):

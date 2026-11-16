@@ -1,0 +1,13 @@
+[
+  {"name":"prose before between and after", "body":"Before.\n\n[[statement:first]]\n\nBetween.\n\n[[statement:second]]\n\nAfter.", "ids":["first","second"]},
+  {"name":"CRLF and optional outer spaces", "body":"Before.\r\n  [[statement:first]] \t\r\nAfter.", "ids":["first"]},
+  {"name":"inline quoted indented and escaped examples", "body":"Use [[statement:example]] here.\n> [[statement:quoted]]\n    [[statement:indented]]\n\t[[statement:tabbed]]\n\\[[statement:escaped]]\n[[statement:real]]", "ids":["real"]},
+  {"name":"backtick fence with nested short fence", "body":"````text\n[[statement:example]]\n```\n[[statement:still-literal]]\n````\n[[statement:real]]", "ids":["real"]},
+  {"name":"tilde fence keeps backticks literal", "body":"~~~markdown\n```\n[[statement:example]]\n~~~\n[[statement:real]]", "ids":["real"]},
+  {"name":"unclosed fence remains literal", "body":"```\n[[statement:example]]", "ids":[]},
+  {"name":"inline code spans can cross lines", "body":"Literal ``\n[[statement:example]]\n`\n[[statement:still-literal]]\n`` ends.\n[[statement:real]]", "ids":["real"]},
+  {"name":"all supported math spans remain literal", "body":"\\[\n[[statement:display]]\n\\]\n\\(\n[[statement:inline]]\n\\)\n$$\n[[statement:dollars]]\n$$\n[[statement:real]]", "ids":["real"]},
+  {"name":"escaped math delimiter does not open math", "body":"\\\\[\n[[statement:real]]\n\\\\]", "ids":["real"]},
+  {"name":"escaped closing delimiter does not close math", "body":"\\[\n\\\\]\n[[statement:example]]\n\\]\n[[statement:real]]", "ids":["real"]},
+  {"name":"malformed marker syntax stays literal", "body":"[[statement:Uppercase]]\n[[statement:a_b]]\n[[statement:]]\n[[statement:real]] trailing\n[[statement:real]]", "ids":["real"]}
+]

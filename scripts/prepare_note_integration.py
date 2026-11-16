@@ -31,6 +31,54 @@ OWNED_EXTENSIONS = {"scheme_context", "assumptions", "assumption_statements", "s
     "presentation_sha256", "ram_analysis_sha256", "local_fixture", "canonical_conversion"}
 
 
+def readable_fixture_sections(row):
+    """Apply authored placements without changing the generated scientific data.
+
+    The generator owns readable_sections. Its optional presentation overlay pins
+    exact paragraph boundaries, so an upstream prose change requires a deliberate
+    layout revision instead of silently moving a statement to unrelated context.
+    """
+    from crucible.note_sections import ReadableSection, validate_statement_placements
+
+    sections = [{key: section[key] for key in ("id", "title", "body")}
+                for section in row["readable_sections"]]
+    layout = row.get("readable_statement_layout")
+    if layout is None:
+        return sections
+    if not isinstance(layout, list) or len(layout) > 64:
+        raise ValueError("Use at most 64 authored statement placement boundaries.")
+    by_id = {section["id"]: section for section in sections}
+    insertions = {}
+    for entry in layout:
+        if set(entry) != {"section_id", "after_paragraph", "paragraph_sha256", "content"}:
+            raise ValueError("Invalid authored statement placement boundary.")
+        section = by_id.get(entry["section_id"])
+        paragraphs = section["body"].split("\n\n") if section else []
+        index = entry["after_paragraph"]
+        if type(index) is not int or not 0 <= index < len(paragraphs):
+            raise ValueError("The statement placement paragraph is unavailable.")
+        if hashlib.sha256(paragraphs[index].encode()).hexdigest() != entry["paragraph_sha256"]:
+            raise ValueError("Readable prose changed; review its authored statement placement.")
+        if not isinstance(entry["content"], str) or not entry["content"].strip() or len(entry["content"]) > 40000:
+            raise ValueError("A placement needs bounded readable content.")
+        key = (section["id"], index)
+        if key in insertions:
+            raise ValueError("A paragraph has two conflicting placement instructions.")
+        insertions[key] = entry["content"]
+    for section in sections:
+        paragraphs = []
+        for index, paragraph in enumerate(section["body"].split("\n\n")):
+            paragraphs.append(paragraph)
+            if extra := insertions.get((section["id"], index)):
+                paragraphs.append(extra)
+        section["body"] = "\n\n".join(paragraphs)
+    statement_ids = {statement["id"] for statement in row["statements"]}
+    placed = validate_statement_placements([ReadableSection.model_validate(section) for section in sections], statement_ids)
+    if placed != statement_ids:
+        raise ValueError("The fixture layout must place each canonical statement exactly once.")
+    return sections
+
+
 def numbered_premises(content):
     """Read both earlier premise metadata and canonical blocks, excluding claims."""
     conclusion_ids = {argument["conclusion_statement"]["statement_id"]
@@ -207,7 +255,7 @@ def prepare(data_dir: Path, *, revise_fixture=False, check=False):
                 return {key: relabel_blocks(item) for key, item in value.items()}
             return value
         sections = [{key: relabel(section[key]) if key in {"title", "body"} else section[key]
-                     for key in ("id", "title", "body")} for section in row["readable_sections"]]
+                     for key in ("id", "title", "body")} for section in readable_fixture_sections(row)]
         source_body = original["content"]["body"]
         if row.get("full_text_argument_appendix"):
             # The current, complete derivations replace duplicate snapshots in

@@ -275,6 +275,12 @@ const lists=app=>app.requests.filter(row=>row.url.startsWith('/api/notebook/note
   const before=lists(app).length;await filterNotes(app,'mine');assert.equal(app.q('list').querySelectorAll('.nb-entry').length,2);
   assert.match(app.q('list').textContent,/Previously removed draft/);assert.equal(lists(app).length,before);
  });
+ await test('editorially archived entries stay out of browsing while owners retain My notes access',async()=>{
+  const rows=[indexRow('active'),indexRow('archived',{archive_reason:'Retired demonstration.',content:content('Earlier demonstration')}),indexRow('other-archive',{owner:{id:2,handle:'other'},archive_reason:'Retired.',content:content('Other archived note')})];
+  const app=await boot({respond:url=>url===indexPath?summaryIndex(rows):undefined});await app.controller.warm('list');await app.show();
+  assert.equal(app.q('list').querySelectorAll('.nb-entry').length,1);assert.doesNotMatch(app.q('list').textContent,/Earlier demonstration|Other archived note/);
+  await filterNotes(app,'mine');assert.equal(app.q('list').querySelectorAll('.nb-entry').length,2);assert.match(app.q('list').textContent,/Earlier demonstration/);assert.doesNotMatch(app.q('list').textContent,/Other archived note/);
+ });
  await test('server page to complete index to expiry never sends synthetic cursors or wrong cached pages',async()=>{
   const rows=Array.from({length:60},(_,i)=>indexRow('item-'+i,{content:content('Row '+i)}));
   const app=await boot({respond:url=>url===indexPath?summaryIndex(rows):url.startsWith('/api/notebook/notes?')?summaryPage(url,rows):undefined});

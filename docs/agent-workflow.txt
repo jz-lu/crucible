@@ -120,7 +120,15 @@ companion, with stable section IDs and Markdown/explicit TeX. The existing body
 remains the complete Full text; never replace it with a shortened summary.
 Both partitions belong to the same immutable revision and content hash.
 Optional statements and arguments supply precise reusable definitions and
-dependency uses without imposing an outline on ordinary research. Full text
+dependency uses without imposing an outline on ordinary research. To display a
+statement in its explanation, place [[statement:ID]] on a line by itself in a
+readable section, with prose before and after it. It names content.statements
+in this same revision; use it at most once across sections. Keep canonical
+definitions there rather than copying them into a glossary. The folded index
+lists titles and exact links. Code/math examples and Full text are not expanded.
+Legacy notes need no rewrite; explicit section relationships can locate a
+requested statement in context without changing any historical source.
+Full text
 can still stand alone. Read the optional statement/argument contract in
 note-format.txt before authoring these fields; they are included in the exact
 revision, export and publication screen. Exact statement/argument links pin

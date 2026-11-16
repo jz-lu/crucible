@@ -1,11 +1,13 @@
 """Optional canonical note blocks and scoped local adoption: no mathematical oracle."""
 from copy import deepcopy
+import json
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
 from sqlalchemy import func, select
 
-from crucible import notebook, statement_workflow as workflow
+from crucible import notebook, note_sections, statement_workflow as workflow
 from crucible.app import create_app
 from crucible.config import Settings
 from crucible.db import User
@@ -58,6 +60,42 @@ def argument(note=None, **updates):
 
 def structured(**updates):
     return content(**{"statements": [block()], "arguments": [argument()], **updates})
+
+
+@pytest.mark.parametrize("case", json.loads((Path(__file__).parent / "fixtures/statement-placements.json").read_text()), ids=lambda case: case["name"])
+def test_placement_parser_preserves_literal_code_and_math(case):
+    assert list(note_sections.statement_markers(case["body"])) == case["ids"]
+
+
+@pytest.mark.parametrize("bodies", [
+    ["[[statement:missing]]"],
+    ["[[statement:rare-failure]]\n\n[[statement:rare-failure]]"],
+    ["[[statement:rare-failure]]", "[[statement:rare-failure]]"],
+])
+def test_invalid_statement_placement_rejected_before_save(trial, bodies):
+    _, owner, _, _ = trial
+    value = structured(sections=[{"id": f"section-{i}", "title": "Explanation", "body": body} for i, body in enumerate(bodies)])
+    response = owner.post("/api/notebook/notes", {"content": value, "idempotency_key": str(uuid4())})
+    assert response.status_code == 422
+    assert not owner.client.get("/api/notebook/notes?visibility=mine").json()["notes"]
+
+
+def test_authored_placement_creates_a_new_revision_without_rewriting_exact_sources(trial):
+    _, owner, _, _ = trial
+    original = structured(sections=[{"id": "reasoning", "title": "Why the bound matters", "body": "Before the premise.\n\nAfter its application."}])
+    first = create(owner, original)
+    value = deepcopy(original)
+    value["sections"][0]["body"] = "Before the premise.\n\n[[statement:rare-failure]]\n\nAfter its application."
+    second = revise(owner, first, value)
+    assert second["revision"] == first["revision"] + 1
+    assert second["content_sha256"] == notebook._hash(value) != first["content_sha256"]
+    exact = owner.client.get(f"/api/notebook/notes/{first['id']}?revision={first['revision']}&sha256={first['content_sha256']}&statement=rare-failure")
+    assert exact.status_code == 200
+    assert exact.json()["note"]["revisions"][0]["content"] == original
+    latest = second["revisions"][-1]["content"]
+    assert latest["statements"] == original["statements"]
+    assert latest["arguments"] == original["arguments"]
+    assert latest["body"] == original["body"]
 
 
 def context(note, kind="statement", identifier="rare-failure"):

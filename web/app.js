@@ -1661,7 +1661,10 @@ function applyRoute(focus = false) {
   if (screen === 'bounties') document.title = 'Bounties — Crucible';
   if (screen === 'reviews') document.title = 'Review center — Crucible';
   renderReviewAccountLink();
-  if (focus && previousScreen !== screen) $(workspaceSelector(screen)).focus({preventScroll: ['catalogue', 'people', 'activity', 'notebook', 'bounties', 'about', 'scheme-map'].includes(screen)});
+  const destination = $(workspaceSelector(screen));
+  // A cached exact-note reader can focus its statement synchronously. Keep that
+  // contextual handoff instead of replacing it with the outer workspace.
+  if (focus && previousScreen !== screen && !(screen === 'notebook' && document.activeElement?.closest('#notebook-workspace') === destination)) destination.focus({preventScroll: ['catalogue', 'people', 'activity', 'notebook', 'bounties', 'about', 'scheme-map'].includes(screen)});
   scheduleBrowseWarmup();
 }
 function sharedKeyBytes(challenge) {

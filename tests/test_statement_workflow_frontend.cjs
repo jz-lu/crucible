@@ -4,6 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const {createApp, flush} = require('./frontend-dom.cjs');
 const web = path.resolve(__dirname, '../web/notebook');
+const store = require('../web/notebook/store.js');
 const hash = 'a'.repeat(64), user = {id:1,handle:'alice'};
 const source = {note_id:'note-one',revision:1,content_sha256:hash};
 const statement = {id:'failure-bound',label:'A-12',title:'A bounded failure event',definition:'For the stated sampler, $\\delta \\leq 1/128$.'};
@@ -47,13 +48,20 @@ async function boot({record=note(),params=query({}),respond,reviewOnly=false,ena
 }
 let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
 (async()=>{
+  await test('shared placement grammar preserves literal code/math examples and only expands standalone IDs',async()=>{
+    const fixtures=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/statement-placements.json'),'utf8'));
+    for(const fixture of fixtures) assert.deepEqual(store.readableStatementBlocks(fixture.body).filter(part=>part.kind==='statement').map(part=>part.id),fixture.ids,fixture.name);
+    assert.throws(()=>store.readableStatementBlocks('a'.repeat(40001)),/bounded/);
+  });
   await test('canonical statements and separate arguments render in the ordinary reader',async()=>{
     const value=content();value.arguments.push({...argument,id:'direct',title:'Direct enumeration',status:'unconditional',dependencies:[]});
     const app=await boot({record:note(value)}),full=app.q('full');
-    assert.equal(full.querySelectorAll('.nb-statement-block').length,1);assert.equal(full.querySelectorAll('.nb-argument-block').length,2);
+    assert.equal(full.querySelectorAll('.nb-statement-block').length,0);assert.equal(full.querySelectorAll('.nb-argument-block').length,2);
     assert.match(full.textContent,/A-12.*bounded failure event/s);
     assert.ok(full.querySelectorAll('.nb-argument-entry').every(entry=>!entry.open));
     assert.equal(full.querySelector('.nb-statements-list').open,false);
+    const index=full.querySelector('.nb-statement-index');assert.equal(index.querySelectorAll('a').length,1);
+    assert.equal(index.textContent.includes(statement.definition),false);assert.match(index.querySelector('a').href,/revision=1&sha256=a{64}&statement=failure-bound$/);
     const fullText=full.querySelector('.nb-full-text');assert.equal(fullText.open,false);
     assert.equal(fullText.querySelector('summary').textContent,'Full text');
     assert.match(fullText.querySelector('.nb-body').textContent,/Technical derivation/);
@@ -64,6 +72,41 @@ let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS 
     const app=await boot({params:query({statement:'failure-bound'})});assert.equal(app.document.activeElement.dataset.noteStatement,'failure-bound');
     const request=app.requests.find(x=>x.url.startsWith('/api/notebook/notes/note-one'));assert.match(request.url,/sha256=a{64}&statement=failure-bound/);
     app.q('full').querySelector('.nb-statement-block').querySelector('.nb-structured-cite').click();assert.match(app.root.querySelector('[name="statement-link"]').value,/statement=failure-bound$/);
+  });
+  await test('authored statements interleave with prose and exact links focus their surrounding explanation',async()=>{
+    const value=canonicalContent();value.sections=[{id:'experiment',title:'The experiment',body:'Before the premise.\n\n[[statement:failure-bound]]\n\nBetween premise and conclusion.\n\n[[statement:success-claim]]\n\nAfter the conclusion.'}];
+    const app=await boot({record:note(value),params:query({statement:'failure-bound'}),enabled:false}),full=app.q('full'),section=full.querySelector('.nb-readable-section');
+    assert.equal(section.dataset.noteSection,'experiment');assert.equal(app.document.activeElement.closest('.nb-readable-section'),section);
+    const children=section.querySelector('.nb-readable-flow').children;
+    assert.deepEqual(Array.from(children,x=>x.dataset.noteStatement || x.textContent),['Before the premise.\n','failure-bound','\nBetween premise and conclusion.\n','success-claim','\nAfter the conclusion.']);
+    assert.equal(full.querySelectorAll('[data-note-statement="failure-bound"]').length,1);
+    assert.equal(full.querySelectorAll('[data-note-statement="success-claim"]').length,1);
+    assert.equal(section.textContent.split(statement.definition).length-1,1);
+    assert.equal(full.querySelector('.nb-statements-list').open,false);
+    assert.equal(full.querySelector('.nb-statement-index').querySelector('a').getAttribute('aria-current'),'location');
+    assert.doesNotMatch(section.textContent,/\[\[statement:/);
+  });
+  await test('historical links use only explicit unique context and leave immutable text intact',async()=>{
+    for(const relation of ['premise','conclusion','dependency','ambiguous','unlinked']) {
+      const value=canonicalContent();value.sections=[{id:'reasoning',title:'Linked reasoning',body:'Original explanation remains exact.'},{id:'other',title:'Another section',body:'Unrelated words.'}];
+      if(relation==='premise')value.extensions.assumptions=[{id:'failure-bound',section_id:'reasoning'}];
+      if(['conclusion','dependency','ambiguous'].includes(relation))value.arguments[0].section_id='reasoning';
+      if(relation==='ambiguous')value.arguments.push({...value.arguments[0],id:'second',section_id:'other'});
+      const id=relation==='conclusion'?'success-claim':'failure-bound',before=JSON.stringify(value);
+      const app=await boot({record:note(value),params:query({statement:id}),enabled:false}),selected=app.document.activeElement;
+      assert.equal(selected.dataset.noteStatement,id);
+      assert.equal(selected.closest('.nb-readable-section')?.dataset.noteSection || null,['ambiguous','unlinked'].includes(relation)?null:'reasoning',relation);
+      assert.equal(app.q('full').textContent.split('Original explanation remains exact.').length-1,1);
+      assert.equal(JSON.stringify(value),before);
+    }
+  });
+  await test('unknown and duplicate placements fail closed without selecting a replacement',async()=>{
+    for(const bodies of [['[[statement:missing]]'],['[[statement:failure-bound]]','[[statement:failure-bound]]']]){
+      const value=content();value.sections=bodies.map((body,i)=>({id:'section-'+i,title:'Explanation',body}));
+      const app=await boot({record:note(value),params:query({statement:'failure-bound'})});
+      assert.match(app.q('full').querySelector('.nb-error').textContent,/placement|only once/);
+      assert.equal(app.q('full').querySelector('.nb-statement-block'),null);assert.equal(app.requests.some(x=>x.url.includes('/context')),false);
+    }
   });
   await test('a canonical conclusion uses its exact statement without promoting it to a theorem',async()=>{
     const value=canonicalContent(), app=await boot({record:note(value),params:query({argument:'attack'}),enabled:false});
@@ -104,19 +147,27 @@ let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS 
     assert.match(app.q('full').querySelector('.nb-dependency-list').textContent,/A-12.*Failure at most 1\/8/s);
   });
   await test('a focused argument shows its reasoning once and keeps the exact section reachable',async()=>{
-    const value=content();value.sections=[{id:'reasoning',title:'Why the bound suffices',body:'Unique readable derivation.'}];value.arguments[0]={...argument,section_id:'reasoning'};
+    const value=content();value.sections=[{id:'reasoning',title:'Why the bound suffices',body:'Unique readable derivation.\n\n[[statement:failure-bound]]\n\nThe exact premise is used above.'}];value.arguments[0]={...argument,section_id:'reasoning'};
     const app=await boot({record:note(value),params:query({argument:'attack'})}),full=app.q('full');
     assert.equal(full.querySelector('.nb-argument-block').classList.contains('nb-structured-selected'),true);
     assert.equal(full.querySelector('.nb-statements-list').open,false);
     assert.equal(full.textContent.split('Unique readable derivation.').length-1,1);
     assert.match(full.querySelector('.nb-argument-reasoning').textContent,/Unique readable derivation/);
+    assert.equal(full.querySelectorAll('[data-note-statement="failure-bound"]').length,1);assert.doesNotMatch(full.querySelector('.nb-argument-reasoning').textContent,/\[\[statement:/);
     assert.ok(full.querySelectorAll('a').some(a=>a.href.endsWith('note_section=reasoning')));
     assert.equal(full.querySelector('.nb-full-text').open,false);
   });
-  await test('new premise descriptions show the exact statement and one explanation',async()=>{
+  await test('a placed conclusion is defined once inside its reasoning, including after context enrichment',async()=>{
+    const value=canonicalContent();value.sections=[{id:'reasoning',title:'Why this follows',body:'The experiment first.\n\n[[statement:success-claim]]\n\nThe proof and its limits follow.'}];value.arguments[0].section_id='reasoning';
+    const app=await boot({record:note(value),params:query({argument:'attack'}),respond:url=>url.includes('/context?')?{argument:{...canonicalResolved(),section_id:'reasoning'}}:undefined}),full=app.q('full');
+    assert.equal(full.textContent.split(conclusion.definition).length-1,1);
+    assert.match(full.querySelector('.nb-argument-conclusion').querySelector('a').href,/statement=success-claim$/);
+    assert.equal(full.querySelector('.nb-argument-reasoning').querySelector('[data-note-statement="success-claim"]').textContent.includes(conclusion.definition),true);
+  });
+  await test('premise descriptions keep exact contextual links and one explanation without duplicate definitions',async()=>{
     const value=content();value.arguments[0]={...argument,dependencies:[{statement:{statement_id:statement.id},use:'Specialize to the actual sampler.'}]};
     const app=await boot({record:note(value),enabled:false,params:query({argument:'attack'})}),dependencies=app.q('full').querySelector('.nb-dependency-list');
-    assert.match(dependencies.textContent,/For the stated sampler/);assert.match(dependencies.textContent,/How this premise is used.*Specialize to the actual sampler/s);
+    assert.equal(dependencies.textContent.includes(statement.definition),false);assert.match(dependencies.querySelector('a').href,/revision=1&sha256=a{64}&statement=failure-bound$/);assert.match(dependencies.textContent,/How this premise is used.*Specialize to the actual sampler/s);
     assert.equal(dependencies.querySelectorAll('.nb-use-details').length,1);
   });
   await test('a multi-argument note requires an explicit choice for an update',async()=>{
@@ -139,7 +190,15 @@ let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS 
     const app=await boot();byText(app.q('full'),'Edit').click();
     assert.equal(app.root.querySelector('[name="statement-title-0"]').value,statement.title);
     assert.equal(app.root.querySelector('[name="statement-definition-0"]').value,statement.definition);
+    assert.equal(app.root.querySelector('[name="statement-placement-0"]').value,'[[statement:failure-bound]]');assert.equal(app.root.querySelector('[name="statement-placement-0"]').readOnly,true);
     assert.ok(byText(app.q('dialog-body'),'Add statement'));assert.ok(!app.q('dialog-body').querySelector('.nb-statement-editor').open);
+  });
+  await test('saving a dangling placement preserves the draft and makes no write request',async()=>{
+    const value=content();value.sections=[{id:'reasoning',title:'Reasoning',body:'Before.\n\n[[statement:failure-bound]]\n\nAfter.'}];
+    const app=await boot({record:note(value)});byText(app.q('full'),'Edit').click();byText(app.q('dialog-body'),'Remove statement').click();
+    app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
+    assert.equal(app.requests.some(x=>x.body&&x.url.endsWith('/revisions')),false);assert.match(app.q('dialog-body').textContent,/placement must name a canonical statement.*draft is still here/s);
+    assert.match(app.root.querySelector('[name="readable-body-0"]').value,/\[\[statement:failure-bound\]\]/);
   });
   await test('proposing an argument pins target adoption, sources and scope; uncertain retries are identical',async()=>{
     const writes=[];const app=await boot({respond:(url,body)=>{if(body&&url.endsWith('/statement-workflow/updates')){writes.push(JSON.parse(JSON.stringify(body)));if(writes.length===1)throw Object.assign(Error('No receipt'),{status:503});return{update:{id:'update-one'}};}}});
@@ -302,7 +361,17 @@ let passed=0;async function test(name,fn){await fn();passed++;console.log('PASS 
     assert.equal(app.requests.some(r=>r.url.includes('/notes/prior')),false);
   });
   await test('inert mathematical content cannot inject markup through statements',async()=>{
-    const value=content();value.statements[0]={...statement,definition:'<img src=x onerror=alert(1)> $x$'};const app=await boot({record:note(value)});assert.equal(app.q('full').querySelectorAll('img,script').length,0);assert.match(app.q('full').textContent,/<img/);
+    const value=content();value.statements[0]={...statement,definition:'<img src=x onerror=alert(1)> $x$'};value.sections=[{id:'reasoning',title:'Context',body:'<script>alert(1)</script>\n\n[[statement:failure-bound]]\n\nAfter.'}];const app=await boot({record:note(value)});assert.equal(app.q('full').querySelectorAll('img,script').length,0);assert.match(app.q('full').textContent,/<img/);
+  });
+  await test('archive notices identify the exact archived revision without denying its citation',async()=>{
+    for(const kind of ['revision','curated','unarchived-revision']) {
+      const record=note();record.archive_reason='Retired demonstration.';
+      if(kind==='revision')record.revisions[0].archive_reason=record.archive_reason;
+      if(kind==='curated')record.source_kind='curated-research';
+      const app=await boot({record,params:query({statement:'failure-bound'}),enabled:false});
+      assert.equal(app.q('full').textContent.includes('This exact revision remains available for citations.'),kind!=='unarchived-revision');
+      assert.equal(app.document.activeElement.dataset.noteStatement,'failure-bound');
+    }
   });
   console.log(`\n${passed} statement workflow frontend checks passed.`);
 })().catch(error=>{console.error(error);process.exitCode=1;});

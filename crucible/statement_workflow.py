@@ -192,6 +192,8 @@ def validate_content(content):
         raise ValueError("Statement and argument identifiers must each be distinct within a note.")
     sections = {item.id for item in content.sections}
     statement_ids = {item.id for item in statements}
+    from .note_sections import validate_statement_placements
+    validate_statement_placements(content.sections, statement_ids)
     for argument in arguments:
         if argument.section_id is not None and argument.section_id not in sections:
             raise ValueError("The argument's reasoning section must exist in this note.")

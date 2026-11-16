@@ -872,7 +872,51 @@
         "scope": "Representation of the existing authored propositions and arguments, not new proof, independent review or scheme admission. Each conclusion has one canonical statement; an argument references it rather than repeating authoritative conclusion prose.",
         "dependency_convention": "Use each whole proposition as written, with any retained source scope and exact native configuration IDs. No weaker sufficient threshold or substitution is inferred.",
         "legacy_input": "Existing assumptions, scheme_arguments and graph_models in the authoring source remain generator inputs; generated notes use only these canonical blocks."
-      }
+      },
+      "readable_statement_layout": [
+        {
+          "section_id": "dh-interval-hardness",
+          "after_paragraph": 1,
+          "paragraph_sha256": "dcb5ee9a72a918e2d1769dc0f7bd5832e1c73263823d69ccdf76c9070f1ab266",
+          "content": "[[statement:dh-interval-cdh-budget]]"
+        },
+        {
+          "section_id": "dh-hash-transfer",
+          "after_paragraph": 1,
+          "paragraph_sha256": "1d57d54140490e4992e70bad1a8a191a5379129ed77c2b26e4a0d1823ee857d6",
+          "content": "[[statement:dh-sha256-passive-transfer]]"
+        },
+        {
+          "section_id": "security",
+          "after_paragraph": 0,
+          "paragraph_sha256": "45f1dc92bc10a6bc5ba99edbc9d8788d0eb9d500ce8a07dfe76e7fd4279965af",
+          "content": "[[statement:claim-scheme-security]]"
+        },
+        {
+          "section_id": "correctness",
+          "after_paragraph": 0,
+          "paragraph_sha256": "32b8628dd40499112e5ff441f67a07f851ec6211533b9ff61084cef72a271ffc",
+          "content": "[[statement:claim-scheme-correctness]]"
+        },
+        {
+          "section_id": "attack",
+          "after_paragraph": 0,
+          "paragraph_sha256": "eb90b8542b29404a15e75516e8bf5f8d7d0139d55d0ce18d8388aea92c62159e",
+          "content": "[[statement:claim-dh-interval-rho-nfs-v1]]"
+        },
+        {
+          "section_id": "quantum",
+          "after_paragraph": 0,
+          "paragraph_sha256": "af1fae6fc4155e895249d02d3fa25a5069bec1427e939473ae14ff66c1c911cd",
+          "content": "[[statement:claim-shor-polynomial-quantum-v1]]"
+        },
+        {
+          "section_id": "ram-interval-bsgs-v1",
+          "after_paragraph": 0,
+          "paragraph_sha256": "9302a2137b455c9027996e0fb03a8f4428ebf484af96cff1329b840dffbf8958",
+          "content": "[[statement:claim-ram-interval-bsgs-v1]]"
+        }
+      ]
     },
     "rsa-kem@4": {
       "title": "RSA: exact inversion and conditional key secrecy",
@@ -1760,7 +1804,51 @@
         "scope": "Representation of the existing authored propositions and arguments, not new proof, independent review or scheme admission. Each conclusion has one canonical statement; an argument references it rather than repeating authoritative conclusion prose.",
         "dependency_convention": "Use each whole proposition as written, with any retained source scope and exact native configuration IDs. No weaker sufficient threshold or substitution is inferred.",
         "legacy_input": "Existing assumptions, scheme_arguments and graph_models in the authoring source remain generator inputs; generated notes use only these canonical blocks."
-      }
+      },
+      "readable_statement_layout": [
+        {
+          "section_id": "rsa-inversion-hardness",
+          "after_paragraph": 2,
+          "paragraph_sha256": "bced038fd0637ce1f88b5e71094759bd5eb570f19d36a734f63608931323bfda",
+          "content": "[[statement:rsa-emitted-key-inversion-budget]]"
+        },
+        {
+          "section_id": "rsa-hash-transfer",
+          "after_paragraph": 1,
+          "paragraph_sha256": "6c502d187080403c2abb8c61b523c730d85351f298d912fb655687dee29b8378",
+          "content": "[[statement:rsa-sha256-passive-transfer]]"
+        },
+        {
+          "section_id": "security",
+          "after_paragraph": 0,
+          "paragraph_sha256": "fcff3f2eb2fe81459a3bc97f266abe4a82ab456e8bbd4a9439189392a3f9f3eb",
+          "content": "[[statement:claim-scheme-security]]"
+        },
+        {
+          "section_id": "correctness",
+          "after_paragraph": 0,
+          "paragraph_sha256": "d6ab9fbdb6ecfab92a4c4fc02b3c84a412c0bf3cd5cc18d7b02e1874d92f5a26",
+          "content": "[[statement:claim-scheme-correctness]]"
+        },
+        {
+          "section_id": "attack",
+          "after_paragraph": 0,
+          "paragraph_sha256": "6076a0ac21c0d634045e49321733e1b0446308cac37bc2344f6e90b04eca42fe",
+          "content": "[[statement:claim-classical-baseline-v2]]"
+        },
+        {
+          "section_id": "quantum",
+          "after_paragraph": 0,
+          "paragraph_sha256": "2ee1342aa1e62a9c8b1366ead34a675d7c0b2f6770f965335657a71b8c9f8f6c",
+          "content": "[[statement:claim-shor-polynomial-quantum-v1]]"
+        },
+        {
+          "section_id": "ram-rsa-trial-division-v1",
+          "after_paragraph": 0,
+          "paragraph_sha256": "7ef72f1c29e5a6034ddab4b924ecc9b7a208247efa0e8ad6bbd6937c5d47519c",
+          "content": "[[statement:claim-ram-rsa-trial-division-v1]]"
+        }
+      ]
     },
     "dhkem-x25519@curve-compressed-v2": {
       "title": "Custom elliptic curves: equal points, scoped attack costs",
@@ -2639,7 +2727,51 @@
         "scope": "Representation of the existing authored propositions and arguments, not new proof, independent review or scheme admission. Each conclusion has one canonical statement; an argument references it rather than repeating authoritative conclusion prose.",
         "dependency_convention": "Use each whole proposition as written, with any retained source scope and exact native configuration IDs. No weaker sufficient threshold or substitution is inferred.",
         "legacy_input": "Existing assumptions, scheme_arguments and graph_models in the authoring source remain generator inputs; generated notes use only these canonical blocks."
-      }
+      },
+      "readable_statement_layout": [
+        {
+          "section_id": "ec-cdh-hardness",
+          "after_paragraph": 1,
+          "paragraph_sha256": "a77f79cb9bac1bf853a87ff5928a78480078cdf8a688a75d82bfe27563322ee0",
+          "content": "[[statement:ec-registered-cdh-budget]]"
+        },
+        {
+          "section_id": "ec-hash-transfer",
+          "after_paragraph": 1,
+          "paragraph_sha256": "d3f337b202b8cc3b5c7c31f739df5c273a2d9460098e3ae2ccac134b1086c106",
+          "content": "[[statement:ec-sha256-passive-transfer]]"
+        },
+        {
+          "section_id": "security",
+          "after_paragraph": 0,
+          "paragraph_sha256": "8d82fee2a0581ca7a5620959a03e5d63dd63d6ea4de4f965cad9c8c5ad9b78a8",
+          "content": "[[statement:claim-scheme-security]]"
+        },
+        {
+          "section_id": "correctness",
+          "after_paragraph": 0,
+          "paragraph_sha256": "4aa0dac53e316ef794684dc342c1e4b1823d200a527b4f0138f7df8a20b773ac",
+          "content": "[[statement:claim-scheme-correctness]]"
+        },
+        {
+          "section_id": "attack",
+          "after_paragraph": 0,
+          "paragraph_sha256": "39ee4457d56b00a9290c9cee0e4c63208e087c7c50af53543bba1dbe539e058d",
+          "content": "[[statement:claim-ec-generic-rho-v1]]"
+        },
+        {
+          "section_id": "quantum",
+          "after_paragraph": 0,
+          "paragraph_sha256": "0b27fc3d97f0de236f792945cd2255c8c358d82cc5ff575c81d3fb67e4d8d3be",
+          "content": "[[statement:claim-shor-polynomial-quantum-v1]]"
+        },
+        {
+          "section_id": "ram-curve-bsgs-v1",
+          "after_paragraph": 0,
+          "paragraph_sha256": "6703de34c1f8de8e3c0f9487e0bcf980217b66fcf336c07f278dc67705a5563b",
+          "content": "[[statement:claim-ram-curve-bsgs-v1]]"
+        }
+      ]
     },
     "ml-kem@compressed-research-v4": {
       "title": "Module lattices: messages, rounding and conditional agreement",
@@ -3483,7 +3615,63 @@
         "scope": "Representation of the existing authored propositions and arguments, not new proof, independent review or scheme admission. Each conclusion has one canonical statement; an argument references it rather than repeating authoritative conclusion prose.",
         "dependency_convention": "Use each whole proposition as written, with any retained source scope and exact native configuration IDs. No weaker sufficient threshold or substitution is inferred.",
         "legacy_input": "Existing assumptions, scheme_arguments and graph_models in the authoring source remain generator inputs; generated notes use only these canonical blocks."
-      }
+      },
+      "readable_statement_layout": [
+        {
+          "section_id": "expansion",
+          "after_paragraph": 6,
+          "paragraph_sha256": "01ffd2549cd9a86557d8caa33d4631961668ccb2f2a59de858b51a27582f1729",
+          "content": "[[statement:module-independent-expansion]]"
+        },
+        {
+          "section_id": "rounding",
+          "after_paragraph": 6,
+          "paragraph_sha256": "01ffd2549cd9a86557d8caa33d4631961668ccb2f2a59de858b51a27582f1729",
+          "content": "[[statement:module-independent-compression]]"
+        },
+        {
+          "section_id": "attack",
+          "after_paragraph": 0,
+          "paragraph_sha256": "58eeb728dfe0637ff299428c5d97c5cdf7616fdb7e66e2f7217cbbf58ef82e7d",
+          "content": "The reference uses the following declared model:\n\n[[statement:module-endpoint-attack-model]]\n\nThe recorded classical reference is:\n\n[[statement:claim-kyber2021-primal-core-svp-classical]]\n\nThe recorded quantum reference is:\n\n[[statement:claim-kyber2021-primal-core-svp-quantum]]"
+        },
+        {
+          "section_id": "security-key-premise",
+          "after_paragraph": 2,
+          "paragraph_sha256": "013b948afb4a1ad0f16a55c7e53282934d3929f922e19d5bea8261a98100e2f7",
+          "content": "[[statement:module-seeded-key-equations]]"
+        },
+        {
+          "section_id": "security-ephemeral-premise",
+          "after_paragraph": 2,
+          "paragraph_sha256": "9d6a33a12f829e0d8e61d5e6bac4b9e2599e6130977dbd41b49b4f4d3f898ec4",
+          "content": "[[statement:module-seeded-ephemeral-equations]]"
+        },
+        {
+          "section_id": "security-hash-premise",
+          "after_paragraph": 2,
+          "paragraph_sha256": "7898c5ea4d9da3c70660fc25870b8705ad41b8f9be08aa9150355b3bd5c8970f",
+          "content": "[[statement:module-passive-transform-hash]]"
+        },
+        {
+          "section_id": "ram-module-native-message-enumeration-v1",
+          "after_paragraph": 0,
+          "paragraph_sha256": "19fdcb24f6b6bbea0944ac929c1bc7b351941870a1aebc8ebe4ca9100122f2a3",
+          "content": "The recorded recovery claim is:\n\n[[statement:claim-ram-module-native-message-enumeration-v1]]\n\nEnumeration uses this bound on actual honest message decoding:\n\n[[statement:ram-module-v4-message-correctness]]"
+        },
+        {
+          "section_id": "security",
+          "after_paragraph": 0,
+          "paragraph_sha256": "4dd195eeb9b978503d1105ee3ad983b30eed6601130a2ad6e8c90e01a3f211df",
+          "content": "[[statement:claim-scheme-security]]"
+        },
+        {
+          "section_id": "correctness",
+          "after_paragraph": 0,
+          "paragraph_sha256": "085ef0368f34074a23e7e94a936593aa53a4e2e332dbf3bc8cef183d2eb398db",
+          "content": "[[statement:claim-scheme-correctness]]"
+        }
+      ]
     },
     "frodokem@anchor-research-v3": {
       "title": "FrodoKEM: noisy products and a conditional tail bound",
@@ -5714,7 +5902,81 @@
         "scope": "Representation of the existing authored propositions and arguments, not new proof, independent review or scheme admission. Each conclusion has one canonical statement; an argument references it rather than repeating authoritative conclusion prose.",
         "dependency_convention": "Use each whole proposition as written, with any retained source scope and exact native configuration IDs. No weaker sufficient threshold or substitution is inferred.",
         "legacy_input": "Existing assumptions, scheme_arguments and graph_models in the authoring source remain generator inputs; generated notes use only these canonical blocks."
-      }
+      },
+      "readable_statement_layout": [
+        {
+          "section_id": "noise-model",
+          "after_paragraph": 3,
+          "paragraph_sha256": "72d40f6f4e638d5da7af868dfc60404edca0bbfad8fc8b0b8852d7812c4fda39",
+          "content": "[[statement:frodo-independent-noise]]"
+        },
+        {
+          "section_id": "security-bridge",
+          "after_paragraph": 2,
+          "paragraph_sha256": "b06835813d1a79b49e26b1e22c448078d52a20c6c23d9e60c5fdc915b4dcbeb1",
+          "content": "[[statement:frodo-security-hash-model]]"
+        },
+        {
+          "section_id": "attack",
+          "after_paragraph": 0,
+          "paragraph_sha256": "35cc7c18faff98f70965992581b65dc938b2ad1c97e4087094fa6aca59db551a",
+          "content": "The reference uses the following declared model:\n\n[[statement:frodo-classical-attack-model]]\n\nThe recorded classical reference is:\n\n[[statement:claim-frodo-lwe-anchor-core-svp-v3]]"
+        },
+        {
+          "section_id": "quantum",
+          "after_paragraph": 0,
+          "paragraph_sha256": "6bf83d5eee38ec001af441f406d6bd71b89b5e33eb885cf6e4e11bf2f111455f",
+          "content": "The reference uses the following declared model:\n\n[[statement:frodo-quantum-attack-model]]\n\nThe recorded quantum reference is:\n\n[[statement:claim-frodo-qrw-core-svp-quantum-v1]]"
+        },
+        {
+          "section_id": "security-key-premise",
+          "after_paragraph": 2,
+          "paragraph_sha256": "63c3aae0ed6b8fe169a0420b8bb677fa95b9299fc282130323c1b5046c675187",
+          "content": "[[statement:frodo-seeded-key-equations]]"
+        },
+        {
+          "section_id": "security-ephemeral-premise",
+          "after_paragraph": 2,
+          "paragraph_sha256": "2f11d847dcec1b383a27372a7b12fa6913e4e18fe1089f029c6b99967e69631c",
+          "content": "[[statement:frodo-seeded-ephemeral-equations]]"
+        },
+        {
+          "section_id": "ram-frodo-bounded-secret-column-enumeration-v1",
+          "after_paragraph": 0,
+          "paragraph_sha256": "6482d977b4937837a68e6f49ee52b05086ad632ad93306e7d1f8ecd08075b311",
+          "content": "The recorded recovery claim is:\n\n[[statement:claim-ram-frodo-bounded-secret-column-enumeration-v1]]"
+        },
+        {
+          "section_id": "ram-frodo-bounded-secret-column-enumeration-v1",
+          "after_paragraph": 1,
+          "paragraph_sha256": "6a78b0d4440df013ab98e35210d10809b04e6b113a7acd29a071797256301cd9",
+          "content": "False accepted secret columns are controlled by this explicit premise:\n\n[[statement:ram-frodo-v3-independent-public-matrix]]"
+        },
+        {
+          "section_id": "ram-frodo-native-message-enumeration-v1",
+          "after_paragraph": 0,
+          "paragraph_sha256": "6ce3107932ae4bb6753c5a52e1d305d4ac5b41bbfe2202d0063e7adc9cf2c2c1",
+          "content": "The recorded recovery claim is:\n\n[[statement:claim-ram-frodo-native-message-enumeration-v1]]"
+        },
+        {
+          "section_id": "ram-frodo-native-message-enumeration-v1",
+          "after_paragraph": 1,
+          "paragraph_sha256": "9842e36ab65575df491f2e51818c96a670fa7441110a4614dde8f1436bc01515",
+          "content": "Message enumeration uses a separate bound on actual honest decoding:\n\n[[statement:ram-frodo-v3-message-correctness]]"
+        },
+        {
+          "section_id": "security",
+          "after_paragraph": 0,
+          "paragraph_sha256": "abc49957b016a10ce4d97c599ad517957da4f507bf0f199ef40da07c3bcb4f7c",
+          "content": "[[statement:claim-scheme-security]]"
+        },
+        {
+          "section_id": "correctness",
+          "after_paragraph": 0,
+          "paragraph_sha256": "fc0514dc0b1fcb53e87f3e9c95966d19a2fc0e7a467862c85ae7195ffa508f43",
+          "content": "[[statement:claim-scheme-correctness]]"
+        }
+      ]
     },
     "sntrup@3": {
       "title": "Streamlined NTRU Prime: exact lifting and limited attack models",
@@ -6429,7 +6691,51 @@
         "scope": "Representation of the existing authored propositions and arguments, not new proof, independent review or scheme admission. Each conclusion has one canonical statement; an argument references it rather than repeating authoritative conclusion prose.",
         "dependency_convention": "Use each whole proposition as written, with any retained source scope and exact native configuration IDs. No weaker sufficient threshold or substitution is inferred.",
         "legacy_input": "Existing assumptions, scheme_arguments and graph_models in the authoring source remain generator inputs; generated notes use only these canonical blocks."
-      }
+      },
+      "readable_statement_layout": [
+        {
+          "section_id": "attack-model",
+          "after_paragraph": 0,
+          "paragraph_sha256": "fa21c06410f600a1e42dc9b333fd9b975702dd2617fbc46c30e1dd65f148b9b6",
+          "content": "[[statement:ntru-hybrid-attack-model]]"
+        },
+        {
+          "section_id": "core-hardness",
+          "after_paragraph": 2,
+          "paragraph_sha256": "940d17e54c3d55d20550c1475102300d63f77b6f7085ec478dc8dff33e27323d",
+          "content": "[[statement:ntru-exact-core-one-wayness]]"
+        },
+        {
+          "section_id": "hash-model",
+          "after_paragraph": 2,
+          "paragraph_sha256": "bfcf0b53f31535d27ef55757f3c1c0bf849edf6b973398ffd6b1a115442ae5db",
+          "content": "[[statement:ntru-domain-separated-hash-model]]"
+        },
+        {
+          "section_id": "security",
+          "after_paragraph": 0,
+          "paragraph_sha256": "8df9d847331363df88fa1f4b3dd4ab79166e92d3205f9e8ceed0e4cc34e14f0a",
+          "content": "[[statement:claim-scheme-security]]"
+        },
+        {
+          "section_id": "correctness",
+          "after_paragraph": 0,
+          "paragraph_sha256": "87e0e2500b80e3bf2c4e29078be612792826707d5349273227a112cee62c85fa",
+          "content": "[[statement:claim-scheme-correctness]]"
+        },
+        {
+          "section_id": "attack",
+          "after_paragraph": 0,
+          "paragraph_sha256": "07883db715b686f41aed0856d41f2e6e52c6e0ddd6d871622ee33841e3085fa3",
+          "content": "[[statement:claim-ntruprime-20200927-hybrid-classical-free-memory-v1]]"
+        },
+        {
+          "section_id": "ram-ntru-fixed-weight-input-enumeration-v1",
+          "after_paragraph": 0,
+          "paragraph_sha256": "455d9c9c21f7907d25a4b44d04661d24b694bcd3929315ffd2cde3bc8614f935",
+          "content": "[[statement:claim-ram-ntru-fixed-weight-input-enumeration-v1]]"
+        }
+      ]
     },
     "hqc@modeled-research-v3": {
       "title": "HQC: guaranteed small stages and conditional tails",
@@ -8536,7 +8842,63 @@
         "scope": "Representation of the existing authored propositions and arguments, not new proof, independent review or scheme admission. Each conclusion has one canonical statement; an argument references it rather than repeating authoritative conclusion prose.",
         "dependency_convention": "Use each whole proposition as written, with any retained source scope and exact native configuration IDs. No weaker sufficient threshold or substitution is inferred.",
         "legacy_input": "Existing assumptions, scheme_arguments and graph_models in the authoring source remain generator inputs; generated notes use only these canonical blocks."
-      }
+      },
+      "readable_statement_layout": [
+        {
+          "section_id": "expansion",
+          "after_paragraph": 3,
+          "paragraph_sha256": "6ddc62dd2a6cba36b11922869e51ebd60bcfd469cf90dd4731839653fc9acdea",
+          "content": "[[statement:hqc-finite-expansion-transfer]]"
+        },
+        {
+          "section_id": "tail-model",
+          "after_paragraph": 1,
+          "paragraph_sha256": "851cd3fda23e327374e243aa589e38f863ce1e6a25c3d80d1b8e956a358fcfb8",
+          "content": "[[statement:hqc-decoder-tail-domination]]"
+        },
+        {
+          "section_id": "message-hardness",
+          "after_paragraph": 5,
+          "paragraph_sha256": "07bae3d0844c90da58da642d5a54591c79a1d83493ec2b5861a603d1f7c84ba7",
+          "content": "[[statement:hqc-exact-native-message-one-wayness]]"
+        },
+        {
+          "section_id": "hash-model",
+          "after_paragraph": 7,
+          "paragraph_sha256": "bfcf0b53f31535d27ef55757f3c1c0bf849edf6b973398ffd6b1a115442ae5db",
+          "content": "[[statement:hqc-key-coins-oracle-model]]"
+        },
+        {
+          "section_id": "ram-exhaustive-private-support-recovery",
+          "after_paragraph": 0,
+          "paragraph_sha256": "f07dcc9381a787ba2bd77a8a483dd48fbd6b59d85bc961b864ad4f309ba81215",
+          "content": "The recorded recovery claim is:\n\n[[statement:claim-ram-exhaustive-private-support-recovery]]\n\nRecovering the honest secret, rather than a different explanation of the public key, uses this premise:\n\n[[statement:ram-hqc-unique-key-transfer-v1]]\n\nHonest decoding contributes a separate conditional premise:\n\n[[statement:ram-hqc-honest-decoding-transfer-v1]]"
+        },
+        {
+          "section_id": "ram-prange-recovery-of-the-quasi-cyclic-private-key",
+          "after_paragraph": 0,
+          "paragraph_sha256": "f07dcc9381a787ba2bd77a8a483dd48fbd6b59d85bc961b864ad4f309ba81215",
+          "content": "The recorded recovery claim is:\n\n[[statement:claim-ram-prange-recovery-of-the-quasi-cyclic-private-key]]\n\nInformation-set recovery uses this stated condition on the structured matrices:\n\n[[statement:ram-prange-structured-rank-density-v1]]"
+        },
+        {
+          "section_id": "security",
+          "after_paragraph": 0,
+          "paragraph_sha256": "9758b81b9cb92fb029b4d9cead4892e7eab1e4f43db3ed9e2f4a5231782b8dbc",
+          "content": "[[statement:claim-scheme-security]]"
+        },
+        {
+          "section_id": "correctness",
+          "after_paragraph": 0,
+          "paragraph_sha256": "40ac31c00210e4effd499e261330d83ad07a20f0d3337b167c4fc4e74e8b5a4c",
+          "content": "[[statement:claim-scheme-correctness]]"
+        },
+        {
+          "section_id": "attack",
+          "after_paragraph": 0,
+          "paragraph_sha256": "06c5ba30288b4f20069d9f3f4a1553cf2b0cfedfbfde42a4af74a94f701ff6b0",
+          "content": "[[statement:claim-hqc2025-endpoint-reassessment-v1]]"
+        }
+      ]
     },
     "classic-mceliece@length-research-v1": {
       "title": "Classic McEliece: unique decoding and an open attack assessment",
@@ -9546,7 +9908,51 @@
         "scope": "Representation of the existing authored propositions and arguments, not new proof, independent review or scheme admission. Each conclusion has one canonical statement; an argument references it rather than repeating authoritative conclusion prose.",
         "dependency_convention": "Use each whole proposition as written, with any retained source scope and exact native configuration IDs. No weaker sufficient threshold or substitution is inferred.",
         "legacy_input": "Existing assumptions, scheme_arguments and graph_models in the authoring source remain generator inputs; generated notes use only these canonical blocks."
-      }
+      },
+      "readable_statement_layout": [
+        {
+          "section_id": "syndrome-hardness",
+          "after_paragraph": 3,
+          "paragraph_sha256": "fe6135183c6792d5bb2018afe685965f7c20c0425f0bbcb07fe532a50dadb6f2",
+          "content": "[[statement:mceliece-exact-goppa-syndrome-one-wayness]]"
+        },
+        {
+          "section_id": "hash-model",
+          "after_paragraph": 6,
+          "paragraph_sha256": "bfcf0b53f31535d27ef55757f3c1c0bf849edf6b973398ffd6b1a115442ae5db",
+          "content": "[[statement:mceliece-session-hash-oracle]]"
+        },
+        {
+          "section_id": "ram-prange-syndrome-decoding-with-bounded-sampling",
+          "after_paragraph": 0,
+          "paragraph_sha256": "293da96bb5521414fbf05e392ff4d2c69a7bb0c92a1fa74943739d3cf2e5e06c",
+          "content": "The recorded recovery claim is:\n\n[[statement:claim-ram-prange-syndrome-decoding-with-bounded-sampling]]"
+        },
+        {
+          "section_id": "ram-prange-syndrome-decoding-with-bounded-sampling",
+          "after_paragraph": 1,
+          "paragraph_sha256": "1516950eab60b89d4377f9a04f9ab5301852b9547247994a28edbdc22d09b36a",
+          "content": "Information-set recovery uses this stated condition on the structured matrices:\n\n[[statement:ram-prange-structured-rank-density-v1]]"
+        },
+        {
+          "section_id": "security",
+          "after_paragraph": 0,
+          "paragraph_sha256": "62a59cc7bbfd72f370a48f4096e37ce2721888b65dc3fb14f2ace43c8be1fd2d",
+          "content": "[[statement:claim-scheme-security]]"
+        },
+        {
+          "section_id": "correctness",
+          "after_paragraph": 0,
+          "paragraph_sha256": "0bf32213195d0711e885c42b5a0440627de0feee03d03cae13f6b4214a6ad62e",
+          "content": "[[statement:claim-scheme-correctness]]"
+        },
+        {
+          "section_id": "attack",
+          "after_paragraph": 0,
+          "paragraph_sha256": "4b4c1e8cac6cc288793df33e1d38eec14fe7c704e4412105fda66f25d88e354c",
+          "content": "[[statement:claim-mceliece-structural-reassessment-20261017]]"
+        }
+      ]
     }
   }
 }

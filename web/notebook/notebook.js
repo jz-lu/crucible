@@ -71,7 +71,7 @@
   }
   const citationGuidance = 'Give every research note a Citations section using references. Spend a separate, deliberate pass checking citations: read the original source, verify the exact claim and version, and record the section, theorem or page and what it supports in scope. Prefer primary sources. Cite Crucible notes by exact revision and content hash, using Cite this note; distinguish their claims and review status from independently established results. Separate borrowed results, your deductions and conjectures. Do not invent citations or imply you read an inaccessible source; mark verification gaps explicitly. A genuine original observation may have no external sources: explain that instead of adding filler citations. Use the optional relation field to explain direct connections: cites, builds_on, supports, challenges, reproduces or responds_to. Pair it with a precise scope; these are authored claims, not review decisions. Exact local note links form the revision graph and backlinks. A citation never grants access to a private note; do not copy private titles or content into shared work without permission.';
 
-  const noteWritingGuidance = "The dropdown summary is for people browsing: briefly explain the question or result, why it matters and any essential caveat. Readable sections are optional; add them when a separate explanation helps people. Give each an explicit stable id, a heading in title, and readable Markdown in body. Preserve section IDs when renaming headings; citations pin the section in an exact saved revision. The note body is the complete free-form technical research record, shown under Full text. Use LaTeX, dense notation, prose, code, calculations or any combination that suits the work. No fixed outline or mandatory internal sections are required. Do not shorten, simplify or flatten the body for general readability. Preserve precise definitions, assumptions, evidence and uncertainties wherever they belong. The human-written tag is an explicit, unverified authorship label: never add it automatically or infer it from an account; omit it from agent-written revisions.";
+  const noteWritingGuidance = "The dropdown summary is for people browsing: briefly explain the question or result, why it matters and any essential caveat. Readable sections are optional; add them when a separate explanation helps people. Give each an explicit stable id, a heading in title, and readable Markdown in body. Preserve section IDs when renaming headings; citations pin the section in an exact saved revision. If the note has canonical statements, place each where its explanation belongs with a standalone [[statement:ID]] line in a readable section, with prose before and after it. Use each marker at most once, referring to content.statements in this same revision; do not copy its definition into a separate glossary. The folded Statements index supplies exact links. Markers inside code or math remain literal examples. The note body is the complete free-form technical research record, shown under Full text. Use LaTeX, dense notation, prose, code, calculations or any combination that suits the work. No fixed outline or mandatory internal sections are required. Do not shorten, simplify or flatten the body for general readability. Preserve precise definitions, assumptions, evidence and uncertainties wherever they belong. The human-written tag is an explicit, unverified authorship label: never add it automatically or infer it from an account; omit it from agent-written revisions.";
   const importSharingGuidance = 'New notes and revisions start private. Publication requires a request for an exact saved revision under the current publication policy. Automatic screening can publish a passing revision; scientific proposals still need separate review. Import does not publish notes or change review status.';
   const notebookCliGuidance = 'Use the CLI for routine note work: notebook list/show/export/import/create/revise/request-publication/cancel-publication/delete. Cancel a pending request with notebook cancel-publication NOTE_UUID --revision N --sha256 SHA; save a new revision to request publication again. Delete permanently erases eligible private note content and saved revisions, cancels pending publish requests, and cannot be undone. Minimal audit and usage records remain. Published notes and notes with human review or scientific proposal history cannot be deleted. An authorized participant can approve login --notebook --no-browser once; the model should not manipulate the browser. Existing connections need explicit notebook permissions. Save through the CLI only when authorized, preserve its retry files and report exact note IDs, revision hashes and publication-request status. If access is unavailable, return portable workspace JSON and report the missing permission.';
 
@@ -908,6 +908,7 @@
       return index.notes.filter(note => {
         const tags = selectedRevision(note).content.tags;
         return (!note.deletion || visibility === 'mine' && String(note.owner?.id) === accountId) &&
+          (!note.archive_reason || visibility === 'mine' && String(note.owner?.id) === accountId) &&
           (visibility !== 'mine' || String(note.owner?.id) === accountId) &&
           (visibility !== 'human' || tags.includes('human-written')) &&
           (visibility !== 'proposals' || Boolean(note.proposal_revision)) && (!tag || tags.includes(tag));
@@ -1489,9 +1490,11 @@
         path.setAttribute('d', 'M10 13a5 5 0 0 0 7 .5l3-3a5 5 0 0 0-7-7l-2 2M14 11a5 5 0 0 0-7-.5l-3 3a5 5 0 0 0 7 7l2-2');
         icon.append(path); cite.append(icon);
         top.append(heading, cite);
-        const body = el('div', 'nb-readable-prose');
-        if (window.CrucibleMath?.markdown) window.CrucibleMath.markdown(body, item.body);
-        else body.append(math('p', '', item.body));
+        const body = window.CrucibleStatementWorkflow?.renderReadable(note, revision, item, statementContext()) || el('div', 'nb-readable-prose');
+        if (!window.CrucibleStatementWorkflow) {
+          if (window.CrucibleMath?.markdown) window.CrucibleMath.markdown(body, item.body);
+          else body.append(math('p', '', item.body));
+        }
         block.append(top, body); out.append(block);
       }
       return out;
@@ -1585,6 +1588,8 @@
       else sources.append(el('p', 'nb-hint', 'No citations recorded for this revision.'));
       sources.append(button('Cite this note', () => citeNote(note, revision)));
       full.append(sources, relatedNotes(note, revision));
+      const archiveReason = revision.archive_reason || (note.source_kind === 'curated-research' ? note.archive_reason : null);
+      if (archiveReason) full.append(el('p', 'nb-notice', 'Archived from the featured collection: ' + archiveReason + ' This exact revision remains available for citations.'));
       const provenance = r.extensions?.research_note;
       if (typeof provenance?.evidence_scope === 'string') full.append(el('p', 'nb-hint', provenance.evidence_scope));
       const details = el('details', 'nb-details'); details.append(el('summary', '', 'Record details'));
@@ -2469,7 +2474,7 @@
     }
     function readableSectionEditor(original) {
       const section = el('section', 'nb-sections-editor'), rows = el('div', 'nb-section-editor-rows');
-      section.append(el('h3', '', 'Readable sections (optional)'), el('p', 'nb-hint', 'Add an explanation for readers if useful. Without one, readers see a notice and can open Full text.'), rows);
+      section.append(el('h3', '', 'Readable sections (optional)'), el('p', 'nb-hint', 'Add an explanation for readers if useful. To include a canonical statement in context, copy its [[statement:ID]] marker from Statements & arguments onto its own line between explanatory paragraphs. Each statement can appear once; the index supplies links. Without readable sections, readers can open Full text.'), rows);
       const entries = []; let locked = false, sequence = 0;
       const value = () => entries.filter(item => !item.removed && (item.existing || item.title.value.trim() || item.body.value.trim()))
         .map(item => ({id:item.id, title:item.title.value, body:item.body.value}));
@@ -2613,6 +2618,7 @@
             if (citations.value() !== undefined) content.references = citations.value();
             if (readableSections.value() !== undefined) content.sections = readableSections.value();
             if (statementEditor) Object.assign(content, statementEditor.value());
+            window.TheoryStore.statementPlacements(content);
             if (specification || selectedType() === 'scheme-proposal' || selectedType() !== initialType || ['research-note','scheme-proposal'].includes(r?.extensions?.note_type)) {
               const previous = content.extensions;
               const extensions = previous && typeof previous === 'object' && !Array.isArray(previous) ? previous : previous === undefined ? {} : {previous_metadata:previous};

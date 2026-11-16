@@ -7,7 +7,7 @@ import re
 
 import pytest
 
-from crucible import notebook, registry
+from crucible import notebook, note_sections, registry
 from crucible.attack_models import catalogue
 from test_note_sections import local_system, publish, binding_url
 from test_notebook import create
@@ -32,8 +32,7 @@ def note_content(release, row):
     return {"title": row["title"], "claim": row["summary"],
         "conditions": "Exact research release " + release, "body": row["full_text_appendix"],
         "tags": ["conversion-test"],
-        "sections": [{key: section[key] for key in ("id", "title", "body")}
-                     for section in row["readable_sections"]],
+        "sections": script("prepare_note_integration").readable_fixture_sections(row),
         "statements": row["statements"], "arguments": row["arguments"],
         "extensions": {"scheme_context": {"scheme_id": scheme_id, "version": version},
             "ram_analysis_sha256": row["ram_analysis_sha256"],
@@ -83,6 +82,41 @@ def test_readable_conversion_moves_only_exact_definition_text_and_keeps_reasonin
             else:
                 assert after[identifier] == section
         assert {item["section_id"] for item in row["arguments"]} <= after.keys()
+
+
+def test_authored_layout_places_each_statement_once_without_rewriting_source_prose(sources):
+    apply_layout = script("prepare_note_integration").readable_fixture_sections
+    for row in sources.values():
+        before = deepcopy(row)
+        sections = apply_layout(row)
+        assert row == before
+        assert [section["id"] for section in sections] == [section["id"] for section in row["readable_sections"]]
+        placed = [identifier for section in sections for identifier in note_sections.statement_markers(section["body"])]
+        assert len(placed) == len(set(placed))
+        assert set(placed) == {statement["id"] for statement in row["statements"]}
+        for original, rendered in zip(row["readable_sections"], sections):
+            restored = rendered["body"]
+            for entry in row["readable_statement_layout"]:
+                if entry["section_id"] == original["id"]:
+                    assert restored.count(entry["content"]) == 1
+                    restored = restored.replace("\n\n" + entry["content"], "", 1)
+            assert restored == original["body"]
+
+
+def test_fixture_placement_rejects_changed_prose_and_unknown_statements(sources):
+    apply_layout = script("prepare_note_integration").readable_fixture_sections
+    for problem in ("prose", "missing", "duplicate"):
+        row = deepcopy(sources["rsa-kem@4"])
+        entry = row["readable_statement_layout"][0]
+        if problem == "prose":
+            section = next(item for item in row["readable_sections"] if item["id"] == entry["section_id"])
+            section["body"] = "Different explanation."
+        elif problem == "missing":
+            entry["content"] = "[[statement:nonexistent]]"
+        else:
+            entry["content"] += "\n\n" + entry["content"]
+        with pytest.raises(ValueError, match="prose changed|unavailable|canonical statement|only once"):
+            apply_layout(row)
 
 
 def test_role_conclusions_keep_authored_status_and_ram_keeps_exact_per_profile_premises(sources):
