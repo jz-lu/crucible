@@ -1,0 +1,59 @@
+Quick tour: collaborator preview
+================================
+
+This branch adds an optional tour of the existing website. It does not include
+the separate Notes redesign or proposal-implementation work, and publishing the
+branch does not deploy it to crucible.fail.
+
+Get the branch
+--------------
+In a clean checkout, after the branch has been pushed:
+
+    git fetch origin
+    git switch --track origin/feature/quick-tour
+
+If you already have the local branch, switch to feature/quick-tour and use
+git pull --ff-only. Keep unrelated work in its own branch or worktree.
+
+Run and open
+------------
+Follow README.md's "Run locally" section, including docs/native-setup.txt for
+a fresh checkout. Start the existing application with:
+
+    ./run.sh
+
+Open http://127.0.0.1:8000, sign in to a local account, and choose Schemes.
+Click Quick tour beside the page title. No extra environment variables,
+database migrations, provider credentials or frontend build are introduced
+by this feature. Existing application setup requirements still apply.
+
+The tour visits Schemes, Notes, Bounties (when enabled), and the Notes tab of
+My activity. It is never launched automatically. It navigates through the
+normal application, so existing read caches and access checks still apply.
+The controller does not create drafts, request challenge instances, submit
+research, spend allowance or invoke an agent/model.
+
+Manual check
+------------
+- Start the tour from Schemes; check each page and its highlighted heading.
+- Use Back and Next; Finish leaves My activity open.
+- Close tour, Escape, and clicking outside the card should close immediately.
+- Tab and Shift+Tab remain inside the tour controls.
+- Normal navigation away or a changed session should end the tour.
+- Open a note editor and confirm the tour cannot open over that dialog.
+- Check a narrow mobile window and a short window: the card remains usable.
+- Confirm browsing does not require completing the tour and no records changed.
+
+Automated checks
+----------------
+With the repository's Node 22 version:
+
+    node tests/test_orientation_frontend.cjs
+
+The existing frontend CI job automatically runs tests/test_*.cjs, so this test
+needs no separate workflow entry. Public-asset and admission tests cover the
+new versioned orientation.js route. No database schema is changed.
+
+This is a small orientation candidate, not evidence from a newcomer study.
+The purpose is to reinforce discoverable actions in the website, not to make
+the tour a prerequisite for understanding them.

@@ -34,6 +34,7 @@ let toastTimer;
 let roundRetryAt = 0;
 let sessionSynchronization = null;
 let documentEpoch = 0, documentRetired = false, initializationRequest = 0;
+let newcomerOrientation = null;
 let initializationPending = false, resumeInitialization = false;
 const researcherEditor = {account: null, request: 0, base: null, pending: null, open: false, busy: false, loading: false, conflict: false, contextRequired: false, guarded: false};
 function ownsDocument(epoch) { return !documentRetired && documentEpoch === epoch; }
@@ -749,6 +750,7 @@ $('#auth-signup-form').addEventListener('submit', async event => {
 });
 $('#auth-signup-signin').addEventListener('click', () => signInExistingAccount($('#auth-signup-signin')));
 function clearProtectedState() {
+  newcomerOrientation?.cancel();
   clearSchemeAssumptions();
   resetResearcherEditor();
   invalidateReadViews();
@@ -1887,6 +1889,7 @@ function setSession(data) {
   state.access = data.access || (state.access?.mode === 'beta' ?
     {mode: 'beta', allowed: false, status: state.user ? 'pending' : 'anonymous'} :
     {mode: 'open', allowed: true, status: state.user ? 'active' : 'anonymous'});
+  newcomerOrientation?.checkContext();
   if (!hasAccess()) logoBetaEntryPending = false;
   else if (enteringBeta) logoBetaEntryPending = true;
   // Presentation only: the next reload can keep the gate or route frame in
@@ -7186,4 +7189,25 @@ async function initialize() {
 }
 setInterval(updateClock, 1000);
 setInterval(() => { if (!document.hidden) synchronizeSession(); }, 60000);
+// An optional read-only tour of real screens. It never creates research or
+// requests an instance, and it shares the application's existing route/cache.
+newcomerOrientation = window.CrucibleOrientation?.create({
+  launcher: $('#start-orientation'),
+  context: () => !documentRetired && state.ready && hasAccess() && state.user ?
+    JSON.stringify([state.user.id, state.csrf, documentEpoch]) : null,
+  navigate: route => {
+    if (['#challenge', '#notebook', '#bounties', '#activity?kind=notes'].includes(route)) navigateTop(route);
+  },
+  steps: () => [
+    {route:'#challenge', target:'#catalogue-workspace .catalogue-heading', title:'Find a starting point',
+      body:'Open a scheme to inspect its costs, assumptions and open questions—or try a numerical challenge.'},
+    {route:'#notebook', target:'#notebook-workspace .nb-heading', title:'Read, then build on an idea',
+      body:'Find research by title, tag or note number. Open a note to inspect its evidence and continue the work. Your own idea can start here too.'},
+    ...(bountyFeatureAvailable() ? [{route:'#bounties', target:'#notebook-workspace .bty-heading', title:'Find a focused task',
+      body:'Bounties pair a research question with completion criteria and a review plan. Choose one when you want a defined problem to work on.'}] : []),
+    {route:'#activity?kind=notes', target:'#activity-workspace .activity-tabs', title:'Follow your contributions',
+      body:'Return to My activity for your notes, challenge attempts and bounty work. Notes begin privately; request publication when you are ready to share.'},
+  ],
+});
+$('#start-orientation').addEventListener('click', () => newcomerOrientation?.start());
 initialize();

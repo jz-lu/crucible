@@ -2252,6 +2252,42 @@ dialog.wide-dialog {
   width: min(650px,calc(100% - 32px));
 }
 
+/* An explicitly opened tour of the real workspaces, not a second navigation. */
+.catalogue-title-line { display:flex; align-items:baseline; gap:20px; flex-wrap:wrap; }
+.catalogue-heading .orientation-launcher { color:var(--muted); font-size:13px; white-space:nowrap; }
+dialog.orientation-tour {
+  position:fixed; inset:0; width:100%; height:100dvh; max-width:none; max-height:none;
+  margin:0; padding:0; border:0; border-radius:0; background:transparent;
+  box-shadow:none; overflow:hidden;
+}
+dialog.orientation-tour::backdrop { background:color-mix(in srgb,var(--paper) 35%,transparent); backdrop-filter:none; }
+.orientation-card {
+  position:fixed; width:min(400px,calc(100vw - 32px)); max-height:calc(100dvh - 32px);
+  box-sizing:border-box; overflow:auto; padding:24px; border:1px solid var(--border);
+  border-radius:10px; background:var(--surface); box-shadow:0 12px 42px var(--shadow);
+}
+.orientation-progress { margin:0 0 9px; color:var(--muted); font-size:12px; letter-spacing:.04em; }
+.orientation-title { margin:0; font:700 25px/1.18 var(--display); }
+.orientation-title:focus-visible { outline:2px solid var(--accent); outline-offset:5px; }
+.orientation-body { margin:12px 0 24px; font-size:15px; line-height:1.55; text-wrap:pretty; }
+.orientation-controls { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+.orientation-controls button { min-height:38px; }
+.orientation-controls .orientation-close { margin-left:auto; }
+.orientation-ring {
+  position:fixed; pointer-events:none; border:2px solid var(--accent); border-radius:8px;
+  box-sizing:border-box; box-shadow:0 0 0 5px color-mix(in srgb,var(--surface) 75%,transparent);
+}
+@media(max-width:600px) {
+  .catalogue-title-line { gap:14px; }
+  .orientation-card { padding:20px; }
+  .orientation-title { font-size:23px; }
+}
+@media(max-height:600px) {
+  .orientation-card { padding:18px; }
+  .orientation-title { font-size:23px; }
+  .orientation-body { margin:9px 0 18px; font-size:14px; line-height:1.45; }
+}
+
 .dialog-top {
   display: flex;
   align-items: center;

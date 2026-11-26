@@ -7,6 +7,7 @@ ownership, reviewer permissions, CSRF and authorization inside write transaction
 from starlette.routing import Mount
 
 PUBLIC = {
+    ("GET", "/orientation.js"),
     ("GET", "/assets/resi-logo.png"),
     ("GET", "/assets/crucible-icon-light.svg"), ("GET", "/assets/crucible-icon-dark.svg"),
     ("GET", "/assets/crucible-mark.svg"),

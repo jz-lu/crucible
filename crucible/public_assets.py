@@ -36,7 +36,7 @@ CONTENT_SECURITY_POLICY = (
 
 
 PUBLIC_FILES = (
-    '/styles.css', '/app.js', '/bootstrap.js', '/math.js', '/assumptions.js',
+    '/styles.css', '/app.js', '/bootstrap.js', '/math.js', '/assumptions.js', '/orientation.js',
     '/proposal-retractions.js', '/resource-metrics.js', '/graph-points.js', '/assets/crucible-logo.png',
     '/assets/crucible-icon-light.svg', '/assets/crucible-icon-dark.svg', '/assets/crucible-mark.svg',
     '/vendor/resi/cardo-normal-400-latin.woff2',

@@ -1092,6 +1092,10 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     def javascript(request: Request):
         return public_assets.response(request)
 
+    @app.get("/orientation.js")
+    def orientation_javascript(request: Request):
+        return public_assets.response(request)
+
     @app.get("/graph-points.js")
     @app.get("/resource-metrics.js")
     def resource_metrics_javascript(request: Request):
