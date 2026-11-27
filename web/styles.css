@@ -63,7 +63,7 @@
   color-scheme: light;
   --display: 'Cardo',Georgia,serif;
   --wordmark: 'IBM Plex Sans',Arial,sans-serif;
-  --brand-wordmark: Georgia,'Times New Roman',serif;
+  --brand-wordmark: Palatino,'Palatino Linotype','Book Antiqua',Georgia,serif;
   --crucible-image-filter: url('#crucible-vessel-light');
   --header-text-size: 16px;
   --sans: 'IBM Plex Sans',Arial,sans-serif;
@@ -277,6 +277,7 @@ button {
   margin:0;padding:0;border:0;border-radius:0;background:transparent;color:inherit;
   line-height:0;cursor:pointer;
 }
+.site-header .brand-icon-button { transform:translateY(-3px); }
 .brand-wordmark,.brand-wordmark:hover { color:inherit;text-decoration:none; }
 .brand-icon-button:focus-visible,.brand-wordmark:focus-visible {
   outline:2px solid var(--primary);outline-offset:5px;border-radius:2px;
@@ -834,7 +835,7 @@ html[data-pending-page=people] .pending-points-help{display:inline-flex}
 
 .kem-name {
   color: var(--ink);
-  font: 400 20px/1.25 Georgia,'Times New Roman',serif;
+  font: 400 20px/1.25 var(--display);
   text-decoration: none;
 }
 
@@ -2252,6 +2253,42 @@ dialog.wide-dialog {
   width: min(650px,calc(100% - 32px));
 }
 
+/* An explicitly opened tour of the real workspaces, not a second navigation. */
+.catalogue-title-line { display:flex; align-items:baseline; gap:20px; flex-wrap:wrap; }
+.catalogue-heading .orientation-launcher { color:var(--muted); font-size:13px; white-space:nowrap; }
+dialog.orientation-tour {
+  position:fixed; inset:0; width:100%; height:100dvh; max-width:none; max-height:none;
+  margin:0; padding:0; border:0; border-radius:0; background:transparent;
+  box-shadow:none; overflow:hidden;
+}
+dialog.orientation-tour::backdrop { background:color-mix(in srgb,var(--paper) 35%,transparent); backdrop-filter:none; }
+.orientation-card {
+  position:fixed; width:min(400px,calc(100vw - 32px)); max-height:calc(100dvh - 32px);
+  box-sizing:border-box; overflow:auto; padding:24px; border:1px solid var(--border);
+  border-radius:10px; background:var(--surface); box-shadow:0 12px 42px var(--shadow);
+}
+.orientation-progress { margin:0 0 9px; color:var(--muted); font-size:12px; letter-spacing:.04em; }
+.orientation-title { margin:0; font:700 25px/1.18 var(--display); }
+.orientation-title:focus-visible { outline:2px solid var(--accent); outline-offset:5px; }
+.orientation-body { margin:12px 0 24px; font-size:15px; line-height:1.55; text-wrap:pretty; }
+.orientation-controls { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+.orientation-controls button { min-height:38px; }
+.orientation-controls .orientation-close { margin-left:auto; }
+.orientation-ring {
+  position:fixed; pointer-events:none; border:2px solid var(--accent); border-radius:8px;
+  box-sizing:border-box; box-shadow:0 0 0 5px color-mix(in srgb,var(--surface) 75%,transparent);
+}
+@media(max-width:600px) {
+  .catalogue-title-line { gap:14px; }
+  .orientation-card { padding:20px; }
+  .orientation-title { font-size:23px; }
+}
+@media(max-height:600px) {
+  .orientation-card { padding:18px; }
+  .orientation-title { font-size:23px; }
+  .orientation-body { margin:9px 0 18px; font-size:14px; line-height:1.45; }
+}
+
 .dialog-top {
   display: flex;
   align-items: center;
@@ -2480,6 +2517,7 @@ dialog h2 {
 html[data-pending-page=activity] .access-workspace[aria-busy=true] .access-heading-space { visibility:visible; }
 #activity-frame .activity-tabs button:disabled { opacity:1; }
 #activity-frame .activity-section-heading span { text-decoration:underline; }
+html[data-pending-activity] #activity-frame .activity-marker { visibility:hidden; }
 .activity-tabs { display:flex; gap:25px; margin-top:24px; border-bottom:1px solid var(--line); }
 .activity-tabs button { padding:9px 0 12px; border-bottom:2px solid transparent; font:500 15px/1.4 var(--sans); color:var(--muted); }
 .activity-tabs button[aria-pressed="true"] { border-bottom-color:var(--primary); color:var(--ink); }
@@ -2492,6 +2530,7 @@ html[data-pending-page=activity] .access-workspace[aria-busy=true] .access-headi
 .activity-row-heading { display:flex; align-items:center; gap:16px; padding:0 3px; }
 .activity-toggle { display:flex; flex:1; min-width:0; align-items:center; gap:16px; padding:15px 0; background:transparent; text-align:left; color:var(--ink); }
 .activity-toggle:hover { color:var(--primary); }
+a.activity-toggle,a.activity-toggle:hover { text-decoration:none; }
 .activity-toggle:focus-visible,.activity-detail:focus-visible { outline:2px solid var(--primary); outline-offset:4px; }
 .activity-list .history-item-copy { flex:1; min-width:0; }
 .activity-list .history-item-title { font:500 17px/1.45 var(--sans); }
@@ -4048,6 +4087,30 @@ dialog.assumption-reader { width: min(760px, calc(100% - 40px)); padding: 0; bor
 .review-proposal-group > h2 { font-size: 1.25rem; margin-bottom: 1rem; }
 .review-proposal-group .proposal-list-entry { display: flex; flex-direction: column; align-items: flex-start; gap: .3rem; overflow-wrap: anywhere; }
 .review-proposal-pages { display: flex; align-items: center; gap: 1.5rem; margin-top: 1rem; font-size: .85rem; }
+.review-proposal-phases { display:flex; flex-wrap:wrap; gap:.4rem; margin:0 0 1.7rem; }
+.review-proposal-phases a { padding:.5rem .8rem; border-radius:5px; color:var(--muted); text-decoration:none; font:500 .9rem var(--sans); }
+.review-proposal-phases a[aria-current="page"] { color:var(--ink); background:var(--light); }
+.proposal-implementation { border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:1.1rem 0; margin:1.2rem 0; font:400 .9rem/1.6 var(--sans); overflow-wrap:anywhere; }
+.implementation-heading { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:.5rem 1rem; }
+.implementation-heading h3 { margin:0; font:600 1rem/1.4 var(--sans); }
+.implementation-status { color:var(--primary); font:500 .8rem/1.5 var(--sans); }
+.implementation-steps { display:flex; flex-wrap:wrap; gap:.5rem 1rem; padding:0; margin:.8rem 0; list-style:none; color:var(--muted); font-size:.78rem; }
+.implementation-steps li + li::before { content:'→'; margin-right:1rem; color:var(--muted); }
+.implementation-steps [aria-current="step"] { color:var(--ink); font-weight:600; }
+.implementation-meta,.implementation-scope { color:var(--muted); font-size:.78rem; margin:.5rem 0; }
+.implementation-update { white-space:pre-wrap; margin:.7rem 0; }
+.implementation-evidence { padding-left:1.2rem; margin:.6rem 0; }
+.implementation-history,.implementation-editor { margin-top:.9rem; }
+.implementation-history summary,.implementation-editor summary { cursor:pointer; font-weight:500; }
+.implementation-history article { padding:.6rem 0; border-bottom:1px solid var(--line); }
+.implementation-history article p { white-space:pre-wrap; }
+.implementation-editor form { display:grid; gap:.8rem; margin:.8rem 0; max-width:40rem; }
+.implementation-editor label { display:grid; gap:.3rem; font-size:.82rem; }
+.implementation-editor input,.implementation-editor textarea,.implementation-editor select { box-sizing:border-box; width:100%; font:inherit; padding:.65rem; color:var(--ink); background:var(--surface); border:1px solid var(--line); border-radius:4px; }
+.implementation-editor textarea { resize:vertical; }
+.implementation-editor button[type="submit"] { justify-self:start; }
+.implementation-read-error { color:var(--muted); font-size:.85rem; }
+@media(max-width:560px) { .implementation-heading { align-items:flex-start; } .implementation-steps { gap:.4rem .6rem; } .implementation-steps li + li::before { margin-right:.6rem; } }
 .proposal-review-workspace { padding-top: 0; }
 .proposal-review-workspace .catalogue-heading h1 { font-size: clamp(1.4rem, 2vw, 1.8rem); }
 @media (max-width: 560px) { .review-navigation a { padding: .7rem .65rem; } }
@@ -4641,3 +4704,7 @@ dialog.scheme-assumptions-dialog { width: min(680px, calc(100% - 32px)); padding
 }
 .nb-reading-equation { display: block; overflow-x: auto; overflow-y: hidden; margin: 1rem 0; padding: .25rem 0; }
 .nb-reading-equation .katex-display { margin: .2rem 0; }
+
+.activity-note-state{font:400 12px/1.5 var(--sans);color:var(--muted)}
+.activity-note-state[data-publication-status=submitted]{color:var(--amber)}
+.activity-note-state[data-publication-status=changes_requested],.activity-note-state[data-publication-status=withdrawn]{color:var(--error)}

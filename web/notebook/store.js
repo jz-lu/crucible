@@ -84,12 +84,13 @@
     if (!Array.isArray(value) || value.length > 40) fail('invalid_snapshot', 'Use at most 40 text tags.');
     value.forEach(item => text(item, 'Tag', 100));
   }
-  function readableStatementBlocks(body) {
+  function readableStatementBlocks(body, headings = null, structure = null) {
     text(body, 'Section text', 40000);
     const blocks = [], buffer = [];
-    let fence = null, ticks = 0, math = null;
-    const flush = () => { if (buffer.length) { blocks.push({kind:'text', text:buffer.join('\n')}); buffer.length = 0; } };
+    let fence = null, ticks = 0, math = null, lineNumber = 0, firstLine = 1;
+    const flush = () => { if (buffer.length) { blocks.push({kind:'text', text:buffer.join('\n'), line:firstLine}); buffer.length = 0; } };
     for (const line of body.replace(/\r\n?/g, '\n').split('\n')) {
+      lineNumber++; if (!buffer.length) firstLine = lineNumber;
       if (fence) {
         const close = /^ {0,3}(`+|~+)[ \t]*$/.exec(line);
         if (close && close[1][0] === fence[0] && close[1].length >= fence[1]) fence = null;
@@ -97,9 +98,15 @@
       }
       if (!ticks && !math) {
         const opened = /^ {0,3}(`{3,}|~{3,})/.exec(line);
-        if (opened) { fence = [opened[1][0],opened[1].length]; buffer.push(line); continue; }
+        if (opened) { structure?.fence_lines.push(lineNumber); fence = [opened[1][0],opened[1].length]; buffer.push(line); continue; }
+        if (['\\[','$$'].includes(line.trim())) structure?.math_lines.push(lineNumber);
+        const heading = /^(#{1,6})[ \t]+(.+)$/.exec(line);
+        if (heading && headings) {
+          const title = heading[2].replace(/[ \t]+#+[ \t]*$/, '').trim();
+          if (title) headings.push({line:lineNumber,level:heading[1].length,title});
+        }
         const marker = /^ {0,3}\[\[statement:([a-z][a-z0-9-]{0,79})\]\][ \t]*$/.exec(line);
-        if (marker) { flush(); blocks.push({kind:'statement',id:marker[1]}); continue; }
+        if (marker) { flush(); blocks.push({kind:'statement',id:marker[1],line:lineNumber}); continue; }
         if (/^ {0,3}\\\[\[statement:[a-z][a-z0-9-]{0,79}\]\][ \t]*$/.test(line)) { buffer.push(line); continue; }
         if (/^(?: {4}|\t)/.test(line)) { buffer.push(line); continue; }
       }
@@ -130,12 +137,75 @@
     }
     flush(); return blocks;
   }
+  function markdownHeadings(body) {
+    const headings = []; readableStatementBlocks(body, headings); return headings;
+  }
+  function markdownStructure(body) {
+    const structure = {headings:[],fence_lines:[],math_lines:[]};
+    readableStatementBlocks(body, structure.headings, structure); return structure;
+  }
+  function headingPassage(content, location) {
+    object(location, 'Heading location'); text(location.heading, 'Referenced heading', 240);
+    if (Object.keys(location).some(key => !['heading','section_id'].includes(key))) fail('invalid_snapshot', 'Unsupported heading location field.');
+    let source = content.body;
+    if (location.section_id != null) {
+      if (!/^[a-z][a-z0-9-]{0,79}$/.test(location.section_id) || forbidden.has(location.section_id)) fail('invalid_snapshot', 'Use a stable source section ID.');
+      const sections = (content.sections || []).filter(item => item.id === location.section_id);
+      if (sections.length !== 1) fail('invalid_snapshot', "The heading's source section is missing or ambiguous.");
+      source = sections[0].body;
+    }
+    const headings = markdownHeadings(source), matches = headings.filter(item => item.title === location.heading);
+    if (matches.length !== 1) fail('invalid_snapshot', 'The heading reference “' + location.heading + '” must match one unique heading in its source. Update the reference if you renamed or removed that heading.');
+    const selected = matches[0], lines = source.replace(/\r\n?/g, '\n').split('\n');
+    const end = (headings.find(item => item.line > selected.line && item.level <= selected.level)?.line || lines.length + 1) - 1;
+    const passage = lines.slice(selected.line - 1, end).join('\n');
+    if (readableStatementBlocks(passage).some(item => item.kind === 'statement')) fail('invalid_snapshot', 'A referenced heading needs its Markdown text in place, not statement insertion markers.');
+    return {heading:selected.title,start_line:selected.line,end_line:end,text:passage,...(location.section_id != null ? {section_id:location.section_id} : {})};
+  }
+  const validPassage = id => typeof id === 'string' && /^p1-(?:b|s-[a-z][a-z0-9-]{0,63})-(?:0|[1-9][0-9]{0,4})-[1-9][0-9]{0,4}$/.test(id);
+  function passages(content) {
+    const result = [];
+    const containers = [...(content.sections || []).map(part => ({id:part.id,body:part.body,title:part.title})), {body:content.body}];
+    for (const part of containers) {
+      const lines = part.body.replace(/\r\n?/g, '\n').split('\n');
+      const headings = [...(part.id ? [{line:0,level:0,title:part.title}] : []), ...markdownHeadings(part.body)];
+      const stack = [], ends = [];
+      for (let i = headings.length - 1; i >= 0; i--) {
+        while (stack.length && headings[stack.at(-1)].level > headings[i].level) stack.pop();
+        ends[i] = stack.length ? headings[stack.at(-1)].line - 1 : lines.length; stack.push(i);
+      }
+      for (let i = 0; i < headings.length; i++) {
+        const heading = headings[i];
+        result.push({id:'p1-' + (part.id ? 's-' + part.id : 'b') + '-' + heading.line + '-' + ends[i],
+          heading:heading.title,start_line:heading.line,end_line:ends[i],...(part.id ? {section_id:part.id} : {})});
+      }
+    }
+    return result;
+  }
+  function resolvePassage(content, id) {
+    if (!validPassage(id)) fail('invalid_snapshot', 'Use an exact version-one passage selector.');
+    const passage = passages(content).find(item => item.id === id);
+    if (!passage) fail('invalid_snapshot', 'This passage is absent from the exact saved note; no replacement was selected.');
+    const source = passage.section_id ? content.sections.find(item => item.id === passage.section_id).body : content.body;
+    let definition = source.replace(/\r\n?/g, '\n').split('\n').slice(Math.max(0, passage.start_line - 1), passage.end_line).join('\n');
+    if (!passage.start_line) definition = passage.heading + '\n\n' + definition;
+    if (readableStatementBlocks(definition).some(item => item.kind === 'statement')) fail('invalid_snapshot', 'This legacy passage inserts other statement text. Use its existing statement citation instead.');
+    return {id, label:'',title:passage.heading,definition,definitions:[],source_passage:passage};
+  }
+  function materializeStatement(content, item) {
+    if (!item.location) return item;
+    if (item.definition != null) fail('invalid_snapshot', 'Use either a Markdown heading location or a definition, not both.');
+    const {text:definition,...source_passage} = headingPassage(content, item.location);
+    const {location,...record} = item;
+    return {...record,label:item.label || '',title:item.title || source_passage.heading,definition,source_passage};
+  }
   function statementPlacements(content) {
-    const ids = new Set((content.statements || []).map(item => item.id)), placements = new Map();
-    for (const section of content.sections || []) for (const block of readableStatementBlocks(section.body)) {
+    const ids = new Set((content.statements || []).filter(item => !item.location).map(item => item.id)), placements = new Map();
+    const sections = content.sections?.length ? content.sections : ids.size && content.body ? [{id:'$body',body:content.body}] : [];
+    for (const section of sections) for (const block of readableStatementBlocks(section.body)) {
       if (block.kind !== 'statement') continue;
       if (!ids.has(block.id)) fail('invalid_snapshot', 'A statement placement must name a canonical statement in this note.');
-      if (placements.has(block.id)) fail('invalid_snapshot', 'Place each statement only once across the readable sections; use exact links for later references.');
+      if (placements.has(block.id)) fail('invalid_snapshot', 'Place each statement only once in the readable note; use exact links for later references.');
       placements.set(block.id, section.id);
     }
     return placements;
@@ -144,8 +214,8 @@
     object(revision, 'Revision');
     if (revision.revision !== expected) fail('invalid_snapshot', 'Note revisions must be consecutive, starting at one.');
     text(revision.title, 'Note title', 240);
-    text(revision.claim, 'Claim');
-    text(revision.conditions, 'Conditions');
+    text(revision.claim, 'Summary', 20000, true);
+    text(revision.conditions, 'Conditions', 20000, true);
     text(revision.body, 'Supporting body', 40000);
     if (revision.sections !== undefined) {
       if (!Array.isArray(revision.sections) || revision.sections.length > 32) fail('invalid_snapshot', 'Use at most 32 readable sections.');
@@ -164,16 +234,20 @@
       for (const item of values) {
         object(item, key); text(item.id, 'Stable identifier', 80);
         if (!/^[a-z][a-z0-9-]{0,79}$/.test(item.id) || forbidden.has(item.id) || ids.has(item.id)) fail('invalid_snapshot', 'Use unique stable identifiers.');
-        ids.add(item.id); text(item.title, 'Title', 240);
-        if (key === 'statements') text(item.definition, 'Precise statement', 12000);
+        ids.add(item.id); if (key !== 'statements' || !item.location || item.title != null) text(item.title, 'Title', 240);
+        if (key === 'statements') {
+          if (item.location) materializeStatement(revision, item);
+          else text(item.definition, 'Precise statement', 12000);
+        }
         else {
           if (item.conclusion_statement != null) {
             if (item.conclusion != null) fail('invalid_snapshot', 'Use one conclusion statement, not a second copy of its text.');
             const ref = item.conclusion_statement; object(ref, 'Conclusion statement');
-            if (typeof ref.statement_id !== 'string' || !/^[a-z][a-z0-9-]{0,79}$/.test(ref.statement_id) || forbidden.has(ref.statement_id)) fail('invalid_snapshot', 'Identify the exact conclusion statement.');
+            if ((ref.statement_id != null) === (ref.passage != null) || (ref.passage != null ? !validPassage(ref.passage) : typeof ref.statement_id !== 'string' || !/^[a-z][a-z0-9-]{0,79}$/.test(ref.statement_id) || forbidden.has(ref.statement_id))) fail('invalid_snapshot', 'Identify the exact conclusion statement.');
             const external = ['note_id','revision','content_sha256'].filter(key => ref[key] != null);
             if (external.length && (external.length !== 3 || typeof ref.note_id !== 'string' || !ref.note_id.trim() || !Number.isSafeInteger(ref.revision) || ref.revision < 1 || !/^[a-f0-9]{64}$/.test(ref.content_sha256))) fail('invalid_snapshot', 'An external conclusion needs its exact note revision and hash.');
-            if (!external.length && !revision.statements?.some(statement => statement.id === ref.statement_id)) fail('invalid_snapshot', 'The local conclusion statement is missing.');
+            if (!external.length && ref.passage) resolvePassage(revision, ref.passage);
+            if (!external.length && !ref.passage && !revision.statements?.some(statement => statement.id === ref.statement_id)) fail('invalid_snapshot', 'The local conclusion statement is missing.');
           } else text(item.conclusion, 'Conclusion', 6000);
           text(item.scope, 'Scope', 6000); if (!Array.isArray(item.dependencies) || item.dependencies.length > 32) fail('invalid_snapshot', 'Bound the exact dependency list.');
         }
@@ -420,5 +494,5 @@
     };
     return api;
   }
-  return { FORMAT, DEFAULT_NAMESPACE, MAX_BYTES, StoreError, validateSnapshot, clone, authoredMetadata, readableStatementBlocks, statementPlacements, create };
+  return { FORMAT, DEFAULT_NAMESPACE, MAX_BYTES, StoreError, validateSnapshot, clone, authoredMetadata, readableStatementBlocks, markdownHeadings, markdownStructure, headingPassage, passages, resolvePassage, validPassage, materializeStatement, statementPlacements, create };
 });

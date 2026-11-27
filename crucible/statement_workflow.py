@@ -10,11 +10,12 @@ from urllib.parse import parse_qs, urlsplit
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from fastapi import HTTPException, Query, Request
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator, model_serializer
 from sqlalchemy import Float, ForeignKey, JSON, String, UniqueConstraint, func, select
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base, User
+from .note_sections import PASSAGE_PATTERN
 
 IDENTIFIER = r"^[a-z][a-z0-9-]{0,79}$"
 HASH = r"^[0-9a-f]{64}$"
@@ -48,22 +49,50 @@ class NoteSource(StrictModel):
     section_id: str | None = Field(default=None, pattern=IDENTIFIER)
 
 
+class HeadingLocation(StrictModel):
+    heading: str = Field(min_length=1, max_length=240)
+    section_id: str | None = Field(default=None, pattern=IDENTIFIER)
+
+
 class Statement(StrictModel):
     id: str = Field(pattern=IDENTIFIER)
-    label: str = Field(min_length=1, max_length=30)
-    title: str = Field(min_length=1, max_length=240)
-    definition: str = Field(min_length=1, max_length=12000)
+    label: str | None = Field(default=None, min_length=1, max_length=30)
+    title: str | None = Field(default=None, min_length=1, max_length=240)
+    definition: str | None = Field(default=None, min_length=1, max_length=12000)
+    location: HeadingLocation | None = None
     definitions: list[NoteSource] = Field(default_factory=list, max_length=16)
+
+    @model_validator(mode="after")
+    def one_definition_source(self):
+        if (self.definition is None) == (self.location is None):
+            raise ValueError("Use either a Markdown heading location or a definition, not both.")
+        if self.location is None and (self.label is None or self.title is None):
+            raise ValueError("A separate definition needs its label and title.")
+        return self
+
 
 
 class StatementReference(StrictModel):
-    statement_id: str = Field(pattern=IDENTIFIER)
+    statement_id: str | None = Field(default=None, pattern=IDENTIFIER)
+    passage: str | None = Field(default=None, pattern=PASSAGE_PATTERN)
     note_id: str | None = Field(default=None, min_length=1, max_length=108)
     revision: int | None = Field(default=None, ge=1, le=100)
     content_sha256: str | None = Field(default=None, pattern=HASH)
 
+    @model_serializer(mode="wrap")
+    def serialize_selector(self, handler):
+        # Extending the union must not add null keys to historical packets,
+        # fingerprints or idempotency receipts.
+        data = handler(self)
+        for key in ("statement_id", "passage"):
+            if data.get(key) is None:
+                data.pop(key, None)
+        return data
+
     @model_validator(mode="after")
     def complete_pin(self):
+        if (self.statement_id is None) == (self.passage is None):
+            raise ValueError('Select either a registered statement or an exact source passage.')
         present = [self.note_id is not None, self.revision is not None, self.content_sha256 is not None]
         if any(present) and not all(present):
             raise ValueError("An external statement needs its complete exact note pin.")
@@ -179,10 +208,27 @@ class StatementAdoption(Base):
     previous_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
 
-def definition_hash(statement):
-    from . import notebook
+def materialize_statement(statement, content=None):
     data = Statement.model_validate(statement).model_dump(mode="json", exclude_none=True)
-    return notebook._hash({"definition": data["definition"], "definitions": data["definitions"]})
+    if "location" in data:
+        from .note_sections import heading_passage
+        if content is None:
+            raise ValueError("A heading statement requires its exact source content.")
+        passage = heading_passage(content, data.pop("location"))
+        data["definition"] = passage["text"]
+        data["source_passage"] = {key: value for key, value in passage.items() if key != "text"}
+        data.setdefault("title", passage["heading"])
+        data.setdefault("label", "")
+    return data
+
+
+def definition_hash(statement, content=None):
+    from . import notebook
+    data = materialize_statement(statement, content)
+    value = {"definition": data["definition"], "definitions": data["definitions"]}
+    if "source_passage" in data:
+        value["passage_policy"] = "crucible-heading-passage-v1"
+    return notebook._hash(value)
 
 
 def validate_content(content):
@@ -192,17 +238,30 @@ def validate_content(content):
         raise ValueError("Statement and argument identifiers must each be distinct within a note.")
     sections = {item.id for item in content.sections}
     statement_ids = {item.id for item in statements}
+    located = [item for item in statements if item.location is not None]
+    if located:
+        source = content.model_dump(exclude_none=True)
+        for item in located:
+            materialize_statement(item.model_dump(exclude_none=True), source)
     from .note_sections import validate_statement_placements
-    validate_statement_placements(content.sections, statement_ids)
+    validate_statement_placements(content.sections, {item.id for item in statements if item.location is None}, content.body)
     for argument in arguments:
         if argument.section_id is not None and argument.section_id not in sections:
             raise ValueError("The argument's reasoning section must exist in this note.")
         conclusion = argument.conclusion_statement
-        if conclusion and conclusion.note_id is None and conclusion.statement_id not in statement_ids:
-            raise ValueError("A local conclusion must identify a statement in this note.")
+        if conclusion and conclusion.note_id is None:
+            if conclusion.passage:
+                from .note_sections import resolve_passage
+                resolve_passage(content.model_dump(exclude_none=True), conclusion.passage)
+            elif conclusion.statement_id not in statement_ids:
+                raise ValueError("A local conclusion must identify a statement in this note.")
         for use in argument.dependencies:
-            if use.statement.note_id is None and use.statement.statement_id not in statement_ids:
-                raise ValueError("A local premise must identify a statement in this note.")
+            if use.statement.note_id is None:
+                if use.statement.passage:
+                    from .note_sections import resolve_passage
+                    resolve_passage(content.model_dump(exclude_none=True), use.statement.passage)
+                elif use.statement.statement_id not in statement_ids:
+                    raise ValueError("A local premise must identify a statement in this note.")
     return content
 
 
@@ -213,8 +272,19 @@ def selected_record(content, kind, identifier):
     if len(matches) != 1:
         raise HTTPException(404, "This exact note statement or argument is unavailable.")
     value = matches[0]
-    digest = definition_hash(value) if kind == "statement" else notebook._hash(value)
+    digest = definition_hash(value, content) if kind == "statement" else notebook._hash(value)
     return {"id": identifier, "definition_sha256" if kind == "statement" else "argument_sha256": digest}
+
+
+def same_conclusion(left, right):
+    """No inferred proposition equivalence for a quotation of arbitrary prose."""
+    if not left or not right:
+        return False
+    a = left.get("source_passage", {}).get("id")
+    b = right.get("source_passage", {}).get("id")
+    if a or b:
+        return bool(a and b and a == b and left.get("source") == right.get("source"))
+    return left["definition_sha256"] == right["definition_sha256"]
 
 
 def register_routes(app, db, settings, clock, account, visible, throttle):
@@ -268,16 +338,27 @@ def register_routes(app, db, settings, clock, account, visible, throttle):
         return {"note_id": ref.note_id, "revision": ref.revision, "content_sha256": ref.content_sha256}
 
     def resolve_statement(session, user, ref, base=None, *, published=False):
+        from . import notebook_section_refs
         src = NoteSource(**({key: getattr(ref, key) for key in ("note_id", "revision", "content_sha256")}
             if ref.note_id is not None else pin(base)))
         row = source(session, user, src, published=published)
+        anchor = 'passage:' + ref.passage if ref.passage else 'statement:' + ref.statement_id
+        label = notebook_section_refs.display_label(session, pin(src), row.content, anchor)
+        if ref.passage:
+            from .note_sections import resolve_passage
+            from .notebook_locs import metadata
+            try:
+                loc = metadata(session, src.note_id, src.revision, src.content_sha256).get(ref.passage)
+                return {**resolve_passage(row.content, ref.passage), 'source': pin(src), 'loc': loc, 'label': loc or '', **label}
+            except ValueError as error:
+                raise HTTPException(422, str(error)) from error
         selected_record(row.content, "statement", ref.statement_id)
         value = next(item for item in row.content["statements"] if item["id"] == ref.statement_id)
         parsed = Statement.model_validate(value)
         for definition in parsed.definitions:
             source(session, user, definition, published=published)
-        return {**parsed.model_dump(mode="json", exclude_none=True), "source": pin(src),
-                "definition_sha256": definition_hash(value)}
+        return {**materialize_statement(value, row.content), **label, "source": pin(src),
+                "definition_sha256": definition_hash(value, row.content)}
 
     def resolve_argument(session, user, ref, *, published=False):
         row = source(session, user, ref, published=published)
@@ -302,7 +383,7 @@ def register_routes(app, db, settings, clock, account, visible, throttle):
                 raise HTTPException(422, "A review target requires an exact external conclusion statement pin.")
             conclusion = resolve_statement(session, user, expected, published=published)
             actual = argument.get("resolved_conclusion_statement")
-            if not actual or actual["definition_sha256"] != conclusion["definition_sha256"]:
+            if not same_conclusion(actual, conclusion):
                 raise HTTPException(409, "This argument must address the target's exact proposition. Different propositions need a separate target; no implication is inferred.")
             configurations = set(packet["target"]["configuration_ids"])
             if configurations and any(not use["configuration_ids"] or not set(use["configuration_ids"]) <= configurations
@@ -373,7 +454,8 @@ def register_routes(app, db, settings, clock, account, visible, throttle):
                 target = {"id": target_id, "title": title[:240], "kind": kind,
                     "scope": "Exact research release " + identity["release"] + "; " + slot + ".",
                     "configuration_ids": selected_configurations,
-                    "conclusion_statement": {**conclusion["source"], "statement_id": conclusion["id"]}}
+                    "conclusion_statement": {**conclusion["source"],
+                        ("passage" if conclusion.get("source_passage", {}).get("id") else "statement_id"): conclusion["id"]}}
                 argument_pin = ref.model_dump(mode="json", exclude_none=False)
                 event_id = str(uuid5(NAMESPACE_URL, "crucible-initial-argument-admission:" + notebook._hash({"target": target, "argument": argument_pin})))
                 values[target_id] = {"id": event_id, "target": target, "argument": argument_pin,
@@ -498,6 +580,13 @@ def register_routes(app, db, settings, clock, account, visible, throttle):
                 notebook.NotebookRevision.note_id == src["note_id"], notebook.NotebookRevision.revision == src["revision"]))
             if premise_revision is None:
                 return False
+            if statement_ref.passage:
+                from .note_sections import resolve_passage
+                try:
+                    resolve_passage(premise_revision.content, statement_ref.passage)
+                except ValueError:
+                    return False
+                continue
             premise = next((item for item in premise_revision.content.get("statements", []) if item.get("id") == statement_ref.statement_id), None)
             if premise is None:
                 return False
@@ -631,17 +720,18 @@ def register_routes(app, db, settings, clock, account, visible, throttle):
     @app.get("/api/notebook/statement-workflow/context")
     def context(request: Request, note_id: str = Query(min_length=1, max_length=108), revision: int = Query(ge=1, le=100),
                 sha256: str = Query(pattern=HASH), statement: str | None = Query(default=None, pattern=IDENTIFIER),
-                argument: str | None = Query(default=None, pattern=IDENTIFIER)):
-        if (statement is None) == (argument is None) or any(len(request.query_params.getlist(key)) != 1
-                for key in ("note_id", "revision", "sha256")) or any(len(request.query_params.getlist(key)) > 1 for key in ("statement", "argument")):
+                argument: str | None = Query(default=None, pattern=IDENTIFIER),
+                passage: str | None = Query(default=None, pattern=PASSAGE_PATTERN)):
+        if sum(value is not None for value in (statement, argument, passage)) != 1 or any(len(request.query_params.getlist(key)) != 1
+                for key in ("note_id", "revision", "sha256")) or any(len(request.query_params.getlist(key)) > 1 for key in ("statement", "argument", "passage")):
             raise HTTPException(422, "Choose one statement or argument in an exact note revision.")
         with db.transaction() as session:
             user = workflow_account(request, session)
             ref = NoteSource(note_id=note_id, revision=revision, content_sha256=sha256)
             row = source(session, user, ref)
             result = {"source": pin(ref), "prototype": True, "can_propose": session.info["statement_can_propose"], "related_uses": [], "related_arguments": [], "related_research": [], "targets": []}
-            if statement:
-                result["statement"] = resolve_statement(session, user, StatementReference(statement_id=statement), ref)
+            if statement or passage:
+                result["statement"] = resolve_statement(session, user, StatementReference(statement_id=statement, passage=passage), ref)
             else:
                 result["argument"] = resolve_argument(session, user, ArgumentReference(**pin(ref), argument_id=argument))
             # Bounded local research fixture scan; no bodies or private counts returned.
@@ -673,13 +763,18 @@ def register_routes(app, db, settings, clock, account, visible, throttle):
                         continue
                     # The normal reference pipeline recognizes local exact note routes.
                     # An arbitrary external site's matching query is not a dependency.
-                    if parsed_url.scheme or parsed_url.netloc or parsed_url.path not in {"", "/"} or not parsed_url.fragment.startswith("notebook?"):
+                    if parsed_url.scheme or parsed_url.netloc or parsed_url.query or parsed_url.path not in {"", "/"} or not parsed_url.fragment.startswith("notebook?"):
                         continue
                     try:
                         fields = parse_qs(parsed_url.fragment.partition("?")[2], max_num_fields=8)
                     except ValueError:
                         continue
-                    key, location = ("statement", statement) if statement else ("argument", argument)
+                    if "loc" in fields:
+                        from .notebook_locs import checked_link
+                        fields = checked_link(fields, session)
+                        if fields is None:
+                            continue
+                    key, location = ("passage", passage) if passage else ("statement", statement) if statement else ("argument", argument)
                     wanted = {"note": note_id, "revision": str(revision), "sha256": sha256, key: location}
                     if set(fields) != set(wanted) or any(fields[k] != [v] for k, v in wanted.items()):
                         continue
@@ -691,16 +786,16 @@ def register_routes(app, db, settings, clock, account, visible, throttle):
                 for raw in candidate.content.get("arguments", []):
                     parsed = Argument.model_validate(raw)
                     matches = []
-                    if statement:
+                    if statement or passage:
                         conclusion = parsed.conclusion_statement
                         if conclusion:
                             conclusion_pin = pin(candidate_ref) if conclusion.note_id is None else {key: getattr(conclusion, key) for key in ("note_id", "revision", "content_sha256")}
-                            if conclusion.statement_id == statement and conclusion_pin == pin(ref):
+                            if conclusion.statement_id == statement and conclusion.passage == passage and conclusion_pin == pin(ref):
                                 result["related_arguments"].append({"source": pin(candidate_ref), "argument_id": parsed.id, "title": parsed.title})
                         for use in parsed.dependencies:
                             target = use.statement
                             target_pin = pin(candidate_ref) if target.note_id is None else {key: getattr(target, key) for key in ("note_id", "revision", "content_sha256")}
-                            if target.statement_id == statement and target_pin == pin(ref):
+                            if target.statement_id == statement and target.passage == passage and target_pin == pin(ref):
                                 matches.append(use.model_dump(mode="json", exclude_none=True))
                     if matches:
                         result["related_uses"].append({"source": pin(candidate_ref), "argument_id": parsed.id,
@@ -712,14 +807,14 @@ def register_routes(app, db, settings, clock, account, visible, throttle):
                     continue
                 chosen = target["current"]["resolved_argument"] or target["current"]["withdrawn_argument"]
                 direct = argument and any(entry["resolved_argument"]["id"] == argument and entry["resolved_argument"]["source"] == pin(ref) for entry in target["roster"])
-                used = statement and chosen and any(use["resolved_statement"]["id"] == statement and use["resolved_statement"]["source"] == pin(ref)
+                used = (statement or passage) and chosen and any(bool(use["statement"].get("passage")) == bool(passage) and use["resolved_statement"]["id"] == (statement or passage) and use["resolved_statement"]["source"] == pin(ref)
                                          for use in chosen["dependencies"])
                 conclusion = target.get("resolved_conclusion_statement")
-                exact_conclusion = statement and conclusion and conclusion["id"] == statement and conclusion["source"] == pin(ref)
+                exact_conclusion = (statement or passage) and conclusion and bool(conclusion.get("source_passage", {}).get("id")) == bool(passage) and conclusion["id"] == (statement or passage) and conclusion["source"] == pin(ref)
                 # Both statements have already passed exact-source visibility
-                # checks. This is byte-identical normative definition identity,
-                # including all pinned definitions, never inferred implication.
-                asserted = statement and conclusion and result["statement"]["definition_sha256"] == conclusion["definition_sha256"]
+                # checks. Registered definitions preserve their explicit-definition
+                # comparison; arbitrary prose additionally requires the same source.
+                asserted = (statement or passage) and conclusion and same_conclusion(result["statement"], conclusion)
                 if direct or used or asserted:
                     if asserted:
                         target["conclusion_match"] = "exact_pin" if exact_conclusion else "exact_definition"

@@ -43,7 +43,7 @@ def notebook_access(tmp_path):
 
 def content(label):
     return {'title': label, 'claim': label + ' claim', 'conditions': 'Fixture hypotheses only.',
-            'body': label + ' supporting evidence', 'tags': ['access-fixture']}
+            'body': label + ' supporting evidence', 'tags': ['access-fixture', 'ai-written']}
 
 
 def create(actor, label='private-first-revision'):

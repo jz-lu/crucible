@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const sorts = {concrete: 'More concrete first', open: 'More open-ended first', 'points-high': 'Highest points first', 'points-low': 'Lowest points first'};
-  const statuses = {draft: 'Draft', submitted: 'Submitted for review', pending: 'Submitted for review', changes_requested: 'Changes requested', open: 'Open', under_review: 'Under assessment', frozen: 'Under assessment', completed: 'Completed', closed: 'Completed', withdrawn: 'Withdrawn', declined: 'Not admitted', cancelled: 'Cancelled'};
+  const statuses = {draft: 'Draft', submitted: 'Submitted for review', pending: 'Submitted for review', changes_requested: 'Changes requested', open: 'Active', under_review: 'Under assessment', frozen: 'Under assessment', completed: 'Completed', closed: 'Completed', withdrawn: 'Withdrawn', declined: 'Not admitted', cancelled: 'Cancelled'};
   const el = (tag, cls, text) => { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = String(text); return node; };
   function button(text, action, cls = 'nb-button') {
     const node = el('button', cls, text); node.type = 'button'; node.addEventListener('click', action); return node;
@@ -40,6 +40,7 @@
     const client = suppliedClient || window.CrucibleBountyAPI.createClient(api, current);
     let active = false, destroyed = false, request = 0, state = {}, policy = null, allowance = null, selected = null, signature = '';
     let nextFocus = null, pageTimer = null, action = null, pickerNumber = 0;
+    let boostContext = null, boostEpoch = 0, boostBackdrop = null;
     const drafts = new Map(), pendingWrites = new Map(), completedWrites = new Map();
     const owns = () => !destroyed && current();
     const present = () => active && owns();
@@ -56,33 +57,13 @@
     listHeading.append(count, sortField.wrap);
     const entries = el('div', 'bty-grid'), pagination = el('nav', 'bty-pagination'); pagination.setAttribute('aria-label', 'Bounty pages');
     const secondary = el('nav', 'bty-secondary'); secondary.setAttribute('aria-label', 'Bounty collections');
-    const mine = button('Your activity', () => change({status: 'mine', page: 1}, 'heading'), 'bty-secondary-link');
     const past = button('Past bounties', () => change({status: 'past', page: 1}, 'heading'), 'bty-secondary-link');
     const open = button('← Bounties', () => change({status: 'open', page: 1}, 'heading'), 'bty-secondary-link');
-    const agent = button('Copy agent prompt', () => { void copyAgentPrompt(); }, 'bty-secondary-link'); agent.hidden = reviewOnly;
-    secondary.append(mine, agent, past, open); board.append(listHeading, entries, pagination, secondary);
+    secondary.append(past, open); board.append(listHeading, entries, pagination, secondary);
     const reader = el('section', 'bty-reader'), composer = el('section', 'bty-composer'); reader.hidden = composer.hidden = true;
-    root.append(heading, notice, board, reader, composer);
-    function announce(text, error = false) { notice.replaceChildren(); if (text) notice.append(el('p', error ? 'bty-error' : 'nb-notice', text)); }
-    function agentPrompt() {
-      const origin = new URL(window.location.href).origin;
-      const client = `python3 crucible_cli.py --server ${origin}`;
-      const first = state.id ? `bounty show ${state.id}` : 'bounty list';
-      const setup = state.id ? `bounty init --bounty ${state.id} --path bounty-work` : 'bounty init --path bounty-work';
-      return `Help me work on Crucible research bounties at ${origin}.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running. Reuse an existing connection with the needed permissions; otherwise connect with ${client} login --scope bounties:read --scope bounties:write --no-browser and let me approve it in my browser.\n\nRead ${client} guide, then ${client} guide --resource bounties.txt. Start with ${client} ${first}. If local work is useful, use a new directory: ${client} ${setup}. Read its README and exact task terms. Local initialization, reads and private draft saves use no monthly bounty allowance.\n\nKeep completion criteria and the verification plan explicit. Cite exact published note revisions and hashes; distinguish useful partial progress from a claimed solution. Saving a draft does not publish or admit a task. Linking a note does not approve a solution or award points.\n\nAllocate monthly bounty allowance only within my authorized request. Admission requests and boosts need a separately approved bounties:spend scope and an explicit --confirm-allowance amount matching the saved policy. Existing tokens gain no new permissions. Read the current allowance and costs; do not assume them. Never approve reviews through an agent. If a write response is lost, preserve .bounty-request.json and rerun the same command; do not create a replacement request. Return the saved task or contribution receipt and any unresolved questions.`;
-    }
-    async function copyAgentPrompt() {
-      if (!present() || reviewOnly) return;
-      const text = agentPrompt(), ownerRoute = route();
-      try {
-        await window.navigator.clipboard.writeText(text);
-        if (present() && route() === ownerRoute) announce('Agent prompt copied.');
-      } catch {
-        if (!present() || route() !== ownerRoute) return;
-        const box = el('textarea', 'bty-agent-prompt'); box.value = text; box.readOnly = true; box.rows = 8;
-        box.setAttribute('aria-label', 'Agent prompt'); notice.replaceChildren(box); box.focus(); box.select?.();
-      }
-    }
+    const boostDialog = el('dialog', 'nb-dialog bty-boost-dialog'); boostDialog.setAttribute('aria-label', 'Boost bounty');
+    root.append(heading, notice, board, reader, composer, boostDialog);
+    function announce(text, error = false) { notice.replaceChildren(); notice.classList.toggle('nb-sr-only', !error); if (text) notice.append(el('p', error ? 'bty-error' : 'nb-notice', text)); }
     function route(next = state) {
       const params = new URLSearchParams(reviewOnly ? {section: 'bounties'} : {});
       if (next.status && next.status !== 'open') params.set('status', next.status);
@@ -112,6 +93,7 @@
       if (actionTransition) (target.closest('.bty-action-panel') || target).scrollIntoView({block: 'nearest'});
     }
     function updateAllowance() {
+      updateAllowanceActions();
       const stamp = JSON.stringify(allowance);
       if (allowanceNode.dataset.stamp === stamp) return;
       allowanceNode.dataset.stamp = stamp; allowanceNode.replaceChildren();
@@ -119,6 +101,21 @@
       allowanceNode.append(el('span', '', 'Monthly bounty allowance'), el('strong', '', `${allowance.available_units} of ${allowance.monthly_units} remaining`));
       allowanceNode.title = 'Unused allowance expires at the end of each UTC calendar month. Refunds return to their original month.';
       if (allowance.policy_status === 'pending') allowanceNode.append(el('small', '', 'Allocation policy pending'));
+    }
+    function lacksAllowance(cost) {
+      return Number.isSafeInteger(allowance?.available_units) && Number.isSafeInteger(cost) && allowance.available_units < cost;
+    }
+    function setAllowanceDisabled(control, disabled) {
+      control.disabled = disabled;
+      if (disabled) control.title = allowance.available_units === 0 ? 'No monthly bounty allowance remaining.' : 'Not enough monthly bounty allowance remaining.';
+      else control.removeAttribute('title');
+    }
+    function updateAllowanceActions() {
+      setAllowanceDisabled(propose, lacksAllowance(policy?.proposal_cost_units));
+      root.querySelectorAll('[data-boost-task]').forEach(control => {
+        const key = 'boost:' + control.dataset.boostTask;
+        setAllowanceDisabled(control, lacksAllowance(policy?.boost_cost_units) && !pendingWrites.has(key) && !completedWrites.has(key));
+      });
     }
     async function loadAllowance() {
       const token = request;
@@ -146,21 +143,31 @@
       const nextSignature = JSON.stringify([state.status, state.sort, state.page, result]);
       entries.removeAttribute('aria-busy');
       entries.querySelectorAll('.bty-read-error').forEach(node => node.remove());
-      if (signature === nextSignature && entries.childElementCount) { focusAfter(); return; }
+      if (signature === nextSignature && entries.childElementCount) { updateAllowanceActions(); focusAfter(); return; }
       signature = nextSignature; entries.replaceChildren(); pagination.replaceChildren();
       const openBoard = state.status === 'open' && !reviewOnly;
       entries.classList.toggle('bty-grid', openBoard); entries.classList.toggle('bty-management-list', !openBoard);
-      count.textContent = reviewOnly ? 'Awaiting review' : state.status === 'mine' ? 'Your activity' : state.status === 'past' ? 'Past bounties' : 'Open tasks';
-      if (!result.bounties.length) entries.append(el('p', 'bty-no-results', reviewOnly ? 'No bounty reviews are waiting.' : state.status === 'mine' ? 'Your proposals and contributions will appear here.' : state.status === 'past' ? 'No completed bounties yet.' : 'No open bounties yet.'));
+      count.textContent = reviewOnly ? 'Awaiting review' : state.status === 'mine' ? 'Your activity' : state.status === 'past' ? 'Past bounties' : 'Active bounties';
+      if (!result.bounties.length) entries.append(el('p', 'bty-no-results', reviewOnly ? 'No bounty reviews are waiting.' : state.status === 'mine' ? 'Your proposals and contributions will appear here.' : state.status === 'past' ? 'No completed bounties yet.' : 'No active bounties yet.'));
       for (const item of result.bounties) {
-        const card = button('', () => change({id: item.id, detail: 'brief'}, 'reader-title'), openBoard ? 'nb-card bty-question' : 'bty-management-row');
-        card.dataset.bounty = item.id; card.dataset.bountyFocus = item.id;
+        const openTask = button('', () => change({id: item.id, detail: 'brief'}, 'reader-title'), openBoard ? 'bty-card-open' : 'bty-management-row');
+        const card = openBoard ? el('article', 'nb-card bty-question') : openTask;
+        card.dataset.bounty = item.id; openTask.dataset.bountyFocus = item.id;
         const title = el('span', 'bty-question-title', item.title);
         if (openBoard) {
-          const cardHeading = el('span', 'nb-title-copy bty-card-heading'), badge = el('span', 'nb-note-status'); badge.append(el('span', 'nb-visibility', 'Bounty')); cardHeading.append(title, badge);
+          const cardHeading = el('span', 'nb-title-copy bty-card-heading'); cardHeading.append(title);
+          const overline = el('div', 'bty-card-overline'); overline.append(reward(item.reward_points));
           const tags = el('span', 'bty-skills'); item.background_tags.forEach(tag => tags.append(el('span', '', tag)));
-          const footer = el('span', 'bty-card-foot'); footer.append(spectrum(item.scope), reward(item.reward_points));
-          card.append(cardHeading, el('span', 'bty-question-summary', item.summary), tags, footer);
+          const footer = el('div', 'bty-card-foot'), rewards = el('div', 'bty-card-actions');
+          if (item.status === 'open' && item.capabilities.boost === true) {
+            const boost = button('Boost', () => { void openBoostDialog(item, boost); }, 'nb-button bty-card-boost');
+            boost.dataset.boostTask = item.id;
+            boost.dataset.bountyFocus = 'boost:' + item.id;
+            boost.setAttribute('aria-label', 'Boost bounty: ' + item.title); rewards.append(boost);
+          }
+          footer.append(spectrum(item.scope), rewards);
+          openTask.append(cardHeading, el('span', 'bty-question-summary', item.summary), tags);
+          card.append(overline, openTask, footer);
         } else {
           const text = el('span'); text.append(el('span', 'bty-management-status', statuses[item.status] || item.status), title); card.append(text, reward(item.reward_points));
         }
@@ -173,7 +180,7 @@
         previous.dataset.bountyFocus = 'previous'; next.dataset.bountyFocus = 'next';
         pagination.append(previous, el('span', '', 'Page ' + state.page), next);
       }
-      focusAfter();
+      updateAllowanceActions(); focusAfter();
     }
     async function loadList() {
       const token = request, options = listOptions(), cached = client.cachedList(options);
@@ -372,6 +379,11 @@
       });
     }
     async function mutate(key, make, perform, success) {
+      // A hidden request may finish after a retry form has already reopened.
+      // Consume its receipt before creating any new write identity.
+      if (completedWrites.has(key)) {
+        const receipt = completedWrites.get(key); completedWrites.delete(key); success(receipt); return;
+      }
       let pending = pendingWrites.get(key);
       if (!pending) {
         pending = {body: {...make(), idempotency_key: crypto.randomUUID()}, uncertain: false};
@@ -439,7 +451,12 @@
     }
     function exactContext(task) { return {expected_version: task.version, terms_sha256: task.terms_sha256}; }
     function actionButton(text, kind, run, cls) {
-      const trigger = button(text, run, cls); trigger.dataset.bountyFocus = 'action-' + kind; return trigger;
+      const trigger = button(text, run, cls); trigger.dataset.bountyFocus = 'action-' + kind;
+      if (kind === 'boost') {
+        trigger.dataset.boostTask = state.id;
+        setAllowanceDisabled(trigger, lacksAllowance(policy?.boost_cost_units) && !pendingWrites.has('boost:' + state.id) && !completedWrites.has('boost:' + state.id));
+      }
+      return trigger;
     }
     function showAction(result, kind) {
       action = kind; signature = ''; nextFocus = 'action-panel'; paintDetail(result);
@@ -447,8 +464,9 @@
     function closeAction(task, kind) {
       action = null; signature = ''; nextFocus = 'action-' + kind; paintDetail({bounty: task});
     }
-    function confirmAction(task, kind) {
+    function confirmAction(task, kind, options = {}) {
       const key = kind + ':' + task.id;
+      const recovering = kind === 'boost' && (pendingWrites.has(key) || completedWrites.has(key));
       const panel = el('section', 'bty-action-panel'), form = el('form', 'nb-form bty-form');
       let text, cost;
       if (kind === 'boost') {
@@ -458,17 +476,93 @@
         cost = policy?.proposal_cost_units;
         text = Number.isSafeInteger(cost) ? `Reserve ${cost} of your monthly bounty allowance while this proposal is reviewed. Approval starts its ${policy?.proposal_reward_points ?? policy?.default_base_reward_points ?? policy?.points_per_boost}-point reward. If declined or withdrawn before admission, the reservation returns to its original month; expired allowance cannot be spent.` : 'The bounty allocation policy is not ready.';
       }
+      if (recovering) text = 'Check the result of your previous boost request. This reuses its original request; it does not create an additional boost.';
+      const insufficient = kind === 'boost' && !recovering && lacksAllowance(cost);
+      if (insufficient) text = 'No monthly bounty allowance remains for this boost.';
       if (kind !== 'boost' && task.reservation?.status === 'held') text = `Your existing reservation of ${task.reservation.units} remains attached to this proposal. Submitting the revised brief uses no additional allowance.`;
-      panel.append(el('h3', '', kind === 'boost' ? 'Confirm bounty boost' : 'Request bounty admission'), el('p', 'bty-form-hint', text));
+      if (!options.modal) panel.append(el('h3', '', kind === 'boost' ? 'Confirm bounty boost' : 'Request bounty admission'));
+      panel.append(el('p', 'bty-form-hint', text));
       if (task.pending_claim_count > 0 && kind === 'boost') panel.append(el('p', 'bty-form-hint', 'A solution is awaiting assessment. Your boost will return to its original month if an earlier submission receives the award; expired allowance cannot be spent.'));
-      const cancel = button('Cancel', () => closeAction(task, kind)); panel.append(cancel);
-      if (policy?.status === 'ready' && Number.isSafeInteger(cost)) {
-        formActions(form, key, kind === 'boost' ? 'Confirm boost' : 'Submit for review', () => mutate(key, () => ({...exactContext(task), policy_id: policy.id, confirm_cost_units: cost, ...(kind === 'boost' ? {units: 1} : {})}),
-          body => kind === 'boost' ? client.boost(task.id, body) : client.admission(task.id, body), result => saved(result, kind === 'boost' ? 'Bounty boost recorded.' : 'Bounty submitted for review.')));
+      const cancel = button('Cancel', () => options.close ? options.close() : closeAction(task, kind));
+      const canConfirm = !insufficient && (recovering || policy?.status === 'ready' && Number.isSafeInteger(cost));
+      if (!options.modal || !canConfirm) panel.append(cancel);
+      if (canConfirm) {
+        const policyId = policy?.id;
+        formActions(form, key, kind === 'boost' ? 'Confirm boost' : 'Submit for review', async () => {
+          if (options.allowed && !options.allowed()) return;
+          options.busy?.(true);
+          try { await mutate(key, () => ({...exactContext(task), policy_id: policyId, confirm_cost_units: cost, ...(kind === 'boost' ? {units: 1} : {})}),
+            body => kind === 'boost' ? client.boost(task.id, body) : client.admission(task.id, body), options.success || (result => saved(result, kind === 'boost' ? 'Bounty boost recorded.' : 'Bounty submitted for review.'))); }
+          finally { options.busy?.(false); }
+        });
         panel.append(form);
+        if (options.modal) form.querySelector('.nb-form-actions')?.prepend(cancel);
       }
       return panel;
     }
+    function closeBoostDialog(force = false) {
+      if (boostContext?.writing && !force) return;
+      const trigger = boostContext?.trigger;
+      boostContext = null; boostEpoch++; boostBackdrop = null;
+      if (boostDialog.open) boostDialog.close();
+      boostDialog.replaceChildren(); boostDialog.removeAttribute('aria-busy');
+      if (!force && present() && trigger?.isConnected) trigger.focus({preventScroll: true});
+    }
+    async function openBoostDialog(task, trigger) {
+      if (!present() || reviewOnly || boostDialog.open) return;
+      const ownerRoute = route(), epoch = ++boostEpoch;
+      const context = {trigger, writing: false}; boostContext = context;
+      const valid = () => present() && boostDialog.open && boostContext === context && boostEpoch === epoch && route() === ownerRoute;
+      const heading = el('div', 'nb-dialog-heading'), title = el('h2', '', 'Confirm bounty boost'); title.tabIndex = -1;
+      const close = button('×', () => closeBoostDialog(), 'nb-close'); close.setAttribute('aria-label', 'Close boost confirmation');
+      heading.append(title, close);
+      const body = el('div', 'bty-boost-body'), taskTitle = el('p', 'bty-boost-task', task.title);
+      boostDialog.replaceChildren(heading, taskTitle, body); boostDialog.showModal(); title.focus({preventScroll: true});
+      let preparing = false;
+      async function prepare() {
+        if (!valid() || preparing) return;
+        preparing = true;
+        body.replaceChildren(); body.setAttribute('aria-busy', 'true');
+        try {
+          const [result, wallet] = await Promise.all([client.detail(task.id, {refresh: true}), client.allowance({refresh: true})]);
+          if (!valid()) return;
+          const recovering = pendingWrites.has('boost:' + task.id) || completedWrites.has('boost:' + task.id);
+          if (!recovering && (result.bounty.status !== 'open' || !result.bounty.capabilities.boost)) throw Error('This bounty can no longer be boosted.');
+          allowance = wallet.allowance; policy = result.policy || wallet.policy || policy; updateAllowance(); taskTitle.textContent = result.bounty.title;
+          const panel = confirmAction(result.bounty, 'boost', {modal: true, close: () => closeBoostDialog(), allowed: valid,
+            busy(value) { if (valid()) { context.writing = value; close.disabled = value; boostDialog.setAttribute('aria-busy', String(value)); panel.querySelectorAll('button').forEach(control => { if (control.type !== 'submit') control.disabled = value; }); } },
+            success(receipt) {
+              if (!valid()) { completedWrites.set('boost:' + task.id, receipt); return; }
+              closeBoostDialog(true); announce('Bounty boost recorded.');
+              const card = entries.querySelector('[data-bounty="' + task.id + '"]');
+              const points = card?.querySelector('.bty-points'); if (points) points.textContent = reward(receipt.bounty.reward_points).textContent;
+              if (trigger?.isConnected) trigger.focus({preventScroll: true});
+              void loadAllowance();
+              void client.list(listOptions()).then(result => {
+                if (!present() || route() !== ownerRoute) return;
+                const focused = document.activeElement?.dataset?.bountyFocus;
+                if (focused?.startsWith('boost:')) nextFocus = focused;
+                paintList(result);
+              }).catch(() => {});
+            }});
+          body.replaceChildren(panel);
+        } catch (error) {
+          if (!valid() || error.retired) return;
+          const message = el('p', 'bty-error', error.message || 'The bounty could not be checked.'); message.setAttribute('role', 'alert');
+          body.replaceChildren(message, button('Try again', () => { void prepare(); }), button('Cancel', () => closeBoostDialog()));
+        } finally { preparing = false; if (valid()) body.removeAttribute('aria-busy'); }
+      }
+      await prepare();
+    }
+    boostDialog.addEventListener('cancel', event => { event.preventDefault(); closeBoostDialog(); });
+    const outsideBoostDialog = event => {
+      if (event.target !== boostDialog || !boostDialog.open) return false;
+      const bounds = boostDialog.getBoundingClientRect();
+      return event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom;
+    };
+    boostDialog.addEventListener('pointerdown', event => { boostBackdrop = event.isPrimary && event.button === 0 && outsideBoostDialog(event) ? boostEpoch : null; });
+    boostDialog.addEventListener('pointercancel', () => { boostBackdrop = null; });
+    boostDialog.addEventListener('click', event => { const outside = boostBackdrop === boostEpoch; boostBackdrop = null; if (outside && outsideBoostDialog(event)) closeBoostDialog(); });
     async function beginAction(kind) {
       if (!present() || !selected) return;
       const id = selected.id, token = request;
@@ -482,20 +576,20 @@
     }
     function contributionForm(task) {
       const key = 'contribute:' + task.id;
-      const draft = draftFor(key, {note: '', claim: 'partial', explanation: ''}), form = el('form', 'nb-form bty-form');
-      const fields = {note: field('Exact contribution-note citation', 'contribution-note', draft.values.note, {rows: 4, max: 6000}), claim: field('What does it offer?', 'contribution-claim', draft.values.claim, {options: [['partial', 'Useful partial progress'], ['solution', 'A solution to the stated task']]}), explanation: field('What does it establish?', 'contribution-explanation', draft.values.explanation, {rows: 4, max: 6000})};
+      const draft = draftFor(key, {note: '', explanation: ''}), form = el('form', 'nb-form bty-form');
+      const fields = {note: field('Exact solution-note citation', 'contribution-note', draft.values.note, {rows: 4, max: 6000}), explanation: field('What does it establish?', 'contribution-explanation', draft.values.explanation, {rows: 4, max: 6000})};
       attachForm(form, fields, draft, key);
-      form.append(el('p', 'bty-form-hint', 'Use an exact published note revision. Linking it does not publish a private draft or establish completion.'));
-      formActions(form, key, 'Submit contribution', () => mutate(key, () => ({...exactContext(task), contribution_note: window.CrucibleBountyAPI.parseReferences(draft.values.note, {single: true})[0], claim: draft.values.claim, explanation: draft.values.explanation.trim()}), body => client.submit(task.id, body), result => { drafts.delete(key); saved(result, 'Contribution submitted for assessment.'); }));
+      form.append(el('p', 'bty-form-hint', 'Link the published note containing your solution. An independent reviewer checks it against the task criteria.'));
+      formActions(form, key, 'Submit solution', () => mutate(key, () => ({...exactContext(task), contribution_note: window.CrucibleBountyAPI.parseReferences(draft.values.note, {single: true})[0], claim: 'solution', explanation: draft.values.explanation.trim()}), body => client.submit(task.id, body), result => { drafts.delete(key); saved(result, 'Solution submitted for independent review.'); }));
       return form;
     }
-    function withdrawalForm(task, cancellation = false) {
-      const key = (cancellation ? 'cancel:' : 'withdraw:') + task.id, draft = draftFor(key, {reason: ''});
+    function withdrawalForm(task) {
+      const key = 'withdraw:' + task.id, draft = draftFor(key, {reason: ''});
       const panel = el('section', 'bty-action-panel'), form = el('form', 'nb-form bty-form');
-      panel.append(el('h3', '', cancellation ? 'Cancel bounty' : 'Withdraw bounty proposal'), el('p', 'bty-form-hint', cancellation ? 'Boosts return to their original month; expired allowance cannot be spent. The allowance used to publish this task is not returned.' : 'A pending reservation returns to its original month. An expired allowance cannot be spent.'));
+      panel.append(el('h3', '', 'Withdraw bounty proposal'), el('p', 'bty-form-hint', 'A pending reservation returns to its original month. An expired allowance cannot be spent.'));
       attachForm(form, {reason: field('Reason', 'withdrawal-reason', draft.values.reason, {rows: 3, max: 2000})}, draft, key);
-      formActions(form, key, cancellation ? 'Confirm cancellation' : 'Confirm withdrawal', () => mutate(key, () => ({expected_version: task.version, reason: draft.values.reason.trim()}), body => cancellation ? client.cancel(task.id, body) : client.withdraw(task.id, body), result => { drafts.delete(key); saved(result, cancellation ? 'Bounty cancelled.' : 'Bounty proposal withdrawn.'); }));
-      panel.append(button('Cancel', () => closeAction(task, cancellation ? 'cancel' : 'withdraw')), form); return panel;
+      formActions(form, key, 'Confirm withdrawal', () => mutate(key, () => ({expected_version: task.version, reason: draft.values.reason.trim()}), body => client.withdraw(task.id, body), result => { drafts.delete(key); saved(result, 'Bounty proposal withdrawn.'); }));
+      panel.append(button('Cancel', () => closeAction(task, 'withdraw')), form); return panel;
     }
     function decisionForm(task, submission) {
       const kind = 'pipeline';
@@ -545,9 +639,10 @@
       signature = nextSignature; reader.replaceChildren();
       reader.append(button('← ' + (reviewOnly ? 'Bounty reviews' : state.status === 'mine' ? 'Your activity' : state.status === 'past' ? 'Past bounties' : 'Bounties'), () => change({id: '', detail: 'brief'}, task.id), 'nb-link bty-reader-back'));
       const article = el('article', 'bty-detail'), heading = el('div', 'bty-detail-heading'), title = el(reviewOnly ? 'h2' : 'h1', '', task.title); title.tabIndex = -1; title.dataset.bountyFocus = 'reader-title';
-      heading.append(el('p', 'bty-meta', statuses[task.status] || task.status), title, el('p', 'bty-byline', 'Posted by ' + task.owner.handle + ' · brief revision ' + (task.revision || 1)));
+      heading.append(el('p', 'bty-meta', statuses[task.status] || task.status), title, el('p', 'bty-byline', 'Posted by ' + task.owner.handle));
+      const facts = el('div', 'bty-task-facts'); facts.append(reward(task.reward_points), spectrum(task.scope)); heading.append(facts);
       const tabs = el('nav', 'bty-detail-tabs'); tabs.setAttribute('aria-label', 'Bounty information');
-      for (const [name, label] of [['brief', 'The task'], ['notes', 'Starting notes'], ['contributions', 'Contributions']]) {
+      for (const [name, label] of [['brief', 'The task'], ['notes', 'Starting notes'], ...(reviewOnly ? [['contributions', 'Submissions']] : [])]) {
         const tab = button(label, () => change({detail: name}, name), 'nb-link'); tab.dataset.bountyFocus = name;
         tab.setAttribute('aria-pressed', String(state.detail === name || name === 'contributions' && state.detail === 'contribute')); tabs.append(tab);
       }
@@ -558,25 +653,23 @@
         if (!pins.length) body.append(el('p', 'bty-empty-progress', 'No starting notes are linked.'));
       }
       else if (state.detail === 'contribute' && task.capabilities.submit) body.append(contributionForm(task));
-      else if (state.detail === 'contributions') paintContributions(body, task);
+      else if (reviewOnly && state.detail === 'contributions') paintContributions(body, task);
       else {
-        const facts = el('div', 'bty-task-facts'); facts.append(spectrum(task.scope), reward(task.reward_points)); body.append(facts, el('p', 'bty-context', task.summary), section('Completion criteria', task.terms.completion_criteria), section('How it is verified', task.terms.verification_plan));
+        body.append(el('p', 'bty-context', task.summary), section('Completion criteria', task.terms.completion_criteria), section('How it is verified', task.terms.verification_plan));
         const actions = el('div', 'bty-actions');
         if (task.capabilities.edit) actions.append(button('Edit draft', () => change({compose: true}, 'bounty-title')));
         if (task.capabilities.request_admission) actions.append(actionButton('Submit for review', 'admission', () => { void beginAction('admission'); }));
         if (task.capabilities.boost) actions.append(actionButton('Boost this bounty', 'boost', () => { void beginAction('boost'); }, 'nb-button nb-primary'));
-        if (task.capabilities.submit) actions.append(button('Link a contribution', () => change({detail: 'contribute'}, 'contribution-note'), 'nb-link'));
-        if (task.capabilities.cancel) actions.append(actionButton('Cancel bounty', 'cancel', () => showAction({bounty: task}, 'cancel'), 'nb-link'));
+        if (task.capabilities.submit) actions.append(button('Submit a solution', () => change({detail: 'contribute'}, 'contribution-note'), 'nb-link'));
         if (task.capabilities.withdraw) actions.append(actionButton('Withdraw proposal', 'withdraw', () => showAction({bounty: task}, 'withdraw'), 'nb-link'));
-        if (!reviewOnly) actions.append(button('Copy agent prompt', () => { void copyAgentPrompt(); }, 'nb-link'));
         body.append(actions);
         if (action) {
-          const panel = ['withdraw', 'cancel'].includes(action) ? withdrawalForm(task, action === 'cancel') : confirmAction(task, action);
+          const panel = action === 'withdraw' ? withdrawalForm(task) : confirmAction(task, action);
           const heading = panel.querySelector('h3'); heading.tabIndex = -1; heading.dataset.bountyFocus = 'action-panel';
           body.append(panel);
         }
         if (reviewOnly && task.capabilities.review_admission) body.append(admissionReview(task));
-        if (task.decisions?.length) {
+        if (reviewOnly && task.decisions?.length) {
           const history = el('details', 'bty-decision-history'); history.append(el('summary', '', 'Review history'));
           for (const decision of task.decisions) history.append(section((({admission:'Admission', poster:'Historical proposer assessment', pipeline:'Independent reviewer'})[decision.kind] || 'Review') + ' · ' + decision.decision.replaceAll('_', ' '), decision.reason));
           body.append(history);
@@ -605,20 +698,20 @@
     async function show(params) {
       if (!owns()) return;
       active = true; request++; clearTimeout(pageTimer); pageTimer = null;
-      const next = {status: ['mine', 'past'].includes(params.get('status')) ? params.get('status') : 'open', sort: Object.hasOwn(sorts, params.get('sort')) ? params.get('sort') : 'concrete', page: Math.max(1, Math.min(1000, parseInt(params.get('page'), 10) || 1)), id: params.get('bounty') || '', detail: ['notes', 'contributions', 'contribute'].includes(params.get('detail')) ? params.get('detail') : 'brief', compose: !reviewOnly && params.get('compose') === 'bounty'};
-      if (JSON.stringify(next) !== JSON.stringify(state)) { signature = ''; action = null; }
+      const next = {status: ['mine', 'past'].includes(params.get('status')) ? params.get('status') : 'open', sort: Object.hasOwn(sorts, params.get('sort')) ? params.get('sort') : 'concrete', page: Math.max(1, Math.min(1000, parseInt(params.get('page'), 10) || 1)), id: params.get('bounty') || '', detail: ['notes', 'contribute', ...(reviewOnly ? ['contributions'] : [])].includes(params.get('detail')) ? params.get('detail') : 'brief', compose: !reviewOnly && params.get('compose') === 'bounty'};
+      if (JSON.stringify(next) !== JSON.stringify(state)) { signature = ''; action = null; closeBoostDialog(true); }
       state = next;
       const inReader = Boolean(state.id) && !state.compose;
       board.hidden = inReader || state.compose; reader.hidden = !inReader; composer.hidden = !state.compose; heading.hidden = inReader || state.compose;
       title.textContent = reviewOnly ? 'Bounty reviews' : 'Bounties';
       propose.hidden = reviewOnly; secondary.hidden = reviewOnly; sortField.wrap.hidden = reviewOnly || state.status !== 'open'; sortField.input.value = state.sort;
-      mine.hidden = past.hidden = reviewOnly || state.status !== 'open'; open.hidden = reviewOnly || state.status === 'open';
+      past.hidden = reviewOnly || state.status !== 'open'; open.hidden = reviewOnly || state.status === 'open';
       void loadAllowance();
       if (state.compose && !state.id) proposalForm();
       else if (state.id) await loadDetail();
       else await loadList();
     }
-    function hide() { active = false; request++; clearTimeout(pageTimer); pageTimer = null; }
+    function hide() { active = false; request++; closeBoostDialog(true); clearTimeout(pageTimer); pageTimer = null; }
     function invalidateReads() {
       client.invalidateReads(); signature = '';
       // Invalidation is passive: page retirement and other workspace writes must

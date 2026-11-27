@@ -61,12 +61,13 @@ def test_direct_or_incremental_progress_has_one_highlight_and_no_repeat_badges(c
     receipt(app, alice, 20, 21)
     receipt(app, alice, 1, 22)
     data = person(app, "alice")
-    assert data["points"] == 100
-    assert data["score_breakdown"] == {"progress": 0, "early_recovery": 100, "scheme_contributions": 0, "note_contributions": 0, "bounty_points": 0}
+    expected = 100 * len(achieved)
+    assert data["points"] == expected
+    assert data["score_breakdown"] == {"progress": 0, "early_recovery": expected, "scheme_contributions": 0, "note_contributions": 0, "bounty_points": 0}
     assert pairs(data["first_ten"]["highlights"]) == [(20, 1)]
     assert len(data["first_ten"]["history"]) == len(achieved)
     assert data["first_ten"]["history"][0]["submission_id"] == achieved[-1]["submission_id"]
-    assert sum(row["counts_toward_bonus"] for row in data["first_ten"]["history"]) == 1
+    assert sum(row["counts_toward_bonus"] for row in data["first_ten"]["history"]) == len(achieved)
     assert history(app)["milestones"] == data["first_ten"]["history"]
 
 
@@ -142,11 +143,11 @@ def test_profile_and_paged_award_flags_ignore_display_release_selection(current_
         monkeypatch.setitem(registry.CURRENT, "teaching-dh-kem", display_version)
         data = person(app, "alice")
         page = history(app)["milestones"]
-        assert data["points"] == 100
+        assert data["points"] == 200
         assert data["records"][0]["scheme_version"] == display_version
         assert data["first_records"][0]["submission_id"] == highest["submission_id"]
         for rows in (data["first_ten"]["history"], page):
-            assert [row["submission_id"] for row in rows if row["counts_toward_bonus"]] == [earned["submission_id"]]
+            assert [row["submission_id"] for row in rows if row["counts_toward_bonus"]] == [highest["submission_id"], earned["submission_id"]]
         assert data["first_ten"]["history"] == page
 
 

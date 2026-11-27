@@ -66,7 +66,7 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
   });
   await test('unrelated participant writes keep evidence while unknown writes and access rotation clear it', async () => {
     const app = await fixture(); await app.navigate('#scheme/cache-0/1');
-    for (const [path, method] of [['/api/notebook/notes', 'POST'], ['/api/notebook/notes/note-id/revisions', 'POST'], ['/api/notebook/notes/note-id/publication-requests', 'POST'], ['/api/me/profile', 'PUT'], ['/api/challenges', 'POST'], ['/api/challenges/challenge-id/submit', 'POST']]) {
+    for (const [path, method] of [['/api/notebook/notes', 'POST'], ['/api/notebook/notes/note-id/rating', 'POST'], ['/api/notebook/notes/note-id/revisions', 'POST'], ['/api/notebook/notes/note-id/publication-requests', 'POST'], ['/api/me/profile', 'PUT'], ['/api/challenges', 'POST'], ['/api/challenges/challenge-id/submit', 'POST']]) {
       await app.sandbox.api(path, {}, {method});
       await app.navigate('#about'); await app.navigate('#scheme/cache-0/1');
       assert.equal(points(app).length, 1); assert.equal(reads(app).length, 1, path);

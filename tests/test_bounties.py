@@ -10,7 +10,8 @@ from sqlalchemy import func, select
 from crucible import beta_access, bounty_allowance as allowance, registry
 from crucible.app import create_app
 from crucible.bounty_models import (BountyAllowanceEvent as Event, BountyAward, BountyDecision,
-                                   BountyPolicy, BountySubmission, BountyTask, BountyWallet)
+                                   BountyPolicy, BountySubmission, BountyTask, BountyWallet,
+                                   BountyWriteReceipt)
 from crucible.config import Settings
 from crucible.db import User
 from test_notebook import Actor, create as create_note, request_publication, approve, content
@@ -170,6 +171,78 @@ def test_decline_and_withdraw_return_reservation_once_without_reward(system):
         assert session.scalar(select(func.count()).select_from(BountyAward))==0
 
 
+@pytest.mark.parametrize('state',['draft','changes_requested'])
+def test_pre_admission_withdrawal_remains_available(system,state):
+    _,owner,reviewer,*_=system
+    value=create(owner)
+    if state=='changes_requested':
+        value=decision(reviewer,request(owner,value),'changes_requested')
+        value=owner.client.get('/api/bounties/'+value['bounty']['id']).json()
+    assert value['bounty']['capabilities']['withdraw'] is True
+    assert value['bounty']['capabilities']['cancel'] is False
+    path='/api/bounties/'+value['bounty']['id']+'/withdrawals'
+    payload=body(value,reason='Withdraw this proposal before admission.')
+    first=post(owner,path,payload)
+    assert first['bounty']['status']=='withdrawn' and available(owner)==10
+    assert post(owner,path,payload)['receipt']==first['receipt']
+
+
+@pytest.mark.parametrize('boost_units',[0,3])
+def test_owner_cannot_cancel_admitted_bounty_or_refund_allocations(system,boost_units):
+    app,owner,reviewer,solver,supporter,*_=system
+    value=opened(system)
+    if boost_units:value=boost(supporter,value,boost_units)
+    path='/api/bounties/'+value['bounty']['id']
+    detail=owner.client.get(path).json()['bounty']
+    assert detail['capabilities']['cancel'] is False
+    assert detail['capabilities']['withdraw'] is False
+    listed=owner.client.get('/api/bounties').json()['bounties'][0]
+    assert listed['capabilities']['cancel'] is False
+
+    def snapshot():
+        with app.state.db.transaction() as session:
+            return {model.__tablename__:list(session.execute(select(model.__table__).order_by(
+                *model.__table__.primary_key.columns)).mappings()) for model in
+                (BountyTask,Event,BountyWallet,BountyWriteReceipt,BountyAward,BountyDecision,BountySubmission)}
+
+    before=snapshot()
+    payload=body(value,reason='An old client still offers cancellation.')
+    for _ in range(2):
+        failure=post(owner,path+'/cancellations',payload,409)
+        assert 'cannot be cancelled after admission' in failure['detail']
+    # Withdrawal is not an alternative way to revoke an admitted task.
+    post(owner,path+'/withdrawals',payload,409)
+    post(supporter,path+'/cancellations',payload,403)
+    assert snapshot()==before
+    assert owner.client.get(path).json()['bounty']==detail
+    assert available(owner)==9 and available(supporter)==10-boost_units
+
+
+def test_historical_cancelled_bounty_and_exact_receipt_remain_readable(system):
+    app,owner,reviewer,solver,*_,now=system
+    value=opened(system);task_id=value['bounty']['id']
+    payload=body(value,reason='Historical cancellation before owner cancellation was retired.')
+    # Represent a record committed by the previous runtime; the new endpoint
+    # cannot create this state, but must preserve its visibility and retries.
+    with app.state.db.transaction(write=True) as session:
+        task=session.get(BountyTask,task_id)
+        task.status='cancelled';task.version+=1;task.sequence+=1
+        effect={'action':'cancel','task_id':task_id,'version':task.version,
+                'created_at':now[0],'reason':payload['reason'],'refunds':[]}
+        session.add(BountyWriteReceipt(user_id=owner.identifier,idempotency_key=payload['idempotency_key'],
+            request_sha256=allowance.digest({'action':'cancel','task_id':task_id,
+                'body':{key:val for key,val in payload.items() if key!='idempotency_key'}}),
+            task_id=task_id,effect=effect,created_at=now[0]))
+    path='/api/bounties/'+task_id
+    retry=post(owner,path+'/cancellations',payload)
+    assert retry['receipt']==effect and retry['bounty']['status']=='cancelled'
+    assert retry['bounty']['capabilities']['cancel'] is False
+    assert solver.client.get(path).json()['bounty']['status']=='cancelled'
+    assert task_id in {row['id'] for row in solver.client.get('/api/bounties?status=past').json()['bounties']}
+    post(owner,path+'/cancellations',body(retry,reason='A new request is not a historical retry.'),409)
+    assert available(owner)==9
+
+
 def test_revision_feedback_keeps_one_reservation_and_frozen_terms_do_not_edit(system):
     _,owner,reviewer,*_=system
     value=decision(reviewer,request(owner,create(owner)),'changes_requested')
@@ -214,7 +287,7 @@ def test_earlier_unresolved_claim_blocks_later_award_until_recorded_rejection(sy
     assert value['bounty']['award']['submission_id']==second
 
 
-def test_only_one_active_claim_and_no_owner_or_unpublished_claim(system):
+def test_only_one_active_claim_and_no_unpublished_claim(system):
     _,owner,reviewer,solver,*_=system
     value=opened(system);note=create_note(solver)
     pin={'note_id':note['id'],'revision':note['revision'],'content_sha256':note['content_sha256']}
@@ -222,7 +295,18 @@ def test_only_one_active_claim_and_no_owner_or_unpublished_claim(system):
     post(solver,path,body(value,terms_sha256=value['bounty']['terms_sha256'],contribution_note=pin,claim='solution',explanation='A result.'),409)
     value=submit(solver,value,published(solver,reviewer))
     post(solver,path,body(value,terms_sha256=value['bounty']['terms_sha256'],contribution_note=published(solver,reviewer),claim='solution',explanation='Another result.'),409)
-    post(owner,path,body(value,terms_sha256=value['bounty']['terms_sha256'],contribution_note=published(owner,reviewer),claim='solution',explanation='Own result.'),403)
+
+
+def test_poster_may_solve_own_admitted_bounty_but_needs_independent_review(system):
+    _, owner, reviewer, *_ = system
+    value = opened(system)
+    assert value['bounty']['capabilities']['submit'] is True
+    value = submit(owner, value, published(owner, reviewer))
+    sid = value['receipt']['submission_id']
+    path = '/api/bounties/' + value['bounty']['id'] + '/submissions/' + sid + '/decisions'
+    post(owner, path, body(value, kind='pipeline', decision='approved', reason='My own solution.'), 403)
+    value = assess(reviewer, value, 'pipeline', submission_id=sid)
+    assert value['bounty']['award']['submission_id'] == sid
 
 
 def test_proposal_owner_and_solver_cannot_supply_pipeline_approval(system):
@@ -250,7 +334,8 @@ def test_retired_poster_decisions_do_not_change_the_task_or_journal(system):
 def test_month_boundary_refunds_stay_expired_and_grants_do_not_accumulate(system):
     app,owner,reviewer,solver,supporter,_,now=system
     pending=request(owner,create(owner))
-    value=boost(supporter,opened(system),2)
+    value=submit(solver,opened(system),published(solver,reviewer));sid=value['receipt']['submission_id']
+    value=boost(supporter,value,2);boost_id=value['receipt']['boost_id']
     assert available(owner)==8 and available(supporter)==8
     now[0]=datetime(2026,11,1,tzinfo=timezone.utc).timestamp()
     # Renew fixture browser sessions; normal sessions also expire independently.
@@ -259,14 +344,16 @@ def test_month_boundary_refunds_stay_expired_and_grants_do_not_accumulate(system
     assert available(owner)==10 and available(supporter)==10
     decision(reviewer,pending,'declined')
     assert available(owner)==10
-    value=post(owner,'/api/bounties/'+value['bounty']['id']+'/cancellations',body(value,reason='Close this unclaimed task.'))
-    assert value['receipt']['refunds']==[{'units':2,'available_units':0,'original_month':'2026-10'}]
+    value=assess(reviewer,value,'pipeline',submission_id=sid)
+    assert value['bounty']['status']=='completed' and value['bounty']['award']['points']==100
     assert available(supporter)==10
     allowance.grant_current_month(app.state.db,app.state.settings,now=now[0])
     allowance.grant_current_month(app.state.db,app.state.settings,now=now[0])
     with app.state.db.transaction() as session:
         assert session.scalar(select(func.count()).select_from(Event).where(Event.kind=='grant',Event.month=='2026-11'))==5
         assert session.scalar(select(Event.available_delta).where(Event.kind=='release',Event.original_event_id==pending['receipt']['reservation_id']))==0
+        refund=session.scalar(select(Event).where(Event.kind=='refund',Event.original_event_id==boost_id))
+        assert (refund.units,refund.available_delta,refund.month)==(2,0,'2026-10')
 
 
 def test_concurrent_retries_have_one_effect_and_spending_never_goes_negative(system):
@@ -397,12 +484,15 @@ def test_boost_units_are_bounded_positive_integers(system,units):
 
 def test_no_same_month_refund_or_expiry_can_increase_original_budget(system):
     _,owner,reviewer,solver,supporter,*_=system
-    value=boost(supporter,opened(system),3)
+    value=submit(solver,opened(system),published(solver,reviewer));sid=value['receipt']['submission_id']
+    value=boost(supporter,value,3)
     assert available(supporter)==7
-    path='/api/bounties/'+value['bounty']['id']+'/cancellations';b=body(value,reason='Cancel unclaimed task.')
-    first=post(owner,path,b);post(owner,path,b)
+    path='/api/bounties/'+value['bounty']['id']+'/submissions/'+sid+'/decisions'
+    b=body(value,kind='pipeline',decision='approved',reason='Independent review of the exact winning evidence.')
+    first=post(reviewer,path,b)
+    assert post(reviewer,path,b)['receipt']==first['receipt']
     assert available(supporter)==10
-    assert first['receipt']['refunds']==[{'units':3,'available_units':3,'original_month':'2026-10'}]
+    assert first['bounty']['award']['points']==100
     history=supporter.client.get('/api/me/bounty-allowance').json()['ledger']
     assert len([row for row in history if row['kind']=='refund'])==1
     assert sum(row['available_delta'] for row in history)==10

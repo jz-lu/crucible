@@ -40,7 +40,7 @@ function summaryPage(url,records){
 }
 async function filterNotes(app,value){const select=app.root.querySelector('[name="visibility"]');select.value=value;select.dispatchEvent({type:'change'});await flush();}
 async function searchNotes(app,value){app.q('search').value=value;app.q('search').dispatchEvent({type:'input'});await app.advanceTimers(250);}
-async function boot({account=user,respond,stored=null,mapFactory,currentReleases,session,digest,reviewOnly=false,researchWorkspace=emptyResearch,initialParams=new URLSearchParams(),onMount}={}) {
+async function boot({account=user,respond,stored=null,mapFactory,currentReleases,session,digest,reviewOnly=false,readerTools=false,researchWorkspace=emptyResearch,initialParams=new URLSearchParams(),onMount}={}) {
   const app=await createApp({schemes:[],hash:'#about'});let current=account;const requests=[],storage=[];
   const timers=new Map();let timerId=0;
   app.sandbox.setTimeout=(fn,delay=0)=>{const id=++timerId;timers.set(id,{fn,delay});return id;};
@@ -54,7 +54,7 @@ async function boot({account=user,respond,stored=null,mapFactory,currentReleases
   const api=async(url,body,options)=>{requests.push({url,body,options});if(respond){const result=await respond(url,body,options);if(result!==undefined)return url==='/map/notes.json'?vm.runInContext('('+JSON.stringify(result)+')',app.sandbox):result;}if(url==='/notebook/request-types.json')return requestTypes;if(url==='/api/notebook/curated-note-numbers')return{numbers:Object.fromEntries(researchWorkspace.notes.map((source,index)=>['curated:'+source.id,index+1]))};if(url.startsWith('/api/notebook/research-requests?source_note_id='))return{requests:[],next_after:null};if(url==='/map/notes.json')return vm.runInContext('('+JSON.stringify(researchWorkspace)+')',app.sandbox);if(url.startsWith('/api/notebook/notes?'))return summaryPage(url,researchWorkspace.notes.map(curatedSummary));if(url.startsWith('/api/notebook/notes/note-one'))return{note:note()};throw Error('Unexpected '+url);};
   let controller,navigationTask=Promise.resolve();
   const navigate=route=>{app.history.pushState(null,'',route);navigationTask=controller.show(new URLSearchParams(route.split('?')[1]||''));return navigationTask;};
-  controller=app.sandbox.window.CrucibleNotebook.mount(root,{api,account:()=>current,navigate,mapFactory,currentReleases,session,reviewOnly});
+  controller=app.sandbox.window.CrucibleNotebook.mount(root,{api,account:()=>current,navigate,mapFactory,currentReleases,session,reviewOnly,readerTools});
   const q=name=>root.querySelector(`[data-nb="${name}"]`);
   onMount?.({root,q});
   await controller.show(initialParams);
@@ -304,11 +304,12 @@ const lists=app=>app.requests.filter(row=>row.url.startsWith('/api/notebook/note
   late.resolve({notes:[rows[25]],next_after:null});await flush();assert.match(app.q('list').textContent,/Row 25/);
   assert.equal(app.requests.some(row=>row.url==='/map/notes.json'||row.url.startsWith('/api/notebook/notes/item-')),false);
  });
- await test('curated body intent starts only on expansion and paint does not wait for secondary status',async()=>{
+ // Explicit auxiliary-tool coverage; actual application mounts leave readerTools off.
+ await test('curated body intent starts only on an explicit reading intent and paint does not wait for secondary status',async()=>{
   const source=curatedFixture('source','Readable curated body'),status=deferred(),statusEntered=deferred();
-  const app=await boot({researchWorkspace:{...emptyResearch,notes:[source]},respond:url=>{if(url.startsWith('/api/notebook/research-requests?source_note_id=')){statusEntered.resolve();return status.promise;}}});
+  const app=await boot({readerTools:true,researchWorkspace:{...emptyResearch,notes:[source]},respond:url=>{if(url.startsWith('/api/notebook/research-requests?source_note_id=')){statusEntered.resolve();return status.promise;}}});
   assert.equal(app.requests.some(row=>row.url==='/map/notes.json'),false);
-  app.q('list').querySelector('.nb-expand').click();await flush();assert.equal(app.requests.filter(row=>row.url==='/map/notes.json').length,1);
+  app.q('list').querySelector('.nb-title').dispatchEvent({type:'pointerenter'});await flush();assert.equal(app.requests.filter(row=>row.url==='/map/notes.json').length,1);
   const showing=app.show('curated:source');await within(statusEntered.promise,'curated status request');const body=app.q('full').querySelector('.nb-body');assert.match(body.textContent,/Argument as text/);
   assert.equal(byText(app.q('full'),'Propose a change').disabled,true);const cite=byText(app.q('full'),'Cite this note');cite.focus();
   status.resolve({requests:[],next_after:null});await showing;assert.equal(app.q('full').querySelector('.nb-body'),body);assert.equal(app.document.activeElement,cite);assert.equal(byText(app.q('full'),'Propose a change').disabled,false);
@@ -317,7 +318,7 @@ const lists=app=>app.requests.filter(row=>row.url.startsWith('/api/notebook/note
  await test('curated secondary failures preserve body and disabled actions but revoked reads clear it',async()=>{
   for(const code of [503,403]){
    const source=curatedFixture('source','Curated text'),status=deferred(),statusEntered=deferred(),digestEntered=deferred(),digestRelease=deferred();let reads=0;
-   const app=await boot({researchWorkspace:{...emptyResearch,notes:[source]},
+   const app=await boot({readerTools:true,researchWorkspace:{...emptyResearch,notes:[source]},
     digest:async(...args)=>{digestEntered.resolve();await digestRelease.promise;return require('node:crypto').webcrypto.subtle.digest(...args);},
     respond:url=>{if(url.startsWith('/api/notebook/research-requests?source_note_id=')){statusEntered.resolve();return ++reads===1?status.promise:{requests:[],next_after:null};}}});
    const showing=app.show('curated:source');await within(digestEntered.promise,'curated digest');await flush();
@@ -326,13 +327,36 @@ const lists=app=>app.requests.filter(row=>row.url.startsWith('/api/notebook/note
    const body=app.q('full').querySelector('.nb-body');assert.ok(body,'Prepared body must paint before secondary status completes');
    status.reject(Object.assign(Error('Denied or unavailable'),{status:code}));await showing;
    if(code===403){assert.equal(app.q('full').querySelector('.nb-body'),null);assert.equal(byText(app.q('full'),'Propose a change'),undefined);}
-   else {assert.equal(app.q('full').querySelector('.nb-body'),body);assert.equal(byText(app.q('full'),'Propose a change'),undefined);byText(app.q('full'),'Retry request status').click();await flush();assert.equal(app.q('full').querySelector('.nb-body'),body);assert.equal(byText(app.q('full'),'Propose a change').disabled,false);}
+   else {assert.equal(app.q('full').querySelector('.nb-body'),body);assert.equal(byText(app.q('full'),'Propose a change').disabled,true);byText(app.q('full'),'Retry request status').click();await flush();assert.equal(app.q('full').querySelector('.nb-body'),body);assert.equal(byText(app.q('full'),'Propose a change').disabled,false);}
   }
  });
  await test('late curated status cannot change another reader or signed-out content',async()=>{
   const source=curatedFixture('source','Curated text'),status=deferred(),statusEntered=deferred();const app=await boot({researchWorkspace:{...emptyResearch,notes:[source]},respond:url=>{if(url.startsWith('/api/notebook/research-requests?source_note_id=')){statusEntered.resolve();return status.promise;}}});
   const showing=app.show('curated:source');await within(statusEntered.promise,'curated status request');assert.ok(app.q('full').querySelector('.nb-body'));
   app.setAccount(null);status.resolve({requests:[curatedRequest(source)],next_after:null});await showing;assert.equal(app.q('full').textContent,'');
+ });
+ await test('default curated reader refreshes authenticated status without adding tool panels or repainting the body',async()=>{
+  const source=curatedFixture('source','A curated explanation'),status=deferred(),entered=deferred();
+  const app=await boot({researchWorkspace:{...emptyResearch,notes:[source]},respond:url=>{if(url.startsWith('/api/notebook/research-requests?source_note_id=')){entered.resolve();return status.promise;}}});
+  const showing=app.show('curated:source');await within(entered.promise,'default curated status');
+  const body=app.q('full').querySelector('.nb-body'),title=app.q('full').querySelector('.nb-full-title');title.focus();
+  assert.ok(body);assert.equal(app.q('full').querySelector('.nb-requests'),null);
+  status.resolve({requests:[curatedRequest(source)],next_after:null});await showing;
+  assert.equal(app.q('full').querySelector('.nb-body'),body);assert.equal(app.document.activeElement,title);
+  assert.match(app.q('full').querySelector('.nb-reader-status').textContent,/Proposal/);
+  for(const selector of ['.nb-requests','.nb-related','.nb-record'])assert.equal(app.q('full').querySelector(selector),null);
+  assert.equal(app.requests.some(row=>row.body),false);
+ });
+ await test('default curated status failures retain content only for temporary errors and clear denied reads',async()=>{
+  for(const code of [503,403]){
+   const source=curatedFixture('source','A curated explanation'),status=deferred(),entered=deferred();
+   const app=await boot({researchWorkspace:{...emptyResearch,notes:[source]},respond:url=>{if(url.startsWith('/api/notebook/research-requests?source_note_id=')){entered.resolve();return status.promise;}}});
+   const showing=app.show('curated:source');await within(entered.promise,'default curated error');
+   const body=app.q('full').querySelector('.nb-body');assert.ok(body);
+   status.reject(Object.assign(Error('Status unavailable'),{status:code}));await showing;
+   assert.equal(app.q('full').querySelector('.nb-body'),code===403?null:body);
+   assert.equal(app.q('full').querySelector('.nb-requests'),null);
+  }
  });
  await test('large body cache pressure evicts bodies before bounded summary and timeline entries',async()=>{
   const rows=[indexRow('one')];const large=id=>note({id,content:{...content('Large '+id),body:'x'.repeat(800000)}});

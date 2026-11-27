@@ -1,0 +1,81 @@
+Proposal implementation tracking
+================================
+
+Scientific review and implementation progress are separate records. A scheme
+proposal still needs independent approval; other change proposals need a
+recommendation. Neither decision publishes a note or activates a scheme.
+
+After a qualifying decision, the derived implementation state is Awaiting
+implementation. An independent configured reviewer can record In progress,
+then Completed with a concrete summary and at least one evidence reference.
+While work is In progress, reviewers can record further updates with a changed
+summary or evidence. An identical update is recovered through its original
+idempotency key rather than added again. Completed work must be reopened before
+recording more work; repeated completion events are rejected.
+Reopening requires an explanation. Every event is retained;
+there is no overwrite endpoint. The author can read progress but cannot mark
+their own proposal completed. The updater is shown as Updated by, not an
+invented assigned implementer. Source checks are assessments, not changes to
+implement, so they do not enter this queue.
+
+Events pin the exact scheme-review ID (and specification hash) or research
+assessment (and frozen packet hash). A revised scheme proposal starts a fresh
+review; old implementation history does not transfer to it. Retracted or
+superseded decisions reject new updates. Review decisions and their existing
+evidence remain unchanged. Replays recover the original event receipt, even
+if newer progress has since been recorded. Concurrent updates require the
+same expected last-event ID and only one can advance the record.
+
+Completion is a reviewer's record of follow-through, not a deployment receipt
+or mathematical certification. Evidence should identify the change actually
+made: an exact commit, merged pull request, validation report, released scheme
+identity, or exact supporting note revision as appropriate. For a hosted code
+change, include the release/verification receipt as well as the implementation.
+The service validates safe references and exact internal note access; it does
+not fetch external URLs or establish that an external claim is true. Numerical
+challenge activation, code deployments, publication and points remain separate
+existing procedures. No credentials, worker, paid provider or new service is
+introduced.
+
+API and access
+--------------
+GET /api/proposal-implementations?scope=review|mine&limit=25&after=...
+  The review queue is for configured reviewers. Mine returns only the current
+  author's proposals. Both include approved/recommended changes, including
+  completed items, with compact progress metadata and bounded pagination.
+
+GET /api/proposal-implementations/{scheme|research}/{target_id}
+  Only the author and configured reviewers can read it. An optional decision_id
+  selects preserved historical scheme progress. Existing proposal detail
+  responses include the same implementation record. Note request labels are
+  augmented in one bounded batch without exposing private review packets.
+
+POST /api/proposal-implementations/{scheme|research}/{target_id}/events
+  Browser session, current beta membership, CSRF and independent configured
+  reviewer required. Bearer agent credentials cannot gain reviewer authority.
+  Body: decision_id, expected_event_id (null for first event), status
+  (in_progress/completed), summary, evidence [{label,url}], idempotency_key.
+  Returns implementation (current state) and event (the exact durable receipt).
+  Evidence supports HTTPS URLs and the existing exact notebook citation syntax,
+  including a single note_section, location, statement or argument locator.
+  Internal note references must be available to the proposer and reviewer;
+  they never grant either account new access. A passage locator is a reader
+  aid, not evidence that the passage supports the completion claim.
+
+Release and recovery
+--------------------
+Migration 0034 adds one empty append-only event table with explicit decision
+foreign keys. It changes no existing account, note, review, challenge or score.
+Use the normal checked schema-release process before deploying code requiring
+the new table. This additive migration alone does not establish uninterrupted
+old/new runtime compatibility; current startup checks are still enforced.
+Downgrade refuses to drop recorded implementation history. Back up and follow
+the maintained operations runbook for any future hosted rollout.
+
+Validation
+----------
+Run tests/test_proposal_implementation.py and
+tests/test_proposal_implementation_migration.py, plus the neighboring proposal,
+research-review, retraction and frontend review-center tests. Native crypto
+artifacts are required by the app test fixtures, but these tests never execute
+submitted code or change a scientific runtime.

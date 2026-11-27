@@ -5,6 +5,7 @@ from sqlalchemy import and_, or_, select, true
 from sqlalchemy.orm import aliased
 
 from . import publication_screening_models  # Register durable models before create_all.
+from . import notebook_visibility
 
 
 def approved_clause(*, allow_development=False):
@@ -25,7 +26,8 @@ def approved_clause(*, allow_development=False):
         .correlate(Publication).exists())
     return and_(Publication.decision == "approved", or_(human, automatic),
                 or_(Publication.test_only_self_review.is_(False), allow_development),
-                Publication.revision_id.not_in(withdrawn_ids()))
+                Publication.revision_id.not_in(withdrawn_ids()),
+                Publication.revision_id.not_in(notebook_visibility.hidden_ids()))
 
 
 def public_policy(settings):

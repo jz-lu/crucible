@@ -116,12 +116,15 @@
     if (route.page === 'activity') {
       const requested = new URLSearchParams((window.location?.hash || '').split('?')[1] || '').get('kind');
       const kind = requested === 'notes' ? 'notes' : requested === 'bounties' && bountyAvailable() ? 'bounties' : 'schemes';
+      root.setAttribute('data-pending-activity', kind);
       for (const name of ['schemes', 'bounties', 'notes']) {
         const tab = document.querySelector('#activity-frame [data-activity-frame-kind=' + name + ']');
         if (tab) {tab.setAttribute('aria-pressed', String(kind === name)); tab.hidden = name === 'bounties' && !bountyAvailable();}
       }
       const link = document.querySelector('#activity-frame [data-activity-frame-link]');
-      if (link) link.textContent = kind === 'notes' ? 'All your notes →' : kind === 'bounties' ? 'All your bounties →' : 'Browse schemes →';
+      if (link) link.textContent = kind === 'notes' ? 'All your notes →' : kind === 'bounties' ? 'All your bounties →' : '';
+      const sectionHeading = document.querySelector('#activity-frame .activity-section-heading');
+      if (sectionHeading) sectionHeading.hidden = kind === 'schemes';
     }
     const notebookTitle = document.querySelector('#notebook-frame-template .nb-heading h1');
     if (notebookTitle) notebookTitle.textContent = route.title;

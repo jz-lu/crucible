@@ -17,7 +17,7 @@ from sqlalchemy.orm import defer
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.concurrency import run_in_threadpool
 
-from . import bounties, beta_access, generation, generation_policy, implementation_builds, standard_schemes, kem, machine_auth, method_sources, notebook, people, protocol_proposals, registry, research, research_reviews
+from . import bounties, beta_access, generation, generation_policy, implementation_builds, standard_schemes, kem, machine_auth, method_sources, notebook, people, proposal_implementation, protocol_proposals, registry, research, research_reviews
 from .config import ROOT, Settings, load_settings
 from .db import AdapterVersion, Base, Challenge, Database, LoginSession, Method, ProfileIncident, RateBucket, Submission, User
 from .schemas import Credentials, NewChallenge, NewMethod, NewSubmission
@@ -1070,6 +1070,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
             page = records[:limit]
             return {"submissions": [{**submission_data(record), **standard_schemes.profile_presentation(manifest), "profile_id": record.profile_id,
                     "scheme_id": scheme_id, "scheme_name": people._release_name(scheme_id, record.scheme_version),
+                    "instance_size": manifest.get("instance_size"),
                     "scheme_version": record.scheme_version, "round_id": record.round_id, "method_name": name}
                     for record, name, scheme_id, manifest in page],
                     "next_after": page[-1][0].id if len(records) > limit else None}
@@ -1092,6 +1093,10 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     def javascript(request: Request):
         return public_assets.response(request)
 
+    @app.get("/orientation.js")
+    def orientation_javascript(request: Request):
+        return public_assets.response(request)
+
     @app.get("/graph-points.js")
     @app.get("/resource-metrics.js")
     def resource_metrics_javascript(request: Request):
@@ -1106,6 +1111,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         return public_assets.response(request)
 
     @app.get("/proposal-retractions.js")
+    @app.get("/proposal-implementation.js")
     def proposal_retractions_script(request: Request):
         return public_assets.response(request)
 
@@ -1286,6 +1292,7 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
     notebook.register_routes(app, db, settings, clock, user_for, throttle)
     bounties.register_routes(app, db, settings, clock, user_for, throttle)
     research_reviews.register_routes(app, db, settings, clock, user_for, throttle)
+    proposal_implementation.register_routes(app, db, settings, clock, user_for, throttle)
     beta_access.register_routes(app, db, settings, clock, account_for, throttle, identity=identity)
     github_auth.register_routes(app, db, settings, clock, identity, issue_session, session_payload, password_operation, throttle)
     password_recovery.register_routes(app, db, settings, clock, identity, issue_session,

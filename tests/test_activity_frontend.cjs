@@ -29,18 +29,17 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
   assert.equal(app.$('#activity-notes-section').hidden,true);assert.equal(app.$('#activity-bounties-section').hidden,true);
   assert.equal(reads(app,'/api/notebook/notes').length,0);assert.equal(reads(app,'/api/bounties').length,0);
   assert.equal(reads(app,'/api/me/submissions')[0].url.searchParams.get('limit'),'25');
-  const row=rows(app,'schemes')[0];assert.match(row.textContent,/Fixture public name.*Incorrect.*Attack method/);
-  assert.equal(row.querySelector('.activity-preview').hidden,true);row.querySelector('.activity-toggle').click();
-  assert.equal(row.querySelector('.activity-preview').hidden,false);assert.equal(row.querySelector('.activity-toggle').getAttribute('aria-expanded'),'true');
-  assert.equal(row.querySelector('.activity-detail').getAttribute('aria-haspopup'),'dialog');
+  const row=rows(app,'schemes')[0];assert.match(row.textContent,/Fixture public name.*Incorrect/);
+  assert.equal(row.querySelector('.activity-preview'),null);
+  assert.equal(row.querySelector('.activity-toggle').getAttribute('aria-haspopup'),'dialog');
   assert.equal(app.requests.some(row=>row.options.method==='POST'),false);
  });
- await test('note previews preserve proposals, status and full-reader links without caching full bodies',async()=>{
+ await test('note rows preserve proposals, status and direct-reader links without caching full bodies',async()=>{
   const app=await boot({hash:'#activity?kind=notes',hook:(url,options,envelope)=>url.pathname==='/api/notebook/notes'?envelope({notes:[
     note('proposal',[],{proposal_revision:{requests:[{kind:'scheme_admission'}]},publication_status:'approved'}),
     note('ordinary',[],{publication_status:'cancelled'})],next_after:null}):undefined});
-  const entries=rows(app,'notes');assert.match(entries[0].textContent,/Proposed scheme.*Published/);assert.match(entries[1].textContent,/Publish request cancelled/);
-  assert.equal(entries[0].querySelector('.activity-detail').href,'#notebook?note=proposal&revision=2');
+  const entries=rows(app,'notes');assert.match(entries[0].textContent,/Proposed scheme/);assert.match(entries[1].textContent,/Publish request cancelled/);
+  assert.equal(entries[0].querySelector('.activity-toggle').href,'#notebook?note=proposal&revision=2');
   assert.equal(reads(app,'/api/notebook/notes')[0].url.searchParams.get('summary'),'true');
   assert.doesNotMatch(JSON.stringify(cache(app,'notes')),/PRIVATE FULL BODY/);
   assert.equal(reads(app,'/api/me/submissions').length,0);
@@ -48,8 +47,8 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
  await test('bounties retain authorship and contribution context with stable full-detail routes',async()=>{
   const app=await boot();await select(app,'bounties');
   assert.equal(app.$('#activity-schemes-section').hidden,true);assert.equal(app.$('#activity-bounties-section').hidden,false);
-  assert.match(rows(app,'bounties')[0].textContent,/Proposed by you/);assert.match(rows(app,'bounties')[0].querySelector('.activity-summary').textContent,/Task summary own/);assert.match(rows(app,'bounties')[1].textContent,/You contributed/);
-  assert.equal(rows(app,'bounties')[0].querySelector('.activity-detail').href,'#bounties?status=mine&bounty=own');
+  assert.match(rows(app,'bounties')[0].textContent,/Proposed by you/);assert.equal(rows(app,'bounties')[0].querySelector('.activity-preview'),null);assert.match(rows(app,'bounties')[1].textContent,/You contributed/);
+  assert.equal(rows(app,'bounties')[0].querySelector('a.activity-toggle').href,'#bounties?status=mine&bounty=own');
  });
  await test('cold rows use an inert quiet placeholder and failures retry only the selected list',async()=>{
   const held=deferred();let hold=true;const app=await boot({hash:'#activity?kind=notes',hook:url=>hold&&url.pathname==='/api/notebook/notes'?held.promise:undefined});
@@ -93,18 +92,18 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
   assert.equal(app.$('#history-content').querySelector('.activity-read-error'),null);
   assert.doesNotMatch(app.$('#history-content').textContent,/could not be loaded/);
  });
- await test('cached unchanged rows keep expansion, identity and focus during a quiet refresh',async()=>{
+ await test('cached unchanged rows keep identity and focus during a quiet refresh',async()=>{
   const held=deferred();let slow=false;const app=await boot({hash:'#activity?kind=notes',hook:url=>slow&&url.pathname==='/api/notebook/notes'?held.promise:undefined});
-  const row=rows(app,'notes')[0],toggle=row.querySelector('.activity-toggle');toggle.click();await app.navigate('#about');slow=true;await select(app,'notes');toggle.focus();
-  assert.equal(rows(app,'notes')[0],row);assert.equal(row.querySelector('.activity-preview').hidden,false);
+  const row=rows(app,'notes')[0],toggle=row.querySelector('.activity-toggle');assert.match(toggle.href,/#notebook\?note=attack/);await app.navigate('#about');slow=true;await select(app,'notes');toggle.focus();
+  assert.equal(rows(app,'notes')[0],row);assert.equal(row.querySelector('.activity-preview'),null);
   held.resolve(app.envelope({notes:[note('attack',['attack-analysis']),note('scheme',['proposal','scheme-description'])],next_after:null}));await flush();
   assert.equal(rows(app,'notes')[0],row);assert.equal(app.document.activeElement,toggle);
  });
- await test('changed rows preserve expanded state and restore focus after repaint',async()=>{
+ await test('changed rows restore focus after repaint',async()=>{
   let changed=false;const app=await boot({hash:'#activity?kind=notes',hook:(url,options,envelope)=>url.pathname==='/api/notebook/notes'?envelope({notes:[note('same',[],{publication_status:changed?'submitted':'private'})],next_after:null}):undefined});
-  const row=rows(app,'notes')[0];row.querySelector('.activity-toggle').click();row.querySelector('.activity-detail').focus();changed=true;
-  await app.sandbox.showActivity();const updated=rows(app,'notes')[0];assert.notEqual(updated,row);assert.equal(updated.querySelector('.activity-preview').hidden,false);
-  assert.equal(app.document.activeElement,updated.querySelector('.activity-detail'));assert.match(updated.textContent,/Publish request pending/);
+  const row=rows(app,'notes')[0];row.querySelector('.activity-toggle').focus();changed=true;
+  await app.sandbox.showActivity();const updated=rows(app,'notes')[0];assert.notEqual(updated,row);assert.equal(updated.querySelector('.activity-preview'),null);
+  assert.equal(app.document.activeElement,updated.querySelector('.activity-toggle'));assert.match(updated.textContent,/Publish request pending/);
  });
  await test('expired page data revalidates only the selected cursor, without restoring all earlier pages',async()=>{
   const app=await boot({hash:'#activity?kind=notes',hook:(url,options,envelope)=>url.pathname==='/api/notebook/notes'?envelope({notes:[note(url.searchParams.has('after')?'next':'first')],next_after:url.searchParams.has('after')?null:'cursor'}):undefined});

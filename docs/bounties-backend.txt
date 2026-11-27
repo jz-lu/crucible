@@ -28,8 +28,9 @@ or revocation blocks spending and grants; retries never create another grant.
 
 An admission request reserves one available unit. Revision-needed feedback and
 resubmission use the same reservation. Approval consumes it with no second debit.
-Final decline or pre-admission withdrawal releases it once. An admitted posting
-unit is not refunded merely because its owner later cancels the task.
+Final decline or pre-admission withdrawal releases it once. After admission the
+owner cannot cancel the task, whether or not it has received boosts or claims.
+The admitted posting unit remains consumed.
 
 Every refund belongs to its ORIGINAL UTC month. A same-month refund restores
 available units. A refund after that month records the returned allocation with
@@ -58,8 +59,8 @@ Independent reviewer qualification freezes the task and its provisional eligible
 offer. An approved claim settles immediately when no earlier unresolved claim
 blocks it and all final checks pass. A later qualified claim retains its submitted
 offer while earlier claims are resolved; qualification alone does not refund
-allocations. Proposer, solver and reviewer must be three distinct active accounts;
-the reviewer must still be configured. Completion requires no proposer sign-off.
+allocations. The reviewer must be distinct from both proposer and solver; all involved
+accounts must be active and the reviewer must still be configured. Completion requires no proposer sign-off.
 Agent tokens can never exercise reviewer authority. Historical proposer decisions
 remain readable audit records; new proposer-decision requests are refused.
 
@@ -119,8 +120,10 @@ POST .../boosts: explicitly spend the selected allowance units.
 POST .../submissions: exact contribution note and scoped claim.
 POST .../submissions/{id}/decisions: independent human reviewer decision
 (kind=pipeline). New kind=poster decisions return 410; historical records remain.
-POST .../cancellations: owner closes an open task with no unresolved claims,
-returning outstanding boosts under original-month expiry.
+POST .../cancellations: retained for old clients; new owner cancellation requests
+return 409 without changing the task, allowance or reward. capabilities.cancel
+is always false. Exact retries of a successful historical cancellation still
+return its recorded receipt; historical cancelled tasks remain readable.
 
 Initial operating limits
 ------------------------
@@ -159,3 +162,10 @@ empty installation with only the unchanged initial policy can be removed. A
 code rollback after migration must use an image whose startup schema check
 accepts the resulting schema. Keeping old account data does not by itself make
 an older strict-schema image a compatible rollback.
+
+Local human-interface refinement, 26 November 2026
+The ordinary reader omits contributions/submissions; the reviewer workspace
+retains submission assessment. The human form submits a solution only. Existing
+partial records and compatible agent inputs are retained, without new points.
+Task owners can submit and receive an award. The reviewer remains independent
+of both poster and solver; admission is not completion approval.

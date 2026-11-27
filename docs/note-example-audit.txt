@@ -1,0 +1,99 @@
+NOTES EXAMPLE AUDIT — 26 NOVEMBER 2026
+Local candidate only. No hosted records or scientific approvals changed.
+
+Scope and evidence
+------------------
+Inspected all 24 entries in the current local catalogue, the saved source of all
+eight scheme evidence notes, and the single-body and companion readers. Browser
+receipts and screenshots are in .local/reader-coherence-audit.json and
+.local/notes-redesign-qa/reader/. These are presentation checks, not an independent
+review of the mathematical claims.
+
+Findings
+--------
+1. The two source encodings had different reader containers. Contents was a
+   sidebar for companion explanations and a leading block for ordinary Markdown.
+   Both now use one article frame: sidebar on desktop, above the text on mobile.
+   Contents is derived from actual headings. Normal clicks stay in the article.
+
+2. The scheme evidence collection still contains substantial historical
+   structure: 81 companion sections, 73 registered statements, 39 arguments and
+   144 references across eight notes. All 73 definitions are inserted through
+   legacy statement markers. This is why styling only the newer Markdown examples
+   did not establish consistency across the site.
+
+3. Plain-section locs and registered statement identities are not interchangeable.
+   The preview now has persistent loc aliases for 19 eligible scheme sections.
+   Composite sections containing inserted definitions deliberately retain their
+   exact statement citations; they cannot be assigned a pure Markdown-range loc
+   without misdescribing the cited text. Those legacy references now have the
+   same bracketed, clickable margin treatment. A bracket is navigation, not proof
+   or an approval badge. Existing references have not been retargeted.
+
+4. A number of equations are too long for a narrow screen. Natural KaTeX group
+   breaks help, but long arrays and large delimited bounds remain unbreakable.
+   Ordinary inline math uses the text baseline. Only genuinely overwide inline
+   groups become separate pannable equations. There are no visible equation
+   scrollbars; oversized expressions remain
+   horizontally pannable instead of being clipped or shrunk to illegible text.
+   All 24 note pages fit a 390-pixel viewport in the subsequent browser check.
+   An authored multiline presentation is preferable in the rebuilt examples.
+
+5. Some notes are workflow fixtures, some are reading examples, and some are
+   compiled scheme evidence. This mix is useful for regression checks, but is
+   not a coherent introductory research collection. Several scheme notes repeat
+   a short description, formal definition and argument. Their long contents lists
+   are a symptom of that duplication. Correcting the data model and explanatory
+   writing is a separate task from changing CSS.
+
+6. Authorship labels are now shown throughout this isolated preview, as requested.
+   The fallback for previously unlabelled fixtures is a local presentation overlay,
+   not a change to their historical content hashes. One explicitly illustrative
+   Human–AI hybrid example demonstrates that candidate wording. Production does
+   not infer authorship. The overlay must not be carried into a hosted release.
+
+7. Publishing from a list used a reader-navigation callback. It now refreshes the
+   current list quietly, preserving its route and filters; publication from the
+   reader refreshes that reader. Confirmation and exact-revision retry behavior
+   remain intact.
+
+Recommended rebuilding sequence
+-------------------------------
+Do not erase the scientific source collection as a shortcut to a cleaner demo.
+Make a small candidate collection alongside it and review it one note at a time.
+Start with the finite-field Diffie–Hellman scheme because its agreement argument
+is short enough to check completely. Separate that proof from its recovery and
+hash-model premises; correctness is not evidence of secrecy.
+
+The first candidate should demonstrate:
+- One question, readable Markdown, explicit parameter domain, and a useful result.
+- A clearly stated assumption or theorem under an ordinary heading.
+- A loc allocated when that exact passage is actually cited.
+- The scheme's security/correctness view referring to the appropriate source,
+  with a return path and no duplicated editable definition.
+- Attribution and enough evidence for a second person or agent to reproduce it.
+
+Then add a second note challenging or refining the same premise. This tests real
+relationships rather than more isolated examples. After that, add a numerical
+observation, a proposal and a bounty submission, only as needed to exercise each
+workflow. The small working collection should include short and long notes,
+single-body and AI-detail cases, and private/in-review/published states.
+
+Acceptance checks for each candidate
+-----------------------------------
+Readable without knowledge of internal IDs. Conditions accompany the claim they
+qualify. Equations are deliberately split for narrow screens. Exact links select
+the intended source and do not change on edit. The agent sees the same claim and
+conditions as the human. No duplicate statement definition drifts separately from
+its heading. Scheme adoption remains a reviewed scientific action, never a UI
+side effect. Authors can edit, publish and retract without unexpected navigation.
+
+Next checkpoint
+---------------
+Review one reconstructed scheme-linked note before copying its structure across
+the other seven schemes. Bulk deletion or wholesale automatic conversion would
+hide precisely the source/binding issues this audit found.
+
+27 November follow-up: the earlier P.N click allocation described above is
+superseded by deterministic hierarchical references. See notes-reading-design.txt.
+Historical research content is preserved, not converted in place.

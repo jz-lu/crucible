@@ -17,10 +17,10 @@ def tags(actor, query=''):
 
 def test_tag_suggestions_use_latest_visible_revisions_and_curated_research(system, curated):
     _, owner, reviewer, reader, _ = system
-    saved = create(owner, content(tags=['private-only']))
-    shared = revise(owner, saved, content(tags=['shared-topic', 'a,b', '100%_literal']))
+    saved = create(owner, content(tags=['private-only', 'ai-written']))
+    shared = revise(owner, saved, content(tags=['shared-topic', 'a,b', '100%_literal', 'ai-written']))
     request_publication(owner, shared); approve(reviewer, shared)
-    revise(owner, shared, content(tags=['PRIVATE_LATER_SECRET']))
+    revise(owner, shared, content(tags=['PRIVATE_LATER_SECRET', 'ai-written']))
     assert tags(reader, 'shared') == ['shared-topic']
     assert tags(reader, 'private') == []
     assert tags(owner, 'PRIVATE_LATER') == ['PRIVATE_LATER_SECRET']
@@ -34,18 +34,18 @@ def test_tag_suggestions_use_latest_visible_revisions_and_curated_research(syste
 def test_tag_search_covers_notes_beyond_any_page_and_deduplicates(system, curated):
     _, owner, _, reader, _ = system
     seed_notes(owner, 80, values=lambda i: {'tags':['needle' if i == 1 else 'other']})
-    create(owner, content(tags=['Needle', 'needle-point', 'a-needle']))
+    create(owner, content(tags=['Needle', 'needle-point', 'a-needle', 'ai-written']))
     assert tags(owner, 'needle') == ['Needle', 'needle-point', 'a-needle']
     assert tags(reader, 'needle') == []
     for i in range(3):
-        create(owner, content(tags=[f'subject-{j + i * 40:03}' for j in range(40)]))
+        create(owner, content(tags=[f'subject-{j + i * 40:03}' for j in range(1, 40)] + ['ai-written']))
     assert len(tags(owner, 'subject-')) == 50
     assert tags(owner, 'subject-119') == ['subject-119']
 
 
 def test_tag_endpoint_requires_browser_access_and_omits_trash(system, curated):
     app, owner, _, _, _ = system
-    saved = create(owner, content(tags=['discarded-tag']))
+    saved = create(owner, content(tags=['discarded-tag', 'ai-written']))
     delete(owner, saved)
     assert tags(owner, 'discarded') == []
     assert TestClient(app).get('/api/notebook/tags').status_code == 401

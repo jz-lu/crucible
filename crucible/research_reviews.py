@@ -154,6 +154,7 @@ def register_routes(app, db, settings, clock, user_for, throttle):
         return record
 
     def serialize(session, record, user, *, detail=True):
+        from . import proposal_implementation
         if notebook_moderation.packet_is_withheld(session, record, user, settings):
             return {'id': record.id, 'purpose': record.purpose, 'title': 'Review packet withheld',
                 'created_at': record.created_at, 'question': notebook_moderation.NOTICE,
@@ -181,7 +182,11 @@ def register_routes(app, db, settings, clock, user_for, throttle):
                 **({'primary_source': {key: record.sources[0][key] for key in ('note_id', 'revision', 'content_sha256')}} if not detail else {}),
                 'can_review': not retired and not assessment and withdrawal is None and protocol_proposals.is_reviewer(settings, user) and
                     (not self_review or protocol_proposals.can_self_review(settings, user)),
-                'self_review': self_review, 'scope': SCOPE}
+                'self_review': self_review, 'scope': SCOPE,
+                'implementation': ((proposal_implementation.for_record(session, 'research', record, user, settings)
+                    if detail else proposal_implementation.compact(session, 'research', record))
+                    if record.purpose in PROPOSAL_PURPOSES and assessment and assessment.outcome == 'recommend'
+                    and not assessment.test_only_self_review and withdrawal is None else None)}
 
     @app.post('/api/notebook/research-requests')
     def create_request(body: RequestInput, request: Request):

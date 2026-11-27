@@ -52,10 +52,10 @@ def history_snapshot(app):
 @pytest.mark.parametrize('state', ['pending', 'accepted', 'dismissed'])
 def test_existing_private_grants_never_expose_notes_or_future_edits(system, state):
     app, owner, reviewer, reader, _ = system
-    first = create(owner, content(title='PRIVATE_EARLIER', tags=['private-marker']))
-    second = revise(owner, first, content(title='PRIVATE_GRANTED', tags=['private-marker']))
+    first = create(owner, content(title='PRIVATE_EARLIER', tags=['private-marker', 'ai-written']))
+    second = revise(owner, first, content(title='PRIVATE_GRANTED', tags=['private-marker', 'ai-written']))
     seed_legacy_shares(owner, second, ['reader', 'reviewer'], state=state)
-    third = revise(owner, second, content(title='PRIVATE_FUTURE', tags=['private-marker']))
+    third = revise(owner, second, content(title='PRIVATE_FUTURE', tags=['private-marker', 'ai-written']))
     snapshot = history_snapshot(app)
     for actor in (reader, reviewer):
         assert actor.client.get(path(first)).status_code == 404
@@ -215,18 +215,19 @@ def test_sharing_migration_preserves_history_and_creates_no_grants(tmp_path, mon
             session.add(User(id=identifier, handle='preserved_author', password_hash='unchanged', created_at=1.0))
             session.flush()
             session.add(LoginSession(token_hash='f'*64, user_id=identifier, expires_at=1000.0))
-            session.add(notebook.NotebookNote(id=note_id, author_id=identifier, created_at=2.0,
+            session.execute(notebook.NotebookNote.__table__.insert().values(id=note_id, author_id=identifier, created_at=2.0,
                 latest_revision=1, idempotency_key=str(uuid4()), request_sha256='a'*64))
             session.flush()
-            session.add(notebook.NotebookRevision(id=revision_id, note_id=note_id, revision=1, created_at=2.0,
+            session.execute(notebook.NotebookRevision.__table__.insert().values(id=revision_id, note_id=note_id, revision=1, created_at=2.0,
                 content=content(), content_sha256=notebook._hash(content()), idempotency_key=str(uuid4()), request_sha256='b'*64))
         def snapshot():
             with db.engine.connect() as connection:
                 return {model.__tablename__: [dict(row) for row in connection.execute(select(model.__table__)).mappings()]
                         for model in (User, LoginSession, notebook.NotebookNote, notebook.NotebookRevision)}
         before = snapshot()
-        command.upgrade(config, 'head')
-        command.check(config)
+        # Test the sharing migration itself; later permanent numbering prevents
+        # downgrade through its allocation table once numbers have been used.
+        command.upgrade(config, '0014')
         assert snapshot() == before
         with db.transaction() as session:
             for model in (sharing.PrivateNoteShare, sharing.PrivateNoteShareChange):
@@ -261,11 +262,11 @@ def test_recipient_migration_preserves_existing_grants_as_accepted(tmp_path, mon
                 for identifier, handle in ((author_id, 'old_author'), (recipient_id, 'old_recipient'))])
             session.flush()
             session.add(LoginSession(token_hash='e'*64, user_id=recipient_id, expires_at=1000.0))
-            session.add(notebook.NotebookNote(id=note_id, author_id=author_id, created_at=2.0,
+            session.execute(notebook.NotebookNote.__table__.insert().values(id=note_id, author_id=author_id, created_at=2.0,
                 latest_revision=2, idempotency_key=str(uuid4()), request_sha256='a'*64))
             session.flush()
             for number in (1, 2):
-                session.add(notebook.NotebookRevision(id=str(uuid4()), note_id=note_id, revision=number,
+                session.execute(notebook.NotebookRevision.__table__.insert().values(id=str(uuid4()), note_id=note_id, revision=number,
                     created_at=number + 1.0, content=content(title=f'Preserved {number}'),
                     content_sha256=notebook._hash(content(title=f'Preserved {number}')),
                     idempotency_key=str(uuid4()), request_sha256='b'*64))
@@ -282,8 +283,7 @@ def test_recipient_migration_preserves_existing_grants_as_accepted(tmp_path, mon
                 return {table: [dict(row) for row in connection.execute(text('SELECT * FROM ' + table)).mappings()]
                         for table in tables}
         before = snapshot()
-        command.upgrade(config, 'head')
-        command.check(config)
+        command.upgrade(config, '0016')
         after = snapshot()
         assert all(after[table] == before[table] for table in tables[:-1])
         assert [{key: value for key, value in row.items() if key not in ('state', 'response_version')}

@@ -290,10 +290,12 @@ test('activity framing selects only public category labels and respects disabled
     f.window.CrucibleFeatures={bounties:enabled};
     for(const kind of ['schemes','bounties','notes'])f.nodes.set('#activity-frame [data-activity-frame-kind='+kind+']',element());
     f.nodes.set('#activity-frame [data-activity-frame-link]',element());
+    f.nodes.set('#activity-frame .activity-section-heading',element());
     f.window.CruciblePendingPage.apply();
     for(const kind of ['schemes','bounties','notes'])assert.equal(f.nodes.get('#activity-frame [data-activity-frame-kind='+kind+']').getAttribute('aria-pressed'),String(kind===expected));
     assert.equal(f.nodes.get('#activity-frame [data-activity-frame-kind=bounties]').hidden,!enabled);
-    assert.equal(f.nodes.get('#activity-frame [data-activity-frame-link]').textContent,expected==='notes'?'All your notes →':expected==='bounties'?'All your bounties →':'Browse schemes →');
+    assert.equal(f.nodes.get('#activity-frame [data-activity-frame-link]').textContent,expected==='notes'?'All your notes →':expected==='bounties'?'All your bounties →':'');
+    assert.equal(f.nodes.get('#activity-frame .activity-section-heading').hidden,expected==='schemes');
     assert.deepEqual(f.requests.map(request=>request.url),['/api/session']);
   }
 });

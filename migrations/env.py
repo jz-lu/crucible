@@ -2,6 +2,9 @@ from crucible import bounty_models  # Reviewed bounty tasks and independent allo
 from crucible import research_reviews  # Register scoped research assessments.
 from crucible import proposal_retractions  # Register terminal author withdrawals.
 from crucible import proposal_notes  # noqa: F401 — durable scheme-review sources
+from crucible import proposal_implementation  # Append-only reviewed implementation progress.
+from crucible import notebook_visibility  # Author visibility and immutable change receipts.
+from crucible import notebook_locs  # Permanent exact-passage loc reservations.
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config

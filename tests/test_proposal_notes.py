@@ -10,7 +10,9 @@ from test_protocol_proposals import specification
 
 
 def scheme_content():
-    return proposal_notes.content_from_spec(proposals._validated(specification())[0])
+    value = proposal_notes.content_from_spec(proposals._validated(specification())[0])
+    value['tags'].append('ai-written')  # Explicit authorship of this test's proposed note.
+    return value
 
 
 def submit(actor, note, payload=None):

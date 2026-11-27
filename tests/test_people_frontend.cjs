@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const {createApp, flush} = require('./frontend-dom.cjs');
-const scoring = {status: 'active', policy_id: 'crucible-points-v11', ordering: 'points_desc_handle'};
+const scoring = {status: 'active', policy_id: 'crucible-points-v12', ordering: 'points_desc_handle'};
 const record = {scheme_id: 'fixture', scheme_name: 'Fixture scheme', scheme_version: '2', profile_id: 'tier-4', tier: 4, submission_id: 'receipt-a', received_at: 100, is_current: true, scoring_eligible: true, score: {progress: 0, early_recovery: 100, total: 100}};
 const person = handle => ({handle, points: 200, rank: 1, score_status: 'active', score_breakdown: {progress: 0, early_recovery: 100, scheme_contributions: 0, note_contributions: 0, bounty_points:100}, accepted_proposal_count: 0, schemes_recovered: 1, correct_submission_count: 2, records: [record], recent_recoveries: [record]});
 const schemes = [{id: 'fixture', version: '2', name: 'Fixture scheme', profiles: [{id: 'tier-4', instance_size: 4}], largest_recovered_profile_id: 'tier-4', first_recovery: {handle: 'alpha', profile_id: 'tier-4', submission_id: 'receipt-a'}}];
@@ -42,7 +42,7 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
     const before = app.requests.length; trigger.click();
     assert.equal(dialog.open, true); assert.equal(app.document.body.style.overflow, 'hidden');
     assert.equal(app.requests.length, before);
-    for (const label of ['Record breakthroughs','Admitted schemes','Research bounties','Research notes','Bounty allowance']) assert.ok(dialog.textContent.includes(label));
+    for (const label of ['Record breakthroughs','Admitted schemes','Research bounties','Note upvotes','Bounty allowance']) assert.ok(dialog.textContent.includes(label));
     assert.match(dialog.textContent, /2,000 points/); assert.match(dialog.textContent, /100 points per completed active week/);
     assert.match(dialog.textContent, /review approval alone earns 0 points/);
     assert.match(dialog.textContent, /independent reviewer approves the exact solution evidence/);
@@ -66,8 +66,8 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
     assert.equal(app.$('#person-title').textContent, 'alpha');
     assert.equal(app.$('#person-workspace').hidden, false);
     assert.equal(app.$('#recovery-dialog').open, false);
-    assert.match(app.$('#person-content').textContent, /Record breakthroughs100Admitted schemes0Research bounties100Research notes0/);
-    assert.match(app.$('#person-content').textContent, /100 points, once per person per scheme/);
+    assert.match(app.$('#person-content').textContent, /Record breakthroughs100Admitted schemes0Research bounties100Note upvotes0/);
+    assert.match(app.$('#person-content').textContent, /frontier earns 100 points/);
     assert.doesNotMatch(app.$('#person-content').textContent, /500 personal-progress|2,000 points for your best first/);
     app.history.back(); await flush();
     assert.equal(app.$('#catalogue-workspace').hidden, false);

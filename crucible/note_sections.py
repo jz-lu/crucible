@@ -14,9 +14,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 SECTION_PATTERN = r"^[a-z][a-z0-9-]{0,63}$"
+PASSAGE_PATTERN = r"^p1-(?:b|s-[a-z][a-z0-9-]{0,63})-(?:0|[1-9][0-9]{0,4})-[1-9][0-9]{0,4}$"
 
 
-def statement_markers(body):
+def statement_markers(body, headings=None, placements=None):
     """Explicit standalone placements, excluding literal code and math spans.
 
     This is a bounded presentation syntax, not Markdown execution. Keep its
@@ -24,7 +25,7 @@ def statement_markers(body):
     parser fixtures. It never changes the stored source or its content hash.
     """
     fence, ticks, math = None, 0, None
-    for line in body.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+    for number, line in enumerate(body.replace("\r\n", "\n").replace("\r", "\n").split("\n"), 1):
         if fence:
             close = re.fullmatch(r" {0,3}(`+|~+)[ \t]*", line)
             if close and close[1][0] == fence[0] and len(close[1]) >= fence[1]:
@@ -35,8 +36,15 @@ def statement_markers(body):
             if opened:
                 fence = (opened[1][0], len(opened[1]))
                 continue
+            heading = re.fullmatch(r"(#{1,6})[ \t]+(.+)", line)
+            if heading and headings is not None:
+                title = re.sub(r"[ \t]+#+[ \t]*$", "", heading[2]).strip()
+                if title:
+                    headings.append({"line": number, "level": len(heading[1]), "title": title})
             marker = re.fullmatch(r" {0,3}\[\[statement:([a-z][a-z0-9-]{0,79})\]\][ \t]*", line)
             if marker:
+                if placements is not None:
+                    placements.append({'line': number, 'id': marker[1]})
                 yield marker[1]
                 continue
             if re.fullmatch(r" {0,3}\\\[\[statement:[a-z][a-z0-9-]{0,79}\]\][ \t]*", line):
@@ -83,14 +91,93 @@ def statement_markers(body):
             i += 1
 
 
-def validate_statement_placements(sections, statement_ids):
+def heading_passage(content, location):
+    """An exact ATX-headed passage; missing/ambiguous targets never fall back."""
+    source = content.get("body", "")
+    if location.get("section_id") is not None:
+        matches = [part for part in content.get("sections", []) if part.get("id") == location["section_id"]]
+        if len(matches) != 1:
+            raise ValueError("The heading's source section is missing or ambiguous.")
+        source = matches[0]["body"]
+    headings = []
+    list(statement_markers(source, headings))
+    matches = [item for item in headings if item["title"] == location["heading"]]
+    if len(matches) != 1:
+        raise ValueError(f"The heading reference ‘{location['heading']}’ must match one unique heading in its source. Update the reference if you renamed or removed that heading.")
+    selected = matches[0]
+    lines = source.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    end = next((item["line"] - 1 for item in headings if item["line"] > selected["line"] and item["level"] <= selected["level"]), len(lines))
+    excerpt = "\n".join(lines[selected["line"] - 1:end])
+    if list(statement_markers(excerpt)):
+        raise ValueError("A referenced heading needs its Markdown text in place, not statement insertion markers.")
+    return {"heading": selected["title"], "start_line": selected["line"], "end_line": end, "text": excerpt,
+            **({"section_id": location["section_id"]} if location.get("section_id") is not None else {})}
+
+
+def passages(content):
+    """Version-one exact source ranges. Display ordinals never identify a target.
+
+    These are derived read-only references, not authored statements or approvals.
+    Companion sections precede technical-body headings in the reading order.
+    A root section uses line zero for its title and includes its whole body.
+    """
+    result = []
+    containers = [(part['id'], part['body'], part['title']) for part in content.get('sections', [])]
+    containers.append((None, content['body'], None))
+    for section_id, body, title in containers:
+        lines = body.replace('\r\n', '\n').replace('\r', '\n').split('\n')
+        headings = []; list(statement_markers(body, headings))
+        selected = ([{'line': 0, 'title': title, 'level': 0}] if section_id else []) + headings
+        stack, ends = [], {}
+        for index in range(len(selected) - 1, -1, -1):
+            while stack and selected[stack[-1]]['level'] > selected[index]['level']:
+                stack.pop()
+            ends[index] = selected[stack[-1]]['line'] - 1 if stack else len(lines)
+            stack.append(index)
+        for index, item in enumerate(selected):
+            end = ends[index]
+            start = item['line']
+            identifier = f"p1-{'s-' + section_id if section_id else 'b'}-{start}-{end}"
+            result.append({'id': identifier, 'heading': item['title'],
+                           'start_line': start, 'end_line': end,
+                           **({'section_id': section_id} if section_id else {})})
+    return result
+
+
+def resolve_passage(content, identifier):
+    """Check the pinned boundaries; never reinterpret an old selector silently."""
+    if not isinstance(identifier, str) or not re.fullmatch(PASSAGE_PATTERN, identifier):
+        raise ValueError('Use an exact version-one passage selector.')
+    item = next((value for value in passages(content) if value['id'] == identifier), None)
+    if item is None:
+        raise ValueError('This passage is absent from the exact saved note; no replacement was selected.')
+    source = content['body'] if 'section_id' not in item else next(part['body'] for part in content['sections'] if part['id'] == item['section_id'])
+    lines = source.replace('\r\n', '\n').replace('\r', '\n').split('\n')
+    definition = '\n'.join(lines[max(0, item['start_line'] - 1):item['end_line']])
+    if item['start_line'] == 0:
+        definition = item['heading'] + '\n\n' + definition
+    if list(statement_markers(definition)):
+        raise ValueError('This legacy passage inserts other statement text. Use its existing statement citation instead.')
+    from . import notebook
+    return {'id': item['id'], 'label': '', 'title': item['heading'], 'definition': definition,
+            'source_passage': item, 'definitions': [],
+            # A prose passage may rely on definitions elsewhere in its source.
+            # Matching excerpt text is not enough to identify a proposition.
+            'definition_sha256': notebook._hash({'passage_policy': 'crucible-source-passage-v1',
+                'content_sha256': notebook._hash(content), 'passage': identifier, 'definition': definition})}
+
+
+def validate_statement_placements(sections, statement_ids, body=None):
     placed = set()
-    for section in sections:
-        for identifier in statement_markers(section.body):
+    sources = [section.body for section in sections]
+    if not sources and statement_ids and body:
+        sources = [body]
+    for source in sources:
+        for identifier in statement_markers(source):
             if identifier not in statement_ids:
                 raise ValueError("A statement placement must name a canonical statement in this note.")
             if identifier in placed:
-                raise ValueError("Place each statement only once across the readable sections; use exact links for later references.")
+                raise ValueError("Place each statement only once in the readable note; use exact links for later references.")
             placed.add(identifier)
     return placed
 
@@ -317,15 +404,23 @@ class _ArgumentReader:
 
     def statement(self, base, reference):
         from . import statement_workflow
+        from . import notebook_section_refs
         source = reference.model_dump(exclude_none=True) if reference.note_id else base
         content = self.read(source)
+        anchor = 'passage:' + reference.passage if reference.passage else 'statement:' + reference.statement_id
+        label = notebook_section_refs.display_label(self.session, source, content, anchor)
+        if reference.passage:
+            from .notebook_locs import metadata
+            loc = metadata(self.session, source.get("note_id", source.get("id")), source["revision"], source["content_sha256"]).get(reference.passage)
+            return {**resolve_passage(content, reference.passage), "label": loc or "", "loc": loc,
+                    **label, "source": self.pin(source, passage=reference.passage)}
         statement_workflow.selected_record(content, "statement", reference.statement_id)
         value = statement_workflow.Statement.model_validate(next(item for item in content["statements"]
             if item["id"] == reference.statement_id))
         for definition in value.definitions:
             self.read(definition.model_dump(exclude_none=True))
-        return {**value.model_dump(exclude_none=True), "source": self.pin(source, statement=value.id),
-                "definition_sha256": statement_workflow.definition_hash(value.model_dump(exclude_none=True))}
+        return {**statement_workflow.materialize_statement(value.model_dump(exclude_none=True), content), **label, "source": self.pin(source, statement=value.id),
+                "definition_sha256": statement_workflow.definition_hash(value.model_dump(exclude_none=True), content)}
 
     def argument(self, source, identifier):
         from . import statement_workflow
@@ -351,6 +446,7 @@ class _ArgumentReader:
                 "argument_sha256": selection["argument_sha256"]}
 
     def legacy_argument(self, source, section_id, role, group):
+        from . import notebook_section_refs
         content = self.read(source)
         section = _readable_section(content, section_id)
         dependencies = []
@@ -362,7 +458,9 @@ class _ArgumentReader:
             definition = premise.get("formal_statement")
             if definition is None:
                 definition = _readable_section(content, premise["source"]["note_section"])["body"]
+            label = notebook_section_refs.display_label(self.session, source, content, 'note_section:' + premise['source']['note_section'])
             dependencies.append({"statement": {"id": premise["id"], "label": premise["label"],
+                **label,
                 "title": premise["title"], "definition": definition, "source": premise["source"],
                 "definition_origin": "legacy-formal-field" if premise.get("formal_statement") else "legacy-readable-section"},
                 "configuration_ids": configurations, "stages": self.stages(configurations),
@@ -379,6 +477,7 @@ def _premise_cards(argument):
     return [{"id": use["statement"]["id"], "label": use["statement"]["label"],
              "title": use["statement"]["title"], "formal_statement": use["statement"]["definition"],
              "source": use["statement"]["source"], "status": "assumed", "stages": use["stages"],
+             **({"source_passage": use["statement"]["source_passage"]} if "source_passage" in use["statement"] else {}),
              "profile_ids": use["configuration_ids"], "definition_sha256": use["statement"].get("definition_sha256")}
             for use in argument["dependencies"]]
 
@@ -459,7 +558,7 @@ def _project_argument_rosters(app, session, user, packet, reader):
         metadata = {"target_id": identifier, "head_id": current["id"], "selection_id": current.get("selection_id"),
             "origin": current["origin"], "independent_review": current["independent_review"],
             "current_status": current["status"], "roster_count": sum(row["status"] == "admitted" for row in state["roster"]),
-            "conclusion_source": reader.pin(conclusion["source"], statement=conclusion["id"]) if conclusion else None,
+            "conclusion_source": reader.pin(conclusion["source"], **{("passage" if conclusion.get("source_passage", {}).get("id") else "statement"): conclusion["id"]}) if conclusion else None,
             "numeric_curve_unchanged": True, "prototype": True}
         if current["status"] != "selected":
             return {"id": argument["id"], "title": argument["title"], "status": current["status"],

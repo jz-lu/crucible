@@ -21,10 +21,45 @@ def withdraw(actor, note, **changes):
 
 def shared(owner, reviewer):
     note = create(owner, content(title='Sensitive fixture title', claim='Sensitive fixture claim',
-        body='Sensitive fixture body', tags=['sensitive-fixture']))
+        body='Sensitive fixture body', tags=['sensitive-fixture', 'ai-written']))
     request_publication(owner, note)
     approve(reviewer, note)
     return note
+
+
+def test_author_retraction_hides_all_published_revisions_without_changing_content(system):
+    app, owner, reviewer, reader, _ = system
+    first = shared(owner, reviewer)
+    second = revise(owner, first, content(title='Second published revision'))
+    request_publication(owner, second); approve(reviewer, second)
+    third = revise(owner, second, content(title='Pending newer revision'))
+    request_publication(owner, third)
+    route = endpoint(first) + '/publication-retractions'
+    body = publication_body(third)
+    assert reader.post(route, body).status_code == 404
+    assert owner.client.post(route, json=body).status_code == 403
+    assert owner.post(route, publication_body(first)).status_code == 409
+    response = owner.post(route, body)
+    assert response.status_code == 200, response.text
+    assert response.json() == {'note_id': first['id'], 'retracted': True}
+    assert owner.post(route, body).json() == response.json()
+    assert owner.post(route, {**body, 'content_sha256':'f'*64}).status_code == 409
+    assert reader.client.get(endpoint(first)).status_code == 404
+    for number in (1, 2):
+        assert reader.client.get(endpoint(first) + '?revision=' + str(number)).status_code == 404
+    current = owner.client.get(endpoint(first)).json()['note']
+    assert [r['publication_status'] for r in current['revisions']] == ['private', 'private', 'private']
+    assert current['revisions'][0]['content']['title'] == 'Sensitive fixture title'
+    assert reader.client.get('/api/notebook/notes').json()['notes'] == []
+    republish = owner.post(endpoint(first) + '/publication-requests', publication_body(third))
+    assert republish.status_code == 200, republish.text
+    assert republish.json()['note']['revision_count'] == 3
+    assert republish.json()['note']['publication_status'] == 'submitted'
+    # Retrying a completed operation must not retract a later publication.
+    fourth = revise(owner, third, content(title='New publication after retraction'))
+    request_publication(owner, fourth); approve(reviewer, fourth)
+    assert owner.post(route, body).json() == response.json()
+    assert reader.client.get(endpoint(first) + '?revision=4').status_code == 200
 
 
 def test_moderation_is_exact_retryable_and_retains_restricted_audit(system):

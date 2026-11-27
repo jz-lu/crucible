@@ -164,3 +164,18 @@ def test_reviewer_agent_cannot_discover_foreign_private_requests_on_its_own_note
         assert client.get("/api/notebook/notes?proposals_only=true").json()["notes"] == []
     finally:
         app.state.db.engine.dispose()
+
+
+def test_agent_author_visibility_requires_publish_scope_and_cannot_hide_foreign_notes(system):
+    app, owner, reviewer, reader, _ = system
+    saved = create(owner); request_publication(owner, saved); approve(reviewer, saved)
+    route = '/api/notebook/notes/' + saved['id'] + '/publication-retractions'
+    body = publication_body(saved)
+    assert agent(app, owner, ['notebook:write']).post(route,json=body).status_code == 403
+    assert agent(app, reader, ['notebook:publish']).post(route,json=body).status_code == 404
+    authorized = agent(app, owner, ['notebook:publish'])
+    assert authorized.post(route,json=body).status_code == 200
+    assert reader.client.get('/api/notebook/notes/' + saved['id']).status_code == 404
+    assert authorized.post('/api/notebook/notes/' + saved['id'] + '/publication-requests',json=publication_body(saved)).status_code == 200
+    assert reader.client.get('/api/notebook/notes/' + saved['id']).status_code == 200
+    assert count(app,notebook.NotebookRevision) == 1

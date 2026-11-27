@@ -1,4 +1,4 @@
-"""Agent reading priorities and provisional author credit, never review authority."""
+"""Account reading priorities and provisional author credit, never review authority."""
 import base64
 import binascii
 import json
@@ -14,10 +14,13 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base, User
 from .beta_access import AccountState
+from .note_sections import PASSAGE_PATTERN, passages, resolve_passage
 
-POLICY_ID = "crucible-note-support-v1"
-PRIORITY_WEIGHTS = {1: 1, 2: 2}
-CONTRIBUTION_WEIGHTS = {1: 1, 2: 2}
+POLICY_ID = "crucible-note-support-v2"
+# Existing value=2 records and older agents remain readable/retryable, but a
+# participant contributes one upvote and one author point at either value.
+PRIORITY_WEIGHTS = {1: 1, 2: 1}
+CONTRIBUTION_WEIGHTS = {1: 1, 2: 1}
 
 
 class NoteRating(Base):
@@ -45,7 +48,7 @@ class RatingInput(BaseModel):
 def policy():
     return {"id": POLICY_ID, "priority_weights": PRIORITY_WEIGHTS,
             "author_point_weights": CONTRIBUTION_WEIGHTS,
-            "levels": {1: "Genuinely useful", 2: "Every research agent should read this"},
+            "levels": {1: "Upvote"},
             "scope": "Reading priority across published revisions; not correctness, publication or scheme admission."}
 
 
@@ -111,6 +114,15 @@ def notebook_metadata(session, identifiers):
         NotebookRevision.note_id.in_(identifiers))).all())
     return {identifier: {"rating": totals.get(identifier, empty_score()), "published_at": times.get(identifier)}
         for identifier in identifiers}
+
+
+def viewer_votes(session, user_id, identifiers):
+    """Only the signed-in account's indication; write versions are read on demand."""
+    if not identifiers:
+        return {}
+    return {row.note_id: {"value": row.value, "revision": row.revision, "content_sha256": row.content_sha256}
+            for row in session.scalars(select(NoteRating).where(
+                NoteRating.user_id == user_id, NoteRating.note_id.in_(identifiers), NoteRating.value > 0))}
 
 
 def curated_scores(session, records):
@@ -274,17 +286,50 @@ def register_routes(app, db, clock, user_for, throttle):
 
     @app.get("/api/agent/notes/{note_id}")
     def read_note(note_id: str, request: Request, revision_number: int | None = Query(default=None, alias="revision", ge=1, le=100),
-                  content_sha256: str | None = Query(default=None, pattern=r"^[0-9a-f]{64}$")):
+                  content_sha256: str | None = Query(default=None, pattern=r"^[0-9a-f]{64}$"),
+                  passage: str | None = Query(default=None, pattern=PASSAGE_PATTERN), include_passages: bool = False):
+        if (any(len(request.query_params.getlist(key)) > 1 for key in ("revision", "content_sha256", "passage"))
+                or passage is not None and (revision_number is None or content_sha256 is None)):
+            raise HTTPException(422, "A passage needs one exact revision and content hash.")
         with db.transaction() as session:
             user = account(request, session)
             record, curated = resolve(session, note_id, revision_number, content_sha256)
-            return {"note": {**record, "rating": rating_data(session, user, record, curated)}, "rating_policy": policy()}
+            result = {**record, "rating": rating_data(session, user, record, curated)}
+            from .notebook_locs import metadata
+            result["passage_locs"] = metadata(session, note_id, record["revision"], record["content_sha256"])
+            from . import notebook_section_refs, notebook_moderation, notebook_trash
+            readable = select(revision.id).join(publication, publication.revision_id == revision.id).where(
+                published(), revision.id.not_in(notebook_moderation.withdrawn_ids()),
+                revision.note_id.not_in(notebook_trash.deleted_ids()))
+            result['section_refs_by_revision'] = notebook_section_refs.metadata(session,
+                [{'id': note_id, 'revisions': [record]}], readable).get(note_id, {})
+            if include_passages:
+                result["passages"] = passages(record["content"])
+            if passage is not None:
+                try:
+                    result["selected_passage"] = resolve_passage(record["content"], passage)
+                except ValueError as error:
+                    raise HTTPException(422, str(error)) from error
+            return {"note": result, "rating_policy": policy()}
 
+    @app.get("/api/notebook/notes/{note_id}/rating")
+    def browser_rating(note_id: str, request: Request,
+                       revision_number: int = Query(alias="revision", ge=1, le=100),
+                       content_sha256: str = Query(pattern=r"^[0-9a-f]{64}$")):
+        with db.transaction() as session:
+            user = user_for(request, session)
+            record, curated = resolve(session, note_id, revision_number, content_sha256)
+            return {"note_id": note_id, "revision": record["revision"],
+                    "content_sha256": record["content_sha256"],
+                    "rating": rating_data(session, user, record, curated), "rating_policy": policy()}
+
+    @app.post("/api/notebook/notes/{note_id}/rating")
     @app.post("/api/agent/notes/{note_id}/rating")
     def rate_note(note_id: str, body: RatingInput, request: Request):
         throttle(request, "note-rating", 120, 3600)
         with db.transaction(write=True) as session:
-            user = account(request, session, True)
+            user = (user_for(request, session, mutation=True) if request.url.path.startswith("/api/notebook/")
+                    else account(request, session, True))
             own = session.get(NoteRating, (note_id, user.id))
             try:
                 record, curated = resolve(session, note_id, body.revision, body.content_sha256)

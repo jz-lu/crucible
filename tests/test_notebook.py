@@ -56,13 +56,59 @@ def system(tmp_path):
 def content(**changes):
     return {"title": "A conditional observation", "claim": "Bound B holds under condition H.",
             "conditions": "Assume H in the specified model.", "body": "A supporting informal argument.",
-            "tags": ["finite groups"], **changes}
+            "tags": ["finite groups", "ai-written"], **changes}
 
 
 def create(actor, value=None, key=None):
     response = actor.post("/api/notebook/notes", {"content": value or content(), "idempotency_key": key or str(uuid4())})
     assert response.status_code == 200, response.text
     return response.json()["note"]
+
+
+@pytest.mark.parametrize("tag", ["human-written", "human-ai-hybrid", "ai-written"])
+def test_authorship_tags_are_explicit_mutually_exclusive_revision_data(system, tag):
+    _, owner, *_ = system
+    saved = create(owner, content(tags=[tag, "algebra"]))
+    assert saved["revisions"][0]["content"]["tags"] == [tag, "algebra"]
+    other = next(value for value in ("human-written", "human-ai-hybrid", "ai-written") if value != tag)
+    denied = owner.post("/api/notebook/notes", {"content": content(tags=[tag, other]), "idempotency_key": str(uuid4())})
+    assert denied.status_code == 422
+    changed = revise(owner, saved, content(tags=[other]))
+    assert changed["revisions"][0]["content"]["tags"] == [tag, "algebra"]
+    assert changed["revisions"][-1]["content"]["tags"] == [other]
+
+
+def test_unspecified_authorship_can_be_saved_revised_imported_and_published(system):
+    _, owner, _, _, _ = system
+    for tags in ([], ["algebra"]):
+        saved = create(owner, content(tags=tags))
+        assert saved['revisions'][0]['content']['tags'] == tags
+        revised = revise(owner, saved, content(tags=tags, title='Revised without a declaration'))
+        request_publication(owner, revised)
+    original = workspace()
+    original['notes'][0]['revisions'][0]['tags'] = ['algebra']
+    imported = owner.post('/api/notebook/import', {'workspace': original, 'idempotency_key': str(uuid4())})
+    assert imported.status_code == 200, imported.text
+    listed = owner.client.get('/api/notebook/notes?scope=mine').json()['notes']
+    legacy = next(item for item in listed if item['revisions'][0]['content']['title'] == 'Imported revision 1')
+    before = owner.client.get(f'/api/notebook/notes/{legacy["id"]}').json()['note']
+    request_publication(owner, legacy)
+    assert owner.client.get(f'/api/notebook/notes/{legacy["id"]}').json()['note']['content_sha256'] == before['content_sha256']
+
+
+def test_clearing_authorship_does_not_relabel_history_and_retries_are_exact(system):
+    _, owner, *_ = system
+    saved = create(owner, content(tags=['human-written']))
+    body = revision_body(saved, content(tags=[], title='Undeclared edit'))
+    endpoint = f'/api/notebook/notes/{saved["id"]}/revisions'
+    first = owner.post(endpoint, body)
+    replay = owner.post(endpoint, body)
+    assert first.status_code == replay.status_code == 200
+    assert first.json() == replay.json()
+    rows = replay.json()['note']['revisions']
+    assert rows[0]['content']['tags'] == ['human-written']
+    assert rows[1]['content']['tags'] == []
+    request_publication(owner, replay.json()['note'])
 
 
 def revision_body(note, value=None, key=None):
@@ -353,7 +399,7 @@ def test_compact_publication_preserves_owner_csrf_latest_revision_and_existing_r
         publication_body(trashed)).status_code == 410
     assert count(app, notebook.NotebookPublication) == 0
     assert owner.post(path, body).status_code == 200
-    assert owner.post(path, {**body, "idempotency_key": str(uuid4())}).status_code == 409
+    assert owner.post(path, {**body, "idempotency_key": str(uuid4())}).status_code == 200
     assert owner.post(path, {**body, "revision": first["revision"],
         "content_sha256": first["content_sha256"]}).status_code == 409
     assert count(app, notebook.NotebookPublication) == 1
@@ -569,3 +615,22 @@ def test_notebook_migration_preserves_existing_accounts_and_sessions(tmp_path, m
         assert existing() == before
     finally:
         db.engine.dispose()
+
+
+def test_freeform_note_needs_no_separate_summary_or_scope_but_preserves_exact_prose(system):
+    _, owner, reviewer, reader, _ = system
+    value = content(title='A short research question', claim='', conditions='',
+        body='Could this family admit a different reduction?\n\nThis is an open question, not an asserted bound.')
+    saved = create(owner, value)
+    assert saved['revisions'][0]['content'] == value
+    digest = saved['content_sha256']
+    request_publication(owner, saved); approve(reviewer, saved)
+    shared = reader.client.get('/api/notebook/notes/' + saved['id']).json()['note']
+    assert shared['revisions'][0]['content']['conditions'] == ''
+    assert shared['content_sha256'] == digest
+    exported = owner.client.get('/api/notebook/export').json()
+    revision = next(item for item in exported['notes'] if item['id'] == saved['id'])['revisions'][0]
+    assert revision['claim'] == revision['conditions'] == ''
+    assert revision['body'] == value['body']
+    assert owner.post('/api/notebook/notes', {'content':content(body=' '), 'idempotency_key':str(uuid4())}).status_code == 422
+    assert owner.post('/api/notebook/notes', {'content':content(conditions='\x00'), 'idempotency_key':str(uuid4())}).status_code == 422

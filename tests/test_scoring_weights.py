@@ -16,7 +16,7 @@ COUNTS = {"teaching-dh-kem": 50, "rsa-kem": 50, "dhkem-x25519": 50,
 
 
 def test_frozen_integer_weights_cover_all_current_configurations():
-    assert scoring.POLICY_ID == "crucible-points-v11"
+    assert scoring.POLICY_ID == "crucible-points-v12"
     for scheme, count in COUNTS.items():
         release = scoring.FAMILY_RELEASES[scheme]
         weights = release["progress_weights"]
@@ -55,7 +55,7 @@ def test_each_family_endpoint_has_equal_first_and_later_solver_caps(current_syst
 
 
 @pytest.mark.parametrize("scheme", COUNTS)
-def test_step_by_step_and_direct_recovery_have_identical_totals(current_system, scheme):
+def test_filling_lower_stages_after_a_leap_earns_no_more_points(current_system, scheme):
     app, _, _ = current_system
     user = add_user(app, "alice")
     adapter = registry.adapter_for(scheme)

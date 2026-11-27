@@ -112,11 +112,12 @@ def winning_keys(records):
 
 
 def winning_keys_for_user(session, user_id, *, reviewer_ids=()):
-    _, families = scoring.score_relations(session.get_bind().dialect.name, reviewer_ids=reviewer_ids)
-    rows = session.execute(select(families).where(families.c.user_id == user_id,
-                                                 families.c.early_recovery > 0)).all()
-    return {(row.scheme_id, scoring.FAMILY_RELEASES[row.scheme_id]["version"],
-             row.early_recovery_submission_id, row.early_recovery_tier) for row in rows}
+    if user_id in reviewer_ids:
+        return set()
+    _, advances = scoring.frontier_relations(session.get_bind().dialect.name)
+    rows = session.execute(select(advances.c.scheme_id, advances.c.scheme_version,
+        advances.c.submission_id, advances.c.tier).where(advances.c.user_id == user_id)).all()
+    return {(row.scheme_id, row.scheme_version, row.submission_id, row.tier) for row in rows}
 
 
 def _data(row, formatter, winners):

@@ -1,0 +1,515 @@
+CRUCIBLE: NOTES LIST AND READER CANDIDATE
+25 November 2026. Local implementation; not deployed.
+
+Purpose
+-------
+Researchers should be able to scan a stable list, open an argument, and act on
+it without first learning the notebook's internal schema. A note has one
+reading destination. The list is for discovery; the reader is for understanding,
+precise references and continued work. Structured statements remain optional.
+
+Implemented presentation
+------------------------
+The outside Notes layout is accepted as of 26 November: left upvote gutter,
+quiet title and three primary labels, owner publication controls, and a fixed
+researcher/date column at the right edge. Editing belongs inside the reader.
+Private + Publish, In review + Retract, and published + Retract are the ordinary
+owner states. Published notes need no Published label. Numbers are absent from
+the list and retained inside the reader for exact citations. Tags are display
+labels; searching still covers titles, summaries, tags and note numbers.
+
+The inside is a local candidate with one header and a continuous article.
+Its typography and primary label styling reuse the list's visual vocabulary.
+Author/date, publication state and owner actions stay separate from subject
+labels. The main labels are Proposal (from an actual request), authorship
+(Human-written, Human–AI hybrid or AI-written, explicitly self-reported), and
+Literature. Other keywords are quiet and neutral.
+Routine success messages are screen-reader announcements, not layout-shifting
+banners. Failures remain visible. Publication history is absent from normal
+reading except actionable feedback. Reviewer audit views retain their detail.
+
+An ordinary human author needs Title and Note. Summary and Conditions remain
+optional API metadata, preserved on edits but absent from the ordinary editor
+and reader. They are empty when omitted, never filled with invented assumptions.
+Authors explain meaningful caveats in the article, close to the relevant claim.
+Formal statement/dependency records and scheme specification/admission checks
+remain independently validated. Optional prose fields are not substitutes for
+those records. A blank conditions field does not establish unconditionality.
+The canonical API still carries claim/conditions strings (empty is allowed),
+so the change does not invent a second note format or rewrite saved records.
+
+Free-form body content is the default readable note. Sections, statements and
+argument structures remain optional. With existing readable sections, Human Explanation
+shows their authored prose; Research details shows the original technical body
+as plain source. Nothing is generated, abbreviated or rewritten to fit the UI.
+No empty alternate mode is shown for a note without a companion explanation.
+
+Articles with at least two linkable headings have a conventional Contents list:
+a quiet right column on desktop and above the article on mobile. It follows
+ordinary Markdown headings (including subsections), not a scientific inventory.
+There is no mixed statement/argument inventory at the top. Short notes without multiple headings remain direct articles. Exact references target their authored headings.
+
+Judgments to revisit after use
+------------------------------
+The two reading views keep complete technical records available without making
+readers process machine scope fields before the article. Long single-body notes now also use the heading Contents list. Ordinary editing uses the prose fields and preserves exact-reference
+metadata. Dedicated statement/argument controls belong to review/developer
+tooling and the API; they are no longer part of the normal writing interface.
+
+Preserved contracts
+-------------------
+Note numbers are display references. Exact links still pin note ID, revision,
+content hash and, where applicable, section/statement/argument ID. Reading an
+exact older revision never silently substitutes a newer one. Links grant no
+access. Cached content and actions retain current authorization checks.
+Reading-view state is scoped to account/session and the exact note identity;
+departure clears it. A precise prose or statement link selects its relevant
+view. Editor dismissal, retries, permission checks and scientific review decisions
+are preserved. Author visibility now has the separate lifecycle described in
+docs/note-publication-visibility.txt. Review-workspace rows and readers keep their previous presentation.
+
+The title's pointer/focus intent uses the existing bounded body preparation
+path. Rendering a list does not fetch every note body. Summary search, filters
+and pagination retain the existing bounded cache/invalidation design.
+
+Local preview parity
+--------------------
+The preview runs on http://127.0.0.1:8018/preview with synthetic accounts and an
+isolated local database. Its base is 09958b267fa1d60ac7a159702f91ae9e1960cc2d,
+which matched origin/main and the hosted health source revision when checked.
+This does not assert equivalence of all runtime artifacts or account data.
+
+Security/Correctness links were absent because the direct local Settings
+construction omitted note-presentation bindings. Restoring the packaged pins
+exposed a second issue: reviewed Linux RAM models do not match five local
+macOS scheme runtime identities. The ignored preview helper derives a binding
+file that preserves all exact note pins but omits those five optional RAM
+attachments. DH, EC-DH and RSA retain their compatible RAM bindings. The normal
+backend validators remain unchanged. No scientific adoption trial is enabled.
+All eight argument presentations and sixteen exact argument destinations work.
+This is argument-presentation parity, not runtime or measurement parity.
+The footer discloses the five omitted curves; their existing graph empty-state
+wording remains generic. Never deploy this derived preview binding as evidence.
+
+Verification
+------------
+223 notebook frontend checks, 43 statement-workflow checks, 19 readable-section
+checks and 29 bulk-publication checks passed in the current local iteration. These cover
+exact identities, actions, access/caching behavior and the normal/reviewer split.
+Isolated Chrome checks at 1440, 390 and 320 CSS pixels verified list navigation,
+both views, exact section/citation links, technical-only notes and owner dialogs.
+No mutating application requests or browser errors occurred. No horizontal
+page overflow remained. Screenshots wait for lazy math assets and fonts.
+Separate parity checks covered all eight schemes and all sixteen argument links.
+Ignored evidence lives under .local/notes-redesign-qa/; no private live data was
+copied into those fixtures. This is not a human usability study or Firefox audit.
+
+Scope and next review
+---------------------
+The presentation adds no provider calls. The separate author-visibility change
+requires migration 0035, following the unshipped implementation-lifecycle
+migration 0034. Neither has been deployed by this local pass. Do not mistake
+successful local presentation checks for production migration verification.
+
+Review the list density, Readable/Research details labels and outline with a researcher
+new to Crucible. Avoid adding a second reader, extra instruction panels or a
+mandatory tutorial to compensate for unclear controls. The existing optional
+section tour remains available; the landing page is unchanged by this pass.
+
+26 November refinement
+----------------------
+Removed the prominent Continue this research section at the user's request.
+The default reader also omits Proposals & reviews, Related notes, Record
+details and the separate Cite this note button. The note number retains exact
+citation access; authored references remain part of the research content.
+The prefilled related-note shortcut is removed; ordinary note authoring remains
+available. Supporting workflows and agent interfaces are preserved for future
+deliberate integration; this is a presentation change, not a permission change.
+Also removed the duplicate bounty-board agent prompt and repeated challenge,
+Summary-field and related-note helper text. Task-specific agent instructions,
+authored scope and publication/deletion/retry explanations remain available.
+
+Populated preview
+-----------------
+The isolated preview now contains three local open bounty copies from the
+repository's docs/launch-bounty-candidates.json, through normal create/request/
+admission flows with the synthetic preview owner and independent reviewer.
+Their titles, summaries, tags, scopes and 100-point rewards match the three
+observed live board entries. Detailed terms come from the saved launch drafts;
+their hashes differ from historical live opening receipts. This is not a claim
+of an exact current live database export. No live accounts, allowances, awards,
+submissions or credentials were copied. No invented extra bounties were added.
+The ignored .local/copy-launch-bounties.py script records exact source file and
+terms hashes plus local IDs in .local/launch-bounty-copy-receipt.json. Original
+source files are unchanged; before-bounty-copy-20261126.db is a local backup.
+
+Human and agent interfaces
+--------------------------
+A capability earns a human control through a concrete researcher task, not just
+because an API exists. Reading, navigation, editing, publication, contribution
+and review are human activities. Structured exports, API guidance and machine
+record formats primarily belong in the agent interface. A human-to-agent
+handoff belongs where someone is likely to delegate a task, not on every page.
+Technical content is not automatically agent-only: formal statements, explicit
+conditions and exact citations remain useful to researchers. Prefer a quiet,
+contextual affordance over a standing panel when the task is occasional.
+
+Local iteration, 26 November 2026
+Human editors start with Note, using the canonical body directly when
+there is no separate explanation. New human notes have no separate companion editor. Existing dual-view notes
+and their exact content remain intact; Research details is shown as plain
+source with stable line references. Selecting Scheme
+proposal no longer inserts the guidelines link; specification checks still apply.
+My activity note rows open the exact-revision reader directly without expansion.
+
+The arrow toggles one account upvote immediately, without a dialog. Its count
+is the number of supporting accounts. A fresh exact-pin read provides the
+concurrency version before writing; ambiguous writes retry the same payload.
+Browser writes require membership and CSRF. Self-votes, unpublished revisions
+and unscoped agent access remain forbidden. Account-scoped vote markers are
+batched into list reads. Legacy double ratings count once under support v2.
+
+Notes do not carry bounty contribution labels or backlinks. Ordinary bounty
+readers show the task and its sources, with a separate solution-submission
+action. Only the review workspace displays the submissions list. Task posters
+may submit solutions; approval still requires a reviewer distinct from both
+poster and solver. Existing partial records are preserved, but the human form
+offers solutions only.
+
+The ignored preview helper supplies Preview Researcher as display attribution
+for imported catalogue rows at the user's request. This does not assign account
+ownership, change research content, or alter permission checks.
+
+Independent review, 26 November
+------------------------------
+A separate read-only reviewer found and reproduced four material issues. They
+were addressed before accepting this local reader: ordinary-body Markdown used
+an older rendering path; body statements could not be placed by ordinary authors;
+a scheme return origin leaked into later independent Notes visits; and exact
+argument links lost navigation far down a long mobile page.
+
+The body now uses the existing bounded Markdown renderer and shared statement
+placement grammar. Source-line callbacks retain exact passage coordinates even
+when prose lines become a single paragraph; no content or hash changes. The
+canonical placement validator is shared in intent across Python and JavaScript,
+with regression fixtures. Insert in note adds a stable marker or locates an
+existing one, without creating duplicate definitions. Single-body notes require
+no separate sections. Literal code/math examples remain literal.
+
+Independent list entry clears scheme-origin navigation. Exact destinations have
+a compact context strip with the appropriate return and Note overview; a premise
+followed from an argument also offers its exact argument return. This avoids a
+persistent toolbar on every short note. It is presentation context, never part
+of a scientific citation or permission grant.
+
+Human and scoped-agent publication actions share the same retraction/restore
+contract and durable retries. Agent guidance now describes the actual v12
+frontier awards and single-account note upvotes rather than the historical rules.
+The agent/CLI/pipeline/statement backend run passed 116 checks; migration,
+visibility, moderation and screening checks were run separately. This evidence
+is local and does not establish production rollout compatibility.
+
+Deliberate remaining boundary: statements have ordinary fields and body insertion;
+complex arguments and pinned definition references remain an optional advanced
+structured editor. An agent can prepare these records. This is not yet a polished
+form for a researcher authoring a large dependency graph entirely by hand. The
+reader preserves arbitrary valid records rather than restricting the schema to
+what a future human form can express. A small dedicated argument-authoring pass
+should be designed against real researcher examples, not improvised here.
+
+The reviewer also caught a dangling-marker trap on statement removal. Removing
+a statement now removes only its actual standalone placement from the current
+readable body/sections, preserving code/math examples and surrounding prose.
+Removal is blocked with local feedback while an argument still depends on that
+statement, so the editor does not silently damage the argument's structure.
+
+Human display iteration, 26 November
+-----------------------------------
+The writer's main field is now Note; the two reader views are Human Explanation
+and Research details. Ordinary single-body notes retain one direct reading view.
+The generic research-note kind is omitted from the human header.
+
+The conditions and summary fields are records, not necessarily reader-facing
+introductions. They are no longer automatically placed before the explanation.
+This iteration initially kept them in Research details or Scope & research
+context. The subsequent refinement below removes both automatic presentations. Authors
+must explain the meaningful caveats in the article itself; the UI does not
+invent a translation or imply that hidden scope is irrelevant. Existing exact
+content, revisions and hashes remain unchanged.
+
+The former mixed In this note disclosure is replaced by a conventional Contents
+list of ordinary article sections: at the right on desktop, above the article
+on narrow screens. There is no separate statement/argument inventory at the
+top. Short single-body notes have no automatic scientific guide. Existing
+statement destinations render as plain headings and prose, with quiet exact
+links; they keep their existing identity behind that presentation.
+
+Three explicitly synthetic local examples are stored in
+  docs/examples/note-reading-demo.json
+and seeded only into the isolated preview:
+- What one recovered secret tells us: Human Explanation + Research details.
+- When repeating a trial helps: ordinary Markdown/LaTeX, with a linked premise
+  and lemma; the premise contains a subsection to exercise passage boundaries.
+- Fresh randomness can still share a failure: an exact-source objection to an
+  application of the premise, with a reproducible finite enumeration.
+The first two gained normal new revisions; originals remain available. Links
+pin the exact second example revision. The third is a new synthetic note. No
+existing scientific scheme binding or real research record was replaced.
+
+Heading-backed statements now implement the confirmed range contract. Their
+optional registration is metadata over prose; it does not impose section types.
+Both the local argument workflow and scheme security/correctness binding reader
+resolve the same source passage. Old definitions keep their original hashes.
+The human editor preserves locator records without copying their derived text.
+Missing and ambiguous targets fail. Renaming an explicitly registered heading
+still requires updating its locator through the structured API/tooling; ordinary
+unregistered headings have no such restriction. Do not silently infer a new target.
+
+Validation at this checkpoint: shared JS/Python boundary fixtures, 125 existing
+backend checks, 16 new heading/template tests, the additional scheme binding case,
+223 notebook frontend checks and 47 statement frontend checks. The store (18),
+math (15 groups) and scheme-assumption (28) frontend checks also passed. Browser checks cover
+all three examples and exact links at 1440/390/320px; no page errors, unintended
+writes or horizontal overflow. Screenshots/receipts are under the ignored
+.local/human-note-display directory. This remains local and is not deployed.
+
+An independent read-only review caught a fence inside multiline-code mismatch,
+a duplicated heading-backed conclusion in its reasoning section, and a missing
+optional context lookup. All three were fixed and reproduced successfully by
+the independent reviewer. The matching regression tests are in the shared
+heading fixtures and statement frontend suite; the new Python suite is included
+in the explicit critical-workflow gate.
+
+Follow-up simplification, 26 November
+-----------------------------------
+Removed the separate Statements & arguments inventory from ordinary reading and
+its optional authoring form from ordinary editing. The article's own sections
+remain the presentation. Explicit links still reveal exact legacy targets and
+arguments when requested; review-workspace detail is preserved. Existing locator,
+statement and dependency metadata round-trips unchanged during human edits.
+
+Earlier passage candidate, 26 November (superseded below)
+------------------------------------------------------
+Ordinary Markdown is now the default source of a reusable passage. Quiet [§N]
+controls sit beside headings; a citation can be labelled [#0056 §3] elsewhere.
+The exact URL carries note ID, saved revision/hash, source container, start/end
+lines and extraction-policy version. No allocation table, original-author edit,
+registration or write-on-read is required. This is a local candidate, not a new
+hosted feature or a promise of cross-revision section identity.
+
+The section number is local to a revision. Inserting or renaming a heading in a
+new revision never changes an old citation. Duplicate heading names work because
+selectors are source ranges. Missing or mixed selectors fail instead of guessing.
+No role is inferred from a heading: a passage becomes a premise only through its
+scoped use by an argument. Legacy statement/argument records remain readable.
+
+The new passage fingerprint includes full authored source content as well as the
+excerpt and selector. Two notes can use the same formula under different local
+definitions; they must not be treated as the same proposition from text alone.
+An alternative argument can reference the original exact conclusion. This is
+intentionally stricter than matching a copied paragraph. Old definition hashes
+and historical decisions are untouched.
+
+Humans write and read ordinary Markdown/LaTeX. Agents can ask for the derived
+passages list with include_passages=true and use the exact selector in existing
+dependency/conclusion fields. The list is opt-in to avoid expanding normal read
+payloads, and rendered passage metadata is cached per immutable content object.
+Access checks run before extraction; no new permission, publication or scientific
+approval follows from creating a link. New generic references use the same
+scheme security/correctness binding and local review/adoption machinery.
+
+Synthetic examples were revised through the local API with no registrations;
+the old revisions and statement links remain. Source navigation is outside the
+highlighted excerpt so reading controls are not mistaken for source text.
+Independent review found and fixed a scheme conclusion-link discriminator, a
+missing root-section context request, an argument return path, and a collision
+between a legal old statement ID and the spelling of a new passage selector.
+
+Final validation for this candidate: 207 backend checks across passages, legacy
+statement workflows, scheme bindings, argument rosters, note access/ratings,
+graph references and implementation evidence; two additional end-to-end cases
+reject copied conclusions while accepting their original pinned source. Frontend
+checks passed for the notebook (223), statement/passage workflow (50), section
+reader (19), scheme links (29), and the store, math and implementation workflows.
+Desktop/phone checks at 1440, 390 and 320 pixels found no JavaScript errors,
+unintended writes or horizontal overflow. The marker remains beside the heading
+when following an exact link; navigation stays outside the quoted range.
+
+Remaining limits: the source grammar is deliberately bounded Markdown; section
+numbers are not cross-revision identities; an authored local argument whose
+passage boundaries move needs its references updated deliberately. The ordinary
+note editor does not silently rewrite scientific dependencies. Whole-note copies
+under another note ID cannot replace an original passage conclusion. No new
+scientific claim, scheme binding or hosted data was activated in this pass.
+
+User correction after the candidate
+-----------------------------------
+The visible identifier, exemplified by A.33, should itself be the loc used to
+refer to a passage. The current computed §N section numbering does not satisfy
+that requirement. Keep exact revision/hash/range resolution underneath it; do
+not mistake a short display ordinal for an independently resolvable loc.
+The loc must be usable by humans and agents and shown beside its source heading.
+It must not require rewriting the source note to make it referenceable.
+The next pass implements this correction below. Existing exact passage links
+continue to work; their source hashes and original content are unchanged.
+
+
+Historical passage-loc candidate — superseded 27 November
+-----------------------------------------------
+A loc is now an actual immutable reference such as P.33, not a heading ordinal.
+P means passage. A neutral prefix avoids attaching a mathematical classification
+or implied approval to the identity. The author's heading still says Assumption,
+Lemma, or whatever the article needs. This is the chosen default for review.
+
+An unreferenced Markdown heading has a quiet citation icon. Explicitly opening
+that control reserves a loc; a cited heading displays [P.N] instead. The loc
+resolves to one exact note ID, revision, source hash and bounded heading range.
+Anyone permitted to read the source can cite it, with appropriate agent write
+scope; the author need not register statements or change the note. Ordinary
+reading, rendering and navigating never allocate locs. Concurrent/retried
+allocations converge on the same source reservation. Reservations survive
+deletion without retaining authored text and are never reassigned.
+
+The reader accepts the copied loc URL and selects the pinned passage, never the
+latest revision. A restrained highlight shows what was cited, including child
+headings and excluding the next same-or-higher heading. Navigation sits outside
+the excerpt. The normal article has no statement inventory or duplicated prose.
+The source's access rules are checked each time; knowing or guessing a loc is
+not authorization. Anonymous, private, retracted and deleted sources do not
+become readable through a citation. Historical sources keep historical pins.
+
+Agents allocate with POST /api/notebook/locs and resolve with GET of P.N. The
+response includes the excerpt and a self-describing exact reference for argument
+dependencies/conclusions. Normalized pins remain the scientific interchange
+format, so exports do not rely on a mutable alias and older records still work.
+Loc URLs also form existing note-revision graph edges and can be cited as
+implementation evidence, with the same source checks. No scientific approval
+or adoption follows from assigning a loc.
+
+The deliberate tradeoff: a loc belongs to one saved revision, not a living
+section across revisions. An edited note receives new locs when cited; old ones
+remain exact. This is less magical and protects research reproducibility. The
+installation owns its namespace: importing another site's P.N must resolve its
+original source, never assume a local number is equivalent. An exact_source URL
+is available alongside the guarded loc URL. UI loc metadata stays outside authored
+content and hashes. Existing explicit statement IDs remain supported.
+
+Schema migration 0036 follows the local 0035 chain. It adds only notebook_locs;
+no old notes are rewritten or backfilled into arbitrary locs. Apply the normal
+migration process before a hosted application requires the table. This pass is
+local only and does not claim rolling-upgrade compatibility or change the host.
+
+Portability check: two installations can both have P.1. Copied browser and agent
+resolver links therefore carry the exact source identity as well as the loc.
+The graph, passage context, implementation evidence and reader check that pair.
+A mismatched import cannot silently retarget the other installation's P.1. Bare
+loc lookup remains an explicit API/CLI operation on the configured server, not
+an accepted portable citation. An isolated two-installation export/import test
+covers this failure mode without rewriting historical authored content.
+
+Loc metadata adds one indexed read per selected note source, cached within the
+request. Note list payloads do not carry it; curated sources use one bounded
+metadata query. No model calls or new service are involved.
+
+Validation of the current loc pass: 221 backend regression checks passed across
+passages, legacy statements, scheme bindings, rosters, ratings, graph references
+and implementation evidence. After the portability refinement, 96 focused
+backend checks passed, including loc identity/access, migration preservation,
+statement workflows and implementation evidence; 49 additional focused checks
+covered CLI, export/import and implementation behavior. The 51 passage/workflow
+frontend checks pass, as do the existing 223 notebook checks and section, scheme,
+implementation, store and math suites. Browser checks at 1440, 390 and 320 pixels
+show no JavaScript errors, horizontal overflow or write requests during reading.
+A second review identified the related-research and import-collision cases; both
+are now covered. The examples exercise actual saved locs, not decorative labels.
+No scientific claims, hosted notes or deployed configuration were changed.
+
+Reader and authorship refinement, 26 November
+--------------------------------------------
+Keep the accepted standardized list spacing, including the reserved label line
+on unlabelled notes. Authorship is an optional single declaration stored in the
+existing tags: human-written, human-ai-hybrid or ai-written. The ordinary writer
+may select one; API creation/revision rejects contradictory choices but permits none. No account,
+import or missing label determines authorship. Existing content is not relabelled.
+The three known synthetic reading examples explicitly declare AI-written.
+
+The note number and reader upvote are larger; the upvote retains a touch-sized target.
+Ordinary readers no longer repeat claim/conditions as Scope & research context,
+show arbitrary internal kind labels, or add legacy premise badges to headings.
+Those stored records remain intact and reviewer-specific presentation remains.
+The contents links jump directly within the rendered article without another
+request. Copied and new-tab links still carry the exact source pin. Companion
+sections keep their saved IDs; editing never flattens existing source bindings.
+
+Validation of this refinement
+-----------------------------
+224 notebook frontend checks, 51 statement/passage frontend checks, and 19
+section/editor checks passed. Real Chromium checks at 1440, 390 and 320 pixels
+confirmed uniform list-row heights in the mixed preview catalogue, reader modes,
+exact citation dialogs, owner actions, no horizontal overflow, no console errors
+and no write requests during reading. The three self-reported authorship choices
+also passed API creation/revision validation, including immutable old revisions.
+
+Catalogue-wide coherence follow-up, 26 November
+----------------------------------------------
+Both saved encodings now share the article/Contents frame. Clicking a passage no
+longer adds tinted blocks, outlines or a layout-shifting side border. Legacy
+statement citations use bracketed margin controls while preserving their exact
+statement URLs; plain headings retain their permanent P.N locs. The upvote icon
+is a fixed SVG aligned with the first title line. The existing number layout stays.
+Wide mathematical groups can pan without visible scrollbars, and natural breaks
+are allowed. Do not claim that arbitrary unbreakable TeX reflows automatically.
+List publication now stays in the list and quietly refreshes its status.
+See note-example-audit.txt for the full inventory and proposed small rebuilding set.
+
+Optional declaration and readable editing links, 26 November
+-----------------------------------------------------------
+Authors may choose Human, AI, or Hybrid, or leave authorship unspecified.
+These remain self-reported tags, not verified identities. No choice is preselected
+for a new note. Saving, revising and publishing all permit unlabelled notes.
+Old revisions/imports stay byte-for-byte intact; removing a label in a new
+revision does not relabel the old one. Bulk publication treats otherwise eligible
+unlabelled notes normally.
+
+The editor displays existing guarded local passage citations as Markdown links
+such as [premise](loc:P.3). Saving restores the original portable revision/hash/
+passage URL; the shorthand is never the persisted citation. Newly typed aliases
+are resolved under the current reader's access, with the returned full pin
+checked before saving. Failed or stale resolution leaves the draft unsaved.
+Code/example lines, foreign URLs, ambiguous aliases and other citation formats
+stay unchanged. Ordinary reading/opening the editor allocates nothing. Historical
+statement/section links remain full links rather than inventing new identities.
+
+The upvote control uses normal flex centering in both the list and the reader,
+with its existing 44px hit target. Standard row spacing and note-number placement
+are retained. Desktop/390px/320px checks verify no horizontal overflow.
+
+Note numbers are plain reference labels, with no hover action or citation popup.
+Exact passage citations and the separate reviewer citation tools remain intact.
+
+
+27 November — current derived section reference design
+
+Sections use deterministic note-and-heading references. In note 56, the second
+section is 56.2; its first subsection is 56.2.1. The short resolver includes the
+saved revision: GET /api/notebook/locs/56.2@3. Reads/copies do not allocate a
+counter or mark a section as cited. Human labels omit the revision (Assumption
+56.2, Lemma 56.3, or Section 56.4); the kind follows an explicit author designation,
+never an inferred mathematical assessment. A heading margin shows [2] only when
+an accessible saved citation or argument uses it. Private incoming uses are not
+revealed to other readers.
+
+Saved note reads include section_refs_by_revision, mapping exact passage,
+statement or companion-section anchors to these labels and locs. The human
+Markdown editor accepts [Assumption 56.2](loc:56.2@3), then resolves and saves a
+portable guarded URL with note ID, revision, content hash and exact anchor.
+Agents should GET the loc, verify the source and qualifications, and save the
+returned URL/reference rather than bare installation-local shorthand. Scientific
+dependencies still use the returned exact passage or statement pin, never the
+human label alone. Copying a bare number to another installation is not portable.
+
+A section includes its subsections until the next same-or-higher heading. Later
+edits may change section ordinals; the @revision pin preserves the old source.
+Existing P.N aliases and the legacy allocation endpoint remain compatible, but
+new UI references never allocate them. Access is checked on every resolution;
+numbers do not grant access. CLI: notes resolve 56.2@3; historical P.33 also works.

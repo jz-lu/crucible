@@ -7,6 +7,8 @@ ownership, reviewer permissions, CSRF and authorization inside write transaction
 from starlette.routing import Mount
 
 PUBLIC = {
+    ("GET", "/orientation.js"),
+    ("GET", "/proposal-implementation.js"),
     ("GET", "/assets/resi-logo.png"),
     ("GET", "/assets/crucible-icon-light.svg"), ("GET", "/assets/crucible-icon-dark.svg"),
     ("GET", "/assets/crucible-mark.svg"),
@@ -33,6 +35,8 @@ PUBLIC = {
 # Explicit paths from the existing application. This is deliberately not a
 # prefix exemption: adding a route requires choosing its audience here.
 MEMBER_PATHS = {
+    "/api/proposal-implementations", "/api/proposal-implementations/{kind}/{target_id}",
+    "/api/proposal-implementations/{kind}/{target_id}/events",
     "/api/notebook/statement-workflow/context", "/api/notebook/statement-workflow/targets",
     "/api/notebook/statement-workflow/targets/{target_id}",
     "/api/notebook/statement-workflow/updates", "/api/notebook/statement-workflow/updates/{update_id}",
@@ -57,7 +61,9 @@ MEMBER_PATHS = {
     "/api/notebook/research-requests/{request_id}/assessments",
     "/api/notebook/research-requests/{request_id}/retraction",
     "/api/notebook/timeline", "/api/notebook/graph", "/api/notebook/notes", "/api/notebook/notes/{note_id}",
+    "/api/notebook/notes/{note_id}/rating",
     "/api/notebook/curated-note-numbers", "/api/notebook/tags",
+    "/api/notebook/locs", "/api/notebook/locs/{loc}",
     "/api/notebook/publication-policy", "/api/notebook/publication-status",
     "/api/notebook/notes/{note_id}/private-shares",
     "/api/notebook/private-shares", "/api/notebook/private-shares/{share_id}/response",
@@ -66,6 +72,7 @@ MEMBER_PATHS = {
     "/api/notebook/notes/{note_id}/proposal-submissions",
     "/api/notebook/notes/{note_id}/publication-requests",
     "/api/notebook/notes/{note_id}/publication-cancellations",
+    "/api/notebook/notes/{note_id}/publication-retractions",
     "/api/notebook/notes/{note_id}/delete", "/api/notebook/notes/{note_id}/restore",
     "/api/notebook/notes/{note_id}/publication-withdrawals",
     "/api/notebook/notes/{note_id}/publication-reviews", "/api/notebook/review-queue",

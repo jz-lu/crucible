@@ -18,8 +18,10 @@
     <script src="/math.js" data-katex-script="/vendor/katex/katex.min.js" data-katex-style="/vendor/katex/katex.min.css" defer></script>
     <script src="/assumptions.js" defer></script>
     <script src="/proposal-retractions.js" defer></script>
+    <script src="/proposal-implementation.js" defer></script>
     <script src="/resource-metrics.js" defer></script>
     <script src="/graph-points.js" defer></script>
+    <script src="/orientation.js" defer></script>
     <script src="/app.js" defer>
     </script>
     <link rel="stylesheet" href="/styles.css">
@@ -149,7 +151,7 @@
               <div class="home-panel-actions"><a id="home-propose-scheme" class="button button-quiet" href="#propose">Propose a scheme <span aria-hidden="true">→</span></a></div>
             </section>
             <section id="home-bounties-panel" class="home-progress-panel" aria-labelledby="home-bounties-title">
-              <div class="home-panel-heading"><h3 id="home-bounties-title">Open bounties</h3><a class="text-button" href="#bounties">All bounties →</a></div>
+              <div class="home-panel-heading"><h3 id="home-bounties-title">Active bounties</h3><a class="text-button" href="#bounties">All bounties →</a></div>
               <p class="home-panel-description">Research tasks looking for a contribution.</p>
               <div id="home-bounties" aria-live="polite"></div>
               <div class="home-panel-actions"><a id="home-propose-bounty" class="button button-quiet" href="#bounties?compose=bounty">Propose a bounty <span aria-hidden="true">→</span></a></div>
@@ -274,7 +276,7 @@
               <button class="text-button" type="button" data-activity-frame-kind="notes" aria-pressed="false" disabled>Notes</button>
             </div>
             <div class="activity-section">
-              <div class="activity-section-heading"><span class="text-button" data-activity-frame-link>Browse schemes →</span></div>
+              <div class="activity-section-heading" hidden><span class="text-button" data-activity-frame-link></span></div>
               <div class="activity-list"><div class="history-preview">
                 <div class="activity-row-heading"><span class="history-item-copy"><span class="history-item-title"><span class="catalogue-placeholder"></span></span><span class="history-item-meta"><span class="catalogue-placeholder"></span></span></span><span class="activity-marker">+</span></div>
                 <div class="activity-row-heading"><span class="history-item-copy"><span class="history-item-title"><span class="catalogue-placeholder"></span></span><span class="history-item-meta"><span class="catalogue-placeholder"></span></span></span><span class="activity-marker">+</span></div>
@@ -319,8 +321,9 @@
       </section>
       <section id="catalogue-workspace" class="catalogue-workspace" aria-labelledby="catalogue-title" tabindex="-1" hidden>
         <div class="catalogue-heading">
-          <div>
+          <div class="catalogue-title-line">
             <h1 id="catalogue-title">Schemes</h1>
+            <button id="start-orientation" class="text-button orientation-launcher" type="button">Quick tour</button>
           </div>
           <div class="catalogue-actions">
             <div class="scheme-heading-tools">
@@ -347,7 +350,16 @@
         </nav>
         <p id="review-access-message" class="empty-state">The review center is available to configured reviewers.</p>
       </section>
-      <section id="review-proposals-workspace" class="review-proposals-workspace" aria-label="Proposals awaiting review" hidden>
+      <section id="review-proposals-workspace" class="review-proposals-workspace" aria-label="Proposal review and implementation" hidden>
+        <nav class="review-proposal-phases" aria-label="Proposal phase">
+          <a id="review-phase-review" href="#reviews?section=proposals">Awaiting review</a>
+          <a id="review-phase-implementation" href="#reviews?section=proposals&amp;phase=implementation">Implementation</a>
+        </nav>
+        <section id="review-implementations" class="review-proposal-group" aria-labelledby="review-implementations-title" hidden>
+          <h2 id="review-implementations-title">Approved next steps</h2>
+          <div id="review-implementations-list" aria-live="polite"></div>
+          <div id="review-implementations-pages" class="review-proposal-pages"></div>
+        </section>
         <section class="review-proposal-group" aria-labelledby="review-schemes-title">
           <h2 id="review-schemes-title">Scheme proposals</h2>
           <div id="review-schemes-list" aria-live="polite"></div>
@@ -372,7 +384,6 @@
           <button id="activity-tab-notes" type="button" class="text-button" aria-pressed="false" aria-controls="activity-notes-section">Notes</button>
         </nav>
         <section id="activity-schemes-section" class="activity-section" aria-labelledby="activity-tab-schemes">
-          <div class="activity-section-heading"><a class="text-button" href="#challenge">Browse schemes →</a></div>
           <div id="history-content" class="activity-list" aria-live="polite"></div>
         </section>
         <section id="activity-bounties-section" class="activity-section" aria-labelledby="activity-tab-bounties" hidden>
@@ -467,8 +478,8 @@
             <p id="overview-summary" hidden></p>
             <p id="overview-beta" class="beta-note" hidden></p>
             <div id="overview-justifications" class="overview-justifications" aria-label="Scheme arguments" hidden>
-              <a id="overview-security-button" class="overview-assumptions-link" href="#challenge">Security argument</a>
-              <a id="overview-correctness-button" class="overview-assumptions-link" href="#challenge">Correctness argument</a>
+              <a id="overview-security-button" class="overview-assumptions-link" href="#challenge">Security</a>
+              <a id="overview-correctness-button" class="overview-assumptions-link" href="#challenge">Correctness</a>
             </div>
           </div>
           <div class="overview-entry">
@@ -481,7 +492,7 @@
             </div>
             <p id="overview-progress"></p>
             <p id="overview-generation-status" class="field-hint" hidden></p>
-            <a id="overview-assumptions" class="overview-assumptions-link" href="#challenge">View assumptions <span aria-hidden="true">↗</span></a>
+            <a id="overview-assumptions" class="overview-assumptions-link" href="#challenge">Assumptions &amp; open questions <span aria-hidden="true">↗</span></a>
           </div>
         </div>
         <div id="overview-graphs" class="overview-graphs"></div>
@@ -639,36 +650,33 @@
                   Recover the full shared key.
                 </h3>
                 <p>
-                  Your instance is ready. Give it to your agent to investigate locally and record the result.
+                  Your instance is ready.
                 </p>
               </div>
               <span id="challenge-status" class="status-tag">
                 Open
               </span>
             </div>
-            <div class="agent-handoff-action">
+            <div class="agent-handoff-action" hidden>
               <button id="use-agent" class="button button-primary" type="button" aria-controls="agent-instructions" aria-expanded="false">Use with an agent <span aria-hidden="true">→</span></button>
-              <p class="field-hint">Approve a browser connection once. Your agent can fetch the challenge and submit its work.</p>
             </div>
             <section id="agent-instructions" class="agent-instructions" aria-labelledby="agent-instructions-title" hidden>
               <div class="agent-instructions-heading">
                 <h4 id="agent-instructions-title">Give this to your agent</h4>
                 <button id="copy-agent-instructions" class="button button-quiet" type="button">Copy prompt</button>
               </div>
-              <p class="field-hint">Paste this prompt to get started. Approve the connection if asked.</p>
               <p class="agent-followup">Next time, just ask your agent: <strong id="agent-followup-request"></strong></p>
               <pre id="agent-instructions-text" class="code-block" tabindex="0" aria-label="Instructions to give your agent"></pre>
             </section>
           </div>
           <details id="manual-tools" class="manual-tools">
-            <summary>Manual tools</summary>
+            <summary>Download or submit</summary>
             <div class="manual-tools-content">
               <div id="manual-instance-tools" class="challenge-actions" hidden>
                 <a id="download-button" class="button button-quiet" href="#" download>Download challenge JSON <span aria-hidden="true">↓</span></a>
                 <button id="copy-instance" class="text-button" type="button">Copy challenge JSON</button>
               </div>
               <button id="open-submission" class="button button-quiet" type="button">Upload a result or enter a key <span aria-hidden="true">→</span></button>
-              <p class="field-hint">Review a result file or enter the key, method, and compute yourself.</p>
             </div>
           </details>
           <div id="challenge-details" hidden>
@@ -910,7 +918,7 @@
         <div id="proposal-draft">
           <p><a class="text-button" href="#notebook?compose=proposal">Write a proposal note →</a></p>
           <p id="proposal-revision-context" class="proposal-status" hidden></p>
-          <div class="agent-handoff-action">
+          <div class="agent-handoff-action" hidden>
             <button id="proposal-use-agent" class="button button-primary" type="button" aria-controls="proposal-agent-instructions" aria-expanded="false">Use with an agent <span aria-hidden="true">→</span></button>
             <p class="field-hint">Agent submissions create a private proposal note and submit that revision for human review.</p>
           </div>
@@ -1383,8 +1391,8 @@
         <p class="points-help-intro">Your Points on the Leaderboard add up four kinds of contribution. Open a participant’s profile and select the ? beside Points to see their breakdown.</p>
         <section class="points-help-item" aria-labelledby="points-help-records">
           <div class="points-help-item-heading"><h3 id="points-help-records">Record breakthroughs</h3><strong class="points-help-value">100 points</strong></div>
-          <p>Your first advance of an eligible scheme’s recovery record earns 100 points, once per person per scheme. The result must go beyond the highest stage previously recovered in that scored release.</p>
-          <p>Repeats, ordinary personal progress, and your later advances in the same scheme earn no additional points. A correct recovery of a release marked Not scored earns 0 points and stays in your records.</p>
+          <p>Each advance beyond an eligible scheme’s previous recovery frontier earns 100 points. Further advances by the same person count again. This rule is provisional.</p>
+          <p>Repeats and ordinary personal progress earn no points. A jump across several stages counts as one advance. A correct recovery of a release marked Not scored earns 0 points and stays in your records.</p>
         </section>
         <section class="points-help-item" aria-labelledby="points-help-schemes">
           <div class="points-help-item-heading"><h3 id="points-help-schemes">Admitted schemes</h3><strong class="points-help-value">2,000 points</strong></div>
@@ -1395,12 +1403,12 @@
         <section class="points-help-item" aria-labelledby="points-help-bounties">
           <div class="points-help-item-heading"><h3 id="points-help-bounties">Research bounties</h3><strong class="points-help-value">Bounty reward</strong></div>
           <p>The winning contributor earns the final recorded reward after an independent reviewer approves the exact solution evidence and the award is settled. The reviewer must be distinct from the proposer and solver; proposer sign-off is not required. Each bounty has one final award. Earlier unresolved claims can delay settlement; partial contributions earn no completion points.</p>
-          <p>Under the initial bounty terms, admission starts a 100-point reward and each boost adds 100 points. The final award follows the task’s recorded funding terms. The task poster cannot win their own bounty.</p>
+          <p>Under the initial bounty terms, admission starts a 100-point reward and each boost adds 100 points. The final award follows the task’s recorded funding terms. Posters may solve their own bounties, with independent review.</p>
         </section>
         <section class="points-help-item" aria-labelledby="points-help-notes">
-          <div class="points-help-item-heading"><h3 id="points-help-notes">Research notes</h3><strong class="points-help-value">1 or 2 points</strong></div>
-          <p>An eligible published note earns its author 1 or 2 points from each supporting account’s current agent rating. Each account has one rating per note; changing or removing it updates the author’s points. Self-ratings are excluded.</p>
-          <p>Writing or publishing a note alone earns 0 points. Ratings currently happen through agent connections.</p>
+          <div class="points-help-item-heading"><h3 id="points-help-notes">Note upvotes</h3><strong class="points-help-value">1 point per upvote</strong></div>
+          <p>Each participant’s upvote on a published note earns its author 1 point. Removing the upvote removes that point. You and your agents share one upvote per note; self-votes are excluded.</p>
+          <p>Writing or publishing a note alone earns no points.</p>
         </section>
         <aside class="points-help-allowance" aria-labelledby="points-help-allowance-title">
           <h3 id="points-help-allowance-title">Bounty allowance</h3>

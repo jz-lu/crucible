@@ -15,7 +15,7 @@ from .db import Challenge, Method, Submission, User
 from .scoring_awards import ADMISSION_POLICY_ID, ADMISSION_POINTS, ACTIVE_WEEK_POINTS, admission_points_relation
 
 
-POLICY_ID = "crucible-points-v11"
+POLICY_ID = "crucible-points-v12"
 FRONTIER_POINTS = 100
 
 # Frozen policy weights, indexed by the original configuration ordinal. These are
@@ -136,17 +136,9 @@ def metadata_relation(name, columns, rows, dialect):
     raise ValueError("Unsupported metadata database dialect")
 
 
-def score_relations(dialect="sqlite", *, as_of=None, reviewer_ids=()):
-    """Build portable SQL aggregates; never load all receipts into Python.
-
-    Only a strict advance beyond the prior exact-release recovery frontier can
-    earn numerical credit. Its account receives 100 once in that scheme, anchored
-    to their earliest advance. Later advances remain factual records. Ordering is
-    deterministic by server receipt time, then receipt ID; navigation stages and
-    inherited lower-profile records never change that comparison.
-    """
+def frontier_relations(dialect="sqlite", *, as_of=None):
+    """Exact eligible achievements and global advances, shared by scores and history."""
     as_of = time.time() if as_of is None else as_of
-    reviewer_ids = tuple(sorted(set(reviewer_ids)))
     profile_rows = []
     for family, release in FAMILY_RELEASES.items():
         profile_rows.extend((family, release["version"], f'{release["profile_prefix"]}{tier}', tier,
@@ -191,10 +183,24 @@ def score_relations(dialect="sqlite", *, as_of=None, reviewer_ids=()):
     ranked = select(advances, func.row_number().over(
         partition_by=(advances.c.user_id, advances.c.scheme_id),
         order_by=(advances.c.received_at, advances.c.submission_id),
-    ).label("award_position"), func.row_number().over(
+    ).label("award_position"), func.count().over(
+        partition_by=(advances.c.user_id, advances.c.scheme_id),
+    ).label("advance_count"), func.row_number().over(
         partition_by=(advances.c.user_id, advances.c.scheme_id),
         order_by=(advances.c.tier.desc(), advances.c.received_at, advances.c.submission_id),
     ).label("record_position")).cte("score_advance_positions")
+    return achievements, ranked
+
+
+def score_relations(dialect="sqlite", *, as_of=None, reviewer_ids=()):
+    """Each strict global frontier advance earns 100; repeat successes earn zero.
+
+    Receipt ordering is server time, then ID. Reviewers establish factual
+    frontiers but receive no points. Original enrolled ordinals are immutable.
+    """
+    as_of = time.time() if as_of is None else as_of
+    reviewer_ids = tuple(sorted(set(reviewer_ids)))
+    achievements, ranked = frontier_relations(dialect, as_of=as_of)
     first = select(ranked).where(ranked.c.award_position == 1).cte("score_first_advance")
     highest = select(ranked).where(ranked.c.record_position == 1).cte("score_highest_advance")
     participants_by_family = select(achievements.c.user_id, achievements.c.scheme_id).distinct().cte("score_family_participants")
@@ -203,7 +209,7 @@ def score_relations(dialect="sqlite", *, as_of=None, reviewer_ids=()):
     earning = and_(first.c.submission_id.is_not(None),
                    participants_by_family.c.user_id.not_in(reviewer_ids))
     families = select(participants_by_family, literal(0).label("progress"),
-                      case((earning, FRONTIER_POINTS), else_=0).label("early_recovery"),
+                      case((earning, FRONTIER_POINTS * first.c.advance_count), else_=0).label("early_recovery"),
                       case((earning, first.c.tier), else_=None).label("early_recovery_tier"),
                       case((earning, 1), else_=None).label("early_recovery_rank"),
                       case((earning, first.c.submission_id), else_=None).label("early_recovery_submission_id"),

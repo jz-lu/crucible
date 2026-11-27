@@ -79,7 +79,7 @@ function checkPin(anchor, source) {
   assert.equal(query.get('note'), source.id);
   assert.equal(query.get('revision'), String(source.revision));
   assert.equal(query.get('sha256'), source.content_sha256);
-  for(const key of ['note_section','statement','argument'])assert.equal(query.get(key),source[key]??null);
+  for(const key of ['note_section','statement','argument','passage'])assert.equal(query.get(key),source[key]??null);
 }
 let passed = 0, completed = false;
 async function test(name, fn) {await fn(); passed++; console.log('PASS '+name);}
@@ -122,7 +122,7 @@ process.once('beforeExit', () => {
     assert.equal(dialog(app).getAttribute('aria-labelledby'), 'scheme-assumptions-title');
     for (const category of ['security', 'correctness']) {
       await open(app, category);
-      assert.equal(app.$('#overview-'+category+'-button').textContent.trim().toLowerCase(), category+' argument');
+      assert.equal(app.$('#overview-'+category+'-button').textContent.trim().toLowerCase(), category);
       assert.equal(content(app).querySelectorAll('[data-assumption-category]').length, 1);
       const section = group(app, category); assert.ok(section);
       const heading = app.document.querySelector('#'+section.getAttribute('aria-labelledby'));
@@ -155,6 +155,27 @@ process.once('beforeExit', () => {
     read.click();await flush();assert.equal(dialog(app).open,false);
     assert.equal(new URLSearchParams(app.location.hash.split('?')[1]).get('argument'),'security-argument');
     assert.equal(vm.runInContext('state.noteOrigin',app.sandbox).label,'Assumption fixture');
+    vm.runInContext("navigate('#notebook')",app.sandbox);await flush();
+    assert.equal(vm.runInContext('state.noteOrigin',app.sandbox),null);
+  });
+  await test('heading-backed premises need no duplicate display label and retain their exact source', async () => {
+    const data=argumentPacket(),premise=data.scheme_arguments.security.dependencies[0].statement;
+    premise.label='';premise.title='Assumption · A bounded failure event';
+    premise.source_passage={heading:premise.title,start_line:3,end_line:8};
+    const app=await boot({data});await open(app);
+    const links=rows(content(app));assert.equal(links.length,2);
+    const link=links.find(item=>item.textContent.includes(premise.title));
+    assert.ok(link);assert.equal(link.querySelector('.assumption-number'),null);
+    checkPin(link,premise.source);
+    assert.doesNotMatch(content(app).textContent,/undefined|unavailable/);
+  });
+  await test('unregistered premise passages keep their exact selector in the scheme view', async () => {
+    const data=argumentPacket(),premise=data.scheme_arguments.security.dependencies[0].statement;
+    premise.id='p1-b-3-8';premise.label='§2';premise.source=canonicalPin('passage',premise.id);
+    premise.source_passage={id:premise.id,heading:premise.title,start_line:3,end_line:8};
+    const app=await boot({data});await open(app);
+    const link=rows(content(app)).find(item=>item.textContent.includes(premise.title));
+    assert.ok(link);checkPin(link,premise.source);assert.equal(noteQuery(link).has('statement'),false);
   });
   await test('canonical missing premises are distinct from an authored claim of no unproved premises', async () => {
     for(const status of [null,'conditional','incomplete','unconditional']) {

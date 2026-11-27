@@ -102,7 +102,7 @@ def test_only_registered_inheriting_releases_reserve_lower_first_places(current_
 
 
 @pytest.mark.parametrize("incremental", [False, True])
-def test_exact_progress_and_bonus_are_maxima_not_per_profile_sums(current_system, incremental):
+def test_each_exact_frontier_advance_counts_once_across_personal_records(current_system, incremental):
     app, _, _ = current_system
     user = add_user(app, "alice")
     adapter = registry.adapter_for("hqc")
@@ -111,9 +111,10 @@ def test_exact_progress_and_bonus_are_maxima_not_per_profile_sums(current_system
     registered_receipt(app, user, adapter, 5, 6)
     registered_receipt(app, user, adapter, 1, 7)
     data = person(app, "alice")
-    assert data["points"] == 100
-    assert data["score_breakdown"] == {"progress": 0, "early_recovery": 100, "scheme_contributions": 0, "note_contributions": 0, "bounty_points": 0}
-    assert sum(row["score"]["total"] for row in data["records"] if row["score"]) == 100
+    expected = 500 if incremental else 100
+    assert data["points"] == expected
+    assert data["score_breakdown"] == {"progress": 0, "early_recovery": expected, "scheme_contributions": 0, "note_contributions": 0, "bounty_points": 0}
+    assert sum(row["score"]["total"] for row in data["records"] if row["score"]) == expected
 
 
 def test_published_endpoint_and_unenrolled_releases_never_take_current_bonus(current_system, monkeypatch):
@@ -226,7 +227,7 @@ def test_catalogue_and_challenge_presentation_follow_policy_without_editing_froz
     assert standard_schemes.profile_presentation(registry.sntrup.manifests()[0])["scoring_eligible"] is False
 
 
-def test_natural_tier_above_fifty_gets_full_first_bonus_without_cumulative_steps(current_system):
+def test_later_natural_frontier_above_fifty_earns_a_second_award(current_system):
     app, _, _ = current_system
     alice, bob = (add_user(app, name) for name in ('alice', 'bob'))
     adapter = registry.adapter_for('frodokem')
@@ -236,8 +237,8 @@ def test_natural_tier_above_fifty_gets_full_first_bonus_without_cumulative_steps
     registered_receipt(app, alice, adapter, 80, 2)
     registered_receipt(app, bob, adapter, 80, 3)
     data = person(app, 'alice')
-    assert data['score_breakdown'] == {'progress': 0, 'early_recovery': 100, 'scheme_contributions': 0, 'note_contributions': 0, 'bounty_points': 0}
-    assert data['points'] == 100
+    assert data['score_breakdown'] == {'progress': 0, 'early_recovery': 200, 'scheme_contributions': 0, 'note_contributions': 0, 'bounty_points': 0}
+    assert data['points'] == 200
     assert data['records'][0]['score']['early_recovery_submission_id'] == lower['submission_id']
     assert data['first_records'][0]['tier'] == 80
     assert lower['submission_id'] != highest['submission_id']

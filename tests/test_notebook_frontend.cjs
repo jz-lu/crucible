@@ -11,7 +11,7 @@ const emptyResearch = {format:'crucible-theory-local-v1',notes:[],views:[]};
 const timeline = (overrides={}) => ({format:'crucible-notebook-timeline-v1',date_basis:'recorded_creation_utc',audience:'currently_visible_notes',as_of:'2026-10-18',total:3,undated_count:0,
  points:[{date:'2026-10-16',created:2,total:2},{date:'2026-10-18',created:1,total:3}],server_time:Date.parse('2026-10-18T12:00:00Z')/1000,...overrides});
 const user = {id:1,handle:'alice'};
-const content = (title='Private claim') => ({title,claim:'A precise claim',conditions:'Scope',body:'Argument as text',tags:['algebra'],kind:'conjecture'});
+const content = (title='Private claim') => ({title,claim:'A precise claim',conditions:'Scope',body:'Argument as text',tags:['algebra','ai-written'],kind:'conjecture'});
 const revision = (number=1,title='Private claim',status='private') => ({revision:number,content_sha256:'hash-'+number,created_at:100,content:content(title),publication_status:status,...(status==='submitted'?{publication:{requested_at:99}}:{})});
 const note = (overrides={}) => {const rev={...revision(),...Object.fromEntries(Object.entries(overrides).filter(([key])=>['revision','content_sha256','content','publication_status','publication'].includes(key)))};const{content:ignored,...metadata}=overrides;return{id:'note-one',owner:user,can_edit:true,created_at:100,revision:rev.revision,content_sha256:rev.content_sha256,publication_status:rev.publication_status,revision_count:1,revisions:[rev],...metadata};};
 const deferred = () => {let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
@@ -39,7 +39,7 @@ function summaryPage(url,records){
 }
 async function filterNotes(app,value){const select=app.root.querySelector('[name="visibility"]');select.value=value;select.dispatchEvent({type:'change'});await flush();}
 async function searchNotes(app,value){app.q('search').value=value;app.q('search').dispatchEvent({type:'input'});await app.advanceTimers(250);}
-async function boot({account=user,respond,stored=null,mapFactory,currentReleases,session,digest,reviewOnly=false,researchWorkspace=emptyResearch,initialParams=new URLSearchParams(),onMount}={}) {
+async function boot({account=user,respond,stored=null,mapFactory,currentReleases,session,digest,reviewOnly=false,readerTools=false,researchWorkspace=emptyResearch,initialParams=new URLSearchParams(),onMount}={}) {
   const app=await createApp({schemes:[],hash:'#about'});let current=account;const requests=[],storage=[];
   const timers=new Map();let timerId=0;
   app.sandbox.setTimeout=(fn,delay=0)=>{const id=++timerId;timers.set(id,{fn,delay});return id;};
@@ -53,16 +53,229 @@ async function boot({account=user,respond,stored=null,mapFactory,currentReleases
   const api=async(url,body,options)=>{requests.push({url,body,options});if(respond){const result=await respond(url,body,options);if(result!==undefined)return url==='/map/notes.json'?vm.runInContext('('+JSON.stringify(result)+')',app.sandbox):result;}if(url==='/notebook/request-types.json')return requestTypes;if(url==='/api/notebook/curated-note-numbers')return{numbers:Object.fromEntries(researchWorkspace.notes.map((source,index)=>['curated:'+source.id,index+1]))};if(url.startsWith('/api/notebook/research-requests?source_note_id='))return{requests:[],next_after:null};if(url==='/map/notes.json')return vm.runInContext('('+JSON.stringify(researchWorkspace)+')',app.sandbox);if(url.startsWith('/api/notebook/notes?'))return summaryPage(url,researchWorkspace.notes.map(curatedSummary));if(url.startsWith('/api/notebook/notes/note-one'))return{note:note()};throw Error('Unexpected '+url);};
   let controller,navigationTask=Promise.resolve();
   const navigate=route=>{app.history.pushState(null,'',route);navigationTask=controller.show(new URLSearchParams(route.split('?')[1]||''));return navigationTask;};
-  controller=app.sandbox.window.CrucibleNotebook.mount(root,{api,account:()=>current,navigate,mapFactory,currentReleases,session,reviewOnly});
+  controller=app.sandbox.window.CrucibleNotebook.mount(root,{api,account:()=>current,navigate,mapFactory,currentReleases,session,reviewOnly,readerTools});
   const q=name=>root.querySelector(`[data-nb="${name}"]`);
   onMount?.({root,q});
   await controller.show(initialParams);
   return{...app,root,controller,q,requests,storage,advanceTimers,whenNavigated:()=>navigationTask,setAccount:value=>{current=value;controller.setAccount(value);},show:async(id,rev)=>controller.show(new URLSearchParams(id?{note:id,...(rev?{revision:String(rev)}:{})}:{}))};
 }
-function fill(app,title='New mathematical claim'){for(const [key,value]of Object.entries(content(title)))if(key!=='tags')app.root.querySelector(`[name="${key}"]`).value=value;app.root.querySelector('[name="tags"]').value=JSON.stringify(['algebra']);}
+// Retained auxiliary workflow coverage opts in explicitly; production mounts omit this option.
+const bootWithReaderTools = (options={}) => boot({...options,readerTools:true});
+function fill(app,title='New mathematical claim'){for(const [key,value]of Object.entries(content(title))){const field=key!=='tags'&&app.root.querySelector(`[name="${key}"]`);if(field)field.value=value;}app.root.querySelector('[name="tags"]').value=JSON.stringify(['algebra','ai-written']);}
 const byText=(root,label)=>root.querySelectorAll('button').find(n=>n.textContent===label);
 let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
 (async()=>{
+ const exactLoc = (alias='P.3',noteId='source-note') => '/#notebook?loc='+alias+'&note='+noteId+'&revision=2&sha256='+'a'.repeat(64)+'&passage=p1-b-1-3';
+ await test('editing shortens guarded links and saves the exact original pins without resolving again',async()=>{
+  const link=exactLoc(),body='See [premise]('+link+').\n\n`[example]('+link+')`\n\n```md\n[example]('+link+')\n```';
+  const original=content();original.body=body;original.sections=[{id:'idea',title:'Idea',body:'Use [P.3]('+link+').'}];
+  let saved;const app=await boot({respond:(url,payload)=>url.endsWith('/revisions')&&payload?(saved=payload,{note:note()}):url.startsWith('/api/notebook/notes/note-one')?{note:note({content:original})}:undefined});
+  original.sections=vm.runInContext('('+JSON.stringify(original.sections)+')',app.sandbox);
+  await app.show('note-one');byText(app.q('full'),'Edit').click();
+  assert.equal(app.root.querySelector('[name="body"]').value,'See [premise](loc:P.3).\n\n`[example]('+link+')`\n\n```md\n[example]('+link+')\n```');
+  assert.ok(app.q('dialog-body').querySelectorAll('textarea').some(field=>field.value==='Use [P.3](loc:P.3).'));
+  app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
+  assert.ok(saved,app.q('dialog-body').textContent);assert.equal(saved.content.body,body);assert.deepEqual(JSON.parse(JSON.stringify(saved.content.sections)),JSON.parse(JSON.stringify(original.sections)));
+  assert.equal(app.requests.some(request=>request.url.startsWith('/api/notebook/locs')),false);
+ });
+ await test('new short loc links resolve once, freeze editing while pending, and persist a guarded citation',async()=>{
+  const waiting=deferred(),link=exactLoc();let saved;
+  const app=await boot({respond:(url,payload)=>url==='/api/notebook/locs/P.3'?waiting.promise:url==='/api/notebook/notes'&&payload?(saved=payload,{note:note()}):undefined});
+  app.q('new').click();fill(app);const body=app.root.querySelector('[name="body"]');body.value='Use [premise](loc:P.3), then [again](loc:P.3).';
+  const form=app.root.querySelector('.nb-form');form.dispatchEvent({type:'submit'});await flush();assert.equal(body.disabled,true);assert.equal(saved,undefined);
+  waiting.resolve({loc:'P.3',url:link,reference:{note_id:'source-note',revision:2,content_sha256:'a'.repeat(64),passage:'p1-b-1-3'}});await flush();
+  assert.equal(saved.content.body,'Use [premise]('+link+'), then [again]('+link+').');assert.equal(app.requests.filter(request=>request.url==='/api/notebook/locs/P.3').length,1);
+ });
+ await test('unavailable and inconsistent short locs leave the draft editable without a save',async()=>{
+  for(const response of [null,{loc:'P.3',url:exactLoc(),reference:{note_id:'different',revision:2,content_sha256:'a'.repeat(64),passage:'p1-b-1-3'}}]){
+   let saved;const app=await boot({respond:(url,payload)=>{if(url==='/api/notebook/locs/P.3'){if(response===null)throw Object.assign(Error('Note not found.'),{status:404});return response;}if(url==='/api/notebook/notes'&&payload){saved=payload;return{note:note()};}}});
+   app.q('new').click();fill(app);const body=app.root.querySelector('[name="body"]');body.value='Use [premise](loc:P.3).';app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
+   assert.equal(saved,undefined);assert.equal(body.value,'Use [premise](loc:P.3).');assert.equal(body.disabled,false);assert.match(app.q('dialog-body').textContent,/draft is still here/);
+  }
+ });
+ await test('derived section shorthand saves portable pins for headings, legacy statements and companion sections',async()=>{
+  for(const [anchor,key,id] of [['passage','passage','p1-b-1-3'],['statement','statement_id','premise'],['note_section','section_id','explanation']]){
+   const loc='56.2.1@3',digest='a'.repeat(64),link='/#notebook?'+new URLSearchParams({loc,note:'source-note',revision:'3',sha256:digest,[anchor]:id});let saved;
+   const app=await boot({respond:(url,payload)=>url==='/api/notebook/locs/'+loc?{loc,url:link,reference:{note_id:'source-note',revision:3,content_sha256:digest,[key]:id}}:url==='/api/notebook/notes'&&payload?(saved=payload,{note:note()}):undefined});
+   app.q('new').click();fill(app);app.root.querySelector('[name="body"]').value='Use [Assumption 56.2.1](loc:'+loc+').';
+   app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
+   assert.equal(saved.content.body,'Use [Assumption 56.2.1]('+link+').');
+   assert.equal(app.requests.filter(r=>r.url==='/api/notebook/locs/'+loc).length,1);
+  }
+ });
+ await test('ambiguous and foreign loc links stay full and are never silently retargeted',async()=>{
+  const links=[exactLoc(),exactLoc('P.3','another-note'),'https://different.example'+exactLoc('P.7')];
+  const original={...content(),body:links.map((link,i)=>'[source '+i+']('+link+')').join('\n')};let saved;
+  const app=await boot({respond:(url,payload)=>url.endsWith('/revisions')&&payload?(saved=payload,{note:note()}):url.startsWith('/api/notebook/notes/note-one')?{note:note({content:original})}:undefined});
+  await app.show('note-one');byText(app.q('full'),'Edit').click();assert.equal(app.root.querySelector('[name="body"]').value,original.body);
+  app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();assert.equal(saved.content.body,original.body);assert.equal(app.requests.some(row=>row.url.startsWith('/api/notebook/locs')),false);
+ });
+ await test('loc resolution cannot save after the editor is closed or identity changes',async()=>{
+  const waiting=deferred();let saved;const app=await boot({respond:(url,payload)=>url==='/api/notebook/locs/P.3'?waiting.promise:url==='/api/notebook/notes'&&payload?(saved=payload,{note:note()}):undefined});
+  app.q('new').click();fill(app);app.root.querySelector('[name="body"]').value='[premise](loc:P.3)';app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
+  app.setAccount({id:9,handle:'different'});waiting.resolve({loc:'P.3',url:exactLoc(),reference:{note_id:'source-note',revision:2,content_sha256:'a'.repeat(64),passage:'p1-b-1-3'}});await flush();assert.equal(saved,undefined);
+ });
+ await test('unlabelled historical notes can request publication without editing',async()=>{
+  const original={...content(),tags:['algebra']};const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:note({content:original})}:undefined});await app.show('note-one');byText(app.q('full'),'Publish').click();
+  assert.ok(byText(app.q('dialog-body'),'Send publish request'));assert.equal(byText(app.q('dialog-body'),'Choose authorship'),undefined);assert.equal(app.requests.some(row=>row.url.includes('/publication-requests')),false);
+ });
+ await test('ordinary authoring requires title and prose, not a prescribed outline',async()=>{
+  let saved;const app=await boot({respond:(url,body)=>url==='/api/notebook/notes'&&body?(saved=body,{note:note({content:body.content})}):undefined});
+  app.q('new').click();const dialog=app.q('dialog-body');
+  assert.equal(dialog.querySelector('.nb-writing-context'),null);
+  assert.equal(dialog.querySelector('[name="claim"]'),null);assert.equal(dialog.querySelector('[name="conditions"]'),null);
+  assert.equal(dialog.querySelector('[name="title"]').required,true);assert.equal(dialog.querySelector('[name="body"]').required,true);
+  dialog.querySelector('[name="authorship"]').value='human-written';dialog.querySelector('[name="authorship"]').dispatchEvent({type:'change'});
+  dialog.querySelector('[name="title"]').value='A short question';dialog.querySelector('[name="body"]').value='Could this family admit a different reduction?';
+  dialog.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
+  assert.equal(saved.content.claim,'');assert.equal(saved.content.conditions,'');assert.equal(saved.content.sections,undefined);
+  assert.equal(saved.content.body,'Could this family admit a different reduction?');
+  assert.equal(app.q('notice').classList.contains('nb-sr-only'),true);
+ });
+ await test('cancelled publication is simply private in the ordinary reader',async()=>{
+  const saved=note({...revision(1,'A private note','cancelled'),publication:{decision:'cancelled',scope:'Historical scope'}});
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:saved}:undefined});await app.show('note-one');
+  assert.equal(app.q('full').querySelector('.nb-publication-state').textContent,'Private');
+  assert.doesNotMatch(app.q('full').textContent,/Publish request cancelled|Historical scope/);assert.ok(byText(app.q('full'),'Publish'));
+  assert.equal(app.q('full').querySelector('.nb-tags').querySelectorAll('button').length,0);
+ });
+ await test('list rows retain quiet status while all publication controls and dates stay inside',async()=>{
+  const rows=['private','submitted','approved'].map((state,index)=>note({id:'note-'+index,...revision(1,state,state)}));
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:rows,next_after:null}:undefined});
+  const entries=app.q('list').querySelectorAll('.nb-reading-entry');
+  assert.equal(byText(app.q('list'),'Edit'),undefined);
+  assert.equal(app.q('list').querySelector('.nb-row-publication'),null);assert.equal(app.q('list').querySelector('.nb-note-time'),null);
+  assert.deepEqual(entries.map(row=>row.querySelector('.nb-row-state')?.textContent||null),['Private','In review',null]);
+ });
+ await test('published-note retraction confirms scope and retries its exact saved request',async()=>{
+  const saved=note({...revision(1,'Published work','approved')});let writes=0,first;
+  const app=await boot({respond:(url,body)=>{
+    if(url.startsWith('/api/notebook/notes?'))return{notes:[saved]};
+    if(url==='/api/notebook/notes/note-one')return{note:saved};
+    if(url.endsWith('/publication-retractions')){writes++;if(!first)first=JSON.parse(JSON.stringify(body));else assert.deepEqual(JSON.parse(JSON.stringify(body)),first);if(writes===1)throw Object.assign(Error('Lost response'),{status:503});return{note_id:saved.id,retracted:true};}
+  }});
+  await app.show('note-one');byText(app.q('full'),'Retract').click();await flush();assert.equal(writes,0);
+  assert.match(app.q('dialog-body').textContent,/note will become private/);
+  byText(app.q('dialog-body'),'Retract').click();await flush();assert.equal(writes,1);
+  byText(app.q('dialog-body'),'Retry retraction').click();await flush();assert.equal(writes,2);
+  assert.equal(first.revision,1);assert.equal(first.content_sha256,'hash-1');
+ });
+ await test('pending request retraction confirms before changing visibility',async()=>{
+  const saved=note({...revision(1,'Submitted work','submitted')});
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[saved]}:url==='/api/notebook/notes/note-one'?{note:saved}:undefined});
+  await app.show('note-one');byText(app.q('full'),'Retract').click();await flush();
+  assert.equal(app.q('dialog-title').textContent,'Retract publication?');
+  assert.ok(byText(app.q('dialog-body'),'Retract'));assert.equal(app.requests.some(row=>row.body),false);
+ });
+ await test('human votes read the exact pin, share the account version and retry the identical uncertain write',async()=>{
+  const digest='a'.repeat(64),saved=note({...revision(1,'Published research','approved'),content_sha256:digest,
+   owner:{id:2,handle:'bob'},can_edit:false,published_at:100});
+  let writes=0,body;const rating={score:0,raters:0,can_rate:true,your_rating:{value:0,version:0}};
+  const app=await boot({respond:(url,payload)=>{
+   if(url.includes('/rating')){
+    if(!payload)return{note_id:saved.id,revision:1,content_sha256:digest,rating};
+    writes++;if(!body)body=JSON.parse(JSON.stringify(payload));else assert.deepEqual(JSON.parse(JSON.stringify(payload)),body);
+    if(writes===1)throw Object.assign(Error('Response lost'),{status:0});
+    return{note_id:saved.id,rating:{score:1,raters:1,can_rate:true,your_rating:{value:1,version:1,revision:1,content_sha256:digest}}};
+   }
+   if(url.startsWith('/api/notebook/notes?'))return{notes:[saved],next_after:null};
+  }});
+  app.q('list').querySelector('.nb-vote-control').click();await flush();
+  assert.match(app.requests.find(row=>row.url.includes('/rating?')).url,/revision=1&content_sha256=a{64}/);
+  assert.equal(writes,1);assert.equal(body.expected_version,0);assert.equal(body.value,1);assert.equal(body.content_sha256,digest);
+  app.q('list').querySelector('.nb-vote-control').click();await flush();assert.equal(writes,2);assert.equal(app.q('dialog').open,false);
+  assert.equal(app.q('list').querySelector('.nb-vote-total').textContent,'1');assert.ok(app.q('list').querySelector('.nb-voted'));
+ });
+ await test('an older-revision vote can be removed without silently moving its endorsement to the displayed revision',async()=>{
+  const digest='a'.repeat(64),old='b'.repeat(64),saved=note({...revision(2,'New explanation','approved'),content_sha256:digest,
+   owner:{id:2,handle:'bob'},can_edit:false,published_at:100});let written;
+  const app=await boot({respond:(url,body)=>{
+   if(url.includes('/rating')){
+    const rating={score:body?0:1,raters:body?0:1,can_rate:true,your_rating:{value:body?0:1,version:body?4:3,revision:1,content_sha256:old}};
+    if(body){written=body;return{note_id:saved.id,rating};}
+    return{note_id:saved.id,revision:2,content_sha256:digest,rating};
+   }
+   if(url.startsWith('/api/notebook/notes?'))return{notes:[saved],next_after:null};
+  }});
+  app.q('list').querySelector('.nb-vote-control').click();await flush();
+  assert.equal(written.value,0);assert.equal(written.revision,1);assert.equal(written.content_sha256,old);assert.equal(written.expected_version,3);
+ });
+ await test('vote reads cannot restore controls after account change and own notes never offer self-votes',async()=>{
+  const digest='a'.repeat(64),saved=note({...revision(1,'Published research','approved'),content_sha256:digest,published_at:100});
+  const gate=deferred();const app=await boot({respond:url=>url.includes('/rating')?gate.promise:url.startsWith('/api/notebook/notes?')?{notes:[saved],next_after:null}:undefined});
+  assert.equal(app.q('list').querySelector('.nb-vote-control'),null);
+  saved.owner={id:2,handle:'bob'};app.controller.invalidateReads();await app.show();
+  app.q('list').querySelector('.nb-vote-control').click();await flush();app.setAccount({id:3,handle:'carol'});
+  gate.resolve({note_id:saved.id,revision:1,content_sha256:digest,rating:{score:0,raters:0,can_rate:true,your_rating:{value:0,version:0}}});await flush();
+  assert.equal(app.q('dialog').open,false);assert.equal(app.q('dialog-body').querySelector('.nb-vote-choice'),null);assert.equal(app.requests.some(row=>row.body),false);
+ });
+ await test('curated votes stay synchronized between a warmed reader and list in both directions',async()=>{
+  const source=curatedFixture('voting','A shared premise'),id='curated:voting',hash=curatedHash(source.revisions[0]);
+  let value=0,version=0;
+  const rating=()=>({raters:value,can_rate:true,your_rating:{value,version,revision:1,content_sha256:hash}});
+  const app=await boot({researchWorkspace:{...emptyResearch,notes:[source]},respond:(url,body)=>{
+   if(url.includes('/rating')){if(body){value=body.value;version++;}return{note_id:id,revision:1,content_sha256:hash,rating:rating()};}
+   if(url==='/api/notebook/curated-note-numbers')return{numbers:{[id]:7},metadata:{[id]:{rating:rating(),my_vote:rating().your_rating}}};
+   if(url.startsWith('/api/notebook/notes?'))return{notes:[{...curatedSummary(source),created_at:1,rating:rating(),my_vote:rating().your_rating}],next_after:null};
+  }});
+  await app.show(id);await app.show();
+  app.q('list').querySelector('.nb-vote-control').click();await flush();assert.equal(value,1);
+  await app.show(id);
+  const vote=app.q('full').querySelector('.nb-vote-control');assert.equal(vote.getAttribute('aria-pressed'),'true');assert.equal(vote.querySelector('.nb-vote-total').textContent,'1');
+  vote.click();await flush();await app.show();assert.equal(value,0);
+  assert.equal(app.q('list').querySelector('.nb-vote-control').getAttribute('aria-pressed'),'false');
+  await app.show(id);assert.equal(app.q('full').querySelector('.nb-vote-total').textContent,'0');
+  assert.equal(app.requests.filter(row=>row.url==='/map/notes.json').length,1,'voting must not reload immutable note content');
+ });
+ for(const phase of ['read','write']) await test('opening the reader during a vote '+phase+' preserves the pending action and settles its controls',async()=>{
+  const hash='a'.repeat(64),gate=deferred();let value=0,writes=0;
+  const rating=()=>({raters:value,can_rate:true,your_rating:{value,version:value,revision:1,content_sha256:hash}});
+  const saved=()=>note({...revision(1,'Published research','approved'),content_sha256:hash,owner:{id:2,handle:'bob'},can_edit:false,published_at:100,rating:rating(),my_vote:rating().your_rating});
+  const app=await boot({respond:async(url,body)=>{
+   if(url.includes('/rating')){
+    if((body?'write':'read')===phase)await gate.promise;
+    if(body){writes++;value=body.value;}
+    return{note_id:'note-one',revision:1,content_sha256:hash,rating:rating()};
+   }
+   if(url.startsWith('/api/notebook/notes?'))return{notes:[saved()],next_after:null};
+   if(url==='/api/notebook/notes/note-one')return{note:saved()};
+  }});
+  app.q('list').querySelector('.nb-vote-control').click();await flush();await app.show('note-one');
+  const pending=app.q('full').querySelector('.nb-vote-control');
+  assert.equal(pending.getAttribute('aria-pressed'),'true');assert.equal(pending.disabled,true);
+  gate.resolve();await flush();
+  const settled=app.q('full').querySelector('.nb-vote-control');
+  assert.equal(writes,1);assert.equal(settled.disabled,false);assert.equal(settled.getAttribute('aria-pressed'),'true');assert.equal(settled.querySelector('.nb-vote-total').textContent,'1');
+ });
+ await test('a note read begun before a confirmed vote cannot replace it with stale totals',async()=>{
+  const hash='a'.repeat(64),gate=deferred();let value=0;
+  const rating=()=>({raters:value,can_rate:true,your_rating:{value,version:value,revision:1,content_sha256:hash}});
+  const saved=()=>note({...revision(1,'Published research','approved'),content_sha256:hash,owner:{id:2,handle:'bob'},can_edit:false,published_at:100,rating:rating(),my_vote:rating().your_rating});
+  const stale=saved(),write=deferred();
+  const app=await boot({respond:async(url,body)=>{
+   if(url.includes('/rating')){if(body){await write.promise;value=body.value;}return{note_id:'note-one',revision:1,content_sha256:hash,rating:rating()};}
+   if(url.startsWith('/api/notebook/notes?'))return{notes:[saved()],next_after:null};
+   if(url==='/api/notebook/notes/note-one'){await gate.promise;return{note:structuredClone(stale)};}
+  }});
+  app.q('list').querySelector('.nb-vote-control').click();await flush();const opening=app.show('note-one');await flush();
+  write.resolve();await flush();gate.resolve();await opening;
+  assert.equal(app.q('full').querySelector('.nb-vote-total')?.textContent,'1');
+  assert.equal(app.q('full').querySelector('.nb-vote-control')?.getAttribute('aria-pressed'),'true');
+ });
+ await test('a pending vote receipt cannot affect another account after navigation',async()=>{
+  const hash='a'.repeat(64),gate=deferred();let value=0;
+  const rating=()=>({raters:value,can_rate:true,your_rating:{value,version:value,revision:1,content_sha256:hash}});
+  const saved=()=>note({...revision(1,'Published research','approved'),content_sha256:hash,owner:{id:2,handle:'bob'},can_edit:false,published_at:100,rating:rating(),my_vote:rating().your_rating});
+  const app=await boot({respond:async(url,body)=>{
+   if(url.includes('/rating')){if(body){await gate.promise;value=1;}return{note_id:'note-one',revision:1,content_sha256:hash,rating:rating()};}
+   if(url.startsWith('/api/notebook/notes?'))return{notes:[saved()],next_after:null};
+   if(url==='/api/notebook/notes/note-one')return{note:saved()};
+  }});
+  app.q('list').querySelector('.nb-vote-control').click();await flush();app.setAccount({id:3,handle:'carol'});await app.show('note-one');
+  gate.resolve();await flush();
+  assert.equal(app.q('full').querySelector('.nb-vote-total').textContent,'0');
+  assert.equal(app.q('full').querySelector('.nb-vote-control').getAttribute('aria-pressed'),'false');
+ });
  const screeningPolicy = mode => ({mode,screening_required:true,policy_id:'a'.repeat(64),processor:'OpenAI',model:'gpt-6-luna',
   notice:'This exact revision is sent to OpenAI. Private drafts are not sent. Monitoring retention may be up to30days.',privacy_url:'https://developers.openai.com/api/docs/guides/your-data'});
  for(const mode of ['automatic','shadow']) await test(mode+' publication confirmation shows processing before pinned consent',async()=>{
@@ -70,8 +283,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const app=await boot({respond:(url,body)=>{if(url.endsWith('/publication-requests')&&body){sent=JSON.parse(JSON.stringify(body));return{note:stored};}if(url.startsWith('/api/notebook/notes/note-one'))return{note:stored};}});
   await app.show('note-one');byText(app.q('full'),'Publish').click();
   assert.equal(sent,undefined);assert.match(app.q('dialog-body').textContent,/sent to OpenAI.*Private drafts.*retention/);
-  assert.match(app.q('dialog-body').textContent,/Sending the request confirms this processing/);
-  assert.match(app.q('dialog-body').textContent,mode==='automatic'?/after a passing automated check/:/evaluation only.*will not publish/);
+  assert.match(app.q('dialog-body').textContent,mode==='automatic'?/after automated screening/:/evaluation only.*will not publish/);
   app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
   assert.equal(sent.screening_consent,true);assert.equal(sent.screening_policy_id,policy.policy_id);
   assert.equal(sent.revision,1);assert.equal(sent.content_sha256,'hash-1');
@@ -94,7 +306,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  });
  await test('automatic publication provenance never impersonates a human scientific reviewer',async()=>{
   const stored=note({...revision(1,'Automatically shared','approved'),publication:{decision_source:'automated',reviewer:{handle:'must-not-appear'},scope:'Community visibility only.'}});
-  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});await app.show('note-one');
+  const app=await bootWithReaderTools({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});await app.show('note-one');
   assert.match(app.q('full').textContent,/Published after automated screening.*not a scientific review/);
   assert.doesNotMatch(app.q('full').textContent,/Reviewed by must-not-appear/);
  });
@@ -164,8 +376,8 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
    if(url.startsWith('/api/notebook/publication-status?')){statusReads++;assert.deepEqual(new URL(url,'http://testserver').searchParams.getAll('publication_id'),[id]);return{publications:[{id,note_id:'note-one',revision:1,content_sha256:'hash-1',status:complete?'approved':'submitted',screening_status:complete?'published':'running'}]};}
    if(url.startsWith('/api/notebook/notes?'))return{notes:[stored()],next_after:null,capabilities:{publication_policy:screeningPolicy('automatic')}};
   }});
-  await app.advanceTimers(2000);assert.equal(statusReads,1);assert.match(app.q('list').textContent,/Publish request pending/);
-  complete=true;await app.advanceTimers(4000);assert.equal(statusReads,2);assert.match(app.q('list').textContent,/Published/);
+  await app.advanceTimers(2000);assert.equal(statusReads,1);assert.match(app.q('list').textContent,/In review/);
+  complete=true;await app.advanceTimers(4000);assert.equal(statusReads,2);assert.equal(app.q('list').querySelector('.nb-publication-state'),null);
   assert.equal(app.requests.some(row=>row.url.startsWith('/api/notebook/notes/')),false,'List refresh never loads bodies');
   await app.advanceTimers(30000);assert.equal(statusReads,2,'Completed work stops polling');
  });
@@ -181,7 +393,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.equal(app.q('list').firstChild,row,'An unchanged return keeps the existing DOM');
   await app.advanceTimers(2000);assert.equal(statusReads,1,'Returning does not reset the current backoff');
   complete=true;await app.advanceTimers(4000);assert.equal(statusReads,2);
-  assert.match(app.q('list').textContent,/Published/);
+  assert.equal(app.q('list').querySelector('.nb-publication-state'),null);
   await app.advanceTimers(30000);assert.equal(statusReads,2);
  });
  for(const reader of [false,true]) await test('a previously manual request starts polling after adoption on '+(reader?'reader':'list')+' return',async()=>{
@@ -200,7 +412,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   stage='queued';app.controller.hide();await app.show(reader?'note-one':undefined);
   await app.advanceTimers(2000);assert.equal(statusReads,2,'Only one bounded status check starts on return');
   stage='published';await app.advanceTimers(4000);assert.equal(statusReads,3);
-  assert.match(app.q(reader?'full':'list').textContent,/Published/);
+  assert.equal(app.q(reader?'full':'list').querySelector('.nb-publication-state'),null);
   await app.advanceTimers(30000);assert.equal(statusReads,3);
  });
  await test('an unchanged human-review result does not restart polling on a fresh reader return',async()=>{
@@ -249,10 +461,10 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
    if(url.startsWith('/api/notebook/notes?'))return{notes:records().slice(0,25),next_after:'next',capabilities:{publication_policy:screeningPolicy('automatic')}};
   }});
   await app.controller.warm('list');await app.show();app.q('more').click();await flush();
-  assert.equal(app.q('page').textContent,'Page 2');assert.match(app.q('list').textContent,/Indexed note 30.*Publish request pending/);
+  assert.equal(app.q('page').textContent,'Page 2');assert.match(app.q('list').textContent,/Indexed note 30.*In review/);
   await app.advanceTimers(2000);
   assert.equal(indexReads,2);assert.equal(app.q('page').textContent,'Page 2');
-  assert.match(app.q('list').textContent,/Indexed note 30.*Published/);assert.doesNotMatch(app.q('list').textContent,/Indexed note 1\b/);
+  assert.match(app.q('list').textContent,/Indexed note 30/);assert.doesNotMatch(app.q('list').textContent,/Indexed note 1\b/);
  });
  await test('new notes choose a type, preserve entered text and save proposal intent without submitting for review',async()=>{
   let saved;
@@ -275,7 +487,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const specification={name:'Existing construction',format:'crucible-kem-spec-v1'},metadata={note_type:'scheme-proposal',kem_specification:specification,custom:{keep:'exact'}};
   let saved;
   let stored=note({content:{...content('Existing proposal'),extensions:metadata}});
-  const app=await boot({respond:(url,body)=>url.endsWith('/revisions')&&body?(saved=JSON.parse(JSON.stringify(body)),{note:stored}):url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});
+  const app=await bootWithReaderTools({respond:(url,body)=>url.endsWith('/revisions')&&body?(saved=JSON.parse(JSON.stringify(body)),{note:stored}):url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});
   stored=vm.runInContext('('+JSON.stringify(stored)+')',app.sandbox);
   await app.show('note-one');byText(app.q('full'),'Edit').click();
   const type=app.root.querySelector('[name="scheme-proposal"]');assert.equal(type.checked,true);
@@ -286,7 +498,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.deepEqual(saved.content.extensions.custom,{keep:'exact'});assert.equal(saved.content.title,'Existing proposal');
   assert.equal(metadata.note_type,'scheme-proposal','editing does not mutate the saved source revision');
   const draft={...content('Unfinished proposal'),extensions:{note_type:'scheme-proposal'}};
-  const reopened=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:note({content:draft})}:undefined});
+  const reopened=await bootWithReaderTools({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:note({content:draft})}:undefined});
   await reopened.show('note-one');assert.match(reopened.q('full').textContent,/Attach scheme specification/);
   assert.equal(byText(reopened.q('full'),'Submit for scheme review'),undefined);
   byText(reopened.q('full'),'Edit').click();assert.equal(reopened.root.querySelector('[name="scheme-proposal"]').checked,true);
@@ -337,60 +549,39 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const app=await boot({respond:(url,body)=>url.startsWith('/api/notebook/tags?')?{tags:['probability, statistics']}:url==='/api/notebook/notes'&&body?(saved=body,{note:note()}):undefined});
   app.q('new').click();fill(app);const input=app.root.querySelector('[name="tag-search"]');input.value='probability';input.dispatchEvent({type:'input'});input.dispatchEvent({type:'keydown',key:'Enter'});await flush();
   app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
-  assert.deepEqual(Array.from(saved.content.tags),['algebra','probability, statistics']);
+  assert.deepEqual(Array.from(saved.content.tags),['algebra','ai-written','probability, statistics']);
   const other=await boot({respond:url=>url.startsWith('/api/notebook/tags?')?late.promise:undefined});other.q('new').click();
   const search=other.root.querySelector('[name="tag-search"]');search.value='secret';search.dispatchEvent({type:'input'});await other.advanceTimers(180);
   other.setAccount({id:2,handle:'bob'});late.resolve({tags:['private-secret']});await flush();
   assert.equal(other.q('dialog').open,false);assert.equal(other.root.textContent.includes('private-secret'),false);
  });
- await test('note rows and readers show public vote totals and relative publication time with an exact tooltip',async()=>{
+ await test('note rows show votes while dates appear only inside the reader',async()=>{
   const timestamp=Date.now()/1000-3660;
   const saved=note({published_at:timestamp,rating:{score:4,raters:3,upvotes:2,double_upvotes:1}});
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[saved]}:url==='/api/notebook/notes/note-one'?{note:saved}:undefined});
   await app.show();
-  const aside=app.q('list').querySelector('.nb-entry-aside'),time=aside.querySelector('time');
-  assert.match(aside.querySelector('.nb-note-votes').textContent,/4/);
-  assert.match(aside.querySelector('.nb-note-votes').title,/2 upvotes \(\+1\).*1 double upvotes \(\+2\)/);
+  const aside=app.q('list').querySelector('.nb-entry-heading');assert.equal(aside.querySelector('time'),null);await app.show('note-one');const time=app.q('full').querySelector('time');
+  assert.match(aside.querySelector('.nb-note-votes').textContent,/3/);
+  assert.match(aside.querySelector('.nb-note-votes').title,/3 upvotes/);
   assert.equal(time.textContent,'1 hr ago');assert.match(time.title,/^Published /);
   assert.equal(time.getAttribute('datetime'),new Date(timestamp*1000).toISOString());
-  await app.show('note-one');assert.match(app.q('full').querySelector('.nb-note-votes').textContent,/4/);
+  await app.show('note-one');assert.match(app.q('full').querySelector('.nb-note-votes').textContent,/3/);
  });
  await test('unpublished notes display saved age without inventing public votes',async()=>{
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()]}:undefined});await app.show();
   assert.equal(app.q('list').querySelector('.nb-note-votes'),null);
-  assert.match(app.q('list').querySelector('time').title,/^Saved /);
+  assert.equal(app.q('list').querySelector('time'),null);await app.show('note-one');assert.match(app.q('full').querySelector('time').title,/^Saved /);
  });
- await test('list note numbers open the exact citation without expansion, reads or writes',async()=>{
+ await test('note numbers stay out of the list and remain noninteractive labels in the reader',async()=>{
   const saved=note({number:1042,content_sha256:'a'.repeat(64)});
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[saved],next_after:null}:url.startsWith('/api/notebook/notes/note-one')?{note:saved}:undefined});
-  assert.equal(app.q('list').querySelector('.nb-note-number').textContent,'#1042');
-  const calls=app.requests.length,reference=app.q('list').querySelector('.nb-number-action');
-  reference.focus();reference.click();await flush();
-  assert.equal(app.q('dialog').getAttribute('aria-label'),'Cite this note');
-  assert.equal(app.q('list').querySelector('.nb-expand').getAttribute('aria-expanded'),'false');
-  assert.equal(app.requests.length,calls);
-  const listCitation=app.q('dialog-body').querySelector('[name="citation-link"]').value;
-  app.q('close').click();await flush();assert.equal(app.document.activeElement,reference);
-  app.q('list').querySelector('.nb-expand').click();await flush();
-  assert.equal(app.q('list').querySelector('.nb-note-number').textContent,'#1042');
-  app.q('list').querySelector('.nb-expand').click();await flush();
-  assert.equal(app.q('list').querySelector('.nb-note-number').textContent,'#1042');
+  assert.equal(app.q('list').querySelector('.nb-note-number'),null);
   await app.show('note-one',1);
-  assert.equal(app.root.querySelector('.nb-heading').hidden,true);
-  app.q('full').querySelector('.nb-number-action').click();
-  assert.equal(app.q('dialog-body').querySelector('.nb-citation-number').textContent,'#1042 · revision 1');
-  assert.match(app.q('dialog-body').querySelector('.nb-prompt').textContent,/#1042/);
-  assert.match(app.q('dialog-body').querySelector('[name="citation-link"]').value,/revision=1&sha256=a{64}/);
-  assert.equal(app.q('dialog-body').querySelector('[name="citation-link"]').value,listCitation);
-  app.q('close').click();await app.show();assert.equal(app.root.querySelector('.nb-heading').hidden,false);
+  const number=app.q('full').querySelector('.nb-number-label');assert.equal(number.textContent,'#1042');assert.equal(number.tagName,'SPAN');
+  number.click();assert.equal(app.q('dialog').open,false);assert.equal(number.getAttribute('title'),null);assert.equal(app.q('full').querySelector('.nb-number-action'),null);
+  assert.equal(app.requests.some(row=>row.body),false);
  });
-
-
- for(const [view,endpoint,result] of [
-  ['list','/api/notebook/notes?',{notes:[]}],
-  ['full','/api/notebook/notes/note-one',{note:note()}],
-  ['timeline','/api/notebook/timeline',timeline()]
- ]) await test(view+' read reserves quiet space with an accessible status until fresh content arrives',async()=>{
+ for(const [view,endpoint,result] of [['list','/api/notebook/notes?',{notes:[]}],['full','/api/notebook/notes/note-one',{note:note()}],['timeline','/api/notebook/timeline',timeline()]]) await test(view+' read reserves quiet space with an accessible status until fresh content arrives',async()=>{
   const late=deferred();let held=false;
   const app=await boot({respond:url=>held&&url.startsWith(endpoint)?late.promise:undefined});
   app.controller.invalidateReads();held=true;
@@ -403,23 +594,23 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.equal(app.q(view).querySelector('.nb-reading'),null,'Settled content removes the temporary busy region');
  });
 
- await test('expanding a note prefetches its exact body and the reader shares the in-flight GET',async()=>{
+ await test('reading intent prefetches the note body and the reader shares the in-flight GET',async()=>{
   const late=deferred();const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()]}:url==='/api/notebook/notes/note-one'?late.promise:undefined});
-  app.q('list').querySelector('.nb-expand').click();await flush();
+  app.q('list').querySelector('.nb-title').dispatchEvent({type:'pointerenter'});await flush();
   assert.equal(app.requests.filter(row=>row.url==='/api/notebook/notes/note-one').length,1);
   const loading=app.show('note-one');await flush();assert.equal(app.requests.filter(row=>row.url==='/api/notebook/notes/note-one').length,1);
   late.resolve({note:note()});await loading;assert.match(app.q('full').textContent,/Argument as text/);assert.equal(byText(app.q('full'),'Edit').disabled,false);
  });
  await test('note intent results cannot restore private caches after an account switch',async()=>{
   const late=deferred();const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()]}:url==='/api/notebook/notes/note-one'?late.promise:undefined});
-  app.q('list').querySelector('.nb-expand').click();await flush();app.setAccount(null);
+  app.q('list').querySelector('.nb-title').dispatchEvent({type:'pointerenter'});await flush();app.setAccount(null);
   late.resolve({note:note()});await flush();assert.equal(app.q('list').textContent,'');assert.equal(app.q('full').textContent,'');
  });
  await test('an older consumed note intent cannot replace a newer cached body',async()=>{
   const old=deferred(),refresh=deferred();let reads=0;
   const newer=note({content:content('Newer saved note')});
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()]}:url==='/api/notebook/notes/note-one'?(++reads===1?old.promise:reads===2?{note:newer}:refresh.promise):undefined});
-  app.q('list').querySelector('.nb-expand').click();const first=app.show('note-one');
+  app.q('list').querySelector('.nb-title').dispatchEvent({type:'pointerenter'});const first=app.show('note-one');
   await app.show();await app.show('note-one');assert.match(app.q('full').textContent,/Newer saved note/);
   old.resolve({note:note({content:content('Older saved note')})});await first;await flush();
   assert.match(app.q('full').textContent,/Newer saved note/,'Late intent cannot change the selected reader');
@@ -431,27 +622,29 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.equal(byText(app.q('full'),'Edit').disabled,false);
  });
 
- await test('returning to the same notebook list paints immediately and keeps unchanged expanded content',async()=>{
+ await test('returning to the same notebook list paints immediately and keeps unchanged rows',async()=>{
   const late=deferred();let delay=false;
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?(delay?late.promise:{notes:[note()],next_after:null}):undefined});
-  app.q('list').querySelector('.nb-expand').click();const first=app.q('list').firstChild;
+  const first=app.q('list').firstChild;
   app.controller.hide();delay=true;const loading=app.show();
   assert.match(app.q('list').textContent,/Private claim/);assert.ok(app.q('list').firstChild===first, 'preserve the loaded list DOM');
   late.resolve({notes:[note()],next_after:null});await loading;
-  assert.ok(app.q('list').firstChild===first, 'preserve the loaded list DOM');assert.equal(app.q('list').querySelector('.nb-preview').hidden,false);
+  assert.ok(app.q('list').firstChild===first, 'preserve the loaded list DOM');assert.equal(app.q('list').querySelector('.nb-preview'),null);
  });
  await test('cached note bodies render before the network while stale action buttons stay disabled',async()=>{
   const late=deferred();let delay=false;
   const app=await boot({respond:url=>url==='/api/notebook/notes/note-one'?(delay?late.promise:{note:note()}):undefined});
   await app.show('note-one');await app.show();delay=true;const loading=app.show('note-one');
   assert.match(app.q('full').textContent,/Argument as text/);assert.equal(byText(app.q('full'),'Edit').disabled,true);
+  for(const label of ['Download agent research task','Propose a change'])assert.equal(byText(app.q('full'),label),undefined);
   assert.equal(app.document.activeElement,app.q('full').querySelector('.nb-full-title'),'cached entry hands focus to the reader');
   const back=app.q('full').querySelector('.nb-back');back.focus();
   const body=app.q('full').querySelector('.nb-body');
   late.resolve({note:note()});await loading;
   assert.equal(app.document.activeElement,back,'quiet revalidation preserves the reader choice of focus');
   assert.ok(app.q('full').querySelector('.nb-body')===body, 'preserve the body during unchanged refresh');assert.equal(byText(app.q('full'),'Edit').disabled,false);
-  byText(app.q('full'),'Explore connections').click();await flush();assert.ok(app.q('full').querySelector('.nb-note-graph'));
+  for(const label of ['Download agent research task','Propose a change'])assert.equal(byText(app.q('full'),label),undefined);
+  assert.equal(app.q('full').querySelector('.nb-related'),null);
  });
  await test('denied and withdrawn cached notes remove their body and invalidate cached list summaries',async()=>{
   for(const status of [403,404,410]){
@@ -490,7 +683,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   delay=true;const changing=filterNotes(app,'human');await flush();
   assert.match(app.q('list').textContent,/Private claim/);assert.doesNotMatch(app.q('list').textContent,/Loading notes/);
   assert.equal(app.q('list').getAttribute('aria-busy'),'true');
-  assert.ok(cardActions(app).length);assert.ok(cardActions(app).every(control=>control.disabled));
+  assert.equal(cardActions(app).length,0);
   late.resolve({notes:[]});await changing;await flush();assert.match(app.q('list').textContent,/No matching notes/);
   assert.doesNotMatch(app.q('list').textContent,/Private claim/);assert.equal(app.q('list').getAttribute('aria-busy'),null);
  });
@@ -511,12 +704,12 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   pending=deferred();await filterNotes(app,'human');assert.match(app.q('list').textContent,/No matching notes/);
   assert.equal(app.q('list').getAttribute('aria-busy'),'true');pending.resolve({notes:[]});await flush();
  });
- await test('expanding retained rows cannot reactivate paging or edits before the requested page arrives',async()=>{
+ await test('reading intent on retained rows cannot reactivate paging or edits before the requested page arrives',async()=>{
   const late=deferred();const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?(listQuery(url).has('after')?late.promise:{notes:[note()],next_after:'page:25'}):undefined});
   app.q('more').click();await flush();assert.equal(listQuery(app.requests.at(-1).url).get('after'),'page:25');
-  app.q('list').querySelector('.nb-expand').click();await flush();
+  app.q('list').querySelector('.nb-title').dispatchEvent({type:'pointerenter'});await flush();
   assert.equal(app.q('prev').disabled,true);assert.equal(app.q('more').disabled,true);
-  assert.ok(cardActions(app).length);assert.ok(cardActions(app).every(control=>control.disabled));
+  assert.equal(cardActions(app).length,0);
   late.resolve({notes:[note({id:'next-page',content:content('Next page result')})],next_after:null});await flush();
   assert.match(app.q('list').textContent,/Next page result/);assert.equal(app.q('prev').disabled,false);assert.equal(app.q('more').disabled,true);
  });
@@ -580,23 +773,25 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const loading=app.show('note-one');assert.match(app.q('full').textContent,/Loading note/);assert.doesNotMatch(app.q('full').textContent,/Argument as text/);
   late.resolve({note:note()});await loading;
  });
- for(const reviewOnly of [false,true]) await test('pending cancellation belongs to the owner in '+(reviewOnly?'review':'normal')+' readers and expanded rows',async()=>{
+ for(const reviewOnly of [true]) await test('pending cancellation belongs to the owner in '+(reviewOnly?'review':'normal')+' readers and expanded rows',async()=>{
   const stored=note({...revision(1,'Pending claim','submitted')});
   const app=await boot({reviewOnly,respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:
    url.startsWith('/api/notebook/review-queue?')?{notes:[stored],next_after:null,screening:'attention'}:url.startsWith('/api/notebook/notes?')?{notes:[stored]}:undefined});
   assert.equal(byText(app.q('list'),'Cancel publish request'),undefined);
-  app.q('list').querySelector('.nb-expand').click();
-  assert.ok(byText(app.q('list'),'Cancel publish request').closest('.nb-preview'));
-  byText(app.q('list'),'Cancel publish request').click();
+  if (reviewOnly) app.q('list').querySelector('.nb-expand').click();
+  else await app.show('note-one');
+  const cancellationHost=app.q(reviewOnly?'list':'full');
+  assert.ok(byText(cancellationHost,'Cancel publish request'));
+  byText(cancellationHost,'Cancel publish request').click();
   assert.equal(app.requests.filter(row=>row.body).length,0,'Opening confirmation never cancels');
-  assert.match(app.q('dialog-body').textContent,/Pending claim.*Revision 1.*stays private.*already be running.*new revision/);
+  assert.match(app.q('dialog-body').textContent,/Pending claim.*stay private.*submit it again without editing/);
   byText(app.q('dialog-body'),'Keep request').click();
   await app.show('note-one');assert.ok(byText(app.q('full'),'Cancel publish request'));
  });
  await test('cancellation is never offered for another author or a nonpending revision',async()=>{
   for(const stored of [note({...revision(1,'Other pending','submitted'),owner:{id:2,handle:'bob'}}),
    ...['private','approved','cancelled','changes_requested','withdrawn'].map(status=>note({...revision(1,'Settled request',status)}))]){
-   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});
+   const app=await boot({reviewOnly:true,respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});
    await app.show('note-one');assert.equal(byText(app.q('full'),'Cancel publish request'),undefined);
    if(stored.publication_status==='cancelled'){assert.match(app.q('full').textContent,/Publish request cancelled/);assert.equal(byText(app.q('full'),'Publish'),undefined);}
   }
@@ -604,7 +799,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  await test('cancellation pins the displayed older revision, retries a lost reply and invalidates reader and list caches',async()=>{
   let cancelled=false,writes=0,reads=0;
   const stored=()=>note({revision:2,revisions:[revision(1,'Submitted earlier',cancelled?'cancelled':'submitted'),revision(2,'New private revision')],revision_count:2});
-  const app=await boot({respond:(url,body)=>{
+  const app=await boot({reviewOnly:true,respond:(url,body)=>{
    if(url.endsWith('/publication-cancellations')){writes++;cancelled=true;if(writes===1)throw Error('Connection lost');return{publication:{id:'publication-one',note_id:'note-one',revision:1,content_sha256:'hash-1',status:'cancelled'}};}
    if(url.startsWith('/api/notebook/notes/note-one')){reads++;return{note:stored()};}
    if(url.startsWith('/api/notebook/notes?'))return{notes:[stored()]};
@@ -620,7 +815,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   await app.show();await app.show('note-one',1);assert.match(app.q('full').textContent,/Publish request cancelled/);
  });
  for(const reply of ['approval won','wrong receipt']) await test('cancellation does not claim success when '+reply,async()=>{
-  const app=await boot({respond:(url,body)=>{
+  const app=await boot({reviewOnly:true,respond:(url,body)=>{
    if(url.endsWith('/publication-cancellations')){if(reply==='approval won')throw Object.assign(Error('This request has already been reviewed'),{status:409});return{publication:{note_id:'different-note',revision:1,content_sha256:'hash-1',status:'cancelled'}};}
    if(url.startsWith('/api/notebook/notes/note-one'))return{note:note({...revision(1,'Pending claim','submitted')})};
   }});
@@ -629,7 +824,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.doesNotMatch(app.q('notice').textContent,/Publish request cancelled/);
  });
  await test('late cancellation replies cannot render after an account change',async()=>{
-  const pending=deferred();const app=await boot({respond:url=>url.endsWith('/publication-cancellations')?pending.promise:url.startsWith('/api/notebook/notes/note-one')?{note:note({...revision(1,'Pending private claim','submitted')})}:undefined});
+  const pending=deferred();const app=await boot({reviewOnly:true,respond:url=>url.endsWith('/publication-cancellations')?pending.promise:url.startsWith('/api/notebook/notes/note-one')?{note:note({...revision(1,'Pending private claim','submitted')})}:undefined});
   await app.show('note-one');byText(app.q('full'),'Cancel publish request').click();byText(app.q('dialog-body'),'Cancel publish request').click();
   app.setAccount({id:2,handle:'bob'});const reads=app.requests.length,before=app.location.hash;
   pending.resolve({publication:{note_id:'note-one',revision:1,content_sha256:'hash-1',status:'cancelled'}});await flush();
@@ -642,7 +837,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
    if(url.startsWith('/api/notebook/publication-status?')){reads++;cancelled=true;return{publications:[{id,note_id:'note-one',revision:1,content_sha256:'hash-1',status:'cancelled',screening_status:'cancelled'}]};}
    if(url.startsWith('/api/notebook/notes?'))return{notes:[stored()],next_after:null,capabilities:{publication_policy:screeningPolicy('automatic')}};
   }});
-  await app.advanceTimers(2000);assert.match(app.q('list').textContent,/Publish request cancelled/);
+  await app.advanceTimers(2000);assert.match(app.q('list').textContent,/Private/);
   await app.advanceTimers(30000);assert.equal(reads,1);
  });
  await test('permanent private draft deletion freezes its exact revision and retries after a lost reply',async()=>{
@@ -748,7 +943,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  await test('private and shared notes are marked and My notes requests an owner-filtered server page',async()=>{
   const shared=note({id:'shared',can_edit:false,owner:{id:2,handle:'bob'},...revision(1,'Approved claim','approved')});
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?summaryPage(url,[note(),shared]):undefined});
-  assert.match(app.root.textContent,/Private claim.*Private.*alice.*Approved claim.*Published.*bob/);
+  assert.match(app.root.textContent,/Private claim.*Private.*alice.*Approved claim.*bob/);
   await filterNotes(app,'mine');assert.doesNotMatch(app.q('list').textContent,/Approved claim/);
   assert.equal(listQuery(app.requests.at(-1).url).get('scope'),'mine');
  });
@@ -763,7 +958,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   await searchNotes(app,'observation 60');assert.equal(listQuery(app.requests.at(-1).url).get('scope'),'human');assert.equal(app.q('list').querySelectorAll('.nb-entry').length,1);assert.match(app.q('list').textContent,/Collaborator observation 60/);
   app.setAccount({id:2,handle:'bob'});await app.show();assert.equal(app.root.querySelector('[name="visibility"]').value,'all');assert.equal(listQuery(app.requests.at(-1).url).get('scope'),'all');
  });
- await test('exact shared revision never exposes edit actions or guesses a later private revision',async()=>{const shared=note({can_edit:false,owner:{id:2,handle:'bob'},...revision(1,'Approved claim','approved'),revisions:[revision(1,'Approved claim','approved')]});const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:shared}:undefined});await app.show('note-one',1);assert.match(app.q('full').textContent,/Approved claim.*Published.*Revision 1/);assert.equal(byText(app.q('full'),'Edit'),undefined);assert.equal(app.requests.at(-1).url,'/api/notebook/notes/note-one?revision=1');});
+ await test('exact shared revision never exposes edit actions or guesses a later private revision',async()=>{const shared=note({can_edit:false,owner:{id:2,handle:'bob'},...revision(1,'Approved claim','approved'),revisions:[revision(1,'Approved claim','approved')]});const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:shared}:undefined});await app.show('note-one',1);assert.match(app.q('full').textContent,/Approved claim.*bob/);assert.equal(byText(app.q('full'),'Edit'),undefined);assert.equal(app.requests.at(-1).url,'/api/notebook/notes/note-one?revision=1');});
  await test('save creates a private account note and retains the submitted draft on validation failure',async()=>{let accepted=false;const app=await boot({respond:(url,body)=>{if(body&&url==='/api/notebook/notes'){if(!accepted)throw Object.assign(Error('Review the conditions'),{status:422});return{note:note({id:'created'})};}if(url.endsWith('/created'))return{note:note({id:'created'})};}});app.q('new').click();fill(app);const form=app.root.querySelector('.nb-form');form.dispatchEvent({type:'submit'});await flush();assert.equal(app.q('dialog').open,true);assert.equal(app.root.querySelector('[name="title"]').value,'New mathematical claim');assert.match(app.q('dialog-body').textContent,/draft is still here/);assert.equal(app.root.querySelector('[name="title"]').disabled,false);accepted=true;form.dispatchEvent({type:'submit'});await flush();assert.equal(app.q('dialog').open,false);assert.equal(app.requests.filter(r=>r.body).length,2);assert.equal(app.requests.filter(r=>r.body)[0].body.content.title,'New mathematical claim');});
  await test('lost save responses retain a frozen idempotent payload and do not create another note on retry',async()=>{let writes=0;const app=await boot({respond:(url,body)=>{if(body&&url==='/api/notebook/notes'){if(++writes===1)throw Object.assign(Error('Lost response'),{status:0});return{note:note()};}}});app.q('new').click();fill(app);const form=app.root.querySelector('.nb-form');form.dispatchEvent({type:'submit'});await flush();assert.equal(app.root.querySelector('[name="title"]').disabled,true);app.root.querySelector('[name="title"]').value='Tampered pending draft';form.dispatchEvent({type:'submit'});await flush();const writesList=app.requests.filter(r=>r.body);assert.equal(writesList.length,2);assert.deepEqual(writesList[0].body,writesList[1].body);assert.equal(writesList[1].body.content.title,'New mathematical claim');});
  await test('revision conflicts preserve the draft and bind the request to its original revision and content hash',async()=>{const app=await boot({respond:(url,body)=>{if(body)throw Object.assign(Error('A newer revision exists'),{status:409});}});await app.show('note-one');byText(app.q('full'),'Edit').click();fill(app,'Improved claim');app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();const write=app.requests.find(r=>r.body);assert.equal(write.body.expected_revision,1);assert.equal(write.body.content_sha256,'hash-1');assert.equal(app.root.querySelector('[name="title"]').value,'Improved claim');assert.match(app.q('dialog-body').textContent,/latest saved revision in another tab/);});
@@ -774,7 +969,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const records=Array.from({length:75},(_,i)=>note({id:'page-note-'+i,content:content('Summary '+String(i+1).padStart(2,'0'))}));
   for(const record of records){delete record.revisions[0].content.body;delete record.revisions[0].content.conditions;record.revisions[0].summary=true;}
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?summaryPage(url,records):undefined});
-  function check(first,last,page){const entries=app.q('list').querySelectorAll('.nb-entry');assert.equal(entries.length,25);assert.ok(entries.every(e=>!e.hidden&&e.querySelector('.nb-expand').getAttribute('aria-expanded')==='false'));assert.match(entries[0].textContent,new RegExp('Summary '+first));assert.match(entries.at(-1).textContent,new RegExp('Summary '+last));assert.equal(app.q('page').textContent,'Page '+page);}
+  function check(first,last,page){const entries=app.q('list').querySelectorAll('.nb-entry');assert.equal(entries.length,25);assert.ok(entries.every(e=>!e.hidden&&e.querySelector('.nb-expand')===null));assert.match(entries[0].textContent,new RegExp('Summary '+first));assert.match(entries.at(-1).textContent,new RegExp('Summary '+last));assert.equal(app.q('page').textContent,'Page '+page);}
   check('01','25',1);assert.equal(app.q('prev').disabled,true);
   app.q('more').click();await flush();check('26','50',2);assert.doesNotMatch(app.q('list').textContent,/Summary 01/);
   app.q('more').click();await flush();check('51','75',3);assert.equal(app.q('more').disabled,true);
@@ -786,37 +981,29 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  await test('a save failing while another page is open remains retryable when returning',async()=>{const late=deferred();const app=await boot({respond:(url,body)=>body?late.promise:undefined});app.q('new').click();fill(app);app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();app.controller.hide();late.reject(Object.assign(Error('Lost response'),{status:0}));await flush();assert.equal(app.q('dialog').open,false);await app.show();assert.equal(app.q('dialog').open,true);assert.match(app.q('dialog-body').textContent,/Retry the same save/);assert.equal(app.root.querySelector('[name="title"]').disabled,true);});
  await test('Publish requires an explicit saved-revision request and never exposes private-sharing controls',async()=>{
   const app=await boot({respond:(url,body)=>body?{note:note()}:undefined});await app.show('note-one');byText(app.q('full'),'Publish').click();
-  assert.equal(app.requests.some(r=>r.body),false);assert.match(app.q('dialog-body').textContent,/This revision.*after a reviewer approves.*Later edits stay private/);assert.equal(app.root.querySelector('[name="private-share-handles"]'),null);
+  assert.equal(app.requests.some(r=>r.body),false);assert.match(app.q('dialog-body').textContent,/This revision.*after publication review.*Later edits stay private/);assert.equal(app.root.querySelector('[name="private-share-handles"]'),null);
   app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();const write=app.requests.find(r=>r.body);assert.equal(write.url,'/api/notebook/notes/note-one/publication-requests');assert.equal(write.body.revision,1);assert.equal(write.body.content_sha256,'hash-1');assert.equal(app.requests.some(r=>r.url.includes('private-shares')),false);
  });
  await test('New note and author actions are visible without notebook review tools',async()=>{
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()],capabilities:{review_publication:true}}:undefined});
   assert.equal(app.q('new').closest('details'),null);assert.equal(app.q('files').closest('details'),null);assert.equal(app.q('review-links'),null);assert.doesNotMatch(app.root.textContent,/Notebook tools|Review:/);
-  const card=app.q('list').querySelector('.nb-entry');for(const label of ['Edit','Publish']){assert.equal(byText(card,label).closest('details'),null);assert.equal(byText(card,label).closest('.nb-entry-heading'),card.querySelector('.nb-entry-heading'));assert.equal(byText(card,label).closest('.nb-title'),null);}assert.equal(card.querySelector('.nb-preview').hidden,true);
+  const card=app.q('list').querySelector('.nb-entry');assert.equal(byText(card,'Publish'),undefined);assert.equal(card.querySelector('.nb-preview'),null);
   await app.show('note-one');for(const label of ['Edit','Publish'])assert.equal(byText(app.q('full'),label).closest('details'),null);assert.equal(byText(app.root,'Share'),undefined);
  });
  await test('only owned editable cards show author actions; handle names and stale share metadata grant nothing',async()=>{
   const records=[note(),note({id:'other',owner:{id:2,handle:'alice'},can_edit:true,private_shared:true}),note({id:'read-only',can_edit:false}),curatedSummary(curatedFixture('curated','Reference'))];
-  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:records}:undefined});const cards=app.q('list').querySelectorAll('.nb-entry');assert.ok(byText(cards[0],'Edit'));assert.ok(byText(cards[0],'Publish'));for(const card of cards.slice(1)){assert.equal(byText(card,'Edit'),undefined);assert.equal(byText(card,'Publish'),undefined);}
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:records}:undefined});const cards=app.q('list').querySelectorAll('.nb-entry');assert.equal(byText(cards[0],'Edit'),undefined);assert.equal(byText(cards[0],'Publish'),undefined);for(const card of cards.slice(1)){assert.equal(byText(card,'Edit'),undefined);assert.equal(byText(card,'Publish'),undefined);}
  });
- await test('card Edit fetches the latest full revision rather than editing a list summary',async()=>{
+ await test('opening a note before publication loads the latest full revision rather than trusting a summary',async()=>{
   const summary=note();summary.revisions[0]={...summary.revisions[0],summary:true,content:{title:'Earlier title',claim:'Earlier summary',tags:[]}};
   const latest=note({revision:2,revisions:[revision(),revision(2,'Latest complete note')]});
-  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[summary]}:url==='/api/notebook/notes/note-one'?{note:latest}:undefined});byText(app.q('list'),'Edit').click();await flush();assert.equal(app.requests.at(-1).url,'/api/notebook/notes/note-one');assert.ok(app.root.querySelector('[name="title"]'), app.root.textContent);assert.equal(app.root.querySelector('[name="title"]').value,'Latest complete note');assert.equal(app.root.querySelector('[name="body"]').value,'Argument as text');assert.equal(app.requests.some(row=>row.body),false);
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[summary]}:url==='/api/notebook/notes/note-one'?{note:latest}:undefined});
+  await app.show('note-one');byText(app.q('full'),'Publish').click();await flush();assert.equal(app.requests.at(-1).url,'/api/notebook/notes/note-one');
+  assert.equal(app.q('dialog-body').querySelector('.nb-publication-note').textContent,'Latest complete note');
+  assert.equal(app.q('dialog-body').querySelector('.nb-publication-note').dataset.revision,'2');assert.equal(app.requests.some(row=>row.body),false);
  });
- await test('card Publish fetches current detail and requests exactly that saved revision',async()=>{
-  const latest=note({revision:2,revisions:[revision(),revision(2,'Current saved note')]});const app=await boot({respond:(url,body)=>url.startsWith('/api/notebook/notes?')?{notes:[note()]}:url==='/api/notebook/notes/note-one'?{note:latest}:url.endsWith('/publication-requests')?{}:undefined});byText(app.q('list'),'Publish').click();await flush();assert.match(app.q('dialog-body').textContent,/Current saved note.*Revision 2/);assert.equal(app.requests.some(r=>r.body),false);app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();const write=app.requests.find(r=>r.body);assert.equal(write.body.revision,2);assert.equal(write.body.content_sha256,'hash-2');
- });
- await test('card actions recover from a failed detail fetch and reject stale edit permissions',async()=>{
-  let attempts=0;const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()]}:url==='/api/notebook/notes/note-one'?(++attempts===1?Promise.reject(Error('Unavailable')):{note:note({owner:{id:2,handle:'bob'},can_edit:false})}):undefined});const edit=byText(app.q('list'),'Edit');edit.click();await flush();assert.match(app.q('list').textContent,/Unavailable.*Try again/);assert.equal(edit.disabled,false);edit.click();await flush();assert.equal(app.q('dialog').open,false);assert.match(app.q('list').textContent,/latest editable note could not be loaded/);assert.equal(app.requests.some(r=>r.body),false);
- });
- await test('late card detail never opens an editor after account, route, or dialog changes',async()=>{
-  for(const change of ['account','route','dialog']){const late=deferred();const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()]}:url==='/api/notebook/notes/note-one'?late.promise:undefined});byText(app.q('list'),'Edit').click();await flush();if(change==='account')app.setAccount({id:2,handle:'bob'});else if(change==='route')app.controller.hide();else app.q('new').click();late.resolve({note:note({...revision(2,'PRIVATE LATE CONTENT')})});await flush();assert.doesNotMatch(app.root.textContent,/PRIVATE LATE CONTENT/);if(change!=='dialog')assert.equal(app.q('dialog').open,false);else assert.equal(app.q('dialog-title').textContent,'New private note');}
- });
- await test('overlapping card loads restore each card and open only the most recent action',async()=>{
-  const first=deferred(),second=deferred(),rows=[note(),note({id:'note-two',...revision(1,'Second note')})];
-  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:rows}:url==='/api/notebook/notes/note-one'?first.promise:url==='/api/notebook/notes/note-two'?second.promise:undefined});
-  const cards=app.q('list').querySelectorAll('.nb-entry'),a=byText(cards[0],'Edit'),b=byText(cards[1],'Edit');a.click();b.click();first.resolve({note:rows[0]});await flush();assert.equal(a.disabled,false);assert.equal(b.disabled,true);assert.equal(app.q('dialog').open,false);assert.equal(cards[0].querySelector('.nb-card-message').hidden,true);second.resolve({note:rows[1]});await flush();assert.equal(b.disabled,false);assert.equal(app.root.querySelector('[name="title"]').value,'Second note');assert.equal(app.requests.some(row=>row.body),false);
+ await test('reader publication requests exactly the current loaded revision',async()=>{
+  const latest=note({revision:2,revisions:[revision(),revision(2,'Current saved note')]});const app=await boot({respond:(url,body)=>url.startsWith('/api/notebook/notes?')?{notes:[note()]}:url==='/api/notebook/notes/note-one'?{note:latest}:url.endsWith('/publication-requests')?{}:undefined});await app.show('note-one');byText(app.q('full'),'Publish').click();await flush();assert.match(app.q('dialog-body').textContent,/Current saved note/);assert.equal(app.requests.some(r=>r.body),false);app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();const write=app.requests.find(r=>r.body);assert.equal(write.body.revision,2);assert.equal(write.body.content_sha256,'hash-2');
  });
  await test('legacy shared links return the ordinary notebook without private-sharing requests',async()=>{
   for(const query of ['shared=1&state=pending','filter=shared']){const app=await boot({initialParams:new URLSearchParams(query)});assert.equal(app.root.querySelector('[name="visibility"]').value,'all');assert.equal(app.requests[0].url,'/api/notebook/notes?limit=25&include_curated=true&scope=all');assert.equal(app.requests.some(r=>r.url.includes('private-shares')),false);assert.equal(byText(app.root,'Share'),undefined);}
@@ -825,16 +1012,12 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   for(const state of ['submitted','approved','changes_requested','withdrawn']){
    const record=note({...revision(1,'Saved note',state)});
    const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[record]}:url.startsWith('/api/notebook/notes/note-one')?{note:record}:undefined});
-   assert.equal(byText(app.q('list'),'Publish'),undefined);assert.ok(byText(app.q('list'),'Edit'));
+   assert.equal(byText(app.q('list'),'Edit'),undefined);assert.equal(byText(app.q('list'),'Retract'),undefined);assert.equal(byText(app.q('list'),'Publish'),undefined);
    await app.show('note-one');assert.equal(byText(app.q('full'),'Publish'),undefined);assert.ok(byText(app.q('full'),'Edit'));assert.equal(app.requests.some(row=>row.body),false);
   }
   const record=note({revision:2,revisions:[revision(1,'Earlier draft'),revision(2,'Latest draft')]});
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:record}:undefined});
   await app.show('note-one',1);assert.equal(byText(app.q('full'),'Publish'),undefined);await app.show('note-one',2);assert.ok(byText(app.q('full'),'Publish'));
- });
- await test('a stale Publish card refreshes a newly pending request without another confirmation or write',async()=>{
-  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note()]}:url.startsWith('/api/notebook/notes/note-one')?{note:note({...revision(1,'Pending elsewhere','submitted')})}:undefined});
-  byText(app.q('list'),'Publish').click();await flush();assert.equal(byText(app.q('list'),'Publish'),undefined);assert.equal(app.q('dialog').open,false);assert.match(app.q('list').textContent,/Publish request pending/);assert.equal(app.requests.some(row=>row.body),false);
  });
  await test('publication confirmation cancels without a write and a confirmed pending request removes Publish',async()=>{
   let record=note();let writes=0;
@@ -843,10 +1026,10 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
    if(url.startsWith('/api/notebook/notes?'))return{notes:[record]};
    if(url.startsWith('/api/notebook/notes/note-one'))return{note:record};
   }});
-  byText(app.q('list'),'Publish').click();await flush();assert.equal(app.q('dialog-title').textContent,'Request publication');assert.ok(byText(app.q('dialog-body'),'Send publish request'));assert.equal(writes,0);
-  byText(app.q('dialog-body'),'Cancel').click();assert.equal(app.q('dialog').open,false);assert.equal(writes,0);assert.ok(byText(app.q('list'),'Publish'));
-  byText(app.q('list'),'Publish').click();await flush();byText(app.q('dialog-body'),'Send publish request').closest('form').dispatchEvent({type:'submit'});await flush();assert.equal(writes,1);assert.equal(byText(app.q('full'),'Publish'),undefined);assert.match(app.q('full').textContent,/Publish request pending/);
-  await app.show();assert.equal(byText(app.q('list'),'Publish'),undefined);assert.ok(byText(app.q('list'),'Edit'));
+  await app.show('note-one');byText(app.q('full'),'Publish').click();await flush();assert.equal(app.q('dialog-title').textContent,'Request publication');assert.ok(byText(app.q('dialog-body'),'Send publish request'));assert.equal(writes,0);
+  byText(app.q('dialog-body'),'Cancel').click();assert.equal(app.q('dialog').open,false);assert.equal(writes,0);assert.ok(byText(app.q('full'),'Publish'));
+  const route=app.location.hash;byText(app.q('full'),'Publish').click();await flush();byText(app.q('dialog-body'),'Send publish request').closest('form').dispatchEvent({type:'submit'});await flush();assert.equal(writes,1);assert.equal(app.location.hash,route);assert.equal(app.q('library').hidden,true);assert.equal(byText(app.q('full'),'Publish'),undefined);assert.match(app.q('full').textContent,/In review/);
+  await app.show();assert.equal(byText(app.q('list'),'Edit'),undefined);assert.equal(byText(app.q('list'),'Retract'),undefined);assert.equal(byText(app.q('list'),'Publish'),undefined);
  });
  await test('lost publication request responses retry the same exact revision commitment',async()=>{
   const writes=[];const app=await boot({respond:(url,body)=>{if(url.endsWith('/publication-requests')){writes.push(JSON.parse(JSON.stringify(body)));if(writes.length===1)throw Object.assign(Error('Lost response'),{status:0});return{};}}});await app.show('note-one');byText(app.q('full'),'Publish').click();const form=app.root.querySelector('.nb-form');form.dispatchEvent({type:'submit'});await flush();assert.ok(byText(app.q('dialog-body'),'Retry the same request'));form.dispatchEvent({type:'submit'});await flush();assert.deepEqual(writes[0],writes[1]);assert.equal(writes[1].content_sha256,'hash-1');assert.equal(writes[1].revision,1);
@@ -896,14 +1079,14 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const title=app.q('list').querySelector('.nb-title');
   assert.equal(title.tagName,'A');assert.equal(title.getAttribute('aria-expanded'),null);
   assert.equal(title.getAttribute('href'),'#notebook?note=note-one');
-  assert.equal(app.q('list').querySelector('.nb-preview').hidden,true);
+  assert.equal(app.q('list').querySelector('.nb-preview'),null);
   const modified={type:'click',ctrlKey:true};title.dispatchEvent(modified);
   assert.equal(modified.defaultPrevented,undefined);assert.equal(app.q('full').hidden,true);
   title.click();await app.whenNavigated();
   assert.equal(app.requests.at(-1).url,'/api/notebook/notes/note-one');
   byText(app.q('full'),'Read community revision 1 →').click();await app.whenNavigated();
   assert.equal(app.requests.at(-1).url,'/api/notebook/notes/note-one?revision=1');
-  assert.match(app.q('full').textContent,/Approved original.*Published/);assert.doesNotMatch(app.q('full').textContent,/PRIVATE FUTURE/);
+  assert.match(app.q('full').textContent,/Approved original/);assert.doesNotMatch(app.q('full').textContent,/PRIVATE FUTURE/);
  });
 
  await test('Notes no longer prepares the scheme map in the background',async()=>{
@@ -971,17 +1154,19 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.equal(listQuery(app.requests.at(-1).url).get('scope'),'all');
   assert.ok(app.q('list').querySelectorAll('.nb-entry').every(e=>e.querySelector('.nb-literature')));
   await searchNotes(app,'');await filterNotes(app,'mine');assert.equal(listQuery(app.requests.at(-1).url).get('scope'),'mine');
-  assert.equal(app.q('list').querySelectorAll('.nb-entry').length,2);assert.match(app.q('list').textContent,/Private claim.*Private.*My published note.*Published/);assert.doesNotMatch(app.q('list').textContent,/Approved claim/);
+  assert.equal(app.q('list').querySelectorAll('.nb-entry').length,2);assert.match(app.q('list').textContent,/Private claim.*Private.*My published note/);assert.doesNotMatch(app.q('list').textContent,/Approved claim/);
   assert.deepEqual(Array.from(app.root.querySelector('[name="visibility"]').querySelectorAll('option'),option=>option.textContent),['All notes','My notes','Human-written','Proposals']);
   assert.equal(app.requests.some(r=>r.url==='/map/notes.json'||r.body),false);assert.equal(app.storage.length,0);
  });
  await test('curated source links preserve every revision hash and expose sources without author or review tools',async()=>{
-  const app=await boot({researchWorkspace:research});
+  const app=await bootWithReaderTools({researchWorkspace:research});
   vm.runInContext(fs.readFileSync(path.join(rootPath,'web/map/notes-data.js'),'utf8'),app.sandbox);
   for(const source of research.notes){
    await app.show('curated:'+source.id,1);
    assert.ok(app.q('full').textContent.includes(source.revisions[0].title));
-   assert.ok(app.q('full').textContent.includes(app.sandbox.window.CRUCIBLE_NOTES.revision_hashes[source.id]['1']));
+   byText(app.q('full'),'Cite this note').click();
+   assert.ok(app.q('dialog-body').querySelector('[name="citation-link"]').value.includes(app.sandbox.window.CRUCIBLE_NOTES.revision_hashes[source.id]['1']));
+   app.q('close').click();
    assert.equal(app.q('full').querySelectorAll('.nb-owner').length,0);
    assert.equal(byText(app.q('full'),'Edit'),undefined);
    assert.equal(byText(app.q('full'),'Submit for community sharing'),undefined);
@@ -1026,7 +1211,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  });
  await test('new proposal composer attaches a checked specification but only saves a private note',async()=>{
   const spec={name:'Candidate KEM',format:'crucible-kem-spec-v1',references:[]};let saved;
-  const app=await boot({initialParams:new URLSearchParams('compose=proposal'),respond:(url,body)=>{
+  const app=await bootWithReaderTools({initialParams:new URLSearchParams('compose=proposal'),respond:(url,body)=>{
     if(url==='/api/protocol/proposals/validate')return{specification:spec,note_content:content('Candidate KEM')};
     if(url==='/api/notebook/notes'&&body){saved=body;return{note:note()};}
   }});
@@ -1036,6 +1221,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.equal(JSON.parse(app.root.querySelector('[name="tags"]').value).includes('KEM'),false);
   const file=app.root.querySelector('[name="kem-specification"]');file.files=[{size:30,text:async()=>JSON.stringify(spec)}];file.dispatchEvent({type:'change'});await flush();
   assert.equal(app.root.querySelector('[name="title"]').value,'Candidate KEM');
+  const declaration=app.root.querySelector('[name="authorship"]');declaration.value='human-ai-hybrid';declaration.dispatchEvent({type:'change'});
   app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
   assert.equal(saved.content.extensions.kem_specification.name,'Candidate KEM');
   assert.ok(saved.content.tags.includes('scheme-description'));
@@ -1044,7 +1230,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  await test('scheme review explicitly freezes the saved note revision and retries the same request',async()=>{
   const rev={...revision(),content:{...content(),extensions:{kem_specification:{name:'Candidate'}}}};
   const draft=note({revisions:[rev]});let writes=0;
-  const app=await boot({respond:(url,body)=>{
+  const app=await bootWithReaderTools({respond:(url,body)=>{
     if(url.endsWith('/proposal-submissions')){writes++;if(writes===1)throw Object.assign(Error('Lost response'),{status:0});return{proposal:{id:'proposal-one',source_note:{id:'note-one',revision:1}}};}
     if(url.startsWith('/api/notebook/notes/note-one'))return{note:draft};
   }});
@@ -1061,7 +1247,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  await test('submitted proposal notes expose review history while participant readers cannot edit or open private review',async()=>{
   const rev={...revision(),content:{...content(),extensions:{kem_specification:{name:'Candidate'}}},scheme_review:{id:'proposal-one',status:'submitted',revision:1}};
   let shown=note({revisions:[rev]});
-  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:shown}:undefined});
+  const app=await bootWithReaderTools({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:shown}:undefined});
   await app.show('note-one');assert.match(app.q('full').textContent,/Awaiting scheme review/);
   assert.ok(byText(app.q('full'),'Review & history →'));assert.equal(byText(app.q('full'),'Submit for scheme review'),undefined);
   shown={...shown,can_edit:false,can_review:false,owner:{id:2,handle:'other'}};await app.show('note-one');
@@ -1101,7 +1287,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  await test('scheme panel qualifies development self-review and retains retraction precedence',async()=>{
   const review={id:'proposal-one',status:'approved',revision:1,test_only_self_review:true,effective:false};
   let shown=note({revisions:[{...revision(),content:{...content(),extensions:{kem_specification:{name:'Candidate'}}},scheme_review:review}]});
-  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:shown}:undefined});
+  const app=await bootWithReaderTools({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:shown}:undefined});
   await app.show('note-one');
   assert.match(app.q('full').querySelector('.nb-scheme-state').textContent,/test review.*inactive/);
   shown.revisions[0].scheme_review={...review,effective:true};await app.show('note-one');
@@ -1181,13 +1367,13 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.equal(links.length,1);assert.equal(links[0].href,prefix.slice(1)+'&sha256='+hash+'&location=L3');
   assert.ok(app.requests.every(row=>!row.url.includes('prior')));
  });
- await test('every note has citations and citing it pins the selected revision without writing or fetching',async()=>{
-  const hash='a'.repeat(64), saved=note({content_sha256:hash});
-  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:saved}:undefined});
-  await app.show('note-one',1);assert.match(app.q('full').textContent,/CitationsNo citations recorded/);
+ await test('review tools retain exact-revision citations independently of the number label',async()=>{
+  const hash='a'.repeat(64), saved=note({number:1,content_sha256:hash});
+  const app=await bootWithReaderTools({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:saved}:undefined});
+  await app.show('note-one',1);assert.ok(byText(app.q('full'),'Cite this note'));
   const before=app.requests.length;let copied;app.sandbox.navigator.clipboard={writeText:async value=>{copied=value;}};
   byText(app.q('full'),'Cite this note').click();byText(app.q('dialog-body'),'Copy citation JSON').click();await flush();
-  const reference=JSON.parse(copied);assert.equal(reference.title,'Private claim · revision 1');
+  const reference=JSON.parse(copied);assert.equal(reference.title,'#0001 · Private claim · revision 1');
   assert.equal(reference.url,'/#notebook?note=note-one&revision=1&sha256='+hash);
   assert.equal(app.requests.length,before);assert.match(app.q('dialog-body').textContent,/does not change who can read/);
  });
@@ -1245,7 +1431,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  });
  await test('note connections are lazy, directional, exact and navigable without trusting authored titles',async()=>{
   const hash='a'.repeat(64), saved=note({content_sha256:hash}), root={note_id:'note-one',revision:1,content_sha256:hash,title:'Private claim'};
-  const app=await boot({respond:url=>{
+  const app=await bootWithReaderTools({respond:url=>{
    if(url.startsWith('/api/notebook/notes/note-one'))return{note:saved};
    if(url.startsWith('/api/notebook/graph?')){const direction=new URL(url,'http://test').searchParams.get('direction');const other={note_id:direction==='incoming'?'response':'prior',revision:2,content_sha256:'b'.repeat(64),title:direction==='incoming'?'Counterexample':'Original lemma'};
     return{format:'crucible-note-graph-v1',root,direction,links:[{source:direction==='incoming'?other:root,target:direction==='incoming'?root:other,relation:direction==='incoming'?'challenges':'builds_on',scope:'<script>inert authored explanation</script>'}],next_after:null};}
@@ -1259,7 +1445,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  });
  await test('connection failures retry, paginate and do not claim an unavailable graph is empty',async()=>{
   const root={note_id:'note-one',revision:1,content_sha256:'a'.repeat(64),title:'Private claim'};let fail=true;
-  const app=await boot({respond:url=>{
+  const app=await bootWithReaderTools({respond:url=>{
    if(url.startsWith('/api/notebook/notes/note-one'))return{note:note({content_sha256:root.content_sha256})};
    if(url.startsWith('/api/notebook/graph?')){const q=new URL(url,'http://test').searchParams,direction=q.get('direction');if(direction==='incoming'&&fail)throw Error('Connections temporarily unavailable');
     const target={note_id:q.has('after')?'second':'first',revision:1,content_sha256:'b'.repeat(64),title:q.has('after')?'Second source':'First source'};
@@ -1272,7 +1458,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  });
  await test('late connections cannot restore private graph content after an account or route change',async()=>{
   for(const change of ['account','route']){const late=deferred(),hash='a'.repeat(64),root={note_id:'note-one',revision:1,content_sha256:hash,title:'PRIVATE graph'};
-   const app=await boot({respond:url=>url.startsWith('/api/notebook/graph?')?late.promise:url.startsWith('/api/notebook/notes/note-one')?{note:note({content_sha256:hash})}:undefined});
+   const app=await bootWithReaderTools({respond:url=>url.startsWith('/api/notebook/graph?')?late.promise:url.startsWith('/api/notebook/notes/note-one')?{note:note({content_sha256:hash})}:undefined});
    await app.show('note-one',1);byText(app.q('full'),'Explore connections').click();await flush();
    if(change==='account')app.setAccount({id:2,handle:'bob'});else await app.controller.show(new URLSearchParams());
    late.resolve({format:'crucible-note-graph-v1',root,direction:'incoming',links:[{source:{...root,note_id:'private-response',title:'PRIVATE late response'},target:root,relation:'challenges'}],next_after:null});await flush();
@@ -1302,20 +1488,43 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   await app.show('note-one');byText(app.q('full'),'Edit').click();const title=app.root.querySelector('[name="citation-0-title"]');title.value='Corrected title';title.dispatchEvent({type:'input'});
   app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();assert.ok(saved,app.q('dialog-body').textContent);assert.equal(JSON.stringify(saved.content.references[0].relation),JSON.stringify(refs[0].relation));assert.equal(saved.content.references[0].other,'also retained');
  });
- await test('Write a related note pins the selected source and requires a concrete explanation',async()=>{
-  const hash='a'.repeat(64);let saved;
-  const app=await boot({respond:(url,body)=>body?(saved=body,{note:note()}):url.startsWith('/api/notebook/notes/note-one')?{note:note({content_sha256:hash})}:undefined});
-  await app.show('note-one',1);byText(app.q('full'),'Write a related note').click();fill(app,'A useful counterexample');
-  assert.equal(app.root.querySelector('[name="citation-0-relation"]').value,'responds_to');
-  assert.equal(app.root.querySelector('[name="citation-0-url"]').value,'/#notebook?note=note-one&revision=1&sha256='+hash);
-  app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();assert.equal(saved,undefined);
-  const scope=app.root.querySelector('[name="citation-0-scope"]');scope.value='This counterexample invalidates the claim at x = 0.';scope.dispatchEvent({type:'input'});
-  app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();assert.equal(saved.content.references[0].relation,'responds_to');assert.equal(app.requests.find(row=>row.body).url,'/api/notebook/notes');
+ await test('default reader keeps research content and owner actions without auxiliary tool panels',async()=>{
+  const app=await boot();await app.show('note-one');const full=app.q('full');
+  for(const selector of ['.nb-continuation','.nb-requests','.nb-related','.nb-record','.nb-citations'])assert.equal(full.querySelector(selector),null);
+  for(const label of ['Continue this research','Write a related note','Propose a change','Cite this note','Download agent research task'])assert.equal(byText(full,label),undefined);
+  assert.ok(byText(full,'Edit'));assert.ok(byText(full,'Publish'));assert.equal(full.querySelector('.nb-scope-details'),null);assert.equal(full.querySelector('.nb-reader-intro'),null);
+  assert.equal(app.requests.some(row=>row.body),false);
+ });
+ await test('a pinned curated reader explicitly offers its newer published revision without replacing the citation',async()=>{
+  const source=curatedFixture('revision-trail','Published explanation',2),app=await boot({researchWorkspace:{...emptyResearch,notes:[source]}});
+  await app.show('curated:revision-trail',1);const title=app.q('full').querySelector('.nb-full-title');assert.equal(title.textContent,'Published explanation 1');
+  const newer=byText(app.q('full'),'Newer published revision 2 →');assert.ok(newer);assert.equal(app.requests.some(row=>row.body),false);
+  app.q('full').querySelector('.nb-number-label').click();assert.equal(app.q('dialog').open,false);
+  newer.click();await app.whenNavigated();assert.equal(app.q('full').querySelector('.nb-full-title').textContent,'Published explanation 2');assert.match(app.location.hash,/revision=2&sha256=[a-f0-9]{64}$/);
+ });
+ await test('private newer revisions and exact reviewer readers get no published-revision shortcut',async()=>{
+  const older={...revision(1,'Published old','approved'),content_sha256:'a'.repeat(64)},newer={...revision(2,'Unpublished future','private'),content_sha256:'b'.repeat(64)};
+  const record=note({revision:2,revisions:[older,newer]});
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:record}:undefined});await app.show('note-one',1);
+  assert.equal(app.q('full').querySelector('.nb-newer-revision'),null);
+  const queued=note({can_edit:false,can_review:true,owner:{id:2,handle:'bob'},revision:2,revisions:[older,{...newer,publication_status:'approved'}]});
+  const reviewer=await boot({reviewOnly:true,initialParams:new URLSearchParams('section=publication&note=note-one&revision=1'),respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:queued}:undefined});
+  assert.equal(reviewer.q('full').querySelector('.nb-newer-revision'),null);
+ });
+ await test('optional reader tools respect permissions and cannot act after an account switch',async()=>{
+  const privateOther=note({can_edit:false,owner:{id:2,handle:'bob'}});
+  const app=await bootWithReaderTools({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:privateOther}:undefined});await app.show('note-one');
+  assert.equal(byText(app.q('full'),'Propose a change'),undefined);
+  const download=byText(app.q('full'),'Download agent research task');let downloads=0;
+  app.sandbox.URL=class extends URL{static createObjectURL(){downloads++;return'blob:fixture';}};
+  app.setAccount({id:3,handle:'charlie'});download.click();assert.equal(downloads,0);assert.equal(app.q('dialog').open,false);assert.equal(app.requests.some(row=>row.body),false);
+  const reviewer=await bootWithReaderTools({reviewOnly:true,initialParams:new URLSearchParams('section=publication&note=note-one'),respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:note({can_edit:false,can_review:true,owner:{id:2,handle:'bob'}})}:undefined});
+  assert.equal(byText(reviewer.q('full'),'Continue this research'),undefined);assert.ok(byText(reviewer.q('full'),'Download agent research task'));assert.equal(byText(reviewer.q('full'),'Write a related note'),undefined);
  });
  await test('source checks freeze the selected revision and retry a lost response with the same payload',async()=>{
   let attempts=0;const writes=[];
   const record={id:'request-one',title:'A source check',purpose:'source_check',question:'Check section 2',sources:[],packet_sha256:'a'.repeat(64),assessment:null,scope:'No activation',can_review:false};
-  const app=await boot({respond:(url,body)=>{if(url==='/api/notebook/research-requests'&&body){writes.push(JSON.parse(JSON.stringify(body)));if(++attempts===1)throw Object.assign(Error('Response lost'),{status:0});return{request:record};}if(url==='/api/notebook/research-requests/request-one')return{request:record};}});
+  const app=await bootWithReaderTools({respond:(url,body)=>{if(url==='/api/notebook/research-requests'&&body){writes.push(JSON.parse(JSON.stringify(body)));if(++attempts===1)throw Object.assign(Error('Response lost'),{status:0});return{request:record};}if(url==='/api/notebook/research-requests/request-one')return{request:record};}});
   await app.show('note-one',1);assert.equal(byText(app.q('full'),'Request research review'),undefined);byText(app.q('full'),'Request source check').click();await flush();
   const purpose=app.root.querySelector('[name="research-purpose"]');assert.equal(purpose.value,'source_check');assert.equal(purpose.options.some(option=>option.value==='technical_review'),false);app.root.querySelector('[name="research-question"]').value='Check section 2';
   app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
@@ -1327,7 +1536,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  });
  await test('all remaining request purposes load guidance without the retired technical review definition',async()=>{
   const activeTypes={...requestTypes,actions:requestTypes.actions.filter(action=>action.id!=='technical_review')};
-  const app=await boot({respond:url=>url==='/notebook/request-types.json'?activeTypes:undefined});
+  const app=await bootWithReaderTools({respond:url=>url==='/notebook/request-types.json'?activeTypes:undefined});
   await app.show('note-one');byText(app.q('full'),'Request source check').click();await flush();
   const purpose=app.root.querySelector('[name="research-purpose"]');
   assert.deepEqual(purpose.options.map(option=>option.value).sort(),['highlight_nomination','map_nomination','procedure','scoring_nomination','source_check','visualization_nomination']);
@@ -1339,20 +1548,20 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const record={id:'retired',title:'Historic technical review',purpose:'technical_review',question:'Old mathematical question',sources:[source],assessment:null,scope:'Historical request',can_review:true};
   const stored={...revision(),requests:[{id:record.id,kind:'technical_review',status:'submitted'}]};
   const app=await boot({respond:url=>url==='/api/notebook/research-requests/retired'?{request:record}:url.startsWith('/api/notebook/research-requests?')?{requests:[record],can_review:false,next_after:null}:url.startsWith('/api/notebook/notes/note-one')?{note:note({revisions:[stored]})}:undefined});
-  await app.show('note-one');assert.match(app.q('full').textContent,/Technical review \(retired\).*Retired request type/);assert.doesNotMatch(app.q('full').textContent,/Awaiting assessment|Review requested/);
+  await app.show('note-one');assert.equal(app.q('full').querySelector('.nb-requests'),null);assert.doesNotMatch(app.q('full').textContent,/Awaiting assessment|Review requested/);
   await app.controller.show(new URLSearchParams('research=1'));assert.match(app.q('full').textContent,/Technical review \(retired\).*Retired request type/);assert.doesNotMatch(app.q('full').textContent,/Awaiting assessment/);
   byText(app.q('full'),record.title).click();await flush();assert.match(app.q('full').textContent,/Old mathematical question.*Retired request type.*Frozen historical claim/);assert.equal(byText(app.q('full'),'Record assessment'),undefined);assert.ok(byText(app.q('full'),'Download review packet'));
  });
  await test('library distinguishes sharing approval from source checks and retired technical history',async()=>{
   for(const [publication,kind,status,expected] of [
    ['private','technical_review','submitted','Private'],
-   ['submitted','technical_review','submitted','Publish request pending'],
+   ['submitted','technical_review','submitted','In review'],
    ['private','source_check','submitted','Source check requested'],
    ['private','source_check','recommend','Private']
   ]){
    const stored={...revision(1,'A research note',publication),requests:[{id:'request-one',kind,status}]};
    const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?{notes:[note({...stored,revisions:[stored]})],next_after:null}:undefined});
-   const badges=app.q('list').querySelector('.nb-note-status').textContent;
+   const badges=(app.q('list').querySelector('.nb-note-status')?.textContent || '') + app.q('list').querySelector('.nb-card-actions').textContent;
    assert.ok(badges.includes(expected));assert.doesNotMatch(badges,/Review requested/);
    if(kind!=='source_check'||status!=='submitted')assert.doesNotMatch(badges,/Source check requested/);
    if(publication==='private')assert.doesNotMatch(badges,/Publish request pending/);
@@ -1398,7 +1607,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const old={...revision(),content:forged,requests:[{id:'r',kind:'visualization_nomination',status:'recommend',url:'https://untrusted.invalid'}]};
   const current={...revision(2),content:forged,requests:[]};
   const saved=note({revision:2,revisions:[old,current]});
-  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:saved}:url.startsWith('/api/notebook/notes?')?{notes:[saved],next_after:null}:undefined});
+  const app=await bootWithReaderTools({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:saved}:url.startsWith('/api/notebook/notes?')?{notes:[saved],next_after:null}:undefined});
   // The entry identifies the trusted older proposal without relabelling the
   // currently selected draft revision as that submitted proposal.
   assert.equal(app.q('list').querySelectorAll('.nb-request-label').length,1);
@@ -1412,7 +1621,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
  });
  await test('visualization requests show extraction requirements and keep scoring a distinct purpose',async()=>{
   let sent;const record={id:'visual-request',title:'A precise claim',purpose:'visualization_nomination',question:'Use the exact lemma in the assumptions view.',sources:[],scope:'Recommendation only',assessment:null};
-  const app=await boot({respond:(url,body)=>{if(url==='/api/notebook/research-requests'&&body){sent=body;return{request:record};}if(url.endsWith('/visual-request'))return{request:record};}});
+  const app=await bootWithReaderTools({respond:(url,body)=>{if(url==='/api/notebook/research-requests'&&body){sent=body;return{request:record};}if(url.endsWith('/visual-request'))return{request:record};}});
   await app.show('note-one');byText(app.q('full'),'Propose a change').click();await flush();
   const purpose=app.root.querySelector('[name="research-purpose"]');
   assert.equal(purpose.value,'visualization_nomination');
@@ -1429,7 +1638,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.equal(app.requests.some(request=>/publication|proposal-submissions/.test(request.url)),false);
  });
  await test('requirements must load before a request and a late response cannot reopen an old account dialog',async()=>{
-  const late=deferred();const app=await boot({respond:url=>url==='/notebook/request-types.json'?late.promise:undefined});
+  const late=deferred();const app=await bootWithReaderTools({respond:url=>url==='/notebook/request-types.json'?late.promise:undefined});
   await app.show('note-one');byText(app.q('full'),'Propose a change').click();
   assert.equal(byText(app.q('dialog-body'),'Send for review').disabled,true);
   app.root.querySelector('[name="research-question"]').value='A target and exact claim';
@@ -1445,12 +1654,12 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
    }
   }});
   await app.show(id,raw.revision);assert.match(app.q('full').textContent,/Proposal/);
-  assert.match(app.q('full').querySelector('.nb-request-row').textContent,/test review \(inactive\)/);
+  assert.equal(app.q('full').querySelector('.nb-request-row'),null);assert.match(app.q('full').querySelector('.nb-reader-status').textContent,/Proposal/);
   assert.equal(raw.requests,undefined);
   const call=app.requests.find(request=>request.url.startsWith('/api/notebook/research-requests?source_note_id='));assert.equal(new URLSearchParams(call.url.split('?')[1]).get('source_note_id'),id);
  });
  await test('agent handoffs identify the same-origin contract without uploading or fetching it on note load',async()=>{
-  const app=await boot();const copied=[];app.sandbox.navigator.clipboard={writeText:async value=>copied.push(value)};
+  const app=await bootWithReaderTools();const copied=[];app.sandbox.navigator.clipboard={writeText:async value=>copied.push(value)};
   app.q('files').click();byText(app.q('dialog-body'),'Copy prompt').click();await flush();
   assert.match(copied[0],/^Before working, read the Crucible agent contract at http:\/\/127\.0\.0\.1:8000\/api\/agent\/pipeline/);
   assert.match(copied[0],/Do not request passwords or tokens/);
@@ -1482,7 +1691,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const reviewed=note({id:'review-only',content:content('A source check'),proposal_revision:{revision:1,content_sha256:'hash-1',requests:[proposalRecord('source-check','source_check')]}});
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?summaryPage(url,[submitted,forged,reviewed]):undefined});
   const entries=app.q('list').querySelectorAll('.nb-entry');
-  assert.equal(entries[0].querySelector('.nb-expand').getAttribute('aria-expanded'),'false');
+  assert.equal(entries[0].querySelector('.nb-expand'),null);
   assert.equal(entries[0].querySelector('.nb-request-label').textContent,'Proposal');
   assert.equal(entries[1].querySelector('.nb-request-label'),null);
   assert.equal(entries[2].querySelectorAll('.nb-request-label').some(node=>node.textContent==='Proposal'),false);
@@ -1508,7 +1717,7 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   await filterNotes(app,'all');const all=listQuery(app.requests.at(-1).url);assert.equal(all.get('scope'),'all');assert.equal(all.has('proposals_only'),false);assert.equal(all.has('after'),false);
   assert.equal(app.q('page').textContent,'Page 1');assert.match(app.q('list').textContent,/Private claim/);
  });
- await test('proposal title opens the exact submitted revision directly and agrees with the preview reader',async()=>{
+ await test('proposal title opens the exact submitted revision directly and retains the proposal filter on return',async()=>{
   const old={...revision(1,'Submitted mathematical claim'),content_sha256:'b'.repeat(64),requests:[proposalRecord()]};
   const latest={...revision(2,'New private draft'),content_sha256:'c'.repeat(64),requests:[]};
   const saved=note({...latest,revisions:[old,latest],proposal_revision:{revision:1,content_sha256:old.content_sha256,requests:old.requests}});
@@ -1516,9 +1725,8 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   assert.match(app.q('list').textContent,/New private draft/);assert.equal(app.q('list').querySelector('.nb-request-label').textContent,'Proposal');
   await filterNotes(app,'proposals');
   const directRoute=app.q('list').querySelector('.nb-title').getAttribute('href');
-  app.q('list').querySelector('.nb-expand').click();
-  assert.equal(app.q('list').querySelector('.nb-preview').hidden,false);
-  byText(app.q('list'),'Read note →').click();await app.whenNavigated();
+  assert.equal(app.q('list').querySelector('.nb-preview'),null);
+  app.q('list').querySelector('.nb-title').click();await app.whenNavigated();
   assert.equal(app.location.hash,directRoute);
   byText(app.q('full'),'← Notes').click();await app.whenNavigated();
   assert.equal(app.root.querySelector('[name="visibility"]').value,'proposals');
@@ -1863,43 +2071,108 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
    assert.equal(app.q('timeline').querySelector('svg'),null);assert.match(app.q('timeline').textContent,/could not be loaded/);
   }
  });
- await test('Human-written is unchecked by default and only explicit choices add the canonical tag',async()=>{
+ await test('Authorship is unselected by default and only explicit choices add the canonical tag',async()=>{
   for(const checked of [false,true]){
    let sent;const app=await boot({respond:(url,body)=>url==='/api/notebook/notes'&&body?(sent=body,{note:note()}):undefined});app.q('new').click();fill(app);
-   const human=app.root.querySelector('[name="human-written"]');assert.equal(human.checked,false);assert.equal(app.q('dialog-body').textContent.includes('Optional, self-reported label; not verified'),false);
-   if(checked){human.checked=true;human.dispatchEvent({type:'change'});}app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();assert.equal(sent.content.tags.includes('human-written'),checked);assert.equal(Object.hasOwn(sent.content,'human-written'),false);
+   const human=app.root.querySelector('[name="authorship"]');assert.equal(human.value,'');assert.equal(Boolean(human.required),false);app.root.querySelector('[name="tags"]').value=JSON.stringify(['algebra']);assert.equal(app.q('dialog-body').textContent.includes('Optional, self-reported label; not verified'),false);
+   if(checked){human.value='human-written';human.dispatchEvent({type:'change'});}app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();assert.equal(sent.content.tags.includes('human-written'),checked);assert.equal(Object.hasOwn(sent.content,'human-written'),false);
+  }
+ });
+ await test('all three authorship choices replace each other and remain plain persisted tags',async()=>{
+  for(const choice of ['human-written','human-ai-hybrid','ai-written']){
+   let sent;const app=await boot({respond:(url,body)=>url==='/api/notebook/notes'&&body?(sent=body,{note:note()}):undefined});
+   app.q('new').click();fill(app);const select=app.root.querySelector('[name="authorship"]'),tags=app.root.querySelector('[name="tags"]');
+   tags.value=JSON.stringify(['algebra','human-written']);tags.dispatchEvent({type:'input'});
+   select.value=choice;select.dispatchEvent({type:'change'});
+   assert.equal(app.root.querySelectorAll('.nb-selected-tag').length,1);assert.equal(app.root.querySelector('.nb-selected-tag').textContent,'algebra×');
+   app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();
+   assert.deepEqual(Array.from(sent.content.tags),['algebra',choice]);assert.equal(Object.hasOwn(sent.content,'authorship'),false);
   }
  });
  await test('Human-written and freeform tags stay synchronized and changes count as an unsaved draft',async()=>{
-  const app=await boot();app.q('new').click();const human=app.root.querySelector('[name="human-written"]'),tags=app.root.querySelector('[name="tags"]');
-  tags.value=JSON.stringify(['algebra','human-written']);tags.dispatchEvent({type:'input'});assert.equal(human.checked,true);
-  human.checked=false;human.dispatchEvent({type:'change'});assert.equal(tags.value,JSON.stringify(['algebra']));
-  human.checked=true;human.dispatchEvent({type:'change'});assert.equal(tags.value,JSON.stringify(['algebra','human-written']));human.dispatchEvent({type:'change'});assert.equal(tags.value,JSON.stringify(['algebra','human-written']));
-  tags.value=JSON.stringify(['algebra']);tags.dispatchEvent({type:'input'});assert.equal(human.checked,false);
+  const app=await boot();app.q('new').click();const human=app.root.querySelector('[name="authorship"]'),tags=app.root.querySelector('[name="tags"]');
+  tags.value=JSON.stringify(['algebra','human-written']);tags.dispatchEvent({type:'input'});assert.equal(human.value,'human-written');
+  human.value='';human.dispatchEvent({type:'change'});assert.equal(tags.value,JSON.stringify(['algebra']));
+  human.value='human-written';human.dispatchEvent({type:'change'});assert.equal(tags.value,JSON.stringify(['algebra','human-written']));human.dispatchEvent({type:'change'});assert.equal(tags.value,JSON.stringify(['algebra','human-written']));
+  tags.value=JSON.stringify(['algebra']);tags.dispatchEvent({type:'input'});assert.equal(human.value,'');
   let warned=false;app.sandbox.window.confirm=()=>{warned=true;return false;};app.q('close').click();assert.equal(warned,true);assert.equal(app.q('dialog').open,true);
  });
- await test('editing explicitly tagged content preserves or removes Human-written on the new revision',async()=>{
+ await test('editing can clear authorship without relabelling historical revisions',async()=>{
   for(const remove of [false,true]){
    const authored={...content(),tags:['algebra','human-written']};let sent;const app=await boot({respond:(url,body)=>url.endsWith('/revisions')&&body?(sent=body,{note:note()}):url.startsWith('/api/notebook/notes/note-one')?{note:note({content:authored})}:undefined});await app.show('note-one');byText(app.q('full'),'Edit').click();
-   const human=app.root.querySelector('[name="human-written"]');assert.equal(human.checked,true);if(remove){human.checked=false;human.dispatchEvent({type:'change'});}app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();assert.equal(sent.content.tags.includes('human-written'),!remove);assert.deepEqual(authored.tags,['algebra','human-written']);
+   const human=app.root.querySelector('[name="authorship"]');assert.equal(human.value,'human-written');if(remove){human.value='';human.dispatchEvent({type:'change'});}app.root.querySelector('.nb-form').dispatchEvent({type:'submit'});await flush();assert.equal(sent.content.tags.includes('human-written'),!remove);assert.deepEqual(authored.tags,['algebra','human-written']);
   }
  });
  await test('an uncertain save freezes Human-written and retries the original tag choice',async()=>{
-  const writes=[];const app=await boot({respond:(url,body)=>{if(url==='/api/notebook/notes'&&body){writes.push(JSON.parse(JSON.stringify(body)));if(writes.length===1)throw Object.assign(Error('Lost response'),{status:0});return{note:note()};}}});app.q('new').click();fill(app);const human=app.root.querySelector('[name="human-written"]');human.checked=true;human.dispatchEvent({type:'change'});const form=app.root.querySelector('.nb-form');form.dispatchEvent({type:'submit'});await flush();assert.equal(human.disabled,true);assert.equal(app.root.querySelector('[name="tags"]').disabled,true);
-  human.checked=false;human.dispatchEvent({type:'change'});app.root.querySelector('[name="tags"]').value=JSON.stringify(['tampered']);form.dispatchEvent({type:'submit'});await flush();assert.deepEqual(writes[0],writes[1]);assert.ok(writes[1].content.tags.includes('human-written'));
+  const writes=[];const app=await boot({respond:(url,body)=>{if(url==='/api/notebook/notes'&&body){writes.push(JSON.parse(JSON.stringify(body)));if(writes.length===1)throw Object.assign(Error('Lost response'),{status:0});return{note:note()};}}});app.q('new').click();fill(app);const human=app.root.querySelector('[name="authorship"]');human.value='human-written';human.dispatchEvent({type:'change'});const form=app.root.querySelector('.nb-form');form.dispatchEvent({type:'submit'});await flush();assert.equal(human.disabled,true);assert.equal(app.root.querySelector('[name="tags"]').disabled,true);
+  human.value='';human.dispatchEvent({type:'change'});app.root.querySelector('[name="tags"]').value=JSON.stringify(['tampered']);form.dispatchEvent({type:'submit'});await flush();assert.deepEqual(writes[0],writes[1]);assert.ok(writes[1].content.tags.includes('human-written'));
  });
- await test('Human-written badges follow the displayed revision across accounts and support ordinary tag filtering',async()=>{
+ await test('Human-written labels follow the displayed revision and stay display-only',async()=>{
   const tagged=note({owner:{id:2,handle:'bob'},can_edit:false,...revision(1,'Human note','approved'),content:{...content('Human note'),tags:['algebra','human-written']}}),untagged=note({id:'other',owner:{id:2,handle:'bob'},can_edit:false,...revision(1,'Other note','approved')});
   const app=await boot({respond:url=>url.startsWith('/api/notebook/notes?')?summaryPage(url,[tagged,untagged]):url.startsWith('/api/notebook/notes/note-one')?{note:tagged}:undefined});assert.equal(app.q('list').querySelectorAll('.nb-human-written').length,1);assert.match(app.q('list').querySelector('.nb-human-written').getAttribute('title'),/Self-reported.*not verified/);
-  app.q('list').querySelector('.nb-expand').click();byText(app.q('list'),'Human-written').click();await flush();assert.equal(listQuery(app.requests.at(-1).url).get('tag'),'human-written');assert.equal(app.q('list').querySelectorAll('.nb-entry').length,1);
+  assert.equal(byText(app.q('list'),'Human-written'),undefined);assert.equal(app.q('list').querySelectorAll('.nb-entry').length,2);assert.equal(app.requests.some(row=>row.url.includes('tag=human-written')),false);
   await app.show('note-one');assert.equal(app.q('full').querySelectorAll('.nb-human-written').length,1);assert.equal(byText(app.q('full'),'Edit'),undefined);
   app.setAccount({id:3,handle:'carol'});assert.equal(app.q('full').textContent,'');await app.show('note-one');assert.equal(app.q('full').querySelectorAll('.nb-human-written').length,1);
  });
  await test('historical Human-written labels never infer authorship of a later untagged revision',async()=>{
-  const older=revision(1,'Earlier human draft','approved');older.content.tags.push('human-written');const latest=revision(2,'Later agent draft');const stored=note({revision:2,revisions:[older,latest]});const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});await app.show('note-one',1);assert.equal(app.q('full').querySelectorAll('.nb-human-written').length,1);byText(app.q('full'),'Edit').click();assert.equal(app.root.querySelector('[name="human-written"]').checked,false);app.q('close').click();await app.show('note-one',2);assert.equal(app.q('full').querySelectorAll('.nb-human-written').length,0);
+  const older=revision(1,'Earlier human draft','approved');older.content.tags=['algebra','human-written'];const latest=revision(2,'Later agent draft');latest.content.tags=['algebra'];const stored=note({revision:2,revisions:[older,latest]});const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});await app.show('note-one',1);assert.equal(app.q('full').querySelectorAll('.nb-human-written').length,1);byText(app.q('full'),'Edit').click();assert.equal(app.root.querySelector('[name="authorship"]').value,'');app.q('close').click();await app.show('note-one',2);assert.equal(app.q('full').querySelectorAll('.nb-human-written').length,0);
  });
  await test('imports preserve only explicit Human-written tags and do not infer authorship from the importing account',async()=>{
   const workspace={format:'crucible-theory-local-v1',notes:[{id:'human',revisions:[{revision:1,createdAt:1000,...content('Human source'),tags:['human-written']}]},{id:'agent',revisions:[{revision:1,createdAt:1000,...content('Agent source')}]}],views:[]};let sent;const app=await boot({stored:JSON.stringify(workspace),respond:(url,body)=>url==='/api/notebook/import'?(sent=body,{added_notes:2}):undefined});app.q('files').click();assert.match(app.q('dialog-body').textContent,/human-written.*never add it automatically or infer it from an account.*omit it from agent-written revisions/);byText(app.q('dialog-body'),'Review browser drafts for import').click();byText(app.q('dialog-body'),'Import notes').click();await flush();assert.deepEqual(Array.from(sent.workspace.notes[0].revisions[0].tags),['human-written']);assert.equal(sent.workspace.notes[1].revisions[0].tags.includes('human-written'),false);
  });
+ // Reader-view redesign regressions: independent of list presentation.
+ const readingNote = (extra={}) => note({number:7,content_sha256:'a'.repeat(64),content:{...content('One research note'),body:'# Technical record\nExact original text.',sections:[{id:'idea',title:'The idea',body:'An authored explanation.'}]},...extra});
+ await test('normal readers group identity and owner controls around one full-width title',async()=>{
+  const stored=readingNote();const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});await app.show('note-one');
+  const full=app.q('full'),header=full.querySelector('.nb-reader-header');
+  assert.equal(header.querySelector('.nb-full-title').textContent,'One research note');
+  assert.equal(header.querySelector('.nb-reader-revision'),null);
+  assert.ok(header.querySelector('.nb-reader-status'));assert.ok(byText(header,'Edit'));assert.ok(byText(header,'Publish'));
+  assert.equal(full.querySelector('.nb-readable-view').hidden,false);assert.equal(full.querySelector('.nb-full-text').hidden,true);
+  assert.equal(full.querySelector('.nb-reader-contents'),null);
+  assert.equal(header.querySelector('.nb-number-label').textContent,'#0007');header.querySelector('.nb-number-label').click();
+  assert.equal(app.q('dialog').open,false);assert.equal(app.requests.some(row=>row.body),false);
+ });
+ await test('switching note views preserves exact content without duplicating metadata or fetching or writing',async()=>{
+  const stored=readingNote();const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});await app.show('note-one');
+  const full=app.q('full'),requests=app.requests.length;
+  byText(full,'Research details').click();assert.equal(full.querySelector('.nb-readable-view').hidden,true);assert.equal(full.querySelector('.nb-full-text').hidden,false);
+  assert.equal(byText(full,'Research details').getAttribute('aria-pressed'),'true');assert.equal(full.querySelector('.nb-research-context'),null);
+  assert.match(full.querySelector('.nb-body').textContent,/Technical record.*Exact original text/);
+  byText(full,'Human Explanation').click();assert.equal(full.querySelector('.nb-readable-view').hidden,false);assert.equal(full.querySelector('.nb-full-text').hidden,true);
+  assert.equal(app.requests.length,requests);assert.equal(stored.revisions[0].content.body,'# Technical record\nExact original text.');assert.equal(stored.revisions[0].content.conditions,'Scope');
+ });
+ await test('a single-body note keeps both views and explicitly identifies absent research details',async()=>{
+  const stored=readingNote({content:{...content('Technical-only note'),conditions:''}});const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});await app.show('note-one');
+  const full=app.q('full');assert.ok(full.querySelector('.nb-reader-views'));
+  assert.equal(full.querySelector('.nb-readable-view').hidden,false);assert.equal(full.querySelector('.nb-full-text').hidden,true);assert.match(full.querySelector('.nb-body').textContent,/Argument as text/);
+  byText(full,'Research details').click();assert.equal(full.querySelector('.nb-full-text').hidden,false);assert.match(full.querySelector('.nb-full-text').textContent,/No separate research details have been added/);
+  assert.equal(full.querySelector('.nb-reader-intro'),null);assert.equal(full.querySelector('.nb-research-context'),null);
+ });
+ await test('cached reader mode survives fresh authorization but resets on departure and account change',async()=>{
+  const stored=readingNote(),gate=deferred();let reads=0;
+  const app=await boot({respond:url=>url.split('?')[0]==='/api/notebook/notes/note-one'?(++reads===2?gate.promise:{note:stored}):undefined});await app.show('note-one');
+  byText(app.q('full'),'Research details').click();const refreshing=app.show('note-one');await flush();
+  assert.equal(app.q('full').querySelector('.nb-full-text').hidden,false);assert.equal(byText(app.q('full'),'Human Explanation').disabled,true);
+  gate.resolve({note:{...stored,rating:{score:1}}});await refreshing;
+  assert.equal(app.q('full').querySelector('.nb-full-text').hidden,false);assert.equal(byText(app.q('full'),'Human Explanation').disabled,false);
+  await app.show();await app.show('note-one');assert.equal(app.q('full').querySelector('.nb-readable-view').hidden,false);
+  byText(app.q('full'),'Research details').click();app.setAccount({id:2,handle:'bob'});await app.show('note-one');assert.equal(app.q('full').querySelector('.nb-readable-view').hidden,false);
+ });
+ await test('exact passage and section links reveal their corresponding reader view',async()=>{
+  const stored=readingNote(),source={note:'note-one',revision:'1',sha256:'a'.repeat(64)};
+  const app=await boot({respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined,initialParams:new URLSearchParams({...source,location:'L1'})});
+  assert.equal(app.q('full').querySelector('.nb-full-text').hidden,false);assert.equal(app.q('full').querySelector('.nb-full-text').open,true);
+  assert.equal(app.document.activeElement.getAttribute('data-nb-location'),'L1');
+  await app.controller.show(new URLSearchParams({...source,note_section:'idea'}));
+  assert.equal(app.q('full').querySelector('.nb-readable-view').hidden,false);assert.equal(app.q('full').querySelector('.nb-full-text').hidden,true);
+  assert.equal(app.document.activeElement.getAttribute('data-note-section'),'idea');
+ });
+ await test('reviewer readers retain their original single-view layout and exact source',async()=>{
+  const stored=readingNote({can_review:true,publication_status:'submitted'});const app=await boot({reviewOnly:true,respond:url=>url.startsWith('/api/notebook/notes/note-one')?{note:stored}:undefined});await app.show('note-one',1);
+  const full=app.q('full');assert.ok(full.querySelector('.nb-reader-heading'));assert.equal(full.querySelector('.nb-reader-header'),null);assert.equal(full.querySelector('.nb-reader-views'),null);
+  assert.equal(full.querySelector('.nb-full-text').open,false);assert.ok(full.querySelector('.nb-note-contents'));assert.equal(full.querySelector('.nb-reader-contents'),null);
+ });
+ // End reader-view redesign regressions.
  console.log(`\n${passed} durable notebook frontend checks passed.`);
 })().catch(error=>{console.error(error);process.exitCode=1;});

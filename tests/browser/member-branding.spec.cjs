@@ -25,8 +25,8 @@ for (const width of [1440, 640, 390]) for (const theme of ['light', 'dark']) {
         account:center(document.querySelector('.account-actions')),font:getComputedStyle(wordmark).fontFamily,
         overflow:document.documentElement.scrollWidth > innerWidth};
     });
-    expect(alignment.font).toContain('Georgia');expect(alignment.overflow).toBe(false);
-    expect(Math.abs(alignment.wordmark - alignment.mark), 'wordmark and complete icon share a centre').toBeLessThan(1);
+    expect(alignment.font).toContain('Palatino');expect(alignment.overflow).toBe(false);
+    expect(Math.abs(alignment.wordmark - alignment.mark - 3), 'icon sits slightly above the centred wordmark').toBeLessThan(1);
     const navigationCenter = width > 700 ? alignment.wordmark : alignment.navigation[0];
     for (const center of alignment.navigation) expect(Math.abs(center - navigationCenter), 'navigation labels share their row centre').toBeLessThan(1);
     if (width > 700) expect(Math.abs(alignment.account - alignment.wordmark), 'account controls share the title centre').toBeLessThan(1);

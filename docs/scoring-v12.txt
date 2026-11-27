@@ -1,0 +1,39 @@
+CRUCIBLE — PROVISIONAL POINTS POLICY v12
+Decision date: 26 November 2026
+Policy ID: crucible-points-v12
+
+Every valid correct receipt that strictly advances the global recovery frontier
+of its exactly enrolled scheme release earns its account 100 points. The same
+account may earn another 100 for a later frontier advance. A multi-stage jump is
+one advance, not one award per crossed stage. Ties, repeats, copied recoveries
+and filling lower holes earn nothing. Ordinary personal progress earns zero.
+
+Receipt eligibility, original configuration enrollment, server-time/receipt-ID
+ordering and archived-release separation are unchanged from v11. Reviewer
+receipts still establish the factual frontier, but reviewers earn no points and
+remain excluded from rankings. First-to-reach and personal-record displays keep
+their compact highest-record view. Legacy milestone flags identify every earning
+advance. Family score totals aggregate all advances; legacy first-award fields
+still identify the first earning receipt, not an exclusive source of that total.
+
+This is deliberately provisional. Progressions with more configurations can
+provide more opportunities, and walking intermediate stages can earn more than
+one direct jump. It rewards recorded frontier advances, not proven algorithmic
+novelty, equal compute, or comparable cryptographic strength. Do not add artificial
+stages to generate awards. Future calibration may use frozen progress values.
+New configurations/releases still need explicit scoring enrollment; changes to
+navigation alone neither rescale awards nor turn old receipts into new work.
+
+Totals are derived from existing immutable receipts under the current policy.
+No account, receipt, note, prior result or attribution is erased or rewritten.
+This local update requires no schema migration. A future policy can recompute
+scores from the same evidence. Current admitted-scheme and bounty award amounts remain unchanged. Note
+support is updated by the refinement below. v11 is preserved as historical policy.
+
+Note support UI refinement, 26 November 2026
+One current upvote per account per note earns its author one point. Posting or
+publishing alone earns none. Support policy crucible-note-support-v2 counts
+legacy values 1 and 2 equally; value 2 remains accepted for older clients and
+exact retries, but is no longer offered as a distinct level. Existing records
+are preserved. List priority, displayed supporter counts and author points use
+one point per supporting account. Human clicks toggle 0/1 without a dialog.

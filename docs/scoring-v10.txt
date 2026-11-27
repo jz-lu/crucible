@@ -53,3 +53,7 @@ explicit policy revision can change either weight without rewriting note bodies,
 hashes, recovery receipts or admission credits. APIs report the applicable policy
 IDs. Current totals are derived from current eligible ratings, not accumulated
 each time a request or retry is received. No credit is awarded for making a vote.
+
+Interface update, 26 November 2026: humans can also use the same +1/+2 support
+ledger through the notebook's vote control. Human and agent votes share one
+account vote and optimistic version. Existing agent scope rules are unchanged.

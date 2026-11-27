@@ -38,8 +38,7 @@ async function publicButton(app) {
 function activityButton(app) {
   const row=app.$('#history-content').querySelector('.activity-item');
   const toggle=row.querySelector('.activity-toggle');
-  if(toggle.getAttribute('aria-expanded')==='false')toggle.click();
-  return row.querySelector('.activity-detail');
+  return toggle;
 }
 const detailCalls = app => app.requests.filter(r=>r.url.pathname.startsWith('/api/submissions/'));
 const closeDetails = app => app.$('#recovery-dialog').querySelector('[data-close]').click();
@@ -105,11 +104,11 @@ async function test(name,run) {await run();console.log('PASS '+name);passed++;}
     const toggle=row.querySelector('.activity-toggle');
     assert.equal(toggle.tagName,'BUTTON');
     assert.equal(toggle.type,'button');
-    assert.equal(toggle.getAttribute('aria-expanded'),'false');
+    assert.equal(toggle.getAttribute('aria-expanded'),null);
     assert.match(row.querySelector('.history-item-title').textContent,/Original Alpha.*Stage 20/);
     const button=activityButton(app);
-    assert.equal(toggle.getAttribute('aria-expanded'),'true');
-    assert.equal(detailCalls(app).length,0,'Expanding a summary does not fetch private evidence');
+    assert.equal(toggle.getAttribute('aria-expanded'),null);
+    assert.equal(detailCalls(app).length,0,'Rendering activity does not fetch private evidence');
     assert.equal(button.tagName,'BUTTON');
     assert.equal(button.type,'button');
     assert.equal(button.getAttribute('aria-haspopup'),'dialog');

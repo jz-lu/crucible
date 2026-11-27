@@ -164,6 +164,13 @@ test('bindings require exact existing source revisions and can be repinned expli
   assert.ok(!store.snapshot().views[0].bindings.some(item => item.id === binding.id));
 });
 
+test('optional prose fields remain empty through portable export and import', () => {
+  const {store}=fixture(); const record=store.createNote(input({claim:'',conditions:''}));
+  const snapshot=JSON.parse(store.exportJSON()); Store.validateSnapshot(snapshot);
+  assert.equal(snapshot.notes.find(item=>item.id===record.id).revisions[0].conditions,'');
+  assert.equal(snapshot.notes.find(item=>item.id===record.id).revisions[0].claim,'');
+});
+
 test('local assessments need reasons and are ordinary editable demo data', () => {
   const { store } = fixture(legacySnapshot());
   const view = store.snapshot().views[0], binding = view.bindings[0];

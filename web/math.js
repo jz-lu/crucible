@@ -20,6 +20,34 @@
   const assetLoads = new Map(), attempts = new Map();
   let rendererReady = typeof window.katex?.render === 'function';
   let rendererLoad = null;
+  let readingLayoutPending = false;
+
+  function scheduleReadingLayout() {
+    if (readingLayoutPending || typeof window.requestAnimationFrame !== 'function' || typeof window.getComputedStyle !== 'function') return;
+    readingLayoutPending = true;
+    window.requestAnimationFrame(() => {
+      readingLayoutPending = false;
+      // Inspect only live, visible reading content. No retained private DOM or
+      // per-expression observers; measure first, then update styles together.
+      const changes = [];
+      for (const span of document.querySelectorAll('.nb-root:not(.nb-review-workspace).nb-note-reader .math-inline')) {
+        if (!span.getClientRects().length) continue;
+        const block = span.closest('p,li,h1,h2,h3,h4,h5,h6,.nb-reading-equation') || span.parentElement;
+        const style = window.getComputedStyle(block);
+        const available = block.clientWidth - parseFloat(style.paddingLeft || 0) - parseFloat(style.paddingRight || 0);
+        if (available <= 0) continue;
+        const groups = [...span.querySelectorAll('.katex-html > .katex-base, .katex-html > .base')];
+        const wide = groups.some(group => group.getBoundingClientRect().width > available + 1);
+        if (span.classList.contains('math-wide') !== wide) changes.push({span,wide});
+      }
+      for (const {span,wide} of changes) {
+        span.classList.toggle('math-wide',wide);
+        if (wide) span.tabIndex = 0; else span.removeAttribute('tabindex');
+      }
+    });
+  }
+  window.addEventListener?.('resize', scheduleReadingLayout, {passive:true});
+  document.fonts?.addEventListener?.('loadingdone', scheduleReadingLayout);
 
   function pendingElements() {
     return [...(document.querySelectorAll?.('[data-crucible-math-pending]') || [])].filter(element => {
@@ -152,13 +180,14 @@
       expressions++;
     }
     element.append(source.slice(cursor));
+    scheduleReadingLayout();
     return element;
   }
 
   // A bounded, inert reading format. This deliberately shares the application's
   // lazy renderer and its retry/detached-node policy, rather than adding a
   // second Markdown/TeX loader. Full-text source citations still use body lines.
-  function markdown(target, value) {
+  function markdown(target, value, {onBlock, lineOffset = 0} = {}) {
     const source = String(value ?? '');
     const doc = target.ownerDocument;
     target.replaceChildren();
@@ -195,40 +224,60 @@
       parent.append(text.slice(at));
     }
     const lines = source.replace(/\r\n?/g, '\n').split('\n');
+    const structure = source.trim() && window.TheoryStore?.markdownStructure?.(source);
+    const headings = structure ? new Map(structure.headings.map(item => [item.line,item])) : null;
+    const fences = structure ? new Set(structure.fence_lines) : null, mathLines = structure ? new Set(structure.math_lines) : null;
+    const headingAt = i => headings ? headings.get(i + 1) : (() => {
+      const match = /^(#{1,6})[ \t]+(.+)$/.exec(lines[i]);
+      return match ? {level:match[1].length,title:match[2].replace(/[ \t]+#+[ \t]*$/, '').trim()} : null;
+    })();
+    const fenceAt = (line, i) => (!fences || fences.has(i + 1)) && /^ {0,3}(`{3,}|~{3,})/.exec(line);
+    const mathAt = (line, i) => (!mathLines || mathLines.has(i + 1)) && ['\\[','$$'].includes(line.trim());
+    const append = (block, start, end, kind) => {
+      if (onBlock) onBlock(block, start + 1, end, kind);
+      else { block.setAttribute('data-markdown-start', start + 1 + lineOffset); block.setAttribute('data-markdown-end', end + lineOffset); target.append(block); }
+    };
     for (let i = 0; i < lines.length;) {
-      const line = lines[i];
+      const startLine = i, line = lines[i];
       if (!line.trim()) { i++; continue; }
-      if (line.trim() === '\\[') {
+      if (mathAt(line, i)) {
+        const closing = line.trim() === '$$' ? '$$' : '\\]';
         const start = i++;
-        while (i < lines.length && delimiter(lines[i], '\\]', 0) === -1) i++;
+        while (i < lines.length && delimiter(lines[i], closing, 0) === -1) i++;
         const block = node('div'); block.className = 'nb-reading-equation';
-        let text = lines.slice(start, i).join('\n');
+        let text = lines.slice(start, i).join('\n'), endLine = i;
         if (i < lines.length) {
-          const end = delimiter(lines[i], '\\]', 0) + 2;
+          endLine = i + 1;
+          const end = delimiter(lines[i], closing, 0) + 2;
           text += '\n' + lines[i].slice(0, end);
           const remainder = lines[i].slice(end);
           if (remainder.trim()) lines[i] = remainder;
           else i++;
         }
         if (++expressions <= MAX_READING_EXPRESSIONS) render(block, text, {displayMode: true}); else block.textContent = text;
-        target.append(block); continue;
+        append(block, startLine, endLine, 'math'); continue;
       }
-      if (/^```/.test(line)) {
+      const fence = fenceAt(line, i);
+      if (fence) {
         const body = []; i++;
-        while (i < lines.length && !/^```\s*$/.test(lines[i])) body.push(lines[i++]);
+        while (i < lines.length) {
+          const close = /^ {0,3}(`+|~+)[ \t]*$/.exec(lines[i]);
+          if (close && close[1][0] === fence[1][0] && close[1].length >= fence[1].length) break;
+          body.push(lines[i++]);
+        }
         if (i < lines.length) i++;
-        const pre = node('pre'); pre.append(node('code', body.join('\n'))); target.append(pre); continue;
+        const pre = node('pre'); pre.append(node('code', body.join('\n'))); append(pre, startLine, i, 'code'); continue;
       }
-      const heading = /^(#{1,4})\s+(.+)$/.exec(line);
-      if (heading) { const h = node('h' + Math.min(heading[1].length + 2, 6)); inline(h, heading[2]); target.append(h); i++; continue; }
+      const heading = headingAt(i);
+      if (heading) { const h = node('h' + Math.min(heading.level + 2, 6)); inline(h, heading.title); i++; append(h, startLine, i, 'heading'); continue; }
       if (/^[-*] /.test(line)) {
         const list = node('ul');
         while (i < lines.length && /^[-*] /.test(lines[i])) { const li = node('li'); inline(li, lines[i++].slice(2)); list.append(li); }
-        target.append(list); continue;
+        append(list, startLine, i, 'list'); continue;
       }
       const body = [];
-      while (i < lines.length && lines[i].trim() && lines[i].trim() !== '\\[' && !/^(?:#{1,4}\s|[-*] |```)/.test(lines[i])) body.push(lines[i++]);
-      const p = node('p'); inline(p, body.join('\n')); target.append(p);
+      while (i < lines.length && lines[i].trim() && !mathAt(lines[i], i) && !headingAt(i) && !/^[-*] /.test(lines[i]) && !fenceAt(lines[i], i)) body.push(lines[i++]);
+      const p = node('p'); inline(p, body.join('\n')); append(p, startLine, i, 'paragraph');
     }
     return target;
   }

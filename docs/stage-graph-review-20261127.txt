@@ -1,0 +1,209 @@
+STAGES AND GRAPHS — FIRST LOCAL REVIEW
+27 November 2026
+
+Recommendation
+
+Keep current stages while improving what the reader sees. Use a focused stage
+explorer with two distinct questions: cost to use, and attack effort. Give each
+metric a plain title, units and one short explanation. Keep exact methodology in the retained evidence and supporting notes,
+without requiring a general method panel in the human-facing overview. Do not imply that a higher stage is a uniformly harder
+security level, or that the cost of one known attack certifies security.
+
+Latest UI direction: the replacement should fit the scheme overview ergonomically.
+Security and Correctness links sit visibly below the scheme title. Public-key,
+ciphertext and runtime explanations may be a little fuller to explain practical
+use. No generic Method/source or plotted-values control. The draft starts on
+Frodo with 80 stages: hover/arrow keys inspect, click/Enter pins, Escape clears.
+Costs retain a short origin caption; the source data and report remain available
+for review rather than being presented as additional default interface controls.
+
+Prototype: outputs/graph-explorer-20261127/index.html (workspace outputs)
+Local URL: http://127.0.0.1:8019/graphs/
+This is an inspectable design draft, not the application's new default.
+
+Scope of evidence
+
+Inspected all eight local release descriptions, default progressions, profile
+metrics and note-backed graph models. Matched all 377 default-stage parameter
+sets and both encoded sizes to a retained native resource batch, run 40770844682.
+Matching parameters and sizes is useful identity evidence; it does not prove
+that an old report is currently active on the hosted website. The isolated
+preview database has no activated resource publications. No hosted reports
+were audited or activated, and no timing runs were started during this pass.
+
+The retained reports use serialized-native-honest-v3. All chosen operation
+series are complete: 100 recorded trials, five processes, twenty measured
+exchanges per process, three warmups plus one separately retained first call.
+The recorded contract includes RNG, validation/import, serialization, KDF and
+internal allocation in the operation; startup, initial setup and caller buffer
+allocation are excluded. Agreement checks happen outside timing. A complete
+series cannot discard unsuccessful calls to improve its reported number.
+
+The current native_v2 source was inspected as supporting implementation context,
+not mistaken for the exact v3 source closure of the historical run. The v3 method,
+sampling contract and statistics were read from the retained report itself.
+Independent source-closure reproduction remains outstanding.
+
+Three CPU families appear in this batch:
+- AMD EPYC 7763: module lattice, Frodo, HQC, elliptic curves.
+- AMD EPYC 9V45: McEliece, RSA.
+- Intel Xeon Platinum 8370C: finite-field DH, Streamlined NTRU Prime.
+Each plotted within-scheme series has one comparison-profile identity, CPU model
+and implementation hash. A matching CPU model does not prove constant frequency,
+identical host load or absence of drift. Cross-scheme timing rankings are not
+justified by this batch. A standardized rerun should use one declared machine
+class, controlled load and a recorded build/operation contract.
+
+What the numbers currently say
+
+Encoded public-key and ciphertext sizes never decrease along any of the eight
+default routes. Flat size is legitimate: the McEliece path keeps its syndrome
+length at 96 bytes because m*t remains 768.
+
+Measured runtime need not rise at every stage. Some curves deserve investigation:
+- DH 49 → 50: encapsulation 8.114 ms → 4.359 ms, with comparable decreases in keygen
+  and decapsulation. Five worker medians cluster on each side of the drop.
+- EC 24 → 25: encapsulation 510.27 µs → 348.11 µs, with comparable other-operation
+  decreases. This also exceeds the within-configuration worker variation.
+- Frodo's largest adjacent decrease in the inspected series is under 1%.
+- McEliece encapsulation is 62.41 µs at Stage 1 and 36.44 µs at Stage 50. Its fixed-
+  weight sampler has a reason to get cheaper as n increases: the earlier joint-
+  parameter review computes about 11.74 expected batches at n = 840 and 1.79 at n = 3488.
+  This is a plausible mechanism documented independently of the timing shape;
+  it is not proof that it explains every observed dip. Stochastic key generation
+  and encapsulation also have substantial worker-to-worker variation.
+
+Do not smooth these curves or remove configurations merely to make them rise.
+For the large DH/EC discontinuities, reproduce just the adjacent configurations
+first, interleaving their order across independent processes. Inspect arithmetic
+backend thresholds, compile differences and environmental drift. Those are
+hypotheses, not established causes. Retain unsuccessful attempts, cold calls and
+raw samples. Quartiles are not confidence intervals. No new error bars are
+proposed for the main UI.
+
+Attack evidence needs its own meaning
+
+The local note-backed common-unit curves currently cover DH, RSA and EC only.
+They are explicit recovery baselines (interval BSGS, trial division, curve BSGS),
+with scoped >=50% success, in the declared bit-RAM model. They are not best-known
+attack costs and are not security lower bounds. In particular, a large
+trial-division work bound is not a useful claim that factoring is that hard.
+
+Historical reference figures remain separate: ML has a classical and quantum
+endpoint reference, Frodo has 64 classical and one quantum point, NTRU has 12
+classical points, and the older classical DH/RSA/EC references cover 50 each.
+HQC and McEliece have no numeric reference on the inspected current route.
+Missing values stay missing. No line is interpolated through unknown estimates.
+The historical models are explicitly incomplete; their units are not silently
+converted into a common security scale.
+
+Design implication: distinguish measured runtime, exact encoded size, and a
+specified attack estimate, but communicate this with short titles and captions.
+A simple graph cannot fix an inappropriate scientific interpretation. I would
+not title a baseline-attack curve simply 'Security'.
+
+Scheme-by-scheme disposition
+
+1. Module-lattice encryption — retain six stages provisionally.
+   Degree 8, 16, 32, 64, 128, 256 at fixed rank 2, q = 3329, noise and compression settings.
+   The last point is the ML-KEM-512 endpoint. The smaller rings are custom
+   research constructions, with different algebraic structure; the endpoint's
+   security assessment does not transfer to them. The common correctness target
+   is a ceiling under declared premises, not an identical failure rate or uniform
+   proof strength. This is a simple authentic restricted path. Adding arbitrary
+   intermediate degrees to make fifty stages would make it worse. Improve attack
+   coverage and the explanation of six uneven jumps before changing the route.
+
+2. FrodoKEM — retain eighty stages provisionally.
+   n = 8…640 in steps of 8 preserves the endpoint's noise/compression settings. The eighty
+   settings are natural dimension increments, not eighty equal security steps.
+   The timing path is comparatively smooth. Fixed costs can make small settings
+   inefficient without making the progression invalid. Check the scoped
+   correctness model and attack references independently before labeling the
+   whole route with comparable bits of security.
+
+3. Streamlined NTRU Prime — retain 25 selected stages, review coverage.
+   There are 27 registered configurations; two sit outside the default route.
+   Polynomial degree, modulus and weight move together. This finite selection
+   avoids some dominated candidates within its stated screen; it does not prove
+   a global optimum. Only 12 default points have the inspected historical hybrid
+   attack reference. Preserve those gaps and explain the finite selection.
+
+4. HQC — prioritize scientific/model review, not cosmetic resampling.
+   Sixty-six natural weight settings, with code sizes selected under the declared
+   decoder/noise model. The endpoint is the historical August 2025 construction.
+   The repository explicitly records unresolved contemporary reassessment.
+   This pass did not independently re-evaluate that literature. Do not describe
+   this endpoint as a newly established 128-bit target or conflate the
+   correctness surrogate with a proved bound for the real distribution.
+
+5. Classic McEliece — highest priority for a replacement-route study.
+   Fifty shortened lengths 840…3488, m = 12 / t = 64 fixed. This is a legitimate
+   shortening experiment, but a poor candidate for claiming parameter efficiency
+   at small security levels. The earlier joint study is the correct starting
+   point: it considers m,n,t together while flagging structural-attack coverage
+   and the absence of a reviewed generalized native implementation. Do not turn
+   its attractive diagnostic tuples directly into live stages. Flat ciphertext
+   and falling encapsulation are not themselves defects.
+
+6. Finite-field DH — retain temporarily, investigate timing and attack scope.
+   Fifty configurations reaching a 3072-bit field, with an explicit shortened
+   secret-exponent distribution. Short exponents can be an efficiency choice,
+   but the current margin and groups are custom. Fixed-group precomputation and
+   specialized structure belong in the attack analysis. The large timing drops
+   need targeted reproduction; they do not justify changing the parameters.
+
+7. RSA — retain temporarily, improve attack interpretation and timing evidence.
+   Fifty balanced-factor modulus sizes, ending at 3072 bits. A straightforward
+   structural control, selected against an incomplete classical reference.
+   The three-byte public exponent is an encoding decision. Trial division is
+   an auditable baseline, not the best-known factoring attack. No attempt here
+   to certify the existing prime distribution or custom KDF.
+
+8. Elliptic-curve DH — retain temporarily, prioritize curve-specific review.
+   Fifty distinct certified prime-order research curves, reaching a 257-bit group
+   order. They are not resized X25519. Compression is lossless but introduces
+   decoding work. Generic rho/BSGS analysis alone does not establish that every
+   chosen curve lacks a cheaper special attack. Investigate 24 → 25 timings while
+   preserving the exact curve identities.
+
+What should happen next
+
+First workshop the local graph layout and amount of explanation. Then investigate
+specific timing anomalies, using one controlled environment. For substantive
+stage changes, start with McEliece's joint parameters and HQC's model/endpoint
+assessment, each as a separate scientific proposal supported by exact notes.
+Do not undertake a mass relabeling or wipe scores/records.
+
+Any changed progression must identify what changed: route membership/order only,
+implementation only, or the actual protocol/parameters/distributions. Preserve
+old configurations, note pins, receipts and historical charts. New scientific
+claims need their own review; new bytes/runtime identities need fresh evidence.
+Recoveries do not transfer merely because new settings have similar stage labels.
+
+Evidence and reproduction
+
+Local extractor: .local/extract-graph-audit.py
+Read-only API responses: .local/graph-audit-raw/ (raw JSON preserves big integers)
+Retained reports: ../review-preload-20261028/full-resource-run-40770844682/measurements/
+Producer mappings: /Users/aksharramkumar/git/crucible-schemes/publication/registry.json
+Generated evidence: workspace outputs/graph-explorer-20261127/audit.json,
+selected-timing-evidence.json, data.js and qa.json.
+
+Relevant maintained source documents:
+- docs/stage-progressions.txt and crucible/progressions.py
+- docs/module-v4-design.txt; docs/frodo-anchor-ladder.txt
+- docs/classical-parameter-frontier.txt
+- docs/mceliece-joint-parameter-review-20261029.txt
+- docs/resource-publications.txt
+
+Primary external cross-checks read during this pass:
+FIPS 203 describes the standard ML-KEM parameter sets and algorithm contract;
+it does not validate reduced-degree custom stages:
+https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf
+RFC 7919 section 5.2 discusses short-exponent efficiency and its constraints;
+it does not validate these custom research groups or margin:
+https://www.rfc-editor.org/rfc/rfc7919.html#section-5.2
+The Classic McEliece website returned a retrieval error in this pass. Its
+specification and contemporary papers remain cited by the retained joint study;
+that is not presented as a new independent literature validation here.

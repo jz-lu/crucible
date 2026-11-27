@@ -1,14 +1,14 @@
-CURRENT POLICY — 29 October 2026
+CURRENT POLICY — 26 November 2026
 
-Eligibility update, 5 November: reviewers are unscored and excluded from the
-participant leaderboard; historical evidence remains. See reviewer-scoring.txt.
+Policy v12 provisionally awards 100 points for every genuine recovery-frontier
+advance, including later advances by the same account. Repeats and ordinary
+personal progress earn no points. A multi-stage jump earns one award.
+See docs/scoring-v12.txt for limitations and preserved receipt rules.
 
-Policy v11 awards 100 once per account per enrolled scheme for a genuine recovery
-frontier advance, with no ordinary personal-progress points. Later advances remain
-visible records. It also uses admitted-scheme component v2: 2,000 base plus 100 per
-completed active week until withdrawal or retirement. See docs/scoring-v11.txt and
-docs/scheme-admission-points-v2.txt. The following records are historical and must
-not be used as the current price table.
+Reviewers are unscored and excluded from the participant leaderboard; historical
+evidence remains. Admitted-scheme component v2 remains 2,000 base plus 100 per
+completed active week until withdrawal or retirement. Note and bounty awards
+are unchanged. Earlier policies below and in scoring-v11.txt are historical.
 
 ADMISSION COMPONENT UPDATE — 29 October 2026
 

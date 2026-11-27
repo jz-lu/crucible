@@ -80,6 +80,23 @@ def test_invalid_statement_placement_rejected_before_save(trial, bodies):
     assert not owner.client.get("/api/notebook/notes?visibility=mine").json()["notes"]
 
 
+@pytest.mark.parametrize("body,valid", [
+    ("Introduction.\n\n[[statement:rare-failure]]\n\nConsequence.", True),
+    ("[[statement:missing]]", False),
+    ("[[statement:rare-failure]]\n[[statement:rare-failure]]", False),
+    ("```\n[[statement:missing]]\n```", True),
+])
+def test_single_body_statements_share_placement_validation(trial, body, valid):
+    _, owner, _, _ = trial
+    value = structured(body=body, sections=[])
+    response = owner.post("/api/notebook/notes", {"content": value, "idempotency_key": str(uuid4())})
+    assert response.status_code == (200 if valid else 422), response.text
+    if valid:
+        saved = response.json()["note"]
+        assert saved["revisions"][0]["content"]["body"] == body
+        assert saved["revisions"][0]["content"]["sections"] == []
+
+
 def test_authored_placement_creates_a_new_revision_without_rewriting_exact_sources(trial):
     _, owner, _, _ = trial
     original = structured(sections=[{"id": "reasoning", "title": "Why the bound matters", "body": "Before the premise.\n\nAfter its application."}])

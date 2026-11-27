@@ -211,7 +211,7 @@ def refresh_outcome(session, task, settings, now):
     pipeline = current_decisions(session, qualified).get('pipeline')
     if pipeline is None or pipeline.decision != 'approved':
         return
-    if len({task.owner_id, qualified.author_id, pipeline.actor_id}) != 3:
+    if pipeline.actor_id in (task.owner_id, qualified.author_id):
         raise HTTPException(409, 'Completion requires a reviewer independent of the poster and solver.')
     if pipeline.actor_id not in settings.reviewer_ids:
         raise HTTPException(409, 'An active configured reviewer must approve this exact contribution.')
@@ -294,9 +294,9 @@ def register_routes(app, db, settings, clock, user_for, throttle):
         capabilities = {'edit': own and task.status in ('draft', 'changes_requested'),
                         'request_admission': own and task.status in ('draft', 'changes_requested'),
                         'withdraw': own and task.status in ('draft', 'pending', 'changes_requested'),
-                        'cancel': own and task.status == 'open' and not pending,
+                        'cancel': False,
                         'boost': task.status == 'open',
-                        'submit': not own and task.status == 'open',
+                        'submit': task.status == 'open',
                         'review_admission': human and not own and protocol_proposals.is_reviewer(settings, user)
                                             and task.status == 'pending'}
         result = {key: getattr(task, key) for key in ('id', 'title', 'summary', 'background_tags', 'scope', 'status', 'version',
@@ -567,7 +567,6 @@ def register_routes(app, db, settings, clock, user_for, throttle):
     def submit(task_id: UUID, body: SubmissionInput, request: Request):
         def apply(session, user, task, now):
             if task.status != 'open': raise HTTPException(409, 'This bounty is not accepting new contributions.')
-            if task.owner_id == user.id: raise HTTPException(403, 'The bounty owner cannot claim their own task.')
             terms = terms_for(session, task)
             require_sources(session, user, terms)
             source(session, user, body.contribution_note, published=True, owned=True)
@@ -628,12 +627,8 @@ def register_routes(app, db, settings, clock, user_for, throttle):
     def cancel(task_id: UUID, body: ReasonInput, request: Request):
         def apply(session, user, task, now):
             owner_only(user, task)
-            if task.status != 'open' or session.scalar(select(BountySubmission.id).where(BountySubmission.task_id == task.id,
-                    BountySubmission.claim == 'solution', BountySubmission.status.in_(('pending', 'qualified')))):
-                raise HTTPException(409, 'Resolve outstanding claims before cancelling an open task.')
-            tick(task, now)
-            refunds = refund_many(session, task, live_boosts(session, task), now)
-            task.status = 'cancelled'
-            return task, {'reason': body.reason, 'refunds': [{'units': e.units, 'available_units': e.available_delta,
-                    'original_month': e.month} for e in refunds]}
+            # An admitted brief is a commitment to participants, even before its
+            # first boost or contribution. Keep this route for old clients and
+            # exact historical receipt retries, without allowing a new effect.
+            raise HTTPException(409, 'Bounties cannot be cancelled after admission. Only drafts or pending proposals can be withdrawn.')
         return mutation(request, body, task_id, 'cancel', apply)

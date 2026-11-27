@@ -34,6 +34,7 @@ let toastTimer;
 let roundRetryAt = 0;
 let sessionSynchronization = null;
 let documentEpoch = 0, documentRetired = false, initializationRequest = 0;
+let newcomerOrientation = null;
 let initializationPending = false, resumeInitialization = false;
 const researcherEditor = {account: null, request: 0, base: null, pending: null, open: false, busy: false, loading: false, conflict: false, contextRequired: false, guarded: false};
 function ownsDocument(epoch) { return !documentRetired && documentEpoch === epoch; }
@@ -749,6 +750,7 @@ $('#auth-signup-form').addEventListener('submit', async event => {
 });
 $('#auth-signup-signin').addEventListener('click', () => signInExistingAccount($('#auth-signup-signin')));
 function clearProtectedState() {
+  newcomerOrientation?.cancel();
   clearSchemeAssumptions();
   resetResearcherEditor();
   invalidateReadViews();
@@ -1052,7 +1054,7 @@ let reviewProposalsGeneration = 0;
 function clearReviewProposals() {
   reviewProposalsGeneration++;
   $('#review-argument-updates')?.remove();
-  for (const kind of ['schemes', 'changes']) {
+  for (const kind of ['schemes', 'changes', 'implementations']) {
     $('#review-' + kind + '-list').replaceChildren();
     $('#review-' + kind + '-list').removeAttribute('aria-busy');
     $('#review-' + kind + '-pages').replaceChildren();
@@ -1060,10 +1062,18 @@ function clearReviewProposals() {
 }
 function showReviewProposals() {
   clearReviewProposals();
+  const implementing = new URLSearchParams(window.location.hash.split('?')[1] || '').get('phase') === 'implementation';
+  for (const phase of ['review','implementation']) {
+    const active = (phase === 'implementation') === implementing, link = $('#review-phase-' + phase);
+    if (active) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+  }
+  for (const kind of ['schemes','changes']) $('#review-' + kind + '-list').closest('section').hidden = implementing;
+  $('#review-implementations').hidden = !implementing;
   const generation = reviewProposalsGeneration, account = state.user?.id, credential = state.csrf, lifecycle = documentEpoch, reads = readViewEpoch;
   const owns = () => ownsDocument(lifecycle) && state.user?.id === account && state.csrf === credential && reads === readViewEpoch;
   const current = () => generation === reviewProposalsGeneration && ownsDocument(lifecycle) && hasAccess() &&
     state.canReviewProposals && state.user?.id === account && state.csrf === credential && state.screen === 'reviews' && reviewSurface() === 'proposals';
+  if (implementing) { showImplementationQueue(current, owns); return; }
   if (state.statementWorkflowAvailable) {
     const target = node('div'); target.id = 'review-argument-updates';
     $('#review-proposals-workspace').append(target);
@@ -1143,6 +1153,61 @@ function showReviewProposals() {
     };
     void load();
   }
+}
+function showImplementationQueue(current, owns) {
+  const target = $('#review-implementations-list'), pages = $('#review-implementations-pages');
+  let cursors = [null], page = 0, request = 0;
+  const load = async () => {
+    if (!current()) return;
+    const token = ++request, cursor = cursors[page], key = 'review-implementations:' + (cursor || '');
+    const present = () => current() && token === request;
+    const paint = result => {
+      paintRead(key, target, result, data => {
+        target.replaceChildren();
+        for (const record of data.implementations) {
+          const link = node('a', undefined, 'proposal-list-entry');
+          link.href = reviewerRoute('proposals', {phase:'implementation', ...(record.kind === 'scheme' ? {proposal:record.target_id} : {research_request:record.target_id})});
+          link.append(node('span', record.title, 'proposal-list-name'), node('span', window.CrucibleImplementation.label(record.status) +
+            (record.actor?.handle ? ' · Updated by ' + record.actor.handle : ''), 'proposal-list-meta')); target.append(link);
+        }
+        if (!data.implementations.length) showEmpty(target, 'No approved next steps to implement yet.');
+      });
+      pages.replaceChildren();
+      if (page || result.next_after) {
+        const previous = node('button', 'Previous page', 'text-button'), next = node('button', 'Next page', 'text-button');
+        previous.type = next.type = 'button'; previous.disabled = page === 0; next.disabled = !result.next_after;
+        previous.addEventListener('click', () => { if (present() && page) { page--; void load(); } });
+        next.addEventListener('click', () => { if (present() && result.next_after) { cursors = [...cursors.slice(0,page + 1), result.next_after]; page++; void load(); } });
+        pages.append(previous, node('span', 'Page ' + (page + 1)), next);
+      }
+    };
+    const cached = cachedRead(key); if (cached) paint(cached);
+    target.setAttribute('aria-busy', 'true'); for (const control of pages.querySelectorAll('button')) control.disabled = true;
+    try {
+      const result = await readAgain(key, '/api/proposal-implementations?' + new URLSearchParams({scope:'review',limit:'25',...(cursor ? {after:cursor} : {})}));
+      if (!present()) return;
+      if (!Array.isArray(result.implementations) || result.implementations.length > 25 || result.implementations.some(record =>
+          !['scheme','research'].includes(record?.kind) || typeof record.target_id !== 'string' || !record.target_id || typeof record.title !== 'string' ||
+          !window.CrucibleImplementation.valid(record, record.kind, record.target_id, true)) ||
+          result.next_after != null && (typeof result.next_after !== 'string' || !result.next_after || cursors.includes(result.next_after))) throw Error('Implementation progress could not be loaded.');
+      rememberRead(key, result); paint(result);
+    } catch (error) {
+      if (owns() && forbiddenRead(error)) {
+        invalidateReadViews(); reviewNotebookWorkspace?.setAccount(null); reviewNotebookWorkspace?.hide();
+        proposals.detailRequest++; proposals.listRequest++; clearProposalReview();
+        $('#proposal-detail-content').replaceChildren(); $('#proposal-list').replaceChildren();
+        if (state.screen === 'reviews' && reviewSurface() === 'proposals') showInlineError(target, error.message, showReviewProposals);
+        return;
+      }
+      if (!present()) return;
+      if (error.status === 422 && cursor) { readViews.delete(key); cursors = [null]; page = 0; }
+      if (cached && error.status !== 422) {
+        renderedReads.delete(target); const retry = node('button', 'Try again', 'text-button'); retry.type = 'button'; retry.addEventListener('click', load);
+        target.append(node('p', 'Progress could not be refreshed.', 'error-message'), retry);
+      } else showInlineError(target, error.message, load);
+    } finally { if (present()) target.removeAttribute('aria-busy'); }
+  };
+  void load();
 }
 function renderReviewPage(query) {
   const params = new URLSearchParams(query), surface = reviewSurface();
@@ -1259,6 +1324,8 @@ async function showNotebook(query, reviewing = false, page = 'notebook') {
   const params = new URLSearchParams(query || window.location.hash.split('?')[1] || '');
   if (page === 'bounties') params.set('view', 'bounties');
   if (page === 'scheme-map') params.set('view', 'map');
+  // An independent notebook entry starts a new reading journey.
+  if (!reviewing && !params.has('note')) state.noteOrigin = null;
   const target = $(reviewing ? '#review-notebook-workspace' : '#notebook-workspace');
   const current = () => ownsDocument(lifecycle) && request === notebookShowRequest && hasAccess() && account === state.user?.id && csrf === state.csrf &&
     (reviewing ? state.screen === 'reviews' && state.canReviewProposals && state.reviewSection === section && reviewSurface() === surface && !['scheme-detail', 'proposals'].includes(surface) : state.screen === page);
@@ -1470,7 +1537,7 @@ function renderHomeSummary(kind, key, data) {
   target.querySelector('.home-read-error')?.remove();
   paintRead(key, target, data, data => {
     const records = data[kind];
-    if (!records.length) return showEmpty(target, kind === 'schemes' ? 'No schemes have been published yet.' : 'No open bounties right now. Check back for new research tasks.');
+    if (!records.length) return showEmpty(target, kind === 'schemes' ? 'No schemes have been published yet.' : 'No active bounties right now. Check back for new research tasks.');
     const items = records.map(record => {
       const link = node('a', undefined, kind === 'schemes' ? 'home-scheme-row' : 'home-bounty-row');
       link.dataset.homeId = record.id;
@@ -1488,7 +1555,7 @@ function renderHomeSummary(kind, key, data) {
         link.append(copy, strip);
       } else {
         link.href = '#bounties?' + new URLSearchParams({bounty: record.id});
-        link.append(node('span', record.title, 'home-bounty-name'), node('span', Number(record.reward_points).toLocaleString() + ' points · ' + (record.status === 'frozen' ? 'Review in progress' : 'Open for contributions'), 'home-bounty-meta'));
+        link.append(node('span', record.title, 'home-bounty-name'), node('span', Number(record.reward_points).toLocaleString() + ' points · ' + (record.status === 'frozen' ? 'Review in progress' : 'Active'), 'home-bounty-meta'));
       }
       return link;
     });
@@ -1516,7 +1583,7 @@ async function loadHomeSummary(kind, request) {
     if (kind === 'schemes') data = summarizeHomeSchemes(response);
     else {
       if (!Array.isArray(response.bounties) || response.bounties.length > 3 || response.bounties.some(task => !task || typeof task.id !== 'string' || typeof task.title !== 'string' || !['open', 'frozen'].includes(task.status) || !Number.isSafeInteger(task.reward_points) || task.reward_points < 0))
-        throw new Error('Open bounties could not be loaded.');
+        throw new Error('Active bounties could not be loaded.');
       data = {bounties: response.bounties.map(task => ({id: task.id, title: task.title, status: task.status, reward_points: task.reward_points}))};
     }
     rememberRead(key, data); renderHomeSummary(kind, key, data);
@@ -1844,19 +1911,26 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
     // conservative invalidation, including unknown paths and methods.
     const readOnlyValidation = method === 'POST' && path === '/api/protocol/proposals/validate';
     if (protectedRequest && !['GET', 'HEAD'].includes(method) && !readOnlyValidation) {
+      const voteWrite = method === 'POST' && /^\/api\/notebook\/notes\/[^/?]+\/rating$/.test(path);
       // These exact actions change participant content/progress, never the
       // separately published measurement corpus. Unknown writes still clear it.
-      const unrelatedToResources = method === 'PUT' && path === '/api/me/profile' || method === 'POST' && (
+      const unrelatedToResources = voteWrite || method === 'PUT' && path === '/api/me/profile' || method === 'POST' && (
         ['/api/notebook/notes', '/api/notebook/import', '/api/challenges', '/api/methods'].includes(path) ||
         /^\/api\/notebook\/notes\/[^/?]+\/(?:revisions|publication-requests|publication-reviews)$/.test(path) ||
         /^\/api\/notebook\/statement-workflow\/updates(?:\/[^/?]+\/review)?$/.test(path) ||
+        /^\/api\/proposal-implementations\/(?:scheme|research)\/[^/?]+\/events$/.test(path) ||
         /^\/api\/challenges\/[^/?]+\/submit$/.test(path));
       const activityKinds = /^\/api\/notebook\//.test(path) ? ['notes', 'bounties'] :
         /^\/api\/bounties(?:\/|$)/.test(path) ? ['bounties'] :
         /^\/api\/challenges\/[^/?]+\/submit$/.test(path) ? ['schemes'] :
         ['/api/challenges', '/api/methods', '/api/me/profile'].includes(path) ? [] : null;
-      invalidateReadViews({resourceReports: !unrelatedToResources, activityKinds}); notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
-      if (path.startsWith('/api/notebook/')) invalidateNoteJustifications();
+      invalidateReadViews({resourceReports: !unrelatedToResources, activityKinds});
+      // Notebook voting reconciles its live counts without discarding in-flight
+      // readers or immutable bodies. Scores in profiles still refresh above.
+      if (!voteWrite) {
+        notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
+        if (path.startsWith('/api/notebook/')) invalidateNoteJustifications();
+      }
     }
     if (!raw && ownsDocument(lifecycle) && (!initialSession || sessionOwner === state.sessionRevision) && (!recoverRead || ownsRead())) absorbClock(data);
     return data;
@@ -1887,6 +1961,7 @@ function setSession(data) {
   state.access = data.access || (state.access?.mode === 'beta' ?
     {mode: 'beta', allowed: false, status: state.user ? 'pending' : 'anonymous'} :
     {mode: 'open', allowed: true, status: state.user ? 'active' : 'anonymous'});
+  newcomerOrientation?.checkContext();
   if (!hasAccess()) logoBetaEntryPending = false;
   else if (enteringBeta) logoBetaEntryPending = true;
   // Presentation only: the next reload can keep the gate or route frame in
@@ -2799,11 +2874,11 @@ function personScoreBreakdown(person) {
   summary.setAttribute('aria-label', 'Points breakdown');
   const panel = node('div', undefined, 'person-score-help-panel');
   const values = node('dl', undefined, 'person-score-parts');
-  for (const [label, key] of [['Record breakthroughs', 'early_recovery'], ['Admitted schemes', 'scheme_contributions'], ['Research bounties', 'bounty_points'], ['Research notes', 'note_contributions']]) {
+  for (const [label, key] of [['Record breakthroughs', 'early_recovery'], ['Admitted schemes', 'scheme_contributions'], ['Research bounties', 'bounty_points'], ['Note upvotes', 'note_contributions']]) {
     const part = node('div'); part.append(node('dt', label), node('dd', peopleNumber(person.score_breakdown[key]))); values.append(part);
   }
   panel.append(values);
-  panel.append(node('p', 'Your first advance of an eligible scheme’s recovery record earns 100 points, once per person per scheme. Ordinary progress and later advances remain recorded without additional points.'));
+  panel.append(node('p', 'Each advance beyond an eligible scheme’s previous recovery frontier earns 100 points. Later advances by the same person count again; repeats and ordinary progress earn no points. This rule is provisional.'));
   panel.append(node('p', 'A new admitted scheme earns 2,000 points plus 100 per completed active week. Withdrawal or retirement stops future accrual and preserves earned points. Bounties award their recorded reward after independent reviewer approval and final settlement.'));
   panel.append(node('p', 'Archived releases retain their records and are labelled when they are not scored. Points recognize contributions; they do not compare attack difficulty. This policy is provisional.'));
   panel.append(node('p', 'Research-note contributions earn 1 or 2 points per supporting account through agent ratings. Changed or removed ratings update that credit. These points do not certify a claim or admit a scheme.'));
@@ -3310,7 +3385,8 @@ function exactNoteRoute(source) {
   if (typeof source?.id !== 'string' || !source.id.trim() || !Number.isSafeInteger(source.revision) || source.revision < 1 ||
       !/^[a-f0-9]{64}$/.test(source.content_sha256) ||
       (source.note_section !== undefined && (typeof source.note_section !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(source.note_section)))) return null;
-  const anchors = ['note_section', 'statement', 'argument'].filter(key => source[key] !== undefined);
+  const anchors = ['note_section', 'statement', 'argument', 'passage'].filter(key => source[key] !== undefined);
+  if (source.passage !== undefined && !(typeof source.passage === 'string' && /^p1-(?:b|s-[a-z][a-z0-9-]{0,63})-(?:0|[1-9][0-9]{0,4})-[1-9][0-9]{0,4}$/.test(source.passage))) return null;
   if (anchors.length > 1 || ['statement', 'argument'].some(key => source[key] !== undefined &&
       (typeof source[key] !== 'string' || !/^[a-z][a-z0-9-]{0,79}$/.test(source[key]) || ['constructor', 'prototype', '__proto__'].includes(source[key])))) return null;
   const query = new URLSearchParams({note: source.id, revision: source.revision, sha256: source.content_sha256});
@@ -3386,11 +3462,12 @@ function assumptionScope(premise) {
 }
 function assumptionLink(premise, origin, {expanded = false, definition = true} = {}) {
   const href = exactNoteRoute(premise?.source);
-  if (!href || premise.status === 'incomplete' || typeof premise.label !== 'string' || !premise.label.trim()) return null;
-  const label = premise.label, title = assumptionTitle(premise);
+  const label = typeof premise.label === 'string' ? premise.label.trim() : '', title = assumptionTitle(premise);
+  if (!href || premise.status === 'incomplete' || (!label && !(title && premise.source_passage?.heading))) return null;
   const link = node('a', undefined, 'chart-assumption-link' + (expanded ? ' scheme-assumption-link' : ''));
   link.href = href;
-  link.append(node('span', label, 'assumption-number'));
+  if (label) link.append(node('span', label, 'assumption-number'));
+  else if (!expanded) link.append(node('span', title, 'assumption-name'));
   if (expanded) {
     const description = node('span', undefined, 'assumption-description');
     if (title && title !== label) description.append(node('span', title, 'assumption-name'));
@@ -3413,7 +3490,7 @@ function assumptionLink(premise, origin, {expanded = false, definition = true} =
     if (meta) description.append(node('span', meta, 'assumption-scope'));
     link.append(description);
     const arrow = node('span', '↗', 'assumption-link-arrow'); arrow.setAttribute('aria-hidden', 'true'); link.append(arrow);
-  } else if (title) link.setAttribute('aria-label', label + ' — ' + title);
+  } else if (title) link.setAttribute('aria-label', [label,title].filter(Boolean).join(' — '));
   link.title = [title, assumptionScope(premise)].filter(Boolean).join(' · ') || 'Read the scoped premise';
   link.addEventListener('click', event => {
     state.noteOrigin = {noteId: premise.source.id, ...origin};
@@ -3506,7 +3583,7 @@ function openSchemeAssumptions(trigger, category) {
           const application = typeof use.use === 'string' && use.use.trim() ? use.use : use.required;
           if (typeof application === 'string' && application.trim()) {
             const usage = node('section', undefined, 'scheme-premise-use');
-            usage.append(node('h4', premise.label + ' · ' + assumptionTitle(premise)), prose(application, 'scheme-premise-use-text'));
+            usage.append(node('h4', [premise.label,assumptionTitle(premise)].filter(Boolean).join(' · ')), prose(application, 'scheme-premise-use-text'));
             applications.append(usage);
           }
           list.append(item);
@@ -5511,7 +5588,7 @@ $('#submission-form').addEventListener('submit', async event => {
   }
 });
 
-function historyPreview() {
+function historyPreview(kind) {
   const preview = node('div', undefined, 'history-preview');
   preview.setAttribute('aria-hidden', 'true');
   for (let index = 0; index < 4; index++) {
@@ -5520,7 +5597,8 @@ function historyPreview() {
     for (const className of ['history-item-title', 'history-item-meta']) {
       const line = node('span', undefined, className); line.append(node('span', undefined, 'catalogue-placeholder')); copy.append(line);
     }
-    item.append(copy, node('span', '+', 'activity-marker')); preview.append(item);
+    item.append(copy);
+    preview.append(item);
   }
   return preview;
 }
@@ -5620,7 +5698,7 @@ function activityRowCopy(kind, record) {
   }
   return {title: record.title, meta: (record.owner?.id === state.user?.id ? 'Proposed by you' : 'You contributed') +
       ' · ' + utcDate(record.updated_at || record.created_at), summary: record.summary,
-    status: ({pending: 'Awaiting review', submitted: 'Awaiting review', changes_requested: 'Changes requested', open: 'Open',
+    status: ({pending: 'Awaiting review', submitted: 'Awaiting review', changes_requested: 'Changes requested', open: 'Active',
       under_review: 'Under assessment', frozen: 'Under assessment', completed: 'Completed', closed: 'Completed',
       rejected: 'Not accepted', declined: 'Not admitted', withdrawn: 'Withdrawn', cancelled: 'Cancelled', draft: 'Draft'})[record.status] || 'Draft',
     href: '#bounties?' + new URLSearchParams({status: 'mine', bounty: record.id}), action: 'View bounty →'};
@@ -5630,40 +5708,37 @@ function paintActivityPage(kind, key, page) {
   const focusedId = focused?.dataset.activityId;
   const focusAction = document.activeElement?.dataset.activityAction;
   const trigger = dialogTriggers.get(recoveryDialog), triggerId = trigger?.closest('.activity-item')?.dataset.activityId;
-  const expanded = new Set([...target.querySelectorAll('.activity-toggle')].filter(button => button.getAttribute('aria-expanded') === 'true')
-    .map(button => button.closest('.activity-item').dataset.activityId));
   target.querySelector('.activity-read-error')?.remove();
   paintRead(key, target, page, data => {
     if (!data.records.length) return showEmpty(target, kind === 'schemes' ? 'No submissions yet.' : kind === 'notes' ? 'No notes yet.' : 'No bounty activity yet.');
-    target.replaceChildren(...data.records.map((record, index) => {
+    target.replaceChildren(...data.records.map(record => {
       const copy = activityRowCopy(kind, record), row = node('article', undefined, 'activity-item'); row.dataset.activityId = record.id;
-      const heading = node('div', undefined, 'activity-row-heading'), toggle = node('button', undefined, 'activity-toggle'); toggle.type = 'button';
+      const heading = node('div', undefined, 'activity-row-heading'), toggle = node(kind === 'schemes' ? 'button' : 'a', undefined, 'activity-toggle');
+      if (kind === 'schemes') toggle.type = 'button';
       const labels = node('span', undefined, 'history-item-copy'), title = node('span', undefined, 'activity-item-heading');
       title.append(node('span', copy.title, 'history-item-title'));
       if (copy.proposal) title.append(node('span', 'Proposed scheme', 'status-tag activity-scheme-tag'));
       labels.append(title, node('span', copy.meta, 'history-item-meta'));
-      const marker = node('span', '+', 'activity-marker'); marker.setAttribute('aria-hidden', 'true');
-      toggle.append(labels, marker); toggle.setAttribute('aria-label', copy.title + ', ' + copy.meta);
-      const details = node('div', undefined, 'activity-preview'); details.id = 'activity-preview-' + kind + '-' + index;
-      toggle.setAttribute('aria-controls', details.id); toggle.dataset.activityAction = 'toggle';
-      const setOpen = open => {details.hidden = !open; toggle.setAttribute('aria-expanded', String(open)); marker.textContent = open ? '−' : '+';};
-      setOpen(expanded.has(record.id)); toggle.addEventListener('click', () => setOpen(details.hidden));
-      heading.append(toggle, node('span', copy.status, 'status-tag' + (copy.status === 'Incorrect' ? ' error-tag' : '')));
-      if (copy.summary) details.append(node('p', copy.summary, 'activity-summary'));
-      if (copy.tags?.length) {
-        const tags = node('div', undefined, 'activity-tags');
-        for (const tag of copy.tags) tags.append(node('span', tag, 'activity-tag')); details.append(tags);
+      toggle.dataset.activityAction = 'open'; toggle.append(labels);
+      if (kind !== 'schemes') toggle.href = copy.href;
+      else {
+        toggle.dataset.submissionId = record.id; toggle.setAttribute('aria-haspopup', 'dialog');
+        toggle.addEventListener('click', () => openSubmissionDetails(record.id, toggle));
       }
-      const action = node(copy.href ? 'a' : 'button', copy.action || 'View submission details →', 'text-button activity-detail');
-      action.dataset.activityAction = 'detail';
-      if (copy.href) action.href = copy.href;
-      else {action.type = 'button'; action.dataset.submissionId = record.id; action.setAttribute('aria-haspopup', 'dialog');
-        action.addEventListener('click', () => openSubmissionDetails(record.id, action));}
-      details.append(action); row.append(heading, details); return row;
+      heading.append(toggle);
+      if (kind === 'notes') {
+        if (copy.status !== 'Published') {
+          const status = node('span', copy.status, 'activity-note-state');
+          status.dataset.publicationStatus = record.publication_status; heading.append(status);
+        }
+      } else heading.append(node('span', copy.status, 'status-tag' + (copy.status === 'Incorrect' ? ' error-tag' : '')));
+      row.append(heading); return row;
     }));
   });
-  const replacement = (id, action) => [...target.querySelectorAll('.activity-item')].find(item => item.dataset.activityId === id)
-    ?.querySelector(action === 'detail' ? '.activity-detail' : '.activity-toggle') || activityFocusTarget();
+  const replacement = (id, action) => {
+    const row = [...target.querySelectorAll('.activity-item')].find(item => item.dataset.activityId === id);
+    return row?.querySelector(action === 'detail' ? '.activity-detail' : '.activity-toggle') || row?.querySelector('.activity-toggle') || activityFocusTarget();
+  };
   if (focused && !focused.isConnected && !recoveryDialog.open) replacement(focusedId, focusAction).focus({preventScroll: true});
   if (triggerId && !trigger.isConnected) dialogTriggers.set(recoveryDialog, replacement(triggerId, 'detail'));
 }
@@ -5713,7 +5788,7 @@ async function loadActivityPage(kind) {
     // Release it on arrival: a short final page must not keep empty padding.
     const height = target.getBoundingClientRect?.().height || 0;
     if (height) target.style.minHeight = height + 'px';
-    target.replaceChildren(historyPreview()); paintActivityPages(true);
+    target.replaceChildren(historyPreview(kind)); paintActivityPages(true);
   }
   target.setAttribute('aria-busy', 'true'); $('#refresh-activity').disabled = true;
   try {
@@ -6276,6 +6351,8 @@ async function loadProposalDetail(id) {
       target.prepend(source);
     }
     target.prepend(node('p', 'Revision ' + record.revision + ' · ' + (record.retracted ? 'Retracted' : proposalStatusLabel(record.status)) + ' · ' + utcDate(record.created_at), 'proposal-status'));
+    const implementation = node('div'); target.prepend(implementation);
+    window.CrucibleImplementation.mount(implementation, {initial:record.implementation, kind:'scheme', targetId:record.id, api, current});
     window.CrucibleRetractions.mount(target, {record, kind:'scheme', api, current, onSuccess:async () => { await loadProposalDetail(id); if (proposalPageActive()) loadProposals(); }});
     const testOnlyReview = (result.reviews || []).some(review => review.revision === record.revision && review.checks?.test_only_self_review === true);
     target.append(node('p', record.retracted ? 'The proposer withdrew this request. Earlier evidence and review decisions remain in the history.' : testOnlyReview ? 'Development self-review only. This decision does not satisfy independent admission review or earn scheme contribution points.' : record.status === 'approved' ? 'A manual reviewer approved this revision for trusted integration. Approval does not activate a live challenge or certify security.' : 'Format checked only. This submitted specification has not been approved or activated as a live challenge.', 'panel-footnote'),
@@ -7186,4 +7263,25 @@ async function initialize() {
 }
 setInterval(updateClock, 1000);
 setInterval(() => { if (!document.hidden) synchronizeSession(); }, 60000);
+// An optional read-only tour of real screens. It never creates research or
+// requests an instance, and it shares the application's existing route/cache.
+newcomerOrientation = window.CrucibleOrientation?.create({
+  launcher: $('#start-orientation'),
+  context: () => !documentRetired && state.ready && hasAccess() && state.user ?
+    JSON.stringify([state.user.id, state.csrf, documentEpoch]) : null,
+  navigate: route => {
+    if (['#challenge', '#notebook', '#bounties', '#activity?kind=notes'].includes(route)) navigateTop(route);
+  },
+  steps: () => [
+    {route:'#challenge', target:'#catalogue-workspace .catalogue-heading', title:'Find a starting point',
+      body:'Open a scheme to inspect its costs, assumptions and open questions—or try a numerical challenge.'},
+    {route:'#notebook', target:'#notebook-workspace .nb-heading', title:'Read, then build on an idea',
+      body:'Find research by title, tag or note number. Open a note to inspect its evidence and continue the work. Your own idea can start here too.'},
+    ...(bountyFeatureAvailable() ? [{route:'#bounties', target:'#notebook-workspace .bty-heading', title:'Find a focused task',
+      body:'Bounties pair a research question with completion criteria and a review plan. Choose one when you want a defined problem to work on.'}] : []),
+    {route:'#activity?kind=notes', target:'#activity-workspace .activity-tabs', title:'Follow your contributions',
+      body:'Return to My activity for your notes, challenge attempts and bounty work. Notes begin privately; request publication when you are ready to share.'},
+  ],
+});
+$('#start-orientation').addEventListener('click', () => newcomerOrientation?.start());
 initialize();

@@ -438,7 +438,10 @@ def test_manual_approval_records_exact_revision_artifact_checks_and_evidence_wit
     response = reviewer.post(f'{SUBMIT}/{record["id"]}/reviews', body)
     assert response.status_code == 200, response.text
     result = response.json()
-    assert result["proposal"] == {**record, "status": "approved", "can_retract": False}
+    assert {key: value for key, value in result["proposal"].items() if key != "implementation"} == {
+        **record, "status": "approved", "can_retract": False}
+    assert result["proposal"]["implementation"]["status"] == "awaiting_implementation"
+    assert result["proposal"]["implementation"]["decision_id"] == result["review"]["id"]
     audit = result["review"]
     assert audit["decision"] == "approved" and audit["revision"] == 1
     assert audit["content_sha256"] == record["content_sha256"]

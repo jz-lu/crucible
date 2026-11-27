@@ -4,34 +4,50 @@
   const base = '/api/notebook/statement-workflow';
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
   const button = (label, fn, cls = 'nb-link') => { const n = el('button', cls, label); n.type = 'button'; n.addEventListener('click', fn); return n; };
-  const prose = text => { const n = el('div', 'nb-readable-prose'); if (window.CrucibleMath?.markdown) window.CrucibleMath.markdown(n, String(text || '')); else n.textContent = text || ''; return n; };
+  const prose = (text, lineOffset = 0) => { const n = el('div', 'nb-readable-prose'); if (window.CrucibleMath?.markdown) window.CrucibleMath.markdown(n, String(text || ''), {lineOffset}); else n.textContent = text || ''; return n; };
   const validId = id => typeof id === 'string' && /^[a-z][a-z0-9-]{0,79}$/.test(id) && !['prototype','constructor','__proto__'].includes(id);
   const validStatementRef = ref => {
-    if (!ref || typeof ref !== 'object' || !validId(ref.statement_id)) return false;
+    if (!ref || typeof ref !== 'object' || (ref.statement_id != null) === (ref.passage != null) ||
+        (ref.passage != null ? !window.TheoryStore.validPassage(ref.passage) : !validId(ref.statement_id))) return false;
     const external = ['note_id','revision','content_sha256'].filter(key => ref[key] != null);
     return !external.length || external.length === 3 && typeof ref.note_id === 'string' && ref.note_id.trim() &&
       Number.isSafeInteger(ref.revision) && ref.revision > 0 && /^[a-f0-9]{64}$/.test(ref.content_sha256);
   };
-  const pin = (note, revision) => ({note_id:note.id,revision:revision.revision,content_sha256:revision.content_sha256});
+  const pin = (note, revision) => ({note_id:note.id,revision:revision.revision,content_sha256:revision.content_sha256,number:note.number,
+    locs:note.locs_by_revision?.[revision.revision] || note.passage_locs || {}, sectionRefs:note.section_refs_by_revision?.[revision.revision] || {}});
   const exactRoute = (source, kind, id) => '#notebook?' + new URLSearchParams({note:source.note_id,revision:String(source.revision),sha256:source.content_sha256,...(kind && id ? {[kind]:id} : {})});
   const targetRoute = id => '#notebook?' + new URLSearchParams({statement_target:id});
   const updateRoute = (id, reviewing = false) => (reviewing ? '#reviews?section=proposals&' : '#notebook?') + new URLSearchParams({statement_update:id});
   const link = (label, href, ctx, cls = 'nb-link') => { const n = el('a', cls, label); n.href = href; n.addEventListener('click', e => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button > 0) return; e.preventDefault(); ctx.navigate(href); }); return n; };
   const uncertain = error => !error.status || error.status >= 500;
   const stateLabel = state => ({pending:'Awaiting review',approved:'Applied',changes_requested:'Changes requested',declined:'Not adopted',decline:'Not adopted'})[state] || state || 'Not assessed';
-  const placementCache = new WeakMap();
+  const placementCache = new WeakMap(), passageCache = new WeakMap();
+  const passagesFor = content => {
+    if (!passageCache.has(content)) passageCache.set(content, window.TheoryStore.passages(content));
+    return passageCache.get(content);
+  };
   const placementsFor = content => {
     if (!placementCache.has(content)) placementCache.set(content, window.TheoryStore.statementPlacements(content));
     return placementCache.get(content);
   };
-  function validate(content) {
+  function validate(content, {resolveLocations = true} = {}) {
     for (const key of ['statements','arguments']) {
       if (content[key] === undefined) continue;
       const rows = content[key];
-      if (!Array.isArray(rows) || rows.length > 32 || new Set(rows.map(x => x?.id)).size !== rows.length || rows.some(x => !x || !validId(x.id) || typeof x.title !== 'string' || !x.title.trim())) throw Error('This revision has invalid ' + key + '. Its content has not been substituted.');
-      if (key === 'statements' && rows.some(x => typeof x.definition !== 'string' || !x.definition.trim() || x.definition.length > 12000 || typeof x.label !== 'string' || !x.label.trim() || x.label.length > 30)) throw Error('Each statement needs a short label and its precise definition (at most 12,000 characters).');
+      if (!Array.isArray(rows) || rows.length > 32 || new Set(rows.map(x => x?.id)).size !== rows.length || rows.some(x => !x || !validId(x.id) || (!(key === 'statements' && x.location && x.title == null) && (typeof x.title !== 'string' || !x.title.trim())))) throw Error('This revision has invalid ' + key + '. Its content has not been substituted.');
+      if (key === 'statements') for (const item of rows) {
+        if (item.location) {
+          if (item.definition != null || typeof item.location.heading !== 'string' || !item.location.heading.trim() || item.location.heading.length > 240) throw Error('Use one exact Markdown heading location, without a copied definition.');
+          if (resolveLocations) window.TheoryStore.materializeStatement(content, item);
+        } else if (typeof item.definition !== 'string' || !item.definition.trim() || item.definition.length > 12000 || typeof item.label !== 'string' || !item.label.trim() || item.label.length > 30) throw Error('Each statement needs a short label and its precise definition (at most 12,000 characters).');
+      }
       if (key === 'arguments' && rows.some(x => (x.conclusion_statement != null ? x.conclusion != null || !validStatementRef(x.conclusion_statement) : typeof x.conclusion !== 'string' || !x.conclusion.trim() || x.conclusion.length > 6000) || typeof x.scope !== 'string' || !x.scope.trim() || x.scope.length > 6000 || !['conditional','unconditional','incomplete'].includes(x.status) || !Array.isArray(x.dependencies) || x.dependencies.length > 32 || x.status === 'unconditional' && x.dependencies.length || x.status === 'conditional' && !x.dependencies.length)) throw Error('A saved argument needs one exact conclusion, its scope and a consistent dependency list.');
-      if (key === 'arguments' && rows.some(x => x.conclusion_statement && !x.conclusion_statement.note_id && !content.statements?.some(statement => statement.id === x.conclusion_statement.statement_id))) throw Error('The local conclusion statement is missing from this revision.');
+      if (key === 'arguments' && rows.some(x => x.conclusion_statement && !x.conclusion_statement.note_id && !x.conclusion_statement.passage && !content.statements?.some(statement => statement.id === x.conclusion_statement.statement_id))) throw Error('The local conclusion statement is missing from this revision.');
+      if (key === 'arguments') for (const argument of rows) {
+        for (const ref of [argument.conclusion_statement, ...argument.dependencies.map(use => use.statement)]) {
+          if (resolveLocations && ref?.passage && !ref.note_id) window.TheoryStore.resolvePassage(content, ref.passage);
+        }
+      }
       if (key === 'arguments') for (const argument of rows) for (const use of argument.dependencies) {
         if (!use || !validStatementRef(use.statement)) throw Error('Each premise must identify an exact statement.');
         const legacy = ['required','mapping','justification'].filter(key => use[key] != null);
@@ -39,6 +55,75 @@
       }
     }
     placementCache.set(content, window.TheoryStore.statementPlacements(content));
+  }
+  function passageCitation(source, item, ctx) {
+    const value = {id:item.id,title:item.heading,source_passage:item};
+    return referenceButton(source, 'passage', value, ctx);
+  }
+  function referenceButton(source, kind, item, ctx) {
+    const reference = source.sectionRefs?.[kind + ':' + item.id];
+    const visible = reference?.used === true;
+    const citation = button(visible ? '[' + reference.number + ']' : '↗', () => cite(source, kind, item, ctx), 'nb-link nb-passage-cite');
+    citation.classList.toggle('nb-passage-unassigned', !visible);
+    citation.setAttribute('aria-label', 'Reference ' + item.title + ' in Markdown');
+    citation.title = 'Reference this section';
+    return citation;
+  }
+  function placeCitation(heading, citation) {
+    const title = el('span', 'nb-heading-title');
+    title.append(...heading.childNodes);
+    heading.classList.add('nb-heading-loc'); heading.append(citation, title);
+  }
+  function decorateSection(heading, body, note, revision, section, ctx, container) {
+    const item = passagesFor(revision.content).find(value => value.section_id === section.id && value.start_line === 0);
+    if (!item) return false;
+    const source = pin(note, revision);
+    heading.classList.add('nb-referenced-heading'); placeCitation(heading,
+      referenceButton(source, 'note_section', {id:section.id,title:section.title}, ctx));
+    heading.dataset.notePassage = item.id; heading.tabIndex = -1;
+    if (ctx.params.get('passage') === item.id) {
+      heading.classList.add('nb-linked-passage'); body.classList.add('nb-linked-passage');
+      if (container && ctx.enabled()) enrichContext(container, pin(note, revision), 'passage', item.id, revision.content, ctx);
+    }
+    return true;
+  }
+  function decorateHeadings(body, source, content, sectionId, ctx) {
+    const blocks = [...body.querySelectorAll('[data-markdown-start]')];
+    const byLine = new Map();
+    for (const block of blocks) { const line = Number(block.getAttribute('data-markdown-start')); if (!byLine.has(line)) byLine.set(line, block); }
+    const text = sectionId === '$body' ? content.body : content.sections.find(item => item.id === sectionId).body;
+    const inserted = window.TheoryStore.readableStatementBlocks(text).filter(part => part.kind === 'statement').map(part => part.line);
+    for (const item of passagesFor(content)) {
+      if (!item.start_line || (item.section_id || '$body') !== sectionId || inserted.some(line => line >= item.start_line && line <= item.end_line)) continue;
+      const heading = byLine.get(item.start_line);
+      if (!heading) continue; // Raw technical source keeps its line links instead.
+      heading.classList.add('nb-referenced-heading'); heading.dataset.notePassage = item.id; heading.tabIndex = -1;
+      const labelHost = /^H[1-6]$/.test(heading.tagName) ? heading : [...heading.children].find(child => /^H[1-6]$/.test(child.tagName)) || heading;
+      placeCitation(labelHost, passageCitation(source, item, ctx));
+      if (ctx.params.get('passage') === item.id) {
+        for (const block of blocks) if (Number(block.getAttribute('data-markdown-start')) >= item.start_line && Number(block.getAttribute('data-markdown-start')) <= item.end_line) block.classList.add('nb-linked-passage');
+        if (ctx.enabled()) enrichContext(body, source, 'passage', item.id, content, ctx);
+      }
+    }
+    for (const item of content.statements || []) {
+      if (!item.location || (item.location.section_id || '$body') !== sectionId) continue;
+      const resolved = window.TheoryStore.materializeStatement(content, item), passage = resolved.source_passage;
+      const blocks = [...body.querySelectorAll('[data-markdown-start]')];
+      const heading = blocks.find(block => Number(block.getAttribute('data-markdown-start')) === passage.start_line);
+      if (!heading) throw Error('The referenced Markdown heading could not be displayed. Its source has not been substituted.');
+      // Separate anchors allow two exact records at the same heading without
+      // copying prose or wrapping overlapping parent/subsection passages.
+      const anchor = el('span', 'nb-heading-anchor'); anchor.dataset.noteStatement = item.id; anchor.tabIndex = -1; heading.prepend(anchor);
+      const citation = button('↗', () => cite(source, 'statement', resolved, ctx), 'nb-link nb-heading-cite');
+      citation.setAttribute('aria-label', 'Link to ' + passage.heading); citation.title = 'Link to this passage';
+      if (!heading.querySelector('.nb-passage-cite')) heading.append(citation);
+      heading.classList.add('nb-referenced-heading');
+      if (ctx.params.get('statement') === item.id) {
+        for (const block of blocks) if (Number(block.getAttribute('data-markdown-start')) >= passage.start_line && Number(block.getAttribute('data-markdown-start')) <= passage.end_line) block.classList.add('nb-linked-passage');
+        if (ctx.enabled()) enrichContext(body, source, 'statement', item.id, content, ctx);
+      }
+    }
+    return body;
   }
   function legacyStatementSection(content, id) {
     const exists = section => content.sections?.some(item => item.id === section);
@@ -56,10 +141,9 @@
     const block = el('section', 'nb-statement-block' + (selected ? ' nb-structured-selected' : ''));
     block.dataset.noteStatement = item.id; block.tabIndex = -1;
     const heading = el('div', 'nb-statement-heading'), title = el('h3', '', item.title);
-    if (item.label) title.prepend(el('span', 'nb-assumption-label', item.label), ' ');
-    const citation = button('↗', () => cite(source, 'statement', item, ctx), 'nb-link nb-structured-cite');
-    citation.title = 'Link to this exact statement'; citation.setAttribute('aria-label', citation.title);
-    heading.append(title, citation); block.append(heading, prose(item.definition));
+    const citation = referenceButton(source, 'statement', item, ctx);
+    title.classList.add('nb-referenced-heading'); placeCitation(title, citation);
+    heading.append(title); block.append(heading, prose(item.definition));
     if (item.definitions?.length) {
       const details = el('details', 'nb-use-details'); details.append(el('summary', '', 'Pinned definitions'));
       for (const ref of item.definitions) details.append(link('Read source definition', exactRoute(ref, ref.section_id ? 'note_section' : null, ref.section_id), ctx));
@@ -68,27 +152,34 @@
     if (selected && ctx.enabled()) enrichContext(block, source, 'statement', item.id, content, ctx);
     return block;
   }
-  function readableBody(source, content, section, ctx) {
+  function readableBody(source, content, section, ctx, renderText = null) {
     const body = el('div', 'nb-readable-flow'), placements = placementsFor(content);
     for (const part of window.TheoryStore.readableStatementBlocks(section.body)) {
-      if (part.kind === 'text') { if (part.text.trim()) body.append(prose(part.text)); }
-      else body.append(statementBlock(content.statements.find(item => item.id === part.id), source, content, ctx));
+      if (part.kind === 'text') { if (part.text.trim()) body.append(renderText ? renderText(part.text, part.line) : prose(part.text, part.line - 1)); }
+      else {
+        const canonical = content.statements?.find(item => item.id === part.id);
+        const block = canonical ? statementBlock(canonical, source, content, ctx) : prose('[[statement:' + part.id + ']]');
+        if (section.id === '$body') { block.dataset.nbLocation = 'L' + part.line; block.tabIndex = -1; }
+        body.append(block);
+      }
     }
     const selected = ctx.params.get('statement');
-    if (selected && !placements.has(selected) && legacyStatementSection(content, selected) === section.id) {
+    if (selected && !content.statements?.find(item => item.id === selected)?.location && !placements.has(selected) && legacyStatementSection(content, selected) === section.id) {
       // Display only the requested unplaced statement, beside its explicitly
       // linked explanation. The immutable historical prose remains unchanged.
       body.append(statementBlock(content.statements.find(item => item.id === selected), source, content, ctx));
     }
-    return body;
+    return decorateHeadings(body, source, content, section.id, ctx);
   }
-  const renderReadable = (note, revision, section, ctx) => readableBody(pin(note, revision), revision.content, section, ctx);
+  const renderReadable = (note, revision, section, ctx, renderText) => readableBody(pin(note, revision), revision.content, section, ctx, renderText);
   function statementValue(ref, resolved, source, content) {
     if (!validStatementRef(ref)) return null;
     const target = ref.note_id ? ref : source;
-    if (resolved?.id === ref.statement_id && resolved.source?.note_id === target.note_id &&
+    if (resolved?.id === (ref.passage || ref.statement_id) && resolved.source?.note_id === target.note_id &&
         resolved.source?.revision === target.revision && resolved.source?.content_sha256 === target.content_sha256) return resolved;
-    return !ref.note_id ? content?.statements?.find(item => item.id === ref.statement_id) || null : null;
+    if (!ref.note_id && ref.passage && content) return window.TheoryStore.resolvePassage(content, ref.passage);
+    const local = !ref.note_id && content?.statements?.find(item => item.id === ref.statement_id);
+    return local ? window.TheoryStore.materializeStatement(content, local) : null;
   }
   function conclusionContent(argument, source, content, ctx, {showDefinition = true} = {}) {
     const out = el('section', 'nb-argument-conclusion');
@@ -96,25 +187,29 @@
     const ref = argument.conclusion_statement, statement = statementValue(ref, argument.resolved_conclusion_statement, source, content);
     out.append(el('h4', '', 'Conclusion'));
     const target = statement?.source || (ref.note_id ? ref : source);
-    out.append(link(statement ? [statement.label, statement.title].filter(Boolean).join(' · ') : 'Read exact conclusion', exactRoute(target, 'statement', ref.statement_id), ctx, 'nb-conclusion-link'));
+    out.append(link(statement ? [statement.label, statement.title].filter(Boolean).join(' · ') : 'Read exact conclusion', exactRoute(target, ref.passage ? 'passage' : 'statement', ref.passage || ref.statement_id), ctx, 'nb-conclusion-link'));
     if (statement && showDefinition) out.append(prose(statement.definition));
     else if (!statement) out.append(el('p', 'nb-hint', 'Open the exact source to read this statement.'));
     return out;
   }
   function cite(source, kind, item, ctx) {
-    const host = ctx.openDialog('Link to ' + kind), alive = ctx.dialogGuard();
-    const href = new URL('/' + exactRoute(source, kind, item.id), window.location.href).href;
-    const f = ctx.field('Exact ' + kind + ' link', 'statement-link', href); f.input.readOnly = true;
+    const host = ctx.openDialog('Reference this section'), alive = ctx.dialogGuard();
+    const reference = source.sectionRefs?.[kind + ':' + item.id];
+    const title = reference ? reference.kind + ' ' + reference.label : item.title;
+    const label = String(title).replace(/[\\[\]]/g, character => '\\' + character);
+    const destination = reference ? 'loc:' + reference.loc : new URL('/' + exactRoute(source, kind, item.id), window.location.href).href;
+    const markdown = '[' + label + '](' + destination + ')';
+    const f = ctx.field('Markdown', 'statement-link', markdown); f.input.readOnly = true;
     const status = el('p', 'nb-hint'); status.setAttribute('role', 'status');
-    host.append(el('p', 'nb-hint', item.title), f.wrap, status,
-      button('Copy link', async () => { try { await navigator.clipboard.writeText(href); if (alive()) status.textContent = 'Copied.'; } catch (_) { if (alive()) status.textContent = 'Select and copy the link above.'; } }, 'nb-button'));
+    host.append(el('p', 'nb-hint', item.title), f.wrap,
+      el('p', 'nb-reference-help', 'Copy into a Crucible note. The reference stays pinned to this saved revision.'), status,
+      button('Copy Markdown', async () => { try { await navigator.clipboard.writeText(markdown); if (alive()) status.textContent = 'Copied.'; } catch (_) { if (alive()) status.textContent = 'Select and copy the Markdown above.'; } }, 'nb-button'));
   }
   function dependency(use, source, content, ctx, {compact = false} = {}) {
     const row = el('li', 'nb-dependency'), ref = use.statement || {}, resolved = use.resolved_statement;
-    const local = !ref.note_id && content?.statements?.find(s => s.id === ref.statement_id);
-    const statement = resolved || local, target = resolved?.source || (ref.note_id ? ref : source);
+    const statement = statementValue(ref, resolved, source, content), target = statement?.source || (ref.note_id ? ref : source);
     const heading = el('div', 'nb-dependency-heading');
-    heading.append(link(statement ? [statement.label,statement.title].filter(Boolean).join(' · ') : 'Read exact premise', exactRoute(target, 'statement', ref.statement_id || statement?.id), ctx));
+    heading.append(link(statement ? [statement.label,statement.title].filter(Boolean).join(' · ') : 'Read exact premise', exactRoute(target, ref.passage ? 'passage' : 'statement', ref.passage || ref.statement_id || statement?.id), ctx));
     row.append(heading);
     if (!compact && statement?.definition) row.append(prose(statement.definition));
     const application = use.use || [use.required, use.mapping, use.justification].filter(Boolean).join('\n\n');
@@ -134,7 +229,8 @@
     if (showTitle) { heading.append(title, citation); block.append(heading); }
     const reasoning = content?.sections?.find(section => section.id === argument.section_id);
     const ref = argument.conclusion_statement;
-    const embeddedConclusion = selected && reasoning && ref && !ref.note_id && placementsFor(content).get(ref.statement_id) === reasoning.id;
+    const embeddedConclusion = selected && reasoning && ref && !ref.note_id &&
+      ((ref.passage && window.TheoryStore.resolvePassage(content, ref.passage).source_passage.section_id === reasoning.id) || placementsFor(content).get(ref.statement_id) === reasoning.id || content.statements?.find(item => item.id === ref.statement_id)?.location?.section_id === reasoning.id);
     block.append(conclusionContent(argument, source, content, ctx, {showDefinition:!embeddedConclusion}));
     if (argument.status === 'incomplete') block.append(el('p', 'nb-argument-status', 'Incomplete argument'));
     if (typeof displayedScope !== 'string' || displayedScope.trim() !== argument.scope?.trim()) {
@@ -157,7 +253,7 @@
     if (!showTitle) actions.append(citation);
     block.append(actions); return block;
   }
-  function renderNote(note, revision, ctx) {
+  function renderNote(note, revision, ctx, {selectedOnly = false} = {}) {
     const content = revision.content, source = pin(note, revision);
     const statements = content.statements || [], arguments_ = content.arguments || [];
     if (!statements.length && !arguments_.length) return null;
@@ -167,6 +263,7 @@
       const section = el('section', 'nb-argument-options');
       for (const argument of arguments_) {
         const selected = selectedArgument === argument.id;
+        if (selectedOnly && !selected) continue;
         const card = argumentCard(argument, source, content, ctx, {selected,showTitle:selected,compact:true});
         if (selected) section.append(card);
         else {
@@ -175,19 +272,19 @@
         }
         if (selected && ctx.enabled()) enrichContext(card, source, 'argument', argument.id, content, ctx);
       }
-      out.append(section);
+      if (section.children.length) out.append(section);
     }
     const statementList = el('details', 'nb-statements-list'), index = el('ul', 'nb-statement-index');
     statementList.open = false;
     statementList.append(el('summary', '', 'Statements (' + statements.length + ')'), index);
     for (const item of statements) {
-      const row = el('li'), reference = link([item.label, item.title].filter(Boolean).join(' · '), exactRoute(source, 'statement', item.id), ctx);
+      const row = el('li'), reference = link([item.label, item.title || item.location?.heading].filter(Boolean).join(' · '), exactRoute(source, 'statement', item.id), ctx);
       if (ctx.params.get('statement') === item.id) reference.setAttribute('aria-current', 'location');
       row.append(reference); index.append(row);
     }
-    if (statements.length) out.append(statementList);
+    if (statements.length && !selectedOnly) out.append(statementList);
     const selected = statements.find(item => item.id === ctx.params.get('statement'));
-    if (selected && !placementsFor(content).has(selected.id) && !legacyStatementSection(content, selected.id)) {
+    if (selected && !selected.location && !placementsFor(content).has(selected.id) && !legacyStatementSection(content, selected.id)) {
       out.append(statementBlock(selected, source, content, ctx));
     }
     return out;
@@ -352,7 +449,7 @@
       const retired = roster.filter(row => row.status === 'withdrawn');
       if (retired.length) { const section = el('details','nb-details nb-roster-history'); section.append(el('summary','','Withdrawn arguments')); for (const record of retired) section.append(rosterEntry(record,target,ctx)); host.append(section); }
       if (ctx.enabled() && ctx.composeRelated) {
-        const conclusion = target.conclusion_statement, reference = conclusion ? exactRoute(conclusion, 'statement', conclusion.statement_id) : data.current?.argument ? exactRoute(data.current.argument, 'argument', data.current.argument.argument_id) : null;
+        const conclusion = target.conclusion_statement, reference = conclusion ? exactRoute(conclusion, conclusion.passage ? 'passage' : 'statement', conclusion.passage || conclusion.statement_id) : data.current?.argument ? exactRoute(data.current.argument, 'argument', data.current.argument.argument_id) : null;
         if (reference) host.append(button('Write an argument note', () => {
           if (ctx.current()) ctx.composeRelated({title:target.title,url:'/' + reference,relation:'responds_to',scope:target.scope});
         }, 'nb-button nb-write-argument'));
@@ -419,7 +516,7 @@
       host.append(section);
     } catch (error) { if (ctx.current() && error.status !== 404) host.append(el('p', 'nb-error', 'Argument updates could not be loaded.')); }
   }
-  function editor(content, field) {
+  function editor(content, field, insertStatement = null, removePlacement = null) {
     const host = el('details', 'nb-details nb-statement-editor'); host.append(el('summary', '', 'Statements & arguments (optional)'));
     const list = el('div'); host.append(list); let serial = 0, locked = false; const entries = [];
     function add(value = {}) {
@@ -427,13 +524,30 @@
       const title = field('Statement title', 'statement-title-' + i, value.title || '', {max:240});
       const label = field('Label', 'statement-label-' + i, value.label || '', {max:30,placeholder:'e.g. S-12 or A-12'});
       const definition = field('Precise statement', 'statement-definition-' + i, value.definition || '', {rows:5,max:12000});
+      const locationHeading = value.location ? field('Referenced Markdown heading', 'statement-heading-' + i, value.location.heading, {max:240}) : null;
       const refs = field('Pinned definitions (optional JSON)', 'statement-definitions-' + i, JSON.stringify(value.definitions || [], null, 2), {rows:3});
       const details = el('details', 'nb-use-details'); details.append(el('summary', '', 'Definition references'), refs.wrap);
-      const item = {original:value,id:value.id || 'statement-' + crypto.randomUUID().replaceAll('-', '').slice(0,24),title:title.input,label:label.input,definition:definition.input,refs:refs.input,removed:false};
+      const item = {original:value,id:value.id || 'statement-' + crypto.randomUUID().replaceAll('-', '').slice(0,24),title:title.input,label:label.input,definition:definition.input,locationHeading:locationHeading?.input,refs:refs.input,removed:false};
       const placement = field('Place in a readable explanation', 'statement-placement-' + i, '[[statement:' + item.id + ']]'); placement.input.readOnly = true;
-      const remove = button('Remove statement', () => { if (locked) return; item.removed = true; block.remove(); }, 'nb-link'); item.remove = remove; entries.push(item);
-      block.append(title.wrap, label.wrap, definition.wrap, placement.wrap,
-        el('p', 'nb-hint', 'Copy this marker onto its own line in one readable section, between your explanatory paragraphs. Keep this stable ID when revising the statement. Later references should use its exact link.'), details, remove); list.append(block);
+      const removalError = el('p', 'nb-error'); removalError.setAttribute('role', 'alert');
+      const remove = button('Remove statement', () => {
+        if (locked) return;
+        try {
+          const arguments_ = JSON.parse(args.input.value || '[]');
+          const used = arguments_.some(argument => [argument.conclusion_statement, ...(argument.dependencies || []).map(use => use.statement)]
+            .some(ref => ref && !ref.note_id && ref.statement_id === item.id));
+          if (used) { removalError.textContent = 'An argument uses this statement. Update that argument before removing it.'; return; }
+          removePlacement?.(item.id); item.removed = true; block.remove();
+        } catch (_) { removalError.textContent = 'Check the argument structure before removing this statement.'; }
+      }, 'nb-link'); item.remove = remove; entries.push(item);
+      if (locationHeading) {
+        block.append(locationHeading.wrap, el('p', 'nb-hint', 'The statement is the prose under this heading. Edit that prose in the note; update this reference if you rename the heading.'), details);
+      } else {
+        block.append(title.wrap, label.wrap, definition.wrap, placement.wrap,
+          el('p', 'nb-hint', 'Place this marker on its own line in the readable note, between explanatory paragraphs. Keep this stable ID when revising the statement. Later references should use its exact link.'), details);
+        if (insertStatement) { item.insert = button('Insert in note', () => { if (!locked) insertStatement(item.id); }, 'nb-button'); block.append(item.insert); }
+      }
+      block.append(remove, removalError); list.append(block);
     }
     for (const value of content?.statements || []) add(value);
     const more = button('Add statement', () => { if (!locked && entries.filter(x => !x.removed).length < 32) add(); }, 'nb-button'); host.append(more);
@@ -441,12 +555,12 @@
     const advanced = el('details', 'nb-use-details'); advanced.append(el('summary', '', 'Argument structure'), el('p', 'nb-hint', 'Optional records linking a conclusion statement, reasoning and premises. Suitable for preparing with an agent; ordinary notes need none.'), args.wrap); host.append(advanced);
     const initial = JSON.stringify({statements:content?.statements || [],arguments:content?.arguments || []});
     function value() {
-      const statements = entries.filter(x => !x.removed).map(x => { const definitions = JSON.parse(x.refs.value || '[]'); return {id:x.id,label:x.label.value.trim(),title:x.title.value.trim(),definition:x.definition.value,...(definitions.length || x.original.definitions !== undefined ? {definitions} : {})}; });
+      const statements = entries.filter(x => !x.removed).map(x => { const definitions = JSON.parse(x.refs.value || '[]'); return {...(x.locationHeading ? {...x.original,location:{...x.original.location,heading:x.locationHeading.value.trim()}} : {id:x.id,label:x.label.value.trim(),title:x.title.value.trim(),definition:x.definition.value}),...(definitions.length || x.original.definitions !== undefined ? {definitions} : {})}; });
       const arguments_ = JSON.parse(args.input.value || '[]');
       const output = {}; if (statements.length || content?.statements !== undefined) output.statements = statements; if (arguments_.length || content?.arguments !== undefined) output.arguments = arguments_;
-      validate(output); return output;
+      validate(output, {resolveLocations:false}); return output;
     }
-    return {section:host,value,dirty:() => { try { const v = value(); return JSON.stringify({statements:v.statements || [],arguments:v.arguments || []}) !== initial; } catch (_) { return true; } },disable:yes => { locked = yes; more.disabled = args.input.disabled = yes; for (const x of entries) for (const input of [x.title,x.label,x.definition,x.refs,x.remove]) input.disabled = yes; }};
+    return {section:host,value,dirty:() => { try { const v = value(); return JSON.stringify({statements:v.statements || [],arguments:v.arguments || []}) !== initial; } catch (_) { return true; } },disable:yes => { locked = yes; more.disabled = args.input.disabled = yes; for (const x of entries) for (const input of [x.title,x.label,x.definition,x.locationHeading,x.refs,x.remove,x.insert].filter(Boolean)) input.disabled = yes; }};
   }
   function contributionAction(note, revision, ctx) {
     if (!ctx.enabled()) return null;
@@ -459,5 +573,5 @@
       host.append(button('Withdraw a current argument using this note as evidence', () => proposeDialog(pin(note, revision), null, ctx), 'nb-link nb-argument-choice'));
     });
   }
-  window.CrucibleStatementWorkflow = Object.freeze({validate,renderNote,renderReadable,readUpdate,readTarget,updatesList,editor,exactRoute,contributionAction});
+  window.CrucibleStatementWorkflow = Object.freeze({validate,renderNote,renderReadable,decorateHeadings,decorateSection,readUpdate,readTarget,updatesList,editor,exactRoute,contributionAction});
 })();

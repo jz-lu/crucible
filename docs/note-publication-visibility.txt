@@ -1,0 +1,34 @@
+NOTE PUBLICATION INTENT — LOCAL IMPLEMENTATION, 26 NOVEMBER 2026
+
+Content revisions change on editing. Author publication intent is independent
+of the decision on that exact content. A retraction makes all submitted or
+published revisions of the note private to ordinary participants. The author
+can restore the latest revision without a fake content edit. Moderator
+withdrawal and a changes-requested decision cannot be bypassed by this toggle.
+Reviewer audit access follows the existing policy for previously submitted work.
+
+Migration 0035 adds an append-only visibility journal and a small current-state
+projection. Existing content, hashes, review decisions, notes, users and ratings
+are untouched. No row means the existing publication rules apply. Normal
+approved-note queries also exclude author-private revisions. Source-packet
+projections withhold hidden third-party text, retaining their exact commitments.
+
+Jobs not yet claimed wait while author-private. A review already in progress
+may finish and record its verdict, but cannot expose a private note. Restoring
+approved content needs no new model call; restoring pending content reuses its
+existing bounded job. Legacy cancelled requests can resume the same revision:
+old cancellation metadata is retained in the visibility journal and old retries
+cannot cancel the resumed request. Attempt bounds remain in force.
+
+Writes require ownership, CSRF or the existing authorized agent scope, exact
+latest content identity and an idempotency key. Repeated completed operations
+cannot override later intent. The original request/cancellation endpoints remain
+compatible. Visibility is not scientific approval or scheme admission.
+
+The current tests cover private reads/search and frozen-packet restrictions,
+approved/pending restoration, old retries after newer intent, an in-flight
+screening result, no duplicate model attempts, migration preservation, and
+refusing a destructive downgrade once visibility history exists. Synthetic
+providers only: no paid model calls. No production migration or release yet.
+SQLite migration evidence is not a claim of PostgreSQL rolling compatibility;
+use the repository's normal database release validation before deployment.

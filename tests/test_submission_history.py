@@ -71,7 +71,7 @@ def test_default_history_stays_fifty_and_explicit_pages_are_bounded(system):
     assert set(first.json()['submissions'][0]) == {'id', 'status', 'received_at', 'method_id',
         'ai_model', 'selection_kind', 'profile_kind', 'profile_label', 'record_inheritance',
         'scoring_eligible', 'scoring_policy_id', 'profile_id', 'scheme_id', 'scheme_name', 'scheme_version',
-        'round_id', 'method_name'}
+        'round_id', 'method_name', 'instance_size'}
     assert 'PRIVATE_' not in first.text
 
 

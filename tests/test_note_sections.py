@@ -22,7 +22,7 @@ from test_notebook import Actor, ORIGIN, create, revise, publication_body, syste
 def content():
     return {"title": "Readable conditional research", "claim": "A stated conditional result.",
         "conditions": "The premise remains unproved in the declared model.",
-        "body": "Full technical text, including μ and every original detail.", "tags": ["local-fixture"],
+        "body": "Full technical text, including μ and every original detail.", "tags": ["local-fixture", "ai-written"],
         "sections": [{"id": "security", "title": "Security", "body": "A conditional security explanation."},
                      {"id": "correctness", "title": "Correctness", "body": "The honest experiment and its conditions."},
                      {"id": "premise", "title": "Premise A", "body": "An explicitly unproved premise."},
@@ -564,9 +564,16 @@ def test_legacy_arguments_have_exact_reasoning_and_no_invented_conclusion(local_
     assert group["dependencies"][0]["mapping"] is None
 
 
-def test_canonical_arguments_use_one_definition_and_pin_revision(local_system):
+@pytest.mark.parametrize("heading_backed", [False, True, "unregistered"])
+def test_canonical_arguments_use_one_definition_and_pin_revision(local_system, heading_backed):
     _, owner, reviewer, reader, path = local_system
     value = canonical_argument_content()
+    if heading_backed:
+        value["body"] = "## Conditional premise\n" + value["statements"][0].pop("definition") + "\n## Other\nOutside scope."
+        value["statements"][0] = {"id": "rsa-local-premise", "location": {"heading": "Conditional premise"}}
+    if heading_backed == "unregistered":
+        value.pop("statements")
+        value["arguments"][1]["dependencies"][0]["statement"] = {"passage": "p1-b-1-2"}
     note = create(owner, value); publish(owner, reviewer, note)
     path.write_text(json.dumps(canonical_manifest(note)))
     response = reader.client.get(binding_url())
@@ -577,11 +584,16 @@ def test_canonical_arguments_use_one_definition_and_pin_revision(local_system):
     assert group["conclusion"] == value["arguments"][1]["conclusion"]
     assert group["scientific_adoption"] is False and group["origin"] == "canonical"
     statement = group["dependencies"][0]["statement"]
-    assert statement["definition"] == value["statements"][0]["definition"]
-    assert statement["source"]["statement"] == "rsa-local-premise"
+    expected = note_sections.heading_passage(value, {"heading": "Conditional premise"})["text"] if heading_backed else value["statements"][0]["definition"]
+    assert statement["definition"] == expected
+    assert statement["source"]["passage" if heading_backed == "unregistered" else "statement"] == ("p1-b-1-2" if heading_backed == "unregistered" else "rsa-local-premise")
     assert packet["scheme_assumptions"]["correctness"]["assumptions"][0]["formal_statement"] == statement["definition"]
     assert "Obsolete copied premise" not in response.text
-    changed = deepcopy(value); changed["statements"][0]["definition"] = "A later private definition."
+    changed = deepcopy(value)
+    if heading_backed:
+        changed["body"] = "## Conditional premise\nA later private definition."
+    else:
+        changed["statements"][0]["definition"] = "A later private definition."
     later = revise(owner, note, changed)
     assert reader.client.get(binding_url()).json() == packet
     path.write_text(json.dumps(canonical_manifest(later)))
@@ -655,3 +667,19 @@ def test_canonical_graph_source_is_argument_and_premise_definition_is_shared(loc
     assert selected["source"]["argument"] == "attack-account"
     assert selected["reasoning_source"]["note_section"] == "attack"
     assert selected["assumptions"][0]["formal_statement"] == packet["scheme_arguments"]["correctness"]["dependencies"][0]["statement"]["definition"]
+
+
+def test_passage_conclusion_has_passage_link_through_scheme_roster(local_system):
+    _, owner, reviewer, reader, path = local_system
+    value = canonical_argument_content()
+    value['body'] = '## Conclusion\nThis exact proposition remains conditional.'
+    claim = value['arguments'][1]; claim.pop('conclusion')
+    claim['conclusion_statement'] = {'passage':'p1-b-1-2'}
+    saved = create(owner, value); publish(owner, reviewer, saved)
+    path.write_text(json.dumps(canonical_manifest(saved)))
+    response = reader.client.get(binding_url())
+    assert response.status_code == 200, response.text
+    group = response.json()['scheme_arguments']['correctness']
+    expected = {'id':saved['id'],'revision':saved['revision'],'content_sha256':saved['content_sha256'],'passage':'p1-b-1-2'}
+    assert group['resolved_conclusion_statement']['source'] == expected
+    assert group['presentation']['conclusion_source'] == expected

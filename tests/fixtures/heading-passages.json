@@ -1,0 +1,14 @@
+[
+  {"name":"nested subsections belong to the parent", "body":"Intro\n## Premise\nA.\n### Detail\nB.\n#### More\nC.\n## Next\nD.", "heading":"Premise", "start":2, "end":7},
+  {"name":"child ends at the next higher heading", "body":"## Premise\nA.\n### Detail\nB.\n#### More\nC.\n## Next\nD.", "heading":"Detail", "start":3, "end":6},
+  {"name":"closing hashes and level six", "body":"###### Fine point ###\nText\n# End\nOther.", "heading":"Fine point", "start":1, "end":2},
+  {"name":"fences and math contain literal headings", "body":"## Premise\nA.\n   ~~~~text\n## Not a boundary\n~~~\n   ~~~~\n\\[\n## Still not a boundary\n\\]\n$$\n## Also literal\n$$\n## Next\nB.", "heading":"Premise", "start":1, "end":12},
+  {"name":"multiline inline code and math", "body":"## Premise\nAn example `\n## Code\n` and \\(\n## Math\n\\)\n    ## Indented literal\n## Next", "heading":"Premise", "start":1, "end":7},
+  {"name":"duplicate targets fail", "body":"## Premise\nA\n## Premise\nB", "heading":"Premise", "invalid":true},
+  {"name":"missing targets fail", "body":"## Changed title\nA", "heading":"Premise", "invalid":true},
+  {"name":"recursive markers fail", "body":"## Premise\n[[statement:another]]", "heading":"Premise", "invalid":true},
+  {"name":"literal marker remains valid", "body":"## Premise\n```\n[[statement:another]]\n```", "heading":"Premise", "start":1, "end":4},
+  {"name":"line endings normalize only for extraction", "body":"## Premise\r\nA\r\n\r\n## Next", "heading":"Premise", "start":1, "end":3},
+  {"name":"fence inside multiline code is not a fence", "body":"## Before\nA multiline `code\n```\ncode` ends here.\n## Target\nThe target proposition.", "heading":"Target", "start":5, "end":6},
+  {"name":"display delimiter inside multiline code stays literal", "body":"## Before\nA multiline `code\n$$\ncode` ends here.\n## Target\nThe target proposition.", "heading":"Target", "start":5, "end":6}
+]

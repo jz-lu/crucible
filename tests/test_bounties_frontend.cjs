@@ -67,16 +67,176 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
     try {
       const initial = f.show('view=bounties'); await flush();
       assert.equal(f.host.querySelectorAll('[data-bounty]').length, 0);
-      assert.doesNotMatch(f.host.textContent, /Example data|Loading|No open bounties yet/);
+      assert.doesNotMatch(f.host.textContent, /Example data|Loading|No active bounties yet/);
       pending.resolve({bounties: [task()], pagination: {offset: 0, limit: 6, has_more: false}, policy}); await initial;
-      const card = f.host.querySelector('[data-bounty]'); card.focus();
-      await f.show('view=bounties'); assert.equal(f.host.querySelector('[data-bounty]'), card); assert.equal(f.document.activeElement, card);
+      const card = f.host.querySelector('[data-bounty]'), open = card.querySelector('.bty-card-open'); open.focus();
+      await f.show('view=bounties'); assert.equal(f.host.querySelector('[data-bounty]'), card); assert.equal(f.document.activeElement, open);
       assert.equal(f.requests.filter(r => r.url.pathname === '/api/bounties').length, 1);
       for (const sort of ['open', 'points-high', 'points-low']) await f.show('view=bounties&sort=' + sort);
       assert.deepEqual(f.requests.filter(r => r.url.pathname === '/api/bounties').map(r => r.url.searchParams.get('sort')), ['concrete', 'open', 'points-high', 'points-low']);
       assert.equal(f.host.querySelector('input[type="search"]'), null);
+      assert.equal(button(f.host, 'Your activity'), undefined);
       assert.match(f.host.textContent, /Monthly bounty allowance10 of 10 remaining/);
     } finally {f.close();}
+  });
+  await test('open cards keep navigation separate from a permission-gated boost confirmation', async () => {
+    const f = fixture({responder: url => url.pathname === '/api/bounties' ? {
+      bounties: [task(), task(second, {capabilities: {boost: false}})],
+      pagination: {offset: 0, limit: 6, has_more: false}, policy} : undefined});
+    try {
+      await f.show('');
+      const card = f.host.querySelector('[data-bounty="' + id + '"]');
+      assert.equal(card.tagName, 'ARTICLE');
+      assert.ok(card.querySelector('.bty-card-open'));
+      assert.equal(card.querySelector('.bty-card-open').querySelector('button'), null);
+      assert.equal(f.host.querySelectorAll('.bty-card-boost').length, 1);
+      assert.equal(button(card, 'Boost').getAttribute('aria-label'), 'Boost bounty: Reproduce a bounded result');
+      click(card, 'Boost'); await flush();
+      assert.equal(f.model.route(), '#bounties'); assert.equal(f.routes.length, 0);
+      assert.equal(f.host.querySelector('dialog').open, true);
+      assert.equal(f.requests.filter(r => r.body).length, 0);
+      assert.ok(button(f.host, 'Confirm boost'));
+      assert.equal(f.document.activeElement.textContent, 'Confirm bounty boost');
+      click(f.host.querySelector('.bty-action-panel'), 'Cancel'); await flush();
+      assert.equal(f.host.querySelector('dialog').open, false);
+      assert.equal(f.host.querySelector('.bty-action-panel'), null);
+      assert.equal(f.document.activeElement, button(card, 'Boost'));
+      for (const status of ['mine', 'past']) {
+        await f.show('status=' + status);
+        assert.equal(f.host.querySelector('.bty-card-boost'), null);
+      }
+    } finally { f.close(); }
+  });
+  await test('card boost refreshes the exact task and allowance before any confirmed spend', async () => {
+    let fresh = false;
+    const currentPolicy = {...policy, id: 'bounty-test-v2', boost_cost_units: 2, points_per_boost: 200};
+    const f = fixture({responder: (url, body) => {
+      if (!fresh) return;
+      if (url.pathname === '/api/me/bounty-allowance') return {allowance: {...wallet, policy_id: currentPolicy.id, available_units: 7}, policy: currentPolicy};
+      if (url.pathname === '/api/bounties/' + id || url.pathname.endsWith('/boosts')) return {
+        bounty: task(id, {version: 3, terms_sha256: 'b'.repeat(64)}), policy: currentPolicy};
+    }});
+    try {
+      await f.show(''); await f.client.detail(id); fresh = true;
+      click(f.host, 'Boost'); await flush();
+      assert.equal(f.requests.filter(r => r.body).length, 0);
+      assert.match(f.host.textContent, /Use 2 of your monthly bounty allowance to add 200 reward points/);
+      assert.equal(f.requests.filter(r => r.url.pathname === '/api/me/bounty-allowance').length, 2);
+      submit(f.host); await flush(); await f.routed();
+      const writes = f.requests.filter(r => r.body); assert.equal(writes.length, 1);
+      assert.deepEqual(JSON.parse(JSON.stringify(writes[0].body)), {
+        expected_version: 3, terms_sha256: 'b'.repeat(64), policy_id: currentPolicy.id,
+        confirm_cost_units: 2, units: 1, idempotency_key: writes[0].body.idempotency_key});
+      assert.ok(writes[0].body.idempotency_key);
+    } finally { f.close(); }
+  });
+  await test('a stale card cannot open a spending form after the fresh capability is removed', async () => {
+    const f = fixture({responder: url => url.pathname === '/api/bounties/' + id
+      ? {bounty: task(id, {status: 'completed', capabilities: {boost: false}}), policy} : undefined});
+    try {
+      await f.show(''); click(f.host, 'Boost'); await flush();
+      assert.match(f.host.textContent, /This bounty can no longer be boosted/);
+      assert.equal(button(f.host, 'Confirm boost'), undefined);
+      assert.equal(f.requests.filter(r => r.body).length, 0);
+    } finally { f.close(); }
+  });
+  await test('a failed fresh allowance read can be retried without spending or leaving controls disabled', async () => {
+    let reads = 0;
+    const f = fixture({responder: url => url.pathname === '/api/me/bounty-allowance' && ++reads === 2
+      ? Promise.reject(Object.assign(Error('Allowance temporarily unavailable'), {status: 503})) : undefined});
+    try {
+      await f.show(''); click(f.host, 'Boost'); await flush();
+      assert.match(f.host.textContent, /Allowance temporarily unavailable/);
+      assert.equal(button(f.host, 'Confirm boost'), undefined);
+      click(f.host.querySelector('dialog'), 'Try again'); await flush();
+      assert.ok(button(f.host, 'Confirm boost'));
+      assert.doesNotMatch(f.host.textContent, /Allowance temporarily unavailable/);
+      assert.equal(f.requests.filter(r => r.body).length, 0);
+    } finally { f.close(); }
+  });
+  await test('late boost preparation cannot reopen a confirmation after leaving the task', async () => {
+    const pending = deferred(); let reads = 0;
+    const f = fixture({responder: url => url.pathname === '/api/me/bounty-allowance' && ++reads === 2 ? pending.promise : undefined});
+    try {
+      await f.show(''); click(f.host, 'Boost'); await flush();
+      assert.equal(f.host.querySelector('dialog').open, true);
+      assert.equal(button(f.host, 'Confirm boost'), undefined);
+      await f.show('status=past');
+      pending.resolve({allowance: wallet, policy}); await flush();
+      assert.equal(f.host.querySelector('dialog').open, false);
+      assert.equal(f.host.querySelector('.bty-action-panel'), null);
+      assert.equal(f.requests.filter(r => r.body).length, 0);
+    } finally { f.close(); }
+  });
+  await test('Escape and a complete backdrop click close the confirmation without spending or navigation', async () => {
+    const f = fixture();
+    try {
+      await f.show(''); const trigger = click(f.host, 'Boost'); await flush();
+      const dialog = f.host.querySelector('dialog');
+      dialog.dispatchEvent({type: 'cancel', preventDefault() {}});
+      assert.equal(dialog.open, false); assert.equal(f.document.activeElement, trigger);
+      click(f.host, 'Boost'); await flush();
+      dialog.getBoundingClientRect = () => ({left: 50, right: 350, top: 100, bottom: 400});
+      dialog.dispatchEvent({type: 'pointerdown', isPrimary: true, button: 0, clientX: 100, clientY: 150});
+      dialog.dispatchEvent({type: 'click', clientX: 0, clientY: 0});
+      assert.equal(dialog.open, true, 'Dragging from inside must not dismiss.');
+      dialog.dispatchEvent({type: 'pointerdown', isPrimary: true, button: 0, clientX: 0, clientY: 0});
+      dialog.dispatchEvent({type: 'click', clientX: 0, clientY: 0});
+      assert.equal(dialog.open, false);
+      assert.equal(f.routes.length, 0); assert.equal(f.requests.filter(r => r.body).length, 0);
+    } finally { f.close(); }
+  });
+  await test('a closed or revoked confirmation cannot be restored by late reads', async () => {
+    for (const revoke of [false, true]) {
+      const pending = deferred();
+      const f = fixture({responder: url => url.pathname === '/api/bounties/' + id ? pending.promise : undefined});
+      try {
+        await f.show(''); click(f.host, 'Boost'); await flush();
+        const dialog = f.host.querySelector('dialog');
+        if (revoke) f.revoke(); else dialog.dispatchEvent({type: 'cancel', preventDefault() {}});
+        pending.resolve({bounty: task(), policy}); await flush();
+        assert.equal(button(f.host, 'Confirm boost'), undefined);
+        assert.equal(f.requests.filter(r => r.body).length, 0);
+      } finally { f.close(); }
+    }
+  });
+  await test('a boost finishing after navigation cannot turn an already reopened retry into a second spend', async () => {
+    const pending = deferred();
+    const f = fixture({responder: url => url.pathname.endsWith('/boosts') ? pending.promise : undefined});
+    try {
+      await f.show(''); click(f.host, 'Boost'); await flush(); submit(f.host); await flush();
+      const dialog = f.host.querySelector('dialog');
+      dialog.dispatchEvent({type: 'cancel', preventDefault() {}});
+      assert.equal(dialog.open, true, 'The actual request must finish before dismissing.');
+      await f.show('status=past'); await f.show(''); click(f.host, 'Boost'); await flush();
+      assert.ok(button(f.host, 'Retry the same request'));
+      pending.resolve({bounty: task(id, {version: 2, reward_points: 200}), policy}); await flush();
+      assert.equal(dialog.open, true, 'An old completion must not close a replacement dialog.');
+      submit(f.host); await flush();
+      assert.equal(f.requests.filter(r => r.url.pathname.endsWith('/boosts')).length, 1);
+      assert.equal(dialog.open, false); assert.match(f.host.textContent, /Bounty boost recorded/);
+      assert.equal(f.routes.length, 0);
+    } finally { f.close(); }
+  });
+  await test('an uncertain boost can recover its exact receipt even if the fresh task is now closed', async () => {
+    let writes = 0;
+    const f = fixture({responder: (url, body) => {
+      if (url.pathname.endsWith('/boosts')) {
+        if (++writes === 1) return Promise.reject(Object.assign(Error('Reply interrupted'), {status: 0}));
+        return {bounty: task(id, {status: 'completed', capabilities: {boost: false}, version: 2}), policy};
+      }
+      if (writes && url.pathname === '/api/bounties/' + id) return {bounty: task(id, {status: 'completed', capabilities: {boost: false}, version: 2}), policy};
+    }});
+    try {
+      await f.show(''); click(f.host, 'Boost'); await flush(); submit(f.host); await flush();
+      const first = f.requests.find(r => r.body).body;
+      click(f.host.querySelector('dialog'), 'Cancel'); click(f.host, 'Boost'); await flush();
+      assert.match(f.host.textContent, /does not create an additional boost/);
+      assert.ok(button(f.host, 'Retry the same request')); submit(f.host); await flush();
+      const actual = f.requests.filter(r => r.body);
+      assert.equal(actual.length, 2); assert.deepEqual(actual[1].body, first);
+      assert.equal(f.host.querySelector('dialog').open, false);
+    } finally { f.close(); }
   });
   await test('read ownership rejects late completions and a failed optional preparation does not poison retries', async () => {
     const old = deferred(); let calls = 0;
@@ -110,7 +270,7 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
       for (const status of ['open', 'mine', 'past']) {
         await f.show('status=' + status);
         assert.equal(f.host.querySelector('h1').textContent, 'Bounties');
-        assert.equal(f.host.querySelector('.bty-count').textContent, status === 'mine' ? 'Your activity' : status === 'past' ? 'Past bounties' : 'Open tasks');
+        assert.equal(f.host.querySelector('.bty-count').textContent, status === 'mine' ? 'Your activity' : status === 'past' ? 'Past bounties' : 'Active bounties');
       }
     } finally { f.close(); }
   });
@@ -286,7 +446,6 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
       for (const [trigger, heading, confirmation] of [
         ['Boost this bounty', 'Confirm bounty boost', 'Confirm boost'],
         ['Submit for review', 'Request bounty admission', 'Submit for review'],
-        ['Cancel bounty', 'Cancel bounty', 'Confirm cancellation'],
         ['Withdraw proposal', 'Withdraw bounty proposal', 'Confirm withdrawal']
       ]) {
         button(f.host, trigger).focus(); click(f.host, trigger); await flush();
@@ -300,6 +459,7 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
         assert.equal(f.document.activeElement, button(f.host, trigger));
         assert.equal(f.host.querySelector('.bty-action-panel'), null);
       }
+      assert.equal(button(f.host, 'Cancel bounty'), undefined, 'Even an older cancellation capability must not expose the removed action.');
     } finally {f.close();}
   });
   await test('a rejection after a lost boost reply cannot mint a replacement spend', async () => {
@@ -365,11 +525,14 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
       submissions: [submission], decisions: [{kind: 'poster', decision: 'approved', reason: 'An earlier recorded assessment.'}]}), policy} : undefined});
     try {
       await f.show('bounty=' + id + '&detail=contributions');
-      assert.match(f.host.textContent, /Awaiting independent review/);
+      assert.doesNotMatch(f.host.textContent, /Awaiting independent review/);
+      assert.equal(button(f.host, 'Contributions'), undefined);
       assert.doesNotMatch(f.host.textContent, /Poster ·|Pipeline ·|pending|Record .* decision/);
       assert.equal(f.host.querySelector('form'), null, 'Legacy proposer capabilities must not restore an action.');
       await f.show('bounty=' + id);
-      assert.match(f.host.querySelector('.bty-decision-history').textContent, /Historical proposer assessment · approvedAn earlier recorded assessment\./);
+      assert.equal(f.host.querySelector('.bty-decision-history'),null);
+      const review = fixture({reviewOnly:true,responder:url=>url.pathname==='/api/bounties/'+id ? {bounty:task(id,{decisions:[{kind:'poster',decision:'approved',reason:'An earlier recorded assessment.'}]}),policy}:undefined});
+      try {await review.show('bounty='+id);assert.match(review.host.querySelector('.bty-decision-history').textContent,/Historical proposer assessment · approvedAn earlier recorded assessment\./);} finally {review.close();}
       assert.equal(f.requests.filter(r => r.body).length, 0);
     } finally {f.close();}
   });
@@ -403,7 +566,7 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
     } finally {f.close();}
   });
   await test('partial contributions have no pending approval and qualified claims show settlement separately', async () => {
-    const f = fixture({responder: url => url.pathname === '/api/bounties/' + id ? {bounty: task(id, {status: 'frozen', submissions: [
+    const f = fixture({reviewOnly: true, responder: url => url.pathname === '/api/bounties/' + id ? {bounty: task(id, {status: 'frozen', submissions: [
       {id: second, claim: 'partial', status: 'partial', contribution_note: pin},
       {id: note, claim: 'solution', status: 'qualified', contribution_note: pin, pipeline_decision: {decision: 'approved'}}]}), policy} : undefined});
     try {
@@ -496,17 +659,27 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
     const f = fixture({responder: url => url.pathname === '/api/bounties' ? {bounties:[task()],pagination:{offset:0,limit:6,has_more:false},policy:{...policy,monthly_units:0}} : undefined});
     try {await f.show('view=bounties'); assert.equal(f.host.querySelectorAll('[data-bounty]').length, 1);} finally {f.close();}
   });
-  await test('agent prompt names the exact task and requires separate explicit allowance authority', async () => {
-    const f = fixture(); let copied;
-    f.window.navigator.clipboard = {writeText: async value => copied = value};
+  await test('exhausted allowance disables boost and proposing, and a fresh allowance restores them', async () => {
+    let remaining = 0;
+    const f = fixture({responder: url => url.pathname === '/api/me/bounty-allowance' ? {allowance:{...wallet,available_units:remaining},policy} : undefined});
     try {
-      await f.show('view=bounties'); click(f.host, 'Copy agent prompt'); await flush();
-      assert.match(copied, /bounty list/); assert.match(copied, /--scope bounties:read --scope bounties:write/);
-      assert.match(copied, /separately approved bounties:spend scope/); assert.match(copied, /--confirm-allowance/);
-      await f.show('view=bounties&bounty=' + id);
-      button(f.host.querySelector('.bty-actions'), 'Copy agent prompt').click(); await flush();
-      assert.ok(copied.includes('bounty show ' + id));
-      assert.equal(f.requests.filter(r => r.body).length, 0);
+      await f.show(''); await flush();
+      assert.equal(button(f.host,'Propose a bounty').disabled,true);
+      assert.equal(button(f.host,'Boost').disabled,true);
+      assert.match(button(f.host,'Boost').title,/No monthly bounty allowance/);
+      remaining = 1; f.client.invalidateReads(); await f.show(''); await flush();
+      assert.equal(button(f.host,'Propose a bounty').disabled,false);
+      assert.equal(button(f.host,'Boost').disabled,false);
+    } finally {f.close();}
+  });
+  await test('ordinary bounty pages omit agent prompts and reviewer history', async () => {
+    const f = fixture({responder: url => url.pathname === '/api/bounties/' + id ? {bounty:task(id,{decisions:[{kind:'admission',decision:'approved',reason:'Test review.'}]}),policy} : undefined});
+    try {
+      await f.show(''); assert.equal(button(f.host,'Copy agent prompt'),undefined);
+      await f.show('bounty=' + id);
+      assert.equal(button(f.host,'Copy agent prompt'),undefined);
+      assert.equal(f.host.querySelector('.bty-decision-history'),null);
+      assert.equal(f.requests.filter(r=>r.body).length,0);
     } finally {f.close();}
   });
   complete = true; console.log(passed + ' bounty production frontend checks passed');

@@ -30,7 +30,7 @@ def index(actor, **params):
 def test_complete_index_matches_all_pages_with_curated_summaries_and_no_bodies(system, curated):
     app, owner, _, _, _ = system
     seed_notes(owner, 121, values=lambda n: {'title': f'Note {n}', 'claim': 'Visible summary',
-        'tags': ['human-written', 'topic'] if n % 2 else ['literature'],
+        'tags': ['human-written', 'topic'] if n % 2 else ['literature', 'ai-written'],
         'body': 'ACCOUNT_BODY_NOT_IN_INDEX', 'extensions': {'private': 'EXTENSION_NOT_IN_INDEX'}})
     with app.state.db.transaction(write=True) as session:
         note = session.get(notebook.NotebookNote, browse(owner)[0][0]['id'])
@@ -54,7 +54,7 @@ def test_complete_index_matches_all_pages_with_curated_summaries_and_no_bodies(s
 
 def test_index_keeps_latest_visible_revision_and_exact_proposal_status(system, curated):
     _, owner, reviewer, reader, _ = system
-    public = create(owner, content(title='Approved summary', tags=['literature']))
+    public = create(owner, content(title='Approved summary', tags=['literature', 'ai-written']))
     request_publication(owner, public); approve(reviewer, public)
     private = revise(owner, public, content(title='PRIVATE_LATEST_SUMMARY', tags=['human-written']))
     proposal = submit(owner, private, purpose='procedure')

@@ -215,4 +215,25 @@ unfinished`);
   assert.ok(element.textContent.endsWith('\\[\nunfinished'));
 });
 
+
+check('Markdown block callbacks retain original line coordinates across grouping and math', () => {
+  const element = document.createElement('div'), blocks = [];
+  context.CrucibleMath.markdown(element, '# Title\n\nA **bold** line.\nContinued.\n\n- One\n- Two\n\n\\[\nx^2\n\\]\n\n```\ncode\n```', {
+    onBlock(node, start, end, kind) { blocks.push([start,end,kind]); element.append(node); }
+  });
+  assert.deepEqual(blocks, [[1,1,'heading'],[3,4,'paragraph'],[6,7,'list'],[9,11,'math'],[13,15,'code']]);
+  assert.equal(element.querySelectorAll('strong').length,1);
+});
+
+check('note reference boundaries and rendered heading boundaries agree', () => {
+  context.TheoryStore = require('../web/notebook/store.js');
+  const fixtures = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/heading-passages.json'), 'utf8'));
+  for (const fixture of fixtures) {
+    if (fixture.invalid) continue;
+    const n = target();context.CrucibleMath.markdown(n,fixture.body);
+    const rendered = n.childNodes.filter(x => /^H[3-6]$/.test(x.tagName));
+    assert.deepEqual(rendered.map(x => Number(x.getAttribute('data-markdown-start'))), context.TheoryStore.markdownHeadings(fixture.body).map(x => x.line), fixture.name);
+  }
+});
+
 console.log(`${groups} math rendering groups passed.`);

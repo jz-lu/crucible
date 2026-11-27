@@ -1,0 +1,77 @@
+{
+  "purpose": "Synthetic local reading examples, not submitted research or scientific endorsements.",
+  "notes": [
+    {
+      "title": "Example · What one recovered secret tells us",
+      "claim": "A successful challenge is evidence about a particular recovery task, not a proof of general insecurity.",
+      "conditions": "Illustrative scope record. Passive shared-secret recovery from one honestly generated public key and encapsulation; no decapsulation oracle. A real result must pin the scheme release, parameter configuration, challenge receipt, implementation, hardware and wall-clock boundary. No claim about a deployed protocol or a general IND-CCA experiment.",
+      "body": "# Experiment record\n\nThis is a local reading example, not a completed attack.\n\nInputs: a public key pk and an encapsulation ciphertext c.\nTarget: the exact shared secret K associated with that encapsulation.\n\nEvidence required for an actual result: an accepted challenge receipt; attack source and revision; commands; machine and compute report; and a description of any reused preprocessing.\n\nInterpretation: the accepted receipt establishes the submitted instance was recovered. Success probability on fresh independent instances requires separate evidence. A security estimate is always relative to an experiment and a resource model.",
+      "sections": [
+        {
+          "id": "the-task",
+          "title": "What the challenger is trying to do",
+          "body": "A key encapsulation mechanism lets two parties arrive at the same secret. A numerical challenge gives the participant the public information and asks them to recover that secret.\n\nFinding the right secret is a concrete result. It tells us that this particular challenge was solvable with the reported method and resources. This example explains how to read such a result; it does not report a real recovery.\n\nThe participant receives the public key and ciphertext, without a decapsulation service or either party’s secret data.\n\n## What one success leaves open\n\nOne solved instance does not tell us how often the method works on fresh instances. The successful case might have an unusual property, and some of the work might have happened before the clock started.\n\nThose questions do not make the recovery worthless. They tell us what to investigate next: repeat the experiment, explain the method, and account for both preparation and online work.\n\n## A useful next experiment\n\nChoose the next test before looking at its answer. Run the same method on independently generated instances, record unsuccessful runs too, and report the total cost.\n\nThe goal is to turn an isolated success into evidence someone else can understand and reproduce.\n\nA simple [repetition bound]({{repetition.bound}}) describes the probability that all runs fail under an explicit [independence premise]({{repetition.premise}}). Those links point to the precise passages, including their qualifications."
+        }
+      ],
+      "tags": [
+        "reproducibility",
+        "ai-written"
+      ],
+      "kind": "research-note",
+      "extensions": {
+        "illustrative": true,
+        "local_reading_demo": "v3",
+        "authoring": "AI-written local example"
+      },
+      "references": [
+        {
+          "title": "When repeating a trial helps · independence premise",
+          "url": "{{repetition.premise}}",
+          "relation": "cites",
+          "scope": "Illustrates a premise needed to interpret repeated experiments; not an assertion that a real recovery method satisfies it."
+        }
+      ]
+    },
+    {
+      "title": "Example · When repeating a trial helps",
+      "claim": "Independent repetition reduces the chance that every trial fails; the independence premise is part of the claim.",
+      "conditions": "Synthetic probability example only. Failure probability is bounded by p in [0,1]; trials have mutually independent failure events. No assertion that any existing scheme, attack or sampler satisfies this premise.",
+      "body": "Suppose a recovery method sometimes fails. Running it again might help, but only if the next run has a meaningful chance to behave differently. Repeating the same unsuccessful computation does not create new evidence.\n\n## Assumption · Fresh trials\n\nEach trial fails with probability at most \\(p\\), where \\(0\\leq p\\leq 1\\), the number of trials \\(r\\) is a positive integer, and the failure events are mutually independent. This is an assumption about the experiment, not something established by pressing Run several times.\n\n### What this excludes\n\nIndependent failure events rule out a shared hidden cause that makes every run fail together. This restriction belongs to the premise, even though it has its own subheading.\n\n## Lemma · The bound after repetition\n\nUnder that assumption, the chance that all \\(r\\) trials fail is at most\n\n\\[\np^r.\n\\]\n\nTo see this, call the failure events \\(F_1,\\ldots,F_r\\). Independence lets us multiply their probabilities, and each factor is at most \\(p\\). For example, if each trial fails with probability at most one half, five independent trials all fail with probability at most \\(1/32\\).\n\n## Why the assumption matters\n\nImagine that every run uses the same hidden random choice. Each run could fail with probability one half, while either all runs fail or all succeed. Repeating it five times would then leave the all-fail probability at one half.\n\nBefore applying the lemma to a real attack, we would need to justify the independence of its failure events. Fresh random bits alone may not be enough if the runs share an underlying source of failure.\n\nThis is a local layout example, not a result about an existing cryptographic scheme.",
+      "tags": [
+        "probability",
+        "ai-written"
+      ],
+      "kind": "research-note",
+      "extensions": {
+        "illustrative": true,
+        "local_reading_demo": "v3",
+        "authoring": "AI-written local example"
+      }
+    },
+    {
+      "title": "Example · Fresh randomness can still share a failure",
+      "claim": "A common hidden cause can make all trials fail together despite fresh randomness in each run.",
+      "conditions": "Synthetic counterexample. One shared fair bit B and r independent fresh fair bits R_i; failure is defined as B=1. This does not refute the independent-repetition lemma and is not evidence of a flaw in an actual cryptographic scheme.",
+      "body": "The [repetition lemma]({{repetition.bound}}) multiplies failure probabilities because it assumes independent failure events. That is a valid argument. The question is whether an actual experiment meets its [fresh-trials premise]({{repetition.premise}}).\n\n## A shared source of failure\n\nChoose one fair bit \\(B\\) and keep it fixed across all runs. In each run, choose a fresh fair bit \\(R_i\\), but let the run fail exactly when \\(B=1\\).\n\nEvery run has failure probability one half. Yet the probability that all five runs fail is also one half, not \\(1/32\\). The fresh bits do not remove the shared cause.\n\nThis is not a counterexample to the lemma: its independence premise is false here. It is a counterexample to the inference that fresh random bits alone establish independent failures.\n\n## A check you can reproduce\n\nThis short program enumerates all 64 equally likely choices. It should print `1/2`.\n\n```python\nfrom itertools import product\nfrom fractions import Fraction\n\noutcomes = list(product((0, 1), repeat=6))\nall_fail = sum(shared == 1 for shared, *fresh in outcomes)\nprint(Fraction(all_fail, len(outcomes)))\n```\n\n## What to investigate next\n\nFor a real recovery method, ask whether retries share a key, instance, preprocessing step or other cause of failure. If they do, either justify independence for the actual experiment or prove a different bound that accounts for the dependence.\n\nThe lesson is about checking the applicability of a premise. It does not establish that any existing scheme or challenge has this failure mode.",
+      "tags": [
+        "probability",
+        "reproducibility",
+        "ai-written"
+      ],
+      "kind": "research-note",
+      "references": [
+        {
+          "title": "When repeating a trial helps · independence premise",
+          "url": "{{repetition.premise}}",
+          "relation": "responds_to",
+          "scope": "Challenges an application based only on fresh random bits, not the mathematical implication under genuine independence."
+        }
+      ],
+      "extensions": {
+        "illustrative": true,
+        "local_reading_demo": "v3",
+        "authoring": "AI-written local example"
+      }
+    }
+  ]
+}

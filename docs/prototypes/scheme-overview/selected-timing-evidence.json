@@ -1,0 +1,224 @@
+[
+  {
+    "scheme": "teaching-dh-kem",
+    "stage": 49,
+    "parameter": "2935-bit field",
+    "operations": {
+      "decapsulate": {
+        "median_us": 8114.9775,
+        "worker_medians_us": [
+          8108.539,
+          8112.8665,
+          8116.189,
+          8109.9285,
+          8120.0085
+        ]
+      },
+      "encapsulate": {
+        "median_us": 8113.8595,
+        "worker_medians_us": [
+          8114.532,
+          8107.8095,
+          8116.15,
+          8109.815,
+          8121.093
+        ]
+      },
+      "keygen": {
+        "median_us": 1191.762,
+        "worker_medians_us": [
+          1189.255,
+          1191.2265,
+          1193.4945,
+          1191.942,
+          1195.0795
+        ]
+      }
+    }
+  },
+  {
+    "scheme": "teaching-dh-kem",
+    "stage": 50,
+    "parameter": "3072-bit field",
+    "operations": {
+      "decapsulate": {
+        "median_us": 4358.714,
+        "worker_medians_us": [
+          4374.634,
+          4374.5685,
+          4334.761,
+          4333.727,
+          4366.3085
+        ]
+      },
+      "encapsulate": {
+        "median_us": 4359.1395,
+        "worker_medians_us": [
+          4361.538,
+          4375.944,
+          4366.603,
+          4338.488,
+          4375.067
+        ]
+      },
+      "keygen": {
+        "median_us": 640.3475,
+        "worker_medians_us": [
+          641.0385,
+          639.325,
+          647.2015,
+          640.0805,
+          636.28
+        ]
+      }
+    }
+  },
+  {
+    "scheme": "dhkem-x25519",
+    "stage": 24,
+    "parameter": "130-bit group order",
+    "operations": {
+      "decapsulate": {
+        "median_us": 517.8505,
+        "worker_medians_us": [
+          520.7905,
+          504.9565,
+          522.2435,
+          518.482,
+          501.014
+        ]
+      },
+      "encapsulate": {
+        "median_us": 510.2715,
+        "worker_medians_us": [
+          507.1755,
+          512.811,
+          503.779,
+          515.762,
+          513.017
+        ]
+      },
+      "keygen": {
+        "median_us": 252.846,
+        "worker_medians_us": [
+          253.182,
+          251.158,
+          254.78,
+          255.832,
+          250.903
+        ]
+      }
+    }
+  },
+  {
+    "scheme": "dhkem-x25519",
+    "stage": 25,
+    "parameter": "135-bit group order",
+    "operations": {
+      "decapsulate": {
+        "median_us": 349.8775,
+        "worker_medians_us": [
+          347.3575,
+          350.644,
+          346.1805,
+          354.6915,
+          353.8395
+        ]
+      },
+      "encapsulate": {
+        "median_us": 348.114,
+        "worker_medians_us": [
+          347.9585,
+          348.3695,
+          346.616,
+          345.7195,
+          361.724
+        ]
+      },
+      "keygen": {
+        "median_us": 175.177,
+        "worker_medians_us": [
+          174.0345,
+          174.536,
+          174.32,
+          176.1835,
+          173.9645
+        ]
+      }
+    }
+  },
+  {
+    "scheme": "classic-mceliece",
+    "stage": 1,
+    "parameter": "n = 840 \u00b7 m = 12 \u00b7 t = 64",
+    "operations": {
+      "decapsulate": {
+        "median_us": 2752.007,
+        "worker_medians_us": [
+          2756.458,
+          2749.4575,
+          2747.815,
+          2750.4995,
+          2765.512
+        ]
+      },
+      "encapsulate": {
+        "median_us": 62.4075,
+        "worker_medians_us": [
+          98.0815,
+          43.455,
+          67.2755,
+          78.572,
+          58.878
+        ]
+      },
+      "keygen": {
+        "median_us": 46029.117,
+        "worker_medians_us": [
+          56212.85,
+          56402.6225,
+          46155.6505,
+          36626.403,
+          37123.1935
+        ]
+      }
+    }
+  },
+  {
+    "scheme": "classic-mceliece",
+    "stage": 50,
+    "parameter": "n = 3488 \u00b7 m = 12 \u00b7 t = 64",
+    "operations": {
+      "decapsulate": {
+        "median_us": 10395.534,
+        "worker_medians_us": [
+          10308.379,
+          10107.9,
+          10398.7835,
+          10430.1305,
+          10512.498
+        ]
+      },
+      "encapsulate": {
+        "median_us": 36.4445,
+        "worker_medians_us": [
+          31.492,
+          37.0905,
+          33.25,
+          33.735,
+          39.9795
+        ]
+      },
+      "keygen": {
+        "median_us": 97939.74,
+        "worker_medians_us": [
+          98053.8255,
+          72936.991,
+          114989.992,
+          100038.1675,
+          72369.605
+        ]
+      }
+    }
+  }
+]

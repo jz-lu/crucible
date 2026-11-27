@@ -58,7 +58,7 @@ def test_six_or_fifty_configurations_offer_the_same_single_flat_award(ledger,sch
     assert families[('alice',scheme)].progress == families[('bob',scheme)].progress == 0
 
 
-def test_steps_repeats_and_inherited_lower_records_never_stack(ledger):
+def test_each_frontier_advance_earns_points_but_repeats_and_inherited_records_do_not(ledger):
     first=add(ledger,'alice','teaching-dh-kem',1,0)
     highest=None
     for ordinal in range(2,21):
@@ -67,7 +67,7 @@ def test_steps_repeats_and_inherited_lower_records_never_stack(ledger):
         add(ledger,'alice','teaching-dh-kem',20,tick)
     add(ledger,'bob','rsa-kem',20,0)  # A direct leap in a separate family earns the same100.
     points,families=scores(ledger)
-    assert points == {'alice':100,'bob':100,'carol':0}
+    assert points == {'alice':2000,'bob':100,'carol':0}
     family=families[('alice','teaching-dh-kem')]
     assert family.early_recovery_submission_id == first
     assert family.early_recovery_tier == 1
@@ -84,7 +84,7 @@ def test_copied_frontier_and_lower_holes_get_zero_but_another_person_advancing_g
     add(ledger,'alice','rsa-kem',13,5)
     add(ledger,'bob','ml-kem',1,6)
     points,families=scores(ledger)
-    assert points == {'alice':100,'bob':200,'carol':0}
+    assert points == {'alice':200,'bob':300,'carol':0}
     assert families[('bob','rsa-kem')].early_recovery_submission_id == first
     assert families[('bob','rsa-kem')].highest_frontier_submission_id == high
 
@@ -121,8 +121,8 @@ def test_scoring_reads_preserve_every_receipt_and_ignore_registry_navigation(led
         assert [dict(row) for row in session.execute(select(Submission.__table__)).mappings()] == before
 
 
-def test_v11_sql_has_one_prior_frontier_window_without_threshold_expansion():
-    assert scoring.POLICY_ID == 'crucible-points-v11'
+def test_v12_sql_has_one_prior_frontier_window_without_threshold_expansion():
+    assert scoring.POLICY_ID == 'crucible-points-v12'
     participants,_ = scoring.score_relations('postgresql',as_of=4000000)
     sql=str(select(participants).compile(dialect=postgresql.dialect(),compile_kwargs={'literal_binds':True}))
     assert 'ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING' in sql

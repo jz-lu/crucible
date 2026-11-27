@@ -21,17 +21,44 @@ def sessions_cover_age_changes(system):
 def test_support_can_lift_older_notes_but_fresh_work_can_overtake_them(system, curated):
     _, owner, reviewer, reader, now = system
     old = publish(owner, reviewer, create(owner, content(title='Useful older work')))
-    assert vote(agent(reader), old, 2).status_code == 200
+    assert vote(agent(reader), old, 1).status_code == 200
+    assert vote(agent(reviewer), old, 1).status_code == 200
     now[0] += 86400
     new = publish(owner, reviewer, create(owner, content(title='New unrated work')))
-    assert [note['id'] for note in page(reader)['notes']] == [old['id'], new['id']]
+    assert [note['id'] for note in page(reader, order='hot')['notes']] == [old['id'], new['id']]
     assert page(reader, order='recent')['notes'][0]['id'] == new['id']
     now[0] += 2 * 86400
     fresh = publish(owner, reviewer, create(owner, content(title='Fresh research')))
-    ranked = page(reader)['notes']
+    ranked = page(reader, order='hot')['notes']
     assert [note['id'] for note in ranked] == [fresh['id'], old['id'], new['id']]
-    assert ranked[1]['rating'] == {'score': 2, 'raters': 1, 'upvotes': 0, 'double_upvotes': 1}
+    assert ranked[1]['rating'] == {'score': 2, 'raters': 2, 'upvotes': 2, 'double_upvotes': 0}
     assert 'your_rating' not in json.dumps(ranked)
+
+
+def test_default_prioritizes_own_pending_then_publication_age_and_matches_paged_index(system, curated):
+    _, owner, reviewer, reader, now = system
+    oldest = publish(owner, reviewer, create(owner, content(title='Old supported note')))
+    vote(agent(reader), oldest)
+    now[0] += 100
+    pending = create(owner, content(title='My pending note')); request_publication(owner, pending)
+    now[0] += 100
+    newer = publish(reader, reviewer, create(reader, content(title='New public note')))
+    now[0] += 100
+    draft = create(owner, content(title='New private note'))
+    expected = [pending['id'], draft['id'], newer['id'], oldest['id']]
+    assert [n['id'] for n in page(owner)['notes']] == expected
+    assert [n['id'] for n in page(reader)['notes']] == [newer['id'], oldest['id']]
+    index = page(owner, projection='index',include_curated=True)
+    paged, _ = browse(owner, include_curated=True, limit=1)
+    assert [n['id'] for n in index['notes']] == [n['id'] for n in paged]
+    assert [n['id'] for n in paged[:4]] == expected
+    now[0] += 100
+    approve(reviewer, pending)
+    assert [n['id'] for n in page(owner)['notes']] == [pending['id'],draft['id'],newer['id'],oldest['id']]
+    # Editing an old shared note does not promote it above newly published work.
+    now[0] += 100
+    revise(owner, oldest)
+    assert page(owner)['notes'][-1]['id'] == oldest['id']
 
 
 def test_publication_time_is_real_approval_time_and_does_not_reset_on_revision(system):
@@ -78,7 +105,7 @@ def test_pages_freeze_age_and_merge_curated_support_before_pagination(system, cu
     paged, _ = browse(reader, include_curated=True, limit=2)
     assert [note['id'] for note in index['notes']] == [note['id'] for note in paged]
     metadata = reader.client.get('/api/notebook/curated-note-numbers').json()['metadata'][bundled['id']]
-    assert metadata['rating']['score'] == 2 and metadata['published_at'] == 1
+    assert metadata['rating']['score'] == 1 and metadata['published_at'] == 1
     assert reader.client.get('/api/notebook/notes', params={'order': 'recent', 'after':
         page(reader, limit=1)['next_after']}).status_code == 422
 

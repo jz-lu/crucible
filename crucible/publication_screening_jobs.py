@@ -242,6 +242,7 @@ def _recover_expired(session, control, now):
 
 def claim(db, *, policy, enabled, monthly_budget_micro_usd, now, lease_seconds=120, clock=None):
     """Reserve budget and one global lease; returns only identifiers, never content."""
+    from .notebook_visibility import hidden_ids
     _time(now)
     _integer(monthly_budget_micro_usd)
     _integer(lease_seconds, 10, 600)
@@ -264,6 +265,7 @@ def claim(db, *, policy, enabled, monthly_budget_micro_usd, now, lease_seconds=1
         last_turn = select(func.max(history.last_started_at)).where(
             history.author_id == ScreeningJob.author_id).correlate(ScreeningJob).scalar_subquery()
         job = session.scalar(select(ScreeningJob).where(ScreeningJob.status == 'queued',
+            ScreeningJob.revision_id.not_in(hidden_ids()),
             ScreeningJob.policy_id == policy.id, ScreeningJob.available_at <= now)
             .order_by(func.coalesce(last_turn, -1), ScreeningJob.created_at, ScreeningJob.id)
             .limit(1).with_for_update())

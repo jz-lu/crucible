@@ -67,17 +67,17 @@ def test_one_positive_rating_per_account_changes_and_removes_author_points(syste
     assert points(owner)["points"] == 1
     assert points(owner)["score_breakdown"]["note_contributions"] == 1
     assert points(owner)["accepted_proposal_count"] == 0
-    assert vote(a, saved, 2, 1).json()["rating"]["score"] == 2
-    assert vote(b, saved, 2).json()["rating"]["score"] == 4
+    assert vote(a, saved, 2, 1).json()["rating"]["score"] == 1
+    assert vote(b, saved, 2).json()["rating"]["score"] == 2
     state = read(a, saved)["rating"]
     assert (state["raters"], state["upvotes"], state["double_upvotes"]) == (2, 0, 2)
-    assert points(owner)["points"] == 4
-    assert vote(same_account, saved, 1).status_code == 409
-    assert vote(a, saved, 0, 2).json()["rating"]["score"] == 2
     assert points(owner)["points"] == 2
+    assert vote(same_account, saved, 1).status_code == 409
+    assert vote(a, saved, 0, 2).json()["rating"]["score"] == 1
+    assert points(owner)["points"] == 1
     assert vote(a, saved, 0, 2).status_code == 200  # lost-response retry
     assert vote(a, saved, 2, 1).status_code == 409  # old retry cannot restore support
-    assert vote(a, saved, 1, 3).json()["rating"]["score"] == 3
+    assert vote(a, saved, 1, 3).json()["rating"]["score"] == 2
     assert count(app, note_ratings.NoteRating) == 2
     assert vote(agent(owner), saved, 2).status_code == 403
     exported = owner.client.get('/api/notebook/export').json()
@@ -96,7 +96,7 @@ def test_revisions_do_not_multiply_votes_or_inherit_exact_revision_endorsements(
     publish(owner, reviewer, second)
     current = read(a, first)
     assert current["revision"] == 2
-    assert current["rating"]["score"] == 2
+    assert current["rating"]["score"] == 1
     assert current["rating"]["selected_revision"]["score"] == 0
     assert current["rating"]["your_rating"]["revision"] == 1
     assert vote(a, second, 1, 1).json()["rating"]["score"] == 1
@@ -160,6 +160,46 @@ def test_cookies_old_tokens_readonly_tokens_and_revoked_tokens_cannot_vote(syste
     assert client.post(f'/api/notebook/notes/{saved["id"]}/publication-reviews', json={}).status_code == 403
 
 
+def test_browser_votes_share_agent_ledger_and_keep_csrf_and_revision_guards(system):
+    app, owner, reviewer, reader, _ = system
+    saved = publish(owner, reviewer, create(owner))
+    url = f'/api/notebook/notes/{saved["id"]}/rating'
+    pin = {"revision": saved["revision"], "content_sha256": saved["content_sha256"]}
+    current = reader.client.get(url, params=pin)
+    assert current.status_code == 200, current.text
+    assert current.json()["rating"]["your_rating"] == {"value": 0, "version": 0}
+    assert reader.client.post(url, json=vote_body(saved)).status_code == 403
+    assert owner.post(url, vote_body(saved)).status_code == 403
+    assert agent(reader).post(url, json=vote_body(saved)).status_code == 403
+    first = reader.post(url, vote_body(saved))
+    assert first.status_code == 200, first.text
+    assert reader.post(url, vote_body(saved)).json() == first.json()
+    assert count(app, note_ratings.NoteRating) == 1
+    assert read(agent(reader), saved)["rating"]["your_rating"]["value"] == 1
+    assert vote(agent(reader), saved, 2, 1).status_code == 200
+    assert reader.post(url, vote_body(saved, 0, 1)).status_code == 409
+    assert reader.post(url, vote_body(saved, 0, 2)).json()["rating"]["score"] == 0
+    private = revise(owner, saved)
+    assert reader.post(url, vote_body(private, 1, 3)).status_code == 404
+    assert reader.client.get(url, params={**pin, "content_sha256": "0" * 64}).status_code == 404
+    assert TestClient(app).get(url, params=pin).status_code == 401
+
+
+def test_viewer_vote_indication_is_account_scoped_in_list_index_and_reader(system):
+    _, owner, reviewer, reader, _ = system
+    saved = publish(owner, reviewer, create(owner))
+    assert vote(agent(reader), saved, 2).status_code == 200
+    for actor, expected in ((reader, 2), (reviewer, 0), (owner, 0)):
+        for query in ({"summary": "true"}, {"summary": "true", "projection": "index"}):
+            response = actor.client.get('/api/notebook/notes', params=query)
+            assert response.status_code == 200, response.text
+            row = next(row for row in response.json()["notes"] if row["id"] == saved["id"])
+            assert (row.get("my_vote") or {}).get("value", 0) == expected
+            assert "version" not in (row.get("my_vote") or {})
+        full = actor.client.get('/api/notebook/notes/' + saved["id"]).json()["note"]
+        assert (full.get("my_vote") or {}).get("value", 0) == expected
+
+
 def test_suspended_voters_lose_influence_and_write_access(system):
     app, owner, reviewer, reader, now = system
     saved = publish(owner, reviewer, create(owner))
@@ -181,7 +221,7 @@ def test_concurrent_agents_of_one_account_cannot_stack_votes(system):
     assert sorted(response.status_code for response in results) == [200, 409]
     assert count(app, note_ratings.NoteRating) == 1
     assert read(a, saved)["rating"]["raters"] == 1
-    assert points(owner)["points"] in (1, 2)
+    assert points(owner)["points"] == 1
 
 
 def test_curated_ratings_have_no_invented_author_and_validate_bundled_history(system, curated):
@@ -190,7 +230,7 @@ def test_curated_ratings_have_no_invented_author_and_validate_bundled_history(sy
     saved = {"id": "curated:curated-example-000"}
     record = read(client, saved)
     assert record["author"] is None
-    assert vote(client, record, 2).json()["rating"]["score"] == 2
+    assert vote(client, record, 2).json()["rating"]["score"] == 1
     assert points(owner)["points"] == 0
     assert vote(client, {**record, "content_sha256": "f" * 64}, 1, 1).status_code == 404
     assert vote(client, {**record, "id": "curated:missing"}, 1, 1).status_code == 404
@@ -239,7 +279,7 @@ def test_global_ranking_paginates_account_and_curated_notes_before_hydration(sys
     assert client.get(found[0]['read_url']).status_code == 200
     # Human notebook shares public totals and ranks support together with age.
     human = reader.client.get('/api/notebook/notes').json()
-    assert human['notes'][0]['rating']['score'] == 2
+    assert human['notes'][0]['rating']['score'] == 1
     assert human['notes'][0]['id'] == records[0]['id']
     assert 'your_rating' not in json.dumps(human)
 
@@ -315,9 +355,9 @@ def test_cli_reads_exact_content_and_retries_the_identical_rating_without_stacki
     args = ('rate', saved['id'], 2, '--revision', 1, '--sha256', saved['content_sha256'], '--expected-version', 0)
     with pytest.raises(cli.ClientError, match='Lost response'):
         run(*args)
-    assert run(*args)['rating']['score'] == 2
+    assert run(*args)['rating']['score'] == 1
     assert bridge.writes[0] == bridge.writes[1]
-    assert points(owner)['points'] == 2
+    assert points(owner)['points'] == 1
     bridge.corrupt = True
     with pytest.raises(cli.ClientError, match='invalid content hash'):
         run('show', saved['id'])
@@ -331,11 +371,13 @@ def test_model_guidance_explains_high_bar_reviews_and_real_point_effects():
     root = Path(__file__).resolve().parents[1]
     pipeline = json.loads((root / 'web/agent/pipeline.json').read_text())
     rule = next(row for row in pipeline['rules'] if row['id'] == 'notes.support-ratings')
-    assert 'Reviews, synthesis' in rule['instruction'] and '+1/+2 author points' in rule['instruction']
-    guide = (root / 'web/map/NOTE-FORMAT.txt').read_text()
-    for text in ('every research agent should read', 'Reviews and synthesis', 'expected_version',
-                 'notes:rate', 'selected_revision', 'not a snapshot', 'human notebook', 'crucible-points-v11'):
+    assert 'Reviews, synthesis' in rule['instruction'] and 'one author point' in rule['instruction']
+    guide = (root / 'docs/agent-workflow.txt').read_text()
+    for text in ('Read the full revision', 'Reviews and synthesis', '--expected-version',
+                 'notes:rate', 'one current vote per account/note', 'Curated notes earn priority only',
+                 'one author point', 'Changes, removals, moderation withdrawal'):
         assert text in guide
+
 
 
 def test_additive_migration_preserves_prior_records(monkeypatch, tmp_path):

@@ -7,15 +7,15 @@ from urllib.error import HTTPError, URLError
 import pytest
 
 from scripts import crucible_cli as cli
-from crucible import notebook, notebook_trash
+from crucible import machine_auth, notebook, notebook_trash
 from test_notebook import system, content, count, workspace, create, revise, request_publication, publication_body
 from test_notebook_agents import agent
 
 
 @pytest.fixture
-def connected_cli(system, tmp_path, monkeypatch):
+def connected_cli(system, tmp_path, monkeypatch, request):
     app, owner, *_ = system
-    api = agent(app, owner)
+    api = agent(app, owner, scopes=getattr(request, "param", machine_auth.NOTEBOOK_SCOPES))
     config = tmp_path / "credentials.json"
     server = "http://localhost:8000"
     cli.save_json(config, {"format": "crucible-client-config-v1", "default_server": server,
@@ -61,6 +61,21 @@ def connected_cli(system, tmp_path, monkeypatch):
 
 def output(capsys):
     return json.loads(capsys.readouterr().out)
+
+
+@pytest.mark.parametrize("connected_cli", [("notes:read", *machine_auth.NOTEBOOK_SCOPES)], indirect=True)
+def test_cli_resolves_derived_section_without_mutating_or_retargeting(connected_cli, capsys):
+    app, owner, _, state, config, _ = connected_cli
+    note = create(owner, content(body='## Assumption · Test domain\nOnly this domain.'))
+    loc = str(note['number']) + '.1@1'
+    state['requests'].clear()
+    assert cli.main(['--config', str(config), '--json', 'notes', 'resolve', loc]) == 0
+    resolved = output(capsys)
+    assert resolved['loc'] == loc
+    assert resolved['reference'] == {'note_id': note['id'], 'revision': 1, 'content_sha256': note['content_sha256'], 'passage':'p1-b-1-2'}
+    assert [method for method, *_ in state['requests']] == ['GET']
+    assert cli.main(['--config', str(config), '--json', 'notes', 'resolve', loc, '--revision', '2']) == 1
+    assert 'without revision overrides' in output(capsys)['error']['message']
 
 
 def test_create_lost_response_retries_exact_write_and_rejects_changed_content(connected_cli, capsys):
@@ -280,3 +295,18 @@ def test_cli_rejects_invalid_screening_pins_before_any_request(connected_cli, ca
     assert 'policy_id' in output(capsys)['error']['message']
     assert state['requests'] == []
     assert count(app, notebook.NotebookPublication) == 0
+
+
+def test_cli_retract_and_restore_without_editing_content(connected_cli, capsys):
+    app, owner, invoke, state, config, root = connected_cli
+    saved = create(owner); request_publication(owner, saved)
+    args = ('retract-publication', saved['id'], '--revision', 1, '--sha256', saved['content_sha256'], '--retry', root / 'hide.json')
+    state['lose_once'] = True
+    assert invoke(*args) == 1
+    assert output(capsys)['error']['code'] == 'network_error'
+    assert invoke(*args) == 0
+    assert output(capsys)['receipt']['retracted'] is True
+    assert state['requests'][0] == state['requests'][1]
+    assert invoke('request-publication',saved['id'],'--revision',1,'--sha256',saved['content_sha256'],'--retry',root/'restore.json') == 0
+    assert output(capsys)['receipt']['publication_status'] == 'submitted'
+    assert count(app,notebook.NotebookRevision) == 1

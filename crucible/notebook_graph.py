@@ -21,19 +21,19 @@ class NotebookReference(Base):
     target_note_id: Mapped[str] = mapped_column(String(100))
     target_revision: Mapped[int] = mapped_column(Integer)
     target_sha256: Mapped[str] = mapped_column(String(64))
+    target_anchor: Mapped[str | None] = mapped_column(String(100), nullable=True)
     relation: Mapped[str] = mapped_column(String(32))
     scope: Mapped[str] = mapped_column(Text)
 
 
-def references(content):
+def references(content, connection=None, *, base=None):
     """Legacy/external citations stay intact; only unambiguous local pins are edges.
 
     Absolute URLs are intentionally not inferred to belong to this installation.
     The editor canonicalizes same-origin links to /#notebook?... before saving.
     """
-    values = content.get("references")
-    if not isinstance(values, list):
-        values = [] if values is None else [values]
+    from .notebook_section_refs import source_references
+    values = source_references(content, base)
     for position, value in enumerate(values):
         if not isinstance(value, dict) or not isinstance(value.get("url"), str):
             continue
@@ -41,10 +41,16 @@ def references(content):
             url = urlsplit(value["url"])
             if url.scheme or url.netloc or url.path not in ("", "/") or url.query or not url.fragment.startswith("notebook?"):
                 continue
-            fields = parse_qs(url.fragment[len("notebook?"):], strict_parsing=True, keep_blank_values=True, max_num_fields=4)
+            fields = parse_qs(url.fragment[len("notebook?"):], strict_parsing=True, keep_blank_values=True, max_num_fields=5)
+            if "loc" in fields:
+                from .notebook_locs import checked_link
+                fields = checked_link(fields, connection) if connection is not None else None
+                if fields is None:
+                    continue
             if (set(fields) not in ({"note", "revision", "sha256"}, {"note", "revision", "sha256", "location"},
                                     {"note", "revision", "sha256", "note_section"},
                                     {"note", "revision", "sha256", "statement"},
+                                    {"note", "revision", "sha256", "passage"},
                                     {"note", "revision", "sha256", "argument"})
                     or any(len(items) != 1 for items in fields.values())):
                 continue
@@ -52,6 +58,11 @@ def references(content):
             if location is not None and (not re.fullmatch(r"L[1-9][0-9]{0,6}", location) or int(location[1:]) > 1_000_000):
                 continue
             section = fields.get("note_section", [None])[0]
+            passage = fields.get("passage", [None])[0]
+            if passage is not None:
+                from .note_sections import PASSAGE_PATTERN
+                if not re.fullmatch(PASSAGE_PATTERN, passage):
+                    continue
             if section is not None and not re.fullmatch(r"[a-z][a-z0-9-]{0,63}", section):
                 continue
             block = fields.get("statement", fields.get("argument", [None]))[0]
@@ -70,8 +81,10 @@ def references(content):
         # The existing graph stays at note-revision granularity; the original
         # URL is retained in source content. Neither grants target access nor
         # establishes that the passage exists or supports the claimed relation.
+        anchor = next((key + ':' + fields[key][0] for key in ('passage', 'statement', 'note_section', 'argument') if key in fields), None)
         yield {"position": position, "target_note_id": identifier, "target_revision": int(number),
                "target_sha256": digest, "relation": relation if isinstance(relation, str) and relation in RELATIONS else "cites",
+               **({'target_anchor': anchor} if anchor else {}),
                "scope": value.get("scope", "")[:10000] if isinstance(value.get("scope", ""), str) else ""}
 
 
@@ -79,7 +92,8 @@ def index_revision(connection, revision):
     """Called on every ORM insertion, including proposal-created revisions."""
     from .notebook import NotebookNote
 
-    rows = [{"source_revision_id": revision.id, **item} for item in references(revision.content)]
+    base = {'note_id': revision.note_id, 'revision': revision.revision, 'content_sha256': revision.content_sha256}
+    rows = [{"source_revision_id": revision.id, 'target_anchor': None, **item} for item in references(revision.content, connection, base=base)]
     if rows:
         author = select(NotebookNote.author_id).where(NotebookNote.id == revision.note_id).scalar_subquery()
         mapping = dict(connection.execute(select(NotebookNote.source_id, NotebookNote.id).where(
@@ -111,7 +125,7 @@ def _read_cursor(value):
     try:
         key = json.loads(base64.b64decode(value + "=" * (-len(value) % 4), altchars=b"-_", validate=True))
         if (not isinstance(key, list) or len(key) != 3 or not isinstance(key[0], str) or not 1 <= len(key[0]) <= 100
-                or type(key[1]) is not int or not 1 <= key[1] <= 100 or type(key[2]) is not int or not 0 <= key[2] < 1000):
+                or type(key[1]) is not int or not 1 <= key[1] <= 100 or type(key[2]) is not int or not 0 <= key[2] <= 2_147_483_647):
             raise ValueError
         return tuple(key)
     except (ValueError, TypeError, UnicodeError):
@@ -166,7 +180,7 @@ def register_routes(app, db, settings, account, visible):
                     candidates.append(((identifier, number, position),
                         {"source": node(identifier, number, digest, title), "target": root, "relation": relation, "scope": scope}))
                 for source_pin, source in bundled.items():
-                    for item in references(source["content"]):
+                    for item in references(source["content"], session):
                         key = (source_pin[0], source_pin[1], item["position"])
                         if (item["target_note_id"], item["target_revision"], item["target_sha256"]) == pin and (cursor is None or key > cursor):
                             candidates.append((key, {"source": node(*source_pin, source["content"]["title"]),
@@ -174,7 +188,7 @@ def register_routes(app, db, settings, account, visible):
             else:
                 # Outgoing pins are bounded by the authored references limit.
                 # Resolve targets in one query, never one query per citation.
-                items = list(references(bundled[pin]["content"])) if root_revision is None else [
+                items = list(references(bundled[pin]["content"], session)) if root_revision is None else [
                     {key: getattr(row, key) for key in ("position", "target_note_id", "target_revision", "target_sha256", "relation", "scope")}
                     for row in session.scalars(select(link).where(link.source_revision_id == root_revision.id)
                         .order_by(link.position))]

@@ -3,12 +3,12 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import Float, ForeignKey, String, UniqueConstraint, select, tuple_
+from sqlalchemy import Float, ForeignKey, String, UniqueConstraint, select, tuple_, or_
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base
 
-NOTICE = "This revision was withdrawn from community visibility by a moderator. Its audit record is retained privately."
+NOTICE = "This revision was withdrawn from community visibility. Its audit record is retained privately."
 
 
 class PublicationWithdrawal(Base):
@@ -58,7 +58,7 @@ def audit_data(record):
 
 def packet_is_withheld(session, record, user, settings):
     """Frozen copies retain their hashes but cannot bypass a source withdrawal."""
-    from . import notebook, protocol_proposals
+    from . import notebook, protocol_proposals, notebook_visibility
     if protocol_proposals.is_reviewer(settings, user):
         return False
     refs = [(source["note_id"], source["revision"], source["content_sha256"])
@@ -67,9 +67,9 @@ def packet_is_withheld(session, record, user, settings):
     if not refs:
         return False
     revision = notebook.NotebookRevision
-    return session.scalar(select(PublicationWithdrawal.revision_id)
-        .join(revision, revision.id == PublicationWithdrawal.revision_id)
-        .where(tuple_(revision.note_id, revision.revision, revision.content_sha256).in_(refs)).limit(1)) is not None
+    return session.scalar(select(revision.id).where(
+        tuple_(revision.note_id, revision.revision, revision.content_sha256).in_(refs),
+        or_(revision.id.in_(withdrawn_ids()), revision.id.in_(notebook_visibility.hidden_ids()))).limit(1)) is not None
 
 
 def register_routes(app, db, settings, clock, account, throttle):

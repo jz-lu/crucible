@@ -109,6 +109,8 @@ def required_scope(method, path):
             return "notebook:read"
         if path in {"/api/bounties", "/api/me/bounty-allowance"} or re.fullmatch(rf"/api/bounties/{_UUID}", path):
             return "bounties:read"
+        if re.fullmatch(r"/api/notebook/locs/(?:P\.[1-9][0-9]{0,9}|[1-9][0-9]{0,9}(?:\.[1-9][0-9]{0,4}){1,8}@(?:[1-9][0-9]?|100))", path):
+            return "notes:read"
         if path in {"/api/notebook/notes", "/api/notebook/export", "/api/notebook/publication-policy", "/api/notebook/publication-status"} or re.fullmatch(
                 rf"/api/notebook/(?:notes|imports)/{_UUID}", path):
             return "notebook:read"
@@ -135,10 +137,10 @@ def required_scope(method, path):
             return "bounties:spend"
         if path == "/api/bounties" or re.fullmatch(rf"/api/bounties/{_UUID}/(?:revisions|withdrawals|submissions|cancellations)", path):
             return "bounties:write"
-        if path in {"/api/notebook/notes", "/api/notebook/import"} or re.fullmatch(
+        if path in {"/api/notebook/notes", "/api/notebook/import", "/api/notebook/locs"} or re.fullmatch(
                 rf"/api/notebook/notes/{_UUID}/(?:revisions|delete|restore)", path):
             return "notebook:write"
-        if re.fullmatch(rf"/api/notebook/notes/{_UUID}/publication-(?:requests|cancellations)", path):
+        if re.fullmatch(rf"/api/notebook/notes/{_UUID}/publication-(?:requests|cancellations|retractions)", path):
             return "notebook:publish"
         if re.fullmatch(r"/api/agent/notes/[^/]{1,108}/rating", path):
             return "notes:rate"

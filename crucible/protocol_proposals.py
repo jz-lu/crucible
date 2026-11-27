@@ -169,13 +169,16 @@ def _validation():
 
 
 def _proposal_data(record, session=None, user=None):
+    from . import proposal_implementation
     withdrawal = proposal_retractions.get(session, proposal_retractions.SCHEME, record.id) if session is not None else None
     state = proposal_retractions.detail(session, withdrawal, user) if user is not None else {
         "retracted": withdrawal is not None, "retraction": {"created_at": withdrawal.created_at} if withdrawal else None}
+    implementation = proposal_implementation.compact(session, "scheme", record) if session is not None and record.status == "approved" and withdrawal is None else None
     return {"id": record.id, "status": record.status, "created_at": record.created_at,
             "revision": record.revision,
             "content_sha256": record.content_sha256, "specification": record.specification,
             **state, "can_retract": bool(user and user.id == record.author_id and withdrawal is None),
+            **({"implementation": implementation} if implementation is not None else {}),
             "source_note": proposal_notes.source_record(session, record.id, record.revision) if session is not None else None}
 
 
@@ -221,12 +224,18 @@ def _history(session, record, before_revision=None, limit=20):
 
 
 def _historical_proposal(session, record, revision, user=None):
+    from . import proposal_implementation
     if revision.revision == record.revision:
         return _proposal_data(record, session, user)
     review = session.scalar(select(ProtocolProposalReview).where(
         ProtocolProposalReview.proposal_id == record.id, ProtocolProposalReview.revision == revision.revision))
-    return {**_proposal_data(record, session, user), **_revision_data(revision, session),
-            "created_at": record.created_at, "status": review.decision if review else "submitted"}
+    result = {**_proposal_data(record, session, user), **_revision_data(revision, session),
+              "created_at": record.created_at, "status": review.decision if review else "submitted"}
+    result.pop("implementation", None)
+    implementation = proposal_implementation.compact(session, "scheme", record, revision=revision.revision)
+    if implementation is not None:
+        result["implementation"] = implementation
+    return result
 
 
 def register_routes(app, db, settings, clock, user_for, throttle):
@@ -485,8 +494,13 @@ def register_routes(app, db, settings, clock, user_for, throttle):
 
     @app.get("/api/protocol/proposals/{proposal_id}")
     def proposal_detail(proposal_id: str, request: Request):
+        from . import proposal_implementation
         with db.transaction() as session:
             record, user = accessible(session, request, proposal_id)
             author = session.get(User, record.author_id)
-            return {"proposal": _proposal_data(record, session, user), "author": {"id": author.id, "handle": author.handle},
+            data = _proposal_data(record, session, user)
+            if data.get("implementation") is not None:
+                data["implementation"] = proposal_implementation.for_record(session, "scheme", record, user, settings)
+            return {"proposal": data,
+                    "author": {"id": author.id, "handle": author.handle},
                     **_history(session, record)}

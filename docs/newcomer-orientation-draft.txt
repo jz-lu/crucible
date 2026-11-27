@@ -1,0 +1,134 @@
+CRUCIBLE: OPTIONAL ORIENTATION FOR CRYPTOGRAPHY RESEARCHERS
+23 November 2026. Local candidate and follow-up ideas; not deployed.
+
+Audience and scope
+------------------
+The audience knows cryptography but is new to Crucible's organization. Explain
+local actions and consequences, not elementary cryptography. Keep the landing
+page intact. Improve continuity inside the application and offer a short tour
+of its real sections; neither a new landing pitch nor more explanatory cards
+is needed. Keep the text short and specific to the screen being shown.
+
+Structure and orientation should work together
+---------------------------------------------
+Visible next actions, precise links and stable context must make the product
+usable without a tour. The optional tour introduces those actual affordances.
+The local entry is Quick tour on Schemes. There is no new Help navigation.
+No forced first-login flow. Existing deep links keep their destination unless
+the participant explicitly starts the tour or follows another navigation action.
+Inspect -> investigate -> record -> request a change is a useful journey
+hypothesis, not a mandatory funnel or a measured description of 80% of users.
+Researchers may arrive with a question, a finished note, an exact citation or an
+agent already working. Choosing to contribute must not require a numerical
+challenge, bounty, scheme selection or tour completion.
+
+LOCAL CANDIDATE: short tour of four real sections
+-----------------------------------------------
+Exact copy is configured at the bottom of web/app.js; web/orientation.js owns
+the controller. It uses existing routes and caches. There is no intent selector,
+branch machinery, selected-object manipulation or agent-connection walkthrough.
+
+1. Schemes: #challenge; highlight the catalogue heading.
+Title: Find a starting point
+Copy: 'Open a scheme to inspect its costs, assumptions and open questions—or
+try a numerical challenge.'
+
+2. Notes: #notebook; highlight the notebook heading.
+Title: Read, then build on an idea
+Copy: 'Find research by title, tag or note number. Open a note to inspect its
+evidence and continue the work. Your own idea can start here too.'
+
+3. Bounties: #bounties; highlight the bounty heading.
+Title: Find a focused task
+Copy: 'Bounties pair a research question with completion criteria and a review
+plan. Choose one when you want a defined problem to work on.'
+This stop is omitted when the bounty feature is unavailable, giving three stops.
+
+4. My activity, Notes: #activity?kind=notes; highlight the activity tabs.
+Title: Follow your contributions
+Copy: 'Return to My activity for your notes, challenge attempts and bounty work.
+Notes begin privately; request publication when you are ready to share.'
+
+Back/Next navigate the real sections. Finish, Close tour, Escape or a backdrop
+click exits; the current section remains available. Reopen from Quick tour on
+Schemes. The tour does not create drafts, request instances, submit, publish,
+allocate allowance or approve connections. It does not remember completion.
+It refuses to start over an open dialog and closes on account/context change
+or navigation away from its expected route. A missing highlight target does not
+prevent the participant from continuing or closing the tour.
+
+Tradeoff and possible follow-up
+------------------------------
+Section orientation is brief and has a small, predictable read-only surface.
+It helps someone locate existing tools without depending on a particular note,
+scheme or task being available. Its limitation is that seeing where sections
+are may not connect the participant's intent to a first useful contribution.
+The order is a tour itinerary, not a required research pipeline. In particular,
+visiting Schemes first must not imply that contributing requires an attack.
+
+A richer task-led tour is a FUTURE IDEA, not built or agreed for rollout:
+choose Explore research / Bring a contribution / Try a challenge / Browse
+bounties, then orient within the corresponding object and show its next action.
+An arriving note or question could retain its context; an agent user could go
+directly to the relevant existing handoff. Add this only if newcomer observation
+shows a real gap. Do not add a branching wizard merely to cover every possibility.
+Use minimal copy such as 'Write a related note or propose a change' where useful.
+Definitions and consequences belong beside actual controls, not in a longer tour.
+
+Definitions only where they matter
+----------------------------------
+At the stage selector: 'Stage selects parameters within this scheme.'
+At challenge request: 'Your instance closes at the shared hourly deadline.'
+At an exact citation: show revision and hash through the existing citation UI.
+At Publish: distinguish sharing from scientific approval without a general
+warning banner. At Boost: distinguish monthly allowance from earned points.
+Do not frontload architecture, scoring rules or a glossary.
+
+Capability boundary
+-------------------
+EXISTING BASELINE: Notes and exact citations, schemes/challenges, bounty board,
+publication/proposal requests, and task-specific browser/agent workflows exist.
+The initial audit used source 09958b2; a source audit is not a live-feature check.
+LOCAL CHANGES IN THIS CHECKOUT: default note readers now focus on reading and
+ownership actions. The Continue this research strip, Proposals & reviews, Related
+notes, Record details and separate citation button were removed after user
+review on 26 November. Exact citations remain on the note number. Supporting
+workflows remain available to the agent interface and relevant reviewer views.
+An older exact note can link to a newer published revision without silently
+replacing the requested historical revision. These are continuity improvements,
+not proof that contributors understand the overall workflow or that they are live.
+The local Notes redesign now uses direct title-to-reader navigation, Readable /
+Full text views and one optional exact-link outline. See notes-reading-design.txt.
+LOCAL CANDIDATE: the section tour described above is implemented in this checkout.
+FUTURE IDEA: task-led branching, selected-object orientation and a fuller agent
+walkthrough. None is implemented by this draft. No extra Help menu is prescribed.
+
+Exit, safety and accessibility criteria
+--------------------------------------
+- Close tour is available throughout; Back is disabled only at the first stop.
+- Explicit Next may navigate to the top of a section; initial visits are untouched.
+- Preserve meaningful keyboard focus and never discard a real work draft.
+- Keep the highlight read-only; controls beneath it must not be auto-activated.
+- Preserve usable geometry, visible focus, reduced-motion behavior and readable
+  text on narrow screens and at 200% zoom. No timed progression is needed.
+- Missing targets, unavailable features or changed access must leave a safe exit.
+- No provider calls or writes to research, permissions, rewards or review state.
+
+Verification boundary
+---------------------
+The integration pass reports automated desktop/mobile browser checks with no
+application writes, 10 orientation module tests, 49 neighboring frontend checks,
+and 126 asset/admission checks. These establish specific technical behavior,
+not whether researchers find the tour useful. No deployment or human usability
+study is claimed. Re-run relevant checks after code or copy changes.
+
+Evaluation before adoption
+--------------------------
+Observe researchers new to Crucible with and without the tour. Ask them to find
+a relevant note, continue its work, bring an independent contribution, and locate
+the appropriate challenge or bounty action. Check that they distinguish saving,
+publishing, submitting a proposal and claiming a solution. Record wrong turns,
+uncertainty and whether they can resume their original task; do not infer success
+from dismissing the tour. No such human study or percentage estimate is claimed.
+If a common task still needs the tour to explain its primary button, improve
+the underlying structure and label before adding more tutorial text.

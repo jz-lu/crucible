@@ -30,7 +30,35 @@ def cancel(session, publication, *, now, key, commitment):
 
 
 def register_routes(app, db, clock, account, throttle):
-    from . import notebook, notebook_trash
+    from . import notebook, notebook_trash, notebook_visibility
+
+    @app.post('/api/notebook/notes/{note_id}/publication-retractions')
+    def retract_note(note_id: UUID, body: notebook.PublicationInput, request: Request):
+        throttle(request, 'notebook-publication', 60, 3600)
+        commitment = notebook._hash({'note_id': str(note_id), 'revision': body.revision,
+            'content_sha256': body.content_sha256, 'action': 'retract-note-publications'})
+        with db.transaction(write=True) as session:
+            user, _ = lock_author_mutation(request, session, account)
+            note = session.scalar(select(notebook.NotebookNote).where(
+                notebook.NotebookNote.id == str(note_id), notebook.NotebookNote.author_id == user.id).with_for_update())
+            if note is None:
+                raise HTTPException(404, 'Note not found.')
+            if notebook_visibility.replay(session, user.id, body.idempotency_key, commitment):
+                return {'note_id': note.id, 'retracted': True}
+            notebook_trash.require_active(session, note.id)
+            latest = session.scalar(select(notebook.NotebookRevision).where(
+                notebook.NotebookRevision.note_id == note.id, notebook.NotebookRevision.revision == note.latest_revision))
+            if latest is None or latest.revision != body.revision or latest.content_sha256 != body.content_sha256:
+                raise HTTPException(409, 'The note changed. Read its latest saved revision before retracting it.')
+            publications = session.scalars(select(notebook.NotebookPublication).join(notebook.NotebookRevision,
+                notebook.NotebookRevision.id == notebook.NotebookPublication.revision_id)
+                .where(notebook.NotebookRevision.note_id == note.id)
+                .order_by(notebook.NotebookRevision.revision).with_for_update()).all()
+            if not any(p.decision in (None, 'approved') and not notebook_visibility.hidden(session, p.revision_id) for p in publications):
+                raise HTTPException(409, 'This note is already private.')
+            notebook_visibility.record(session, note, publications, private=True, key=body.idempotency_key,
+                commitment=commitment, now=clock())
+            return {'note_id': note.id, 'retracted': True}
 
     @app.post('/api/notebook/notes/{note_id}/publication-cancellations')
     def cancel_publication(note_id: UUID, body: notebook.PublicationInput, request: Request):
@@ -52,6 +80,13 @@ def register_routes(app, db, clock, account, throttle):
                 raise HTTPException(404, 'Publication request not found.')
             if target.content_sha256 != body.content_sha256:
                 raise HTTPException(409, 'Read the exact submitted revision before cancelling publication.')
+            prior = notebook_visibility.cancellation_receipt(session, user.id, note.id, body.idempotency_key)
+            if prior:
+                if prior['review_sha256'] != commitment:
+                    raise HTTPException(409, 'This identifier was used for another cancellation.')
+                return {'publication': {'id': publication.id, 'note_id': note.id,
+                    'revision': target.revision, 'content_sha256': target.content_sha256,
+                    'status': 'cancelled', 'cancelled_at': prior['reviewed_at']}}
             if publication.decision == 'cancelled':
                 if publication.review_key != str(body.idempotency_key) or publication.review_sha256 != commitment:
                     raise HTTPException(409, 'This publication request was already cancelled.')

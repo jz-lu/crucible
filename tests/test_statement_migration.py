@@ -29,7 +29,11 @@ def test_statement_upgrade_preserves_existing_research_and_challenges(tmp_path, 
             assert not connection.execute(text('PRAGMA foreign_key_check')).all()
             for name in TABLES:
                 assert connection.scalar(text('SELECT count(*) FROM ' + name)) == 0
+        # Compare current metadata only at the current head, then continue the
+        # historical 0033 downgrade/recovery exercise on its own schema.
+        command.upgrade(config, 'head')
         command.check(config)
+        command.downgrade(config, '0033')
         command.downgrade(config, '0032')
         command.upgrade(config, '0033')
         with db.engine.begin() as connection:

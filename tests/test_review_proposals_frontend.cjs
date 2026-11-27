@@ -247,5 +247,29 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
     assert.doesNotMatch(app.$('#review-proposals-workspace').textContent,/LATE_PRIVATE_ARGUMENT/);assert.equal(app.$('#review-proposals-workspace').hidden,true);
   });
 
+  await test('implementation phase finds approved scheme and research work without pending-review fetches', async () => {
+    const records = [{kind:'scheme',target_id:'approved-one',title:'<img onerror=unsafe()>',decision_id:'decision-one',status:'awaiting_implementation',eligible:true,can_update:false},
+      {kind:'research',target_id:'change-one',title:'Process improvement',decision_id:'decision-two',status:'completed',eligible:true,can_update:false,actor:{handle:'reviewer'}}];
+    const app = await boot({hash:'#reviews?section=proposals&phase=implementation',hook:url => url.pathname === '/api/proposal-implementations' ? {implementations:records,next_after:null} : undefined});
+    assert.equal(app.$('#review-phase-implementation').getAttribute('aria-current'),'page');
+    assert.equal(app.$('#review-implementations').hidden,false);assert.equal(group(app,'schemes').closest('section').hidden,true);
+    assert.equal(reads(app,'schemes').length,0);assert.equal(reads(app,'changes').length,0);
+    const list=group(app,'implementations');assert.match(list.textContent,/Awaiting implementation.*Completed.*Updated by reviewer/s);assert.equal(list.querySelector('img'),null);
+    assert.equal(list.querySelectorAll('a')[0].href,'#reviews?section=proposals&phase=implementation&proposal=approved-one');
+    assert.equal(list.querySelectorAll('a')[1].href,'#reviews?section=proposals&phase=implementation&research_request=change-one');
+    const request=app.requests.find(item=>item.url.pathname==='/api/proposal-implementations');assert.equal(request.url.searchParams.get('scope'),'review');assert.equal(request.url.searchParams.get('limit'),'25');
+  });
+
+  await test('implementation summaries retain cache on navigation, paginate and ignore departed reads', async () => {
+    const record=id=>({kind:'scheme',target_id:id,title:id,decision_id:'decision-'+id,status:'in_progress',eligible:true,can_update:false});
+    let hold=null;
+    const app=await boot({hash:'#reviews?section=proposals&phase=implementation',hook:url=>url.pathname==='/api/proposal-implementations' ? hold?.promise || {implementations:[record(url.searchParams.has('after')?'page-two':'page-one')],next_after:url.searchParams.has('after')?null:'next-one'} : undefined});
+    button(pages(app,'implementations'),'Next page').click();await flush();assert.match(group(app,'implementations').textContent,/page-two/);
+    await app.navigate('#about');hold=deferred();await app.navigate('#reviews?section=proposals&phase=implementation');
+    assert.match(group(app,'implementations').textContent,/page-one/);
+    await app.navigate('#reviews?section=proposals');hold.resolve({implementations:[record('LATE_IMPLEMENTATION')],next_after:null});await flush();
+    assert.equal(app.$('#review-implementations').hidden,true);assert.doesNotMatch(group(app,'implementations').textContent,/LATE_IMPLEMENTATION/);
+  });
+
   console.log(`${passed} review-proposals frontend checks passed.`);
 })().catch(error => {console.error(error); process.exitCode = 1;});

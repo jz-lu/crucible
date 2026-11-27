@@ -20,7 +20,7 @@ function summary(number, changes={}) {
   const {publication_status='private', revision=1, ...rest} = changes;
   const digest=number.toString(16).padStart(64,'0');
   const row={revision,content_sha256:digest,created_at:100+number,summary:true,publication_status,
-    content:{title:'Private note '+number,claim:'Summary only',tags:[]}};
+    content:{title:'Private note '+number,claim:'Summary only',tags:['ai-written']}};
   return {id:identifier(number),owner,can_edit:true,deletion:null,revision,content_sha256:digest,
     publication_status,revision_count:revision,revisions:[row],shared_revision:null,proposal_revision:null,...rest};
 }
@@ -92,13 +92,21 @@ async function test(name,run){
 }
 
 (async()=>{
+  await test('unlabelled imported drafts are included with other eligible notes',async()=>{
+    const missing=summary(1);missing.revisions[0].content.tags=[];
+    const app=await fixture({rows:[missing,summary(2)]});await app.open();
+    await until(()=>app.findButton('Send 2 publish requests'),'Both drafts selected');
+    assert.doesNotMatch(app.q('dialog-body').textContent,/Choose authorship/);
+    await app.confirm(2);await until(()=>app.writes().length===2,'Both notes submitted');
+    assert.equal(app.writes()[0].url.pathname.includes(identifier(1)),true);assertNoBodyReads(app);
+  });
   const policy={mode:'automatic',screening_required:true,policy_id:'a'.repeat(64),processor:'OpenAI',model:'gpt-6-luna',
     notice:'Selected exact revisions are sent to OpenAI. Private drafts are not sent. Standard monitoring retention applies.',privacy_url:'https://developers.openai.com/api/docs/guides/your-data'};
   await test('bulk confirmation discloses processing and binds every compact request to the fresh policy',async()=>{
     const app=await fixture({policy});await app.open();
     await until(()=>app.findButton('Send 2 publish requests'),'Selection complete');
     assert.equal(app.writes().length,0);assert.match(app.q('dialog-body').textContent,/sent to OpenAI.*Private drafts/);
-    assert.match(app.q('dialog-body').textContent,/after a passing automated check/);
+    assert.match(app.q('dialog-body').textContent,/after automated screening/);
     await app.confirm(2);await until(()=>app.writes().length===2,'Both requests sent');
     assert.ok(app.writes().every(call=>call.body.screening_consent===true&&call.body.screening_policy_id===policy.policy_id));
     assertNoBodyReads(app);
@@ -138,7 +146,7 @@ async function test(name,run){
     first.resolve(receipt(app.writes()[0].url,app.writes()[0].body));
     await until(()=>app.writes().length===2,'Second follows receipt');
     second.resolve(receipt(app.writes()[1].url,app.writes()[1].body));
-    await until(()=>/2 confirmed/i.test(app.q('dialog-body').textContent),'Completion reports both requests');
+    await until(()=>!app.q('dialog').open,'Successful publication closes quietly');
     assert.deepEqual(app.writes().map(call=>call.url.pathname.split('/')[4]),[identifier(1),identifier(8)]);
     for(const call of app.writes()) {
       const note=rows.find(row=>call.url.pathname.includes(row.id));
@@ -196,7 +204,7 @@ async function test(name,run){
     await app.open();await app.confirm(2);
     await until(()=>app.available(/Retry/i),'An unbound receipt must require retry');
     assert.equal(app.writes().length,1);
-    assert.match(app.q('dialog-body').querySelector('.nb-batch-status').textContent,/0 confirmed/);
+    assert.doesNotMatch(app.q('dialog-body').textContent,/0 confirmed|0 skipped/);
     app.activate(app.findButton(/Retry/i));
     await until(()=>app.writes().length===3,'Validated retry permits the next item');
     assert.deepEqual(app.writes()[1].body,app.writes()[0].body);
@@ -208,7 +216,7 @@ async function test(name,run){
     await app.open();await app.confirm(2);
     await until(()=>app.q('dialog-body').querySelector('.nb-error')?.textContent,'Denied request is reported');
     assert.equal(app.writes().length,1);
-    assert.match(app.q('dialog-body').querySelector('.nb-batch-status').textContent,/0 confirmed/);
+    assert.doesNotMatch(app.q('dialog-body').textContent,/0 confirmed|0 skipped/);
     app.q('close').click();assert.equal(app.q('dialog').open,false);
   });
 

@@ -98,7 +98,7 @@ for (const width of [1440,390]) test(`cold bounty navigation reserves only its o
     await expect(panel.getByRole('heading',{name:'Bounties',level:1})).toBeVisible();
     const heading = await panel.getByRole('heading',{name:'Bounties',level:1}).boundingBox();
     for (const dimension of ['x','y']) expect(Math.abs(heading[dimension] - pendingHeading[dimension])).toBeLessThan(2);
-    await expect(panel).not.toContainText('No open bounties yet.');
+    await expect(panel).not.toContainText('No active bounties yet.');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   } finally {
     script.release(); session.release(); board.release();

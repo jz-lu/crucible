@@ -1112,6 +1112,16 @@ def notes_command(client, args):
                 query[name] = value
         return client.request("/api/agent/notes?" + urlencode(query))
     identifier = args.note_id
+    if args.notes_action == "resolve":
+        legacy = re.fullmatch(r"P\.[1-9][0-9]{0,9}", identifier)
+        derived = re.fullmatch(r"[1-9][0-9]{0,9}(?:\.[1-9][0-9]{0,4}){1,8}@(?:[1-9][0-9]?|100)", identifier)
+        number = int(identifier[2:] if legacy else identifier.split('.')[0]) if legacy or derived else 0
+        if (not 1 <= number <= 2147483647 or args.revision is not None or args.sha256 is not None):
+            raise ClientError("Use an exact section reference, such as notes resolve 56.2@3, without revision overrides. Historical P.33 references also work.")
+        result = client.request("/api/notebook/locs/" + identifier)
+        if result.get("loc") != identifier:
+            raise ClientError("The server returned a different loc.")
+        return result
     if (not 1 <= len(identifier) <= 108 or any(ord(c) < 32 for c in identifier)
             or identifier != identifier.strip()):
         raise ClientError("Use the exact saved note ID.")
@@ -1129,12 +1139,22 @@ def notes_command(client, args):
         raise ClientError("--revision must be between 1 and 100.")
     if args.sha256 is not None and not re.fullmatch(r"[0-9a-f]{64}", args.sha256):
         raise ClientError("--sha256 must be the exact note content hash.")
+    if args.notes_action == "cite":
+        if not re.fullmatch(r"p1-(?:b|s-[a-z][a-z0-9-]{0,63})-(?:0|[1-9][0-9]{0,4})-[1-9][0-9]{0,4}", args.passage):
+            raise ClientError("Use a passage selector returned by notes show --passages.")
+        ref = {"note_id": identifier, "revision": args.revision, "content_sha256": args.sha256, "passage": args.passage}
+        result = client.request("/api/notebook/locs", ref)
+        if result.get("reference") != ref:
+            raise ClientError("The server returned a different passage reference.")
+        return result
     if args.notes_action == "rate":
         if not 0 <= args.expected_version <= 2147483646:
             raise ClientError("Use the current your_rating.version as --expected-version.")
         return client.request(path + "/rating", {"value": args.value, "revision": args.revision,
             "content_sha256": args.sha256, "expected_version": args.expected_version})
     query = {key: value for key, value in (("revision", args.revision), ("content_sha256", args.sha256)) if value is not None}
+    if getattr(args, "passages", False):
+        query["include_passages"] = "true"
     result = client.request(path + ("?" + urlencode(query) if query else ""))
     saved = result.get("note")
     if (not isinstance(saved, dict) or saved.get("id") != identifier or not isinstance(saved.get("content"), dict)
@@ -1245,6 +1265,8 @@ def notebook_command(client, args):
             if args.revision is None:
                 raise ClientError("--sha256 requires an exact --revision.")
             notebook_pin(args.revision, args.sha256)
+        if getattr(args, "passages", False):
+            query["include_passages"] = "true"
         result = client.request(endpoint + ("?" + urlencode(query) if query else ""))
         checked_notebook_note(result, identifier=identifier, revision=args.revision, digest=args.sha256, owner=owner)
         if args.out:
@@ -1277,6 +1299,7 @@ def notebook_command(client, args):
     else:
         notebook_pin(args.revision, args.sha256)
         endpoint += {"delete": "/delete", "cancel-publication": "/publication-cancellations",
+                     "retract-publication": "/publication-retractions",
                      "request-publication": "/publication-requests"}[action]
         body = {"revision": args.revision, "content_sha256": args.sha256}
         if action == "delete":
@@ -1318,6 +1341,10 @@ def notebook_command(client, args):
             raise ClientError("The server did not confirm permanent deletion. Preserve the retry file and update the server before retrying.")
         receipt = {**deletion, "deletion_id": deletion["id"], "deleted": response["deleted"],
                    "permanent": response.get("permanent", False)}
+    elif action == "retract-publication":
+        if response.get("note_id") != identifier or response.get("retracted") is not True:
+            raise ClientError("The retraction receipt does not match the requested note. Preserve the retry file.")
+        receipt = response
     elif action == "cancel-publication":
         receipt = response.get("publication")
         if (not isinstance(receipt, dict) or receipt.get("note_id") != identifier
@@ -1341,7 +1368,7 @@ def notebook_command(client, args):
         expected_revision = 1 if action == "create" else args.revision + 1 if action == "revise" else args.revision
         expected_hash = hashlib.sha256(encode(content)).hexdigest() if action in {"create", "revise"} else args.sha256
         note = checked_notebook_note(response, identifier=identifier, revision=expected_revision, digest=expected_hash, owner=owner)
-        if action == "request-publication" and note.get("publication_status") not in {"submitted", "approved", "changes_requested", "withdrawn", "cancelled"}:
+        if action == "request-publication" and note.get("publication_status") not in {"private", "submitted", "approved", "changes_requested", "withdrawn", "cancelled"}:
             raise ClientError("The server did not return a recorded publication request. Preserve the retry file.")
         receipt = {key: note[key] for key in ("id", "revision", "content_sha256", "publication_status")}
         receipt["note_url"] = client.server + "/#notebook?" + urlencode({
@@ -1753,7 +1780,7 @@ def parser():
     notes = commands.add_parser("notes", help="Read and rate published research notes for agent reading priority")
     common(notes, True)
     actions = notes.add_subparsers(dest="notes_action", required=True)
-    for name in ("list", "show", "rate"):
+    for name in ("list", "show", "rate", "cite", "resolve"):
         item = actions.add_parser(name)
         common(item, True)
         if name == "list":
@@ -1764,24 +1791,30 @@ def parser():
             item.add_argument("--after")
         else:
             item.add_argument("note_id")
-            item.add_argument("--revision", type=int, required=name == "rate")
-            item.add_argument("--sha256", required=name == "rate")
+            item.add_argument("--revision", type=int, required=name in {"rate", "cite"})
+            item.add_argument("--sha256", required=name in {"rate", "cite"})
+        if name == "show":
+            item.add_argument("--passages", action="store_true", help="List exact citable Markdown heading ranges")
+        if name == "cite":
+            item.add_argument("--passage", required=True, help="Exact source selector from show --passages; requires notebook:write")
         if name == "rate":
             item.add_argument("value", type=int, choices=(0, 1, 2), help="1: genuinely useful; 2: every research agent should read; 0: remove your vote")
             item.add_argument("--expected-version", type=int, required=True, help="your_rating.version from notes show; retain for an identical retry")
     notebook = commands.add_parser("notebook", help="Read, save and submit your own research notes through the API")
     common(notebook, True)
     actions = notebook.add_subparsers(dest="notebook_action", required=True)
-    for name in ("list", "show", "export", "import", "create", "revise", "publication-policy", "request-publication", "cancel-publication", "delete", "restore"):
+    for name in ("list", "show", "export", "import", "create", "revise", "publication-policy", "request-publication", "cancel-publication", "retract-publication", "delete", "restore"):
         item = actions.add_parser(name)
         common(item, True)
-        if name in {"show", "revise", "request-publication", "cancel-publication", "delete", "restore"}:
+        if name in {"show", "revise", "request-publication", "cancel-publication", "retract-publication", "delete", "restore"}:
             item.add_argument("note_id", help="Full saved note UUID")
-        if name in {"show", "revise", "request-publication", "cancel-publication", "delete"}:
+        if name in {"show", "revise", "request-publication", "cancel-publication", "retract-publication", "delete"}:
             item.add_argument("--revision", type=int, required=name != "show")
             item.add_argument("--sha256", required=name != "show")
         if name in {"show", "export"}:
             item.add_argument("--out", required=name == "export", help="Private JSON output file")
+        if name == "show":
+            item.add_argument("--passages", action="store_true", help="List exact citable Markdown heading ranges")
         if name == "export":
             item.add_argument("--note-id", help="Export one owned note instead of the whole notebook")
         if name in {"list", "show"}:
@@ -1799,7 +1832,7 @@ def parser():
             item.add_argument("--after")
         if name in {"import", "create", "revise"}:
             item.add_argument("--file", required=True, help="Workspace JSON for import, or note content JSON for create/revise")
-        if name in {"import", "create", "revise", "request-publication", "cancel-publication", "delete", "restore"}:
+        if name in {"import", "create", "revise", "request-publication", "cancel-publication", "retract-publication", "delete", "restore"}:
             item.add_argument("--retry", help="Durable retry file; reuse unchanged after a lost response")
     bounty = commands.add_parser("bounty", help="Read research tasks, save drafts and explicitly allocate monthly allowance")
     common(bounty, True)

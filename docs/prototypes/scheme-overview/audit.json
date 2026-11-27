@@ -1,0 +1,1450 @@
+[
+  {
+    "scheme": "teaching-dh-kem",
+    "stages": 50,
+    "configurations": 50,
+    "historical_report_sha256": "52f3681a6440bbef642fa1e34dd73efa9c5cfdf304a3a0310fc91dae867775ee",
+    "size_drops": {
+      "public": 0,
+      "cipher": 0
+    },
+    "timing_dips": {
+      "keygen": [
+        {
+          "from": 4,
+          "to": 5,
+          "fraction_drop": 0.2609072343585618,
+          "separated_quartiles": true
+        },
+        {
+          "from": 6,
+          "to": 7,
+          "fraction_drop": 0.016068376068375967,
+          "separated_quartiles": false
+        },
+        {
+          "from": 19,
+          "to": 20,
+          "fraction_drop": 0.008056507672101754,
+          "separated_quartiles": false
+        },
+        {
+          "from": 20,
+          "to": 21,
+          "fraction_drop": 0.09647833879640233,
+          "separated_quartiles": true
+        },
+        {
+          "from": 25,
+          "to": 26,
+          "fraction_drop": 0.13070282540283062,
+          "separated_quartiles": true
+        },
+        {
+          "from": 29,
+          "to": 30,
+          "fraction_drop": 0.3158743919472138,
+          "separated_quartiles": true
+        },
+        {
+          "from": 32,
+          "to": 33,
+          "fraction_drop": 0.1564993093807725,
+          "separated_quartiles": true
+        },
+        {
+          "from": 35,
+          "to": 36,
+          "fraction_drop": 0.3508395316216648,
+          "separated_quartiles": true
+        },
+        {
+          "from": 38,
+          "to": 39,
+          "fraction_drop": 0.23213376122510498,
+          "separated_quartiles": true
+        },
+        {
+          "from": 43,
+          "to": 44,
+          "fraction_drop": 0.28662661341996565,
+          "separated_quartiles": true
+        },
+        {
+          "from": 45,
+          "to": 46,
+          "fraction_drop": 0.4436911334323953,
+          "separated_quartiles": true
+        },
+        {
+          "from": 47,
+          "to": 48,
+          "fraction_drop": 0.267806718742186,
+          "separated_quartiles": true
+        },
+        {
+          "from": 49,
+          "to": 50,
+          "fraction_drop": 0.4626884394702969,
+          "separated_quartiles": true
+        }
+      ],
+      "encapsulate": [
+        {
+          "from": 4,
+          "to": 5,
+          "fraction_drop": 0.2163712908263734,
+          "separated_quartiles": true
+        },
+        {
+          "from": 6,
+          "to": 7,
+          "fraction_drop": 0.013008707272765152,
+          "separated_quartiles": false
+        },
+        {
+          "from": 20,
+          "to": 21,
+          "fraction_drop": 0.11692408415915234,
+          "separated_quartiles": true
+        },
+        {
+          "from": 25,
+          "to": 26,
+          "fraction_drop": 0.13679075214648562,
+          "separated_quartiles": true
+        },
+        {
+          "from": 29,
+          "to": 30,
+          "fraction_drop": 0.34283001961362225,
+          "separated_quartiles": true
+        },
+        {
+          "from": 32,
+          "to": 33,
+          "fraction_drop": 0.14007198694398293,
+          "separated_quartiles": true
+        },
+        {
+          "from": 35,
+          "to": 36,
+          "fraction_drop": 0.35707535347346797,
+          "separated_quartiles": true
+        },
+        {
+          "from": 38,
+          "to": 39,
+          "fraction_drop": 0.2069471105957299,
+          "separated_quartiles": true
+        },
+        {
+          "from": 43,
+          "to": 44,
+          "fraction_drop": 0.27669634563987877,
+          "separated_quartiles": true
+        },
+        {
+          "from": 45,
+          "to": 46,
+          "fraction_drop": 0.4498486349499864,
+          "separated_quartiles": true
+        },
+        {
+          "from": 47,
+          "to": 48,
+          "fraction_drop": 0.25629042619367826,
+          "separated_quartiles": true
+        },
+        {
+          "from": 49,
+          "to": 50,
+          "fraction_drop": 0.46275388426432573,
+          "separated_quartiles": true
+        }
+      ],
+      "decapsulate": [
+        {
+          "from": 4,
+          "to": 5,
+          "fraction_drop": 0.15176156583629896,
+          "separated_quartiles": true
+        },
+        {
+          "from": 5,
+          "to": 6,
+          "fraction_drop": 0.027480019298944947,
+          "separated_quartiles": false
+        },
+        {
+          "from": 6,
+          "to": 7,
+          "fraction_drop": 0.010526088738379236,
+          "separated_quartiles": false
+        },
+        {
+          "from": 11,
+          "to": 12,
+          "fraction_drop": 0.0014585764294049453,
+          "separated_quartiles": false
+        },
+        {
+          "from": 20,
+          "to": 21,
+          "fraction_drop": 0.1125163541212385,
+          "separated_quartiles": true
+        },
+        {
+          "from": 25,
+          "to": 26,
+          "fraction_drop": 0.1381246659039702,
+          "separated_quartiles": true
+        },
+        {
+          "from": 29,
+          "to": 30,
+          "fraction_drop": 0.3417639815460979,
+          "separated_quartiles": true
+        },
+        {
+          "from": 32,
+          "to": 33,
+          "fraction_drop": 0.14121781624765006,
+          "separated_quartiles": true
+        },
+        {
+          "from": 35,
+          "to": 36,
+          "fraction_drop": 0.3584328337422966,
+          "separated_quartiles": true
+        },
+        {
+          "from": 38,
+          "to": 39,
+          "fraction_drop": 0.20741935121699706,
+          "separated_quartiles": true
+        },
+        {
+          "from": 43,
+          "to": 44,
+          "fraction_drop": 0.27621112698112416,
+          "separated_quartiles": true
+        },
+        {
+          "from": 45,
+          "to": 46,
+          "fraction_drop": 0.44929819668359305,
+          "separated_quartiles": true
+        },
+        {
+          "from": 47,
+          "to": 48,
+          "fraction_drop": 0.2584977789178131,
+          "separated_quartiles": true
+        },
+        {
+          "from": 49,
+          "to": 50,
+          "fraction_drop": 0.46288033454190103,
+          "separated_quartiles": true
+        }
+      ]
+    },
+    "classical_points": 50,
+    "quantum_points": 0,
+    "ram_points": 50,
+    "cpu": "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
+    "implementation": "be42e92d4bc2b70e7822f06c473bc621553aba9a23cf0c466877a1ac0ea03eed",
+    "comparison_profile": "cae180448a15ac01247c7cd33a2ec8a478c58b3df89bae5a8f8ff801c440c7c0"
+  },
+  {
+    "scheme": "rsa-kem",
+    "stages": 50,
+    "configurations": 50,
+    "historical_report_sha256": "3b2c16901b2262390e38c02362a9bef2f49c2d78db954f653f9605cbe139133d",
+    "size_drops": {
+      "public": 0,
+      "cipher": 0
+    },
+    "timing_dips": {
+      "keygen": [
+        {
+          "from": 2,
+          "to": 3,
+          "fraction_drop": 0.06749089128587671,
+          "separated_quartiles": false
+        },
+        {
+          "from": 4,
+          "to": 5,
+          "fraction_drop": 0.031879159538022006,
+          "separated_quartiles": false
+        },
+        {
+          "from": 19,
+          "to": 20,
+          "fraction_drop": 0.11051357141602214,
+          "separated_quartiles": false
+        },
+        {
+          "from": 25,
+          "to": 26,
+          "fraction_drop": 0.027168249141632073,
+          "separated_quartiles": false
+        },
+        {
+          "from": 40,
+          "to": 41,
+          "fraction_drop": 0.19153266379484368,
+          "separated_quartiles": false
+        },
+        {
+          "from": 45,
+          "to": 46,
+          "fraction_drop": 0.10927073445804569,
+          "separated_quartiles": false
+        },
+        {
+          "from": 49,
+          "to": 50,
+          "fraction_drop": 0.18771716073646372,
+          "separated_quartiles": false
+        }
+      ],
+      "encapsulate": [
+        {
+          "from": 4,
+          "to": 5,
+          "fraction_drop": 0.06794212729874394,
+          "separated_quartiles": true
+        },
+        {
+          "from": 6,
+          "to": 7,
+          "fraction_drop": 0.03845731841123545,
+          "separated_quartiles": false
+        },
+        {
+          "from": 7,
+          "to": 8,
+          "fraction_drop": 0.009756375877218004,
+          "separated_quartiles": false
+        },
+        {
+          "from": 9,
+          "to": 10,
+          "fraction_drop": 0.014742572011793964,
+          "separated_quartiles": false
+        },
+        {
+          "from": 10,
+          "to": 11,
+          "fraction_drop": 0.0017265193370166187,
+          "separated_quartiles": false
+        },
+        {
+          "from": 12,
+          "to": 13,
+          "fraction_drop": 0.031006510833600176,
+          "separated_quartiles": false
+        },
+        {
+          "from": 14,
+          "to": 15,
+          "fraction_drop": 0.009563846558066302,
+          "separated_quartiles": false
+        },
+        {
+          "from": 16,
+          "to": 17,
+          "fraction_drop": 0.011546184738955856,
+          "separated_quartiles": false
+        },
+        {
+          "from": 20,
+          "to": 21,
+          "fraction_drop": 0.016725431696953286,
+          "separated_quartiles": false
+        },
+        {
+          "from": 25,
+          "to": 26,
+          "fraction_drop": 0.02956509059093726,
+          "separated_quartiles": false
+        },
+        {
+          "from": 29,
+          "to": 30,
+          "fraction_drop": 0.03171125110319861,
+          "separated_quartiles": false
+        },
+        {
+          "from": 35,
+          "to": 36,
+          "fraction_drop": 0.10162987578131177,
+          "separated_quartiles": false
+        },
+        {
+          "from": 38,
+          "to": 39,
+          "fraction_drop": 0.047015896999019535,
+          "separated_quartiles": false
+        },
+        {
+          "from": 43,
+          "to": 44,
+          "fraction_drop": 0.0698490932272735,
+          "separated_quartiles": false
+        },
+        {
+          "from": 45,
+          "to": 46,
+          "fraction_drop": 0.19093389666402605,
+          "separated_quartiles": true
+        },
+        {
+          "from": 47,
+          "to": 48,
+          "fraction_drop": 0.0804948598380485,
+          "separated_quartiles": false
+        },
+        {
+          "from": 49,
+          "to": 50,
+          "fraction_drop": 0.25471594270697173,
+          "separated_quartiles": true
+        }
+      ],
+      "decapsulate": [
+        {
+          "from": 4,
+          "to": 5,
+          "fraction_drop": 0.0048171732225384956,
+          "separated_quartiles": false
+        },
+        {
+          "from": 29,
+          "to": 30,
+          "fraction_drop": 0.06433187604441204,
+          "separated_quartiles": true
+        },
+        {
+          "from": 35,
+          "to": 36,
+          "fraction_drop": 0.12769563374485893,
+          "separated_quartiles": true
+        },
+        {
+          "from": 43,
+          "to": 44,
+          "fraction_drop": 0.0592821354177705,
+          "separated_quartiles": true
+        },
+        {
+          "from": 45,
+          "to": 46,
+          "fraction_drop": 0.23243886509869527,
+          "separated_quartiles": true
+        },
+        {
+          "from": 47,
+          "to": 48,
+          "fraction_drop": 0.03982785566556413,
+          "separated_quartiles": true
+        },
+        {
+          "from": 49,
+          "to": 50,
+          "fraction_drop": 0.3050623411626362,
+          "separated_quartiles": true
+        }
+      ]
+    },
+    "classical_points": 50,
+    "quantum_points": 0,
+    "ram_points": 50,
+    "cpu": "AMD EPYC 9V45 96-Core Processor",
+    "implementation": "09b60e209ae4d5e20db674235ebbb0709080b8338bb113b453e037dbf96d1e6b",
+    "comparison_profile": "5a1979a2f491ae6e7a5cc40cb3f17141e2fab36da487dc9fcb413801de72e2c3"
+  },
+  {
+    "scheme": "frodokem",
+    "stages": 80,
+    "configurations": 80,
+    "historical_report_sha256": "5084c3f2e7857d93fa8b667d625a2e7bf60b8fb97a502f949535b36b55fa3b24",
+    "size_drops": {
+      "public": 0,
+      "cipher": 0
+    },
+    "timing_dips": {
+      "keygen": [
+        {
+          "from": 69,
+          "to": 70,
+          "fraction_drop": 0.0012104890203823437,
+          "separated_quartiles": false
+        },
+        {
+          "from": 75,
+          "to": 76,
+          "fraction_drop": 0.008090311583864307,
+          "separated_quartiles": true
+        }
+      ],
+      "encapsulate": [
+        {
+          "from": 67,
+          "to": 68,
+          "fraction_drop": 0.00041930068441875523,
+          "separated_quartiles": false
+        },
+        {
+          "from": 69,
+          "to": 70,
+          "fraction_drop": 0.002442709780064223,
+          "separated_quartiles": false
+        },
+        {
+          "from": 75,
+          "to": 76,
+          "fraction_drop": 0.007193653443419157,
+          "separated_quartiles": true
+        }
+      ],
+      "decapsulate": [
+        {
+          "from": 57,
+          "to": 58,
+          "fraction_drop": 0.0022864933019236533,
+          "separated_quartiles": false
+        },
+        {
+          "from": 67,
+          "to": 68,
+          "fraction_drop": 0.00021206092547398914,
+          "separated_quartiles": false
+        },
+        {
+          "from": 69,
+          "to": 70,
+          "fraction_drop": 0.0029290794739617043,
+          "separated_quartiles": true
+        },
+        {
+          "from": 75,
+          "to": 76,
+          "fraction_drop": 0.006944796907737416,
+          "separated_quartiles": true
+        }
+      ]
+    },
+    "classical_points": 64,
+    "quantum_points": 1,
+    "ram_points": 0,
+    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "implementation": "7de47de78c9d144505d50989415be546466a87242afb7bc252d0315dd7ba8bab",
+    "comparison_profile": "a61dd866fce576f116d0460ea1302a7c4bb9d0f1992dc5cd6584d37765923b51"
+  },
+  {
+    "scheme": "dhkem-x25519",
+    "stages": 50,
+    "configurations": 50,
+    "historical_report_sha256": "54de44c6fcfa1aecaf226b3a991ce1142be812c92fbf49353eef9b6de58d9b0e",
+    "size_drops": {
+      "public": 0,
+      "cipher": 0
+    },
+    "timing_dips": {
+      "keygen": [
+        {
+          "from": 11,
+          "to": 12,
+          "fraction_drop": 0.24348987112809162,
+          "separated_quartiles": true
+        },
+        {
+          "from": 17,
+          "to": 18,
+          "fraction_drop": 0.0029138417003123918,
+          "separated_quartiles": false
+        },
+        {
+          "from": 24,
+          "to": 25,
+          "fraction_drop": 0.3071790734280946,
+          "separated_quartiles": true
+        },
+        {
+          "from": 25,
+          "to": 26,
+          "fraction_drop": 0.013009698761823785,
+          "separated_quartiles": false
+        },
+        {
+          "from": 31,
+          "to": 32,
+          "fraction_drop": 0.002052682260875849,
+          "separated_quartiles": false
+        },
+        {
+          "from": 37,
+          "to": 38,
+          "fraction_drop": 0.24713979328478475,
+          "separated_quartiles": true
+        },
+        {
+          "from": 45,
+          "to": 46,
+          "fraction_drop": 0.006302072514943857,
+          "separated_quartiles": false
+        },
+        {
+          "from": 48,
+          "to": 49,
+          "fraction_drop": 0.01945259002604338,
+          "separated_quartiles": false
+        }
+      ],
+      "encapsulate": [
+        {
+          "from": 11,
+          "to": 12,
+          "fraction_drop": 0.2542127393781939,
+          "separated_quartiles": true
+        },
+        {
+          "from": 17,
+          "to": 18,
+          "fraction_drop": 0.004996842189318618,
+          "separated_quartiles": false
+        },
+        {
+          "from": 24,
+          "to": 25,
+          "fraction_drop": 0.3177867076644493,
+          "separated_quartiles": true
+        },
+        {
+          "from": 25,
+          "to": 26,
+          "fraction_drop": 0.016073757447272907,
+          "separated_quartiles": false
+        },
+        {
+          "from": 31,
+          "to": 32,
+          "fraction_drop": 0.016013755497469417,
+          "separated_quartiles": false
+        },
+        {
+          "from": 37,
+          "to": 38,
+          "fraction_drop": 0.24625357993883445,
+          "separated_quartiles": true
+        },
+        {
+          "from": 48,
+          "to": 49,
+          "fraction_drop": 0.021286224795889153,
+          "separated_quartiles": true
+        }
+      ],
+      "decapsulate": [
+        {
+          "from": 11,
+          "to": 12,
+          "fraction_drop": 0.2548279242019861,
+          "separated_quartiles": true
+        },
+        {
+          "from": 17,
+          "to": 18,
+          "fraction_drop": 0.005322183013486748,
+          "separated_quartiles": false
+        },
+        {
+          "from": 24,
+          "to": 25,
+          "fraction_drop": 0.32436581600288117,
+          "separated_quartiles": true
+        },
+        {
+          "from": 25,
+          "to": 26,
+          "fraction_drop": 0.018312123528949398,
+          "separated_quartiles": false
+        },
+        {
+          "from": 27,
+          "to": 28,
+          "fraction_drop": 0.00024327644719068786,
+          "separated_quartiles": false
+        },
+        {
+          "from": 30,
+          "to": 31,
+          "fraction_drop": 0.0009999378844919304,
+          "separated_quartiles": false
+        },
+        {
+          "from": 37,
+          "to": 38,
+          "fraction_drop": 0.24551988846603467,
+          "separated_quartiles": true
+        },
+        {
+          "from": 48,
+          "to": 49,
+          "fraction_drop": 0.0179381948185513,
+          "separated_quartiles": true
+        }
+      ]
+    },
+    "classical_points": 50,
+    "quantum_points": 0,
+    "ram_points": 50,
+    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "implementation": "ac1fd8791a6721512c7fb71d201c0b57504bcfb9f2142ae3739b1a1d5be8465f",
+    "comparison_profile": "21b53b6ba780bf7d4dbb0372dffa89655f516898873bca85b798be70951af748"
+  },
+  {
+    "scheme": "classic-mceliece",
+    "stages": 50,
+    "configurations": 50,
+    "historical_report_sha256": "b2c73826b17907c8e93931fe4bc743b681f9eaefbfe87a766b39776249bef621",
+    "size_drops": {
+      "public": 0,
+      "cipher": 0
+    },
+    "timing_dips": {
+      "keygen": [
+        {
+          "from": 1,
+          "to": 2,
+          "fraction_drop": 0.0014613576011027751,
+          "separated_quartiles": false
+        },
+        {
+          "from": 2,
+          "to": 3,
+          "fraction_drop": 0.2275217499938862,
+          "separated_quartiles": false
+        },
+        {
+          "from": 4,
+          "to": 5,
+          "fraction_drop": 0.20328126277307879,
+          "separated_quartiles": false
+        },
+        {
+          "from": 7,
+          "to": 8,
+          "fraction_drop": 0.1938771820472116,
+          "separated_quartiles": false
+        },
+        {
+          "from": 10,
+          "to": 11,
+          "fraction_drop": 0.12150809552601705,
+          "separated_quartiles": false
+        },
+        {
+          "from": 11,
+          "to": 12,
+          "fraction_drop": 0.08766149856382133,
+          "separated_quartiles": false
+        },
+        {
+          "from": 16,
+          "to": 17,
+          "fraction_drop": 0.22424997236544186,
+          "separated_quartiles": false
+        },
+        {
+          "from": 17,
+          "to": 18,
+          "fraction_drop": 0.023780280317325042,
+          "separated_quartiles": false
+        },
+        {
+          "from": 20,
+          "to": 21,
+          "fraction_drop": 0.007474203892508302,
+          "separated_quartiles": false
+        },
+        {
+          "from": 21,
+          "to": 22,
+          "fraction_drop": 0.1889235712405316,
+          "separated_quartiles": false
+        },
+        {
+          "from": 24,
+          "to": 25,
+          "fraction_drop": 0.21931647836857882,
+          "separated_quartiles": false
+        },
+        {
+          "from": 27,
+          "to": 28,
+          "fraction_drop": 0.24741524601069842,
+          "separated_quartiles": false
+        },
+        {
+          "from": 29,
+          "to": 30,
+          "fraction_drop": 0.23167625987588314,
+          "separated_quartiles": false
+        },
+        {
+          "from": 32,
+          "to": 33,
+          "fraction_drop": 0.13529990583305995,
+          "separated_quartiles": false
+        },
+        {
+          "from": 33,
+          "to": 34,
+          "fraction_drop": 0.14945124608077187,
+          "separated_quartiles": false
+        },
+        {
+          "from": 37,
+          "to": 38,
+          "fraction_drop": 0.16269161288204892,
+          "separated_quartiles": false
+        },
+        {
+          "from": 39,
+          "to": 40,
+          "fraction_drop": 0.1665251987349854,
+          "separated_quartiles": false
+        },
+        {
+          "from": 40,
+          "to": 41,
+          "fraction_drop": 0.018407450118561264,
+          "separated_quartiles": false
+        },
+        {
+          "from": 44,
+          "to": 45,
+          "fraction_drop": 0.2060584662600755,
+          "separated_quartiles": false
+        },
+        {
+          "from": 45,
+          "to": 46,
+          "fraction_drop": 0.04705623043768037,
+          "separated_quartiles": false
+        },
+        {
+          "from": 47,
+          "to": 48,
+          "fraction_drop": 0.04359148400324975,
+          "separated_quartiles": false
+        }
+      ],
+      "encapsulate": [
+        {
+          "from": 2,
+          "to": 3,
+          "fraction_drop": 0.0638843284656817,
+          "separated_quartiles": false
+        },
+        {
+          "from": 5,
+          "to": 6,
+          "fraction_drop": 0.1935039761090982,
+          "separated_quartiles": false
+        },
+        {
+          "from": 8,
+          "to": 9,
+          "fraction_drop": 0.20505271155855254,
+          "separated_quartiles": false
+        },
+        {
+          "from": 10,
+          "to": 11,
+          "fraction_drop": 0.2484865277882734,
+          "separated_quartiles": false
+        },
+        {
+          "from": 12,
+          "to": 13,
+          "fraction_drop": 0.01042065742088727,
+          "separated_quartiles": false
+        },
+        {
+          "from": 14,
+          "to": 15,
+          "fraction_drop": 0.12009584664536743,
+          "separated_quartiles": false
+        },
+        {
+          "from": 15,
+          "to": 16,
+          "fraction_drop": 0.10848068939641509,
+          "separated_quartiles": false
+        },
+        {
+          "from": 18,
+          "to": 19,
+          "fraction_drop": 0.05703711766626762,
+          "separated_quartiles": false
+        },
+        {
+          "from": 19,
+          "to": 20,
+          "fraction_drop": 0.048045968166018915,
+          "separated_quartiles": false
+        },
+        {
+          "from": 20,
+          "to": 21,
+          "fraction_drop": 0.0004041982727260862,
+          "separated_quartiles": false
+        },
+        {
+          "from": 21,
+          "to": 22,
+          "fraction_drop": 0.11826232292326566,
+          "separated_quartiles": false
+        },
+        {
+          "from": 23,
+          "to": 24,
+          "fraction_drop": 0.040088432423356135,
+          "separated_quartiles": false
+        },
+        {
+          "from": 24,
+          "to": 25,
+          "fraction_drop": 0.056937115535990235,
+          "separated_quartiles": false
+        },
+        {
+          "from": 28,
+          "to": 29,
+          "fraction_drop": 0.0751540949169408,
+          "separated_quartiles": false
+        },
+        {
+          "from": 30,
+          "to": 31,
+          "fraction_drop": 0.059224214096389005,
+          "separated_quartiles": false
+        },
+        {
+          "from": 31,
+          "to": 32,
+          "fraction_drop": 0.0653912569299282,
+          "separated_quartiles": false
+        },
+        {
+          "from": 33,
+          "to": 34,
+          "fraction_drop": 0.15118586541488188,
+          "separated_quartiles": false
+        },
+        {
+          "from": 34,
+          "to": 35,
+          "fraction_drop": 0.004046951081874139,
+          "separated_quartiles": false
+        },
+        {
+          "from": 35,
+          "to": 36,
+          "fraction_drop": 0.04991015201308058,
+          "separated_quartiles": false
+        },
+        {
+          "from": 37,
+          "to": 38,
+          "fraction_drop": 0.11788865668176007,
+          "separated_quartiles": false
+        },
+        {
+          "from": 39,
+          "to": 40,
+          "fraction_drop": 0.022050783622889036,
+          "separated_quartiles": false
+        },
+        {
+          "from": 40,
+          "to": 41,
+          "fraction_drop": 0.0452667867569414,
+          "separated_quartiles": false
+        },
+        {
+          "from": 44,
+          "to": 45,
+          "fraction_drop": 0.008637356217922942,
+          "separated_quartiles": false
+        },
+        {
+          "from": 45,
+          "to": 46,
+          "fraction_drop": 0.09019866434704538,
+          "separated_quartiles": false
+        },
+        {
+          "from": 48,
+          "to": 49,
+          "fraction_drop": 0.05574771960166258,
+          "separated_quartiles": false
+        }
+      ],
+      "decapsulate": [
+        {
+          "from": 2,
+          "to": 3,
+          "fraction_drop": 0.018333022507528773,
+          "separated_quartiles": true
+        },
+        {
+          "from": 5,
+          "to": 6,
+          "fraction_drop": 0.003908261424698578,
+          "separated_quartiles": false
+        },
+        {
+          "from": 28,
+          "to": 29,
+          "fraction_drop": 0.007487004950279097,
+          "separated_quartiles": false
+        }
+      ]
+    },
+    "classical_points": 0,
+    "quantum_points": 0,
+    "ram_points": 0,
+    "cpu": "AMD EPYC 9V45 96-Core Processor",
+    "implementation": "1801e41d077514e8e4cb492cf370256463a526886ebf6f09f8a4b54e4f2571e1",
+    "comparison_profile": "5a1979a2f491ae6e7a5cc40cb3f17141e2fab36da487dc9fcb413801de72e2c3"
+  },
+  {
+    "scheme": "ml-kem",
+    "stages": 6,
+    "configurations": 6,
+    "historical_report_sha256": "af10b7d46db7f58a7542ba5b6c2be97b8c02178129402caa98d22d6a152152b5",
+    "size_drops": {
+      "public": 0,
+      "cipher": 0
+    },
+    "timing_dips": {
+      "keygen": [],
+      "encapsulate": [],
+      "decapsulate": []
+    },
+    "classical_points": 1,
+    "quantum_points": 1,
+    "ram_points": 0,
+    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "implementation": "c1dbc2de55d46b6a6f8caf7d6f3b5a67a3dc9e4742ab568532bf27b543917543",
+    "comparison_profile": "a7d33a92798baf50cdf72303a015d8e76d90cd71d4f4fe71b6309713543a078d"
+  },
+  {
+    "scheme": "hqc",
+    "stages": 66,
+    "configurations": 66,
+    "historical_report_sha256": "9875b3afdfece615c7914619006b414fbdbd3d2090158e35a1cbfb1a2b8e0554",
+    "size_drops": {
+      "public": 0,
+      "cipher": 0
+    },
+    "timing_dips": {
+      "keygen": [
+        {
+          "from": 1,
+          "to": 2,
+          "fraction_drop": 0.006247300302366088,
+          "separated_quartiles": false
+        },
+        {
+          "from": 3,
+          "to": 4,
+          "fraction_drop": 0.016848451195811687,
+          "separated_quartiles": false
+        },
+        {
+          "from": 4,
+          "to": 5,
+          "fraction_drop": 0.00994021348867602,
+          "separated_quartiles": false
+        },
+        {
+          "from": 8,
+          "to": 9,
+          "fraction_drop": 0.0066744110914828125,
+          "separated_quartiles": false
+        },
+        {
+          "from": 13,
+          "to": 14,
+          "fraction_drop": 0.006119699724062566,
+          "separated_quartiles": false
+        },
+        {
+          "from": 18,
+          "to": 19,
+          "fraction_drop": 0.00043777824174784374,
+          "separated_quartiles": false
+        },
+        {
+          "from": 21,
+          "to": 22,
+          "fraction_drop": 0.00947973476805597,
+          "separated_quartiles": false
+        },
+        {
+          "from": 29,
+          "to": 30,
+          "fraction_drop": 0.0015148137722766908,
+          "separated_quartiles": false
+        },
+        {
+          "from": 31,
+          "to": 32,
+          "fraction_drop": 0.006462044579715331,
+          "separated_quartiles": false
+        },
+        {
+          "from": 36,
+          "to": 37,
+          "fraction_drop": 0.0506534743785414,
+          "separated_quartiles": false
+        },
+        {
+          "from": 37,
+          "to": 38,
+          "fraction_drop": 0.00018355766790600914,
+          "separated_quartiles": false
+        },
+        {
+          "from": 46,
+          "to": 47,
+          "fraction_drop": 0.0002344314809716863,
+          "separated_quartiles": false
+        },
+        {
+          "from": 51,
+          "to": 52,
+          "fraction_drop": 0.002489109057180916,
+          "separated_quartiles": false
+        },
+        {
+          "from": 52,
+          "to": 53,
+          "fraction_drop": 0.0031362075098698705,
+          "separated_quartiles": false
+        },
+        {
+          "from": 56,
+          "to": 57,
+          "fraction_drop": 0.0013982091468150992,
+          "separated_quartiles": false
+        },
+        {
+          "from": 62,
+          "to": 63,
+          "fraction_drop": 0.06654350316348023,
+          "separated_quartiles": true
+        },
+        {
+          "from": 63,
+          "to": 64,
+          "fraction_drop": 0.0006945688732280519,
+          "separated_quartiles": false
+        }
+      ],
+      "encapsulate": [
+        {
+          "from": 1,
+          "to": 2,
+          "fraction_drop": 0.00524846552832503,
+          "separated_quartiles": false
+        },
+        {
+          "from": 3,
+          "to": 4,
+          "fraction_drop": 0.0130984445048824,
+          "separated_quartiles": false
+        },
+        {
+          "from": 4,
+          "to": 5,
+          "fraction_drop": 0.0009378611432127038,
+          "separated_quartiles": false
+        },
+        {
+          "from": 8,
+          "to": 9,
+          "fraction_drop": 0.005364144303665608,
+          "separated_quartiles": false
+        },
+        {
+          "from": 13,
+          "to": 14,
+          "fraction_drop": 0.0023712563890690985,
+          "separated_quartiles": false
+        },
+        {
+          "from": 15,
+          "to": 16,
+          "fraction_drop": 0.000982713599820162,
+          "separated_quartiles": false
+        },
+        {
+          "from": 18,
+          "to": 19,
+          "fraction_drop": 0.0008913465975027846,
+          "separated_quartiles": false
+        },
+        {
+          "from": 20,
+          "to": 21,
+          "fraction_drop": 0.02298761756104928,
+          "separated_quartiles": false
+        },
+        {
+          "from": 31,
+          "to": 32,
+          "fraction_drop": 0.004224008338739038,
+          "separated_quartiles": false
+        },
+        {
+          "from": 36,
+          "to": 37,
+          "fraction_drop": 0.04583516138404131,
+          "separated_quartiles": true
+        },
+        {
+          "from": 46,
+          "to": 47,
+          "fraction_drop": 0.0009381565925403734,
+          "separated_quartiles": false
+        },
+        {
+          "from": 51,
+          "to": 52,
+          "fraction_drop": 0.004093457871669592,
+          "separated_quartiles": false
+        },
+        {
+          "from": 56,
+          "to": 57,
+          "fraction_drop": 0.0003350037376448345,
+          "separated_quartiles": false
+        },
+        {
+          "from": 57,
+          "to": 58,
+          "fraction_drop": 0.0004553607943820204,
+          "separated_quartiles": false
+        },
+        {
+          "from": 61,
+          "to": 62,
+          "fraction_drop": 0.000277374994334334,
+          "separated_quartiles": false
+        },
+        {
+          "from": 62,
+          "to": 63,
+          "fraction_drop": 0.06765836364573419,
+          "separated_quartiles": true
+        },
+        {
+          "from": 65,
+          "to": 66,
+          "fraction_drop": 0.0017883554566846538,
+          "separated_quartiles": false
+        }
+      ],
+      "decapsulate": [
+        {
+          "from": 1,
+          "to": 2,
+          "fraction_drop": 0.0052382504693067045,
+          "separated_quartiles": false
+        },
+        {
+          "from": 3,
+          "to": 4,
+          "fraction_drop": 0.010559147197538366,
+          "separated_quartiles": false
+        },
+        {
+          "from": 4,
+          "to": 5,
+          "fraction_drop": 0.0008241781584291674,
+          "separated_quartiles": false
+        },
+        {
+          "from": 8,
+          "to": 9,
+          "fraction_drop": 0.0051835985745695146,
+          "separated_quartiles": false
+        },
+        {
+          "from": 15,
+          "to": 16,
+          "fraction_drop": 0.004264643057563022,
+          "separated_quartiles": false
+        },
+        {
+          "from": 18,
+          "to": 19,
+          "fraction_drop": 0.0019082279601885244,
+          "separated_quartiles": false
+        },
+        {
+          "from": 20,
+          "to": 21,
+          "fraction_drop": 0.021222237362038432,
+          "separated_quartiles": false
+        },
+        {
+          "from": 21,
+          "to": 22,
+          "fraction_drop": 0.008150471583197039,
+          "separated_quartiles": false
+        },
+        {
+          "from": 29,
+          "to": 30,
+          "fraction_drop": 0.0007817375772053436,
+          "separated_quartiles": false
+        },
+        {
+          "from": 31,
+          "to": 32,
+          "fraction_drop": 0.003975465330593009,
+          "separated_quartiles": false
+        },
+        {
+          "from": 34,
+          "to": 35,
+          "fraction_drop": 0.00010049639614306827,
+          "separated_quartiles": false
+        },
+        {
+          "from": 36,
+          "to": 37,
+          "fraction_drop": 0.04749922085117675,
+          "separated_quartiles": true
+        },
+        {
+          "from": 51,
+          "to": 52,
+          "fraction_drop": 0.0035617051430276714,
+          "separated_quartiles": true
+        },
+        {
+          "from": 54,
+          "to": 55,
+          "fraction_drop": 0.0010452405005554333,
+          "separated_quartiles": false
+        },
+        {
+          "from": 56,
+          "to": 57,
+          "fraction_drop": 0.000507806458762361,
+          "separated_quartiles": false
+        },
+        {
+          "from": 57,
+          "to": 58,
+          "fraction_drop": 0.0005522307319294484,
+          "separated_quartiles": false
+        },
+        {
+          "from": 60,
+          "to": 61,
+          "fraction_drop": 0.0002961341888263469,
+          "separated_quartiles": false
+        },
+        {
+          "from": 61,
+          "to": 62,
+          "fraction_drop": 0.00035904910591533223,
+          "separated_quartiles": false
+        },
+        {
+          "from": 62,
+          "to": 63,
+          "fraction_drop": 0.06308388036733448,
+          "separated_quartiles": true
+        },
+        {
+          "from": 63,
+          "to": 64,
+          "fraction_drop": 0.000574769805171238,
+          "separated_quartiles": false
+        },
+        {
+          "from": 65,
+          "to": 66,
+          "fraction_drop": 0.0022511237542296447,
+          "separated_quartiles": false
+        }
+      ]
+    },
+    "classical_points": 0,
+    "quantum_points": 0,
+    "ram_points": 0,
+    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "implementation": "303e313759ccfb711b13673c075a23df82de1f49c0fd6d16af2ce4d25b424d87",
+    "comparison_profile": "a7d33a92798baf50cdf72303a015d8e76d90cd71d4f4fe71b6309713543a078d"
+  },
+  {
+    "scheme": "sntrup",
+    "stages": 25,
+    "configurations": 27,
+    "historical_report_sha256": "a0fdda1f455fd2204c940e52cc2999608ec2d367847f1a2b8c0838d9334d3884",
+    "size_drops": {
+      "public": 0,
+      "cipher": 0
+    },
+    "timing_dips": {
+      "keygen": [
+        {
+          "from": 2,
+          "to": 3,
+          "fraction_drop": 0.058520872516592104,
+          "separated_quartiles": true
+        },
+        {
+          "from": 22,
+          "to": 23,
+          "fraction_drop": 0.034136242892522595,
+          "separated_quartiles": true
+        }
+      ],
+      "encapsulate": [],
+      "decapsulate": [
+        {
+          "from": 2,
+          "to": 3,
+          "fraction_drop": 0.2001638448935008,
+          "separated_quartiles": true
+        },
+        {
+          "from": 22,
+          "to": 23,
+          "fraction_drop": 0.04155910773954674,
+          "separated_quartiles": true
+        }
+      ]
+    },
+    "classical_points": 12,
+    "quantum_points": 0,
+    "ram_points": 0,
+    "cpu": "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
+    "implementation": "999ea915c69b3d4834f070424501e9a0184158c71bedd651377c9bda9ff2d3e5",
+    "comparison_profile": "cae180448a15ac01247c7cd33a2ec8a478c58b3df89bae5a8f8ff801c440c7c0"
+  }
+]

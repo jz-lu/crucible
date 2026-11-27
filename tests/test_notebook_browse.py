@@ -35,7 +35,7 @@ def curated(tmp_path, monkeypatch):
     path = tmp_path / 'curated.json'
     value = {'format': notebook.FORMAT, 'notes': [
         {'id': f'curated-example-{number:03d}', 'revisions': [dict(content(title=f'Curated match {number}',
-            tags=['literature', 'curated-topic'], body='CURATED FULL BODY MUST NOT BE RETURNED'),
+            tags=['literature', 'curated-topic', 'ai-written'], body='CURATED FULL BODY MUST NOT BE RETURNED'),
             revision=1, createdAt=(number * 4 + 1) * 1000)]} for number in range(7)], 'views': []}
     path.write_text(json.dumps(value))
     monkeypatch.setattr(notebook, 'CURATED_NOTES_PATH', path)
@@ -78,15 +78,15 @@ def test_latest_summary_search_and_scopes_work_beyond_fifty_matches(system):
     assert len(page(owner, q='exact-topic', limit=100)['notes']) == 63
     assert page(owner, tag='exact')['notes'] == []
     changed = records[-1]
-    revise(owner, changed, content(title='Current unrelated title', claim='No match here.', tags=[]))
+    revise(owner, changed, content(title='Current unrelated title', claim='No match here.', tags=['ai-written']))
     assert changed['id'] not in {note['id'] for note in browse(owner, q='needle', limit=25)[0]}
     assert len(browse(owner, scope='mine', limit=25)[0]) == 93
 
 
 def test_search_uses_literal_wildcards_and_the_same_exact_tag_domain(system):
     _, owner, _, _, _ = system
-    literal = create(owner, content(title='100%_ literal', tags=['a,b', 'exact-tag']))
-    create(owner, content(title='100XX alternative', tags=['a', 'b', 'exact-tag-extra']))
+    literal = create(owner, content(title='100%_ literal', tags=['a,b', 'exact-tag', 'ai-written']))
+    create(owner, content(title='100XX alternative', tags=['a', 'b', 'exact-tag-extra', 'ai-written']))
     assert [note['id'] for note in page(owner, q='%_')['notes']] == [literal['id']]
     assert [note['id'] for note in page(owner, tag='exact-tag')['notes']] == [literal['id']]
     assert [note['id'] for note in page(owner, q='a,b')['notes']] == [literal['id']]
@@ -104,7 +104,7 @@ def test_human_written_filter_uses_latest_visible_tags_before_pagination(system,
     assert page(reader, scope='human', include_curated=True)['notes'] == []
     saved = records[0]
     request_publication(owner, saved); approve(reviewer, saved)
-    revised = revise(owner, saved, content(title='An agent revision', tags=['topic']))
+    revised = revise(owner, saved, content(title='An agent revision', tags=['topic', 'ai-written']))
     assert saved['id'] not in {item['id'] for item in browse(owner, scope='human')[0]}
     visible = page(reader, scope='human')['notes']
     assert [item['id'] for item in visible] == [saved['id']]
@@ -134,15 +134,15 @@ def test_merged_cursor_has_no_duplicates_and_default_mode_stays_account_only(sys
         assert 'CURATED FULL BODY' not in json.dumps(note)
 
 
-def test_saved_revision_time_reorders_owner_and_ignores_import_provenance(system):
+def test_explicit_recent_revision_order_ignores_import_provenance(system):
     _, owner, _, _, now = system
     first = create(owner, content(title='First note'))
     now[0] += 10
     second = create(owner, content(title='Second note'))
-    assert [item['id'] for item in page(owner)['notes']] == [second['id'], first['id']]
+    assert [item['id'] for item in page(owner, order='recent')['notes']] == [second['id'], first['id']]
     now[0] += 10
     revised = revise(owner, first)
-    listed = page(owner)['notes']
+    listed = page(owner, order='recent')['notes']
     assert [item['id'] for item in listed] == [first['id'], second['id']]
     assert listed[0]['revisions'][0]['created_at'] == now[0]
     assert listed[0]['created_at'] == first['created_at']
@@ -152,7 +152,7 @@ def test_saved_revision_time_reorders_owner_and_ignores_import_provenance(system
     imported['notes'][0]['revisions'][0]['createdAt'] = 0
     response = import_workspace(owner, imported)
     assert response.status_code == 200, response.text
-    listed = page(owner)['notes']
+    listed = page(owner, order='recent')['notes']
     assert listed[0]['imported'] is True
     assert listed[0]['revisions'][0]['created_at'] == now[0]
     assert [item['id'] for item in listed[1:]] == [revised['id'], second['id']]
@@ -163,13 +163,14 @@ def test_equal_time_order_is_stable_across_multiple_pages(system):
     records = seed_notes(owner, 73)
     with app.state.db.transaction(write=True) as session:
         session.execute(update(notebook.NotebookRevision).values(created_at=123.25))
+        session.execute(update(notebook.NotebookNote).values(created_at=123.25))
     found, sizes = browse(owner, limit=25)
     assert sizes == [25, 25, 23]
     assert [item['id'] for item in found] == [item['id'] for item in records]
     first = page(owner, limit=25)
     assert first['next_after'] != first['notes'][-1]['id']
     assert notebook._read_browse_cursor(first['next_after']) == (
-        app.state.clock(), notebook._browse_rank(0, 123.25, app.state.clock()), 123.25, records[24]['id'])
+        app.state.clock(), 0, 123.25, records[24]['id'])
 
 
 def test_private_edits_do_not_change_readers_order_timestamps_or_cursor(system):
@@ -237,9 +238,9 @@ def test_invalid_and_legacy_cursors_fail_clearly(system, cursor):
 
 def test_search_does_not_reveal_private_later_versions_or_other_accounts(system, curated):
     _, owner, reviewer, reader, _ = system
-    first = create(owner, content(title='Shared match', tags=['literature']))
+    first = create(owner, content(title='Shared match', tags=['literature', 'ai-written']))
     request_publication(owner, first); approve(reviewer, first)
-    revise(owner, first, content(title='PRIVATE_LATER_TOKEN', tags=['private-only']))
+    revise(owner, first, content(title='PRIVATE_LATER_TOKEN', tags=['private-only', 'ai-written']))
     create(owner, content(title='PRIVATE_NEW_TOKEN'))
     for actor in (reader, reviewer):
         assert page(actor, include_curated='true', q='PRIVATE_')['notes'] == []
@@ -254,10 +255,10 @@ def test_search_does_not_reveal_private_later_versions_or_other_accounts(system,
 
 def test_retired_shared_scope_does_not_disclose_notes_or_curated_matches(system, curated):
     _, owner, reviewer, reader, _ = system
-    first = create(owner, content(title='EARLIER_PRIVATE_TOKEN', tags=['earlier-private']))
+    first = create(owner, content(title='EARLIER_PRIVATE_TOKEN', tags=['earlier-private', 'ai-written']))
     public = revise(owner, first, content(title='Public snapshot'))
     request_publication(owner, public); approve(reviewer, public)
-    latest = revise(owner, public, content(title='PRIVATE_LATEST_TOKEN', tags=['granted']))
+    latest = revise(owner, public, content(title='PRIVATE_LATEST_TOKEN', tags=['granted', 'ai-written']))
     seed_legacy_shares(owner, latest, ['reader'])
     for actor in (owner, reviewer, reader):
         response = actor.client.get('/api/notebook/notes', params={'scope':'shared', 'include_curated':'true'})
@@ -283,7 +284,7 @@ def test_legacy_grants_do_not_affect_search_or_newest_first_pagination(system, c
     assert [row['id'] for row in found] == [record['id'] for record in reversed(owned)]
     assert all(row['can_edit'] and row['revision_count'] == 1 for row in found)
     assert page(reader, q='PRIVATE_BODY_ONLY_TOKEN')['notes'] == []
-    revise(owner, records[30], content(title='Needle newest private', tags=['shared-topic']))
+    revise(owner, records[30], content(title='Needle newest private', tags=['shared-topic', 'ai-written']))
     assert page(reader, q='needle', tag='shared-topic', limit=1)['notes'][0]['id'] == owned[-1]['id']
 
 
@@ -294,7 +295,7 @@ def test_merged_curated_proposals_remain_exact_and_private_across_old_revisions(
     old = {key: val for key, val in source['revisions'][0].items() if key in notebook.CONTENT_FIELDS}
     ref = {'id': 'curated:' + source['id'], 'revision': 1, 'content_sha256': notebook._hash(old)}
     record = submit(owner, ref, purpose='visualization_nomination')
-    source['revisions'].append(dict(content(title='Current curated summary', tags=['literature']), revision=2, createdAt=2000))
+    source['revisions'].append(dict(content(title='Current curated summary', tags=['literature', 'ai-written']), revision=2, createdAt=2000))
     path.write_text(json.dumps(value))
     for actor in (owner, reviewer):
         records = page(actor, include_curated='true', proposals_only='true')['notes']
@@ -402,11 +403,11 @@ def test_published_archive_is_exact_reversible_and_preserves_owner_access(system
     from test_note_ratings import agent
     _, owner, reviewer, reader, _ = system
     path, value = curated
-    old = create(owner, content(title='A placeholder test', tags=['only-in-archive']))
+    old = create(owner, content(title='A placeholder test', tags=['only-in-archive', 'ai-written']))
     request_publication(owner, old); approve(reviewer, old)
-    saved = revise(owner, old, content(title='Another placeholder', tags=['only-in-archive']))
+    saved = revise(owner, old, content(title='Another placeholder', tags=['only-in-archive', 'ai-written']))
     request_publication(owner, saved); approve(reviewer, saved)
-    other = create(owner, content(title='A substantial control note', tags=['research']))
+    other = create(owner, content(title='A substantial control note', tags=['research', 'ai-written']))
     request_publication(owner, other); approve(reviewer, other)
     pin = {key: saved[key] for key in ('revision', 'content_sha256')}
     entry = dict(pin, note_id=saved['id'], reason='Operational test, without research evidence.')
@@ -439,7 +440,7 @@ def test_published_archive_is_exact_reversible_and_preserves_owner_access(system
     assert saved['id'] in {note['id'] for note in page(reader)['notes']}
     entry['content_sha256'] = pin['content_sha256']
     notebook.EDITORIAL_SELECTION_PATH.write_text(json.dumps(selection))
-    new = revise(owner, saved, content(title='A substantive replacement', tags=['research']))
+    new = revise(owner, saved, content(title='A substantive replacement', tags=['research', 'ai-written']))
     assert saved['id'] not in {note['id'] for note in page(reader)['notes']}  # New draft stays private.
     request_publication(owner, new); approve(reviewer, new)
     assert next(note for note in page(reader)['notes'] if note['id'] == saved['id'])['revision'] == new['revision']

@@ -1,0 +1,137 @@
+CRUCIBLE: ORGANIZATIONAL MODEL FOR DISCUSSION
+23 November 2026. Design draft, not an implementation or deployment claim.
+
+Purpose and recommendation
+--------------------------
+Crucible should help people understand cryptographic ideas, investigate them,
+and turn useful findings into carefully reviewed changes. The architecture
+should distinguish those activities without making participants learn it first.
+Use five functional compartments below. These are ownership boundaries, not
+five required navigation tabs, five databases, or five separate services.
+For a newcomer, the simpler mental model can be Understand / Investigate /
+Contribute. Navigation should follow frequent tasks rather than the schema.
+
+1. Research record and substantiation
+------------------------------------
+Owns: authored research, immutable revisions, precise statements, assumptions,
+arguments, citations, uncertainty, and explicit relationships between findings.
+Input: a question, conjecture, construction, proof, obstruction or observation.
+Output: durable research that others can inspect, cite and challenge exactly.
+The notebook is its primary authoring and reading surface. Experimental
+receipts remain owned by the experiment system; notes cite and interpret them.
+
+An assumption is a precise unproved premise used in an argument, not another
+repository of prose. Give statements stable note-local IDs and exact revision
+links. A dedicated assumption view can aggregate its uses and responses without
+duplicating the definition. One note can contain several statements; several
+arguments can use the same exact statement in different scopes.
+The statement and its use must be distinct: record which conclusion depends
+on it, the role it plays, parameter coverage and relevant model. A restriction
+such as classical adversaries is not automatically an unproved assumption.
+An authored 'supports' edge is not proof. Publication is not substantiation.
+
+Pushback: turning every interesting sentence into a formal object would hinder
+exploration. Ordinary notes should remain easy to write. Add precise statements
+where reuse or a consequential dependency makes the extra structure valuable.
+Separate assumptions into another compartment only if they acquire genuinely
+independent operations, not merely because they deserve a prominent view.
+
+2. Constructions and experiments
+--------------------------------
+Owns: exact scheme releases, parameter configurations, default progressions,
+implementation identities, challenge protocols, measurements and result receipts.
+Input: a defined construction, runnable implementation and explicit experiment.
+Output: identified observations, with enough provenance to reproduce or dispute.
+A stage is a position in one versioned progression; an instance is a particular
+issued challenge. Neither is a universal measure of security. Historical result
+identities must survive a changed progression or a better implementation.
+The scheme record identifies what is running and cites its research sources;
+it should not silently become a competing mathematical specification.
+
+3. Work and incentives
+---------------------
+Owns: actionable tasks, completion criteria, verification plans, participation,
+bounty allowance, boosts and earned-award records.
+Input: a worthwhile question and an intelligible standard for completing it.
+Output: coordinated work, contribution claims and recognition when justified.
+A bounty is a task that cites research; it is not a kind of note. Its solution
+can be explained in a contribution note. Exploration need not begin with a
+bounty, and useful research need not earn points to deserve preservation.
+An incentive rule allocates attention or recognition; it does not establish
+mathematical validity or cross-scheme difficulty.
+
+4. Decisions and adoption
+------------------------
+Owns: who may decide which transition, the exact evidence reviewed, the scope
+and reasons of that decision, and the record of subsequent implementation.
+Input: a deliberate request referring to exact research, task or release state.
+Output: an accountable decision and, separately, evidence of follow-through.
+Keep publication screening, substantive review and operational adoption distinct.
+The first asks whether material is suitable to share. The second assesses a
+specific proposed action or claim. The third establishes what actually changed.
+Approved, in progress, completed and live must not be interchangeable labels.
+Work coordination owns a task's promise; this compartment supplies the authority
+for admitting the task or accepting a solution. The award ledger then records
+the consequence. A boost cannot purchase approval, and a pending claim is not
+an award. Human and agent interfaces must preserve these same boundaries.
+
+5. Views and orientation
+-----------------------
+Owns: comprehensible projections, navigation, search, filters and reading context.
+Input: authorized research, experiments, work and decisions.
+Output: note lists, scheme pages, graphs, timelines, maps, boards and profiles.
+A resource curve answers a different question from a premise-dependency graph,
+a chronology, or a work-status board. Name that question and expose provenance.
+Views should not maintain competing scientific status. Drawing an edge does
+not establish a reduction; a recovery line does not establish a security bound.
+Cached projections are appropriate, provided identity, freshness and permissions
+remain correct. An exact citation never grants access to its target.
+
+Contracts joining the compartments
+---------------------------------
+Research reference: note ID + revision + content hash; add a statement, argument
+or section ID when a specific part is meant. Display numbers are conveniences.
+Experiment reference: scheme/release + exact configuration + implementation and
+protocol identity + receipt identity. Retain original inputs where applicable.
+Task reference: immutable terms + exact source pins + exact contribution pins.
+Decision reference: the submitted identity, authorized actor, outcome and scope.
+Adoption reference: the decision plus evidence of the actual implementation or
+release. A completed tracking event is not itself a deployment receipt.
+Views join these identities. Labels, titles and stage numbers are not join keys.
+These are conceptual contracts; they do not assert that every join has a live UI.
+
+Stress tests
+------------
+New scheme: research definition and premises -> admission review -> implemented
+release/configurations and tests -> catalogue. A bounty is optional.
+Attack a premise: publish an exact objection and evidence -> expose affected
+uses -> assess consequences. Do not automatically erase dependent findings.
+Improve a decoder: state what changes -> compare correctness and costs under
+identified settings -> review -> integrate. Preserve earlier measurements.
+Solve a bounty: published contribution -> independent completion assessment ->
+task settlement. Publishing a note alone does not complete its bounty.
+Replicate a result: recover original inputs and identities -> produce a separate
+receipt -> relate it to the original. Do not overwrite history or award a false
+first breakthrough. Failed replication also needs a clear account of differences.
+
+Capability boundary at this draft
+---------------------------------
+CURRENT SOURCE (09958b2): durable notes/revisions and exact citations; publication
+screening with configured modes; human proposal/bounty decisions; versioned
+challenges and receipts; CLI access; resource charts, maps, timeline and profiles.
+Source capability alone does not prove a feature is enabled on the hosted site.
+CURRENT SOURCE, LOCAL-ONLY WORKFLOW: precise statement/argument selection and
+review experiments have local targets; do not portray them as hosted authority
+over schemes, correctness, security curves or deployments.
+LOCAL CHANGE IN THIS CHECKOUT: explicit implementation-progress events after
+qualifying proposal decisions, including completion evidence and reopening.
+These events do not automatically publish, deploy, admit schemes or award points.
+PROPOSED HERE: this five-part model, a consistent end-to-end lineage view and
+newcomer orientation. A comprehensive dependency-impact view remains design work.
+No additional service, infrastructure or automatic scientific verifier is proposed.
+
+Source anchors
+--------------
+docs/agent-workflow.txt; docs/bounties-backend.txt; docs/scoring-v11.txt;
+docs/statement-trial-review.txt; docs/proposal-implementation.txt;
+crucible/notebook_graph.py; crucible/research_reviews.py; crucible/scoring.py.

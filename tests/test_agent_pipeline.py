@@ -288,20 +288,20 @@ def test_current_scoring_guidance_resolves_live_policy_without_old_formulas():
     from crucible.scoring_awards import ADMISSION_POLICY_ID, ADMISSION_POINTS, ACTIVE_WEEK_POINTS
 
     pipeline = json.loads((ROOT / "web/agent/pipeline.json").read_text())
-    assert agent_guidance.RESOURCES["scoring-policy.txt"][0] == "docs/scoring-v11.txt"
+    assert agent_guidance.RESOURCES["scoring-policy.txt"][0] == "docs/scoring-v12.txt"
     assert agent_guidance.RESOURCES["scoring-base.txt"] == agent_guidance.RESOURCES["scoring-policy.txt"]
     assert agent_guidance.RESOURCES["scheme-admission-policy.txt"][0] == "docs/scheme-admission-points-v2.txt"
     rules = {item["id"]: item for item in pipeline["rules"]}
     recovery = rules["scoring.evidence-not-labels"]["instruction"]
     admission = rules["scoring.admission-and-credit"]["instruction"]
     assert scoring.POLICY_ID in recovery
-    assert f"{scoring.FRONTIER_POINTS} points once per enrolled scheme" in recovery
-    assert "ordinary personal progress" in recovery and "add no numerical points" in recovery
+    assert f"earns {scoring.FRONTIER_POINTS} points, including later advances by the same account" in recovery
+    assert "ordinary personal progress" in recovery.lower() and "add no numerical points" in recovery
     assert ADMISSION_POLICY_ID in admission
     assert f"{ADMISSION_POINTS:,} plus {ACTIVE_WEEK_POINTS} per completed active week" in admission
     assert "Mere proposal approval" in admission and "stops future weekly accrual" in admission
     assert "registry removal is not a retirement timestamp" in admission
-    assert "+1/+2 author weights" in admission
+    assert "one point per supporting account" in admission
     current_rules = " ".join(item["instruction"] for item in pipeline["rules"])
     assert "maximum personal weight" not in current_rules
     assert "1,000-point new-family award" not in current_rules

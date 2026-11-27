@@ -1,0 +1,184 @@
+Notes and challenge stages — local development checkpoint, 27 November 2026
+
+Agreed next work
+
+1. After the user's final UI check, rebuild the local example notes one at a
+   time, starting with scheme explanations and their security/correctness
+   dependencies. Preserve original research records and exact historical links.
+   Do not delete or relabel published sources to simplify the examples.
+2. Reassess the scientific meaning and presentation of challenge stages and
+   resource/security figures alongside this work. The user does not consider
+   four equally prominent figures an established final design.
+
+Current implementation inspected, not a completed scientific audit
+
+crucible/progressions.py separates immutable parameter configurations from their
+ordered, versioned default progression. The routes have different stage counts.
+The module-lattice route has six degree settings; Frodo has eighty dimension
+settings; McEliece retains fifty shortened lengths at fixed m/t. Several route
+descriptions explicitly qualify optimality, attack coverage or correctness
+model assumptions. These declarations are useful safeguards, not proof that
+every route is the best scientific or human-facing choice.
+
+web/app.js currently gives public-key size, ciphertext size, computation and
+security/reference work four graph positions. Runtime and security are different
+kinds of evidence. web/resource-metrics.js also distinguishes instruments and
+measurement environments. Process RSS has already been removed from prominent
+choices; its retained historical measurements are not scheme memory requirements.
+
+Next audit: separate three questions
+
+Stage construction: does each configuration authentically instantiate the
+declared family? Is the correctness envelope acceptable without making later
+stages unreliable? Are there avoidable inefficient parameter choices? What
+supports the progression order and endpoint? More stages and smoother curves
+are not scientific improvements by themselves.
+
+Measurement: trace each plotted value to the exact configuration, implementation,
+workload, instrument and raw evidence. Check encoded lengths, operation boundaries,
+warm/cold calls, RNG/allocation/setup treatment, sampling, unsuccessful attempts,
+machine/compiler identities and stale evidence. Investigate irregularities without
+smoothing them away. Distinguish mathematical cost from a particular implementation's
+runtime. Review the currently active reports, not only dated benchmark summaries.
+
+Presentation: distinguish costs to honest users, modeled attacker work, and actual
+recorded recoveries. Do not imply that an attack-work estimate is a proved security
+lower bound, that stage numbers are comparable across schemes, or that the highest
+recovery proves every smaller setting was recovered. Explain unknowns through the
+scheme's supporting notes, with detailed evidence available on demand.
+
+Candidate interface to workshop, not an approved redesign
+
+Make choosing a meaningful stage and understanding what has been recovered the
+primary task. Present a compact selected-configuration summary. Consider one main
+stage explorer with switchable cost metrics, while placing attack evidence and
+its assumptions in a distinct area. Do not combine units into one score or normalize
+opposite objectives merely to obtain a single attractive curve. An eventual
+security/cost tradeoff plot needs defensible, comparably scoped attack references;
+the current stage axis remains useful navigation without claiming that comparison.
+
+Deliverable before modifying routes
+
+A short scheme-by-scheme disposition: retain, investigate, or propose a replacement;
+evidence and uncertainty for each; a small local visualization prototype; and an
+explicit migration/evidence plan for any changed configuration. No production
+deployment, benchmark rerun, stage redefinition or new note corpus is authorized
+by this checkpoint alone beyond the ongoing local review/iteration work.
+
+Current notes checkpoint
+
+Sections use deterministic note-and-heading references. In note 56, the second
+section is 56.2; its first subsection is 56.2.1. The short resolver includes the
+saved revision: GET /api/notebook/locs/56.2@3. Reads/copies do not allocate a
+counter or mark a section as cited. Human labels omit the revision (Assumption
+56.2, Lemma 56.3, or Section 56.4); the kind follows an explicit author designation,
+never an inferred mathematical assessment. A heading margin shows [2] only when
+an accessible saved citation or argument uses it. Private incoming uses are not
+revealed to other readers.
+
+Saved note reads include section_refs_by_revision, mapping exact passage,
+statement or companion-section anchors to these labels and locs. The human
+Markdown editor accepts [Assumption 56.2](loc:56.2@3), then resolves and saves a
+portable guarded URL with note ID, revision, content hash and exact anchor.
+Agents should GET the loc, verify the source and qualifications, and save the
+returned URL/reference rather than bare installation-local shorthand. Scientific
+dependencies still use the returned exact passage or statement pin, never the
+human label alone. Copying a bare number to another installation is not portable.
+
+A section includes its subsections until the next same-or-higher heading. Later
+edits may change section ordinals; the @revision pin preserves the old source.
+Existing P.N aliases and the legacy allocation endpoint remain compatible, but
+new UI references never allocate them. Access is checked on every resolution;
+numbers do not grant access. CLI: notes resolve 56.2@3; historical P.33 also works.
+
+Next: compare three quieter list layouts with AI/Hybrid badges inside the reader
+only. Outer publication controls and timestamps are removed. Both reading modes
+remain present, with an explicit message for missing material. Default order is
+own pending publication requests first, then newest first-publication/creation
+age; edits and upvotes do not bump that age. Draft a compact Needs changes review
+state after choosing a list layout. Then begin the graph/stage audit above.
+
+Local comparison checkpoint, 2026-11-27
+
+Three list layouts are saved in outputs/notes-layout-options-20261127/index.html
+at the workspace root (two directories above this checkout). A keeps occasional
+badges beside the title; B uses a separate right column; C keeps them below the
+title. These are browser-only illustrative overlays. The production list has
+initially had not adopted one of them. The user subsequently chose A: badges
+immediately after the title. It is now applied to the local application, with
+consistent minimum row spacing and a narrow-screen wrap. AI/Hybrid badges stay
+in the reader; Human-written, Literature and workflow-derived Proposal remain
+available outside. No stored authorship changes. Reviewer workspace is unchanged.
+
+The adjacent outputs/note-review-template-20261127/index.html is an isolated
+interactive design template, not a connected review service. It provides author
+states (In review, Needs changes, Private, Published) and a compact reviewer view.
+All buttons alter only the temporary page; no request, edit or decision is sent.
+The requested change is one short, attributed reason inside the reader. List
+rows need only a status. Automated uncertainty remains In review, not rejected.
+Scientific validity is not inferred from a publication decision. A normal
+published note has no extra success banner or published badge.
+
+The existing backend already supports changes_requested with a reviewer reason.
+Actual integration should reuse it, retain exact revision/hash checks and preserve
+the existing private feedback permissions. The current backend requires an edit
+before resubmission after that decision. Reconsideration of an unchanged revision
+is an unresolved product decision; do not implement a fake edit or silently erase
+the review to bypass it. Consider a bounded human reconsideration path if needed.
+This prototype does not change those rules or automatic screening behavior.
+
+Checked: desktop/mobile reference copying and resolution make no mutations;
+one-to-four-digit vote counts retain a 20px gap before the title with no overflow;
+the review prototype supports return/edit/request interactions at both widths.
+The CLI derived-reference test uses the explicit notes:read and notebook scopes,
+matching the separate API permissions instead of loosening authentication.
+
+Representative populated layout, 2026-11-27
+
+outputs/populated-notes-20261127/index.html is a responsive, static rendering of
+16 plausible sample notes, produced through the real list renderer using read-only
+browser API fixtures. It includes three Human-written labels, proposal/literature
+combinations, two own pending requests, one own private draft, votes from 0 to 104,
+longer research titles and a longer handle. No saved notes or accounts were changed.
+It is available from the ignored local design server at /filled/ on port 8019.
+This snapshot is for layout inspection, not editing or publishing.
+
+The exercise found overly aggressive one-line tablet truncation and unnecessary
+stacking of paired tags. Local list CSS now permits two title lines at every
+width and gives paired badges enough space to sit together. Minimum row spacing,
+the vote column and author alignment remain intact. At 1440, 1024, 768 and 390px,
+the rendered sample had no title/tag/author overlaps or horizontal overflow.
+This is responsive-layout evidence, not a claim about every possible input or
+the full publication workflow. Long mobile titles still truncate after two lines;
+their full titles remain available in the working reader.
+
+27 November — completed local review checkpoint
+
+The user chose the list layout with major badges after the title and only
+Human-written authorship advertised in the list. The reader keeps all declared
+authorship. Its vote now sits to the right of the title. Own-note counts retain
+hover styling without a rating action. Publication state sits between the major
+badges and minor topic tags, separated by quiet vertical rules where adjacent
+groups exist. The review workspace keeps its separate presentation.
+
+A realistic populated-list sample was approved. Current graph work has produced
+an independent local explorer, not a replacement application route:
+http://127.0.0.1:8019/graphs/
+The user specifically asks for understandable titles, concise explanations and
+a clear goal/setup, with technical detail available without dominating the UI.
+
+The first scientific/measurement review and remaining uncertainties are recorded
+in docs/stage-graph-review-20261127.txt. All377 current default configurations and
+encoded lengths match the retained October batch. Current live activation was
+not checked. Large DH/EC timing discontinuities need targeted reproduction;
+McEliece needs a joint-parameter route study; HQC needs its model/endpoint review.
+No stages, evidence activations or production records were changed.
+
+Graph design feedback incorporated during this checkpoint:
+- This is a proposed replacement for the scheme overview reached from Schemes.
+  Its structure may change, but it must fit the application's navigation and feel.
+- Security and Correctness links should remain prominent near the scheme title.
+- Public key, ciphertext and runtime deserve fuller practical explanations.
+- Remove generic Method/source and plotted-values controls from the default UI.
+- Show a long progression to evaluate the interaction; Frodo80 is the default.
+  Hover previews a stage; click pins it. Keyboard arrows/Enter mirror that flow.

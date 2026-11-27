@@ -88,7 +88,7 @@ def test_zero_result_accounts_have_shared_zero_rank_and_bounded_pagination(curre
     assert [row["handle"] for row in last["people"]] == ["charlie"]
     assert not last["pagination"]["has_more"]
     assert people(app, offset=99)["people"] == []
-    assert first["scoring"]["policy_id"] == "crucible-points-v11"
+    assert first["scoring"]["policy_id"] == "crucible-points-v12"
 
 
 @pytest.mark.parametrize("query", [{"limit": 0}, {"limit": 101}, {"offset": -1}, {"limit": "x"}])

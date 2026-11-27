@@ -84,7 +84,7 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
  });
  await test('frozen bounties show their review state without inviting unavailable contributions',async()=>{
   const app=await boot({actor:user,hook:(url,options,envelope)=>url.pathname==='/api/bounties'?envelope({bounties:[{...bounties[0],status:'frozen'}]}):undefined});
-  assert.match(app.$('#home-bounties').textContent,/Review in progress/);assert.doesNotMatch(app.$('#home-bounties').textContent,/Open for contributions/);
+  assert.match(app.$('#home-bounties').textContent,/Review in progress/);assert.doesNotMatch(app.$('#home-bounties').textContent,/Active/);
  });
  await test('a slow or failed progress read never blocks the introduction or the other highlight',async()=>{
   const pending=deferred();const app=await boot({actor:user,hook:url=>url.pathname==='/api/schemes'?pending.promise:undefined});
@@ -125,7 +125,7 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
   const app=await boot({actor:user,hash:'#about'});app.window.CrucibleFeatures={bounties:false};await app.navigate('#home');
   assert.equal(app.$('#home-bounties-panel').hidden,true);assert.equal(app.$('#home-bounty-guide').hidden,true);assert.equal(app.requests.some(r=>r.url.pathname==='/api/bounties'),false);
   const empty=await boot({actor:user,hook:(url,options,envelope)=>url.pathname==='/api/schemes'?envelope({schemes:[]}):url.pathname==='/api/bounties'?envelope({bounties:[]}):undefined});
-  assert.match(empty.$('#home-schemes').textContent,/No schemes/);assert.match(empty.$('#home-bounties').textContent,/No open bounties/);
+  assert.match(empty.$('#home-schemes').textContent,/No schemes/);assert.match(empty.$('#home-bounties').textContent,/No active bounties/);
  });
  console.log(`${passed} home-page checks passed.`);
 })().catch(error=>{console.error(error);process.exitCode=1;});
