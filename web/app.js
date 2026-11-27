@@ -19,7 +19,7 @@ const state = {
   submitBusy: false, pendingAttempt: null, roundRefreshing: false,
   challengeRequest: 0, leaderboardRequest: 0, submissionChallenge: null,
   leaderboardDataKey: null, leaderboardPendingKey: null,
-  historyRequest: 0, recoveryRequest: 0, catalogueRequest: 0, catalogueRevision: null, sessionRevision: 0,
+  historyRequest: 0, recoveryRequest: 0, catalogueRequest: 0, catalogueRevision: null, recoveryScoring: null, sessionRevision: 0,
   peopleRequest: 0, personRequest: 0, personHandle: null, personDataKey: null,
   people: [], peoplePagination: null,
   connectCode: null, connectRequest: 0, connection: null, connectBusy: false,
@@ -34,6 +34,8 @@ let toastTimer;
 let roundRetryAt = 0;
 let sessionSynchronization = null;
 let documentEpoch = 0, documentRetired = false, initializationRequest = 0;
+let newcomerOrientation = null, orientationSuspended = false, orientationReturnRoute = null;
+let accountPoints = null, accountPointsLoad = null, accountPointsEpoch = 0, accountPointsAt = 0, accountPointsTimer = null;
 let initializationPending = false, resumeInitialization = false;
 const researcherEditor = {account: null, request: 0, base: null, pending: null, open: false, busy: false, loading: false, conflict: false, contextRequired: false, guarded: false};
 function ownsDocument(epoch) { return !documentRetired && documentEpoch === epoch; }
@@ -43,6 +45,8 @@ window.addEventListener('pagehide', () => {
   // A restored document must not attach to requests owned by its retired visit.
   // Keep completed snapshots; detach only in-flight handoffs and read owners.
   catalogueLoad = null; mapCatalogueLoad = null; releaseLoads.clear();
+  accountPointsEpoch++; accountPointsLoad = null; accountPointsAt = 0;
+  if (accountPointsTimer !== null) clearTimeout(accountPointsTimer); accountPointsTimer = null;
   pendingReads.clear(); intendedReads.clear(); warmedReads.clear(); notebookEarlyReads.clear(); readViewEpoch++;
   sessionSynchronization = null; state.roundRefreshing = false;
   state.challengeStartIntent = null;
@@ -265,6 +269,8 @@ const protectedRequests = new Set();
 const browsingRequests = new Set();
 const dialogTriggers = new WeakMap();
 const authDialog = $('#auth-dialog');
+const challengeStartDialog = $('#challenge-start-dialog');
+let challengeStartChoice = null;
 const submissionDialog = $('#submission-dialog');
 const recoveryDialog = $('#recovery-dialog');
 const findingDialog = $('#finding-dialog');
@@ -374,7 +380,7 @@ function recoveryTemplate(challenge) {
       fields: 'Required: format, challenge_id, candidate, method.name, method.pseudocode, compute.hardware, compute.workers, compute.wall_seconds, compute.precomputation, compute.peak_memory. Optional: ai_model, compute.notes and this _instructions object. No other fields are accepted.',
       instructions: 'You may keep or remove _instructions. If kept, it must be an object of text values. It is guidance only, ignored when submitting; editing it cannot change validation rules.',
       format: 'Keep format exactly "crucible-recovery-v1". Required text fields and the null attack-time placeholder must be filled in before import.',
-      challenge_id: 'Use the exact challenge.id from the downloaded challenge contract or this template. The website looks up that instance and selects its scheme, release, and parameter profile automatically, even if another profile is displayed. It must belong to the signed-in account, still be open, and have no final answer. Do not replace this ID with a stage number or parameter-set name.',
+      challenge_id: 'Use the exact challenge.id from the downloaded challenge contract or this template. The website looks up that instance and selects its scheme, release, and parameter profile automatically, even if another profile is displayed. It must belong to the signed-in account, still be open, and have no final answer. Do not replace this ID with a level number or parameter-set name.',
       candidate: `The complete ${keyBytes}-byte shared secret: exactly ${keyBytes * 2} hexadecimal characters. Uppercase or lowercase accepted; no spaces, line breaks, or 0x prefix.`,
       'method.name': 'Required nonblank text, at most 100 Unicode characters; a short descriptive name for the attack.',
       'method.pseudocode': 'Required nonblank text, at most 15000 Unicode characters. Describe the algorithm, key derivation, and preparation. The method object must also fit within a 65536-byte JSON request, including escapes. Pseudocode is stored as text, never executed.',
@@ -400,6 +406,43 @@ function node(tag, text, className) {
   return element;
 }
 function setText(selector, text) { $(selector).textContent = text ?? ''; }
+// Decorate action arrows without replacing their buttons or event handlers.
+function actionArrowDirection(glyph) { return {'←':'back','↗':'up','↙':'down','↓':'vertical-down','↑':'vertical-up','↘':'down-right','↖':'up-left'}[glyph] || 'forward'; }
+function decorateActionArrows(root = document) {
+  const selector = 'button,a.button,a.text-button,a.nb-button,a.nb-link,.home-section-heading > a';
+  const actions = [...(root.matches?.(selector) ? [root] : []),...root.querySelectorAll(selector)];
+  const visit = element => {
+    if (element.matches?.('.action-arrow,svg,code,pre')) return;
+    if (element.tagName === 'SPAN' && !element.childElementCount && /^[→↗←↙↓↑↘↖]$/.test(element.textContent.trim())) { const glyph = element.textContent.trim(); element.classList.add('action-arrow'); element.setAttribute('data-direction',actionArrowDirection(glyph)); return; }
+    for (const child of [...(element.childNodes || [])]) {
+      if (child.nodeType === 3 && /[→↗←↙↓↑↘↖]/.test(child.textContent)) {
+        const fragment = document.createDocumentFragment();
+        for (const part of child.textContent.split(/([→↗←↙↓↑↘↖])/)) {
+          if (/^[→↗←↙↓↑↘↖]$/.test(part)) { const arrow = node('span',part,'action-arrow'); arrow.setAttribute('data-direction',actionArrowDirection(part)); fragment.append(arrow); }
+          else if (part) fragment.append(document.createTextNode(part));
+        }
+        child.replaceWith(fragment);
+      } else if (child.nodeType === 1) visit(child);
+    }
+  };
+  for (const action of actions) visit(action);
+}
+decorateActionArrows();
+if (typeof MutationObserver === 'function') {
+  const pending = new Set(); let scheduled = false;
+  const watch = new MutationObserver(records => {
+    for (const record of records) {
+      const target = record.target.nodeType === 1 ? record.target : record.target.parentElement;
+      const action = target?.closest?.('button,a'); if (action) pending.add(action);
+      for (const added of record.addedNodes || []) if (added.nodeType === 1) pending.add(added);
+    }
+    if (!pending.size || scheduled) return;
+    scheduled = true; queueMicrotask(() => { scheduled = false; if (documentRetired) { pending.clear(); return; } for (const root of pending) if (root.isConnected) decorateActionArrows(root); pending.clear(); });
+  });
+  const start = () => watch.observe(document.body,{childList:true,subtree:true,characterData:true}); start();
+  window.addEventListener('pagehide',() => { watch.disconnect(); pending.clear(); });
+  window.addEventListener('pageshow',event => { if (event.persisted) { start(); decorateActionArrows(); } });
+}
 function setError(selector, message) {
   const target = $(selector);
   target.textContent = message || '';
@@ -443,8 +486,9 @@ function exactProfileRecords(scheme, profile = null) {
 }
 function profileLabel(profile, scheme = null) {
   return namedParameters(scheme, profile) ? profile?.profile_label || profile?.name || profileId(profile) :
-    profile?.stage_label || (instanceSize(profile) == null ? profile?.native_parameter_label || profileId(profile) : 'Stage ' + instanceSize(profile));
+    (profile?.stage_label && levelTerminology(profile.stage_label)) || (instanceSize(profile) == null ? profile?.native_parameter_label || profileId(profile) : 'Level ' + instanceSize(profile));
 }
+function levelTerminology(text) { return typeof text !== 'string' ? text : text.replace(/\bStages\b/g,'Levels').replace(/\bStage\b/g,'Level').replace(/\bstages\b/g,'levels').replace(/\bstage\b/g,'level'); }
 function orderedProfiles(scheme) {
   return (scheme?.profiles || []).filter(profile => !scheme?.default_progression || Number.isSafeInteger(instanceSize(profile))).slice().sort((a, b) => namedParameters(scheme) ?
     (a.profile_order ?? 0) - (b.profile_order ?? 0) : instanceSize(a) - instanceSize(b));
@@ -459,7 +503,7 @@ function recordProfileLabel(record) {
   const profile = scheme?.profiles?.find(item => profileId(item) === record.profile_id);
   if (profile) return profileLabel(profile, scheme);
   if (namedParameters(scheme, record)) return record.profile_label || record.profile_id;
-  return Number.isSafeInteger(record.tier ?? record.instance_size) ? 'Stage ' + (record.tier ?? record.instance_size) : record.profile_id;
+  return Number.isSafeInteger(record.tier ?? record.instance_size) ? 'Level ' + (record.tier ?? record.instance_size) : record.profile_id;
 }
 function initialSecurityEstimate(scheme, profile) {
   const model = scheme?.initial_security_model;
@@ -514,14 +558,14 @@ function attackReferenceModel(scheme) {
   return researchTiers(scheme) || model?.kind === 'attack-reference' || model?.status === 'limited-reference' || model?.estimate_kind === 'attack-upper-bound';
 }
 function tierNote(scheme, profile) {
-  if (namedParameters(scheme, profile)) return 'Named parameter sets are distinct challenge targets, not a stage progression. Recoveries do not transfer between them.';
+  if (namedParameters(scheme, profile)) return 'Named parameter sets are distinct challenge targets, not a level progression. Recoveries do not transfer between them.';
   const context = profile?.stage_context;
-  if (intermediateConfiguration(profile)) return context?.before_stage != null && context?.after_stage != null ? `Between Stages ${context.before_stage} and ${context.after_stage}. ${profile.native_parameter_label || 'A reviewed intermediate configuration.'}` : 'A reviewed configuration outside the default progression.';
+  if (intermediateConfiguration(profile)) return context?.before_stage != null && context?.after_stage != null ? `Between Levels ${context.before_stage} and ${context.after_stage}. ${profile.native_parameter_label || 'A reviewed intermediate configuration.'}` : 'A reviewed configuration outside the default progression.';
   const estimate = initialSecurityEstimate(scheme, profile);
   if (estimate !== null) return `${attackReferenceModel(scheme) ? 'Initial classical attack reference' : 'Initial classical estimate'}: ≈${estimateBits(estimate)} bits.`;
   const published = securityReference(scheme, profile, 'classical');
   if (published) return `Published classical attack reference: ${estimateBits(published.bits)} (${published.model.unit}). See Protocol for its scope.`;
-  return researchTiers(scheme, profile) ? 'Stages follow this scheme’s default progression through reviewed configurations. Security estimates are not yet available.' : 'Stages follow this scheme’s default progression through reviewed configurations.';
+  return researchTiers(scheme, profile) ? 'Levels follow this scheme’s default progression through reviewed configurations. Security estimates are not yet available.' : 'Levels follow this scheme’s default progression through reviewed configurations.';
 }
 function availableReleases() { return state.schemes.flatMap(scheme => [scheme, ...(scheme.previous_releases || [])]); }
 function releaseKey(id, version) { return JSON.stringify([id, String(version)]); }
@@ -563,13 +607,23 @@ function renderAssumptions(scheme, profile, query) {
   assumptionsWorkspace.show(scheme, profile, query.get('claim'));
 }
 function navigate(hash) {
+  closePrimaryNavigation();
+  closePointsPopover();
   if (window.location.hash === hash) applyRoute();
   else window.location.hash = hash;
+  resetNavigationScroll();
 }
 function navigateTop(hash) {
   navigate(hash);
-  window.scrollTo({top: 0, left: 0, behavior: 'instant'});
 }
+function resetNavigationScroll() {
+  window.scrollTo({top: 0, left: 0, behavior: 'instant'});
+  const route = window.location.hash, epoch = documentEpoch;
+  window.requestAnimationFrame?.(() => {
+    if (ownsDocument(epoch) && window.location.hash === route) window.scrollTo({top:0,left:0,behavior:'instant'});
+  });
+}
+if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual';
 function personRoute(handle) { return '#person/' + encodeURIComponent(handle); }
 function siteOrigin() { return new URL(window.location.href).origin; }
 function connectionCode(value) {
@@ -749,6 +803,9 @@ $('#auth-signup-form').addEventListener('submit', async event => {
 });
 $('#auth-signup-signin').addEventListener('click', () => signInExistingAccount($('#auth-signup-signin')));
 function clearProtectedState() {
+  newcomerOrientation?.cancel();
+  clearAccountPoints();
+  clearHomeHighlights();
   clearSchemeAssumptions();
   resetResearcherEditor();
   invalidateReadViews();
@@ -767,14 +824,14 @@ function clearProtectedState() {
   mapCatalogueLoad = null; mapReleases = null;
   for (const controller of protectedRequests) controller.abort();
   for (const key of ['catalogueRequest', 'challengeRequest', 'leaderboardRequest', 'historyRequest', 'recoveryRequest', 'peopleRequest', 'personRequest', 'connectRequest']) state[key]++;
-  state.schemes = []; state.catalogueRevision = null; state.generationAdmission = null; state.people = []; state.profile = null; state.challenge = null; state.methods = [];
+  state.schemes = []; state.catalogueRevision = null; state.recoveryScoring = null; state.generationAdmission = null; state.people = []; state.profile = null; state.challenge = null; state.methods = [];
   state.schemeId = null; state.schemeVersion = null; state.personHandle = null; state.personDataKey = null;
   state.pendingAttempt = null; state.submissionChallenge = null; state.connection = null; state.round = null;
   state.challengeStartIntent = null; state.challengeLoading = false;
   state.canReviewProposals = false; state.canSelfReviewProposals = false; state.canManageBetaAccess = false;
   resetAgentSettings(); resetAgentInstructions(); resetProposalAccount(state.user?.id);
   research.request++; research.recoveriesRequest++; research.targets = []; research.target = null; research.findings = []; research.recoveries = [];
-  for (const selector of ['#kem-catalogue', '#people-content', '#person-content', '#leaderboard-content', '#history-content', '#activity-bounties', '#activity-notes', '#recovery-content', '#connect-content', '#overview-graphs', '#target-catalogue', '#home-schemes', '#home-bounties']) $(selector).replaceChildren();
+  for (const selector of ['#kem-catalogue', '#people-content', '#person-content', '#leaderboard-content', '#history-content', '#activity-bounties', '#activity-notes', '#recovery-content', '#connect-content', '#overview-graphs', '#target-catalogue', '#home-guide-content']) $(selector).replaceChildren();
   for (const dialog of document.querySelectorAll('dialog')) if (dialog.open && dialog !== authDialog) dialog.close();
   resetSubmissionForm();
   // A fresh shell also releases notebook closures and private data held by the
@@ -811,6 +868,7 @@ const RELEASE_PROGRESS_FIELDS = ['generation_admission', 'participant_count', 'r
 function installNavigation(data) {
   if (!Array.isArray(data.schemes) || (data.projection && data.projection !== 'navigation')) throw new Error('Scheme navigation could not be loaded.');
   const revision = data.catalogue_revision || null;
+  const previousRevision = state.catalogueRevision;
   const releases = data.schemes.flatMap(scheme => [scheme, ...(scheme.previous_releases || [])]);
   const keys = new Set();
   for (const scheme of releases) {
@@ -824,6 +882,11 @@ function installNavigation(data) {
   }
   state.schemes = data.schemes;
   state.catalogueRevision = revision;
+  if (Object.hasOwn(data,'recovery_scoring')) {
+    const scoring = data.recovery_scoring;
+    state.recoveryScoring = scoring && typeof scoring.policy_id === 'string' && Number.isSafeInteger(scoring.record_advance_points) && scoring.record_advance_points > 0 &&
+      Array.isArray(scoring.enrolled_releases) && scoring.enrolled_releases.every(item => typeof item?.id === 'string' && typeof item.version === 'string') ? scoring : null;
+  } else if (previousRevision !== revision) state.recoveryScoring = null;
   navigationProjection = data.projection === 'navigation';
   for (const [key, entry] of releaseDetails) {
     const current = data.schemes.find(item => item.id === entry.scheme.id);
@@ -1218,6 +1281,75 @@ function ensureNotebookAssets() {
       notebookAssetsReady = true;
     })().catch(error => { notebookAssets = null; throw error; });
 }
+let agentHandoffSequence = 0;
+const openAgentHandoffs = new Set();
+function createAgentHandoff({prompt,current = () => true,key = () => window.location.hash,files} = {}) {
+  let owner = state.user?.id, credential = state.csrf;
+  const root = node('details',undefined,'agent-workflow'); root.dataset.agentHandoff = 'true';
+  const trigger = node('summary','Work with an agent','agent-workflow-toggle');
+  const panel = node('section',undefined,'agent-instructions agent-workflow-panel'); panel.id = 'agent-handoff-'+(++agentHandoffSequence);
+  trigger.setAttribute('aria-controls',panel.id);
+  const heading = node('div',undefined,'agent-instructions-heading');
+  const copy = node('button','Copy prompt','button button-quiet agent-copy'); copy.type = 'button'; copy.setAttribute('aria-live','polite');
+  const close = node('button','×','icon-button'); close.type = 'button'; close.setAttribute('aria-label','Close agent prompt');
+  heading.append(node('h4','Agent prompt'),copy,close);
+  const pre = node('pre',undefined,'code-block'); pre.tabIndex = 0; pre.setAttribute('aria-label','Agent prompt');
+  const status = node('p',undefined,'field-hint agent-copy-status'); status.setAttribute('role','status'); status.hidden = true;
+  panel.append(heading,node('p','Paste this prompt into your agent. Approve a connection if asked.','field-hint'),pre,status);
+  if (files) { const advanced = node('button','Files & import','text-button'); advanced.type = 'button'; advanced.addEventListener('click',() => { root.open = false; files(); }); panel.append(advanced); }
+  root.append(trigger,panel);
+  let contextKey = key(), copyRun = 0, timer = null;
+  const owned = () => !documentRetired && hasAccess() && state.user?.id === owner && state.csrf === credential && current();
+  root.agentHandoffPlace = () => {
+    if (!root.open || !root.isConnected) { openAgentHandoffs.delete(root); return; }
+    const button = trigger.getBoundingClientRect(), width = Math.min(560,window.innerWidth-32);
+    panel.style.width = width+'px'; panel.style.maxHeight = Math.max(180,window.innerHeight-48)+'px';
+    const h = panel.getBoundingClientRect().height, below = window.innerHeight-button.bottom-16, above = button.top-16;
+    const top = below >= Math.min(h,320) || below >= above ? button.bottom+10 : button.top-h-10;
+    panel.style.left = Math.max(16,Math.min(window.innerWidth-width-16,button.right-width))+'px';
+    panel.style.top = Math.max(16,Math.min(window.innerHeight-h-16,top))+'px';
+  };
+  root.agentHandoffRefresh = () => {
+    if (contextKey === key() && owned()) return;
+    owner = state.user?.id; credential = state.csrf; contextKey = key(); root.open = false; copyRun++; clearTimeout(timer); copy.disabled = false; copy.textContent = 'Copy prompt'; pre.textContent = ''; status.hidden = true; openAgentHandoffs.delete(root);
+  };
+  root.addEventListener('toggle',() => {
+    if (!root.open) { openAgentHandoffs.delete(root); copyRun++; clearTimeout(timer); copy.textContent = 'Copy prompt'; copy.disabled = false; return; }
+    if (!owned()) { root.open = false; return; }
+    contextKey = key(); pre.textContent = prompt(); status.hidden = true; openAgentHandoffs.add(root); root.agentHandoffPlace();
+  });
+  close.addEventListener('click',() => { root.open = false; trigger.focus({preventScroll:true}); });
+  copy.addEventListener('click',async() => {
+    if (!owned() || !root.open || copy.disabled) return;
+    const run = ++copyRun, context = key(), text = prompt(); pre.textContent = text; copy.disabled = true;
+    const active = () => owned() && root.open && root.isConnected && run === copyRun && context === key();
+    try {
+      await navigator.clipboard.writeText(text);
+      if (!active()) return;
+      copy.textContent = 'Copied'; status.hidden = true; clearTimeout(timer);
+      timer = setTimeout(() => { if (active()) copy.textContent = 'Copy prompt'; },2200);
+    } catch {
+      if (!active()) return;
+      status.textContent = 'Select the prompt and copy it.'; status.hidden = false; pre.focus({preventScroll:true});
+      const selection = window.getSelection?.(); if (selection && document.createRange) { const range = document.createRange(); range.selectNodeContents(pre); selection.removeAllRanges(); selection.addRange(range); }
+    } finally { if (active()) { copy.disabled = false; root.agentHandoffPlace(); } }
+  });
+  return root;
+}
+function refreshAgentHandoffs() {
+  for (const element of document.querySelectorAll('[data-agent-handoff]')) element.agentHandoffRefresh?.();
+  for (const element of openAgentHandoffs) if (!element.isConnected) openAgentHandoffs.delete(element);
+}
+document.addEventListener('click',event => { for (const element of openAgentHandoffs) if (!element.contains(event.target)) { element.open = false; openAgentHandoffs.delete(element); } });
+document.addEventListener('focusin',event => { for (const element of openAgentHandoffs) if (!element.contains(event.target)) { element.open = false; openAgentHandoffs.delete(element); } });
+document.addEventListener('keydown',event => { if (event.key === 'Escape') for (const element of openAgentHandoffs) { element.open = false; openAgentHandoffs.delete(element); } });
+for (const type of ['resize','scroll']) window.addEventListener(type,() => { for (const element of openAgentHandoffs) element.agentHandoffPlace(); },true);
+window.addEventListener('pagehide',() => { for (const element of openAgentHandoffs) element.open = false; openAgentHandoffs.clear(); });
+function schemeAgentPrompt() {
+  const origin = siteOrigin(), scheme = selectedScheme();
+  return `Help me explore ${state.screen === 'overview' && scheme ? scheme.name+' release '+scheme.version : 'cryptographic schemes'} on Crucible at ${origin}.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running. Read the current pipeline contract at ${origin}/api/agent/pipeline with the CLI guide command. Reuse an existing scoped connection, or let me approve login in my browser. Never request credentials in chat.\n\nStart from ${origin}/${window.location.hash}. Inspect the actual catalogue, scheme specification and source evidence. Explain the construction and its assumptions, identify a useful challenge level or research question, and distinguish known results from conjecture. A scheme is the construction; a challenge is one test with its own inputs. Ask me before issuing a challenge, submitting work or proposing a scheme. Preserve exact scheme/release/profile identities and report any unavailable evidence.`;
+}
+
 function notebookAPI(path, body, options) {
   const early = notebookEarlyReads.get(path);
   if (early && body === undefined && (!options?.method || options.method === 'GET')) {
@@ -1228,7 +1360,7 @@ function notebookAPI(path, body, options) {
 }
 function getNotebookWorkspace(reviewing = false) {
   const target = $(reviewing ? '#review-notebook-workspace' : '#notebook-workspace');
-  const options = {navigate, api: reviewing ? api : notebookAPI,
+  const options = {navigate, agentHandoff:createAgentHandoff, api: reviewing ? api : notebookAPI,
     curatedNotesAvailable: () => state.curatedNotesAvailable !== false,
     statementWorkflowAvailable: () => state.statementWorkflowAvailable === true,
     noteOrigin: note => state.noteOrigin?.noteId === note.id ? state.noteOrigin : null,
@@ -1421,132 +1553,1237 @@ $('#access-continue').addEventListener('click', async () => {
   try { await loadAuthorizedWorkspace(); } catch (error) { globalError(error.message); }
 });
 setInterval(renderVerificationControls, 1000);
-let homeSummaryRequest = 0;
+let accountMenuPinned = false;
+function closeAccountMenu() {
+  accountMenuPinned = false; $('#account-menu-panel').hidden = true; $('#account-menu-trigger').setAttribute('aria-expanded','false');
+}
+const compactNavigation = window.matchMedia?.('(max-width:1180px)');
+let primaryNavigationLayout = [], navigationSweep = null, navigationAnimations = [];
+function clearNavigationSweep() {
+  for (const animation of navigationAnimations) animation.cancel();
+  navigationAnimations = []; navigationSweep?.remove(); navigationSweep = null;
+}
+function capturePrimaryNavigation() {
+  if (compactNavigation?.matches || !window.getComputedStyle || !$('#primary-nav-panel').getBoundingClientRect) return;
+  primaryNavigationLayout = [...$('#primary-nav-panel').querySelectorAll('button'),$('#nav-people')]
+    .filter(element => !element.hidden && element.getClientRects().length)
+    .map(element => {
+      const box = element.getBoundingClientRect(), style = window.getComputedStyle(element);
+      return {label:element.textContent.trim(),left:box.left,top:box.top,width:box.width,height:box.height,font:style.font,color:style.color};
+    });
+}
+function transitionPrimaryNavigation() {
+  closePrimaryNavigation();
+  if (!hasAccess() || !state.user || window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches || !$('#primary-nav-toggle').animate) { capturePrimaryNavigation(); return; }
+  if (!compactNavigation.matches) {
+    capturePrimaryNavigation();
+    navigationAnimations = [...$('#primary-nav-panel').querySelectorAll('button')].filter(element => !element.hidden).map(element =>
+      element.animate([{opacity:0,transform:'translateX(18px)'},{opacity:1,transform:'translateX(0)'}],{duration:240,easing:'ease-out'}));
+    return;
+  }
+  const destination = $('#primary-nav-toggle').getBoundingClientRect();
+  // Large layout jumps (e.g. rotating a phone) have no continuous rightward path.
+  const labels = primaryNavigationLayout.filter(item => item.left + item.width < destination.right);
+  if (!labels.length) return;
+  const sweep = node('div',undefined,'navigation-sweep'); sweep.setAttribute('aria-hidden','true'); sweep.setAttribute('inert','');
+  sweep.style.height = $('.site-header').getBoundingClientRect().height + 'px';
+  for (const item of labels) {
+    const label = node('span',item.label); Object.assign(label.style,{left:item.left+'px',top:item.top+'px',width:item.width+'px',height:item.height+'px',font:item.font,color:item.color}); sweep.append(label);
+  }
+  $('.site-header').append(sweep); navigationSweep = sweep;
+  navigationAnimations = [...sweep.children].map((label,index) => {
+    const item = labels[index], dx = destination.left + destination.width / 2 - item.left - item.width, dy = destination.top + destination.height / 2 - item.top - item.height / 2;
+    return label.animate([{opacity:.85,transform:'translate(0,0) scale(1)'},{opacity:.65,offset:.45},{opacity:0,transform:`translate(${dx}px,${dy}px) scale(.12)`}],{duration:360,delay:index*25,easing:'cubic-bezier(.3,0,.2,1)',fill:'both'});
+  });
+  Promise.allSettled(navigationAnimations.map(animation => animation.finished)).then(() => { if (navigationSweep === sweep) clearNavigationSweep(); });
+}
+function closePrimaryNavigation() {
+  clearNavigationSweep();
+  $('.primary-nav')?.classList.remove('is-open');
+  $('#primary-nav-toggle')?.setAttribute('aria-expanded','false');
+  $('#primary-nav-toggle')?.setAttribute('aria-label','Open navigation');
+}
+function openPrimaryNavigation() {
+  if (!hasAccess() || !state.user || !compactNavigation?.matches) return;
+  clearNavigationSweep();
+  closeAccountMenu();
+  closePointsPopover();
+  $('.primary-nav').classList.add('is-open');
+  $('#primary-nav-toggle').setAttribute('aria-expanded','true');
+  $('#primary-nav-toggle').setAttribute('aria-label','Close navigation');
+}
+$('#primary-nav-toggle').addEventListener('click',() => {
+  if ($('.primary-nav').classList.contains('is-open')) closePrimaryNavigation(); else openPrimaryNavigation();
+});
+$('.primary-nav').addEventListener('keydown',event => {
+  if (event.key === 'Escape' && $('.primary-nav').classList.contains('is-open')) {
+    event.preventDefault(); closePrimaryNavigation(); $('#primary-nav-toggle').focus({preventScroll:true});
+  } else if (['ArrowDown','ArrowUp'].includes(event.key) && compactNavigation?.matches) {
+    event.preventDefault(); openPrimaryNavigation();
+    const items = [...$('#primary-nav-panel').querySelectorAll('button')].filter(guideVisible), index = items.indexOf(document.activeElement);
+    const next = index < 0 ? event.key === 'ArrowDown' ? 0 : items.length-1 : (index+(event.key === 'ArrowDown' ? 1 : items.length-1))%items.length;
+    items[next]?.focus({preventScroll:true});
+  }
+});
+$('.primary-nav').addEventListener('focusout',event => { if (!event.relatedTarget?.closest?.('.primary-nav')) closePrimaryNavigation(); });
+document.addEventListener('click',event => { if (!event.target.closest?.('.primary-nav')) closePrimaryNavigation(); });
+compactNavigation?.addEventListener?.('change',transitionPrimaryNavigation);
+window.addEventListener('resize',capturePrimaryNavigation);
+if (window.ResizeObserver) new window.ResizeObserver(capturePrimaryNavigation).observe($('#primary-nav-panel'));
+window.addEventListener('pagehide',closePrimaryNavigation);
+function openAccountMenu() {
+  if (!hasAccess() || !state.user) return;
+  closePrimaryNavigation();
+  closePointsPopover();
+  $('#account-menu-panel').hidden = false; $('#account-menu-trigger').setAttribute('aria-expanded','true');
+}
+$('#account-menu-trigger').addEventListener('click',() => {
+  accountMenuPinned = !accountMenuPinned; if (accountMenuPinned) openAccountMenu(); else closeAccountMenu();
+});
+$('#account-menu').addEventListener('pointerenter',event => { if (event.pointerType !== 'touch') openAccountMenu(); });
+$('#account-menu').addEventListener('pointerleave',() => { if (!accountMenuPinned && !document.activeElement?.closest?.('#account-menu')) closeAccountMenu(); });
+$('#account-menu').addEventListener('focusout',event => { if (!event.relatedTarget?.closest?.('#account-menu')) closeAccountMenu(); });
+$('#account-menu-panel').addEventListener('click',event => { if (event.target.closest?.('a,button')) closeAccountMenu(); });
+document.addEventListener('click',event => { if (!event.target.closest?.('#account-menu')) closeAccountMenu(); });
+document.addEventListener('keydown',event => {
+  if (event.key === 'Escape' && !event.defaultPrevented && !$('#account-menu-panel').hidden) { closeAccountMenu(); $('#account-menu-trigger').focus({preventScroll:true}); }
+});
+$('#account-menu').addEventListener('keydown',event => {
+  if (event.key === 'Escape') { event.preventDefault(); closeAccountMenu(); $('#account-menu-trigger').focus({preventScroll:true}); }
+  else if (['ArrowDown','ArrowUp'].includes(event.key)) {
+    event.preventDefault(); openAccountMenu();
+    const items = [...$('#account-menu-panel').querySelectorAll('a,button')].filter(item => !item.hidden), index = items.indexOf(document.activeElement);
+    const next = index < 0 ? (event.key === 'ArrowDown' ? 0 : items.length-1) : (index + (event.key === 'ArrowDown' ? 1 : items.length-1)) % items.length;
+    items[next]?.focus({preventScroll:true});
+  }
+});
+let pointsPopoverTimer = null, pointsPopoverSuppressed = false;
+function closePointsPopover() {
+  clearTimeout(pointsPopoverTimer); pointsPopoverTimer = null;
+  $('#account-points-popover').hidden = true; $('#account-points').setAttribute('aria-expanded','false');
+}
+function openPointsPopover() {
+  if (pointsPopoverSuppressed || !hasAccess() || !state.user || $('#account-points').hidden || [...document.querySelectorAll('dialog')].some(dialog => dialog.open)) return;
+  closePrimaryNavigation(); closeAccountMenu(); clearTimeout(pointsPopoverTimer); pointsPopoverTimer = null;
+  $('#account-points-popover').hidden = false; $('#account-points').setAttribute('aria-expanded','true');
+}
+function openPointsHelp(trigger = $('#how-it-works')) {
+  if (!hasAccess() || !state.user || [...document.querySelectorAll('dialog')].some(dialog => dialog.open)) return;
+  pointsPopoverSuppressed = true; closePointsPopover(); pointsHelpDialog.dataset.route = window.location.hash; openDialog(pointsHelpDialog,trigger); renderLiveGuide();
+}
+$('#account-points-wrap').addEventListener('pointerenter',event => { if (event.pointerType !== 'touch') openPointsPopover(); });
+$('#account-points-wrap').addEventListener('pointermove',event => { if (event.pointerType !== 'touch' && !pointsHelpDialog.open) { pointsPopoverSuppressed = false; openPointsPopover(); } });
+$('#account-points-wrap').addEventListener('pointerleave',() => { pointsPopoverTimer = setTimeout(() => { if (!document.activeElement?.closest?.('#account-points-wrap')) closePointsPopover(); },160); });
+$('#account-points-wrap').addEventListener('focusin',openPointsPopover);
+$('#account-points-wrap').addEventListener('focusout',event => { if (!event.relatedTarget?.closest?.('#account-points-wrap')) closePointsPopover(); });
+$('#account-points-help').addEventListener('click',() => openPointsHelp($('#account-points')));
+document.addEventListener('keydown',event => { if (event.key === 'Escape') closePointsPopover(); else if (event.key === 'Tab' && !pointsHelpDialog.open) pointsPopoverSuppressed = false; });
+document.addEventListener('click',event => { if (!event.target.closest?.('#account-points-wrap')) closePointsPopover(); });
+pointsHelpDialog.addEventListener('close',() => { pointsPopoverSuppressed = true; closePointsPopover(); renderLiveGuide(); });
+let guidedChallengeApproach = null;
+let liveGuide = null, liveGuideView = '', liveGuideHighlight = null, liveGuidePollAt = 0, liveGuidePolling = false;
+let liveGuideCurrentView = null, liveGuideTransition = null;
+let guideActivationDepth = 0;
+document.addEventListener('click',event => {
+  event.guideOwnerAtStart = liveGuide;
+  const control = event.target.closest?.('button,a,input,textarea,select,label,summary');
+  const editorLaunch = liveGuide && liveGuide.kind !== 'challenge' && !liveGuide.noteId && control?.matches?.('[data-nb="new"],a[href="#notebook?compose=proposal"]');
+  const formControl = control && control.closest('dialog')?.open && control.closest('dialog') === liveGuidePanel?.closest('dialog');
+  event.startedInGuide = Boolean(guideActivationDepth || editorLaunch || formControl || event.target.closest?.('#participation-guide') || event.target.closest?.('.guide-target') || liveGuide?.extraTarget === event.target || liveGuide?.extraTarget?.contains?.(event.target));
+  if (liveGuide && !liveGuideMinimized && !orientationSuspended && !liveGuidePanel.hidden && !event.startedInGuide) {
+    event.preventDefault(); event.stopImmediatePropagation?.(); event.stopPropagation?.();
+    liveGuideMinimized = true; liveGuideView = ''; saveLiveGuide(); renderLiveGuide();
+  }
+},true);
+let liveGuideOverlay = null, liveGuidePositionFrame = null, liveGuideMinimized = false;
+const liveGuidePanel = $('#participation-guide');
+const liveGuideResizeObserver = window.ResizeObserver ? new window.ResizeObserver(() => scheduleGuidePosition()) : null;
+const LIVE_GUIDE_STORAGE = 'crucible-participation-guide-v1';
+function saveLiveGuide() {
+  try {
+    if (!liveGuide) { window.sessionStorage?.removeItem(LIVE_GUIDE_STORAGE); return; }
+    const saved = {version:1};
+    for (const key of ['owner','kind','schemeId','schemeVersion','profileId','approach','challengeId','noteId','bountyId','toolsReady','agentReady','manualReady','challengeStep','tourStep','intro'])
+      if (liveGuide[key] !== undefined) saved[key] = liveGuide[key];
+    saved.minimized = liveGuideMinimized;
+    window.sessionStorage?.setItem(LIVE_GUIDE_STORAGE, JSON.stringify(saved));
+  } catch { /* Presentation hints are optional; server receipts remain authoritative. */ }
+}
+function restoreLiveGuide() {
+  if (liveGuide || !hasAccess() || !state.user) return;
+  if (['','#','#home'].includes(window.location.hash.split('?')[0])) {
+    try { window.sessionStorage?.removeItem(LIVE_GUIDE_STORAGE); } catch {}
+    return;
+  }
+  try {
+    const saved = JSON.parse(window.sessionStorage?.getItem(LIVE_GUIDE_STORAGE) || 'null');
+    if (!saved) return;
+    if (saved.version !== 1 || saved.owner !== state.user.id || !['challenge','note','scheme','bounty'].includes(saved.kind)) {
+      window.sessionStorage?.removeItem(LIVE_GUIDE_STORAGE); return;
+    }
+    liveGuide = {owner:state.user.id, kind:saved.kind};
+    for (const key of ['schemeId','schemeVersion','profileId','approach','challengeId','noteId','bountyId'])
+      if (typeof saved[key] === 'string' && /^[A-Za-z0-9_.-]{1,200}$/.test(saved[key])) liveGuide[key] = saved[key];
+    liveGuide.toolsReady = saved.toolsReady === true;
+    for (const key of ['agentReady','manualReady']) liveGuide[key] = saved[key] === true;
+    if (['intro','choice','tools','work'].includes(saved.challengeStep)) liveGuide.challengeStep = saved.challengeStep;
+    liveGuideMinimized = saved.minimized === true;
+    liveGuide.intro = saved.intro === true && liveGuide.kind === 'challenge';
+    if (liveGuide.kind === 'challenge' && liveGuide.schemeId && (!liveGuide.schemeVersion || !liveGuide.profileId)) { endLiveGuide(); return; }
+    if (!['agent','manual'].includes(liveGuide.approach)) delete liveGuide.approach;
+    liveGuidePollAt = 0;
+  } catch { /* Ignore unavailable or malformed local hints. */ }
+}
+function endLiveGuide() {
+  liveGuide = null; liveGuideView = ''; liveGuidePollAt = 0;
+  liveGuideCurrentView = null; liveGuideTransition?.cancel(); liveGuideTransition = null;
+  liveGuideMinimized = false;
+  liveGuideHighlight?.classList.remove('guide-target'); liveGuideHighlight = null;
+  liveGuideOverlay?.remove(); liveGuideOverlay = null;
+  liveGuideResizeObserver?.disconnect();
+  const panel = liveGuidePanel;
+  if (panel) { panel.hidden = true; panel.replaceChildren(); if (panel.parentElement !== $('#guide-slot')) { panel.remove(); $('#guide-slot').append(panel); } }
+  saveLiveGuide();
+}
+function startLiveGuide(kind, selection = {}) {
+  if (!hasAccess() || !state.user) return;
+  endLiveGuide();
+  liveGuide = {owner:state.user.id, kind, ...selection};
+  saveLiveGuide(); renderLiveGuide();
+}
+function guideVisible(element) {
+  if (!element || element.closest?.('[hidden]') || element.closest?.('#participation-guide')) return false;
+  const dialog = element.closest?.('dialog');
+  return (!dialog || dialog.open) && (!element.getClientRects || element.getClientRects().length > 0);
+}
+function guideControl(selector) { return [...document.querySelectorAll(selector)].find(guideVisible); }
+function revealIntroTarget(guide,view) {
+  const target = view.target;
+  if (guide.kind !== 'challenge' || view.disabled || !target?.closest?.('#workspace') || target.closest('dialog') || state.screen !== 'scheme' || state.view !== 'challenge' || state.schemeId !== guide.schemeId || state.schemeVersion !== guide.schemeVersion || profileId() !== guide.profileId || guide.introRevealTarget === target || !window.requestAnimationFrame) return;
+  guide.introRevealTarget = target; const route = window.location.hash;
+  window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+    if (documentRetired || liveGuide !== guide || !hasAccess() || guide.owner !== state.user?.id || window.location.hash !== route || orientationSuspended || liveGuideMinimized || !guideVisible(target)) {
+      if (liveGuide === guide) delete guide.introRevealTarget; return;
+    }
+    const boxes = [target,view.extraTarget].filter(guideVisible).map(element => element.getBoundingClientRect());
+    const top = ($('.site-header')?.getBoundingClientRect().bottom || 0)+16, bottom = window.innerHeight-16;
+    const group = {top:Math.min(...boxes.map(box => box.top)),bottom:Math.max(...boxes.map(box => box.bottom))};
+    const height = group.bottom-group.top, room = liveGuidePanel.getBoundingClientRect().height+44;
+    const visible = group.top >= top && group.bottom <= bottom;
+    if (!visible || group.top-top < room && bottom-group.bottom < room) {
+      const current = window.scrollY, maximum = Math.max(0,document.documentElement.scrollHeight-window.innerHeight);
+      const candidates = [top,bottom-height].map(wanted => {
+        const scroll = Math.max(0,Math.min(maximum,current+group.top-wanted)), y = group.top-(scroll-current);
+        const clipped = Math.max(0,top-y)+Math.max(0,y+height-bottom);
+        const shortage = Math.min(Math.max(0,room-(y-top)),Math.max(0,room-(bottom-y-height)));
+        return {scroll,score:clipped*1000+shortage*100+Math.abs(scroll-current)};
+      }).sort((a,b) => a.score-b.score);
+      window.scrollTo({top:candidates[0].scroll,behavior:'instant'});
+    }
+    scheduleGuidePosition();
+  }));
+}
+function guideButton(label) {
+  return [...document.querySelectorAll('button')].find(button => guideVisible(button) && button.textContent.trim() === label);
+}
+function guideFocus(element) {
+  if (!element || element.disabled) return;
+  for (let parent = element.parentElement; parent; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
+  element.scrollIntoView?.({block:'center', behavior:'instant'}); element.focus({preventScroll:true});
+}
+function guideActivate(element) {
+  if (!element || element.disabled) return;
+  guideFocus(element); guideActivationDepth++;
+  try { element.click(); } finally { guideActivationDepth--; }
+  setTimeout(renderLiveGuide, 0);
+}
+function guideRoute() {
+  const guide = liveGuide;
+  if (!guide) return '#home';
+  if (guide.kind === 'contribution') return '#home?guide=tour&step=0';
+  if (guide.kind === 'challenge') return guide.schemeId && guide.profileId ? schemeRoute({id:guide.schemeId, version:guide.schemeVersion}, {id:guide.profileId}, 'challenge') + (guide.approach ? '&approach=' + guide.approach : '') : '#challenge';
+  if (guide.kind === 'bounty' && guide.bountyId) return '#bounties?' + new URLSearchParams({bounty:guide.bountyId, detail:'contribute'});
+  if (guide.noteId) return '#notebook?' + new URLSearchParams({note:guide.noteId});
+  return guide.kind === 'bounty' ? '#bounties' : guide.kind === 'scheme' ? '#propose' : '#notebook';
+}
+function observeLiveGuide(path, method, data, owner) {
+  if (!liveGuide || liveGuide !== owner || liveGuide.owner !== state.user?.id || !hasAccess()) return;
+  if (liveGuide.kind === 'site') return;
+  const guide = liveGuide, pathname = path.split('?')[0], note = data?.note;
+  if (guide.kind === 'challenge' && method === 'GET' && pathname === '/api/challenges/' + guide.challengeId + '/download' && data?.challenge?.id === guide.challengeId) guide.challengeSnapshot = data.challenge;
+  if (guide.kind !== 'challenge' && note?.owner?.id === guide.owner && typeof note.id === 'string') {
+    const selected = new URLSearchParams(window.location.hash.split('?')[1] || '').get('note');
+    if (!guide.noteId && (method === 'POST' && pathname === '/api/notebook/notes' || selected === note.id)) guide.noteId = note.id;
+    if (guide.noteId === note.id) {
+      const revision = note.revisions?.find(row => row.revision === note.revision) || note.revisions?.[0] || note;
+      guide.note = {id:note.id, revision:revision.revision, hash:revision.content_sha256,
+        status:revision.publication_status || note.publication_status, hasSpec:Boolean(revision.content?.extensions?.kem_specification),
+        publication:revision.publication?.id, proposal:revision.scheme_review?.id};
+      if (guide.kind === 'note' && guide.note.publication) guide.receipt = {id:guide.note.publication, label:'Publication request recorded.', route:'#notebook?' + new URLSearchParams({note:note.id, revision:String(revision.revision)})};
+      if (guide.kind === 'scheme' && guide.note.proposal) guide.receipt = {id:guide.note.proposal, label:'Scheme review submission recorded.', route:'#propose?' + new URLSearchParams({proposal:guide.note.proposal})};
+    }
+  }
+  if (guide.kind === 'scheme' && pathname === '/api/protocol/proposals/validate' && data?.specification && data?.note_content) guide.specificationReady = true;
+  if (guide.kind === 'scheme' && /\/proposal-submissions$/.test(pathname) && data?.proposal?.source_note?.id === guide.noteId && data.proposal.id) {
+    guide.receipt = {id:data.proposal.id, label:'Scheme review submission recorded.', route:'#propose?' + new URLSearchParams({proposal:data.proposal.id})};
+  }
+  if (guide.kind === 'bounty' && data?.bounty?.id && pathname === '/api/bounties/' + data.bounty.id) {
+    if (!guide.bountyId && data.bounty.capabilities?.submit) guide.bountyId = data.bounty.id;
+    if (guide.bountyId === data.bounty.id) guide.bounty = {id:data.bounty.id, status:data.bounty.status};
+  }
+  if (guide.kind === 'bounty' && guide.bountyId && pathname === '/api/bounties/' + guide.bountyId + '/submissions' && data?.receipt?.submission_id) {
+    guide.receipt = {id:data.receipt.submission_id, label:'Bounty contribution recorded.', route:'#bounties?' + new URLSearchParams({bounty:guide.bountyId, detail:'contributions'})};
+  }
+  saveLiveGuide(); setTimeout(renderLiveGuide, 0);
+}
+function liveGuideNoteView(guide) {
+  const editor = guideControl('[data-guide-action="save-note"]');
+  const field = name => guideControl('[data-nb="dialog"] [name="' + name + '"]');
+  if (editor) {
+    const fields = [['title','Give your idea a title.','Write a short title for your question or result.'],
+      ['claim','Explain the question or result.','Add the summary people will see when browsing.'],
+      ['conditions','Set the scope.','State the assumptions, parameters and limits.'],
+      ['body','Write up your work.','Add the argument, evidence or investigation you want others to inspect.']];
+    const missing = fields.find(([name]) => !field(name)?.value.trim());
+    if (missing) return {step:1, title:missing[1], copy:missing[2], target:field(missing[0]), action:'Go to this field', run:() => guideFocus(field(missing[0]))};
+    if (guide.kind === 'scheme' && !guide.specificationReady && !guide.note?.hasSpec) return {step:2, title:'Attach your scheme specification.', copy:'Fill in the template, then attach your JSON specification.', target:field('kem-specification'), action:'Choose specification', run:() => guideActivate(field('kem-specification')),
+      secondary:'Download specification template', secondaryRun:() => guideActivate(guideControl('[data-nb="dialog"] a[href="/api/protocol/spec-template"]'))};
+    try { editor.closest('form')?.guideValidation?.(); }
+    catch (error) { return {step:2, title:'Complete this citation.', copy:error.guideMessage || error.message, target:error.guideTarget, action:'Complete source details', run:() => guideFocus(error.guideTarget)}; }
+    return {step:2, title:'Save your private draft.', copy:'Review your text and sources, then save this revision to your account.', target:editor, action:'Save private draft', run:() => guideActivate(editor), disabled:editor.disabled};
+  }
+  if (!guide.note) return {step:1, title:guide.kind === 'scheme' ? 'Write your proposal note.' : guide.kind === 'bounty' ? 'Write your evidence note.' : 'Write your note.', copy:'Your draft stays private until you request publication.',
+    target:guideControl('[data-nb="new"]') || guideControl('a[href="#notebook?compose=proposal"]'), action:guide.noteId ? 'Open your saved note' : 'Open the editor', run:() => {
+      if (guide.noteId) navigateTop('#notebook?' + new URLSearchParams({note:guide.noteId}));
+      else navigateTop('#notebook?compose=' + (guide.kind === 'scheme' ? 'proposal' : 'note'));
+    }};
+  if (guide.kind === 'scheme') {
+    const confirm = guideButton('Submit this revision') || guideButton('Retry this submission');
+    if (confirm) return {step:3, title:'Submit this revision for review.', copy:'Read the requirements and confirm the exact saved revision. This requests review of your scheme.', target:confirm, action:'Submit this revision', run:() => guideActivate(confirm), disabled:confirm.disabled};
+    const submit = guideButton('Submit for scheme review');
+    return {step:3, title:guide.note.hasSpec ? 'Submit your scheme for review.' : 'Attach a specification to your draft.', copy:guide.note.hasSpec ? 'Your draft is saved. Open the review request when it is ready for reviewers.' : 'Open your saved proposal and attach its specification before requesting scheme review.',
+      target:submit || guideButton('Attach scheme specification'), action:guide.note.hasSpec ? 'Open review request' : 'Attach specification', run:() => {
+        const target = submit || guideButton('Attach scheme specification');
+        if (target) guideActivate(target); else navigateTop('#notebook?' + new URLSearchParams({note:guide.noteId}));
+      }};
+  }
+  const confirm = guideButton('Send publish request') || guideButton('Retry the same request');
+  if (confirm) {
+    const consent = guideControl('[data-nb="dialog"] input[type="checkbox"]:not(:checked)');
+    return {step:3, title:'Review and send your publication request.', copy:'Read the publication notice before confirming this revision.', target:consent || confirm,
+      action:consent ? 'Review publication consent' : 'Send publish request', run:() => consent ? guideFocus(consent) : guideActivate(confirm), disabled:!consent && confirm.disabled};
+  }
+  const publish = guideButton('Publish');
+  return {step:3, title:'Submit your saved note.', copy:'Review the publication notice, then request publication.', target:publish,
+    action:'Review publication request', run:() => publish ? guideActivate(publish) : navigateTop('#notebook?' + new URLSearchParams({note:guide.noteId}))};
+}
+function moveChallengeGuide(guide,step) {
+  if (liveGuide !== guide) return;
+  guide.challengeStep = step; delete guide.introRevealTarget;
+  if (step === 'choice') { resetAgentInstructions(); $('#manual-tools').open = false; }
+  if (step === 'tools') {
+    if (guide.approach === 'agent') showAgentInstructions(); else $('#manual-tools').open = true;
+  }
+  saveLiveGuide(); renderLiveGuide();
+}
+function refreshGuideChallenge(guide) {
+  if (submissionDialog.open) submissionDialog.close();
+  guide.challengeId = null; guide.challengeSnapshot = null; guide.beginRequested = false;
+  guide.toolsReady = false; guide.agentReady = false; guide.manualReady = false;
+  guide.challengeStep = 'intro'; delete guide.formField; saveLiveGuide(); void loadChallenge({retry:true});
+}
+function challengeGuideFields(challenge) {
+  const text = (id,title,copy,optional = false) => ({id,title,copy,optional,target:$('#'+id),valid:() => {
+    const field = $('#'+id), value = field.value.trim();
+    return (optional || Boolean(value)) && (field.maxLength < 0 || !field.maxLength || value.length <= field.maxLength) && field.validity?.valid !== false;
+  }});
+  const fields = [text('candidate','Enter your recovered key.','Paste the '+sharedKeyBytes(challenge)*2+' hexadecimal characters, or upload a result file.')];
+  fields[0].valid = () => new RegExp('^[0-9a-fA-F]{'+sharedKeyBytes(challenge)*2+'}$').test($('#candidate').value);
+  fields.push(text('method-select','Choose your method.','Reuse a saved method, or create a new one.'));
+  if ($('#method-select').value === 'new') fields.push(text('method-name','Name your method.','Give your approach a short name.'),text('method-pseudocode','Describe your method.','Include the steps needed to reproduce your work.'));
+  fields.push(text('ai-model','AI model (optional).','Name the model and version if known; otherwise leave blank.',true),
+    text('hardware','Record your hardware.','Name the CPU, GPU or machine used.'),
+    text('workers','Parallel workers.','How many workers ran at once?'),
+    text('wall-seconds','Record elapsed time.','Seconds spent on this attempt.'),
+    text('precomputation','Record preparation.','Describe reused data or preparation, or write None.'),
+    text('peak-memory','Record peak memory.','Use units, or “Not measured”.'),
+    text('compute-notes','Additional notes (optional).','Add measurement details if useful.',true));
+  fields.find(field => field.id === 'workers').valid = () => Number.isInteger(Number($('#workers').value)) && Number($('#workers').value) >= 1 && Number($('#workers').value) <= 1000000;
+  fields.find(field => field.id === 'wall-seconds').valid = () => Boolean($('#wall-seconds').value.trim()) && Number.isFinite(Number($('#wall-seconds').value)) && Number($('#wall-seconds').value) >= 0 && Number($('#wall-seconds').value) <= 315576000;
+  return fields;
+}
+function challengeGuideFormView(guide,challenge) {
+  const fields = challengeGuideFields(challenge), firstInvalid = fields.find(field => !field.valid());
+  if (guide.formRevision !== state.submissionFormRevision || !fields.some(field => field.id === guide.formField) && guide.formField !== 'review') {
+    guide.formRevision = state.submissionFormRevision; guide.formField = firstInvalid?.id || 'review';
+  }
+  const field = fields.find(item => item.id === guide.formField);
+  if (!field) return {step:4,formField:'review',title:'Review and submit your answer.',copy:'One answer locks this instance, even if incorrect.',target:$('#submit-answer'),action:'Submit this answer',disabled:state.submitBusy || state.importBusy,run:() => {
+    if (firstInvalid) { guide.formField = firstInvalid.id; guideFocus(firstInvalid.target); renderLiveGuide(); }
+    else guideActivate($('#submit-answer'));
+  }};
+  return {step:4,formField:field.id,title:field.title,copy:field.copy,target:field.target,
+    extraTarget:field.id === 'candidate' ? guideControl('#upload-recovery') : null,
+    action:'Next',disabled:state.importBusy,run:() => {
+      if (!field.valid()) { guideFocus(field.target); field.target.reportValidity?.(); return; }
+      const next = fields.slice(fields.indexOf(field)+1).find(item => !item.optional);
+      guide.formField = next?.id || 'review'; guideFocus(next?.target || $('#submit-answer')); renderLiveGuide();
+    }};
+}
+function liveChallengeView(guide) {
+  if (guide.intro && !guide.challengeId && ['home','loading'].includes(state.screen)) return {step:2,title:'Your first challenge',copy:'Opening the challenge.',action:'Opening…',disabled:true};
+  if (!guide.schemeId) {
+    const eligible = state.schemes.filter(scheme => orderedProfiles(scheme).length), suggested = eligible.find(scheme => scheme.id === 'teaching-dh-kem') || eligible[0];
+    const first = [...document.querySelectorAll('.kem-name')].find(link => guideVisible(link) && suggested && link.dataset.guideScheme === suggested.id && link.dataset.guideVersion === String(suggested.version));
+    return {step:0,title:state.catalogueLoaded && !eligible.length ? 'No challenges available.' : 'Choose a scheme.',copy:'Start with a small challenge.',target:first,
+      action:first ? 'Choose this scheme' : 'Browse schemes',run:() => first ? guideActivate(first) : navigateTop('#challenge')};
+  }
+  if (state.screen === 'overview' && state.schemeId === guide.schemeId && state.schemeVersion === guide.schemeVersion) return {step:1,title:'Open the challenge.',copy:'Try this scheme at its first level.',target:$('#overview-challenges'),action:'Open the challenge',run:() => navigateTop(guideRoute())};
+  const matching = state.screen === 'scheme' && state.view === 'challenge' && state.schemeId === guide.schemeId && state.schemeVersion === guide.schemeVersion && profileId() === guide.profileId;
+  if (!matching) return {step:2,title:'Continue your challenge.',copy:'Return to your selected scheme and level.',action:'Return to challenge',run:() => navigateTop(guideRoute())};
+  const challenge = guide.challengeSnapshot && guide.challengeSnapshot.id === guide.challengeId && state.challenge?.id !== guide.challengeId ? guide.challengeSnapshot : state.challenge;
+  if (!challenge || state.challengeLoading && !guide.challengeId) return {step:2,title:guide.intro ? 'Let’s try a challenge.' : 'Get your challenge.',copy:'Recover a secret, then submit your result. The deadline is on the hour.',target:$('#issue-button'),
+    action:state.challengeLoading ? 'Preparing…' : guide.intro ? 'Begin challenge' : 'Get my instance',disabled:$('#issue-button').disabled || state.challengeLoading,run:() => { guide.beginRequested = true; guideActivate($('#issue-button')); }};
+  if (!guide.challengeId && (guide.beginRequested || guide.challengeStep !== 'intro')) { guide.challengeId = challenge.id; if (guide.beginRequested) guide.challengeStep = 'choice'; saveLiveGuide(); }
+  if (guide.challengeId && guide.challengeId !== challenge.id) return {step:2,title:'Your instance changed.',copy:'Continue with the instance shown here.',action:'Use this instance',run:() => {
+    guide.challengeId = challenge.id; guide.challengeSnapshot = null; guide.toolsReady = false; guide.agentReady = false; guide.manualReady = false; delete guide.formField; moveChallengeGuide(guide,'choice');
+  }};
+  const result = challenge.submission?.status || (challenge.status === 'solved' ? 'correct' : challenge.status === 'incorrect' ? 'incorrect' : null);
+  const expired = now() >= challenge.ends_at || challenge.status === 'expired';
+  if (guide.intro && guide.challengeStep === 'intro') return {step:2,title:'Let’s try a challenge.',copy:result ? 'Recover a secret, then submit a result. You already answered this round.' : expired ? 'Recover a secret, then submit a result. Your previous instance has expired.' : 'Recover a secret, then submit your result.',target:guideControl('.challenge-top h3'),action:result ? 'View result' : expired ? 'Check current round' : 'Choose tools',run:() => { if (expired && !result) refreshGuideChallenge(guide); else { guide.challengeId = challenge.id; moveChallengeGuide(guide,result ? 'work' : 'choice'); } }};
+  if (result) return {step:5,title:result === 'correct' ? 'Recovery recorded.' : 'Answer recorded.',copy:result === 'correct' ? 'Your recovered key was verified.' : 'The key did not match. This instance is locked.',target:guideControl('#challenge-status'),action:'View my activity',run:() => { endLiveGuide(); navigateTop('#activity'); },done:true};
+  if (expired) return {step:3,expired:true,title:'This round has ended.',copy:'Check for a current instance before continuing.',action:'Check current round',run:() => refreshGuideChallenge(guide)};
+  if (submissionDialog.open) {
+    if (state.submissionChallenge?.id !== guide.challengeId) return {step:4,title:'Check the instance.',copy:'This form belongs to another challenge.',action:'Return to my instance',run:() => { submissionDialog.close(); navigateTop(guideRoute()); }};
+    if (state.pendingAttempt) return {step:4,title:'Check your submission.',copy:'Retry the same answer to retrieve its receipt.',target:$('#submit-answer'),action:'Retry the same answer',run:() => guideActivate($('#submit-answer')),disabled:state.submitBusy};
+    return challengeGuideFormView(guide,challenge);
+  }
+  if (!guide.challengeStep) guide.challengeStep = guide.approach ? guide.toolsReady ? 'work' : 'tools' : 'choice';
+  if (guide.challengeStep === 'intro') return {step:2,title:'Let’s try a challenge.',copy:'Recover a secret, then submit your result.',target:guideControl('.challenge-top h3'),action:'Choose tools',run:() => moveChallengeGuide(guide,'choice')};
+  if (guide.challengeStep === 'choice' || !guide.approach) return {step:3,title:'Choose how to work.',copy:'Use an agent or work locally.',target:$('#use-agent'),extraTarget:guideControl('#manual-tools > summary'),choices:true,
+    action:'Use an agent',run:() => chooseGuidedApproach('agent'),secondary:'Use my own tools',secondaryRun:() => chooseGuidedApproach('manual')};
+  const manual = guide.approach === 'manual';
+  if (guide.challengeStep === 'tools') {
+    if (manual && !$('#manual-tools').open) return {step:3,title:'Open your tools.',copy:'Download the public challenge inputs.',target:guideControl('#manual-tools > summary'),action:'Open manual tools',run:() => { $('#manual-tools').open = true; renderLiveGuide(); }};
+    if (!manual && $('#agent-instructions').hidden) return {step:3,title:'Give the challenge to your agent.',copy:'Open the prompt for this instance.',target:$('#use-agent'),action:'Show agent prompt',run:() => { showAgentInstructions(); renderLiveGuide(); }};
+    if (!manual && guide.copyFailed) return {step:3,title:'Copy the prompt manually.',copy:'Select the prompt, then copy it.',target:$('#agent-instructions-text'),action:'Select prompt',run:selectAgentPrompt,
+      secondary:'I copied it',secondaryRun:() => completeGuideTools(guide,'agent')};
+    return {step:3,title:manual ? 'Download your challenge inputs.' : 'Give the challenge to your agent.',copy:manual ? guide.toolError || 'Save the JSON and investigate locally.' : 'Paste this prompt into your agent.',
+      target:manual ? $('#download-button') : $('#copy-agent-instructions'),extraTarget:manual ? null : $('#agent-instructions-text'),action:manual ? 'Download challenge JSON' : guide.copyBusy ? 'Copying…' : 'Copy agent prompt',disabled:manual ? guide.downloadBusy : guide.copyBusy,
+      run:() => manual ? downloadGuidedInputs(guide) : copyAgentInstructions(),secondary:guide.toolsReady ? 'Continue' : 'I have a result',secondaryRun:() => guide.toolsReady ? moveChallengeGuide(guide,'work') : guideActivate($('#open-submission'))};
+  }
+  return {step:3,title:'Recover the secret locally.',copy:manual ? 'Return with your recovered key or result file.' : 'Your agent can submit for you. This page checks for its result.',
+    target:guideControl('#open-submission') || guideControl('#manual-tools > summary'),action:'Enter or upload my result',run:() => guideActivate($('#open-submission')),
+    secondary:manual ? 'Download inputs again' : 'Show agent prompt',secondaryRun:() => moveChallengeGuide(guide,'tools')};
+}
+function completeGuideTools(guide,approach) {
+  if (liveGuide !== guide || guide.owner !== state.user?.id || guide.challengeId !== state.challenge?.id || guide.approach !== approach || guide.challengeStep !== 'tools') return;
+  guide[approach+'Ready'] = true; guide.toolsReady = true; guide.copyFailed = false;
+  moveChallengeGuide(guide,'work');
+}
+function chooseGuidedApproach(approach) {
+  const guide = liveGuide;
+  if (guide?.kind !== 'challenge' || !['agent','manual'].includes(approach)) return;
+  guide.approach = approach; guide.toolsReady = Boolean(guide[approach+'Ready']); guide.copyFailed = false;
+  if (approach === 'manual') resetAgentInstructions();
+  moveChallengeGuide(guide,'tools');
+}
+function liveBountyView(guide) {
+  if (!guide.bountyId) return {step:0, title:'Choose a bounty to contribute to.', copy:'Open a task accepting contributions and read its completion criteria. Choose work you can support with evidence.', target:guideControl('[data-bounty]'), action:'Browse open bounties', run:() => navigateTop('#bounties')};
+  const noteField = guideControl('[name="contribution-note"]');
+  if (noteField) {
+    let cited = false;
+    try { cited = window.CrucibleBountyAPI?.parseReferences(noteField.value, {single:true})?.length === 1; } catch { /* Keep guiding the citation until the shared parser accepts it. */ }
+    if (!cited) return {step:3, title:'Link the published evidence.', copy:'Use the exact published note revision and content hash. Your contribution stays tied to that evidence.', target:noteField, action:guide.note?.status === 'approved' ? 'Use my published note' : 'Enter the note citation', run:() => {
+      if (guide.note?.status === 'approved') { noteField.value = JSON.stringify({note_id:guide.note.id, revision:guide.note.revision, content_sha256:guide.note.hash}); noteField.dispatchEvent(new Event('input', {bubbles:true})); }
+      guideFocus(noteField);
+    }};
+    const explanation = guideControl('[name="contribution-explanation"]');
+    if (!explanation?.value.trim()) return {step:3, title:'Explain what your work establishes.', copy:'Choose partial progress or a solution. Explain how your evidence addresses the task.', target:explanation, action:'Explain my contribution', run:() => guideFocus(explanation)};
+    const submit = guideButton('Submit contribution');
+    return {step:3, title:'Review and submit your contribution.', copy:'Check the exact citation, claim and explanation. Assessment and any reward come after submission.', target:submit, action:'Submit contribution', run:() => guideActivate(submit), disabled:!submit || submit.disabled};
+  }
+  if (guideControl('[data-guide-action="save-note"]') || state.screen === 'notebook' && (!guide.note || guide.note.status !== 'approved')) {
+    if (guide.note?.publication && guide.note.status !== 'approved') return {step:2, title:'Your note is awaiting publication.', copy:'The request is recorded. This bounty needs a published note; continue when it is approved, or use another published note.', action:'Return to the bounty', run:() => navigateTop(guideRoute())};
+    return liveGuideNoteView(guide);
+  }
+  const link = () => navigateTop('#bounties?' + new URLSearchParams({bounty:guide.bountyId, detail:'contribute'}));
+  return {step:1, title:guide.note?.status === 'approved' ? 'Link your published contribution.' : 'Prepare evidence for this task.', copy:guide.note?.status === 'approved' ? 'Your note is published. Link its exact revision and explain what it establishes.' : 'Do the work, then write up your evidence in a note. You can also link an existing published note.',
+    target:guideButton('Link a contribution'), action:guide.note?.status === 'approved' ? 'Link my contribution' : 'Write an evidence note', run:() => guide.note?.status === 'approved' ? link() : navigateTop('#notebook?compose=note'),
+    secondary:'Use an existing published note', secondaryRun:link};
+}
+function reviewGuideField(guide,view) {
+  if (guide.kind === 'challenge') return view;
+  guide.fieldTrail = (guide.fieldTrail || []).filter(item => guideVisible(item.target) && item.target.isConnected);
+  if (view.target && /^(INPUT|TEXTAREA|SELECT)$/.test(view.target.tagName) && !guide.fieldTrail.some(item => item.target === view.target)) {
+    guide.fieldTrail.push({step:view.step,title:view.title,copy:view.copy,target:view.target});
+  }
+  const index = guide.reviewIndex, previous = guide.fieldTrail[index];
+  if (!Number.isInteger(index) || !previous) { delete guide.reviewIndex; return view; }
+  return {...previous,total:view.total,action:'Next',run:() => {
+    const following = guide.fieldTrail[index+1];
+    if (following) { guide.reviewIndex = index+1; guideFocus(following.target); }
+    else { delete guide.reviewIndex; guideFocus(view.target); }
+    renderLiveGuide();
+  }};
+}
+function liveGuideBackAction(guide,view) {
+  if (view.done || guide.receipt || state.submitBusy || state.issueBusy || state.importBusy) return null;
+  if (guide.kind === 'challenge' && view.expired) return () => {
+    if (submissionDialog.open) submissionDialog.close();
+    if (guide.intro) moveChallengeGuide(guide,'intro'); else { endLiveGuide(); navigateTop('#home'); }
+  };
+  if (guide.kind === 'challenge' && state.screen === 'scheme' && state.view === 'challenge') {
+    if (submissionDialog.open) {
+      const fields = challengeGuideFields(state.submissionChallenge || state.challenge), index = view.formField === 'review' ? fields.length : fields.findIndex(field => field.id === view.formField);
+      const previous = fields.slice(0,Math.max(0,index)).filter(field => !field.optional).at(-1);
+      return previous ? () => { guide.formField = previous.id; guideFocus(previous.target); renderLiveGuide(); } : () => { submissionDialog.close(); moveChallengeGuide(guide,'work'); };
+    }
+    if (guide.challengeStep === 'tools') return () => moveChallengeGuide(guide,'choice');
+    if (guide.challengeStep === 'work') return () => moveChallengeGuide(guide,'tools');
+    if (guide.challengeStep === 'choice') return () => moveChallengeGuide(guide,'intro');
+    return () => { endLiveGuide(); navigateTop('#home'); };
+  }
+  const trail = guide.fieldTrail || [], at = Number.isInteger(guide.reviewIndex) ? guide.reviewIndex : trail.findIndex(item => item.target === view.target);
+  const cursor = at < 0 ? trail.length : at;
+  if (cursor > 0) return () => { guide.reviewIndex = cursor-1; guideFocus(trail[cursor-1].target); renderLiveGuide(); };
+  if (submissionDialog.open) return () => { submissionDialog.close(); renderLiveGuide(); };
+  if (guideControl('[data-guide-action="save-note"]') || guideControl('[name="contribution-note"]')) return null;
+  const dialog = [...document.querySelectorAll('dialog')].find(item => item.open);
+  if (dialog) return () => { const cancel = guideButton('Cancel'); if (cancel) guideActivate(cancel); else dialog.close(); renderLiveGuide(); };
+  if (guide.kind === 'challenge') {
+    if (!guide.schemeId) return () => { endLiveGuide(); navigateTop('#home'); };
+    if (state.screen === 'overview') return () => {
+      if (guide.intro) { guide.challengeStep = 'intro'; saveLiveGuide(); navigateTop(guideRoute()); return; }
+      if (!guide.challengeId) for (const key of ['schemeId','schemeVersion','profileId','approach']) delete guide[key];
+      saveLiveGuide(); navigateTop('#challenge');
+    };
+    return () => navigateTop(overviewRoute({id:guide.schemeId,version:guide.schemeVersion},{id:guide.profileId}));
+  }
+  if (guide.noteId) { const edit = guideButton('Edit'); return edit ? () => guideActivate(edit) : null; }
+  if (guide.kind === 'bounty' && guide.bountyId) return () => navigateTop('#bounties?' + new URLSearchParams({bounty:guide.bountyId}));
+  return () => { endLiveGuide(); navigateTop('#home?guide=tour'); };
+}
+async function pollLiveGuide() {
+  const guide = liveGuide;
+  if (!guide || orientationSuspended || guide.receipt || liveGuidePolling || Date.now() < liveGuidePollAt || document.hidden || state.issueBusy || state.submitBusy || submissionDialog.open) return;
+  liveGuidePollAt = Date.now() + 5000;
+  liveGuidePolling = true;
+  try {
+    if (guide.kind === 'challenge' && guide.challengeId && state.screen === 'scheme' && state.view === 'challenge' &&
+        state.challenge?.id === guide.challengeId && !state.challengeLoading && canSubmitChallenge(state.challenge)) await loadChallenge({background:true});
+    else if (guide.kind === 'challenge' && guide.challengeId && !guide.challengeSnapshot && state.challenge?.id !== guide.challengeId) await api('/api/challenges/' + encodeURIComponent(guide.challengeId) + '/download', undefined, {readRecovery:true});
+    else if (guide.noteId && (!guide.note || guide.kind === 'bounty' && guide.note.status === 'submitted')) await api('/api/notebook/notes/' + encodeURIComponent(guide.noteId), undefined, {readRecovery:true});
+  } catch { /* Existing workspace errors and explicit retries retain the user's work. */ }
+  finally { liveGuidePolling = false; }
+}
+function startSiteTutorial() { closePrimaryNavigation(); closePointsPopover(); return newcomerOrientation?.start(); }
+$('#how-it-works').addEventListener('click',startSiteTutorial);
+const HELP_ROUTES = new Set(['#home','#challenge','#notebook','#bounties','#activity?kind=notes','#people','#about','#propose']);
+function orientationPageSteps(route = window.location.hash || '#home') {
+  const [path,query = ''] = route.split('?'), params = new URLSearchParams(query);
+  const step = (target,title,body,fallback) => ({route,target,title,body,...(fallback ? {fallback} : {})});
+  if (path === '#challenge' && params.get('view') !== 'map') return [
+    step('#catalogue-workspace .kem-name','Schemes','Schemes are cryptographic constructions. Open one to try a challenge.','#catalogue-title'),
+    step('#propose-scheme-button','Propose a scheme','Submit your own construction for review.')
+  ];
+  if (path === '#challenge' && params.get('view') === 'map') return [
+    step('#nav-challenge','Scheme map','Explore how constructions relate. Select a scheme for its details.','#primary-nav-toggle')
+  ];
+  if (path.startsWith('#challenge/') && params.get('view') && params.get('view') !== 'challenge') return [
+    step('#workspace .workspace-tabs','Scheme views','Switch between challenge inputs, results and cost estimates.'),
+    step('#profile-select','Parameter levels','Compare different settings for this scheme.')
+  ];
+  if (path.startsWith('#challenge/')) return [
+    step('#profile-select','Choose a level','Start with smaller parameters, then test larger ones.'),
+    step('#challenge-empty:not([hidden]),#challenge-active:not([hidden])','Your challenge','Fresh inputs for this scheme at your chosen level. Recover the shared secret.'),
+    ...(guideControl('#use-agent') ? [step('#use-agent','Choose your tools','Use an agent or work locally. Submit your key, method and compute details.')] : [step('#issue-button','Start a challenge','Get an instance to reveal your inputs and submission controls.')])
+  ];
+  if (path.startsWith('#scheme/')) return [
+    step('.overview-heading','Scheme overview','Inspect the construction and its current recovery record.'),
+    step('#overview-challenges','Try a challenge','Choose a level and get your own challenge inputs.'),
+    step('#overview-assumptions','Check the argument','Read the assumptions behind the scheme.')
+  ];
+  if (path === '#bounties' || path === '#notebook' && params.get('view') === 'bounties') {
+    if (params.get('compose')) return [step('.bty-composer','Propose a bounty','Define the task, completion criteria and verification plan. Save privately before requesting admission.')];
+    if (params.get('bounty')) return [
+      step('.bty-detail-heading','The bounty','Read the exact task and its reward.'),
+      step('.bty-detail-tabs','Evidence and submissions','Review the brief, source notes and contributions.'),
+      step('.bty-actions','Contribute findings','Link a published evidence note. An assessment determines completion and any award.')
+    ];
+    return [
+      step('.bty-question','Research bounties','Choose a task to read its completion criteria and review plan.','.bty-heading'),
+      step('.bty-sort','Find a task','Sort by points or how open-ended the task is.'),
+      step('.bty-heading-actions','Propose a bounty','Your monthly allowance can support new bounties and boosts.')
+    ];
+  }
+  if (path === '#notebook') return params.get('note') ? [
+    step('.nb-reader-heading','Research note','Read the claim, conditions and evidence for this exact revision.'),
+    step('.nb-full,.nb-reader-summary','Build on the evidence','Use exact revision links when citing a note.')
+  ] : [
+    step('#notebook-workspace .nb-toolbar','Research notes','Find evidence and ideas by title, tag or note number.'),
+    step('[data-nb="new"]','Write a note','Save privately, then request publication when ready.')
+  ];
+  if (path === '#activity') return [
+    step('.activity-tabs','Your activity','Switch between challenge attempts, bounties and notes.'),
+    step('#activity-pagination','Follow your submissions','Open an entry to inspect its result or review status.')
+  ];
+  if (path === '#people') return [
+    step('#people-title','Leaderboard','Compare contributions and points.'),
+    step('#points-help-button','How points work','Read how verified contributions earn points.')
+  ];
+  if (path.startsWith('#person/')) return [step('#person-title','Researcher profile','Browse this researcher’s schemes, notes, bounties and recorded contributions.')];
+  if (path === '#about') return [
+    step('.about-intro','About Crucible','A place to propose cryptography and test its limits.'),
+    step('#about-principles-title','How we work','Read the principles behind research and review.')
+  ];
+  return [step(workspaceSelector(state.screen)+' h1','This page','Use the page controls to explore. All features opens the site overview.')];
+}
+function createGuideOverlay(maskId) {
+  if (!document.createElementNS) return null;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.classList.add('guide-overlay'); svg.setAttribute('aria-hidden', 'true');
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs'), mask = document.createElementNS('http://www.w3.org/2000/svg', 'mask');
+  mask.setAttribute('id',maskId); mask.setAttribute('maskUnits','userSpaceOnUse'); mask.setAttribute('x','0'); mask.setAttribute('y','0');
+  const background = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  background.setAttribute('width','100%'); background.setAttribute('height','100%'); background.setAttribute('fill','white');
+  const cutouts = document.createElementNS('http://www.w3.org/2000/svg', 'path'); cutouts.setAttribute('class','guide-cutouts'); cutouts.setAttribute('fill','black');
+  mask.append(background,cutouts); defs.append(mask); svg.append(defs);
+  for (const name of ['veil','ring','lead','arrow']) {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('class', 'guide-' + name);
+    if (name === 'veil') path.setAttribute('mask','url(#'+maskId+')');
+    if (name === 'lead') path.setAttribute('pathLength', '1');
+    svg.append(path);
+  }
+  return svg;
+}
+function guideOverlay() { return liveGuideOverlay ||= createGuideOverlay('guide-cutout-mask'); }
+function scheduleGuidePosition() {
+  if (!liveGuide || liveGuidePositionFrame !== null || !window.requestAnimationFrame) return;
+  liveGuidePositionFrame = window.requestAnimationFrame(() => { liveGuidePositionFrame = null; positionLiveGuide(); });
+}
+function guideAnchor(element) {
+  // Catalogue links belong to a complete row. Form controls and cards use
+  // their own border boxes, without an offset that straddles adjacent content.
+  return element?.classList.contains('kem-name') ? element.closest('tr') || element : element;
+}
+function guideRectangle(element) {
+  const anchor = guideAnchor(element), box = anchor.getBoundingClientRect();
+  const style = window.getComputedStyle(anchor);
+  const length = (value,size) => Math.max(0,(parseFloat(value) || 0) * (value?.endsWith('%') ? size / 100 : 1));
+  let corners = ['TopLeft','TopRight','BottomRight','BottomLeft'].map(corner => {
+    const values = (style['border'+corner+'Radius'] || '0').trim().split(/\s+/);
+    const x = length(values[0],box.width), y = length(values[1] || values[0],box.height);
+    return x && y ? [x,y] : [0,0];
+  });
+  // Follow native rounded controls exactly; unboxed text gets a soft wash.
+  const radius = anchor.matches('input[type="checkbox"]') ? 2 : anchor.matches('input[type="radio"]') ? Math.min(box.width,box.height)/2 : Math.min(6,box.width/2,box.height/2);
+  corners = corners.map(([x,y]) => x || y ? [x,y] : [radius,radius]);
+  return {left:box.left,top:box.top,right:box.right,bottom:box.bottom,width:box.width,height:box.height,corners};
+}
+function roundedGuideRectangle(rect, inset = 0) {
+  const x = rect.left + inset, y = rect.top + inset, w = Math.max(0,rect.width - inset*2), h = Math.max(0,rect.height - inset*2);
+  const native = rect.corners;
+  // CSS scales all corner radii together when adjacent corners would overlap.
+  const factor = Math.min(1,rect.width / (native[0][0]+native[1][0] || 1),rect.width / (native[3][0]+native[2][0] || 1),rect.height / (native[0][1]+native[3][1] || 1),rect.height / (native[1][1]+native[2][1] || 1));
+  const [tl,tr,br,bl] = native.map(pair => pair.map(value => Math.max(0,value * factor - inset)));
+  const arc = (r,endX,endY) => r[0] && r[1] ? `A${r[0]},${r[1]} 0 0 1 ${endX},${endY}` : `L${endX},${endY}`;
+  return `M${x+tl[0]},${y}H${x+w-tr[0]}${arc(tr,x+w,y+tr[1])}V${y+h-br[1]}${arc(br,x+w-br[0],y+h)}H${x+bl[0]}${arc(bl,x,y+h-bl[1])}V${y+tl[1]}${arc(tl,x+tl[0],y)}Z`;
+}
+function positionLiveGuide() {
+  if (liveGuide && !orientationSuspended) positionGuide({panel:liveGuidePanel,overlay:liveGuideOverlay,target:liveGuideHighlight,extraTarget:liveGuide.extraTarget,minimized:liveGuideMinimized});
+}
+function positionGuide({panel,overlay,target,extraTarget,minimized = false,adjusted = false}) {
+  if (!panel || panel.hidden || !panel.getBoundingClientRect || !overlay) return;
+  const viewport = window.visualViewport, vx = viewport?.offsetLeft || 0, vy = viewport?.offsetTop || 0;
+  const width = viewport?.width || window.innerWidth, height = viewport?.height || window.innerHeight, edge = 16, gap = 44;
+  const header = $('.site-header')?.getBoundingClientRect(), headerBottom = panel.closest('dialog') ? vy : Math.max(vy,Math.min(vy+height,header?.bottom || vy));
+  if (minimized) overlay.setAttribute('hidden',''); else overlay.removeAttribute('hidden');
+  panel.classList.toggle('is-minimized',minimized);
+  panel.style.maxHeight = Math.max(110,height-edge*2-(headerBottom-vy)) + 'px';
+  if (minimized) {
+    panel.style.width = 'auto'; const small = panel.getBoundingClientRect();
+    panel.style.left = Math.max(vx+edge,vx+width-small.width-edge) + 'px'; panel.style.top = vy+height-small.height-edge + 'px'; return;
+  }
+  panel.style.width = Math.min(340,width-edge*2) + 'px';
+  const box = panel.getBoundingClientRect(), pw = box.width, ph = box.height;
+  target = guideVisible(target) ? target : null; const focused = document.activeElement;
+  const editing = focused && !panel.contains(focused) && /^(INPUT|TEXTAREA|SELECT)$/.test(focused.tagName) && guideVisible(focused);
+  const elements = [target,extraTarget,editing ? focused : null].filter((el,i,all) => el && all.indexOf(el) === i && guideVisible(el));
+  const rects = elements.map(guideRectangle).filter((r,i,all) => !all.some((other,j) => j !== i && other.left <= r.left && other.top <= r.top && other.right >= r.right && other.bottom >= r.bottom && (j < i || other.width > r.width || other.height > r.height)));
+  let rect = target ? guideRectangle(target) : null;
+  const clamp = (n,lo,hi) => Math.max(lo,Math.min(n,Math.max(lo,hi)));
+  const bounds = {left:vx+edge,top:headerBottom+edge,right:vx+width-edge,bottom:vy+height-edge};
+  const overlap = (x,y,r) => Math.max(0,Math.min(x+pw+10,r.right)-Math.max(x-10,r.left)) * Math.max(0,Math.min(y+ph+10,r.bottom)-Math.max(y-10,r.top));
+  const extra = guideVisible(extraTarget) ? guideRectangle(extraTarget) : null;
+  const placement = rect && extra ? {left:Math.min(rect.left,extra.left),top:Math.min(rect.top,extra.top),right:Math.max(rect.right,extra.right),bottom:Math.max(rect.bottom,extra.bottom)} : rect;
+  const candidates = placement ? [[placement.right+gap,placement.top],[placement.left-pw-gap,placement.top],[placement.left,placement.bottom+gap],[placement.left,placement.top-ph-gap],[bounds.right-pw,bounds.bottom-ph],[bounds.left,bounds.top]] : [[bounds.right-pw,bounds.bottom-ph]];
+  let best;
+  for (const [index,[rawX,rawY]] of candidates.entries()) {
+    const x = clamp(rawX,bounds.left,bounds.right-pw), y = clamp(rawY,bounds.top,bounds.bottom-ph);
+    const score = rects.reduce((sum,r) => sum+overlap(x,y,r),0)*1000 + Math.abs(x-rawX)+Math.abs(y-rawY)+index*60;
+    if (!best || score < best.score) best = {x,y,score};
+  }
+  // Make room below the complete highlighted group, including a prompt preview.
+  // Moving the scroll container preserves focus and the native control sizes.
+  const modal = target?.closest('dialog');
+  if (!adjusted && modal?.open && placement && rects.some(r => overlap(best.x,best.y,r) > 0)) {
+    const frame = modal.getBoundingClientRect(), floor = Math.max(vy+edge,frame.top+12), ceiling = Math.min(vy+height-edge,frame.bottom-12);
+    const h = placement.bottom-placement.top, maximum = Math.max(0,modal.scrollHeight-modal.clientHeight), before = modal.scrollTop;
+    if (h+ph+gap <= ceiling-floor) {
+      const options = [floor,ceiling-h].map(wanted => {
+        const scroll = clamp(before+placement.top-wanted,0,maximum), y = placement.top-(scroll-before);
+        const clipped = Math.max(0,floor-y)+Math.max(0,y+h-ceiling);
+        const shortage = Math.min(Math.max(0,ph+gap-y+floor),Math.max(0,ph+gap-ceiling+y+h));
+        return {scroll,score:clipped*1000+shortage*100+Math.abs(scroll-before)};
+      }).sort((a,b) => a.score-b.score);
+      modal.scrollTop = options[0].scroll;
+      if (Math.abs(modal.scrollTop-before) > 1) return positionGuide({panel,overlay,target,extraTarget,minimized,adjusted:true});
+    }
+  }
+  if (!adjusted && placement && !target?.closest('.site-header') && best.x < placement.right && best.x+pw > placement.left) {
+    const shift = best.y >= placement.top ? Math.max(0,placement.bottom+gap-best.y) : Math.min(0,placement.top-gap-best.y-ph);
+    const frame = modal?.open ? modal.getBoundingClientRect() : null;
+    const floor = frame ? Math.max(vy+edge,frame.top+12) : bounds.top, ceiling = frame ? Math.min(vy+height-edge,frame.bottom-12) : bounds.bottom;
+    const active = editing ? focused.getBoundingClientRect() : null;
+    if (shift > 0 && placement.top-shift >= floor && (!active || active.top-shift >= floor) ||
+        shift < 0 && placement.bottom-shift <= ceiling && (!active || active.bottom-shift <= ceiling)) {
+      const before = modal?.open ? modal.scrollTop : window.scrollY;
+      if (modal?.open) modal.scrollTop += shift; else window.scrollBy?.(0,shift);
+      const after = modal?.open ? modal.scrollTop : window.scrollY;
+      if (Math.abs(after-before) > 1) return positionGuide({panel,overlay,target,extraTarget,minimized,adjusted:true});
+    }
+  }
+  panel.style.left = best.x + 'px'; panel.style.top = best.y + 'px';
+  // CSS percentages exclude a desktop scrollbar; innerWidth includes it.
+  // Match the SVG's actual viewport so its user units remain screen pixels.
+  const svgBox = overlay.getBoundingClientRect(), fullWidth = svgBox.width, fullHeight = svgBox.height;
+  overlay.setAttribute('viewBox',`0 0 ${fullWidth} ${fullHeight}`);
+  const mask = overlay.querySelector('mask'); mask.setAttribute('width',fullWidth); mask.setAttribute('height',fullHeight);
+  overlay.querySelector('.guide-veil').setAttribute('d',`M0,0H${fullWidth}V${fullHeight}H0Z`);
+  // A luminance mask unions overlapping holes without expanding their bounds.
+  overlay.querySelector('.guide-cutouts').setAttribute('d',rects.map(r => roundedGuideRectangle(r)).join(' '));
+  overlay.querySelector('.guide-ring').setAttribute('d',rects.map(r => roundedGuideRectangle(r)).join(' '));
+  if (rect && extra) {
+    const distance = r => Math.hypot(Math.max(r.left-best.x-pw,best.x-r.right,0),Math.max(r.top-best.y-ph,best.y-r.bottom,0));
+    if (distance(extra) < distance(rect)) rect = extra;
+  }
+  let lead = '', arrow = '';
+  if (rect && rect.bottom > vy && rect.top < vy+height && rect.right > vx && rect.left < vx+width) {
+    let sx,sy,ex,ey,dx=0,dy=0;
+    const middleX = (rect.left+rect.right)/2, middleY = (rect.top+rect.bottom)/2;
+    if (best.x >= rect.right+12 || best.x+pw <= rect.left-12) {
+      dx = best.x >= rect.right+12 ? -1 : 1;
+      sx = dx < 0 ? best.x : best.x+pw; sy = clamp(middleY,best.y+26,best.y+ph-26);
+      ex = dx < 0 ? rect.right+7 : rect.left-7; ey = clamp(sy,rect.top+Math.min(12,rect.height/2),rect.bottom-Math.min(12,rect.height/2));
+      const bend = Math.abs(ex-sx)*.45;
+      lead = `M${sx},${sy}C${sx+dx*bend},${sy} ${ex-dx*bend},${ey} ${ex},${ey}`;
+    } else if (best.y >= rect.bottom+12 || best.y+ph <= rect.top-12) {
+      dy = best.y >= rect.bottom+12 ? -1 : 1;
+      sx = clamp(middleX,best.x+26,best.x+pw-26); sy = dy < 0 ? best.y : best.y+ph;
+      ex = clamp(sx,rect.left+Math.min(12,rect.width/2),rect.right-Math.min(12,rect.width/2)); ey = dy < 0 ? rect.bottom+7 : rect.top-7;
+      const bend = Math.abs(ey-sy)*.45;
+      lead = `M${sx},${sy}C${sx},${sy+dy*bend} ${ex},${ey-dy*bend} ${ex},${ey}`;
+    }
+    if (lead) arrow = dx ? `M${ex-dx*7},${ey-4}L${ex},${ey}L${ex-dx*7},${ey+4}` : `M${ex-4},${ey-dy*7}L${ex},${ey}L${ex+4},${ey-dy*7}`;
+  }
+  overlay.querySelector('.guide-lead').setAttribute('d',lead); overlay.querySelector('.guide-arrow').setAttribute('d',arrow);
+}
+
+function renderLiveGuide() {
+  const panel = liveGuidePanel;
+  if (!panel) return;
+  if (!hasAccess() || !state.user || liveGuide && liveGuide.owner !== state.user.id) { if (liveGuide) endLiveGuide(); return; }
+  if (orientationSuspended || challengeStartDialog.open) return;
+  if (pointsHelpDialog.open) { panel.hidden = true; liveGuideOverlay?.setAttribute('hidden',''); return; }
+  if (state.screen === 'home') {
+    panel.hidden = true; liveGuideOverlay?.setAttribute('hidden','');
+    liveGuideHighlight?.classList.remove('guide-target'); liveGuideHighlight = null;
+    // Home never resumes a saved walkthrough. Explicit start actions create a
+    // fresh presentation; existing server instances remain available normally.
+    if (!liveGuide) { try { window.sessionStorage?.removeItem(LIVE_GUIDE_STORAGE); } catch {} }
+    return;
+  }
+  restoreLiveGuide();
+  const guide = liveGuide;
+  if (!guide) return;
+  const refreshingChallenge = guide.kind === 'challenge' && state.challengeLoading && guide.challengeId && state.screen === 'scheme' && state.view === 'challenge' && state.schemeId === guide.schemeId && state.schemeVersion === guide.schemeVersion && profileId() === guide.profileId;
+  if (refreshingChallenge && liveGuideCurrentView && !panel.hidden && !submissionDialog.open) {
+    panel.setAttribute('aria-busy','true');
+    for (const control of panel.querySelectorAll('.guide-next,.guide-back')) control.disabled = true;
+    if (!guideVisible(liveGuideHighlight)) liveGuideOverlay?.setAttribute('hidden','');
+    return;
+  }
+  panel.setAttribute('aria-busy','false');
+  if (!liveGuideMinimized || state.screen !== 'home') setHomeFeatureLink(null);
+  let view;
+  if (guide.receipt) view = {step:4, done:true, title:guide.receipt.label, copy:guide.kind === 'note' ? 'Publication was requested for this revision. Check its status on the note.' : guide.kind === 'scheme' ? 'This revision was submitted for review. The decision comes separately.' : 'Your contribution was received. This receipt does not imply an award.', action:'View submission', run:() => { const route = guide.receipt.route; endLiveGuide(); navigateTop(route); }};
+  else if (guide.kind === 'contribution') view = {step:0, title:'Follow an idea.', copy:'Choose a contribution to follow through to submission.', target:guideControl('[data-contribution="note"]'), action:'Write a note', run:() => { const target = guideControl('[data-contribution="note"]'); if (target) guideActivate(target); else navigateTop(guideRoute()); }};
+  else if (guide.kind === 'challenge') view = liveChallengeView(guide);
+  else if (guide.kind === 'bounty') view = liveBountyView(guide);
+  else view = liveGuideNoteView(guide);
+  if (guide.intro && guide.kind === 'challenge') {
+    view = {...view,step:Math.max(0,view.step-2),total:3};
+  }
+  view = reviewGuideField(guide,view);
+  const dialogs = [...document.querySelectorAll('dialog')].filter(element => element.open);
+  const dialog = dialogs[dialogs.length - 1];
+  const host = dialog || $('#guide-slot'), overlay = guideOverlay();
+  if (panel.parentElement !== host) { panel.remove(); host.append(panel); }
+  if (overlay && overlay.parentElement !== host) { overlay.remove(); host.prepend(overlay); }
+  panel.hidden = false;
+  if (!view.target || !guideVisible(view.target)) view.target = guideControl(workspaceSelector(state.screen) + ' h1') || guideControl('#account-handle');
+  revealIntroTarget(guide,view);
+  guide.extraTarget = view.extraTarget;
+  const targetChanged = liveGuideHighlight !== (view.target || null);
+  if (targetChanged) {
+    liveGuideHighlight?.classList.remove('guide-target'); liveGuideHighlight = view.target || null; liveGuideHighlight?.classList.add('guide-target');
+    liveGuideResizeObserver?.disconnect(); liveGuideResizeObserver?.observe(panel);
+    if (liveGuideHighlight) liveGuideResizeObserver?.observe(guideAnchor(liveGuideHighlight));
+    if (guide.extraTarget) liveGuideResizeObserver?.observe(guide.extraTarget);
+  }
+  liveGuideCurrentView = view;
+  const key = JSON.stringify([guide.kind, view.step, view.title, view.copy, view.action, view.secondary, Boolean(view.choices), Boolean(view.done)]);
+  const changed = key !== liveGuideView;
+  if (changed) {
+    const hadView = Boolean(liveGuideView);
+    const guideHadFocus = panel.contains?.(document.activeElement), focusedClass = document.activeElement?.classList;
+    const nextFocus = focusedClass?.contains('guide-back') ? '.guide-back' : focusedClass?.contains('guide-hide') ? '.guide-hide' : '.guide-next';
+    liveGuideView = key;
+    const top = node('div', undefined, 'live-guide-top');
+    top.append(node('p', view.done ? 'Submission recorded' : guide.kind === 'contribution' ? 'Choose a path' : (view.step + 1) + ' / ' + (view.total || (guide.kind === 'challenge' ? 6 : 5)), 'live-guide-progress'));
+    const minimize = node('button', liveGuideMinimized ? 'Continue guide' : 'Hide guide', 'guide-hide'); minimize.type = 'button';
+    minimize.setAttribute('aria-label',minimize.textContent);
+    minimize.addEventListener('click', () => { liveGuideMinimized = !liveGuideMinimized; liveGuideView = ''; saveLiveGuide(); renderLiveGuide(); }); top.append(minimize);
+    const leave = node('button','×','guide-close'); leave.type = 'button'; leave.setAttribute('aria-label','Exit guide'); leave.title = 'Exit guide'; leave.addEventListener('click',endLiveGuide); top.append(leave);
+    const title = node('h2', view.title); title.id = 'live-guide-title';
+    const copy = node('p', view.copy, 'live-guide-copy');
+    const actions = node('div', undefined, 'live-guide-actions' + (view.choices ? ' is-choice' : ''));
+    const action = node('button', view.action, 'button button-primary guide-next'); action.type = 'button'; action.addEventListener('click', () => { if (liveGuide === guide) liveGuideCurrentView?.run?.(); }); if (view.choices) actions.append(action);
+    if (view.secondary) { const secondary = node('button', view.secondary, 'text-button'); secondary.type = 'button'; secondary.addEventListener('click', () => { if (liveGuide === guide) liveGuideCurrentView?.secondaryRun?.(); }); actions.append(secondary); }
+    const navigation = node('div',undefined,'guide-navigation');
+    const back = node('button','Back','text-button guide-back'); back.type = 'button'; back.addEventListener('click',() => { if (liveGuide === guide) liveGuideBackAction(guide,liveGuideCurrentView)?.(); });
+    navigation.append(back);
+    if (!view.choices) navigation.append(action);
+    panel.replaceChildren(top,title,copy,...(view.choices || view.secondary ? [actions] : []),navigation);
+    if (guideHadFocus) panel.querySelector(nextFocus)?.focus({preventScroll:true});
+    liveGuideTransition?.cancel(); liveGuideTransition = null;
+    if (hadView && !liveGuideMinimized && !window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) liveGuideTransition = title.animate?.([{opacity:.6,transform:'translateY(3px)'},{opacity:1,transform:'translateY(0)'}],{duration:120,easing:'ease-out'}) || null;
+    overlay?.classList.remove('guide-arrive');
+    // Read-only layout; no focus transfer or form changes while typing.
+    if (overlay?.getBoundingClientRect) { void overlay.getBoundingClientRect(); overlay.classList.add('guide-arrive'); }
+    const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) && !document.activeElement?.closest?.('#participation-guide');
+    const rect = view.target?.getBoundingClientRect?.();
+    if (rect && view.target.closest('dialog')?.open && !typing && !liveGuideMinimized && (rect.top < 24 || rect.bottom > window.innerHeight - 24)) view.target.scrollIntoView?.({block:'center', behavior:'instant'});
+  }
+  panel.querySelector('.guide-next').disabled = Boolean(view.disabled);
+  panel.querySelector('.guide-back').disabled = !liveGuideBackAction(guide,view);
+  positionLiveGuide(); scheduleGuidePosition();
+  void pollLiveGuide();
+}
+document.addEventListener('input', () => { if (liveGuide) setTimeout(renderLiveGuide, 0); });
+document.addEventListener('change', () => { if (liveGuide) setTimeout(renderLiveGuide, 0); });
+document.addEventListener('click', () => { if (liveGuide) setTimeout(renderLiveGuide, 0); });
+document.addEventListener('click',event => {
+  if (!liveGuide || event.guideOwnerAtStart !== liveGuide || event.startedInGuide || liveGuideMinimized || orientationSuspended) return;
+  liveGuideMinimized = true; liveGuideView = ''; saveLiveGuide(); renderLiveGuide();
+});
+document.addEventListener('focusin', scheduleGuidePosition);
+document.addEventListener('scroll', scheduleGuidePosition, true);
+window.addEventListener('resize', () => {
+  if (liveGuide?.kind === 'challenge' && liveGuideCurrentView && !liveGuideMinimized && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName)) { delete liveGuide.introRevealTarget; revealIntroTarget(liveGuide,liveGuideCurrentView); }
+  const rect = liveGuideHighlight?.getBoundingClientRect?.();
+  if (rect && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) && (rect.bottom < 24 || rect.top > window.innerHeight - 24)) liveGuideHighlight.scrollIntoView?.({block:'center', behavior:'instant'});
+  scheduleGuidePosition();
+});
+window.visualViewport?.addEventListener('resize', scheduleGuidePosition);
+window.visualViewport?.addEventListener('scroll', scheduleGuidePosition);
+$('#manual-tools > summary').addEventListener('click',event => {
+  if (liveGuide?.kind === 'challenge' && (liveGuide.approach !== 'manual' || liveGuide.challengeStep === 'choice')) { event.preventDefault(); chooseGuidedApproach('manual'); }
+});
+$('#download-button').addEventListener('click',event => {
+  if (liveGuide?.kind === 'challenge' && liveGuide.challengeId === state.challenge?.id && liveGuide.approach === 'manual') {
+    event.preventDefault(); void downloadGuidedInputs(liveGuide);
+  }
+});
+$('#submission-dialog').addEventListener('focusin',event => {
+  if (liveGuide?.kind !== 'challenge' || !submissionDialog.open || !state.submissionChallenge || event.target.closest?.('#participation-guide')) return;
+  if (challengeGuideFields(state.submissionChallenge).some(field => field.id === event.target.id)) {
+    liveGuide.formRevision = state.submissionFormRevision; liveGuide.formField = event.target.id; renderLiveGuide();
+  }
+});
+$('#submission-dialog').addEventListener('close',() => { if (liveGuide?.kind === 'challenge') { liveGuideView = ''; renderLiveGuide(); } });
+setInterval(renderLiveGuide, 1000);
+
+function askChallengeGuide(trigger, scheme = null, profile = null) {
+  if (!hasAccess() || !state.user || documentRetired || !scheme || !profile || !['home','catalogue'].includes(state.screen) || [...document.querySelectorAll('dialog')].some(dialog => dialog.open)) return;
+  challengeStartChoice = {owner:state.user.id,csrf:state.csrf,epoch:documentEpoch,
+    route:schemeRoute(scheme,profile,'challenge'),description:scheme.name+' · '+profileLabel(profile,scheme),
+    selection:{schemeId:scheme.id,schemeVersion:String(scheme.version),profileId:profileId(profile)}};
+  setHomeFeatureLink(null); endLiveGuide();
+  navigateTop(challengeStartChoice.route);
+}
+function showChallengeStartChoice() {
+  const choice = challengeStartChoice;
+  if (!choice || choice.opened) return;
+  if (!hasAccess() || state.user?.id !== choice.owner || state.csrf !== choice.csrf || !ownsDocument(choice.epoch) || window.location.hash !== choice.route) { challengeStartChoice = null; return; }
+  if (state.screen !== 'scheme' || state.view !== 'challenge' || state.schemeId !== choice.selection.schemeId || state.schemeVersion !== choice.selection.schemeVersion || profileId() !== choice.selection.profileId || $('#workspace').hidden) return;
+  if ([...document.querySelectorAll('dialog')].some(dialog => dialog.open)) { challengeStartChoice = null; return; }
+  choice.opened = true; setText('#challenge-start-description',choice.description); $('#challenge-start-description').hidden = false;
+  openDialog(challengeStartDialog,$('#workspace'));
+  $('#challenge-start-guided').focus({preventScroll:true});
+}
+function chooseChallengeGuide(guided) {
+  const choice = challengeStartChoice;
+  if (!choice || !challengeStartDialog.open || !hasAccess() || state.user?.id !== choice.owner || state.csrf !== choice.csrf ||
+      !ownsDocument(choice.epoch) || window.location.hash !== choice.route) { challengeStartDialog.close(); return; }
+  challengeStartDialog.close(); challengeStartChoice = null;
+  if (guided) startLiveGuide('challenge',{...choice.selection,intro:true,challengeStep:'intro'}); else endLiveGuide();
+}
+$('#challenge-start-guided').addEventListener('click',() => chooseChallengeGuide(true));
+$('#challenge-start-own').addEventListener('click',() => chooseChallengeGuide(false));
 function renderHomeAccount() {
   const member = hasAccess() && Boolean(state.user);
   $('#home-workspace').classList.toggle('is-member', member);
-  const button = $('#home-primary');
-  button.disabled = !state.sessionResolved;
-  setText('#home-primary', member ? 'My activity →' : state.user ? 'Check your access →' : 'Sign in to Crucible →');
-  $('#home-access-note').hidden = member;
-  setText('#home-access-note', state.user ?
-    'Your account needs active beta access. Open your invitation link or contact the person who invited you.' :
-    'Currently invitation-only. Open your invitation link to join.');
-  $('#home-progress').hidden = !member;
-  $('#home-bounties-panel').hidden = !bountyFeatureAvailable();
-  $('#home-bounty-guide').hidden = !bountyFeatureAvailable();
+  $('#home-tour').hidden = !member; $('#home-bounty-option').hidden = !bountyFeatureAvailable();
+  $('#home-get-started').hidden = !member;
+  if (!member) { guidedChallengeApproach = null; $('#home-guide-content').replaceChildren(); endLiveGuide(); }
+  if (member) renderLiveGuide();
 }
-function showHome() {
-  if (!hasAccess()) { renderAccessGate(); return; }
-  if (['propose', 'reviews'].includes(state.screen)) leaveProposalPage();
-  if (recoveryDialog.open) recoveryDialog.close();
-  state.challengeStartIntent = null;
-  state.screen = 'home';
-  state.challengeRequest++; state.leaderboardRequest++; state.historyRequest++; state.peopleRequest++; state.personRequest++;
-  showWorkspace('home'); renderHomeAccount();
-  document.title = 'crucible — Find new cryptography. Test its limits.';
-  if (hasAccess() && state.user && state.ready) void loadHomeProgress();
-}
-function homeSummaryPreview(target) {
-  quietReadStatus(target, 'Loading current progress');
-  const preview = node('div'); preview.setAttribute('aria-hidden', 'true');
-  for (let index = 0; index < 3; index++) {
-    const row = node('div', undefined, 'home-placeholder');
-    row.append(node('span', undefined, 'catalogue-placeholder'), node('span', undefined, 'catalogue-placeholder')); preview.append(row);
-  }
-  target.append(preview);
-}
-function summarizeHomeSchemes(data) {
-  if (!Array.isArray(data.schemes) || data.schemes.some(scheme => !scheme || typeof scheme.id !== 'string' || typeof scheme.name !== 'string' || scheme.version == null || !Array.isArray(scheme.profiles)))
-    throw new Error('Scheme progress could not be loaded.');
-  return {schemes: data.schemes.slice().sort((a, b) => (b.participant_count || 0) - (a.participant_count || 0)).slice(0, 6).map(scheme => ({
-    id: scheme.id, version: scheme.version, name: scheme.name,
-    profiles: orderedProfiles(scheme).map(profile => ({id: profileId(profile), label: profileLabel(profile, scheme)})),
-    recovered: recoveredProfileIds(scheme), largest: scheme.largest_recovered_profile_id || null
-  }))};
-}
-function renderHomeSummary(kind, key, data) {
-  const target = $('#home-' + kind), focused = document.activeElement?.closest('#home-' + kind) === target ? document.activeElement : null;
-  target.querySelector('.home-read-error')?.remove();
-  paintRead(key, target, data, data => {
-    const records = data[kind];
-    if (!records.length) return showEmpty(target, kind === 'schemes' ? 'No schemes have been published yet.' : 'No open bounties right now. Check back for new research tasks.');
-    const items = records.map(record => {
-      const link = node('a', undefined, kind === 'schemes' ? 'home-scheme-row' : 'home-bounty-row');
-      link.dataset.homeId = record.id;
-      if (kind === 'schemes') {
-        link.href = overviewRoute(record);
-        const largest = record.profiles.find(profile => profile.id === record.largest);
-        const copy = node('span', undefined, 'home-scheme-copy');
-        copy.append(node('span', record.name, 'home-scheme-name'), node('span', largest ? 'Largest recovery: ' + largest.label : record.largest ? 'Recovery recorded' : 'No recoveries yet', 'home-scheme-status'));
-        const strip = node('span', undefined, 'home-stage-strip'); strip.setAttribute('aria-hidden', 'true');
-        for (const profile of record.profiles) {
-          const segment = node('span', undefined, record.recovered.includes(profile.id) ? 'is-recovered' : ''); strip.append(segment);
-        }
-        link.setAttribute('aria-label', record.name + '. ' + (largest ? 'Largest recovery: ' + largest.label + '. ' : '') +
-          record.profiles.filter(profile => record.recovered.includes(profile.id)).length + ' of ' + record.profiles.length + ' configurations have a recorded recovery.');
-        link.append(copy, strip);
-      } else {
-        link.href = '#bounties?' + new URLSearchParams({bounty: record.id});
-        link.append(node('span', record.title, 'home-bounty-name'), node('span', Number(record.reward_points).toLocaleString() + ' points · ' + (record.status === 'frozen' ? 'Review in progress' : 'Open for contributions'), 'home-bounty-meta'));
-      }
-      return link;
-    });
-    if (kind === 'schemes') {
-      const key = node('div', undefined, 'home-stage-key'); key.append(node('span', 'Recovered'), node('span', 'Unrecovered')); items.push(key);
-    }
-    target.replaceChildren(...items);
-  });
-  if (focused && !focused.isConnected && ![...document.querySelectorAll('dialog')].some(dialog => dialog.open)) {
-    const replacement = [...target.querySelectorAll('[data-home-id]')].find(link => link.dataset.homeId === focused.dataset.homeId);
-    (replacement || $('#home-workspace')).focus({preventScroll: true});
-  }
-}
-async function loadHomeSummary(kind, request) {
-  const target = $('#home-' + kind), key = 'home:' + kind, cached = cachedRead(key);
-  const epoch = readViewEpoch, account = state.user?.id, csrf = state.csrf;
-  const current = () => hasAccess() && state.user?.id === account && state.csrf === csrf && readViewEpoch === epoch &&
-    request === homeSummaryRequest && state.screen === 'home';
-  if (cached) renderHomeSummary(kind, key, cached); else homeSummaryPreview(target);
-  target.setAttribute('aria-busy', 'true');
+let homeHighlights = null, homeHighlightsLoad = null, homeHighlightsEpoch = 0;
+let introStartRequest = 0;
+async function startIntroChallenge() {
+  if (!hasAccess() || !state.user || documentRetired) return;
+  const token = ++introStartRequest, owner = state.user.id, csrf = state.csrf, epoch = documentEpoch, origin = window.location.hash;
+  const current = () => ownsDocument(epoch) && hasAccess() && state.user?.id === owner && state.csrf === csrf && token === introStartRequest;
+  const control = $('#home-get-started'), status = $('#home-intro-status');
+  control.disabled = true; control.setAttribute('aria-busy','true'); status.hidden = true;
   try {
-    const response = await readAgain(key, kind === 'schemes' ? '/api/schemes?projection=navigation' : '/api/bounties?status=open&sort=concrete&offset=0&limit=3');
-    if (!current()) return;
-    let data;
-    if (kind === 'schemes') data = summarizeHomeSchemes(response);
-    else {
-      if (!Array.isArray(response.bounties) || response.bounties.length > 3 || response.bounties.some(task => !task || typeof task.id !== 'string' || typeof task.title !== 'string' || !['open', 'frozen'].includes(task.status) || !Number.isSafeInteger(task.reward_points) || task.reward_points < 0))
-        throw new Error('Open bounties could not be loaded.');
-      data = {bounties: response.bounties.map(task => ({id: task.id, title: task.title, status: task.status, reward_points: task.reward_points}))};
-    }
-    rememberRead(key, data); renderHomeSummary(kind, key, data);
+    if (!state.catalogueLoaded && !await loadAuthorizedCatalogue()) throw Error('The introductory challenge is unavailable. Please try again.');
+    if (!current() || window.location.hash !== origin) return;
+    const scheme = state.schemes.find(item => item.id === 'teaching-dh-kem' && !generationUnavailable(item)), first = scheme && orderedProfiles(scheme)[0];
+    if (!first) throw Error('The introductory challenge is unavailable. Please try again.');
+    startLiveGuide('challenge',{schemeId:scheme.id,schemeVersion:String(scheme.version),profileId:profileId(first),intro:true,challengeStep:'intro'});
+    liveGuidePanel.hidden = true; liveGuideOverlay?.setAttribute('hidden','');
+    navigateTop(schemeRoute(scheme,first,'challenge'));
   } catch (error) {
+    if (!current() || window.location.hash !== origin) return;
+    if (state.screen === 'home') { status.textContent = error.message; status.hidden = false; } else globalError(error.message);
+  } finally { if (current()) { control.disabled = false; control.setAttribute('aria-busy','false'); } }
+}
+$('#home-get-started').addEventListener('click',() => { void startIntroChallenge(); });
+$('#home-intro-trigger').addEventListener('click',() => $('#home-get-started').click());
+function clearHomeHighlights() {
+  weeklyPersonalEpoch++; weeklyPersonalProgress = null; weeklyPersonalLoad = null;
+  introStartRequest++; $('#home-get-started').disabled = false; $('#home-get-started').setAttribute('aria-busy','false');
+  $('#home-intro-status').hidden = true; $('#home-intro-status').textContent = '';
+  homeHighlights = null; homeHighlightsLoad = null; homeHighlightsEpoch++;
+  setHomeFeatureLink(null);
+  for (const id of ['#home-featured-challenge','#home-bounty-list']) $(id).replaceChildren();
+}
+function featuredHomeScheme(timestamp = now()) {
+  const schemes = state.schemes.filter(scheme => orderedProfiles(scheme).length && !generationUnavailable(scheme))
+    .sort((a,b) => a.id.localeCompare(b.id) || String(a.version).localeCompare(String(b.version)));
+  // Monday-to-Monday UTC rotation, shared by all members. Only current,
+  // available releases participate; no synthetic targets or editorial claims.
+  const week = Math.floor((timestamp * 1000 - Date.UTC(1970,0,5)) / 604800000);
+  return schemes.length ? schemes[((week % schemes.length) + schemes.length) % schemes.length] : null;
+}
+let weeklyPersonalProgress = null, weeklyPersonalLoad = null, weeklyPersonalEpoch = 0;
+function weeklyPerson() {
+  return weeklyPersonalProgress?.owner === state.user?.id && weeklyPersonalProgress?.csrf === state.csrf ? weeklyPersonalProgress.person : null;
+}
+function paintWeeklyProgress(card,scheme) {
+  const profiles = orderedProfiles(scheme), named = namedParameters(scheme), person = weeklyPerson();
+  const record = person?.records.find(row => row.scheme_id === scheme.id && String(row.scheme_version) === String(scheme.version));
+  const best = record ? profiles.findIndex(row => profileId(row) === record.profile_id) : -1;
+  const loading = !weeklyPersonalProgress || weeklyPersonalProgress.owner !== state.user?.id || Boolean(weeklyPersonalLoad);
+  const label = card.querySelector('.weekly-personal-progress'), track = card.querySelector('.home-stage-track');
+  label.textContent = person ? (named ? 'Your latest: ' : 'Your best: ')+(best < 0 ? 'no solves yet' : profileLabel(profiles[best],scheme)) : loading ? 'Your progress: checking…' : 'Your progress: unavailable';
+  label.title = named ? 'Your latest verified solution in this release.' : 'Your highest verified solution in this release. The marker shows the community record.';
+  const position = best+1;
+  track.hidden = named;
+  track.setAttribute('aria-busy',String(loading));
+  if (person) track.setAttribute('aria-valuenow',position); else track.removeAttribute('aria-valuenow');
+  track.setAttribute('aria-valuetext',label.textContent);
+  card.querySelector('.home-stage-fill').style.width = person ? (100*position/profiles.length)+'%' : '0%';
+  const you = card.querySelector('.weekly-you-marker'); you.hidden = !person; you.style.left = (100*position/profiles.length)+'%';
+  const reward = card.querySelector('.weekly-reward');
+  const earned = person?.first_records?.some(row => row.scheme_id === scheme.id);
+  const enrolled = state.recoveryScoring?.enrolled_releases.some(row => row.id === scheme.id && row.version === String(scheme.version));
+  const frontier = Number(card.dataset.frontier);
+  const available = enrolled && frontier < profiles.length-1 && !earned && person?.score_status !== 'reviewer';
+  const stamp = JSON.stringify([available,earned,state.recoveryScoring?.record_advance_points]);
+  if (reward.dataset.stamp !== stamp) {
+    reward.dataset.stamp = stamp; reward.replaceChildren(); card.removeAttribute('aria-describedby');
+    if (available) {
+      const points = node('span',undefined,'points-badge weekly-points '+(card.classList.contains('catalogue-weekly-card') ? 'catalogue-weekly-points' : 'home-weekly-points'));
+      points.append(node('strong',pointAmount(state.recoveryScoring.record_advance_points)),node('span','points'));
+      const explanation = node('span','Set a new community record to earn '+state.recoveryScoring.record_advance_points+' points. Once per scheme.','weekly-reward-caption');
+      explanation.id = (card.classList.contains('catalogue-weekly-card') ? 'catalogue' : 'home')+'-weekly-reward-explanation'; explanation.setAttribute('role','tooltip');
+      points.setAttribute('aria-label',state.recoveryScoring.record_advance_points+' points'); card.setAttribute('aria-describedby',explanation.id);
+      reward.append(points,explanation);
+    } else if (earned) reward.append(node('span','Record bonus earned','weekly-bonus-earned'));
+  }
+}
+function refreshWeeklyCards() {
+  for (const card of document.querySelectorAll('[data-weekly-scheme]')) {
+    const scheme = state.schemes.find(row => row.id === card.dataset.weeklyScheme && String(row.version) === card.dataset.weeklyVersion);
+    if (scheme) paintWeeklyProgress(card,scheme);
+  }
+}
+async function loadWeeklyPersonalProgress() {
+  if (!hasAccess() || !state.user || documentRetired || weeklyPersonalLoad || weeklyPersonalProgress?.owner === state.user.id && weeklyPersonalProgress.csrf === state.csrf && Date.now()-weeklyPersonalProgress.at < 60000) return;
+  const owner = state.user.id, handle = state.user.handle, csrf = state.csrf, epoch = ++weeklyPersonalEpoch, lifecycle = documentEpoch;
+  const current = () => ownsDocument(lifecycle) && hasAccess() && state.user?.id === owner && state.csrf === csrf && epoch === weeklyPersonalEpoch;
+  const task = (async () => {
+    try {
+      const data = await readAgain('person:'+handle.toLowerCase(),'/api/people/'+encodeURIComponent(handle)+'?include_milestones=false');
+      if (!current()) return;
+      if (!data?.person || data.person.handle?.toLowerCase() !== handle.toLowerCase() || !Array.isArray(data.person.records) || data.person.records.some(row => !row || typeof row.scheme_id !== 'string' || typeof row.profile_id !== 'string')) throw Error('Personal progress unavailable.');
+      weeklyPersonalProgress = {owner,csrf,person:data.person,at:Date.now()};
+      if (data.person.records.some(record => { const scheme = state.schemes.find(row => row.id === record.scheme_id && String(row.version) === String(record.scheme_version)); if (!scheme) return false; const profiles = orderedProfiles(scheme); return profiles.findIndex(row => profileId(row) === record.profile_id) > profiles.findIndex(row => profileId(row) === scheme.largest_recovered_profile_id); })) void refreshProfiles({background:true}).catch(() => {});
+    } catch {
+      if (current()) weeklyPersonalProgress = {owner,csrf,person:null,at:Date.now()};
+    } finally { if (current()) { weeklyPersonalLoad = null; refreshWeeklyCards(); } }
+  })();
+  weeklyPersonalLoad = task;
+  try { await task; } finally { if (weeklyPersonalLoad === task) weeklyPersonalLoad = null; }
+}
+function createWeeklyChallengeCard(scheme, {compact = false} = {}) {
+  const profiles = orderedProfiles(scheme), recovered = new Set(recoveredProfileIds(scheme));
+  const frontier = Math.max(-1,profiles.findIndex(item => profileId(item) === scheme.largest_recovered_profile_id),...profiles.map((item,index) => recovered.has(profileId(item)) ? index : -1));
+  const profile = profiles[frontier+1] || (exactProfileRecords(scheme) && profiles.find(item => !recovered.has(profileId(item)))) || profiles[0];
+  const link = node('a',undefined,'weekly-challenge-card '+(compact ? 'catalogue-weekly-card' : 'home-weekly-card'));
+  link.dataset.weeklyScheme = scheme.id; link.dataset.weeklyVersion = String(scheme.version); link.dataset.frontier = frontier;
+  link.href = schemeRoute(scheme,profile,'challenge');
+  link.addEventListener('click',event => {
+    if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault(); askChallengeGuide(link,scheme,profile);
+  });
+  const art = document.createElementNS('http://www.w3.org/2000/svg','svg'); art.setAttribute('viewBox','0 0 180 180'); art.setAttribute('class','home-weekly-art'); art.setAttribute('aria-hidden','true');
+  for (const radius of [34,59,82]) { const circle = document.createElementNS('http://www.w3.org/2000/svg','circle'); circle.setAttribute('cx','90'); circle.setAttribute('cy','90'); circle.setAttribute('r',radius); art.append(circle); }
+  for (const [x,y,r] of [[90,90,7],[90,8,5],[141,120,5],[62,71,4]]) { const dot = document.createElementNS('http://www.w3.org/2000/svg','circle'); dot.setAttribute('cx',x); dot.setAttribute('cy',y); dot.setAttribute('r',r); dot.setAttribute('class','home-orbit-dot'); art.append(dot); }
+  link.append(art);
+  const heading = node('div',undefined,'home-weekly-top'), copy = node('div',undefined,'weekly-target-copy');
+  if (compact) { const label = node('span','Challenge of the week','catalogue-weekly-label'); const icon = $('#home-weekly-title svg')?.cloneNode(true); if (icon) label.prepend(icon); copy.append(label); }
+  else copy.append(node('span','Scheme','weekly-scheme-label'));
+  copy.append(node('h3',scheme.name)); heading.append(copy,node('div',undefined,'weekly-reward')); link.append(heading);
+  const progress = node('div',undefined,'home-stage-progress'), labels = node('div',undefined,'home-stage-labels');
+  const community = node('span',namedParameters(scheme) ? 'Community: '+profiles.filter(item => recovered.has(profileId(item))).length+'/'+profiles.length+' sets solved' : 'Record: '+(frontier < 0 ? 'none yet' : profileLabel(profiles[frontier],scheme)),'home-community-progress');
+  community.title = 'The highest level solved by anyone. Your own progress is shown separately.';
+  labels.append(node('span','Your progress: checking…','weekly-personal-progress'),community);
+  const track = node('div',undefined,'home-stage-track'); track.setAttribute('role','progressbar');
+  track.setAttribute('aria-label','Your verified progress'); track.setAttribute('aria-valuemin','0'); track.setAttribute('aria-valuemax',profiles.length);
+  const fill = node('span',undefined,'home-stage-fill'), you = node('span',undefined,'weekly-you-marker'), marker = node('span',undefined,'home-stage-marker weekly-frontier-marker');
+  you.setAttribute('aria-hidden','true'); marker.setAttribute('aria-hidden','true'); marker.title = community.textContent;
+  marker.hidden = frontier < 0; marker.style.left = (100*(frontier+1)/profiles.length)+'%';
+  track.append(fill,you,marker); progress.append(labels,track); link.append(progress);
+  const action = node('span',undefined,'weekly-challenge-action'); action.append(node('span','Try challenge'),node('span','→','action-arrow')); link.append(action);
+  paintWeeklyProgress(link,scheme); void loadWeeklyPersonalProgress();
+  return link;
+}
+function renderCatalogueWeekly() {
+  const host = $('#catalogue-weekly'), scheme = featuredHomeScheme();
+  host.hidden = !hasAccess() || !state.user || !scheme; host.replaceChildren();
+  if (!host.hidden) host.append(createWeeklyChallengeCard(scheme,{compact:true}));
+}
+function renderHomeHighlights() {
+  if (!hasAccess() || !state.user || !homeHighlights) return;
+  const {schemes, bounties} = homeHighlights;
+  const challenge = $('#home-featured-challenge'), list = $('#home-bounty-list');
+  challenge.replaceChildren(); list.replaceChildren();
+  for (const [target, result, label] of [[challenge,schemes,'Challenge unavailable.'],[list,bounties,'Bounties unavailable.']]) {
+    target.setAttribute('aria-busy','false');
+    if (result.status === 'rejected') {
+      const retry = node('button','Retry','text-button'); retry.type = 'button'; retry.addEventListener('click',() => { void loadHomeHighlights({refresh:true}); });
+      target.append(node('p',label,'home-highlight-status'),retry);
+    }
+  }
+  if (schemes.status === 'fulfilled') {
+    const scheme = featuredHomeScheme();
+    if (scheme) {
+      challenge.append(createWeeklyChallengeCard(scheme));
+    } else challenge.append(node('p','No challenges available.','home-highlight-status'));
+  }
+  $('#home-bounties').hidden = !bountyFeatureAvailable();
+  if (bounties.status === 'fulfilled' && bountyFeatureAvailable()) {
+    const rows = [...bounties.value].sort((a,b) => b.reward_points - a.reward_points || a.id.localeCompare(b.id)).slice(0,3);
+    for (const [index,bounty] of rows.entries()) {
+      const link = node('a',undefined,'home-bounty'); link.href = '#bounties?' + new URLSearchParams({bounty:bounty.id, detail:'brief', from:'home'});
+      const rank = node('span',String(index+1).padStart(2,'0'),'home-bounty-rank'); rank.setAttribute('aria-hidden','true');
+      const copy = node('div',undefined,'home-bounty-copy'); copy.append(node('h3',bounty.title));
+      if (bounty.status === 'frozen') copy.append(node('span','Under review','home-feature-label'));
+      const points = node('span',undefined,'points-badge home-bounty-points'); points.append(node('strong',pointAmount(bounty.reward_points)),node('span','points'));
+      points.setAttribute('aria-label',bounty.reward_points.toLocaleString('en-US')+' points');
+      link.append(rank,copy,points); list.append(link);
+    }
+    if (!rows.length) list.append(node('p','No open bounties.','home-highlight-status'));
+  }
+  renderLiveGuide();
+  if (homeLinkedFeature) setHomeFeatureLink(homeLinkedFeature);
+}
+async function loadHomeHighlights({refresh = false} = {}) {
+  if (!hasAccess() || !state.user) return;
+  if (homeHighlightsLoad) return homeHighlightsLoad;
+  if (!refresh && homeHighlights && Date.now() - homeHighlights.at < 60000) { renderHomeHighlights(); return; }
+  const account = state.user.id, csrf = state.csrf, epoch = ++homeHighlightsEpoch, lifecycle = documentEpoch;
+  const current = () => ownsDocument(lifecycle) && hasAccess() && state.user?.id === account && state.csrf === csrf && epoch === homeHighlightsEpoch;
+  for (const [id,label] of [['#home-featured-challenge','Loading challenge…'],['#home-bounty-list','Loading bounties…']]) {
+    $(id).setAttribute('aria-busy','true'); if (!homeHighlights) $(id).replaceChildren(node('p',label,'home-highlight-status'));
+  }
+  $('#home-bounties').hidden = !bountyFeatureAvailable();
+  const task = (async () => {
+    const results = await Promise.allSettled([
+      state.catalogueLoaded ? Promise.resolve(true) : loadAuthorizedCatalogue().then(loaded => { if (!loaded) throw Error('Challenge unavailable.'); }),
+      bountyFeatureAvailable() ? api('/api/bounties?status=open&sort=points-high&limit=3',undefined,{readRecovery:true}).then(data => {
+        if (!Array.isArray(data.bounties) || data.bounties.length > 3 || data.bounties.some(row => typeof row.id !== 'string' || !/^[A-Za-z0-9_.-]{1,200}$/.test(row.id) || typeof row.title !== 'string' || !['open','frozen'].includes(row.status) || !Number.isSafeInteger(row.reward_points) || row.reward_points < 0)) throw Error('Bounties unavailable.');
+        return data.bounties;
+      }) : Promise.resolve([])
+    ]);
     if (!current()) return;
-    if (cached && !forbiddenRead(error)) {
-      target.querySelector('.home-read-error')?.remove();
-      const notice = node('div', undefined, 'home-read-error');
-      showInlineError(notice, error.message, loadHomeProgress); target.append(notice);
-    } else readRefreshError(key, target, error, loadHomeProgress, null);
-  } finally { if (current()) target.setAttribute('aria-busy', 'false'); }
+    homeHighlights = {at:Date.now(),schemes:results[0],bounties:results[1]}; renderHomeHighlights();
+  })();
+  homeHighlightsLoad = task;
+  try { await task; } finally { if (homeHighlightsLoad === task) homeHighlightsLoad = null; }
 }
-async function loadHomeProgress() {
-  if (!hasAccess() || !state.user || state.screen !== 'home') return;
-  const request = ++homeSummaryRequest;
-  $('#refresh-home').disabled = true;
-  try { await Promise.all([loadHomeSummary('schemes', request), ...(bountyFeatureAvailable() ? [loadHomeSummary('bounties', request)] : [])]); }
-  finally { if (request === homeSummaryRequest) $('#refresh-home').disabled = false; }
+let homeLinkedFeature = null, homePinnedFeature = null, homeFeatureFrame = null, homeFeatureTime = 0;
+// Keep a different, continuous path for each panel for this document's lifetime.
+// Pointer position chooses a point on the path; nothing roams while idle.
+const homeFeatureSpots = [...document.querySelectorAll('[data-home-feature]')].map(element => ({
+  element, target: document.getElementById(element.getAttribute('aria-controls')),
+  pointer: null, keyboard: false, x: null, y: null, u: .5, v: .5, strength: 0, phraseStrength: 0,
+  path: {reverse: element.dataset.homeFeature === 'challenge', phase: Math.random() * Math.PI * 2,
+    waves: 1.1 + Math.random() * .65, amplitude: .16 + Math.random() * .08, inset: .14 + Math.random() * .06}
+}));
+function setHomeFeatureLink(feature) {
+  if (!feature) homePinnedFeature = null;
+  homeLinkedFeature = feature && state.screen === 'home' ? feature : null;
+  const root = $('#home-entry');
+  if (homeLinkedFeature) root.setAttribute('data-preview',homeLinkedFeature); else root.removeAttribute('data-preview');
+  for (const control of document.querySelectorAll('[data-home-feature]')) {
+    control.setAttribute('aria-pressed',String(Boolean(homeLinkedFeature && homePinnedFeature === control.dataset.homeFeature)));
+    control.classList.toggle('is-feature-source',control.dataset.homeFeature === homeLinkedFeature);
+  }
+  const target = homeLinkedFeature === 'challenge' ? guideControl('.home-weekly') : homeLinkedFeature === 'bounties' ? guideControl('#home-bounties') : null;
+  for (const element of document.querySelectorAll('.is-feature-linked')) if (element !== target) element.classList.remove('is-feature-linked');
+  target?.classList.add('is-feature-linked');
+  requestHomeFeatureFrame();
 }
-$('#home-primary').addEventListener('click', () => {
-  if (!state.sessionResolved) return;
-  if (hasAccess() && state.user) { navigateTop('#activity'); return; }
-  if (state.user) { navigateTop('#challenge'); return; }
-  state.returnRoute = '#home'; setAuthMode('login'); openAuth($('#home-primary'));
+function requestHomeFeatureFrame() {
+  if (homeFeatureFrame === null && !documentRetired && window.requestAnimationFrame) homeFeatureFrame = window.requestAnimationFrame(animateHomeFeatures);
+}
+function animateHomeFeatures(time) {
+  homeFeatureFrame = null;
+  if (documentRetired) return;
+  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  const elapsed = homeFeatureTime ? Math.min(time - homeFeatureTime, 32) : 16;
+  const follow = reduced ? 1 : 1 - Math.exp(-elapsed / 145), fade = reduced ? 1 : 1 - Math.exp(-elapsed / 95);
+  homeFeatureTime = time;
+  let unsettled = false;
+  for (const spot of homeFeatureSpots) {
+    const active = homeLinkedFeature === spot.element.dataset.homeFeature && state.screen === 'home';
+    if (!active && spot.strength === 0 && spot.phraseStrength === 0) continue;
+    const box = spot.element.getBoundingClientRect();
+    const clamp = value => Math.max(0, Math.min(1, value));
+    const px = spot.pointer && !reduced ? clamp((spot.pointer.x - box.left) / box.width) : .5;
+    const py = spot.pointer && !reduced ? clamp((spot.pointer.y - box.top) / box.height) : .5;
+    const x = px * box.width, y = py * box.height, path = spot.path;
+    const t = path.reverse ? 1 - px : px;
+    const u = path.inset + (1 - path.inset * 2) * t;
+    const v = .5 + Math.sin(t * Math.PI * path.waves + path.phase) * path.amplitude + (py - .5) * .16;
+    const phrase = active && (spot.pointer || spot.keyboard || homePinnedFeature) ? 1 : 0;
+    if (spot.x === null || spot.strength < .002) { spot.x = x; spot.y = y; spot.u = u; spot.v = v; }
+    spot.x += (x - spot.x) * follow; spot.y += (y - spot.y) * follow;
+    spot.u += (u - spot.u) * follow; spot.v += (v - spot.v) * follow;
+    spot.strength += ((active ? 1 : 0) - spot.strength) * fade;
+    spot.phraseStrength += (phrase - spot.phraseStrength) * fade;
+    if (!active && spot.strength < .002) spot.strength = 0;
+    if (!phrase && spot.phraseStrength < .002) spot.phraseStrength = 0;
+    spot.element.style.setProperty('--phrase-x', spot.x.toFixed(2) + 'px');
+    spot.element.style.setProperty('--phrase-y', spot.y.toFixed(2) + 'px');
+    spot.element.style.setProperty('--phrase-strength', spot.phraseStrength.toFixed(4));
+    spot.target?.style.setProperty('--preview-x', (spot.u * 100).toFixed(3) + '%');
+    spot.target?.style.setProperty('--preview-y', (spot.v * 100).toFixed(3) + '%');
+    spot.target?.style.setProperty('--preview-strength', spot.strength.toFixed(4));
+    if (Math.abs((active ? 1 : 0) - spot.strength) > .001 || Math.abs(phrase - spot.phraseStrength) > .001 ||
+        (active && (Math.hypot(x - spot.x, y - spot.y) > .1 || Math.hypot(u - spot.u, v - spot.v) > .0002))) unsettled = true;
+  }
+  if (unsettled) requestHomeFeatureFrame(); else homeFeatureTime = 0;
+}
+for (const link of document.querySelectorAll('[data-home-feature]')) {
+  const spot = homeFeatureSpots.find(item => item.element === link);
+  const point = event => { spot.pointer = {x:event.clientX, y:event.clientY}; spot.keyboard = false; requestHomeFeatureFrame(); };
+  link.addEventListener('pointerenter',event => { if (event.pointerType !== 'touch') { point(event); setHomeFeatureLink(link.dataset.homeFeature); } });
+  link.addEventListener('pointermove',event => { if (event.pointerType !== 'touch') point(event); });
+  link.addEventListener('pointerleave',() => { spot.pointer = null; if (document.activeElement !== link) setHomeFeatureLink(homePinnedFeature); else requestHomeFeatureFrame(); });
+  link.addEventListener('focus',() => { spot.keyboard = !spot.pointer; setHomeFeatureLink(link.dataset.homeFeature); });
+  link.addEventListener('blur',() => { spot.keyboard = false; setHomeFeatureLink(homePinnedFeature); });
+  link.addEventListener('click',() => {
+    if (liveGuide && state.screen === 'home') { liveGuideMinimized = true; liveGuideView = ''; renderLiveGuide(); }
+    homePinnedFeature = homePinnedFeature === link.dataset.homeFeature ? null : link.dataset.homeFeature;
+    setHomeFeatureLink(homePinnedFeature);
+    if (homePinnedFeature) {
+      const target = document.getElementById(link.getAttribute('aria-controls'));
+      target?.scrollIntoView?.({block:'nearest',behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ? 'instant' : 'smooth'});
+    }
+  });
+}
+document.addEventListener('click',event => { if (homePinnedFeature && !event.target.closest?.('[data-home-feature]')) setHomeFeatureLink(null); });
+document.addEventListener('keydown',event => { if (event.key === 'Escape' && homePinnedFeature) setHomeFeatureLink(null); });
+window.addEventListener('resize',requestHomeFeatureFrame);
+document.addEventListener('scroll',requestHomeFeatureFrame,true);
+window.addEventListener('blur',() => { for (const spot of homeFeatureSpots) { spot.pointer = null; spot.keyboard = false; } setHomeFeatureLink(null); });
+window.addEventListener('pagehide',() => {
+  if (homeFeatureFrame !== null) window.cancelAnimationFrame?.(homeFeatureFrame);
+  homeFeatureFrame = null; homeFeatureTime = 0; setHomeFeatureLink(null);
+  for (const spot of homeFeatureSpots) {
+    spot.pointer = null; spot.keyboard = false; spot.strength = 0; spot.phraseStrength = 0;
+    spot.element.style.setProperty?.('--phrase-strength','0'); spot.target?.style.setProperty?.('--preview-strength','0');
+  }
 });
-$('#refresh-home').addEventListener('click', loadHomeProgress);
-for (const selector of ['#home-propose-scheme', '#home-propose-bounty']) $(selector).addEventListener('click', event => {
-  if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-  event.preventDefault(); navigateTop($(selector).getAttribute('href'));
-});
+function homeGuideLink(label, route, primary = false) {
+  const link = node('a', label, primary ? 'button button-primary' : 'text-button'); link.href = route;
+  link.addEventListener('click', event => { if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); navigateTop(route); });
+  return link;
+}
+function homeGuideHeading(title, copy) {
+  const heading = node('div', undefined, 'home-guide-heading'), titleNode = node('h1', title); titleNode.id = 'home-guide-title'; titleNode.tabIndex = -1;
+  heading.append(titleNode, node('p', copy)); return heading;
+}
+async function renderHomeGuide(focus = false) {
+  const params = new URLSearchParams(window.location.hash.split('?')[1] || ''), kind = params.get('guide');
+  if (kind === 'site') { startSiteTutorial(); return; }
+  const active = ['challenge','tour'].includes(kind);
+  $('#home-entry').hidden = active; $('#home-walkthrough').hidden = !active;
+  $('#home-workspace').setAttribute('aria-labelledby', active ? 'home-guide-title' : 'home-title');
+  const content = $('#home-guide-content'); content.replaceChildren(); content.setAttribute('aria-busy', 'false');
+  if (!active || !hasAccess() || !state.user) { if (!active && hasAccess() && state.user) void loadHomeHighlights(); return; }
+  if (kind === 'challenge') {
+    startLiveGuide('challenge'); navigateTop('#challenge'); return;
+  }
+  content.append(homeGuideLink('← Home', '#home'), homeGuideHeading('What would you like to contribute?', 'Choose something you’d like to do.'));
+  const choices = node('div', undefined, 'home-contributions');
+  for (const [value,title,copy] of [['note','Write a note','Develop an idea and submit it for publication.'],['bounty','Contribute to a bounty','Link evidence toward an open research task.'],['scheme','Propose a scheme','Prepare a proposal and submit it for review.']]) {
+    if (value === 'bounty' && !bountyFeatureAvailable()) continue;
+    const button = node('button', undefined, 'home-approach'); button.type = 'button'; button.dataset.contribution = value;
+    button.append(node('strong', title), node('span', copy), node('span', '→', 'home-path-arrow'));
+    button.addEventListener('click', () => { startLiveGuide(value); navigateTop(guideRoute()); }); choices.append(button);
+  }
+  content.append(choices);
+  liveGuidePanel.hidden = true; liveGuideOverlay?.setAttribute('hidden','');
+  document.title = 'Choose a contribution — Crucible';
+  if (focus) $('#home-guide-title')?.focus({preventScroll:true});
+}
+
+function showHome(focus = false) {
+  if (!hasAccess()) { renderAccessGate(); return; }
+  if (['propose','reviews'].includes(state.screen)) leaveProposalPage();
+  if (recoveryDialog.open) recoveryDialog.close(); state.challengeStartIntent = null; state.screen = 'home';
+  state.challengeRequest++; state.leaderboardRequest++; state.historyRequest++; state.peopleRequest++; state.personRequest++;
+  showWorkspace('home'); renderHomeAccount(); document.title = 'crucible — Find new cryptography. Test its limits.'; void renderHomeGuide(focus);
+}
 function workspaceSelector(screen) {
   return {home: '#home-workspace', loading: '#route-loading', access: '#access-workspace', scheme: '#workspace', overview: '#overview-workspace', assumptions: '#assumptions-workspace', notebook: '#notebook-workspace', bounties: '#notebook-workspace', 'scheme-map': '#notebook-workspace', reviews: '#review-workspace', research: '#research-workspace', about: '#about-workspace', propose: '#proposal-workspace', people: '#people-workspace', activity: '#activity-workspace', person: '#person-workspace', connect: '#connect-workspace'}[screen] || '#catalogue-workspace';
 }
@@ -1558,12 +2795,12 @@ function applyRoute(focus = false) {
   clearAcceptedInvitation();
   if (state.sessionResolved && (!hasAccess() || window.location.hash.split('?')[0] === '#join')) {
     renderAccessGate();
-    if (focus) $('#access-workspace').focus();
+    if (focus) $('#access-workspace').focus({preventScroll:true});
     return;
   }
   if (isHomeRoute()) {
     if (!state.sessionResolved) return;
-    const previous = state.screen; showHome();
+    const previous = state.screen; showHome(focus);
     if (focus && previous !== 'home') $(workspaceSelector(state.screen)).focus({preventScroll: true});
     return;
   }
@@ -1731,8 +2968,8 @@ function applyRoute(focus = false) {
   const destination = $(workspaceSelector(screen));
   // A cached exact-note reader can focus its statement synchronously. Keep that
   // contextual handoff instead of replacing it with the outer workspace.
-  if (focus && previousScreen !== screen && !(screen === 'notebook' && document.activeElement?.closest('#notebook-workspace') === destination)) destination.focus({preventScroll: ['catalogue', 'people', 'activity', 'notebook', 'bounties', 'about', 'scheme-map'].includes(screen)});
-  scheduleBrowseWarmup();
+  if (focus && previousScreen !== screen && !(screen === 'notebook' && document.activeElement?.closest('#notebook-workspace') === destination)) destination.focus({preventScroll:true});
+  scheduleBrowseWarmup(); showChallengeStartChoice();
 }
 function sharedKeyBytes(challenge) {
   const bytes = challenge?.projection === 'summary' ? challenge.shared_secret_bytes : challenge?.public?.encoding?.shared_secret_bytes;
@@ -1753,6 +2990,7 @@ function absorbClock(data) {
 }
 async function api(path, body, {raw = false, method = body === undefined ? 'GET' : 'POST', initialSession = false, readRecovery = false} = {}) {
   const lifecycle = documentEpoch, sessionOwner = state.sessionRevision, accountOwner = state.user?.id, csrfOwner = state.csrf;
+  const guideOwner = liveGuide;
   const protectedRequest = !/^\/api\/(?:session(?:\?|$)|auth\/|access\/)/.test(path);
   const recoverRead = !raw && body === undefined && method === 'GET' &&
     (initialSession && path === '/api/session' || readRecovery && protectedRequest && !path.startsWith('/api/agent/'));
@@ -1856,9 +3094,13 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
         /^\/api\/challenges\/[^/?]+\/submit$/.test(path) ? ['schemes'] :
         ['/api/challenges', '/api/methods', '/api/me/profile'].includes(path) ? [] : null;
       invalidateReadViews({resourceReports: !unrelatedToResources, activityKinds}); notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
+      weeklyPersonalProgress = null; weeklyPersonalEpoch++; weeklyPersonalLoad = null;
+      if (['home','catalogue'].includes(state.screen)) void loadWeeklyPersonalProgress();
+      refreshAccountPointsSoon();
       if (path.startsWith('/api/notebook/')) invalidateNoteJustifications();
     }
     if (!raw && ownsDocument(lifecycle) && (!initialSession || sessionOwner === state.sessionRevision) && (!recoverRead || ownsRead())) absorbClock(data);
+    if (protectedRequest && ownsRead()) observeLiveGuide(path, method, data, guideOwner);
     return data;
   } finally {
     if (bootstrap) bootstrap.finish(); else clearTimeout(timeout);
@@ -1866,8 +3108,47 @@ async function api(path, body, {raw = false, method = body === undefined ? 'GET'
     browsingRequests.delete(controller);
   }
 }
+function pointAmount(value, compact = false) {
+  return value >= (compact ? 1000 : 10000) ? new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:1}).format(value) : value.toLocaleString('en-US');
+}
+function renderAccountPoints() {
+  const badge = $('#account-points'), member = hasAccess() && Boolean(state.user);
+  badge.hidden = !member;
+  setText('#account-points-value',member && accountPoints ? pointAmount(accountPoints.points,true) : '—');
+  badge.href = member ? personRoute(state.user.handle) : '#people';
+  badge.setAttribute('aria-busy',String(Boolean(member && accountPointsLoad)));
+  const label = !accountPoints ? accountPointsLoad ? 'Loading your points' : 'Your points are unavailable' : accountPoints.score_status === 'reviewer' ? 'Reviewer account · '+accountPoints.points.toLocaleString('en-US')+' points' : 'Your points: '+accountPoints.points.toLocaleString('en-US');
+  badge.setAttribute('aria-label',label+' · View your profile'); badge.title = label;
+}
+function clearAccountPoints() {
+  accountPointsEpoch++; accountPoints = null; accountPointsLoad = null; accountPointsAt = 0;
+  if (accountPointsTimer !== null) clearTimeout(accountPointsTimer); accountPointsTimer = null;
+  renderAccountPoints();
+}
+async function loadAccountPoints({refresh = false} = {}) {
+  if (!hasAccess() || !state.user || documentRetired) return;
+  if (accountPointsLoad) return accountPointsLoad;
+  if (!refresh && accountPointsAt && Date.now()-accountPointsAt < 60000) return;
+  const owner = state.user.id, csrf = state.csrf, lifecycle = documentEpoch, epoch = ++accountPointsEpoch;
+  const current = () => ownsDocument(lifecycle) && epoch === accountPointsEpoch && hasAccess() && state.user?.id === owner && state.csrf === csrf;
+  const task = (async() => {
+    try {
+      const result = (await api('/api/me/points')).account_points;
+      if (!current()) return;
+      if (result?.user_id !== owner || !Number.isSafeInteger(result.points) || result.points < 0 || !['active','reviewer'].includes(result.score_status)) throw Error('Points unavailable.');
+      accountPoints = {points:result.points,score_status:result.score_status};
+    } catch (_) { /* A failed read keeps the last confirmed score, or an empty badge. */ }
+    finally { if (current()) { accountPointsAt = Date.now(); accountPointsLoad = null; renderAccountPoints(); } }
+  })();
+  accountPointsLoad = task; renderAccountPoints(); return task;
+}
+function refreshAccountPointsSoon() {
+  if (!hasAccess() || !state.user || documentRetired) return;
+  accountPointsEpoch++; accountPointsLoad = null; accountPointsAt = 0;
+  if (accountPointsTimer !== null) return;
+  accountPointsTimer = setTimeout(() => { accountPointsTimer = null; void loadAccountPoints({refresh:true}); },250);
+}
 function setSession(data) {
-  const enteringBeta = state.sessionResolved && !hasAccess();
   document.body.removeAttribute('data-access-pending');
   $('.primary-nav').removeAttribute('inert');
   state.sessionRevision++;
@@ -1887,8 +3168,7 @@ function setSession(data) {
   state.access = data.access || (state.access?.mode === 'beta' ?
     {mode: 'beta', allowed: false, status: state.user ? 'pending' : 'anonymous'} :
     {mode: 'open', allowed: true, status: state.user ? 'active' : 'anonymous'});
-  if (!hasAccess()) logoBetaEntryPending = false;
-  else if (enteringBeta) logoBetaEntryPending = true;
+  newcomerOrientation?.checkContext();
   // Presentation only: the next reload can keep the gate or route frame in
   // place, but every reload still waits for its fresh session before any data.
   document.body.setAttribute('data-access-view', hasAccess() ? 'workspace' : 'gate');
@@ -1914,6 +3194,8 @@ function setSession(data) {
   notebookWorkspace?.setAccount(hasAccess() ? state.user : null);
   reviewNotebookWorkspace?.setAccount(hasAccess() && state.canReviewProposals ? state.user : null);
   if (previousId !== state.user?.id || previousCsrf !== state.csrf) {
+    clearAccountPoints();
+    clearHomeHighlights();
     state.challengeStartIntent = null;
     invalidateReadViews();
     notebookWorkspace?.invalidateReads?.(); reviewNotebookWorkspace?.invalidateReads?.();
@@ -1958,7 +3240,7 @@ function setSession(data) {
     if (submissionDialog.open) submissionDialog.close();
     if (recoveryDialog.open) recoveryDialog.close();
     if (pointsHelpDialog.open) { dialogTriggers.delete(pointsHelpDialog); pointsHelpDialog.close(); }
-    for (const selector of ['#history-content', '#activity-bounties', '#activity-notes', '#home-schemes', '#home-bounties']) $(selector).replaceChildren();
+    for (const selector of ['#history-content', '#activity-bounties', '#activity-notes', '#home-guide-content']) $(selector).replaceChildren();
     $('#recovery-content').replaceChildren();
     setText('#recovery-context', '');
     setText('#recovery-title', 'Submission details');
@@ -1976,6 +3258,9 @@ function setSession(data) {
   $('#account-handle').href = state.user ? personRoute(state.user.handle) : '#people';
   $('#logout-button').hidden = !state.user;
   $('#history-button').hidden = !state.user || !hasAccess();
+  $('#how-it-works').hidden = !state.user || !hasAccess();
+  $('#account-menu').hidden = !state.user || !hasAccess();
+  if (previousId !== state.user?.id || previousCsrf !== state.csrf || !hasAccess()) closeAccountMenu();
   clearAcceptedInvitation();
   renderAuthMethods();
   renderHomeAccount();
@@ -1984,6 +3269,7 @@ function setSession(data) {
     renderAccessGate();
     return;
   }
+  renderAccountPoints(); void loadAccountPoints();
   absorbClock(data);
   renderReviewAccountLink();
   if (state.screen === 'reviews' && state.ready && (previousId !== state.user?.id || previousCsrf !== state.csrf || previousReview !== state.canReviewProposals || previousSelfReview !== state.canSelfReviewProposals)) renderReviewPage(window.location.hash.split('?')[1] || '');
@@ -2126,6 +3412,7 @@ async function synchronizeSession() {
       setSession(data);
       revision = state.sessionRevision;
       if (!hasAccess()) return;
+      void loadAccountPoints({refresh:true});
       if (!state.ready || (routeNeedsCatalogue() && !state.catalogueLoaded)) { await loadAuthorizedWorkspace(); return; }
       const changed = oldRound !== state.round?.id || oldUser !== state.user?.id;
       if (['catalogue', 'overview', 'scheme'].includes(state.screen) && await refreshProfiles({background: true}) === false) return;
@@ -2175,6 +3462,7 @@ async function refreshProfiles({background = false} = {}) {
   const lifecycle = documentEpoch;
   const request = ++state.catalogueRequest;
   const oldRevision = state.catalogueRevision;
+  const oldScoring = JSON.stringify(state.recoveryScoring);
   const oldCatalogue = JSON.stringify(state.schemes.map(catalogueDisplayKey));
   const oldSelection = catalogueDisplayKey(selectedScheme());
   const oldAdmission = JSON.stringify(selectedScheme()?.generation_admission);
@@ -2194,7 +3482,9 @@ async function refreshProfiles({background = false} = {}) {
     throw error;
   }
   if (!ownsDocument(lifecycle) || request !== state.catalogueRequest) return false;
-  installNavigation(merged ? {schemes: merged, catalogue_revision: data.catalogue_revision, ...(navigationProjection ? {projection: 'navigation'} : {})} : data);
+  installNavigation(merged ? {schemes: merged, catalogue_revision: data.catalogue_revision,
+    ...(Object.hasOwn(data,'recovery_scoring') ? {recovery_scoring:data.recovery_scoring} : {}),
+    ...(navigationProjection ? {projection: 'navigation'} : {})} : data);
   state.catalogueLoaded = true;
   const metadataChanged = oldRevision !== state.catalogueRevision;
   let scheme = selectedScheme();
@@ -2208,7 +3498,8 @@ async function refreshProfiles({background = false} = {}) {
   }
   const selectionChanged = oldSelection !== catalogueDisplayKey(scheme);
   if (oldAdmission !== JSON.stringify(scheme?.generation_admission)) state.generationAdmission = null;
-  if (state.screen === 'catalogue' && (!background || metadataChanged || oldCatalogue !== JSON.stringify(state.schemes.map(catalogueDisplayKey)))) renderCatalogue();
+  if (state.screen === 'catalogue' && (!background || metadataChanged || oldScoring !== JSON.stringify(state.recoveryScoring) || oldCatalogue !== JSON.stringify(state.schemes.map(catalogueDisplayKey)))) renderCatalogue();
+  if (state.screen === 'home' && homeHighlights) renderHomeHighlights();
   if (['scheme', 'overview', 'assumptions'].includes(state.screen) && !scheme) return applyRoute();
   if (state.screen === 'overview' && (!background || metadataChanged || selectionChanged)) {
     const openCards = Object.keys(OVERVIEW_CARDS).filter(id => $('#overview-chart-' + id)?.querySelector('details')?.open);
@@ -2261,10 +3552,11 @@ function prepareSchemeLink(link, scheme) {
   link.addEventListener('pointerenter', prepare); link.addEventListener('focus', prepare);
 }
 function renderCatalogue() {
+  renderCatalogueWeekly();
   const target = $('#kem-catalogue');
   if (target.getAttribute('aria-busy') === 'true') $('#refresh-catalogue').disabled = false;
   target.setAttribute('aria-busy', 'false');
-  setText('#tier-help', 'Stages mark positions in each scheme’s default progression through reviewed configurations. Schemes can have different numbers of stages; equal stage numbers do not imply equal security or attack cost. Named parameter sets are distinct targets; their order does not imply security or transfer recovery results.');
+  setText('#tier-help', 'Levels mark positions in each scheme’s default progression through reviewed configurations. Schemes can have different numbers of levels; equal level numbers do not imply equal security or attack cost. Named parameter sets are distinct targets; their order does not imply security or transfer recovery results.');
   if (!state.schemes.length) return showEmpty(target, 'No KEMs have been published yet.');
   const wrap = node('div', undefined, 'kem-table-wrap');
   const table = node('table', undefined, 'kem-table');
@@ -2276,7 +3568,7 @@ function renderCatalogue() {
     if (label === 'Largest recovery') {
       th.className = 'recovery-heading';
       const help = node('button'); help.id = 'tier-info'; help.type = 'button';
-      help.setAttribute('aria-label', 'About challenge stages');
+      help.setAttribute('aria-label', 'About challenge levels');
       help.setAttribute('aria-controls', 'tier-help');
       help.setAttribute('aria-expanded', String(!$('#tier-help').hidden));
       help.addEventListener('click', () => {
@@ -2318,6 +3610,14 @@ function renderCatalogue() {
     const name = node('td');
     const link = node('a', scheme.name, 'kem-name');
     link.href = overviewRoute(scheme);
+    link.dataset.guideScheme = scheme.id; link.dataset.guideVersion = String(scheme.version);
+    link.addEventListener('click', event => {
+      if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || liveGuide?.kind !== 'challenge' || liveGuide.challengeId) return;
+      const first = orderedProfiles(scheme)[0]; if (!first) return;
+      event.preventDefault();
+      Object.assign(liveGuide, {schemeId:scheme.id, schemeVersion:String(scheme.version), profileId:profileId(first)}); saveLiveGuide();
+      navigateTop(overviewRoute(scheme, first));
+    });
     prepareSchemeLink(link, scheme);
     name.append(link);
     const progress = node('td');
@@ -2346,6 +3646,7 @@ function renderCatalogue() {
   }
   wrap.append(table);
   target.replaceChildren(wrap);
+  renderLiveGuide();
 }
 const AGENT_SCOPE_LABELS = {
   'challenges:read': 'Read your challenge instances',
@@ -2542,10 +3843,11 @@ function agentInstructionsKey() {
   return state.user && state.challenge ? JSON.stringify([state.user.id, state.challenge.id, canSubmitChallenge(state.challenge)]) : null;
 }
 function updateAgentAction() {
-  setText('#use-agent', state.challenge && !canSubmitChallenge(state.challenge) ? 'Inspect with an agent →' : 'Use with an agent →');
+  setText('#use-agent','Work with an agent');
   if (!$('#agent-instructions').hidden && state.agentInstructionsKey !== agentInstructionsKey()) showAgentInstructions();
 }
 function resetAgentInstructions() {
+  agentCopyRequest++; clearTimeout(agentCopyTimer); setText('#copy-agent-instructions','Copy prompt'); $('#copy-agent-instructions').disabled = false; $('#agent-copy-status').hidden = true;
   state.agentInstructionsKey = null;
   $('#agent-instructions').hidden = true;
   $('#use-agent').setAttribute('aria-expanded', 'false');
@@ -2562,23 +3864,57 @@ function showAgentInstructions() {
   $('#use-agent').setAttribute('aria-expanded', 'true');
 }
 function toggleAgentInstructions() {
-  if (!$('#agent-instructions').hidden) resetAgentInstructions();
-  else showAgentInstructions();
+  if (liveGuide?.kind === 'challenge' && (liveGuide.approach !== 'agent' || liveGuide.challengeStep === 'choice')) { chooseGuidedApproach('agent'); return; }
+  if (!$('#agent-instructions').hidden) resetAgentInstructions(); else showAgentInstructions();
+  if (liveGuide?.kind === 'challenge') renderLiveGuide();
 }
+function selectAgentPrompt() {
+  showAgentInstructions(); const prompt = $('#agent-instructions-text'); guideFocus(prompt);
+  const selection = window.getSelection?.();
+  if (selection && document.createRange) { const range = document.createRange(); range.selectNodeContents(prompt); selection.removeAllRanges(); selection.addRange(range); }
+}
+let agentCopyRequest = 0, agentCopyTimer = null;
 async function copyAgentInstructions() {
-  if (!state.challenge || !state.user) return;
-  const challenge = state.challenge, account = state.user.id;
-  const instructions = agentInstructions(challenge);
-  $('#copy-agent-instructions').disabled = true;
+  if (!state.challenge || !state.user || $('#copy-agent-instructions').disabled) return false;
+  const challenge = state.challenge, account = state.user.id, csrf = state.csrf, epoch = documentEpoch, owner = liveGuide, request = ++agentCopyRequest;
+  const current = () => ownsDocument(epoch) && request === agentCopyRequest && state.challenge?.id === challenge.id && state.user?.id === account && state.csrf === csrf && state.screen === 'scheme' && state.view === 'challenge';
+  const button = $('#copy-agent-instructions'); clearTimeout(agentCopyTimer); button.disabled = true;
+  if (owner?.kind === 'challenge' && owner.challengeId === challenge.id) { owner.copyBusy = true; owner.copyFailed = false; renderLiveGuide(); }
   try {
-    await navigator.clipboard.writeText(instructions);
-    if (state.challenge?.id === challenge.id && state.user?.id === account) toast('Agent instructions copied. Give them to your agent.');
+    await navigator.clipboard.writeText(agentInstructions(challenge));
+    if (!current()) return false;
+    setText('#copy-agent-instructions','Copied'); $('#agent-copy-status').hidden = true;
+    agentCopyTimer = setTimeout(() => { if (current()) setText('#copy-agent-instructions','Copy prompt'); },2200);
+    if (liveGuide === owner && owner?.kind === 'challenge') completeGuideTools(owner,'agent');
+    return true;
   } catch {
-    if (state.challenge?.id === challenge.id && state.user?.id === account) {
-      showAgentInstructions();
-      toast('Copy the agent instructions shown below.');
-    }
-  } finally { $('#copy-agent-instructions').disabled = false; }
+    if (!current()) return false;
+    showAgentInstructions(); setText('#agent-copy-status','Copy blocked. Select the prompt and copy it.'); $('#agent-copy-status').hidden = false;
+    if (liveGuide === owner && owner?.kind === 'challenge' && owner.approach === 'agent') { owner.copyFailed = true; owner.challengeStep = 'tools'; renderLiveGuide(); }
+    return false;
+  } finally {
+    if (owner) owner.copyBusy = false;
+    if (request === agentCopyRequest) button.disabled = false;
+    if (current() && liveGuide === owner) renderLiveGuide();
+  }
+}
+async function downloadGuidedInputs(guide) {
+  if (guide.downloadBusy || liveGuide !== guide || guide.approach !== 'manual' || guide.challengeId !== state.challenge?.id) return;
+  const account = state.user?.id, csrf = state.csrf, epoch = documentEpoch, id = guide.challengeId;
+  const current = () => ownsDocument(epoch) && liveGuide === guide && state.user?.id === account && state.csrf === csrf && state.challenge?.id === id && state.screen === 'scheme' && state.view === 'challenge';
+  guide.downloadBusy = true; guide.toolError = ''; renderLiveGuide();
+  try {
+    const payload = await api('/api/challenges/'+encodeURIComponent(id)+'/download',undefined,{raw:true});
+    if (!current()) return;
+    if (JSON.parse(payload)?.challenge?.id !== id) throw Error('Unexpected challenge download.');
+    const blob = new Blob([payload],{type:'application/json'}), url = URL.createObjectURL(blob), link = node('a');
+    link.href = url; link.download = $('#download-button').download; document.body.append(link);
+    guideActivationDepth++;
+    try { link.click(); } finally { guideActivationDepth--; link.remove(); setTimeout(() => URL.revokeObjectURL(url),1000); }
+    completeGuideTools(guide,'manual');
+  } catch {
+    if (current()) guide.toolError = 'Download failed. Try again.';
+  } finally { guide.downloadBusy = false; if (current()) renderLiveGuide(); }
 }
 $('#connect-code-form').addEventListener('submit', event => {
   event.preventDefault();
@@ -2710,7 +4046,7 @@ function exactRecord(record) {
 function personalRecordTable(records, {showPoints = true} = {}) {
   const includesNamed = records.some(record => namedParameters(availableReleases().find(scheme =>
     scheme.id === record.scheme_id && String(scheme.version) === String(record.scheme_version)), record));
-  return peopleTable(['Scheme', includesNamed ? 'Stage / parameter set' : 'Highest stage', ...(showPoints ? ['Points'] : []), 'Solved'], records.map(record => {
+  return peopleTable(['Scheme', includesNamed ? 'Level / parameter set' : 'Highest level', ...(showPoints ? ['Points'] : []), 'Solved'], records.map(record => {
     const name = node('span', undefined, 'person-record-scheme');
     const link = node('a', record.scheme_name || record.scheme_id, 'person-scheme-link');
     link.href = overviewRoute({id: record.scheme_id, version: record.scheme_version});
@@ -2748,7 +4084,7 @@ function renderFirstRecords(person) {
     content.append(node('div', 'No first-place records yet.', 'empty-state'));
     return section;
   }
-  const table = peopleTable(['Scheme', 'Stage', 'Reached'], firsts.map(record => {
+  const table = peopleTable(['Scheme', 'Level', 'Reached'], firsts.map(record => {
     const name = node('span', undefined, 'person-record-scheme');
     name.append(node('span', record.scheme_name || record.scheme_id, 'milestone-scheme'));
     if (!record.is_current) name.append(node('span', 'Archived · release ' + record.scheme_version, 'person-record-release'));
@@ -2762,7 +4098,7 @@ function renderFirstRecords(person) {
   }));
   table.classList.add('first-records-table');
   table.querySelector('table').classList.add('milestone-table');
-  table.querySelector('table').setAttribute('aria-label', 'Highest first-place stage per scheme');
+  table.querySelector('table').setAttribute('aria-label', 'Highest first-place level per scheme');
   content.append(table);
   return section;
 }
@@ -3378,11 +4714,11 @@ function assumptionTitle(premise) {
 function assumptionScope(premise) {
   const stages = Array.isArray(premise.stages) ? [...new Set(premise.stages)].filter(n => Number.isSafeInteger(n) && n > 0).sort((a,b) => a-b) : [];
   if (!stages.length) return '';
-  if (stages.length === 1) return 'Stage ' + stages[0];
+  if (stages.length === 1) return 'Level ' + stages[0];
   const ranges = []; let start = stages[0], end = start;
   for (const n of stages.slice(1)) { if (n === end + 1) end = n; else { ranges.push(start === end ? String(start) : `${start}–${end}`); start = end = n; } }
   ranges.push(start === end ? String(start) : `${start}–${end}`);
-  return 'Stages ' + ranges.join(', ');
+  return 'Levels ' + ranges.join(', ');
 }
 function assumptionLink(premise, origin, {expanded = false, definition = true} = {}) {
   const href = exactNoteRoute(premise?.source);
@@ -3683,8 +5019,8 @@ function overviewRecovery(scheme, values, named) {
   const label = !points.length ? '' : !named ? 'Largest recovered · ' + points[0].label :
     'Recovered · ' + (points.length > 3 ? `${points.length} parameter sets` : points.map(point => point.label).join(', '));
   const meaning = named ? 'Red markers identify recorded recoveries, not a security guarantee or recoveries at other profiles.' :
-    exact ? 'The red line marks the highest recorded stage, not a security guarantee or recoveries at lower stages. The tinted area shows the range up to that stage.' :
-      'The red line marks a recorded recovery, not a security guarantee or individual recoveries at every lower stage.';
+    exact ? 'The red line marks the highest recorded level, not a security guarantee or recoveries at lower levels. The tinted area shows the range up to that level.' :
+      'The red line marks a recorded recovery, not a security guarantee or individual recoveries at every lower level.';
   return {points, tier, label, meaning};
 }
 function redrawResourceCharts(scheme) {
@@ -3712,7 +5048,7 @@ function renderOverviewChart(scheme, cardId) {
   const card = target.closest('.overview-card');
   const profiles = overviewProfiles(scheme);
   const named = namedParameters(scheme);
-  const axisLabel = named ? 'Parameter set' : 'Challenge stage';
+  const axisLabel = named ? 'Parameter set' : 'Challenge level';
   const security = ['classical', 'quantum', 'ram'].includes(metric);
   const evidence = security ? securityReferences(scheme, metric) : null;
   const polynomialQuantum = metric === 'quantum' && evidence?.models?.some(model => model?.id === 'shor-polynomial-quantum-v1');
@@ -3740,7 +5076,7 @@ function renderOverviewChart(scheme, cardId) {
   const svg = svgNode('svg', {viewBox: '0 0 480 240', role: 'img', 'aria-labelledby': 'graph-title-' + cardId + ' graph-description-' + cardId, class: 'overview-svg'});
   svg.append(svgNode('title', {id: 'graph-title-' + cardId}, descriptor.title + ' by ' + axisLabel.toLowerCase()));
   const summary = measured.length ? `${measured.length} published values; ${descriptor.unit.toLowerCase()} on the vertical axis.` : 'No values have been published. This chart shows axes only.';
-  svg.append(svgNode('desc', {id: 'graph-description-' + cardId}, `${summary} ${named ? 'Distinct named parameter sets on the horizontal axis; points are not interpolated.' : values.length ? `Challenge stages ${minTier} to ${maxTier} on the horizontal axis.` : 'No challenge stages published.'}${recoveredLabel ? ` ${recoveredLabel}. ${recoveryMeaning}` : ''}`));
+  svg.append(svgNode('desc', {id: 'graph-description-' + cardId}, `${summary} ${named ? 'Distinct named parameter sets on the horizontal axis; points are not interpolated.' : values.length ? `Challenge levels ${minTier} to ${maxTier} on the horizontal axis.` : 'No challenge levels published.'}${recoveredLabel ? ` ${recoveredLabel}. ${recoveryMeaning}` : ''}`));
   if (metric === 'ram') svg.querySelector('desc').textContent += ' Baseline upper bounds in the classical bit-RAM model for at least 50% probability of recovering the complete shared key under the linked premises. Faster attacks may exist; these values are not security levels.';
   const left = 48, right = 465, top = 43, bottom = 190;
   const x = tier => minTier === maxTier ? (left + right) / 2 : left + (tier - minTier) / (maxTier - minTier) * (right - left);
@@ -3807,7 +5143,7 @@ function renderOverviewChart(scheme, cardId) {
   const note = metric === 'ram' ? 'Classical bit-RAM v1 · baseline upper bounds · at least 50% shared-key recovery under the linked premises. Faster attacks may exist; these values are not security levels.' : literatureOnly ? `${singleModel.label}. ${measured.length} of ${values.length} configurations. Published attack-model reference, not full-KEM security bits; see model and values.` : descriptor.kind === 'timing' ? timing?.report ? 'Median wall time · ' + [timing.report.implementation?.language, timing.report.implementation?.performance_level].filter(Boolean).join(' · ') + '. ' + (named ? '' : 'Lines join adjacent measured configurations. ') + 'See method and results for the environment and spread.' : 'Reference implementation timings use a shared measurement method. Missing measurements are left empty.' :
     descriptor.kind === 'baseline' ? (measured.length ? attackReferenceModel(scheme) ? 'A stated classical attack reference, not a security lower bound. Other attacks may be faster.' : 'Frozen classical reference; not a measured security guarantee.' : 'No initial classical estimate is published for this release.') :
     descriptor.kind === 'security' ? 'An estimate needs a stated security game, attack model, and source. Recovery records are not estimates.' :
-    'Canonical encoded bytes. Excludes JSON and shared domain parameters. ' + (named ? 'Dots mark distinct parameter sets; no interpolation is implied.' : 'Dots mark reviewed configurations; intermediate configurations sit between the surrounding stages.');
+    'Canonical encoded bytes. Excludes JSON and shared domain parameters. ' + (named ? 'Dots mark distinct parameter sets; no interpolation is implied.' : 'Dots mark reviewed configurations; intermediate configurations sit between the surrounding levels.');
   if (indexedLabels) {
     const legend = node('ol', undefined, 'chart-parameter-legend');
     for (const point of values) legend.append(node('li', point.label));
@@ -3872,17 +5208,18 @@ function renderOverview(scheme, contextProfile = null) {
   setText('#overview-title', scheme.name);
   setText('#overview-summary', scheme.summary || '');
   $('#overview-beta').hidden = scheme.review_status !== 'local-beta';
-  setText('#overview-beta', (researchTiers(scheme) ? 'Research stages · ' : '') + 'Local beta. Independent admission review pending.' + (scheme.scoring_eligible === false ? ' These profiles are not scored.' : ''));
+  setText('#overview-beta', (researchTiers(scheme) ? 'Research levels · ' : '') + 'Local beta. Independent admission review pending.' + (scheme.scoring_eligible === false ? ' These profiles are not scored.' : ''));
   const profiles = overviewProfiles(scheme);
   const current = state.schemes.find(item => item.id === scheme.id);
   const archived = String(current?.version) !== String(scheme.version);
-  setText('#overview-release', `${archived ? 'Archived release ' + scheme.version + ' · ' : ''}${namedParameters(scheme) ? profiles.length : scheme.default_progression?.stage_count ?? profiles.length} ${namedParameters(scheme) ? 'parameter set' + (profiles.length === 1 ? '' : 's') : 'challenge stages'}`);
-  const entry = contextProfile || profiles.find(profile => profileId(profile) === scheme.next_profile_id) || profiles[0];
+  setText('#overview-release', archived ? 'Archived release ' + scheme.version : ''); $('#overview-release').hidden = !archived;
+  const guided = liveGuide?.kind === 'challenge' && liveGuide.schemeId === scheme.id && liveGuide.schemeVersion === String(scheme.version);
+  const entry = (guided ? profiles.find(profile => profileId(profile) === liveGuide.profileId) : null) || contextProfile || profiles.find(profile => profileId(profile) === scheme.next_profile_id) || profiles[0];
   $('#overview-assumptions').href = assumptionsRoute(scheme, contextProfile);
   applySchemeNoteLink(scheme); void loadNoteJustifications(scheme);
   const challengeLink = $('#overview-challenges');
   challengeLink.hidden = !entry;
-  challengeLink.href = entry ? schemeRoute(scheme, entry) : '#challenge';
+  challengeLink.href = entry ? schemeRoute(scheme, entry, 'challenge') : '#challenge';
   renderOverviewClock(scheme);
   $('#overview-generation-status').hidden = archived || !generationUnavailable(scheme);
   setText('#overview-generation-status', generationUnavailable(scheme) ? generationMessage(scheme) : '');
@@ -3956,7 +5293,7 @@ function renderIntermediateConfigurations(scheme, current) {
     return button;
   });
   target.replaceChildren(...buttons);
-  if (restoreFocus) buttons.find(button => button.getAttribute('aria-pressed') === 'true')?.focus();
+  if (restoreFocus) buttons.find(button => button.getAttribute('aria-pressed') === 'true')?.focus({preventScroll:true});
 }
 function exactRecoveryTrack(profiles, recovered) {
   // Runs stop at recovered thumb centers, never halfway into an unsolved stage.
@@ -4038,7 +5375,7 @@ function renderProfiles(previewProfile = null, {details = true} = {}) {
       return button;
     });
     target.replaceChildren(...choices);
-    if (restoreFocus) choices.find(button => button.getAttribute('aria-pressed') === 'true')?.focus();
+    if (restoreFocus) choices.find(button => button.getAttribute('aria-pressed') === 'true')?.focus({preventScroll:true});
     setText('#profile-label', 'Parameter set');
     setText('#size-range', profiles.length > 1 ? `${profiles.length} sets` : '');
     const conceal = !frontier || recovered.has(profileId(frontier)) || profileId(frontier) === profileId(current);
@@ -4054,7 +5391,7 @@ function renderProfiles(previewProfile = null, {details = true} = {}) {
     return;
   }
   const intermediate = intermediateConfiguration(current);
-  setText('#profile-label', intermediate ? 'Configuration' : 'Stage');
+  setText('#profile-label', intermediate ? 'Configuration' : 'Level');
   const selectedIndex = profiles.findIndex(profile => profileId(profile) === profileId(current));
   const index = selectedIndex >= 0 ? selectedIndex : Math.max(0, profiles.findLastIndex(profile => stagePosition(profile) < stagePosition(current)));
   const options = $('#size-options');
@@ -4076,13 +5413,13 @@ function renderProfiles(previewProfile = null, {details = true} = {}) {
   slider.disabled = profiles.length < 2;
   profileRailView = {selection: selectionKey(), profile: profileId(current), order: profiles.map(profileId)};
   paintProfileRecoveryStyles(scheme, profiles, current);
-  slider.setAttribute('aria-valuetext', current ? intermediate ? profileLabel(current, scheme) : `Challenge stage ${instanceSize(current)}` : 'No stages available');
+  slider.setAttribute('aria-valuetext', current ? intermediate ? profileLabel(current, scheme) : `Challenge level ${instanceSize(current)}` : 'No levels available');
   setText('#size-slider-value', current && !intermediate ? String(instanceSize(current)) : '—');
   $('#jump-size').disabled = !profiles.length;
   setText('#size-range', profiles.length && current ? intermediate ? `Between ${current.stage_context?.before_stage ?? '—'} and ${current.stage_context?.after_stage ?? '—'}` : `${instanceSize(current)} of ${scheme?.default_progression?.stage_count ?? input.max}` : '');
   $('#previous-size').disabled = !profiles.some(profile => stagePosition(profile) < stagePosition(current));
   $('#next-size').disabled = !profiles.some(profile => stagePosition(profile) > stagePosition(current));
-  const advanceLabel = 'Go to next unsolved stage';
+  const advanceLabel = 'Go to next unsolved level';
   const advanceNumber = frontier ? instanceSize(frontier) : '—';
   const concealAdvance = !frontier || (exact && recovered.has(profileId(frontier))) || profileId(frontier) === profileId(current);
   $('#advance-size').disabled = concealAdvance;
@@ -4101,9 +5438,9 @@ function renderProfiles(previewProfile = null, {details = true} = {}) {
     const button = node('button', String(instanceSize(profile)), 'size-option');
     button.type = 'button';
     button.setAttribute('aria-pressed', String(selected));
-    const status = nextUnsolved ? ', next unsolved stage' : record ? ', largest recovered' : solved ? ', recovered' : prior ? ', earlier stage' : '';
-    button.setAttribute('aria-label', `Stage ${instanceSize(profile)}` + status);
-    button.title = `Stage ${instanceSize(profile)}` + status;
+    const status = nextUnsolved ? ', next unsolved level' : record ? ', largest recovered' : solved ? ', recovered' : prior ? ', earlier level' : '';
+    button.setAttribute('aria-label', `Level ${instanceSize(profile)}` + status);
+    button.title = `Level ${instanceSize(profile)}` + status;
     button.classList.toggle('is-next-unsolved', nextUnsolved);
     button.classList.toggle('is-prior', prior);
     button.tabIndex = selected || (intermediate && profiles.indexOf(profile) === index) ? 0 : -1;
@@ -4121,7 +5458,7 @@ function renderProfiles(previewProfile = null, {details = true} = {}) {
     return button;
   });
   options.replaceChildren(...choices);
-  if (restoreFocus) choices.find(button => button.getAttribute('aria-pressed') === 'true')?.focus();
+  if (restoreFocus) choices.find(button => button.getAttribute('aria-pressed') === 'true')?.focus({preventScroll:true});
   setError('#profile-error', '');
   setText('#profile-note', tierNote(scheme, current));
   if (!previewProfile && details && (state.view === 'protocol' || $('#scheme-specifics').open)) renderProtocol();
@@ -4154,7 +5491,7 @@ function renderSchemeHeading() {
   setText('#scheme-title', scheme.name);
   setText('#scheme-summary', scheme.summary);
   $('#scheme-beta').hidden = scheme.review_status !== 'local-beta';
-  setText('#scheme-beta', (researchTiers(scheme, state.profile) ? 'Research stages · ' : '') + 'Local beta. Independent admission review pending.' + (scheme.scoring_eligible === false ? ' These profiles are not scored.' : ''));
+  setText('#scheme-beta', (researchTiers(scheme, state.profile) ? 'Research levels · ' : '') + 'Local beta. Independent admission review pending.' + (scheme.scoring_eligible === false ? ' These profiles are not scored.' : ''));
 }
 $('#scheme-specifics').addEventListener('toggle', () => {
   if ($('#scheme-specifics').open && hasAccess() && state.screen === 'scheme') renderProtocol();
@@ -4172,8 +5509,8 @@ function renderProtocol() {
     addFact(specifics, 'Underlying problem', protocol.assumption || 'See the registered protocol.');
     addFact(specifics, namedParameters(scheme) ? 'Parameter sets' : 'Mapped parameter', configurationProse(scheme.size_parameter?.meaning));
     if (scheme.ladder_design) {
-      addFact(specifics, 'Stage progression', scheme.ladder_design.progression);
-      addFact(specifics, 'Cost as stages rise', scheme.ladder_design.cost);
+      addFact(specifics, 'Level progression', levelTerminology(scheme.ladder_design.progression));
+      addFact(specifics, 'Cost as levels rise', levelTerminology(scheme.ladder_design.cost));
       addFact(specifics, 'Parameter choices', scheme.ladder_design.qualification);
       addFact(specifics, 'Upper endpoint', scheme.ladder_design.endpoint);
       const selection = scheme.ladder_design.selection;
@@ -4211,10 +5548,10 @@ function renderProtocol() {
   $('#parameter-measurement-basis').hidden = true;
   if (!profile) return;
   const descriptor = scheme?.size_parameter;
-  setText('#profile-label', namedParameters(scheme, profile) ? 'Parameter set' : intermediateConfiguration(profile) ? 'Configuration' : 'Stage');
+  setText('#profile-label', namedParameters(scheme, profile) ? 'Parameter set' : intermediateConfiguration(profile) ? 'Configuration' : 'Level');
   setText('#profile-note', tierNote(scheme, profile));
-  addFact(facts, namedParameters(scheme, profile) ? 'Parameter set' : intermediateConfiguration(profile) ? 'Configuration' : 'Challenge stage', profileLabel(profile, scheme));
-  setText('#protocol-record-rules', 'Method versions are immutable. Correct recoveries can appear publicly with the account handle, method, pseudocode, and compute declaration. ' + (exactProfileRecords(scheme, profile) ? `Records apply only to the exact ${namedParameters(scheme, profile) ? 'parameter set' : intermediateConfiguration(profile) ? 'configuration' : 'stage'} recovered, across all rounds. Recoveries do not transfer to other profiles.${scheme?.scoring_eligible === false ? ' These profiles do not award points.' : ''}` : 'Each stage highlights the earliest accepted recovery at that stage or higher, across all rounds.') + ' Other results remain on participant profiles. Different profiles are not ranked against one another.');
+  addFact(facts, namedParameters(scheme, profile) ? 'Parameter set' : intermediateConfiguration(profile) ? 'Configuration' : 'Challenge level', profileLabel(profile, scheme));
+  setText('#protocol-record-rules', 'Method versions are immutable. Correct recoveries can appear publicly with the account handle, method, pseudocode, and compute declaration. ' + (exactProfileRecords(scheme, profile) ? `Records apply only to the exact ${namedParameters(scheme, profile) ? 'parameter set' : intermediateConfiguration(profile) ? 'configuration' : 'level'} recovered, across all rounds. Recoveries do not transfer to other profiles.${scheme?.scoring_eligible === false ? ' These profiles do not award points.' : ''}` : 'Each level highlights the earliest accepted recovery at that level or higher, across all rounds.') + ' Other results remain on participant profiles. Different profiles are not ranked against one another.');
   const estimate = initialSecurityEstimate(scheme, profile);
   if (estimate !== null) {
     addFact(facts, attackReferenceModel(scheme) ? 'Initial classical attack reference' : 'Initial classical estimate', `≈${estimateBits(estimate)} bits`);
@@ -4232,7 +5569,7 @@ function renderProtocol() {
     addFact(facts, 'Reference scope', reference.model.scope);
   }
   setText('#protocol-size-caveat', 'An incorrect answer locks that instance. An expired instance without an accepted recovery is simply unsolved here; it is not evidence of a security bound. ' +
-    (namedParameters(scheme, profile) ? 'This named parameter set is a distinct target. A recovery is not inherited by other parameter sets, and no stage or security estimate is implied.' : estimate === null ? 'A configuration selects exact scheme parameters, not an estimate of security bits.' :
+    (namedParameters(scheme, profile) ? 'This named parameter set is a distinct target. A recovery is not inherited by other parameter sets, and no level or security estimate is implied.' : estimate === null ? 'A configuration selects exact scheme parameters, not an estimate of security bits.' :
       attackReferenceModel(scheme) ? 'This configuration has a stated classical attack reference, not a security lower bound; other attacks may be faster.' : 'This configuration selects parameters using a frozen initial classical reference. The estimate is not a measured security guarantee; actual attack costs may differ.'));
   addFact(facts, 'Configuration', profile.native_parameter_label || profileLabel(profile, scheme));
   if (descriptor?.mapping) addFact(facts, 'Parameter mapping', descriptor.mapping_math || configurationProse(descriptor.mapping), true);
@@ -4284,7 +5621,7 @@ function renderRecordChallengeAction() {
   if (!scheme || !profile) return;
   const unavailable = generationUnavailable(scheme);
   const label = unavailable ? 'View existing challenges →' : namedParameters(scheme, profile) ? 'Take on this parameter set →' :
-    intermediateConfiguration(profile) ? 'Take on this configuration →' : 'Take on this stage →';
+    intermediateConfiguration(profile) ? 'Take on this configuration →' : 'Take on this level →';
   const challenge = node('a', label, 'button ' + (unavailable ? 'button-secondary' : 'button-primary') + ' tier-record-challenge');
   challenge.href = schemeRoute(scheme, profile, 'challenge');
   challenge.addEventListener('click', event => takeOnChallenge(scheme, profile, event));
@@ -4300,7 +5637,7 @@ function renderChallenge() {
   if (state.agentInstructionsKey !== agentInstructionsKey()) resetAgentInstructions();
   $('#use-agent').disabled = !state.user || !state.challenge || state.challengeLoading;
   updateAgentAction();
-  $('#manual-instance-tools').hidden = !state.challenge || state.challengeLoading;
+  $('#manual-instance-tools').hidden = !state.challenge;
   $('#open-submission').hidden = false;
   $('#open-submission').disabled = !state.ready || state.submitBusy || state.importBusy || state.challengeLoading;
   $('#challenge-loading').hidden = !state.challengeLoading || Boolean(state.challenge);
@@ -4332,12 +5669,21 @@ function renderChallenge() {
       return;
     }
     setText('#empty-title', state.user ? 'Ready?' : 'Start this challenge');
-    setText('#empty-description', state.user ? 'Recover the shared secret from your instance.' :
+    setText('#empty-description', state.user ? 'A challenge gives you inputs for this scheme. Recover their shared secret.' :
       'Sign in to get your instance.');
     setText('#issue-button', requesting ? 'Preparing your instance…' : state.user ? 'Get instance →' : 'Sign in to begin →');
+    renderLiveGuide();
     return;
   }
   const challenge = state.challenge;
+  const approach = new URLSearchParams(window.location.hash.split('?')[1] || '').get('approach');
+  const approachKey = JSON.stringify([state.user?.id, challenge.id, window.location.hash]);
+  if (state.screen === 'scheme' && state.view === 'challenge' && !state.challengeLoading &&
+      ['agent', 'manual'].includes(approach) && guidedChallengeApproach !== approachKey) {
+    guidedChallengeApproach = approachKey;
+    if (approach === 'manual') $('#manual-tools').open = true;
+    else showAgentInstructions();
+  }
   const result = challenge.submission?.status || (challenge.status === 'solved' ? 'correct' : challenge.status === 'incorrect' ? 'incorrect' : null);
   const expired = challenge.status === 'expired' || now() >= challenge.ends_at;
   const status = result === 'correct' ? 'Recovered' : result === 'incorrect' ? 'Incorrect · locked' : expired ? 'Round ended' : 'Open';
@@ -4357,6 +5703,7 @@ function renderChallenge() {
     result === 'incorrect' ? 'The submitted key did not match. This instance is locked. You can try a different profile or return for the next round.' :
       expired ? 'This round has ended without an accepted recovery for this instance.' :
         keyBytes === null ? 'This instance does not declare a supported shared-key output length. Submission is unavailable; refresh the instance or report the problem.' : '';
+  renderLiveGuide();
 }
 function currentChallengeRelease() {
   return state.screen === 'scheme' && state.schemes.some(scheme =>
@@ -4390,7 +5737,7 @@ function takeOnChallenge(scheme, profile, event) {
   state.challengeStartIntent = selectedChallengeStartIntent();
   navigate(route);
 }
-async function loadChallenge({retry = false} = {}) {
+async function loadChallenge({retry = false, background = false} = {}) {
   const request = ++state.challengeRequest;
   const selected = profileId();
   const selection = selectionKey();
@@ -4400,7 +5747,9 @@ async function loadChallenge({retry = false} = {}) {
   const stillSelected = () => ownsDocument(lifecycle) && request === state.challengeRequest &&
     hasAccess() && state.user?.id === accountId && state.csrf === csrf && selectionKey() === selection;
   $('#challenge-error').hidden = true;
-  state.challenge = retry ? null : cachedRead(key)?.challenge || null; state.generationAdmission = null;
+  const retained = background ? state.challenge : null;
+  state.challenge = retry ? null : retained || cachedRead(key)?.challenge || null;
+  if (!background) state.generationAdmission = null;
   if (state.screen !== 'scheme' || !state.user || !selected) {
     state.challengeLoading = false;
     renderChallenge();
@@ -4408,8 +5757,7 @@ async function loadChallenge({retry = false} = {}) {
         challengeStartSelectionMatches(state.challengeStartIntent) && !authDialog.open) openAuth($('#issue-button'));
     return;
   }
-  state.challengeLoading = true;
-  renderChallenge();
+  if (!background) { state.challengeLoading = true; renderChallenge(); }
   let access;
   try {
     const data = await readAgain(challengeReadKey(state.schemeId, state.schemeVersion, selected), challengeReadPath(state.schemeId, state.schemeVersion, selected));
@@ -4424,10 +5772,9 @@ async function loadChallenge({retry = false} = {}) {
     else readViews.delete(key);
   } catch (error) {
     if (!stillSelected()) return;
-    state.challenge = null; readViews.delete(key);
+    state.challenge = retained; if (!retained) readViews.delete(key);
     state.challengeStartIntent = null;
-    setText('#challenge-error-text', error.message);
-    $('#challenge-error').hidden = false;
+    if (!background) { setText('#challenge-error-text', error.message); $('#challenge-error').hidden = false; }
     if (error.status === 401) await synchronizeSession();
   } finally {
     if (stillSelected()) {
@@ -4572,8 +5919,8 @@ async function loadLeaderboard({preserve = false} = {}) {
   const card = $('#tier-record');
   const named = namedParameters(selectedScheme(), state.profile);
   const exact = exactProfileRecords(selectedScheme(), state.profile);
-  const scope = exact ? `The earliest accepted recovery of this exact ${named ? 'parameter set' : intermediateConfiguration(state.profile) ? 'configuration' : 'stage'}, across all rounds. Ties use the server receipt identifier.` : 'The earliest accepted recovery at this stage or higher, across all rounds. Ties use the server receipt identifier.';
-  const footnote = (exact ? 'Recoveries do not transfer between profiles. ' : '“Via Stage” credits a recovery at a higher stage; the result describes that actual instance. ') + 'A recovery verifies one challenge answer. It does not establish a new attack method or a general break of the scheme. Method and compute details are contributor-reported.';
+  const scope = exact ? `The earliest accepted recovery of this exact ${named ? 'parameter set' : intermediateConfiguration(state.profile) ? 'configuration' : 'level'}, across all rounds. Ties use the server receipt identifier.` : 'The earliest accepted recovery at this level or higher, across all rounds. Ties use the server receipt identifier.';
+  const footnote = (exact ? 'Recoveries do not transfer between profiles. ' : '“Via Level” credits a recovery at a higher level; the result describes that actual instance. ') + 'A recovery verifies one challenge answer. It does not establish a new attack method or a general break of the scheme. Method and compute details are contributor-reported.';
   const request = ++state.leaderboardRequest, epoch = readViewEpoch;
   const selected = profileId();
   const schemeId = state.schemeId, schemeVersion = state.schemeVersion;
@@ -4583,7 +5930,7 @@ async function loadLeaderboard({preserve = false} = {}) {
   if (state.screen !== 'scheme' || !selected) {
     setText('#leaderboard-title', ''); card.setAttribute('data-state', 'empty');
     $('#tier-record-notes').hidden = true; $('#leaderboard-scope').hidden = true; $('#leaderboard-footnote').hidden = true;
-    return showEmpty(target, named ? 'Choose an available parameter set to see its record.' : 'Choose an available stage to see its record.');
+    return showEmpty(target, named ? 'Choose an available parameter set to see its record.' : 'Choose an available level to see its record.');
   }
   state.leaderboardPendingKey = dataKey;
   const key = 'record:' + dataKey, cached = cachedRead(key);
@@ -4777,23 +6124,24 @@ function renderView(view, focus = false) {
   const departingRecordFocus = view === 'challenge' && document.activeElement?.closest('#panel-leaderboard');
   const previousFocus = departingRecordFocus ? document.activeElement : null;
   state.view = view;
+  setText('#scheme-page-label', view === 'challenge' ? 'Challenges' : view === 'protocol' ? 'Scheme specification' : 'Challenge records');
   for (const tab of document.querySelectorAll('[data-view]')) {
     const selected = tab.dataset.view === view;
     tab.setAttribute('aria-selected', String(selected));
     tab.tabIndex = selected ? 0 : -1;
     $('#panel-' + tab.dataset.view).hidden = !selected;
-    if (selected && focus) tab.focus();
+    if (selected && focus) tab.focus({preventScroll:true});
   }
   // A Record action can change tabs without changing the outer workspace.
   // Hand off only the focus hidden by this transition, never header/dialog focus.
   if (previousFocus && (document.activeElement === previousFocus || document.activeElement === document.body) &&
-      (!previousFocus.isConnected || previousFocus.closest('[hidden]'))) $('#tab-challenge').focus();
+      (!previousFocus.isConnected || previousFocus.closest('[hidden]'))) $('#tab-challenge').focus({preventScroll:true});
 }
 function activateView(view, focus = false) {
   const scheme = selectedScheme();
   if (!scheme || !state.profile) return;
   navigate(schemeRoute(scheme, state.profile, view));
-  if (focus) $('#tab-' + view).focus();
+  if (focus) $('#tab-' + view).focus({preventScroll:true});
 }
 const tabs = [...document.querySelectorAll('[data-view]')];
 tabs.forEach((tab, index) => {
@@ -4820,8 +6168,11 @@ for (const dialog of document.querySelectorAll('dialog')) {
     document.body.style.overflow = [...document.querySelectorAll('dialog')].some(item => item.open) ? 'hidden' : '';
     const trigger = dialogTriggers.get(dialog);
     const parentDialog = trigger?.closest('dialog');
-    if (trigger?.isConnected && !trigger.hidden && !trigger.disabled &&
-        !trigger.closest('[hidden]') && (!parentDialog || parentDialog.open)) trigger.focus();
+    const focused = document.activeElement;
+    const focusMoved = dialog === pointsHelpDialog && focused && focused !== document.body && focused !== trigger && focused.closest?.('dialog') !== dialog;
+    if (!focusMoved && trigger?.isConnected && !trigger.hidden && !trigger.disabled &&
+        !trigger.closest('[hidden]') && (!parentDialog || parentDialog.open)) trigger.focus({preventScroll:true});
+    if (dialog === challengeStartDialog) { challengeStartChoice = null; setTimeout(renderLiveGuide,0); }
     if (dialog === recoveryDialog) {
       state.recoveryRequest++;
       $('#recovery-content').replaceChildren();
@@ -5424,6 +6775,9 @@ async function openSubmission() {
   lockSubmissionFields(Boolean(state.pendingAttempt || !challenge));
   setError('#submission-error', state.pendingAttempt ? 'The previous request has no confirmed result. Retry to check the same answer; it will not create a second attempt.' : '');
   setText('#submit-answer', state.pendingAttempt ? 'Retry the same answer →' : 'Submit this answer →');
+  if (liveGuide?.kind === 'challenge' && liveGuide.challengeId === challenge?.id) {
+    liveGuide.approach ||= 'manual'; liveGuide.challengeStep = 'work'; saveLiveGuide();
+  }
   openDialog(submissionDialog, $('#open-submission'));
   updateClock();
   const formRevision = state.submissionFormRevision;
@@ -5734,18 +7088,18 @@ async function loadActivityPage(kind) {
 function selectActivityPage(index) {
   const paging = activityPageState(activityKind);
   if (!Number.isInteger(index) || index < 0 || index >= paging.paths.length || index === paging.index) return;
-  paging.index = index; void loadActivityPage(activityKind);
+  paging.index = index; resetNavigationScroll(); void loadActivityPage(activityKind);
 }
 async function copyInstance() {
   if (!state.challenge) return;
   const id = state.challenge.id;
-  const accountId = state.user?.id;
+  const accountId = state.user?.id, owner = liveGuide;
   $('#copy-instance').disabled = true;
   try {
     // Copy and Download must use the same authoritative challenge contract.
     const payload = await api('/api/challenges/' + encodeURIComponent(id) + '/download', undefined, {raw: true});
     if (state.challenge?.id !== id || state.user?.id !== accountId) return;
-    try { await navigator.clipboard.writeText(payload); toast('Challenge JSON copied. It contains the same information as the download.'); }
+    try { await navigator.clipboard.writeText(payload); toast('Challenge JSON copied. It contains the same information as the download.'); if (liveGuide === owner && owner?.kind === 'challenge') completeGuideTools(owner,'manual'); }
     catch {
       toast('Clipboard access is unavailable. Use Download challenge JSON to save the same information.');
     }
@@ -5771,7 +7125,7 @@ function chooseInstanceSize() {
     }
     navigate(schemeRoute(scheme, profile, state.view));
   }
-  else setError('#profile-error', `Choose a published integer stage from ${$('#profile-select').min} to ${$('#profile-select').max}.`);
+  else setError('#profile-error', `Choose a published integer level from ${$('#profile-select').min} to ${$('#profile-select').max}.`);
 }
 function stepInstanceSize(direction) {
   const scheme = selectedScheme();
@@ -5845,12 +7199,21 @@ $('#refresh-catalogue').addEventListener('click', async () => {
 $('.skip-link').addEventListener('click', event => {
   event.preventDefault();
   const target = $(workspaceSelector(state.screen));
-  target.focus();
-  target.scrollIntoView();
+  target.focus({preventScroll:true});
+  resetNavigationScroll();
 });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) void synchronizeSession().finally(scheduleBrowseWarmup); });
 window.addEventListener('online', synchronizeSession);
-window.addEventListener('hashchange', () => applyRoute(true));
+window.addEventListener('hashchange', () => { applyRoute(true); resetNavigationScroll(); });
+document.addEventListener('click', event => {
+  if (event.defaultPrevented || event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  const link = event.target.closest?.('a[href]');
+  if (!link || link.hasAttribute?.('download') || link.getAttribute('target') === '_blank') return;
+  let url; try { url = new URL(link.href,window.location.href); } catch { return; }
+  if (url.origin === siteOrigin() && url.pathname === window.location.pathname && url.search === window.location.search && url.hash) {
+    event.preventDefault(); navigateTop(url.hash);
+  }
+});
 
 
 // A proposal is a description for review. No uploaded instructions or links run.
@@ -5881,7 +7244,7 @@ function proposalAgentPrompt(record) {
   const initialize = record ? `proposal revise ${quote(record.id)}` : 'proposal init';
   const base = record ? `\nExpected base: revision ${record.revision}, content SHA-256 ${record.content_sha256}. If the fetched revision or hash differs, show me the change before editing.\n` : '\n';
   const login = `${client} login`;
-  return `${record ? 'Help me revise my KEM proposal' : 'Help me prepare a new KEM proposal'} for Crucible.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running.\nBefore private access or submission, run ${login} if needed and let me approve the proposal permissions in my browser. Existing connections need login once to add those permissions.\n\nBefore work, read and follow the model pipeline contract at ${origin}/api/agent/pipeline: run ${client} guide. It identifies the supported workflows, exact source contracts and permission boundaries. The workspace saves a copy as pipeline.json; never put credentials in prompts or research files.\n\nPrepare a fresh workspace:\n${client} ${initialize} --path ${quote(folder)}\n${base}\nRead the proposal guide saved in that workspace (also at ${origin}/api/protocol/proposal-guide), then follow its README, template and schema. Explain what it adds over the closest existing scheme. Describe complete reproducible algorithms and sampling distributions, public and private encodings, correctness bound and scope, security assumptions, and identified implementation/evidence. Complete correctness.justification with a precise statement, conditions, configuration coverage and supporting reasoning; distinguish proved, modeled and conjectural steps. Empirical tests are supplemental. Formal verification is optional and conditional guarantees must state their conditions. Reference implementation measurement policy: ${origin}/api/protocol/reference-method. Timings describe the identified implementation, not a full TLS handshake or a security guarantee. Complete the template’s tier_design plan: describe the supported configuration space or reviewed generation rule, with stable configuration identities, and a default progression through natural parameter settings. Its positions are stages; their count is scheme-specific and equal stage numbers do not imply equal security. Preserve the construction and sampling distributions, explaining any coordinated parameter changes. For approval, state a precise correctness guarantee: zero honest disagreement or failure probability at most 2^-128 for every admitted configuration, with probability scope and assumptions. Also state the security notion, claimed guarantee and applicable parameters, with all underlying assumptions. If security depends on a correctness bound, identify that dependency and its required threshold. A claim may depend on conjectures or a heuristic model; distinguish the conditional argument from the evidence for each premise, independently motivate those premises and identify unproved steps for stress testing. Use justification.kind conjectural-claim where appropriate. Unknown correctness is acceptable in an early draft but needs a stated guarantee before approval. The common correctness target remains at most 2^-128; the claim may be conditional, but the target is not optional. For a statistical claim, declare correctness.failure_bound_exponent as an integer at least 128, consistent with the bound and assumptions. Perfect correctness states failure_bound "0" and omits the exponent; correctness.policy_id is optional. A proof gap undermines justification; a rigorous demonstration that actual failure probability exceeds the target refutes the guarantee. A looser upper bound alone is not a refutation. Report generation aborts separately. State the endpoint target, evidence and status (supported-estimate, provisional or unestimated), retaining meaningful published or justified endpoints; justify useful intermediate stages. Prefer a default stage count in multiples of ten, with multiples of five as a fallback when the reviewed configurations support it; preserve endpoints and useful intermediate configurations, and never invent settings or compromise correctness or fidelity to meet a count. Complete parameter_selection: justify efficient admissible configurations under a stated cost objective, constraints, pinned security model and candidate domain; document comparison evidence, tradeoffs and uncertainty without claiming global optimality. Never add padding or restrict entropy just to manufacture stages. Keep unknowns explicit. Ask me for missing information; do not invent proofs, benchmarks or security claims. Spend a separate, deliberate pass on citations: read the primary sources, check exact versions and claim scope, and identify the supporting section, theorem or page in the relevant argument. Cite existing Crucible notes by their exact revision link and content hash, with permission for any private material. Separate mathematical ingredients from a published complete KEM and from inherited security claims. Mark inaccessible or unverified sources and originality uncertainty explicitly; never invent citations or add unrelated ones for appearance.\n\nCheck the specification:\n${client} proposal validate --path ${quote(folder)}\nShow me the specification and validation result. Only when I ask you to submit, run:\n${client} proposal submit --path ${quote(folder)}\nSubmission creates a private research note containing the exact specification and its readable explanation; revisions preserve the earlier notes and reviews. Return the note link and review link from the receipt. Submission requests human review; it does not approve or activate the scheme.`;
+  return `${record ? 'Help me revise my KEM proposal' : 'Help me prepare a new KEM proposal'} for Crucible.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running.\nBefore private access or submission, run ${login} if needed and let me approve the proposal permissions in my browser. Existing connections need login once to add those permissions.\n\nBefore work, read and follow the model pipeline contract at ${origin}/api/agent/pipeline: run ${client} guide. It identifies the supported workflows, exact source contracts and permission boundaries. The workspace saves a copy as pipeline.json; never put credentials in prompts or research files.\n\nPrepare a fresh workspace:\n${client} ${initialize} --path ${quote(folder)}\n${base}\nRead the proposal guide saved in that workspace (also at ${origin}/api/protocol/proposal-guide), then follow its README, template and schema. Explain what it adds over the closest existing scheme. Describe complete reproducible algorithms and sampling distributions, public and private encodings, correctness bound and scope, security assumptions, and identified implementation/evidence. Complete correctness.justification with a precise statement, conditions, configuration coverage and supporting reasoning; distinguish proved, modeled and conjectural steps. Empirical tests are supplemental. Formal verification is optional and conditional guarantees must state their conditions. Reference implementation measurement policy: ${origin}/api/protocol/reference-method. Timings describe the identified implementation, not a full TLS handshake or a security guarantee. Complete the template’s tier_design plan: describe the supported configuration space or reviewed generation rule, with stable configuration identities, and a default progression through natural parameter settings. Its positions are levels; their count is scheme-specific and equal level numbers do not imply equal security. Preserve the construction and sampling distributions, explaining any coordinated parameter changes. For approval, state a precise correctness guarantee: zero honest disagreement or failure probability at most 2^-128 for every admitted configuration, with probability scope and assumptions. Also state the security notion, claimed guarantee and applicable parameters, with all underlying assumptions. If security depends on a correctness bound, identify that dependency and its required threshold. A claim may depend on conjectures or a heuristic model; distinguish the conditional argument from the evidence for each premise, independently motivate those premises and identify unproved steps for stress testing. Use justification.kind conjectural-claim where appropriate. Unknown correctness is acceptable in an early draft but needs a stated guarantee before approval. The common correctness target remains at most 2^-128; the claim may be conditional, but the target is not optional. For a statistical claim, declare correctness.failure_bound_exponent as an integer at least 128, consistent with the bound and assumptions. Perfect correctness states failure_bound "0" and omits the exponent; correctness.policy_id is optional. A proof gap undermines justification; a rigorous demonstration that actual failure probability exceeds the target refutes the guarantee. A looser upper bound alone is not a refutation. Report generation aborts separately. State the endpoint target, evidence and status (supported-estimate, provisional or unestimated), retaining meaningful published or justified endpoints; justify useful intermediate levels. Prefer a default level count in multiples of ten, with multiples of five as a fallback when the reviewed configurations support it; preserve endpoints and useful intermediate configurations, and never invent settings or compromise correctness or fidelity to meet a count. Complete parameter_selection: justify efficient admissible configurations under a stated cost objective, constraints, pinned security model and candidate domain; document comparison evidence, tradeoffs and uncertainty without claiming global optimality. Never add padding or restrict entropy just to manufacture levels. Keep unknowns explicit. Ask me for missing information; do not invent proofs, benchmarks or security claims. Spend a separate, deliberate pass on citations: read the primary sources, check exact versions and claim scope, and identify the supporting section, theorem or page in the relevant argument. Cite existing Crucible notes by their exact revision link and content hash, with permission for any private material. Separate mathematical ingredients from a published complete KEM and from inherited security claims. Mark inaccessible or unverified sources and originality uncertainty explicitly; never invent citations or add unrelated ones for appearance.\n\nCheck the specification:\n${client} proposal validate --path ${quote(folder)}\nShow me the specification and validation result. Only when I ask you to submit, run:\n${client} proposal submit --path ${quote(folder)}\nSubmission creates a private research note containing the exact specification and its readable explanation; revisions preserve the earlier notes and reviews. Return the note link and review link from the receipt. Submission requests human review; it does not approve or activate the scheme.`;
 }
 function resetProposalAgentInstructions(kind = null) {
   for (const name of kind ? [kind] : Object.keys(PROPOSAL_AGENT_UI)) {
@@ -5899,7 +7262,7 @@ function renderProposalAgentControls() {
     if (kind === 'revision') $(ui.button).hidden = !target;
     if (proposals.agentKeys[kind] && proposals.agentKeys[kind] !== target?.key) resetProposalAgentInstructions(kind);
   }
-  setText('#proposal-use-agent', proposals.revisingId ? 'Revise with an agent →' : 'Use with an agent →');
+  setText('#proposal-use-agent','Work with an agent');
 }
 function showProposalAgentInstructions(kind) {
   const target = proposalAgentTarget(kind);
@@ -5919,14 +7282,14 @@ async function copyProposalAgentInstructions(kind) {
   const current = () => proposalAgentTarget(kind)?.key === target.key && proposals.agentKeys[kind] === target.key;
   try {
     await navigator.clipboard.writeText(proposalAgentPrompt(target.record));
-    if (current()) toast('Proposal prompt copied. Give it to your agent.');
+    if (current()) { setText(ui.copy,'Copied'); setTimeout(() => { if (current()) setText(ui.copy,'Copy prompt'); },2200); }
   } catch {
-    if (current()) { showProposalAgentInstructions(kind); toast('Copy the proposal instructions shown below.'); }
+    if (current()) { showProposalAgentInstructions(kind); const pre = $(ui.text); pre.focus?.(); const selection = window.getSelection?.(); if (selection && document.createRange) { const range = document.createRange(); range.selectNodeContents(pre); selection.removeAllRanges(); selection.addRange(range); } toast('Select the prompt and copy it.'); }
   } finally { $(ui.copy).disabled = false; }
 }
 const SPECIFICATION_LABELS = {
   setup: 'Setup', keygen: 'Key generation', encapsulate: 'Encapsulation', decapsulate: 'Decapsulation',
-  tier_meaning: 'Meaning of a stage', supported_tiers: 'Supported stages', mapping: 'Parameter mapping',
+  tier_meaning: 'Meaning of a level', supported_tiers: 'Supported levels', mapping: 'Parameter mapping',
   distribution: 'Sampling distribution', reuse: 'Parameter reuse', public_key: 'Public key', private_key: 'Private key',
   ciphertext: 'Ciphertext', shared_secret: 'Shared secret', shared_secret_bytes: 'Shared-secret bytes',
   kind: 'Claim type', failure_bound: 'Failure bound', argument: 'Argument', scope: 'Scope', evidence: 'Evidence',
@@ -6008,7 +7371,7 @@ function renderSpecification(target, spec) {
       }
       section.append(facts);
     } else section.append(node('p', key === 'tier_design'
-      ? 'Not provided in this revision. A default-progression plan is required before approval: reviewed configurations, faithful parameter scaling, resource costs, a common correctness bound, endpoint target and evidence or provisional status, and useful intermediate stages.'
+      ? 'Not provided in this revision. A default-progression plan is required before approval: reviewed configurations, faithful parameter scaling, resource costs, a common correctness bound, endpoint target and evidence or provisional status, and useful intermediate levels.'
       : 'Not provided. Implementation review is required before activation.', 'field-hint'));
     target.append(section);
   }
@@ -6499,11 +7862,13 @@ $('#download-proposal').addEventListener('click', () => {
 
 // Research records keep claims and their conditions separate from hourly ranking.
 function showWorkspace(name) {
+  if (name !== 'home') setHomeFeatureLink(null);
+  if (challengeStartChoice && (name === 'access' || !hasAccess() || window.location.hash !== challengeStartChoice.route)) { challengeStartChoice = null; if (challengeStartDialog.open) { dialogTriggers.delete(challengeStartDialog); challengeStartDialog.close(); } }
   if (!hasAccess()) name = 'access';
   const root = document.documentElement || document.querySelector('html');
   if (name === 'access') root.setAttribute('data-beta-landing', landingLayout());
   else root.removeAttribute('data-beta-landing');
-  if (name !== 'people' && pointsHelpDialog.open) {
+  if (pointsHelpDialog.open && (name === 'access' || pointsHelpDialog.dataset.route !== window.location.hash)) {
     dialogTriggers.delete(pointsHelpDialog); pointsHelpDialog.close();
   }
   if (schemeAssumptionsDialog.open && (name !== 'overview' || schemeAssumptionsDialog.dataset.route !== window.location.hash)) clearSchemeAssumptions();
@@ -6529,6 +7894,7 @@ function showWorkspace(name) {
     if (name !== 'loading') routeLoadingPanel.setAttribute('aria-busy', 'false');
   }
   $('.primary-nav').hidden = name === 'access';
+  if (name === 'access') { closePrimaryNavigation(); closePointsPopover(); pointsPopoverSuppressed = false; }
   $('#nav-people').hidden = name === 'access' || !hasAccess();
   $('#catalogue-workspace').hidden = name !== 'catalogue';
   $('#workspace').hidden = name !== 'scheme';
@@ -6559,6 +7925,10 @@ function showWorkspace(name) {
     button.classList.toggle('selected', selected);
     if (selected) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
+    if (kind === 'people') {
+      $('#nav-menu-people').classList.toggle('selected',selected);
+      if (selected) $('#nav-menu-people').setAttribute('aria-current','page'); else $('#nav-menu-people').removeAttribute('aria-current');
+    }
   }
   let ownProfileSelected = name === 'person' && ownResearcherProfile();
   if (name === 'loading' && hasAccess() && state.user && pendingPath.startsWith('#person/')) {
@@ -6567,11 +7937,11 @@ function showWorkspace(name) {
   $('#account-handle').classList.toggle('selected', Boolean(ownProfileSelected));
   if (ownProfileSelected) $('#account-handle').setAttribute('aria-current', 'page');
   else $('#account-handle').removeAttribute('aria-current');
-  $('.skip-link').href = workspaceSelector(name);
+  $('.skip-link').href = workspaceSelector(name); refreshAgentHandoffs();
   if (transferLoadingFocus) $(workspaceSelector(name)).focus({preventScroll: true});
   if (enteringResearch && !research.targets.length) loadResearch();
   else if (enteringResearch && research.target) loadFindings();
-  playBetaEntryGlow();
+  renderLiveGuide();
 }
 function researchError(message) {
   setText('#research-error-text', message);
@@ -6599,7 +7969,7 @@ function updateTargetTabs(focus = false) {
     const selected = tab.dataset.targetKind === research.kind;
     tab.setAttribute('aria-selected', String(selected));
     tab.tabIndex = selected ? 0 : -1;
-    if (focus && selected) tab.focus();
+    if (focus && selected) tab.focus({preventScroll:true});
   }
   $('#target-catalogue').setAttribute('aria-labelledby', 'target-tab-' + research.kind);
 }
@@ -6971,7 +8341,7 @@ $('#finding-form').addEventListener('submit', async event => {
     setText('#save-finding', editing ? 'Publish revision →' : 'Publish finding →');
   }
 });
-const taglineSpots = [...document.querySelectorAll('.scrutiny-wording')].map(element => ({element, x: null, y: null, strength: 0}));
+const taglineSpots = [...document.querySelectorAll('.scrutiny-wording')].filter(element => !element.closest('#home-title')).map(element => ({element, x: null, y: null, strength: 0}));
 let taglinePointer = null, taglineFrame = null, taglineTime = 0;
 function requestTaglineFrame() {
   if (taglineFrame === null) taglineFrame = window.requestAnimationFrame(animateTaglineDots);
@@ -7017,18 +8387,17 @@ function clearTaglinePointer() { taglinePointer = null; requestTaglineFrame(); }
 window.addEventListener('pointerout', event => { if (!event.relatedTarget) clearTaglinePointer(); });
 window.addEventListener('pointercancel', clearTaglinePointer);
 window.addEventListener('blur', clearTaglinePointer);
-const landingBrand = $('#site-brand'), landingMark = landingBrand.querySelector('.brand-mark'), landingFire = landingBrand.querySelector('.brand-fire-ghost');
+const landingBrand = $('#site-brand'), landingIcon = $('#brand-animate'), landingFire = landingBrand.querySelector('.brand-fire-ghost');
 const logoMotionPreference = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-let logoAnimationRun = 0, logoStartupTimer = null, logoBetaEntryPending = false;
+let logoAnimationRun = 0;
 function stopLogoAnimation() {
-  clearTimeout(logoStartupTimer); logoStartupTimer = null;
   logoAnimationRun++;
   landingBrand.classList.remove('brand-ignited');
 }
 function igniteLandingLogo() {
   stopLogoAnimation();
   if (logoMotionPreference?.matches) return;
-  // Commit the reset before starting a new CSS animation, even on rapid clicks.
+  // Own each hover animation so an older completion cannot stop a newer run.
   void landingBrand.offsetWidth;
   landingBrand.classList.add('brand-ignited');
   const run = logoAnimationRun;
@@ -7038,28 +8407,12 @@ function igniteLandingLogo() {
   if (animation) animation.finished.then(finish, finish);
   else finish();
 }
-function playBetaEntryGlow() {
-  // Wait for the visible workspace, including the invitation's final dialog.
-  // Session refreshes and ordinary routes do not create another entry event.
-  if (!logoBetaEntryPending || !hasAccess() || authDialog.open || !$('#access-workspace').hidden) return;
-  logoBetaEntryPending = false;
-  igniteLandingLogo();
-}
-authDialog.addEventListener('close', playBetaEntryGlow);
 logoMotionPreference?.addEventListener?.('change', event => { if (event.matches) stopLogoAnimation(); });
-const startLogoAnimation = () => {
-  if (logoAnimationRun !== 0 || logoStartupTimer !== null) return;
-  logoStartupTimer = setTimeout(() => {
-    logoStartupTimer = null;
-    if (logoAnimationRun === 0) igniteLandingLogo();
-  }, 500);
-};
-// Pause briefly after decoding, once per document. Entering beta and icon
-// clicks start immediately and cancel any pending startup animation.
-if (typeof landingMark.decode === 'function') landingMark.decode().then(startLogoAnimation, () => {});
-else if (landingMark.complete) startLogoAnimation();
-else landingMark.addEventListener('load', startLogoAnimation, {once: true});
-$('#brand-animate').addEventListener('click', igniteLandingLogo);
+landingIcon.addEventListener('pointerenter',event => { if (event.pointerType !== 'touch') igniteLandingLogo(); });
+landingIcon.addEventListener('pointerleave',stopLogoAnimation);
+landingIcon.addEventListener('pointercancel',stopLogoAnimation);
+window.addEventListener('blur',stopLogoAnimation);
+window.addEventListener('pagehide',stopLogoAnimation);
 for (const category of ['security', 'correctness']) $('#overview-' + category + '-button').addEventListener('click', event => {
   if (state.noteJustificationsAvailable !== true || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button) return;
   event.preventDefault(); openSchemeAssumptions(event.currentTarget, category);
@@ -7073,11 +8426,12 @@ $('#nav-challenge').addEventListener('click', () => navigateTop('#challenge'));
 $('#scheme-map-button').addEventListener('click', () => navigateTop('#challenge?view=map'));
 $('#propose-scheme-button').addEventListener('click', () => navigateTop('#propose'));
 $('#nav-people').addEventListener('click', () => navigateTop('#people'));
+$('#nav-menu-people').addEventListener('click', () => navigateTop('#people'));
 $('#points-help-button').addEventListener('click', () => {
   if (hasAccess() && state.screen === 'people' && !pointsHelpDialog.open) openDialog(pointsHelpDialog, $('#points-help-button'));
 });
 $('#nav-notebook').addEventListener('click', () => navigateTop('#notebook'));
-$('#nav-bounties').addEventListener('click', () => navigateTop(notebookWorkspace?.bountyRoute?.() || '#bounties'));
+$('#nav-bounties').addEventListener('click', () => navigateTop('#bounties'));
 $('#refresh-people').addEventListener('click', () => loadPeople());
 $('#more-people').addEventListener('click', () => loadPeople(true));
 $('#nav-about').addEventListener('click', () => navigateTop('#about'));
@@ -7186,4 +8540,42 @@ async function initialize() {
 }
 setInterval(updateClock, 1000);
 setInterval(() => { if (!document.hidden) synchronizeSession(); }, 60000);
+// Optional page orientation shares the real guides' geometry and lifecycle guards.
+newcomerOrientation = window.CrucibleOrientation?.create({
+  launcher:$('#how-it-works'),
+  context:() => !documentRetired && state.ready && hasAccess() && state.user ? JSON.stringify([state.user.id,state.csrf,documentEpoch]) : null,
+  navigate:route => { if (HELP_ROUTES.has(route) || route === window.location.hash) navigateTop(route); },
+  allowedRoute:route => HELP_ROUTES.has(route) || typeof route === 'string' && route === window.location.hash,
+  isHome:() => state.screen === 'home',
+  steps:orientationPageSteps,
+  overview:() => [
+    {route:'#propose',icon:'proposal',title:'Propose a scheme',body:'Bring a construction. We’ll guide your submission.',action:'propose',featured:true},
+    {route:'#challenge',icon:'schemes',title:'Schemes',body:'Explore cryptographic constructions.'},
+    ...(bountyFeatureAvailable() ? [{route:'#bounties',icon:'bounties',title:'Bounties',body:'Tackle research tasks.'}] : []),
+    {route:'#notebook',icon:'notes',title:'Notes',body:'Read and share evidence.'},
+    {route:'#activity?kind=notes',icon:'activity',title:'My activity',body:'Track your submissions and reviews.'},
+    {route:'#people',icon:'people',title:'Leaderboard',body:'See contributors and points.'},
+    {route:'#people',icon:'points',title:'How points work',body:'See what earns points.',action:'points'}
+  ],
+  actions:{
+    propose:() => { startLiveGuide('scheme'); navigateTop('#propose'); },
+    points:() => openPointsHelp()
+  },
+  getStarted:() => { void startIntroChallenge(); },
+  presentation:{create:() => createGuideOverlay('orientation-guide-mask'),place:positionGuide,anchor:guideAnchor},
+  onStart:() => {
+    orientationReturnRoute = liveGuide ? window.location.hash : null; orientationSuspended = true;
+    liveGuidePanel.hidden = true; liveGuideOverlay?.setAttribute('hidden',''); setHomeFeatureLink(null);
+  },
+  onStop:reason => {
+    orientationSuspended = false; const route = orientationReturnRoute; orientationReturnRoute = null;
+    if (reason === 'pagehide' || !hasAccess()) return;
+    if (liveGuide?.intro) delete liveGuide.introRevealTarget;
+    if (reason === 'action' && liveGuide) liveGuideMinimized = true;
+    if (route && liveGuide?.owner === state.user?.id && ['close','complete'].includes(reason)) navigateTop(route);
+    renderLiveGuide();
+  }
+});
+for (const id of ['catalogue-agent-entry','overview-agent-entry']) $('#'+id).append(createAgentHandoff({prompt:schemeAgentPrompt,current:() => ['catalogue','overview'].includes(state.screen),key:() => JSON.stringify([state.screen,state.schemeId,state.schemeVersion])}));
+
 initialize();

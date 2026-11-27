@@ -71,7 +71,7 @@ for (const width of [1440, 390]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 
-  test(`a six-position exact rail stops at the recovered stage and refreshes while focused at ${width}px`, async ({page}, testInfo) => {
+  test(`a six-position exact rail stops at the recovered level and refreshes while focused at ${width}px`, async ({page}, testInfo) => {
     await page.setViewportSize({width, height:1000});
     const posts=[]; let recovered=[20,21,22];
     page.on('request',request=>{if(request.method()==='POST')posts.push(new URL(request.url()).pathname);});
@@ -86,7 +86,7 @@ for (const width of [1440, 390]) {
           release.record_inheritance=false;
           if(release.profiles)release.profiles=release.profiles.filter(profile=>/^dh-2[0-5]$/.test(profile.id)).map(profile=>{
             const stage=Number(profile.id.slice(3))-19;
-            return {...profile,stage_number:stage,instance_size:stage,stage_position:stage,stage_label:'Stage '+stage,record_inheritance:false};
+            return {...profile,stage_number:stage,instance_size:stage,stage_position:stage,stage_label:'Level '+stage,record_inheritance:false};
           });
           release.default_progression={...release.default_progression,stage_count:6};
           release.recovered_profile_ids=recovered.map(stage=>'dh-'+stage);

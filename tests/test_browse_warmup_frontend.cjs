@@ -3,9 +3,9 @@ const vm=require('node:vm');
 const {createApp,flush}=require('./frontend-dom.cjs');
 const user={id:'alice-id',handle:'alice'};
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
-const release=(id='one',version='1')=>({id,version,name:id,profiles:[{id:'stage-1',instance_size:1,
+const release=(id='one',version='1')=>({id,version,name:id,profiles:[{id:'level-1',instance_size:1,
   shared_secret_bytes:32,parameters:{},encoding:{shared_secret_bytes:32},correctness:{}}],
-  protocol:{construction:'Synthetic fixed description'},profile_metrics:{},next_profile_id:'stage-1'});
+  protocol:{construction:'Synthetic fixed description'},profile_metrics:{},next_profile_id:'level-1'});
 const releases=[release('one'),release('two'),release('three')];
 const compact=scheme=>{const copy={...scheme};delete copy.protocol;return copy;};
 function notebook(calls,override) {return {mount(target,options){calls.push('mount');return {
@@ -72,7 +72,7 @@ process.once('beforeExit',()=>{
     const held=deferred(),calls=[];
     const {app}=await appFixture({nb:notebook(calls,kind=>kind==='timeline'?held.promise:10)});
     assert.equal(app.$('#about-workspace').hidden,false);assert.deepEqual(calls,[]);
-    assert.equal(app.requests.length,1,'Initial About needs only its session');
+    assert.deepEqual(app.requests.map(r=>r.url.pathname),['/api/session','/api/me/points'],'Initial About reads only its session and the shared menu balance');
     await step(app);assert.deepEqual(calls,['mount']);
     const pending=step(app);await flush();assert.deepEqual(calls,['mount','timeline']);
     await step(app);assert.deepEqual(calls,['mount','timeline'],'A second scheduler cannot start another job');

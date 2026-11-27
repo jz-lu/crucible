@@ -1,4 +1,4 @@
-const {test, expect, signIn} = require('./helpers.cjs');
+const {test, expect, signIn, navigationAction} = require('./helpers.cjs');
 
 for (const width of [1440,390]) test(`source notes can be searched and selected as removable ID tags at ${width}px`, async ({page},testInfo) => {
   await page.setViewportSize({width,height:width === 390 ? 844 : 1000});
@@ -15,7 +15,7 @@ for (const width of [1440,390]) test(`source notes can be searched and selected 
   },width);
   const label = note => '#' + String(note.number).padStart(4,'0');
   const panel = () => page.locator('[data-nb="bounties"]:visible');
-  await page.locator('#nav-bounties').click();
+  await navigationAction(page, '#nav-bounties');
   await expect(panel().getByRole('heading',{name:'Bounties',exact:true,level:1})).toBeVisible();
   await panel().getByRole('button',{name:'Propose a bounty',exact:true}).click();
   for (const [name,value] of [['The task',`Source picker ${width}`],['A short description','A disposable source-picker test.'],

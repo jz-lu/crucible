@@ -1,4 +1,4 @@
-const {test, expect, signIn} = require('./helpers.cjs');
+const {test, expect, signIn, navigationAction} = require('./helpers.cjs');
 
 for (const width of [1440, 390]) {
   test(`Reviewer profile keeps account controls without achievements at ${width}px`, async ({page}, testInfo) => {
@@ -22,7 +22,7 @@ for (const width of [1440, 390]) {
     await expect(page.locator('#researcher-profile-summary')).toContainText('Example Institute');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({path:testInfo.outputPath('reviewer-profile.png'), fullPage:true});
-    await page.getByRole('button', {name:'Leaderboard', exact:true}).click();
+    await navigationAction(page, '#nav-people');
     await expect(page.locator('#people-content .person-link').first()).toBeVisible();
     await expect(page.locator('#people-content')).not.toContainText('browser_queuereviewer');
   });

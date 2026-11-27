@@ -4,7 +4,7 @@ const {createApp, flush} = require('./frontend-dom.cjs');
 const user = {id: 'alice-id', handle: 'alice'};
 const active = (envelope, csrf = 'csrf', account = user) => envelope({user: account, csrf_token: csrf, access: {mode: 'beta', status: 'active', allowed: true}});
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return {promise, resolve, reject}; };
-const profile = {id: 'native-20', instance_size: 20, stage_number: 19, stage_label: 'Stage 19', shared_secret_bytes: 32,
+const profile = {id: 'native-20', instance_size: 20, stage_number: 19, stage_label: 'Level 19', shared_secret_bytes: 32,
   encoding: {shared_secret_bytes: 32}, parameters: {exact: '9007199254740993'}, correctness: {kind: 'fixture', failure_bound: '0'}};
 const release = (id = 'a', version = '2', name = 'Scheme A') => ({id, version, name, profiles: [{...profile}],
   selection_kind: 'tier', record_inheritance: true, next_profile_id: profile.id, largest_recovered_profile_id: profile.id,
@@ -50,7 +50,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(reads(app, 'navigation').length, 1); assert.equal(reads(app, 'release').length, 0);
     gate.resolve(app.envelope(navigation())); await flush();
     assert.equal(app.$('#route-loading').hidden, true);
-    assert.match(app.$('#kem-catalogue').textContent, /Scheme AStage 19alice/);
+    assert.match(app.$('#kem-catalogue').textContent, /Scheme ALevel 19alice/);
     assert.equal(vm.runInContext('releaseDetails.size', app.sandbox), 0);
     assert.equal(vm.runInContext('state.schemes[0].profiles[0].parameters', app.sandbox), undefined);
   });
@@ -94,13 +94,13 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.match(app.location.hash, /#challenge\/a\/2/);
     assert.equal(app.requests.some(r => r.options.method === 'POST'), false);
   });
-  await test('profile records get human stage labels from navigation without downloading protocols', async () => {
+  await test('profile records get human level labels from navigation without downloading protocols', async () => {
     const record = {scheme_id: 'a', scheme_name: 'Scheme A', scheme_version: '2', profile_id: profile.id, tier: 20,
       place: 1, submission_id: 'receipt', received_at: 100, is_current: true};
     const app = await createApp({hash: '#person/alice', responder: responder((url, options, envelope) => {
       if (url.pathname === '/api/people/alice') return envelope({person: {handle: 'alice', points: 0, first_records: [record], records: []}});
     })});
-    assert.equal(app.$('#first-records').querySelector('.milestone-result').textContent, 'Stage 19');
+    assert.equal(app.$('#first-records').querySelector('.milestone-result').textContent, 'Level 19');
     assert.equal(reads(app, 'release').length, 0);
   });
   await test('session rotation evicts cached and pending details, and late old-session bytes cannot return', async () => {
@@ -126,7 +126,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.$('#parameter-json'), parameter); assert.equal(app.document.activeElement, input); assert.equal(input.value, '23');
     assert.equal(reads(app, 'release').length, 1);
   });
-  await test('metadata revision changes replace only the selected full release and preserve exact stage mapping', async () => {
+  await test('metadata revision changes replace only the selected full release and preserve exact level mapping', async () => {
     let revision = 'r1';
     const app = await createApp({hash: route(a), responder: responder((url, options, envelope) => {
       if (url.pathname !== '/api/schemes') return undefined;
@@ -201,7 +201,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     pending.resolve(app.envelope(detail(a)));await flush();assert.equal(app.$('#overview-workspace').hidden,false);
     assert.equal(app.requests.some(r=>r.url.pathname==='/api/challenges'),false);
   });
-  await test('stage browsing paints its heading without building hidden protocol or formatting math', async () => {
+  await test('level browsing paints its heading without building hidden protocol or formatting math', async () => {
     const app=await createApp({hash:route(a,'leaderboard'),responder:responder()});
     assert.equal(app.$('#scheme-title').textContent,'Scheme A');
     assert.doesNotMatch(app.$('#protocol-construction').textContent,/Scheme A full construction/);

@@ -138,7 +138,7 @@ async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
     const app=await boot();
     assert.deepEqual(chart(app).querySelector('.chart-series').getAttribute('d').match(/[ML]/g),['M','M']);
     const interaction=graph(app);interaction.event('click',2);
-    assert.match(chart(app).querySelector('.chart-point-readout').textContent,/Stage 2.*No estimate/);
+    assert.match(chart(app).querySelector('.chart-point-readout').textContent,/Level 2.*No estimate/);
     assert.equal(sourceLinks(app).length,0);
     assert.equal(chart(app).querySelector('.chart-selection-guide').getAttribute('visibility'),'hidden');
   });
@@ -173,7 +173,7 @@ async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
     assert.equal(query.get('sha256'),'a'.repeat(64));
     assert.equal(query.get('note_section'),'attack-one');
     const readout=chart(app).querySelector('.chart-point-readout');
-    assert.match(readout.textContent,/Stage 1/);
+    assert.match(readout.textContent,/Level 1/);
     assert.match(readout.textContent,/Work/); assert.match(readout.textContent,/Memory/);
     const exponents=readout.querySelectorAll('sup').map(el=>el.textContent);
     assert.deepEqual(exponents,['31','12']);
@@ -188,11 +188,11 @@ async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
     assert.equal(sourceLinks(app)[0],before);
     assert.equal(app.document.activeElement,before);
     assert.deepEqual(sourceLinks(app).map(a=>a.textContent.replace(/↗$/, '')),['Attack specification','A-2','A-10']);
-    assert.match(chart(app).querySelector('.chart-point-readout').textContent,/Stage 1/);
+    assert.match(chart(app).querySelector('.chart-point-readout').textContent,/Level 1/);
     interaction.event('click',3);
     assert.deepEqual(sourceLinks(app).map(a=>a.textContent.replace(/↗$/, '')),['Attack specification','A-3']);
     assert.match(sourceLinks(app)[0].href,/note_section=attack-two/);
-    assert.match(chart(app).querySelector('.chart-point-readout').textContent,/Stage 3/);
+    assert.match(chart(app).querySelector('.chart-point-readout').textContent,/Level 3/);
   });
   await test('compact exponent formatting preserves upper bounds by rounding upward',async()=>{
     const data=packet();

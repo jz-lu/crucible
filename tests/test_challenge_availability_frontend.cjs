@@ -3,14 +3,14 @@ const vm = require('node:vm');
 const {createApp, flush} = require('./frontend-dom.cjs');
 const user = {id:'alice',handle:'alice'};
 const yes = {admitted:true,reason:null}, no = {admitted:false,reason:'release_not_admitted'};
-const profiles = ['stage-1','stage-2'].map((id,index)=>({id,instance_size:index+1,parameter_bits:index+1,stage_number:index+1,
-  stage_label:'Stage '+(index+1),shared_secret_bytes:32,encoding:{shared_secret_bytes:32},parameters:{},correctness:{}}));
+const profiles = ['level-1','level-2'].map((id,index)=>({id,instance_size:index+1,parameter_bits:index+1,stage_number:index+1,
+  stage_label:'Level '+(index+1),shared_secret_bytes:32,encoding:{shared_secret_bytes:32},parameters:{},correctness:{}}));
 const release = admission => ({id:'fixture',version:'2',name:'Fixture KEM',profiles,protocol:{construction:'Fixture'},
-  next_profile_id:'stage-1',size_parameter:{meaning:'Fixture'},generation_admission:admission});
-const route = (view='leaderboard',profile='stage-1',version='2')=>`#challenge/fixture/${version}?profile=${profile}&view=${view}`;
+  next_profile_id:'level-1',size_parameter:{meaning:'Fixture'},generation_admission:admission});
+const route = (view='leaderboard',profile='level-1',version='2')=>`#challenge/fixture/${version}?profile=${profile}&view=${view}`;
 const postCount = app=>app.requests.filter(r=>r.url.pathname==='/api/challenges'&&r.options.method==='POST').length;
 const reads = app=>app.requests.filter(r=>r.url.pathname==='/api/challenges'&&r.options.method!=='POST');
-function challenge(envelope, profile='stage-1') {
+function challenge(envelope, profile='level-1') {
   const clock=envelope({});return {id:'existing',scheme_id:'fixture',scheme_version:'2',profile_id:profile,round_id:clock.round.id,
     issued_at:clock.server_time,ends_at:clock.round.ends_at,status:'open',public:{encoding:{shared_secret_bytes:32}}};
 }
@@ -79,8 +79,8 @@ async function test(name,run){await run();console.log('PASS '+name);count++;}
   await test('a late denied profile response cannot disable the next selected profile',async()=>{
     let finish;
     const pending=new Promise(resolve=>{finish=resolve;});
-    const app=await boot({view:'challenge',admission:yes,extra:(url)=>url.pathname==='/api/challenges'&&url.searchParams.get('profile_id')==='stage-1'?pending:undefined});
-    await app.navigate(route('challenge','stage-2'));assert.equal(app.$('#issue-button').disabled,false);
+    const app=await boot({view:'challenge',admission:yes,extra:(url)=>url.pathname==='/api/challenges'&&url.searchParams.get('profile_id')==='level-1'?pending:undefined});
+    await app.navigate(route('challenge','level-2'));assert.equal(app.$('#issue-button').disabled,false);
     finish(app.envelope({challenge:null,generation_admission:no}));await flush();
     assert.equal(app.$('#issue-button').disabled,false);assert.equal(app.$('#empty-title').textContent,'Ready?');
   });
@@ -93,7 +93,7 @@ async function test(name,run){await run();console.log('PASS '+name);count++;}
     assert.match(app.$('.tier-record-challenge').textContent,/Take on/);
   });
   await test('compact progress refresh propagates settings changes into cached release detail',async()=>{
-    let admission=yes;const progress=()=>({participant_count:0,recovered_profile_ids:[],largest_recovered_profile_id:null,next_profile_id:'stage-1',first_recovery:null,generation_admission:admission});
+    let admission=yes;const progress=()=>({participant_count:0,recovered_profile_ids:[],largest_recovered_profile_id:null,next_profile_id:'level-1',first_recovery:null,generation_admission:admission});
     const app=await boot({admission:yes,extra:(url,options,envelope)=>{
       if(url.pathname!=='/api/schemes')return undefined;
       const scheme={...release(admission),...progress()};
@@ -112,7 +112,7 @@ async function test(name,run){await run();console.log('PASS '+name);count++;}
     const archived={admitted:false,reason:'archived_release'};
     const scheme={...release(yes),previous_releases:[{...release(archived),version:'1'}]};
     const app=await boot({admission:yes,schemeOverride:scheme,extra:(url,options,envelope)=>url.pathname==='/api/challenges'&&url.searchParams.get('scheme_version')==='1'?envelope({challenge:null,generation_admission:archived}):undefined});
-    await app.navigate(route('challenge','stage-1','1'));
+    await app.navigate(route('challenge','level-1','1'));
     assert.equal(app.$('#empty-title').textContent,'Archived release');assert.equal(app.$('#issue-button').disabled,false);
     app.$('#issue-button').click();await flush();assert.match(app.location.hash,/#challenge\/fixture\/2/);assert.equal(postCount(app),0);
   });

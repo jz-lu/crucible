@@ -26,7 +26,7 @@ async function test(name, run) { await run(); passed++; console.log('PASS ' + na
   await test('Bounties follows Schemes in main navigation and opens without a catalogue dependency', async () => {
     const app = await boot();
     assert.deepEqual(app.$('.primary-nav').querySelectorAll('button').map(node => node.id),
-      ['nav-challenge', 'nav-bounties', 'nav-notebook', 'nav-about', 'nav-research']);
+      ['primary-nav-toggle', 'nav-challenge', 'nav-bounties', 'nav-notebook', 'nav-about', 'nav-research', 'nav-menu-people']);
     app.$('#nav-bounties').click(); await flush();
     assert.equal(app.location.hash, '#bounties');
     assert.equal(app.document.title, 'Bounties — Crucible');
@@ -63,7 +63,7 @@ async function test(name, run) { await run(); passed++; console.log('PASS ' + na
     assert.equal(app.$('#nav-bounties').getAttribute('aria-current'), 'page');
     app.$('#nav-about').click(); await flush();
     app.$('#nav-bounties').click(); await flush();
-    assert.equal(app.location.hash, '#bounties?status=mine');
+    assert.equal(app.location.hash, '#bounties');
     assert.equal(app.calls.filter(call => call.kind === 'mount').length, 1);
   });
   await test('bounty links do not rewrite a malformed exact passage citation', async () => {

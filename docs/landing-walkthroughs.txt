@@ -1,0 +1,312 @@
+CRUCIBLE — LIVE PARTICIPATION GUIDES
+
+The signed-in home restores the animated “Find new cryptography. Test its
+limits.” tagline and the shared Schemes / Bounties / Notes / About us navigation.
+New to Crucible? Start with a guided challenge. is one clickable intro line;
+hovering it highlights Get started, and clicking either starts the same guide.
+Home has more space above the tagline;
+Top bounties and Challenge of the week remain separate discovery panels below.
+Or try a bounty or propose a scheme. provides two quiet, direct navigation links.
+Without Bounties, the sentence becomes Or propose a scheme.
+Get started fades in after the tagline, with no entrance movement. Both panels
+begin their entrance immediately after that fade: bounty glow, challenge shimmer.
+The earlier icon flow and its Get inputs / Solve / Submit labels are removed.
+The logo ignites only while the symbol is hovered. Tagline previews use localized
+glow or dots on the text and a small corresponding region of the featured panel.
+
+Home never displays a participation prompt or a Return to your challenge arrow.
+A saved presentation is discarded on a Home refresh. Workspace refreshes can
+still resume the guide for the owned instance. Get started opens the exact
+introductory level, explains the challenge, and offers Begin challenge before
+any issuance. Product labels use no course number or introductory guide name. Every Get started
+click creates a fresh presentation at step one, even after a Home refresh or a
+partial/completed walkthrough. An owned instance is preserved; it never selects
+a later guide step or grants another issuance.
+
+INTRODUCTORY CHALLENGE
+
+Get started always selects the current teaching-dh-kem release and its first
+profile, regardless of the weekly choice or the community recovery frontier.
+It starts the real follow-along guide directly in that workspace. The three
+phases cover getting inputs, working with an agent or personal tools, and
+submitting a result. Completion still requires a real server receipt. The
+button alone does not issue an instance, spend allowance or submit anything.
+Already-owned instances resume under the normal one-answer and expiry rules.
+The introductory level can be practice; no record-advance award is promised.
+If the teaching challenge is unavailable, show a retryable error rather than
+silently substituting the weekly scheme. Owner, CSRF, document and route guards
+retire delayed starts; only non-secret guide context is kept for reloads.
+Guide phases use explicit local checkpoints: introduction, tool choice, input
+handoff, working, and submission. Back reverses those steps within the same
+workspace instead of opening the scheme overview. Switching tools keeps separate
+completion flags; only a successful copy/download completes that handoff.
+Workspace refresh preserves the tool/checkpoint and minimized state; Home never
+resumes them through Get started. No authored form values enter browser storage.
+
+The result coach waits for explicit Next; typing does not advance it. Next/Back
+follow the visible form order, including saved-method selection, worker count,
+time, preparation and memory. Going back preserves entries. Result-file import
+goes to review only after the real import validates the exact owned instance.
+A background status read leaves the active controls usable and does not restart
+the current step. A receipt still requires a confirmed server submission.
+
+Agent prompts really open and copy. Success briefly labels the native button
+Copied. Blocked clipboard access reveals the prompt and a manual selection path
+without claiming success; manual acknowledgement can continue. Late copy results
+cannot advance a replacement guide. Downloads fetch and verify the exact public
+JSON before completing the step; failures stay at the retryable download step.
+
+Both the copy button and prompt preview are scrolled into view with room for
+the guide. Highlights follow native corner radii and border bounds, clear the
+sticky header, and resize with their targets. The box stays opaque; only its
+heading has a short transition. Prompts use short, task-specific instructions.
+
+CHALLENGE OF THE WEEK
+
+Clicking the weekly card first opens its exact challenge workspace, then offers
+Want a guide? with Guide me or Jump in. Guide me always starts visibly at the
+first introductory step, clearing prior approach/readiness/minimized hints while
+preserving the actual owned instance. Jump in or dismissing the choice leaves
+the challenge page open without a guide. Neither choice issues an instance or
+submits work. Weekly guide refreshes preserve the selected scheme and step. The choice is bound to the current account,
+session, document and route. View all challenges opens the normal catalogue.
+The generic catalogue-start guide remains supported at #home?guide=challenge.
+
+Choose a live current scheme in the real catalogue, open its first level, and
+get an instance. Then choose an agent or your own tools. The Spotlight guide
+stays beside the actual controls and follows the owned instance. Get instance uses the normal issuance
+action and shared hourly deadline. Manual users download their public inputs;
+agent users copy the real prompt and approve the normal scoped connection.
+
+Participants investigate locally. The guide opens the actual result form and
+points to the missing key, method and compute fields. File import fills that
+same form for review. The final action uses the existing submission button,
+validation, retry identifier and one-answer rule. Typing fields never completes
+the guide. Completion requires a server-confirmed result; incorrect answers are
+clearly identified as recorded and locked, never presented as recoveries.
+
+While an active guide waits, bounded five-second reads detect an agent's real
+submission. No read creates an instance or submits a result. Hidden documents
+and open submission forms suspend polling. Expired pinned instances require an
+explicit restart; an old receipt or old inputs do not authorize a new attempt.
+
+OTHER CONTRIBUTIONS
+
+Home's links open Bounties or Propose a scheme directly. The optional
+contribution chooser remains available at #home?guide=tour: Write a note,
+Contribute to a bounty, or Propose a scheme. The chooser has no guide overlay;
+the follow-along guide begins only after selecting one of these options. A
+deployment without Bounties omits that choice.
+
+Scheme graphs are labeled Scheme overview. Challenge workspaces are labeled
+Challenges, with a prominent Scheme overview button returning to the same
+scheme and release. Try a challenge on the overview opens the challenge panel;
+record and specification panels use their own headings. The redundant level
+count above the scheme title is omitted. All schemes and All bounties use a
+back arrow with the shared hover animation. The Bounties title has no Open
+bounties suffix. Schemes and Home use the same weekly challenge icon colors.
+
+- Notes: use the real editor, save a private revision, review the publication
+  notice and submit its exact revision. A private save is not a publication
+  request. The guide ends at the confirmed request and states that the note's
+  publication status remains separate.
+- Schemes: write a proposal note, attach and format-check its specification,
+  complete the citations, save the real draft, and submit that exact revision
+  for scheme review. The guide reuses the editor's citation validation rather
+  than introducing another validator or inventing source evidence. It never
+  approves a scheme or activates a challenge.
+- Bounties: choose a task accepting contributions and read its requirements.
+  Prepare an evidence note or use an existing published one. A new note must
+  actually become published before the guide offers its exact revision/hash as
+  evidence. The participant explicitly submits the citation, contribution type
+  and explanation through the real bounty form. A receipt is not an award.
+
+The Spotlight guide dims the surrounding page, highlights the next native
+control, and connects it to a floating forest-green prompt with a drawn arrow.
+Both the next field and the field being edited stay clear. The guide moves into
+the real modal while a form is open and updates without taking typing focus.
+Arrows follow scrolling and viewport changes; motion respects reduced-motion
+settings. Hide guide sits beside the exit cross in each prompt header. It removes
+the dimming and collapses the prompt; Continue guide restores the current step.
+The first click outside the prompt and associated controls only hides it, including header clicks; a subsequent click can activate the background action. The cross exits from either state,
+leaving the normal workspace and any draft form available. Back sits at the
+bottom left and Next or the real submission action sits at the bottom right.
+Field Back/Next revisits existing inputs without changing their contents.
+
+Non-secret workflow hints (account binding, target IDs, scheme/level and tool
+choice) may live in sessionStorage for reload recovery. Keys, authored text,
+methods, credentials and completion claims are never stored there. Hints grant
+no rights. Owner/session/document checks guard observed responses; changing
+accounts or losing access clears the guide, and stale responses cannot finish
+a replacement guide. Submission/publication/review status comes from authorized
+server reads and receipts. Existing backend permission and evidence rules apply.
+
+FEATURED OPPORTUNITIES AND OPTIONAL TOUR
+
+Home reads the current, available catalogue and the highest-point active bounty
+listing after admission. The featured challenge rotates Monday-to-Monday in
+UTC and opens its real recommended-level workspace. Bounties use server reward totals,
+rank descending, and open their exact task. Empty and failed reads have truthful
+states and retry controls. Account/session changes retire pending responses.
+The weekly target is the next level beyond the release's recovery record, with
+a practice fallback when the record has reached the end. The level bar shows the signed-in member’s best verified level in the current release, read from their authorized public profile. A separate marker and Record label show the highest level solved by anyone. This does not count all lower levels as personal solves or claim a security percentage. Named, unordered parameter sets retain their names and omit the ordered bar. Unavailable personal reads stay unavailable. Account/session guards retire late results.
+The prominent points amount and enrolled releases come from recovery_scoring in
+the catalogue response, derived from the live server policy. The reward explanation appears only on badge hover/focus: set a new community record, once per scheme. It does not promise points for ordinary attempts. An already earned record bonus is identified instead of re-advertised. Unenrolled or fully recovered targets do not advertise that award.
+A small sage-green money-bag icon in the bounty heading represents the points tasks.
+The challenge heading uses a matching target-and-arrow icon. Both headings use the same bold IBM Plex Sans. Font families match the public
+crucible.fail stylesheet verified on 2026-11-26: Georgia / Times New Roman for
+the wordmark, Cardo / Georgia for display text, and IBM Plex Sans for interface
+and body text. Original local font files, license/provenance and critical-font
+embedding are restored; menu text retains its lighter regular weight.
+Forest green, warm white
+and shared green accents keep the visual system consistent. Bounty, challenge
+and account totals use the same green point badge and bold sans-serif numerals.
+
+The signed-in account balance stays immediately left of Leaderboard across
+member pages. GET /api/me/points uses the leaderboard's canonical score relation
+for the authenticated browser account; it cannot select another account, grants
+no agent permission, and does not add score queries to the session bootstrap.
+The badge refreshes during the existing session refresh and shortly after a
+confirmed mutation. Account/session/document guards retire late responses;
+sign-out clears the badge. A failed initial read shows an unavailable value,
+not an invented zero. Large values use compact display with the exact total in
+the accessible label and tooltip. Clicking the badge opens the owned profile.
+
+Hovering “Find new cryptography” shows a local glow on the text and bounty
+panel; “Test its limits” uses a dotted texture on its text and a localized glow on the weekly
+panel. Both phrases have the same soft radial falloff near the cursor. There are
+no connecting arrows or full-panel preview highlights. These are buttons, not
+route links. Clicking pins the preview and reveals the panel when needed;
+another click, Escape or a click elsewhere clears it. An existing participation
+guide is minimized and preserved. Opening a task remains explicit on its card.
+
+The weekly challenge also appears at the top of Schemes, with the same target,
+personal progress, community marker and policy points. Compact catalogue reads
+preserve scoring metadata. The card has a Try challenge action and separate
+View all challenges link; the native anchor opens the optional guide choice.
+Light mode uses pale teal, while dark mode retains forest green. Home and Schemes card hover/focus and tagline previews use a soft glow without an added outline; the background does not fade. Get started
+enters after the tagline finishes and retains its idle beacon/arrow motion.
+
+Bounties has Open and Closed pill filters, no My activity utility, and matching
+pill shapes for statuses and Highlighted labels. The three highest-point open
+tasks match Home. The main Bounties tab always opens the collection, independent
+of the last detail visited; explicit deep links and browser history still work.
+Details fill the content width. Top bounties links carry from=home and offer Home / All bounties; list and ordinary deep links offer only All bounties. Internal detail tabs and reloads preserve that context, while returning to the list clears it.
+Unsaved private drafts remain available when deliberately reopening the composer.
+Explicit bounty confirmations and navigation start at page top.
+
+Work with an agent consistently reveals a real prompt and Copy prompt across
+Schemes, Challenges, Notes, Bounties and proposals. Copy feedback is temporary
+inline Copied, with selectable text on failure. The Notes entry keeps Files &
+import as an advanced action. Exact scoped prompts, proposal contracts, explicit
+spending authority and native submission/receipt workflows remain intact.
+
+The question-mark bubble is page-specific. On Home it opens Explore Crucible:
+a visual feature map with Schemes, Bounties when enabled, Notes, My activity,
+Leaderboard, Propose a scheme and How points work. Each entry explains its purpose in one short clause.
+Selecting an entry opens that page and its local arrow/highlight tour. There
+is no automatic four-page itinerary. The map also offers Start a guided challenge.
+On other pages, the bubble explains only that current route and its controls;
+Next/Back do not navigate or reload the same page. All features returns to the
+summary at any point. Tour navigation stays read-only. Context-aware targets
+cover scheme overviews/levels, bounty lists/briefs, notes/readers and activity.
+Targets arriving after data loads use an eight-second bounded observer with
+stable null handling. Whole rows and native corners share the live-guide
+geometry, and offscreen targets are revealed only on explicit tour steps.
+Hide/Escape/backdrop collapse the help; the cross exits it. Session/document
+changes retire it. An existing participation guide is suspended and restored,
+while an explicit new challenge action replaces it only after the chosen target loads.
+The user icon still opens activity, profile and sign-out on hover or click.
+
+All internal route navigation starts at page top. Page/statement focus uses
+preventScroll, preserving keyboard context without jumping below the menu.
+Notes and activity pagination also start at the top. Explicit form-field focus
+and scrolling inside a dialog remain available while completing a submission.
+
+Guide outlines match actual control borders and full catalogue rows. Each corner
+uses its native horizontal/vertical radius, including percentages and CSS radius
+scaling; unframed groups use an 8px rounded frame. SVG arcs keep the mask and
+inset outline aligned to the same border, including asymmetric corners. A mask
+keeps overlapping focused/next-field holes clear without expanding them into
+an unrelated rectangle. Short cubic connectors use forward-facing tangents.
+Body text is 16px, controls 15px, and the agent/own-tools choices share a row.
+
+RESPONSIVE NAVIGATION, POINTS HELP AND APPEARANCE
+
+The header is sticky, stays on one row, and has no bottom divider. Its full-width
+contents sit 24px from the sides on desktop and closer on phones. At 1180px and below, the page tabs and
+Leaderboard live in an accessible icon-only navigation dropdown, aligned right
+immediately before points. When the viewport crosses the breakpoint, the former
+tab labels sweep right into the menu icon. The visual copies are inert and
+removed after arrival; keyboard focus stays on real controls. Wide tabs return
+with a short fade. Reduced motion switches layouts immediately. Points, the help bubble and
+account stay visible, including large balances at 320px. Selection, outside
+click, Escape, focus leaving and resizing close the menu. The grouped logo and
+wordmark are one Home link. Hovering the symbol alone starts the flame and warm
+key ember; leaving it stops the effect. The wordmark changes color only, without
+glow, italics, bolding, underline or a shaded box. Loading, signing in, focusing
+or clicking the wordmark does not ignite the symbol. Header tabs change color on
+hover/focus. Motion settings apply to brand, previews and layout transitions.
+
+All features leads with a prominent Propose a scheme card, which opens the real
+guided proposal flow. How points work replaces About us as its own equal-height feature card, beside the other features. The account points
+badge reveals only a How points work action on hover or focus, linking to the
+full existing scoring dialog. This compact box sits 14px below and centered on the
+points badge, visually attached by a fine stem/notch and a short reveal animation, without a shadow or hover underline/shading. Only its arrow moves. Closing it suppresses the hover popup during
+automatic focus restoration; a new pointer movement or keyboard navigation
+can intentionally reveal help again. No extra header tab is needed.
+Closing that dialog preserves focus already moved by the user. Guides stay
+hidden while scoring help is open. Popup choices never save or submit work.
+
+The icon-only moon/sun appearance button is at the right of the sticky header
+on member and sign-in pages. Its accessible label and tooltip name the action. The
+saved light/dark preference overrides the system; without a saved choice, the
+system appearance applies. Denied browser storage still permits switching for
+the current visit. Both palettes cover guides, menus, notebook content and the
+embedded map. The initial trusted canvas includes both palettes, and the favicon
+retains browser-chrome contrast. Theme state carries no identity or permission.
+
+DISCOVERY AND TESTING PREVIEWS
+
+Find new cryptography glows locally; Test its limits shimmers with the original
+3.2px dot texture. Their text masks use the same radial gradient, confined to the
+cursor neighborhood. Each panel gets a small glow patch with the same
+soft edge, rather than a full-card wash. Cursor position along the phrase maps
+to a continuous curved trajectory within the panel. Discovery travels left to
+right; testing follows a separate reversed path. Random curvature parameters
+are chosen once per document and change on reload. The position eases toward
+the cursor, stays still when it settles, and fades on leave. No storage or data
+writes are involved. Touch pinning and keyboard focus keep static midpoint
+previews; reduced motion disables pulsing and spatial following.
+Get started has a stronger idle beacon and an occasional two-part arrow nudge.
+Hover/focus holds the arrow forward. Disabled actions and reduced motion stop
+the animations. Tagline and View all links have no underline. A shared,
+idempotent presenter moves only action-arrow glyphs on hover/focus, preserving
+nodes, labels and handlers; component arrows do not receive nested wrappers.
+
+A scheme is a cryptographic construction; a challenge provides inputs for
+one test at a chosen level. The feature map, scheme challenge action and guide
+copy make this explicit. Weekly cards label the construction Scheme and separate Your best from Record. The bar represents owned verified progress and marks the community record. The record reward explanation appears only on badge hover/focus.
+Named parameter sets retain their actual names. Displayed progression copy,
+charts, controls, help and profiles use level; wire fields, IDs, CLI options and
+immutable authored source evidence retain their contracts. Server Stage labels
+are normalized for display without changing their metadata.
+
+All features reuses the exact money-bag and target SVGs from Home. The scoring
+explanation has its own equal-height feature tile. No additional Home sections or primary paths were added.
+
+LANDING ENTRANCE AND TEXT ACTIONS
+
+Above the tagline stays72px desktop/56px phones; the gap below is24px desktop/22px phones.
+New to Crucible? and Start with a guided challenge. share one line where space
+permits, wrapping the complete hint on narrow phones. Get started follows, then
+the quiet More ways to contribute link immediately below.
+After the tagline, that block enters at0.64s and finishes at1.10s. The two
+opportunity panels start at1.22s with a soft bounty glow and a single dotted
+challenge shimmer sweep. Reduced motion shows everything immediately. These
+animations do not delay data reads or restart when results populate the cards.
+The Get started beacon has blurred layers instead of a solid spread ring.
+Header and landing text actions share the primary-hover color and no underline.
+Light mode has a stronger two-layer teal challenge halo; Try challenge changes
+from an outlined action to a filled green action on direct button hover or card keyboard focus. Dark mode
+retains the cream/sage fill treatment. No hard outline is added to the card.

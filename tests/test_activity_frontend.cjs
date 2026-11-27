@@ -2,8 +2,8 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const {createApp, flush} = require('./frontend-dom.cjs');
 const user = {id:'alice',handle:'alice'};
-const scheme = {id:'fixture',version:'1',name:'Fixture',profiles:[{id:'stage-1',instance_size:1}]};
-const submission = {id:'receipt',scheme_id:'fixture',scheme_version:'1',scheme_name:'Fixture public name',profile_id:'stage-1',method_name:'Attack method',received_at:100,status:'incorrect'};
+const scheme = {id:'fixture',version:'1',name:'Fixture',profiles:[{id:'level-1',instance_size:1}]};
+const submission = {id:'receipt',scheme_id:'fixture',scheme_version:'1',scheme_name:'Fixture public name',profile_id:'level-1',method_name:'Attack method',received_at:100,status:'incorrect'};
 const note = (id,tags=[],extra={}) => ({id,revision:2,created_at:100,publication_status:'private',
   revisions:[{revision:2,created_at:101,content:{title:'Note '+id,claim:'Summary '+id,tags,body:'PRIVATE FULL BODY'},requests:[]}],...extra});
 const task = (id,extra={}) => ({id,title:'Bounty '+id,summary:'Task summary '+id,status:'open',owner:user,created_at:100,...extra});

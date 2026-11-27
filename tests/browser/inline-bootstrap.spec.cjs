@@ -22,7 +22,7 @@ for (const [hint,hash,layout,title] of [['gate','#challenge','gate','Private bet
     await new Promise(done=>server.listen(0,'127.0.0.1',done));
     const origin='http://127.0.0.1:'+server.address().port;
     const context=await browser.newContext({viewport:{width:390,height:1000},serviceWorkers:'block'});
-    const allowed=new Set(['/','/app.js','/math.js','/assumptions.js','/proposal-retractions.js','/resource-metrics.js','/graph-points.js','/assets/crucible-logo.png','/api/session',
+    const allowed=new Set(['/','/app.js','/math.js','/assumptions.js','/orientation.js','/proposal-retractions.js','/resource-metrics.js','/graph-points.js','/assets/crucible-logo.png','/api/session',
       '/assets/crucible-mark.svg','/assets/crucible-icon-light.svg','/assets/crucible-icon-dark.svg',
       '/vendor/resi/cardo-normal-400-latin.woff2',
       '/vendor/resi/cardo-normal-700-latin.woff2','/vendor/resi/plex-sans-normal-100-700-latin.woff2']);

@@ -1,4 +1,4 @@
-const {test, expect, signIn, notebookReady, useDataSaver, gate, holdResponse} = require('./helpers.cjs');
+const {test, expect, signIn, notebookReady, useDataSaver, gate, holdResponse, accountAction, navigationAction} = require('./helpers.cjs');
 
 for (const width of [1440, 390]) test(`an unlinked GitHub callback offers a working password sign-in action at ${width}px`, async ({page}, testInfo) => {
   await page.setViewportSize({width, height: 1000});
@@ -43,7 +43,7 @@ for (const width of [1440, 390]) test(`an unlinked GitHub callback offers a work
 
 test('a changed profile refresh retains native keyboard focus without interrupting another control', async ({page}) => {
   await signIn(page);
-  await page.locator('#account-handle').click();
+  await accountAction(page, '#account-handle');
   const summary = page.locator('#personal-records > summary');
   await summary.focus(); await summary.press('Enter');
   await expect(page.locator('#personal-records')).toHaveAttribute('open', '');
@@ -58,7 +58,7 @@ test('a changed profile refresh retains native keyboard focus without interrupti
   await page.evaluate(() => loadPerson('browser_alice', {preserve: true}));
   await expect(summary).toBeFocused();
   await expect(page.locator('#personal-records')).toHaveAttribute('open', '');
-  const outside = page.locator('#history-button');
+  const outside = page.locator('#account-menu-trigger');
   await outside.focus();
   await page.evaluate(() => loadPerson('browser_alice', {preserve: true}));
   await expect(outside).toBeFocused();
@@ -91,7 +91,7 @@ test('the landing page works before unused math assets and equations hydrate whe
   });
   try {
     await signIn(page);
-    await page.locator('#nav-challenge').click();
+    await navigationAction(page, '#nav-challenge');
     await expect(page.locator('#kem-catalogue')).toContainText('Diffie');
     expect(started).toEqual([]);
     // Use the real math helper on connected content; no backend/provider mocks.
@@ -104,7 +104,7 @@ test('the landing page works before unused math assets and equations hydrate whe
     await expect.poll(() => started.length).toBe(2);
     await expect(page.locator('#browser-math-target')).toContainText('Equation:');
     await expect(page.locator('#browser-math-target .katex')).toHaveCount(0);
-    await page.locator('#nav-about').click();
+    await navigationAction(page, '#nav-about');
     await expect(page.locator('#about-workspace')).toBeVisible();
     release.resolve();
     await expect(page.locator('#browser-math-target .katex')).toHaveCount(1);
@@ -119,12 +119,12 @@ test('cached navigation paints while its fresh read is held; the brand never rel
   await signIn(page); await notebookReady(page);
   const reads = [];
   page.on('request', request => reads.push({method: request.method(), type: request.resourceType()}));
-  await page.locator('#nav-people').click();
+  await navigationAction(page, '#nav-people');
   await expect(page.locator('#people-content')).toContainText('browser_alice');
-  await page.locator('#nav-about').click();
+  await navigationAction(page, '#nav-about');
   const pending = await holdResponse(page, url => url.pathname === '/api/people');
   try {
-    await page.locator('#nav-people').click();
+    await navigationAction(page, '#nav-people');
     await pending.arrived;
     // The refresh is still held, so this can only be the known previous view.
     await expect(page.locator('#people-workspace')).toBeVisible();
@@ -132,7 +132,7 @@ test('cached navigation paints while its fresh read is held; the brand never rel
   } finally {pending.release(); await pending.delivered; await pending.remove();}
   const catalogue = await holdResponse(page, url => url.pathname === '/api/schemes' && url.searchParams.get('projection') === 'navigation');
   try {
-    await page.locator('#nav-challenge').click();
+    await navigationAction(page, '#nav-challenge');
     await catalogue.arrived;
     const preview = page.locator('#kem-catalogue .catalogue-preview');
     await expect(preview).toBeVisible();
@@ -208,10 +208,10 @@ test('a response authorized for Alice cannot reappear after logout and Bob signs
   try {
     await page.locator('#nb-note-list .nb-title').filter({hasText: 'Alice browser-only private note'}).click();
     await pending.arrived;
-    await page.locator('#logout-button').click();
+    await accountAction(page, '#logout-button');
     await expect(page.locator('#access-auth-actions')).toBeVisible();
     await signIn(page, 'bob', {navigate: false});
-    await page.locator('#nav-notebook').click();
+    await navigationAction(page, '#nav-notebook');
     await notebookReady(page, 'bob');
   } finally {pending.release(); await pending.delivered; await pending.remove();}
   await expect(page.locator('#nb-note-list')).not.toContainText('Alice browser-only private note');
@@ -231,7 +231,7 @@ test('notebook Back restores visible focus and changing linked filters survives 
   await expect(filter).toHaveValue('proposals');
   await filter.selectOption('all');
   await expect(page).toHaveURL(/\/#notebook$/);
-  await page.locator('#nav-about').click(); await page.locator('#nav-notebook').click();
+  await navigationAction(page, '#nav-about'); await navigationAction(page, '#nav-notebook');
   await expect(filter).toHaveValue('all');
   await expect(page.locator('#nb-note-list')).toContainText('Alice browser-only private note');
 });
@@ -250,7 +250,7 @@ test('the map downloads concurrently, keeps one stylesheet, and supports a nativ
   });
   try {
     await signIn(page); await notebookReady(page);
-    await page.locator('#nav-challenge').click();
+    await navigationAction(page, '#nav-challenge');
     await page.locator('#scheme-map-button').click();
     // All requests must be started before any response is released. This fails
     // the old serial waterfall without relying on a fragile millisecond budget.
@@ -278,10 +278,10 @@ test('the map downloads concurrently, keeps one stylesheet, and supports a nativ
   await page.keyboard.press('Escape');
   await expect(dialog).not.toBeVisible();
   await expect(node).toBeFocused();
-  await page.getByRole('button', {name: 'Notes', exact: true}).click();
+  await navigationAction(page, '#nav-notebook');
   await notebookReady(page);
   const count = started.length;
-  await page.locator('#nav-challenge').click();
+  await navigationAction(page, '#nav-challenge');
     await page.locator('#scheme-map-button').click();
   await expect(graph).toBeVisible();
   expect(started).toHaveLength(count);
@@ -331,7 +331,7 @@ test('challenge status starts beside its held description and uses a small respo
   await expect(page.locator('#challenge-active')).toBeVisible();
   await expect(page.locator('#target-key')).toContainText('32-byte key');
   expect(reads).toBe(1);
-  await page.locator('#nav-about').click();
+  await navigationAction(page, '#nav-about');
   await expect(page.locator('#about-workspace')).toBeVisible();
   const refresh = await holdResponse(page, url => url.pathname === '/api/challenges' && url.searchParams.get('profile_id') === 'dh-20');
   try {
@@ -372,11 +372,11 @@ for (const workspace of ['notebook', 'map']) test(`a stalled ${workspace} script
     await page.goto('/#about');
     await signIn(page, 'alice', {navigate: false});
     if (workspace === 'map') {
-      await page.locator('#nav-notebook').click(); await notebookReady(page);
-      await page.locator('#nav-challenge').click();
+      await navigationAction(page, '#nav-notebook'); await notebookReady(page);
+      await navigationAction(page, '#nav-challenge');
       await page.locator('#scheme-map-button').click();
     }
-    else await page.locator('#nav-notebook').click();
+    else await navigationAction(page, '#nav-notebook');
     await seen.promise;
     const target = page.locator(workspace === 'map' ? '[data-nb="map"]' : '#notebook-workspace');
     await expect(target).toContainText(workspace === 'map' ? 'The map could not be loaded.' : 'The notebook took too long to load. Please try again.', {timeout: 20000});

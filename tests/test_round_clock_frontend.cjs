@@ -3,11 +3,11 @@ const vm = require('node:vm');
 const {createApp, flush} = require('./frontend-dom.cjs');
 const user = {id: 'alice', handle: 'alice'};
 const admitted = {admitted: true, reason: null};
-const profile = {id: 'stage-1', instance_size: 1, parameter_bits: 1, stage_number: 1,
+const profile = {id: 'level-1', instance_size: 1, parameter_bits: 1, stage_number: 1,
   shared_secret_bytes: 32, parameters: {}, encoding: {shared_secret_bytes: 32}, correctness: {}};
 const scheme = {id: 'fixture', version: '2', name: 'Fixture KEM', profiles: [profile],
   next_profile_id: profile.id, protocol: {}, generation_admission: admitted, size_parameter: {meaning: 'Fixture'}};
-const challengeRoute = '#challenge/fixture/2?profile=stage-1&view=challenge';
+const challengeRoute = '#challenge/fixture/2?profile=level-1&view=challenge';
 const deferred = () => { let resolve; const promise = new Promise(yes => { resolve = yes; }); return {promise, resolve}; };
 const posts = app => app.requests.filter(request => request.options.method === 'POST');
 async function boot({selected = scheme, route = '#scheme/fixture/2', pendingSession = null} = {}) {

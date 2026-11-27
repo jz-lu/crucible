@@ -62,8 +62,8 @@ async function test(name,run) {await run();console.log('PASS '+name);passed++;}
     assert.equal(detailCalls(app)[0].options.method,'GET');
     assert.equal(app.location.hash,hash);
     assert.equal(app.$('#recovery-title').textContent,'Pinned original method');
-    assert.match(app.$('#recovery-context').textContent,/archived-solver.*Original Alpha.*Stage 30.*version 3/);
-    assert.doesNotMatch(app.$('#recovery-context').textContent,/Current Alpha|version 4|Stage 20/);
+    assert.match(app.$('#recovery-context').textContent,/archived-solver.*Original Alpha.*Level 30.*version 3/);
+    assert.doesNotMatch(app.$('#recovery-context').textContent,/Current Alpha|version 4|Level 20/);
     assert.equal(app.$('#recovery-eyebrow').textContent,'Recorded recovery');
     assert.equal(fact(app,'Result'),'Recovered');
     assert.match(fact(app,'Time to submit'),/12(?:\.0)?s from issue to receipt/);
@@ -106,7 +106,7 @@ async function test(name,run) {await run();console.log('PASS '+name);passed++;}
     assert.equal(toggle.tagName,'BUTTON');
     assert.equal(toggle.type,'button');
     assert.equal(toggle.getAttribute('aria-expanded'),'false');
-    assert.match(row.querySelector('.history-item-title').textContent,/Original Alpha.*Stage 20/);
+    assert.match(row.querySelector('.history-item-title').textContent,/Original Alpha.*Level 20/);
     const button=activityButton(app);
     assert.equal(toggle.getAttribute('aria-expanded'),'true');
     assert.equal(detailCalls(app).length,0,'Expanding a summary does not fetch private evidence');

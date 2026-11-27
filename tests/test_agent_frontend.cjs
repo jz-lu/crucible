@@ -162,7 +162,7 @@ async function test(name, run) {await run();console.log('PASS '+name);passed++;}
     assert.match(copied,/Deadline:.*UTC/);
     assert.match(copied,/AI model\(s\).*implemented.*ai_model.*exact versions.*never guess/);
     assert.match(copied,/init 'fixture' --stage 1 --path NEW_EMPTY_FOLDER/);
-    assert.match(app.$('#agent-followup-request').textContent,/Retrieve the newest Fixture challenge at Stage 1/);
+    assert.match(app.$('#agent-followup-request').textContent,/Retrieve the newest Fixture challenge at Level 1/);
     assert.doesNotMatch(copied,/test-csrf|public_key|ciphertext/);
     assert.equal(app.requests.length,before);assert.equal(writes(app).length,0);
     app.sandbox.navigator.clipboard={writeText:async()=>{throw Error('blocked');}};
@@ -220,7 +220,7 @@ async function test(name, run) {await run();console.log('PASS '+name);passed++;}
         vm.runInContext('state.challenge.ends_at = now() - 1', app.sandbox);
         app.sandbox.updateClock();
       }
-      assert.equal(app.$('#use-agent').textContent, 'Inspect with an agent →');
+      assert.equal(app.$('#use-agent').textContent, 'Work with an agent');
       assert.match(app.$('#agent-instructions-text').textContent, /cannot accept a new answer.*existing submission or receipt/);
       assert.match(app.$('#agent-instructions-text').textContent, /get --challenge-id 'terminal-instance'/);
       assert.doesNotMatch(app.$('#agent-instructions-text').textContent, /attack and submission workflow|Deadline:/);

@@ -2,21 +2,21 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const {createApp, flush} = require('./frontend-dom.cjs');
 const user = {id:'owner', handle:'alice'};
-const profiles = [1,2,3].map(size => ({id:'stage-'+size, instance_size:size, shared_secret_bytes:32,
+const profiles = [1,2,3].map(size => ({id:'level-'+size, instance_size:size, shared_secret_bytes:32,
   parameters:{}, encoding:{shared_secret_bytes:32}, correctness:{}}));
-const winner = (extra={}) => ({rank:1, submission_id:'receipt-1', handle:'bob', profile_id:'stage-2',
+const winner = (extra={}) => ({rank:1, submission_id:'receipt-1', handle:'bob', profile_id:'level-2',
   scheme_id:'fixture', scheme_version:'1', instance_size:2, is_inherited:true,
   received_at:1700000000, method:{name:'Exact fixture method'}, ...extra});
 function scheme() {
   return {id:'fixture', version:'1', name:'Fixture', profiles, protocol:{}, profile_metrics:{},
-    participant_count:1, recovered_profile_ids:['stage-2'], largest_recovered_profile_id:'stage-2',
-    next_profile_id:'stage-3', first_recovery:null, profile_recoveries:[],
+    participant_count:1, recovered_profile_ids:['level-2'], largest_recovered_profile_id:'level-2',
+    next_profile_id:'level-3', first_recovery:null, profile_recoveries:[],
     recovery_summary:{format:'crucible-recovery-summary-v1', complete:true, scheme_id:'fixture', scheme_version:'1', profiles:{
-      'stage-1':{winner:winner(), includes_compatible_versions:[]},
-      'stage-2':{winner:winner({is_inherited:false}), includes_compatible_versions:[]},
-      'stage-3':{winner:null, includes_compatible_versions:[]}}}};
+      'level-1':{winner:winner(), includes_compatible_versions:[]},
+      'level-2':{winner:winner({is_inherited:false}), includes_compatible_versions:[]},
+      'level-3':{winner:null, includes_compatible_versions:[]}}}};
 }
-const route = id => '#challenge/fixture/1?profile=stage-'+id+'&view=leaderboard';
+const route = id => '#challenge/fixture/1?profile=level-'+id+'&view=leaderboard';
 const deferred = () => {let resolve, reject; const promise=new Promise((yes,no)=>{resolve=yes;reject=no;}); return {promise,resolve,reject};};
 const reads = (app,path) => app.requests.filter(r=>r.url.pathname===path);
 const result = app => app.$('#leaderboard-content').querySelector('button');
@@ -32,13 +32,13 @@ function projected(release, responder) {
 let passed=0;
 async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
 (async()=>{
-  await test('complete snapshot paints solved and unsolved stages immediately without per-stage reads',async()=>{
+  await test('complete snapshot paints solved and unsolved levels immediately without per-stage reads',async()=>{
     const app=await createApp({schemes:[scheme()],user,hash:route(1)});
     assert.equal(app.$('#leaderboard-title').textContent,'Broken by');
-    assert.match(app.$('#leaderboard-content').textContent,/bob.*Via Stage 2.*Exact fixture method/);
+    assert.match(app.$('#leaderboard-content').textContent,/bob.*Via Level 2.*Exact fixture method/);
     await app.navigate(route(2));
     assert.equal(app.$('#leaderboard-title').textContent,'Broken by');
-    assert.doesNotMatch(app.$('#leaderboard-content').textContent,/Via Stage/);
+    assert.doesNotMatch(app.$('#leaderboard-content').textContent,/Via Level/);
     await app.navigate(route(3)); assert.equal(app.$('#leaderboard-title').textContent,'Unsolved');
     await app.navigate(route(1)); assert.equal(reads(app,'/api/leaderboard').length,0);
     assert.equal(app.requests.some(r=>r.url.pathname.startsWith('/api/submissions/')),false);
@@ -46,7 +46,7 @@ async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
   });
   await test('compatible-source identity and receipt details remain original and fetched only on click',async()=>{
     const release=scheme();
-    release.recovery_summary.profiles['stage-1']={winner:winner({scheme_version:'old'}),includes_compatible_versions:['old']};
+    release.recovery_summary.profiles['level-1']={winner:winner({scheme_version:'old'}),includes_compatible_versions:['old']};
     const app=await createApp({schemes:[release],user,hash:route(1),responder:(url,options,envelope)=>{
       if(url.pathname==='/api/submissions/receipt-1') return envelope({submission:{...winner({scheme_version:'old'}),id:'receipt-1',
         status:'correct',method:{name:'Exact fixture method',pseudocode:'Detail only'},compute:{}}});
@@ -62,13 +62,13 @@ async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
     absent:r=>delete r.recovery_summary,
     version:r=>r.recovery_summary.format='future',
     incomplete:r=>r.recovery_summary.complete=false,
-    missingStage:r=>delete r.recovery_summary.profiles['stage-3'],
+    missingStage:r=>delete r.recovery_summary.profiles['level-3'],
     extraStage:r=>r.recovery_summary.profiles.foreign={winner:null,includes_compatible_versions:[]},
     wrongRelease:r=>r.recovery_summary.scheme_version='old',
     wrongScheme:r=>r.recovery_summary.scheme_id='another',
-    badWinner:r=>r.recovery_summary.profiles['stage-3'].winner={},
-    unknownSource:r=>r.recovery_summary.profiles['stage-1'].winner.scheme_version='unlisted',
-    badInheritance:r=>r.recovery_summary.profiles['stage-1'].winner.is_inherited=false,
+    badWinner:r=>r.recovery_summary.profiles['level-3'].winner={},
+    unknownSource:r=>r.recovery_summary.profiles['level-1'].winner.scheme_version='unlisted',
+    badInheritance:r=>r.recovery_summary.profiles['level-1'].winner.is_inherited=false,
     namedInheritance:r=>r.selection_kind='parameter-set',
     nonInheriting:r=>r.record_inheritance=false,
   };
@@ -82,20 +82,20 @@ async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
   });
   await test('named and non-inheriting exact winners are valid snapshots',async()=>{
     for(const policy of [{selection_kind:'parameter-set'},{record_inheritance:false}]) {
-      const release={...scheme(),...policy};release.recovery_summary.profiles['stage-1'].winner=null;
+      const release={...scheme(),...policy};release.recovery_summary.profiles['level-1'].winner=null;
       const app=await createApp({schemes:[release],user,hash:route(2)});
       assert.equal(app.$('#leaderboard-title').textContent,'Broken by');
       assert.equal(reads(app,'/api/leaderboard').length,0);
     }
   });
-  await test('explicit refresh shares one progress read, keeps current content and replaces all stage entries',async()=>{
+  await test('explicit refresh shares one progress read, keeps current content and replaces all level entries',async()=>{
     const held=deferred(), release=scheme();
     const app=await projected(release,url=>url.searchParams.has('progress_only')?held.promise:undefined);
     const button=app.$('#refresh-leaderboard');button.focus();button.click();button.click();await flush();
     assert.equal(app.requests.filter(r=>r.url.searchParams.has('progress_only')).length,1);
     assert.equal(app.$('#leaderboard-title').textContent,'Broken by');assert.equal(app.document.activeElement,button);
-    const fresh=scheme();fresh.recovery_summary.profiles['stage-1'].winner=winner({handle:'carol',submission_id:'receipt-2'});
-    fresh.recovery_summary.profiles['stage-3'].winner=winner({handle:'carol',submission_id:'receipt-3',profile_id:'stage-3',instance_size:3,is_inherited:false});
+    const fresh=scheme();fresh.recovery_summary.profiles['level-1'].winner=winner({handle:'carol',submission_id:'receipt-2'});
+    fresh.recovery_summary.profiles['level-3'].winner=winner({handle:'carol',submission_id:'receipt-3',profile_id:'level-3',instance_size:3,is_inherited:false});
     held.resolve(app.envelope(progress(fresh)));await flush();
     assert.match(app.$('#leaderboard-content').textContent,/carol/);assert.equal(button.disabled,false);
     await app.navigate(route(3));assert.match(app.$('#leaderboard-content').textContent,/carol/);
@@ -113,7 +113,7 @@ async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
   await test('polling incorporates a changed winner even when old recovery hints are identical and keeps result focus',async()=>{
     let fresh=scheme();const app=await projected(scheme(),url=>url.searchParams.has('progress_only')?app.envelope(progress(fresh)):undefined);
     const original=result(app);original.focus();
-    fresh.recovery_summary.profiles['stage-1'].winner.method.name='Updated public method title';
+    fresh.recovery_summary.profiles['level-1'].winner.method.name='Updated public method title';
     await vm.runInContext('synchronizeSession()',app.sandbox);await flush();
     assert.match(app.$('#leaderboard-content').textContent,/Updated public method title/);
     assert.notEqual(result(app),original);assert.equal(app.document.activeElement,result(app));
@@ -135,7 +135,7 @@ async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
   await test('a replaced winner transfers removed result focus to the stable Record tab during refresh',async()=>{
     const held=deferred(),app=await projected(scheme(),url=>url.searchParams.has('progress_only')?held.promise:undefined);
     result(app).focus();const task=vm.runInContext('refreshLeaderboard()',app.sandbox);await flush();
-    const fresh=scheme();fresh.recovery_summary.profiles['stage-1'].winner=null;
+    const fresh=scheme();fresh.recovery_summary.profiles['level-1'].winner=null;
     held.resolve(app.envelope(progress(fresh)));await task;await flush();
     assert.equal(app.$('#leaderboard-title').textContent,'Unsolved');
     assert.equal(app.document.activeElement,app.$('#tab-leaderboard'));
@@ -148,7 +148,7 @@ async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
     const old=result(app);old.click();await flush();
     const close=app.$('#recovery-dialog').querySelector('button');close.focus();
     const task=vm.runInContext('refreshLeaderboard()',app.sandbox);await flush();
-    const fresh=scheme();fresh.recovery_summary.profiles['stage-1'].winner.method.name='Updated label';
+    const fresh=scheme();fresh.recovery_summary.profiles['level-1'].winner.method.name='Updated label';
     held.resolve(app.envelope(progress(fresh)));await task;await flush();
     assert.equal(app.document.activeElement,close);assert.notEqual(result(app),old);
     assert.equal(vm.runInContext('dialogTriggers.get(recoveryDialog)',app.sandbox),result(app));

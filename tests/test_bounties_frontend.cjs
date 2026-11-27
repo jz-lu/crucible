@@ -44,7 +44,7 @@ function fixture({responder, reviewOnly = false} = {}) {
     show: query => model.show(new URLSearchParams(query)), routed: () => routed,
     revoke() {current = false; model.destroy();}, close() {model.destroy();}};
 }
-const button = (host, text) => host.querySelectorAll('button').find(node => node.textContent === text);
+const button = (host, text) => host.querySelectorAll('button').find(node => node.textContent === text || node.getAttribute('aria-label') === text);
 function click(host, text) {const node = button(host, text); assert.ok(node, text); node.click(); return node;}
 function fill(host, name, value) {const input = host.querySelector('[name="' + name + '"]'); assert.ok(input, name); input.value = value; input.dispatchEvent({type: 'input'}); return input;}
 const submit = host => host.querySelector('form').dispatchEvent({type: 'submit', preventDefault() {}});
@@ -71,11 +71,29 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
       pending.resolve({bounties: [task()], pagination: {offset: 0, limit: 6, has_more: false}, policy}); await initial;
       const card = f.host.querySelector('[data-bounty]'); card.focus();
       await f.show('view=bounties'); assert.equal(f.host.querySelector('[data-bounty]'), card); assert.equal(f.document.activeElement, card);
-      assert.equal(f.requests.filter(r => r.url.pathname === '/api/bounties').length, 1);
+      assert.equal(f.requests.filter(r => r.url.pathname === '/api/bounties').length, 2);
       for (const sort of ['open', 'points-high', 'points-low']) await f.show('view=bounties&sort=' + sort);
-      assert.deepEqual(f.requests.filter(r => r.url.pathname === '/api/bounties').map(r => r.url.searchParams.get('sort')), ['concrete', 'open', 'points-high', 'points-low']);
+      assert.deepEqual(f.requests.filter(r => r.url.pathname === '/api/bounties').map(r => r.url.searchParams.get('sort')), ['concrete', 'points-high', 'open', 'points-low']);
       assert.equal(f.host.querySelector('input[type="search"]'), null);
       assert.match(f.host.textContent, /Monthly bounty allowance10 of 10 remaining/);
+    } finally {f.close();}
+  });
+  await test('highlighted cards match the three highest-point open tasks across sorting and pages', async () => {
+    const extra = ['44444444-4444-4444-8444-444444444444','55555555-5555-4555-8555-555555555555'];
+    const ranked = [task(id,{reward_points:500}),task(second,{reward_points:400}),task(extra[0],{reward_points:300}),task(extra[1],{reward_points:200})];
+    const f = fixture({responder:url => url.pathname === '/api/bounties' ? {bounties:url.searchParams.get('sort') === 'points-high' ? ranked : [...ranked].reverse(),pagination:{offset:0,limit:6,has_more:false},policy} : undefined});
+    try {
+      await f.show('view=bounties'); await flush();
+      assert.deepEqual(f.host.querySelectorAll('.is-highlighted').map(card=>card.dataset.bounty).sort(),ranked.slice(0,3).map(row=>row.id).sort());
+      assert.equal(f.host.querySelectorAll('.bty-featured-label').length,3);
+      assert.equal(f.host.querySelector('[data-bounty="'+extra[1]+'"]').querySelector('.bty-card-badge').textContent,'');
+      assert.equal(f.host.querySelector('.bty-secondary').getAttribute('aria-label'),'Bounty status');
+      assert.deepEqual(f.host.querySelectorAll('.bty-filter').map(node=>node.textContent),['Open','Closed']);
+      assert.equal(button(f.host,'Your activity'),undefined);
+      await f.show('view=bounties&sort=points-low'); await flush();
+      assert.equal(f.host.querySelectorAll('.is-highlighted').length,3);
+      assert.equal(f.requests.filter(row=>row.url.searchParams.get('sort')==='points-high').length,1);
+      assert.equal(f.requests.some(row=>row.body),false);
     } finally {f.close();}
   });
   await test('read ownership rejects late completions and a failed optional preparation does not poison retries', async () => {
@@ -110,9 +128,28 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
       for (const status of ['open', 'mine', 'past']) {
         await f.show('status=' + status);
         assert.equal(f.host.querySelector('h1').textContent, 'Bounties');
-        assert.equal(f.host.querySelector('.bty-count').textContent, status === 'mine' ? 'Your activity' : status === 'past' ? 'Past bounties' : 'Open tasks');
+        assert.equal(f.host.querySelector('.bty-count').textContent, status === 'mine' ? 'Your drafts and contributions' : status === 'past' ? 'Closed bounties' : '');
       }
     } finally { f.close(); }
+  });
+  await test('only Home-featured entry keeps a Home breadcrumb across detail tabs', async () => {
+    const f = fixture();
+    try {
+      await f.show('bounty=' + id + '&from=home');
+      assert.equal(f.host.querySelector('.bty-breadcrumbs').querySelector('a').href,'#home');
+      click(f.host,'Starting notes'); await f.routed();
+      assert.equal(new URLSearchParams(f.model.route().split('?')[1]).get('from'),'home');
+      assert.equal(f.host.querySelector('.bty-breadcrumbs').querySelector('a').href,'#home');
+      click(f.host,'All bounties'); await f.routed();
+      assert.equal(f.model.route(),'#bounties');
+      f.host.querySelector('[data-bounty]').click(); await f.routed();
+      assert.equal(f.host.querySelector('.bty-breadcrumbs').querySelector('a'),null);
+      assert.ok(button(f.host,'All bounties'));
+      assert.equal(new URLSearchParams(f.model.route().split('?')[1]).get('from'),null);
+      await f.show('bounty=' + id); assert.equal(f.host.querySelector('.bty-breadcrumbs').querySelector('a'),null);
+      await f.show('from=home'); f.host.querySelector('[data-bounty]').click(); await f.routed();
+      assert.equal(f.host.querySelector('.bty-breadcrumbs').querySelector('a'),null);
+    } finally {f.close();}
   });
   await test('the source picker opens on focus and adds, removes and saves multiple exact pins', async () => {
     const alpha = sourceNote(), beta = sourceNote(second, 2, {title: 'Beta source note'});
@@ -242,7 +279,9 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
       assert.equal(f.requests.filter(r => r.body).length, 1);
       assert.equal(f.requests.find(r => r.body).path, '/api/bounties');
       assert.match(f.host.textContent, /Draft/);
-      click(f.host, '← Your activity'); await f.routed();
+      click(f.host, 'All bounties'); await f.routed();
+      assert.equal(new URLSearchParams(f.model.route().split('?')[1]).get('status'),null);
+      await f.show('status=mine');
       assert.match(f.host.querySelector('[data-bounty="' + id + '"]').textContent, /Draft/);
       // A direct task link also starts on the default open collection.
       await f.show('view=bounties&bounty=' + id + '&page=3');
@@ -255,7 +294,9 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
       assert.equal(request.body.policy_id, policy.id); assert.equal(request.body.confirm_cost_units, 1);
       assert.equal(request.body.expected_version, 1); assert.equal(request.body.terms_sha256, hash);
       assert.equal(new URLSearchParams(f.model.route().split('?')[1]).get('page'), null);
-      click(f.host, '← Your activity'); await f.routed();
+      click(f.host, 'All bounties'); await f.routed();
+      assert.equal(new URLSearchParams(f.model.route().split('?')[1]).get('status'),null);
+      await f.show('status=mine');
       assert.match(f.host.querySelector('[data-bounty="' + id + '"]').textContent, /Submitted for review/);
     } finally {f.close();}
   });
@@ -278,7 +319,7 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
       assert.equal(writes[0].body.units, 1); assert.equal(writes[0].body.policy_id, policy.id);
     } finally {f.close();}
   });
-  await test('explicit action panels focus their heading and cancel returns to the trigger without refresh theft', async () => {
+  await test('explicit action panels focus their heading and cancel returns to the task title without refresh theft', async () => {
     const f = fixture({responder: url => url.pathname === '/api/bounties/' + id ? {bounty: task(id, {
       capabilities: {boost: true, request_admission: true, cancel: true, withdraw: true}}), policy} : undefined});
     try {
@@ -297,7 +338,7 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
         await f.show('view=bounties&bounty=' + id);
         assert.equal(f.document.activeElement, confirm, 'Quiet reads must not steal action focus.');
         click(panel, 'Cancel');
-        assert.equal(f.document.activeElement, button(f.host, trigger));
+        assert.equal(f.document.activeElement.textContent,task().title);
         assert.equal(f.host.querySelector('.bty-action-panel'), null);
       }
     } finally {f.close();}
@@ -500,11 +541,13 @@ process.once('beforeExit', () => {if (!complete && !process.exitCode) {console.e
     const f = fixture(); let copied;
     f.window.navigator.clipboard = {writeText: async value => copied = value};
     try {
-      await f.show('view=bounties'); click(f.host, 'Copy agent prompt'); await flush();
+      await f.show('view=bounties'); click(f.host, 'Copy prompt'); await flush();
+      assert.ok(button(f.host,'Copied'));assert.equal(f.host.querySelector('.bty-notice').textContent,'');
+      await new Promise(resolve=>setTimeout(resolve,1900));assert.ok(button(f.host,'Copy prompt'));
       assert.match(copied, /bounty list/); assert.match(copied, /--scope bounties:read --scope bounties:write/);
       assert.match(copied, /separately approved bounties:spend scope/); assert.match(copied, /--confirm-allowance/);
       await f.show('view=bounties&bounty=' + id);
-      button(f.host.querySelector('.bty-actions'), 'Copy agent prompt').click(); await flush();
+      button(f.host.querySelector('.bty-actions'), 'Copy prompt').click(); await flush();
       assert.ok(copied.includes('bounty show ' + id));
       assert.equal(f.requests.filter(r => r.body).length, 0);
     } finally {f.close();}

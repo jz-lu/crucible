@@ -1,4 +1,4 @@
-const {test,expect,signIn,holdResponse}=require('./helpers.cjs');
+const {test,expect,signIn,holdResponse, accountAction, navigationAction} = require('./helpers.cjs');
 const indexPath=url=>url.pathname==='/api/notebook/notes'&&url.searchParams.get('projection')==='index';
 const list=page=>page.locator('#nb-note-list');
 const titles=page=>list(page).locator('.nb-title-copy > span:first-child');
@@ -34,7 +34,7 @@ test('admitted background summaries warm without hidden rendering and give exact
   await expect(page.locator('#notebook-workspace [data-nb=timeline] .nb-timeline-card')).toHaveCount(0);
   await expect(page.locator('#notebook-workspace [data-nb=map] svg')).toHaveCount(0);
   const before=requests.length;
-  await page.locator('#nav-notebook').click();
+  await navigationAction(page, '#nav-notebook');
   await expect(titles(page)).toHaveCount(25);await expect(titles(page).first()).toHaveText('Warm summary 00');
   await page.getByRole('button',{name:'Next page',exact:true}).click();
   await expect(titles(page)).toHaveCount(6);await expect(titles(page).first()).toHaveText('Warm summary 25');
@@ -64,17 +64,17 @@ test('first Timeline entry paints its warmed aggregate while fresh validation is
     await page.evaluate(()=>{location.hash='#notebook?view=timeline';});await pending.arrived;
     await expect(timeline.locator('svg')).toBeVisible();await expect(timeline).toHaveAttribute('aria-busy','true');
     await expect(page.locator('#notebook-workspace [data-nb=map] svg')).toHaveCount(0);
-    await page.locator('#nav-about').focus();pending.release();await pending.delivered;
+    await navigationAction(page, '#nav-about', {focus:true});pending.release();await pending.delivered;
     await expect(timeline).not.toHaveAttribute('aria-busy','true');await expect(page.locator('#nav-about')).toBeFocused();
   } finally {pending.release();await pending.delivered;await pending.remove();}
   expect(reads.filter(path=>path==='/api/notebook/timeline')).toHaveLength(2);
   expect(reads.some(path=>/^\/api\/notebook\/notes\//.test(path)||path==='/map/notes.json')).toBe(false);
-  await page.locator('#logout-button').click();
+  await accountAction(page, '#logout-button');
   await expect(page.locator('#access-workspace')).toBeVisible();
   await expect(page.locator('#notebook-workspace .nb-entry')).toHaveCount(0);
   await expect(page.locator('#notebook-workspace [data-nb=timeline] svg')).toHaveCount(0);
   await signIn(page,'bob',{navigate:false});
-  await page.locator('#nav-notebook').click();
+  await navigationAction(page, '#nav-notebook');
   await expect(list(page)).toContainText('Bob browser-only private note');
   await expect(page.locator('#notebook-workspace')).not.toContainText('Alice browser-only private note');
 });
@@ -94,16 +94,16 @@ test('ordinary background preparation makes the first People and submissions vis
   const peopleBefore=reads.filter(path=>path==='/api/people').length;
   const historyBefore=reads.filter(path=>path==='/api/me/submissions').length;
   expect(peopleBefore).toBe(1);expect(historyBefore).toBe(1);
-  await page.locator('#nav-people').click();
+  await navigationAction(page, '#nav-people');
   await expect(page.locator('#people-content')).toContainText('browser_alice');
   await expect(page.locator('#people-content .people-preview')).toHaveCount(0);
   expect(reads.filter(path=>path==='/api/people')).toHaveLength(peopleBefore);
-  await page.locator('#history-button').click();
+  await accountAction(page, '#history-button');
   await expect(page.locator('#history-content')).toContainText('No submissions yet.');
   await expect(page.locator('#history-content .history-preview')).toHaveCount(0);
   expect(reads.filter(path=>path==='/api/me/submissions')).toHaveLength(historyBefore);
-  await page.locator('#nav-about').click();
-  await page.locator('#logout-button').click();
+  await navigationAction(page, '#nav-about');
+  await accountAction(page, '#logout-button');
   await expect(page.locator('#access-workspace')).toBeVisible();
   await expect(page.locator('#people-content')).toBeEmpty();
   await expect(page.locator('#history-content')).toBeEmpty();

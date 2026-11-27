@@ -1,7 +1,7 @@
-const {test, expect, signIn, holdResponse, gate} = require('./helpers.cjs');
+const {test, expect, signIn, holdResponse, gate, navigationAction} = require('./helpers.cjs');
 const recordRoute = stage => '#challenge/teaching-dh-kem/4?profile=dh-' + stage + '&view=leaderboard';
 
-for (const width of [1440,390]) test('complete recovery snapshot browses stages locally at ' + width + 'px', async ({page}) => {
+for (const width of [1440,390]) test('complete recovery snapshot browses levels locally at ' + width + 'px', async ({page}) => {
   await page.setViewportSize({width,height:1000});
   const reads = [];
   page.on('request', request => {const url=new URL(request.url()); if(url.pathname.startsWith('/api/')) reads.push({path:url.pathname,query:url.search,method:request.method()});});
@@ -34,7 +34,7 @@ for (const width of [1440,390]) test('complete recovery snapshot browses stages 
     await page.locator('#refresh-leaderboard').click();await pending.arrived;
     await expect(page.locator('#leaderboard-title')).toHaveText('Unsolved');
     await expect(page.locator('#refresh-leaderboard')).toBeDisabled();
-    await page.locator('#nav-about').focus();
+    await navigationAction(page, '#nav-about', {focus:true});
     pending.release();await pending.delivered;
     await expect(page.locator('#refresh-leaderboard')).toBeEnabled();
     await expect(page.locator('#nav-about')).toBeFocused();
@@ -69,7 +69,7 @@ test('a snapshot refresh changes inherited winners without removing focused resu
   await page.goto('/#about');await signIn(page,'bob',{navigate:false});
   await page.evaluate(route=>{location.hash=route;},recordRoute(20));
   await expect(page.locator('.tier-winner-name')).toHaveText('browser_alice');
-  await expect(page.locator('#leaderboard-content')).toContainText('Via Stage 22');
+  await expect(page.locator('#leaderboard-content')).toContainText('Via Level 22');
   const button=page.locator('.tier-record-result');await button.focus();
   phase='fresh';pending={arrive:gate(),release:gate(),deliver:gate()};
   // Call the same public Refresh handler without moving keyboard focus away

@@ -1,4 +1,4 @@
-const {test, expect, signIn, useDataSaver, holdResponse} = require('./helpers.cjs');
+const {test, expect, signIn, useDataSaver, holdResponse, navigationAction} = require('./helpers.cjs');
 
 // UI-only synthetic tasks follow the disposable app's real session. This does
 // not replace the backend lifecycle tests, publish tasks or award any points.
@@ -24,28 +24,32 @@ async function fixture(page, {review = false} = {}) {
 for (const width of [1440, 390]) test(`bounty board, exact detail and proposal retain a compact ${width}px layout`, async ({page}, testInfo) => {
   await page.setViewportSize({width,height:width === 390 ? 844 : 1000}); await useDataSaver(page);
   const reads = await fixture(page);
-  await signIn(page); await page.locator('#nav-bounties').click();
+  await signIn(page); await navigationAction(page, '#nav-bounties');
   const panel = page.locator('[data-nb="bounties"]');
   await expect(page).toHaveURL(/#bounties$/);
   await expect(page.locator('#nav-bounties')).toHaveAttribute('aria-current','page');
   await expect(page.locator('#nav-notebook')).not.toHaveAttribute('aria-current','page');
-  await expect(page.locator('.primary-nav button:visible')).toHaveText(['Schemes','Bounties','Notes','About us']);
-  const schemesTab = await page.locator('#nav-challenge').boundingBox(), bountyTab = await page.locator('#nav-bounties').boundingBox();
-  expect(bountyTab.x).toBeGreaterThan(schemesTab.x);
-  expect(bountyTab.y).toBeCloseTo(schemesTab.y,0);
+  if(width>1180){
+    await expect(page.locator('.primary-nav button:visible')).toHaveText(['Schemes','Bounties','Notes','About us']);
+    const schemesTab = await page.locator('#nav-challenge').boundingBox(), bountyTab = await page.locator('#nav-bounties').boundingBox();
+    expect(bountyTab.x).toBeGreaterThan(schemesTab.x); expect(bountyTab.y).toBeCloseTo(schemesTab.y,0);
+  }else await expect(page.locator('#primary-nav-toggle')).toBeVisible();
   await expect(page.locator('#notebook-workspace > .nb-heading')).toBeHidden();
   await expect(page.locator('#notebook-workspace > .nb-views')).toBeHidden();
   await expect(page.locator('[data-nb="bounties-view"]')).toHaveCount(0);
   await expect(panel.locator('.bty-question')).toHaveCount(1);
+  await expect(panel.locator('.bty-featured-label')).toHaveText('★ Highlighted');
+  const utilities=await panel.locator('.bty-secondary').boundingBox(),board=await panel.locator('.bty-grid').boundingBox();
+  expect(utilities.y+utilities.height).toBeLessThan(board.y);
   await expect(panel.locator('.bty-allowance')).toContainText('7 of 10 remaining');
   await expect(panel.getByRole('heading', {name:'Bounties',exact:true})).toBeVisible();
   await expect(panel.getByRole('searchbox')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({path:testInfo.outputPath('bounty-board-' + width + '.png'),fullPage:true});
   const before = reads.filter(path => path.startsWith('/api/bounties?')).length;
-  await page.locator('#nav-notebook').click();
+  await navigationAction(page, '#nav-notebook');
   await expect(page.locator('#notebook-workspace > .nb-views')).toHaveCount(0);
-  await page.locator('#nav-bounties').click();
+  await navigationAction(page, '#nav-bounties');
   await expect(panel.locator('.bty-question')).toHaveCount(1);
   expect(reads.filter(path => path.startsWith('/api/bounties?')).length).toBe(before);
   await panel.locator('.bty-question').click();
@@ -54,19 +58,22 @@ for (const width of [1440, 390]) test(`bounty board, exact detail and proposal r
   const boost = panel.getByRole('button',{name:'Boost this bounty',exact:true});
   await boost.focus(); await boost.press('Enter');
   await expect(panel.getByRole('heading',{name:'Confirm bounty boost'})).toBeFocused();
+  await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(0);
   const confirmation = await panel.locator('.bty-action-panel').boundingBox();
   expect(confirmation.y).toBeGreaterThanOrEqual(0);
-  // scrollIntoView rounds the scroll offset to physical pixels.
-  expect(confirmation.y + confirmation.height).toBeLessThanOrEqual(page.viewportSize().height + 1);
+  expect(confirmation.y).toBeLessThan(page.viewportSize().height);
   await page.keyboard.press('Tab');
   await expect(panel.getByRole('button',{name:'Cancel',exact:true})).toBeFocused();
   await expect(panel.locator('.bty-action-panel')).toContainText('100 reward points');
   await panel.getByRole('button',{name:'Cancel',exact:true}).click();
-  await expect(boost).toBeFocused();
-  await panel.getByRole('button',{name:'← Bounties',exact:true}).click();
+  await expect(panel.getByRole('heading',{name:terms.title,exact:true})).toBeFocused();
+  await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(0);
+  await panel.getByRole('button',{name:'All bounties',exact:true}).click();
   await panel.getByRole('button',{name:'Propose a bounty',exact:true}).click();
   await panel.getByLabel('The task',{exact:true}).fill('Unsaved local fixture');
-  await page.locator('#nav-notebook').click(); await page.locator('#nav-bounties').click();
+  await navigationAction(page, '#nav-notebook'); await navigationAction(page, '#nav-bounties');
+  await expect(panel.locator('.bty-question')).toBeVisible();
+  await panel.getByRole('button',{name:'Propose a bounty',exact:true}).click();
   await expect(panel.getByLabel('The task',{exact:true})).toHaveValue('Unsaved local fixture');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({path:testInfo.outputPath('bounty-proposal-' + width + '.png'),fullPage:true});
@@ -153,4 +160,13 @@ test('bounty admission decisions remain in the dedicated reviewer workspace', as
   await expect(panel.getByRole('button',{name:'Record admission decision'})).toBeVisible();
   await expect(panel.getByRole('button',{name:'Boost this bounty'})).toHaveCount(0);
   await page.screenshot({path:testInfo.outputPath('bounty-review.png'),fullPage:true});
+});
+
+for(const width of [1440,390])test('agent help copies its current prompt and clears confirmation at '+width+'px',async({page,context})=>{
+ await page.setViewportSize({width,height:1000});await useDataSaver(page);await fixture(page);await context.grantPermissions(['clipboard-read','clipboard-write']);await signIn(page);await navigationAction(page, '#nav-bounties');
+ const panel=page.locator('[data-nb="bounties"]');await expect(panel.locator('.bty-secondary')).toHaveCSS('border-bottom-width','0px');await expect(panel.locator('.bty-heading .bty-secondary')).toBeVisible();
+ await panel.locator('.agent-workflow-toggle:visible').click();const help=panel.locator('.agent-workflow[open]');await expect(help).toContainText('Work with an agent');await page.clock.install();await help.getByRole('button',{name:'Copy prompt',exact:true}).click();await expect(help.getByRole('button',{name:'Copied',exact:true})).toBeVisible();
+ await expect(panel.locator('.bty-notice')).toBeEmpty();expect(await page.evaluate(()=>navigator.clipboard.readText())).toContain('bounty list');await page.clock.fastForward(2300);await expect(help.getByRole('button',{name:'Copy prompt',exact:true})).toBeVisible();
+ await help.getByRole('button',{name:'Close agent prompt'}).click();await panel.locator('.bty-question').click();await panel.locator('.bty-actions .agent-workflow-toggle').click();const detailHelp=panel.locator('.bty-actions .agent-workflow[open]');await detailHelp.getByRole('button',{name:'Copy prompt',exact:true}).click();await expect(detailHelp.getByRole('button',{name:'Copied',exact:true})).toBeVisible();
+ expect(await page.evaluate(()=>navigator.clipboard.readText())).toContain('bounty show '+id);await expect(panel.locator('.bty-notice')).toBeEmpty();await page.clock.fastForward(2300);await expect(detailHelp.getByRole('button',{name:'Copy prompt',exact:true})).toBeVisible();
 });

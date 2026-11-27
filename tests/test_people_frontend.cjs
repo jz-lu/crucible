@@ -11,11 +11,13 @@ const baseResponder = (url, options, envelope) => {
 let passed = 0;
 async function test(name, run) {await run(); passed++; console.log('PASS ' + name);}
 (async () => {
-  await test('Leaderboard precedes My submissions in account navigation and loads only on demand', async () => {
+  await test('Leaderboard and help precede the compact account menu and load only on demand', async () => {
     const app = await createApp({schemes, responder: baseResponder});
-    assert.deepEqual(app.$('.primary-nav').children.filter(e => !e.hidden).map(e => e.textContent.trim()), ['Schemes', 'Bounties', 'Notes', 'About us']);
+    assert.deepEqual(app.$('#primary-nav-panel').children.filter(e => !e.hidden && e.id !== 'nav-menu-people').map(e => e.textContent.trim()), ['Schemes', 'Bounties', 'Notes', 'About us']);
     const accountActions = app.$('.account-actions').children;
-    assert.equal(accountActions.indexOf(app.$('#nav-people')), accountActions.indexOf(app.$('#history-button')) - 1);
+    assert.equal(accountActions.indexOf(app.$('#nav-people')),accountActions.indexOf(app.$('#how-it-works'))-1);
+    assert.equal(accountActions.indexOf(app.$('#how-it-works')),accountActions.indexOf(app.$('#account-menu'))-1);
+    assert.equal(app.$('#history-button').parentElement,app.$('#account-menu-panel'));
     assert.equal(app.$('#history-button').hidden, true);
     assert.equal(app.$('#nav-people').hidden, false);
     assert.equal(app.requests.some(r => r.url.pathname === '/api/people'), false);
@@ -43,11 +45,11 @@ async function test(name, run) {await run(); passed++; console.log('PASS ' + nam
     assert.equal(dialog.open, true); assert.equal(app.document.body.style.overflow, 'hidden');
     assert.equal(app.requests.length, before);
     for (const label of ['Record breakthroughs','Admitted schemes','Research bounties','Research notes','Bounty allowance']) assert.ok(dialog.textContent.includes(label));
-    assert.match(dialog.textContent, /2,000 points/); assert.match(dialog.textContent, /100 points per completed active week/);
-    assert.match(dialog.textContent, /review approval alone earns 0 points/);
-    assert.match(dialog.textContent, /independent reviewer approves the exact solution evidence/);
-    assert.match(dialog.textContent, /proposer sign-off is not required/);
-    assert.match(dialog.textContent, /release marked Not scored earns 0 points/);
+    assert.match(dialog.textContent, /2,000 points/); assert.match(dialog.textContent, /100 per full active week/);
+    assert.match(dialog.textContent, /When your new scheme goes live/);
+    assert.match(dialog.textContent, /verified, winning solution/);
+    assert.match(dialog.textContent, /Self-ratings don’t count/);
+    assert.match(dialog.textContent, /new record in a scored scheme. Once per scheme/);
     dialog.querySelector('[data-close]').click();
     assert.equal(dialog.open, false); assert.equal(app.document.activeElement, trigger);
     assert.equal(app.document.body.style.overflow, '');

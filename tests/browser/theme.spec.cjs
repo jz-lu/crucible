@@ -7,7 +7,7 @@ const palette = {
 
 async function expectTheme(page, theme) {
   await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-  await expect(page.locator('#theme-toggle')).toHaveCount(0);
+  await expect(page.locator('#theme-toggle')).toBeVisible();
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', palette[theme].meta);
   const browserTheme = await page.evaluate(() => matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   await expect(page.locator('#site-icon')).toHaveAttribute('href', new RegExp('/assets/crucible-icon-' + browserTheme + '\\.svg\\?v=[a-f0-9]{24}$'));
@@ -21,8 +21,8 @@ async function expectTheme(page, theme) {
 }
 
 for (const osTheme of ['dark', 'light']) {
-  const selected = 'light';
-  test(`light first paint survives legacy dark storage and reloads on a ${osTheme} OS`, async ({page, context}) => {
+  const selected = 'dark';
+  test(`saved dark first paint survives storage and reloads on a ${osTheme} OS`, async ({page, context}) => {
     await page.emulateMedia({colorScheme: osTheme});
     // Observe actual rendering opportunities, rather than checking only the final
     // DOM. This runs before the real CSP-hashed bootstrap on each document load.
@@ -81,14 +81,14 @@ for (const osTheme of ['dark', 'light']) {
   });
 }
 
-test('denied browser storage preserves light paint and beta sign-in', async ({page}) => {
+test('denied browser storage preserves system appearance and beta sign-in', async ({page}) => {
   await page.emulateMedia({colorScheme: 'dark'});
   await page.addInitScript(() => Object.defineProperty(window, 'localStorage', {
     configurable: true, get() {throw new DOMException('Blocked by browser policy', 'SecurityError');},
   }));
   await page.goto('/');
-  await expectTheme(page, 'light');
+  await expectTheme(page, 'dark');
   await page.reload();
-  await expectTheme(page, 'light');
+  await expectTheme(page, 'dark');
   await expect(page.locator('#access-sign-in')).toBeVisible();
 });

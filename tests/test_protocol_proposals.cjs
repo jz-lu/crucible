@@ -77,7 +77,7 @@ async function test(name,run){await run();console.log('PASS '+name);passed++;}
     assert.match(copied,/Only when I ask you to submit/);assert.match(copied,/do not invent proofs/);
     assert.match(copied,/Existing connections need login once/);
     assert.match(copied,/template’s tier_design plan/);assert.match(copied,/precise correctness guarantee/);assert.match(copied,/target is not optional/);
-    assert.match(copied,/endpoint target, evidence and status.*provisional or unestimated/);assert.match(copied,/useful intermediate stages/);
+    assert.match(copied,/endpoint target, evidence and status.*provisional or unestimated/);assert.match(copied,/useful intermediate levels/);
     assert.doesNotMatch(copied,/test-csrf|access_token|never_execute/);
     assert.match(app.$('#proposal-agent-followup').textContent,/prepare a new KEM proposal/);
     app.$('#proposal-use-agent').click();assert.equal(app.$('#proposal-agent-instructions').hidden,true);
@@ -159,7 +159,7 @@ async function test(name,run){await run();console.log('PASS '+name);passed++;}
     app.$('#proposal-file').files=[{size:1,text:async()=> ' '.repeat(49153)}];app.$('#proposal-file').dispatchEvent({type:'change'});await flush();
     assert.equal(checks(app).length,0);assert.match(app.$('#proposal-error').textContent,/48 KiB/);
   });
-  await test('stage-design plans appear in the format-only preview as inert labelled text',async()=>{
+  await test('level-design plans appear in the format-only preview as inert labelled text',async()=>{
     const app=await boot();const value=spec();value.tier_design=tierDesign();await upload(app,value);
     const preview=app.$('#proposal-preview');
     for(const label of ['Default progression','Parameter progression','Resource costs','Common correctness requirement','Endpoint status','Endpoint target','Endpoint evidence','Intermediate steps'])assert.ok(preview.textContent.includes(label));

@@ -1,4 +1,4 @@
-const {test, expect, signIn, holdResponse} = require('./helpers.cjs');
+const {test, expect, signIn, holdResponse, navigationAction} = require('./helpers.cjs');
 
 test('scheme record to ready challenge and manual tools is one complete usable journey', async ({page}) => {
   const failures = [];
@@ -9,12 +9,12 @@ test('scheme record to ready challenge and manual tools is one complete usable j
     }
   });
   await signIn(page, 'bob');
-  await page.locator('#nav-challenge').click();
+  await navigationAction(page, '#nav-challenge');
   await expect(page.locator('#kem-catalogue')).toContainText('Diffie');
   await page.locator('#kem-catalogue a').first().click();
   await expect(page.locator('#overview-workspace')).toBeVisible();
   await page.locator('#overview-challenges').click();
-  const takeOn = page.getByRole('link', {name: 'Take on this stage →', exact: true});
+  const takeOn = page.getByRole('link', {name: 'Take on this level →', exact: true});
   await expect(takeOn).toBeVisible();
   await takeOn.click();
   await expect(page.locator('#challenge-active')).toBeVisible();
@@ -48,7 +48,7 @@ test('scheme record to ready challenge and manual tools is one complete usable j
   const fresh = await holdResponse(page, url => url.pathname === '/api/challenges');
   try {
     await takeOn.click(); await fresh.arrived;
-    await page.locator('#nav-about').focus();
+    await navigationAction(page, '#nav-about', {focus:true});
     fresh.release(); await fresh.delivered;
     await expect(page.locator('#challenge-active')).toBeVisible();
     await expect(page.locator('#nav-about')).toBeFocused();

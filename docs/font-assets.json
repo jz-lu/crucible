@@ -1,0 +1,12 @@
+{
+  "verified_at": "2026-11-26",
+  "reference": "https://crucible.fail/styles.css",
+  "families": {
+    "wordmark": "Georgia, 'Times New Roman', serif",
+    "display": "Cardo, Georgia, serif",
+    "body_and_navigation": "IBM Plex Sans, Arial, sans-serif"
+  },
+  "local_asset_provenance": "docs/resi-brand-assets.json",
+  "note": "Restored the published families and original local assets; retained normal menu weight.",
+  "assets": []
+}

@@ -7,7 +7,7 @@
     <script src="/bootstrap.js" async></script>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="crucible — Find new cryptography. Test its limits.">
-    <meta name="color-scheme" content="light">
+    <meta name="color-scheme" content="light dark">
     <link id="site-icon" rel="icon" type="image/svg+xml" href="/assets/crucible-icon-light.svg" data-icon-light="/assets/crucible-icon-light.svg" data-icon-dark="/assets/crucible-icon-dark.svg">
     <link rel="preload" href="/vendor/resi/plex-sans-normal-100-700-latin.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/vendor/resi/cardo-normal-700-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -20,6 +20,7 @@
     <script src="/proposal-retractions.js" defer></script>
     <script src="/resource-metrics.js" defer></script>
     <script src="/graph-points.js" defer></script>
+    <script src="/orientation.js" defer></script>
     <script src="/app.js" defer>
     </script>
     <link rel="stylesheet" href="/styles.css">
@@ -62,8 +63,8 @@
     </a>
     <header class="site-header">
       <div class="header-inner">
-        <div id="site-brand" class="brand">
-          <button id="brand-animate" class="brand-icon-button" type="button" aria-label="Animate Crucible logo">
+        <a id="site-brand" class="brand" href="#home" aria-label="Crucible home" title="Home">
+          <span id="brand-animate" class="brand-icon-button" aria-hidden="true">
             <img class="brand-mark" src="/assets/crucible-mark.svg" width="38" height="54" alt="" decoding="async">
             <svg class="brand-ember-effect" viewBox="0 0 189 192" width="38" height="54" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
               <defs>
@@ -80,12 +81,14 @@
               </g>
               <g class="brand-key-sun"><path fill-rule="evenodd" d="M93 52L98 52L98 53L102 54L103 57L104 57L104 59L105 59L105 62L109 63L109 64L111 65L111 68L112 68L112 73L111 73L110 77L108 77L107 79L103 79L103 80L102 80L102 79L99 79L99 80L101 81L101 85L99 86L99 110L106 110L106 121L99 121L99 125L98 125L98 127L96 127L96 128L93 128L93 127L91 126L91 85L89 84L89 82L90 82L92 79L89 79L89 80L84 79L84 78L82 78L82 77L80 76L80 74L79 74L79 67L80 67L80 65L81 65L83 62L85 62L86 59L87 59L87 56L88 56L89 54L93 53ZM94 58L94 59L92 59L92 64L94 65L94 67L93 67L93 68L91 68L91 67L86 67L86 68L85 68L85 72L86 72L87 74L90 74L90 73L92 72L92 70L94 70L94 71L97 71L97 70L98 70L99 73L104 74L104 73L106 72L105 67L100 67L100 68L98 68L97 65L99 64L99 60L98 60L97 58Z" filter="url(#crucible-key-sun)"/></g>
             </svg>
-          </button>
-          <a class="brand-wordmark" href="#home" aria-label="Crucible home">
+          </span>
+          <span class="brand-wordmark">
             crucible
-          </a>
-        </div>
+          </span>
+        </a>
         <nav class="primary-nav" aria-label="Main navigation" inert hidden>
+          <button id="primary-nav-toggle" class="primary-nav-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="primary-nav-panel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+          <div id="primary-nav-panel" class="primary-nav-panel">
           <button id="nav-challenge" class="nav-button selected" type="button" aria-current="page">
             Schemes
           </button>
@@ -102,22 +105,32 @@
           <button id="nav-research" class="nav-button" type="button" hidden>
             Research
           </button>
+          <button id="nav-menu-people" class="nav-button compact-leaderboard" type="button">Leaderboard</button>
+          </div>
         </nav>
+        <div class="header-tools">
         <div class="account-actions">
+          <div id="account-points-wrap" class="account-points-wrap">
+            <a id="account-points" class="points-badge account-points" href="#people" aria-label="Your points" aria-busy="true" aria-expanded="false" aria-controls="account-points-popover" hidden><svg class="points-symbol" viewBox="0 0 20 20" aria-hidden="true"><path d="m10 2 2.4 5 5.6.8-4 4 .9 5.7L10 14.8l-4.9 2.7.9-5.7-4-4 5.6-.8z"/></svg><strong id="account-points-value">—</strong><span>pts</span></a>
+            <div id="account-points-popover" class="account-points-popover" aria-label="Points help" hidden><button id="account-points-help" class="text-button" type="button">How points work <span class="action-arrow" aria-hidden="true">→</span></button></div>
+          </div>
           <button id="nav-people" class="nav-button" type="button" hidden>
             Leaderboard
           </button>
-          <button id="history-button" class="nav-button" type="button" hidden>
-            My activity
-          </button>
-          <a id="account-handle" class="account-handle" href="#people" hidden>
-          </a>
+          <button id="how-it-works" class="nav-button how-it-works" type="button" aria-label="How it works" title="How it works" hidden><span class="help-mark" aria-hidden="true">?</span></button>
+          <div id="account-menu" class="account-menu" hidden>
+            <button id="account-menu-trigger" class="account-menu-trigger" type="button" aria-label="Your account" aria-expanded="false" aria-controls="account-menu-panel"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.4"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg></button>
+            <div id="account-menu-panel" class="account-menu-panel" hidden>
+              <button id="history-button" class="nav-button" type="button" hidden>My activity</button>
+              <a id="account-handle" class="account-handle" href="#people" hidden></a>
+              <button id="logout-button" class="text-button" type="button" hidden>Sign out</button>
+            </div>
+          </div>
           <button id="auth-button" class="button button-small button-quiet" type="button" disabled hidden>
             Sign in
           </button>
-          <button id="logout-button" class="text-button" type="button" hidden>
-            Sign out
-          </button>
+        </div>
+          <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to dark mode" title="Switch to dark mode" aria-pressed="false"><svg class="theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14A8.5 8.5 0 0 1 10 3.5 8.5 8.5 0 1 0 20.5 14Z"/></svg><svg class="theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5"/></svg></button>
         </div>
       </div>
     </header>
@@ -129,57 +142,31 @@
           Try again
         </button>
       </div>
+      <div id="guide-slot"><aside id="participation-guide" class="live-guide" aria-labelledby="live-guide-title" aria-live="polite" hidden></aside></div>
       <section id="home-workspace" class="home-workspace" aria-labelledby="home-title" tabindex="-1" hidden>
-        <div class="home-intro">
-          <h1 id="home-title" class="scrutiny-tagline"><span class="scrutiny-wording"><span class="scrutiny-letters">Find new cryptography. Test its limits.</span><span class="scrutiny-dots" aria-hidden="true" data-label="Find new cryptography. Test its limits."></span></span></h1>
-          <p class="home-lede">Crucible helps researchers develop new cryptography, test it on controlled examples, and build on evidence others can inspect. Bring an AI agent, or work by hand.</p>
-          <div class="home-actions">
-            <button id="home-primary" class="button button-primary" type="button" disabled>Sign in to Crucible <span aria-hidden="true">→</span></button>
-            <a class="text-button home-secondary" href="#challenge">Explore schemes <span aria-hidden="true">→</span></a>
+        <div id="home-entry">
+          <div class="home-intro">
+            <h1 id="home-title" class="scrutiny-tagline"><span class="scrutiny-wording"><span class="scrutiny-letters"><button class="home-tagline-link" type="button" data-home-feature="bounties" aria-controls="home-bounties" aria-pressed="false" aria-label="Find new cryptography — highlight top bounties"><span class="home-phrase-text">Find new cryptography.</span><span class="home-phrase-effect home-phrase-glow" aria-hidden="true" data-label="Find new cryptography."></span></button> <button class="home-tagline-link" type="button" data-home-feature="challenge" aria-controls="home-weekly" aria-pressed="false" aria-label="Test its limits — highlight the weekly challenge"><span class="home-phrase-text">Test its limits.</span><span class="home-phrase-effect home-phrase-dots" aria-hidden="true" data-label="Test its limits."></span></button></span></span></h1>
+            <div class="home-onboarding">
+              <button id="home-intro-trigger" class="home-new-label" type="button" aria-controls="participation-guide">New to Crucible? <span class="home-start-hint">Start with a guided challenge.</span></button>
+              <button id="home-get-started" class="button button-primary home-get-started" type="button">Get started <span class="action-arrow" aria-hidden="true">→</span></button>
+              <p id="home-tour" class="home-explore">Or <span id="home-bounty-option"><a id="home-bounties-link" href="#bounties">try a bounty</a> or </span><a id="home-propose-link" href="#propose">propose a scheme</a>.</p>
+              <p id="home-intro-status" class="home-intro-status" role="alert" hidden></p>
+            </div>
           </div>
-          <p id="home-access-note" class="home-access-note">Currently invitation-only. Open your invitation link to join.</p>
+          <div id="home-highlights" class="home-highlights">
+            <section id="home-bounties" class="home-bounties" aria-labelledby="home-bounties-title">
+              <div class="home-section-heading"><h2 id="home-bounties-title"><svg class="home-bounty-icon" viewBox="0 0 40 40" aria-hidden="true"><path d="M14 7l3 7h8l3-7c-4 2-10 2-14 0zM16 15C12 19 7 23 7 29c0 5 5 7 13 7s13-2 13-7c0-6-5-10-9-14M15 15h11"/><path d="M20 21l1.5 3 3.5.5-2.5 2.5.6 3.5-3.1-1.7-3.1 1.7.6-3.5-2.5-2.5 3.5-.5z"/></svg>Top bounties</h2><a href="#bounties?sort=points-high" aria-label="View all bounties"><span class="home-view-word">View </span>all <span class="action-arrow" aria-hidden="true">→</span></a></div>
+              <div id="home-bounty-list" aria-busy="true"><p class="home-highlight-status">Loading bounties…</p></div>
+            </section>
+            <section id="home-weekly" class="home-weekly" aria-labelledby="home-weekly-title">
+              <div class="home-section-heading"><h2 id="home-weekly-title"><svg class="home-challenge-icon" viewBox="0 0 40 40" aria-hidden="true"><circle cx="19" cy="21" r="13"/><circle cx="19" cy="21" r="6"/><path d="m19 21 15-15M28 6h6v6"/><circle class="challenge-icon-center" cx="19" cy="21" r="2"/></svg>Challenge of the week</h2><a href="#challenge" aria-label="View all challenges"><span class="home-view-word">View </span>all <span class="action-arrow" aria-hidden="true">→</span></a></div>
+              <div id="home-featured-challenge" aria-busy="true"><p class="home-highlight-status">Loading challenge…</p></div>
+            </section>
+          </div>
         </div>
-        <section id="home-progress" class="home-progress" aria-labelledby="home-progress-title" hidden>
-          <div class="home-section-heading"><h2 id="home-progress-title">Current progress</h2><button id="refresh-home" class="text-button" type="button">Refresh <span aria-hidden="true">↻</span></button></div>
-          <div class="home-progress-grid">
-            <section class="home-progress-panel" aria-labelledby="home-schemes-title">
-              <div class="home-panel-heading"><h3 id="home-schemes-title">Scheme recoveries</h3><a class="text-button" href="#challenge">All schemes →</a></div>
-              <div id="home-schemes" aria-live="polite"></div>
-              <p class="home-progress-footnote">Stage scales are specific to each scheme. <a href="#challenge?view=map">Explore their connections in the scheme map →</a></p>
-              <div class="home-panel-actions"><a id="home-propose-scheme" class="button button-quiet" href="#propose">Propose a scheme <span aria-hidden="true">→</span></a></div>
-            </section>
-            <section id="home-bounties-panel" class="home-progress-panel" aria-labelledby="home-bounties-title">
-              <div class="home-panel-heading"><h3 id="home-bounties-title">Open bounties</h3><a class="text-button" href="#bounties">All bounties →</a></div>
-              <p class="home-panel-description">Research tasks looking for a contribution.</p>
-              <div id="home-bounties" aria-live="polite"></div>
-              <div class="home-panel-actions"><a id="home-propose-bounty" class="button button-quiet" href="#bounties?compose=bounty">Propose a bounty <span aria-hidden="true">→</span></a></div>
-            </section>
-          </div>
-        </section>
-        <section class="home-guide" aria-labelledby="home-guide-title">
-          <div class="home-section-heading"><h2 id="home-guide-title">A few ways to get started</h2></div>
-          <div class="home-guide-grid">
-            <a class="home-guide-card" href="#challenge">
-              <span class="home-guide-number" aria-hidden="true">01</span>
-              <h3>Test a scheme</h3>
-              <p>Choose a scheme and a challenge stage. Try to recover its shared key, then submit your result and method.</p>
-              <span class="home-guide-action">Explore schemes <span aria-hidden="true">→</span></span>
-            </a>
-            <a class="home-guide-card home-map-card" href="#challenge?view=map">
-              <span class="home-guide-number" aria-hidden="true">02</span>
-              <h3>See the bigger picture</h3>
-              <p>Use the scheme map to explore cryptographic families and the assumptions that connect them.</p>
-              <span class="home-guide-action">Open scheme map <span aria-hidden="true">→</span></span>
-            </a>
-            <a id="home-bounty-guide" class="home-guide-card" href="#bounties">
-              <span class="home-guide-number" aria-hidden="true">03</span>
-              <h3>Take on a bounty</h3>
-              <p>Find a focused research task, contribute useful evidence, and work toward its posted reward.</p>
-              <span class="home-guide-action">Browse bounties <span aria-hidden="true">→</span></span>
-            </a>
-          </div>
-          <p class="home-notes-guide">New to the pipeline? <a href="#notebook?note=curated:launch-start-here">Read how to take part <span aria-hidden="true">→</span></a></p>
-          <p class="home-notes-guide">Have an attack, a proposed scheme, or an idea to investigate? <a href="#notebook">Write it up in Notes <span aria-hidden="true">→</span></a></p>
+        <section id="home-walkthrough" class="home-walkthrough" aria-label="Getting started" hidden>
+          <div id="home-guide-content"></div>
         </section>
       </section>
       <div id="access-branding" class="access-branding" hidden>
@@ -312,7 +299,7 @@
           <button id="access-register" class="button button-quiet" type="button" hidden>Create account with a password</button>
         </div>
         <button id="access-existing-account" class="text-button auth-existing-account" type="button" hidden>Already joined? Sign in</button>
-        <button id="access-resume" class="button button-primary" type="button" hidden>Continue joining <span aria-hidden="true">→</span></button>
+        <button id="access-resume" class="button button-primary" type="button" hidden>Continue joining <span class="action-arrow" aria-hidden="true">→</span></button>
         <button id="access-pending-signout" class="text-button auth-back" type="button" hidden>Sign out</button>
         <button id="access-continue" class="button button-primary" type="button" hidden>Continue to Crucible</button>
         <p id="access-error" class="form-error" role="alert" hidden></p>
@@ -329,10 +316,12 @@
               </button>
               <button id="scheme-map-button" class="button button-quiet" type="button">Scheme map</button>
             </div>
+            <div id="catalogue-agent-entry"></div>
             <button id="propose-scheme-button" class="button button-primary" type="button">Propose a scheme</button>
           </div>
         </div>
-        <p id="tier-help" hidden>Stages mark positions in each scheme’s default progression. Schemes can have different numbers of stages; equal stage numbers do not imply equal security or attack cost.</p>
+        <section id="catalogue-weekly" class="catalogue-weekly" aria-label="Challenge of the week" hidden></section>
+        <p id="tier-help" hidden>Levels mark positions in each scheme’s default progression. Schemes can have different numbers of levels; equal level numbers do not imply equal security or attack cost.</p>
         <div id="kem-catalogue" aria-live="polite">
           <div class="loading-state" role="status"><span class="sr-only">Loading schemes</span></div>
         </div>
@@ -462,8 +451,9 @@
         <a class="text-button scheme-back" href="#challenge">← All schemes</a>
         <div class="overview-heading">
           <div>
-            <p id="overview-release" class="eyebrow"></p>
+            <p class="eyebrow scheme-page-label">Scheme overview</p>
             <h1 id="overview-title"></h1>
+            <p id="overview-release" class="field-hint scheme-release" hidden></p>
             <p id="overview-summary" hidden></p>
             <p id="overview-beta" class="beta-note" hidden></p>
             <div id="overview-justifications" class="overview-justifications" aria-label="Scheme arguments" hidden>
@@ -473,15 +463,16 @@
           </div>
           <div class="overview-entry">
             <div class="overview-entry-actions">
+              <div id="overview-agent-entry"></div>
               <aside id="overview-clock" class="round-clock overview-clock" aria-label="Shared challenge round deadline" hidden>
                 <span class="round-time">Round ends in</span>
                 <p id="overview-countdown" class="countdown" aria-label="Round time unavailable">—:—</p>
               </aside>
-              <a id="overview-challenges" class="button button-primary" href="#challenge">View challenges <span aria-hidden="true">→</span></a>
+              <a id="overview-challenges" class="button button-primary" href="#challenge">Try a challenge for this scheme <span class="action-arrow" aria-hidden="true">→</span></a>
             </div>
             <p id="overview-progress"></p>
             <p id="overview-generation-status" class="field-hint" hidden></p>
-            <a id="overview-assumptions" class="overview-assumptions-link" href="#challenge">View assumptions <span aria-hidden="true">↗</span></a>
+            <a id="overview-assumptions" class="overview-assumptions-link" href="#challenge">View assumptions <span class="action-arrow" data-direction="up" aria-hidden="true">↗</span></a>
           </div>
         </div>
         <div id="overview-graphs" class="overview-graphs"></div>
@@ -503,20 +494,18 @@
         <div id="assumptions-content" aria-live="polite"></div>
       </section>
       <section id="workspace" class="workspace" aria-labelledby="scheme-title" tabindex="-1" hidden>
-        <nav class="scheme-breadcrumbs" aria-label="Scheme navigation"><a id="scheme-all" class="text-button" href="#challenge">All schemes</a><span aria-hidden="true">/</span><a id="scheme-back" class="text-button" href="#challenge">Overview</a></nav>
+        <nav class="scheme-breadcrumbs" aria-label="Scheme navigation"><a id="scheme-all" class="text-button back-link" href="#challenge">← All schemes</a><a id="scheme-back" class="button button-quiet" href="#challenge">Scheme overview <span class="action-arrow" aria-hidden="true">→</span></a></nav>
         <div class="scheme-heading">
           <div>
-            <p class="eyebrow">
-              KEM challenge
-            </p>
+            <p id="scheme-page-label" class="eyebrow scheme-page-label">Challenges</p>
             <h1 id="scheme-title"></h1>
             <p id="scheme-summary" hidden></p>
             <p id="scheme-beta" class="beta-note" hidden></p>
             <div class="scheme-actions">
               <button id="advance-size" class="next-instance-button is-concealed" type="button" disabled aria-hidden="true">
-                <span id="advance-size-label">Go to next unsolved stage</span>
+                <span id="advance-size-label">Go to next unsolved level</span>
                 <strong id="advance-size-value">—</strong>
-                <span aria-hidden="true">→</span>
+                <span class="action-arrow" aria-hidden="true">→</span>
               </button>
             </div>
           </div>
@@ -524,27 +513,27 @@
             <div class="profile-field">
               <div class="size-heading">
                 <span class="tier-label">
-                  <span id="profile-label">Stage</span>
+                  <span id="profile-label">Level</span>
                 </span>
                 <span id="size-range"></span>
               </div>
               <div id="parameter-set-options" class="parameter-set-options" role="group" aria-label="Choose parameter set" hidden></div>
               <div id="tier-size-rail" class="size-rail">
-                <button id="previous-size" class="size-step" type="button" aria-label="Previous supported stage" disabled>‹</button>
-                <div id="size-options" role="group" aria-label="Choose challenge stage"></div>
-                <button id="next-size" class="size-step" type="button" aria-label="Next supported stage" disabled>›</button>
+                <button id="previous-size" class="size-step" type="button" aria-label="Previous supported level" disabled>‹</button>
+                <div id="size-options" role="group" aria-label="Choose challenge level"></div>
+                <button id="next-size" class="size-step" type="button" aria-label="Next supported level" disabled>›</button>
               </div>
               <div id="tier-size-slider" class="size-slider-control">
-                <input id="size-slider" type="range" min="0" max="1" step="1" value="0" aria-label="Browse challenge stages" disabled>
+                <input id="size-slider" type="range" min="0" max="1" step="1" value="0" aria-label="Browse challenge levels" disabled>
                 <output id="size-slider-value" for="size-slider" aria-hidden="true">—</output>
               </div>
               <div id="tier-size-jump" class="size-jump">
                 <label for="profile-select">Jump to</label>
-                <input id="profile-select" type="number" step="1" inputmode="numeric" autocomplete="off" placeholder="Stage" aria-describedby="profile-note profile-error" disabled>
-                <button id="jump-size" class="text-button" type="button" aria-label="Go to entered stage" disabled>Go <span aria-hidden="true">→</span></button>
+                <input id="profile-select" type="number" step="1" inputmode="numeric" autocomplete="off" placeholder="Level" aria-describedby="profile-note profile-error" disabled>
+                <button id="jump-size" class="text-button" type="button" aria-label="Go to entered level" disabled>Go <span class="action-arrow" aria-hidden="true">→</span></button>
               </div>
               <p id="profile-error" class="size-error" role="alert" hidden></p>
-              <p id="profile-note" class="field-hint">Stages follow this scheme’s default progression through reviewed configurations.</p>
+              <p id="profile-note" class="field-hint">Levels follow this scheme’s default progression through reviewed configurations.</p>
               <details id="intermediate-configurations" class="manual-tools" hidden>
                 <summary id="intermediate-configurations-label">Intermediate configurations</summary>
                 <div id="intermediate-configuration-options" class="parameter-set-options manual-tools-content" role="group" aria-label="Choose an intermediate configuration"></div>
@@ -587,10 +576,10 @@
           <details id="tier-record-notes" class="tier-record-notes" hidden>
             <summary>About this record</summary>
             <p id="leaderboard-scope" class="panel-footnote" hidden>
-              The earliest accepted recovery at this stage or higher, across all rounds. Ties use the server receipt identifier.
+              The earliest accepted recovery at this level or higher, across all rounds. Ties use the server receipt identifier.
             </p>
             <p id="leaderboard-footnote" class="panel-footnote" hidden>
-              “Via Stage” credits a recovery at a higher stage; the result describes that actual instance. A recovery verifies one challenge answer. It does not establish a new attack method or a general break of the scheme. Method and compute details are contributor-reported.
+              “Via Level” credits a recovery at a higher level; the result describes that actual instance. A recovery verifies one challenge answer. It does not establish a new attack method or a general break of the scheme. Method and compute details are contributor-reported.
             </p>
           </details>
         </section>
@@ -647,14 +636,15 @@
               </span>
             </div>
             <div class="agent-handoff-action">
-              <button id="use-agent" class="button button-primary" type="button" aria-controls="agent-instructions" aria-expanded="false">Use with an agent <span aria-hidden="true">→</span></button>
+              <button id="use-agent" class="button button-quiet agent-workflow-toggle" type="button" aria-controls="agent-instructions" aria-expanded="false">Work with an agent</button>
               <p class="field-hint">Approve a browser connection once. Your agent can fetch the challenge and submit its work.</p>
             </div>
             <section id="agent-instructions" class="agent-instructions" aria-labelledby="agent-instructions-title" hidden>
               <div class="agent-instructions-heading">
-                <h4 id="agent-instructions-title">Give this to your agent</h4>
-                <button id="copy-agent-instructions" class="button button-quiet" type="button">Copy prompt</button>
+                <h4 id="agent-instructions-title">Agent prompt</h4>
+                <button id="copy-agent-instructions" class="button button-quiet" type="button" aria-live="polite">Copy prompt</button>
               </div>
+              <p id="agent-copy-status" class="field-hint" role="status" hidden></p>
               <p class="field-hint">Paste this prompt to get started. Approve the connection if asked.</p>
               <p class="agent-followup">Next time, just ask your agent: <strong id="agent-followup-request"></strong></p>
               <pre id="agent-instructions-text" class="code-block" tabindex="0" aria-label="Instructions to give your agent"></pre>
@@ -667,7 +657,7 @@
                 <a id="download-button" class="button button-quiet" href="#" download>Download challenge JSON <span aria-hidden="true">↓</span></a>
                 <button id="copy-instance" class="text-button" type="button">Copy challenge JSON</button>
               </div>
-              <button id="open-submission" class="button button-quiet" type="button">Upload a result or enter a key <span aria-hidden="true">→</span></button>
+              <button id="open-submission" class="button button-quiet" type="button">Upload a result or enter a key <span class="action-arrow" aria-hidden="true">→</span></button>
               <p class="field-hint">Review a result file or enter the key, method, and compute yourself.</p>
             </div>
           </details>
@@ -783,7 +773,7 @@
               A correct submission establishes that the submitted key matches this instance and was received within its round. The site checks the answer and records the accompanying method and resources. It does not independently verify the declared computation or reproduce the method.
             </p>
             <p id="protocol-size-caveat">
-              An incorrect answer locks that instance. An expired instance without an accepted recovery is simply unsolved here; it is not evidence of a security bound. A challenge stage selects a scheme-specific parameter set, not an estimate of security bits.
+              An incorrect answer locks that instance. An expired instance without an accepted recovery is simply unsolved here; it is not evidence of a security bound. A challenge level selects a scheme-specific parameter set, not an estimate of security bits.
             </p>
             <p>
               This challenge records practical recoveries. It does not yet accept or verify asymptotic attack proofs.
@@ -800,7 +790,7 @@
               Each account gets one private instance per profile per round, and one well-formed answer for that instance. Submit the complete shared key, a reusable method version, and a compute declaration.
             </p>
             <p id="protocol-record-rules">
-              Method versions are immutable. Correct recoveries can appear publicly with the account handle, method, pseudocode, and compute declaration. Each stage highlights the earliest accepted recovery at that stage or higher, across all rounds. Other results remain on participant profiles. Different profiles are not ranked against one another.
+              Method versions are immutable. Correct recoveries can appear publicly with the account handle, method, pseudocode, and compute declaration. Each level highlights the earliest accepted recovery at that level or higher, across all rounds. Other results remain on participant profiles. Different profiles are not ranked against one another.
             </p>
           </details>
         </section>
@@ -911,7 +901,7 @@
           <p><a class="text-button" href="#notebook?compose=proposal">Write a proposal note →</a></p>
           <p id="proposal-revision-context" class="proposal-status" hidden></p>
           <div class="agent-handoff-action">
-            <button id="proposal-use-agent" class="button button-primary" type="button" aria-controls="proposal-agent-instructions" aria-expanded="false">Use with an agent <span aria-hidden="true">→</span></button>
+            <button id="proposal-use-agent" class="button button-quiet agent-workflow-toggle" type="button" aria-controls="proposal-agent-instructions" aria-expanded="false">Work with an agent</button>
             <p class="field-hint">Agent submissions create a private proposal note and submit that revision for human review.</p>
           </div>
           <details class="manual-tools proposal-guidelines">
@@ -922,7 +912,7 @@
                 <li><strong>Specify the algorithms.</strong> Include sampling distributions, encodings, invalid inputs and any shared setup.</li>
                 <li><strong>Separate claims from assumptions.</strong> State the security game, supporting arguments and open questions. New mathematical directions are welcome; a numerical security estimate is not required.</li>
                 <li><strong>Claim honest agreement.</strong> Decapsulation should fail with probability at most 2⁻¹²⁸. Name any models or conjectures the claim depends on; tests alone cannot establish this bound.</li>
-                <li><strong>Choose useful configurations.</strong> Explain the cost–security tradeoffs, correctness coverage and evidence for the endpoint. Stages follow natural parameter choices.</li>
+                <li><strong>Choose useful configurations.</strong> Explain the cost–security tradeoffs, correctness coverage and evidence for the endpoint. Levels follow natural parameter choices.</li>
                 <li><strong>Make it reviewable.</strong> Give precise sources and reproducible evidence. Human review and implementation checks precede a live challenge.</li>
               </ul>
               <a class="text-button" href="/api/protocol/proposal-guide" target="_blank" rel="noopener">Full guide for people and agents ↗</a>
@@ -942,7 +932,7 @@
           </details>
           <section id="proposal-agent-instructions" class="agent-instructions" aria-labelledby="proposal-agent-title" hidden>
             <div class="agent-instructions-heading">
-              <h4 id="proposal-agent-title">Give this to your agent</h4>
+              <h4 id="proposal-agent-title">Agent prompt</h4>
               <button id="copy-proposal-agent" class="button button-quiet" type="button">Copy prompt</button>
             </div>
             <p class="field-hint">The CLI saves the guide, template and schema in your workspace. A private beta requires a connection; submission always needs your approval.</p>
@@ -965,13 +955,13 @@
           <a id="proposal-detail-back" class="text-button" href="#notebook?compose=proposal">← New proposal note</a>
           <div id="proposal-detail-content" aria-live="polite"></div>
           <div id="proposal-detail-actions" class="recovery-import-actions" hidden>
-            <button id="proposal-revise-agent" class="button button-primary" type="button" aria-controls="proposal-revise-agent-instructions" aria-expanded="false" hidden>Revise with an agent <span aria-hidden="true">→</span></button>
+            <button id="proposal-revise-agent" class="button button-quiet agent-workflow-toggle" type="button" aria-controls="proposal-revise-agent-instructions" aria-expanded="false" hidden>Work with an agent</button>
             <button id="download-proposal" class="text-button" type="button">Download specification ↓</button>
             <a id="revise-proposal" class="text-button" href="#propose">Upload a revised specification →</a>
           </div>
           <section id="proposal-revise-agent-instructions" class="agent-instructions" aria-labelledby="proposal-revise-agent-title" hidden>
             <div class="agent-instructions-heading">
-              <h4 id="proposal-revise-agent-title">Give this to your agent</h4>
+              <h4 id="proposal-revise-agent-title">Agent prompt</h4>
               <button id="copy-proposal-revise-agent" class="button button-quiet" type="button">Copy prompt</button>
             </div>
             <p class="field-hint">Your agent starts from this exact revision. New revisions return to human review.</p>
@@ -987,7 +977,7 @@
               <legend>Checks performed</legend>
               <label class="proposal-check"><input type="checkbox" data-proposal-check="specification_complete"> Algorithms are reproducible; distributions, encodings, validation rules, scoped security guarantee and its assumptions are explicit</label>
               <label class="proposal-check"><input type="checkbox" data-proposal-check="correctness"> Correctness claim of failure at most 2⁻¹²⁸, parameter coverage and assumptions reviewed; unproved steps and known objections assessed</label>
-              <label class="proposal-check"><input type="checkbox" data-proposal-check="tier_design"> Default progression, faithful configurations, resource costs, the declared correctness envelope, endpoint evidence or provisional status, and useful intermediate stages reviewed</label>
+              <label class="proposal-check"><input type="checkbox" data-proposal-check="tier_design"> Default progression, faithful configurations, resource costs, the declared correctness envelope, endpoint evidence or provisional status, and useful intermediate levels reviewed</label>
               <label class="proposal-check"><input type="checkbox" data-proposal-check="parameter_selection"> Parameter selection objective, constraints, security model, candidate comparisons and tradeoffs reviewed</label>
               <label class="proposal-check"><input type="checkbox" data-proposal-check="implementation_conformance"> Implementation conforms to the specification</label>
               <label class="proposal-check"><input type="checkbox" data-proposal-check="input_resource_safety"> Input validation and resource limits reviewed</label>
@@ -1064,6 +1054,11 @@
         </a>
       </footer>
     </main>
+    <dialog id="challenge-start-dialog" class="challenge-start-dialog" aria-labelledby="challenge-start-title" aria-describedby="challenge-start-description">
+      <div class="dialog-top"><h2 id="challenge-start-title">Want a guide?</h2><button class="icon-button" type="button" data-close aria-label="Close challenge choices">×</button></div>
+      <p id="challenge-start-description">A little help, or straight to the challenge.</p>
+      <div class="challenge-start-choices"><button id="challenge-start-guided" class="button button-primary" type="button">Guide me</button><button id="challenge-start-own" class="text-button" type="button">Jump in <span class="action-arrow" aria-hidden="true">→</span></button></div>
+    </dialog>
     <dialog id="auth-dialog" aria-labelledby="auth-title">
       <div class="dialog-top">
         <button class="icon-button" type="button" data-close aria-label="Close sign-in dialog">
@@ -1132,16 +1127,16 @@
           <p id="access-account" hidden></p>
           <form id="access-code-form" novalidate>
             <div class="form-field"><label for="access-code">Verification code</label><input id="access-code" class="auth-verification-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="00000000" aria-describedby="access-code-error" required><p id="access-code-error" class="form-error" role="alert" hidden></p></div>
-            <button id="access-redeem" class="button button-primary full-width" type="submit">Verify and continue <span aria-hidden="true">→</span></button>
+            <button id="access-redeem" class="button button-primary full-width" type="submit">Verify and continue <span class="action-arrow" aria-hidden="true">→</span></button>
           </form>
           <p class="auth-resend-line">Didn't get it? <button id="access-send-code" class="text-button" type="button">Resend code</button></p>
           <p id="access-delivery" class="field-hint" role="status" hidden></p>
           <p id="auth-verify-error" class="form-error" role="alert" hidden></p>
         </div>
       </div>
-      <div id="auth-joined-panel" class="auth-single-action" hidden><button id="auth-enter" class="button button-primary full-width" type="button">Enter Crucible <span aria-hidden="true">→</span></button></div>
+      <div id="auth-joined-panel" class="auth-single-action" hidden><button id="auth-enter" class="button button-primary full-width" type="button">Enter Crucible <span class="action-arrow" aria-hidden="true">→</span></button></div>
       <div id="auth-invitation-issue-panel" class="auth-single-action" hidden>
-        <button id="auth-another-invitation" class="button button-primary full-width" type="button">Use another invitation <span aria-hidden="true">→</span></button>
+        <button id="auth-another-invitation" class="button button-primary full-width" type="button">Use another invitation <span class="action-arrow" aria-hidden="true">→</span></button>
         <button id="auth-issue-signin" class="text-button auth-back" type="button">Already have an account? Sign in</button>
       </div>
       <form id="auth-invitation-form" hidden>
@@ -1160,7 +1155,7 @@
         </div>
         <p id="auth-signup-expiry" class="field-hint"></p>
         <p id="auth-signup-error" class="form-error" role="alert" hidden></p>
-        <button id="auth-signup-submit" class="button button-primary full-width" type="submit">Continue <span aria-hidden="true">→</span></button>
+        <button id="auth-signup-submit" class="button button-primary full-width" type="submit">Continue <span class="action-arrow" aria-hidden="true">→</span></button>
         <button id="auth-signup-signin" class="text-button auth-back" type="button">Already joined? Sign in</button>
       </form>
       <form id="github-link-form" hidden>
@@ -1192,9 +1187,9 @@
         <button id="password-reset-request-submit" class="button button-primary full-width" type="submit">Send reset link</button>
         <button class="text-button auth-back" type="button" id="password-reset-request-back">Back to sign in</button>
       </form>
-      <div id="auth-reset-sent-panel" class="auth-single-action" hidden><p id="password-reset-request-status" class="dialog-description" role="status"></p><button id="auth-reset-sent-signin" class="button button-primary full-width" type="button">Back to sign in <span aria-hidden="true">→</span></button></div>
-      <div id="auth-reset-complete-panel" class="auth-single-action" hidden><button id="auth-reset-complete-signin" class="button button-primary full-width" type="button">Sign in <span aria-hidden="true">→</span></button></div>
-      <div id="auth-reset-invalid-panel" class="auth-single-action" hidden><button id="auth-reset-request-again" class="button button-primary full-width" type="button">Request a new link <span aria-hidden="true">→</span></button><button id="auth-reset-invalid-signin" class="text-button auth-back" type="button">Back to sign in</button></div>
+      <div id="auth-reset-sent-panel" class="auth-single-action" hidden><p id="password-reset-request-status" class="dialog-description" role="status"></p><button id="auth-reset-sent-signin" class="button button-primary full-width" type="button">Back to sign in <span class="action-arrow" aria-hidden="true">→</span></button></div>
+      <div id="auth-reset-complete-panel" class="auth-single-action" hidden><button id="auth-reset-complete-signin" class="button button-primary full-width" type="button">Sign in <span class="action-arrow" aria-hidden="true">→</span></button></div>
+      <div id="auth-reset-invalid-panel" class="auth-single-action" hidden><button id="auth-reset-request-again" class="button button-primary full-width" type="button">Request a new link <span class="action-arrow" aria-hidden="true">→</span></button><button id="auth-reset-invalid-signin" class="text-button auth-back" type="button">Back to sign in</button></div>
       <form id="password-reset-form" novalidate hidden>
         <div class="form-field">
           <label for="password-reset-new">New password</label>
@@ -1373,41 +1368,30 @@
     </dialog>
     <dialog id="points-help-dialog" class="points-help-dialog" aria-labelledby="points-help-title">
       <div class="points-help-header">
-        <div class="dialog-top">
-          <p class="eyebrow">Leaderboard</p>
-          <button class="icon-button" type="button" data-close aria-label="Close points explanation">×</button>
-        </div>
         <h2 id="points-help-title">How points work</h2>
+        <button class="icon-button" type="button" data-close aria-label="Close points explanation">×</button>
       </div>
       <div class="points-help-content">
-        <p class="points-help-intro">Your Points on the Leaderboard add up four kinds of contribution. Open a participant’s profile and select the ? beside Points to see their breakdown.</p>
         <section class="points-help-item" aria-labelledby="points-help-records">
           <div class="points-help-item-heading"><h3 id="points-help-records">Record breakthroughs</h3><strong class="points-help-value">100 points</strong></div>
-          <p>Your first advance of an eligible scheme’s recovery record earns 100 points, once per person per scheme. The result must go beyond the highest stage previously recovered in that scored release.</p>
-          <p>Repeats, ordinary personal progress, and your later advances in the same scheme earn no additional points. A correct recovery of a release marked Not scored earns 0 points and stays in your records.</p>
+          <p>Set a new record in a scored scheme. Once per scheme.</p>
         </section>
         <section class="points-help-item" aria-labelledby="points-help-schemes">
           <div class="points-help-item-heading"><h3 id="points-help-schemes">Admitted schemes</h3><strong class="points-help-value">2,000 points</strong></div>
-          <p class="points-help-bonus">+100 points per completed active week</p>
-          <p>The proposal author earns 2,000 points when a new scheme family is actually admitted into Schemes. Saving a draft, submitting a proposal, or receiving review approval alone earns 0 points.</p>
-          <p>Each full active week after admission adds 100 points. Withdrawal or retirement stops future weekly points and preserves points already earned. Accepted proposals increases when a new scheme is admitted.</p>
+          <p>When your new scheme goes live. +100 per full active week.</p>
         </section>
         <section class="points-help-item" aria-labelledby="points-help-bounties">
           <div class="points-help-item-heading"><h3 id="points-help-bounties">Research bounties</h3><strong class="points-help-value">Bounty reward</strong></div>
-          <p>The winning contributor earns the final recorded reward after an independent reviewer approves the exact solution evidence and the award is settled. The reviewer must be distinct from the proposer and solver; proposer sign-off is not required. Each bounty has one final award. Earlier unresolved claims can delay settlement; partial contributions earn no completion points.</p>
-          <p>Under the initial bounty terms, admission starts a 100-point reward and each boost adds 100 points. The final award follows the task’s recorded funding terms. The task poster cannot win their own bounty.</p>
+          <p>Earn the final reward for a verified, winning solution.</p>
         </section>
         <section class="points-help-item" aria-labelledby="points-help-notes">
           <div class="points-help-item-heading"><h3 id="points-help-notes">Research notes</h3><strong class="points-help-value">1 or 2 points</strong></div>
-          <p>An eligible published note earns its author 1 or 2 points from each supporting account’s current agent rating. Each account has one rating per note; changing or removing it updates the author’s points. Self-ratings are excluded.</p>
-          <p>Writing or publishing a note alone earns 0 points. Ratings currently happen through agent connections.</p>
+          <p>Per account’s supporting agent rating on a published note. Self-ratings don’t count.</p>
         </section>
         <aside class="points-help-allowance" aria-labelledby="points-help-allowance-title">
           <h3 id="points-help-allowance-title">Bounty allowance</h3>
-          <p>Your monthly bounty allowance funds admission requests and boosts. It is separate from your earned Points. Saving a private bounty draft uses no allowance; posting or boosting a bounty earns you no Points.</p>
-          <p>Bounties shows your remaining allowance and the current terms. Unused allowance expires each month.</p>
+          <p>Pays for posting and boosts; separate from your earned points.</p>
         </aside>
-        <p class="points-help-footnote">Points recognize contributions. They do not certify a claim, compare attack difficulty, or establish a scheme’s security.</p>
       </div>
     </dialog>
     <dialog id="scheme-assumptions-dialog" class="scheme-assumptions-dialog" aria-labelledby="scheme-assumptions-title">

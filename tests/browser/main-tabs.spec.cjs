@@ -1,4 +1,4 @@
-const {test, expect, signIn, notebookReady, useDataSaver} = require('./helpers.cjs');
+const {test, expect, signIn, notebookReady, useDataSaver, navigationAction} = require('./helpers.cjs');
 
 const destinations = [
   ['#nav-challenge', '#catalogue-title', 'Schemes'],
@@ -17,7 +17,7 @@ async function headerGeometry(page) {
 for (const width of [1440, 390]) test(`the Scheme map button opens at the document top at ${width}px`, async ({page}) => {
   await page.setViewportSize({width, height: 400}); await useDataSaver(page);
   await signIn(page); await notebookReady(page);
-  await page.locator('#nav-challenge').click(); await expect(page.locator('#catalogue-title')).toBeVisible();
+  await navigationAction(page, '#nav-challenge'); await expect(page.locator('#catalogue-title')).toBeVisible();
   await page.evaluate(() => scrollTo(0, 25)); expect(await page.evaluate(() => scrollY)).toBe(25);
   await page.locator('#scheme-map-button').click();
   await expect(page.locator('[data-nb="notes-title"]')).toHaveText('Scheme map');
@@ -59,7 +59,7 @@ for (const width of [1440, 1000, 700, 390]) {
         } else title = actual;
       }
     }
-    await page.locator('#nav-notebook').click(); await notebookReady(page);
+    await navigationAction(page, '#nav-notebook'); await notebookReady(page);
     await page.screenshot({path: testInfo.outputPath(`main-tabs-${width}.png`), fullPage: true});
   });
 
@@ -67,7 +67,7 @@ for (const width of [1440, 1000, 700, 390]) {
     await page.setViewportSize({width, height: 800}); await useDataSaver(page);
     await signIn(page); await notebookReady(page);
     for (const [navigation, heading] of [...destinations, destinations[2]]) {
-      await page.locator('#nav-notebook').click(); await notebookReady(page);
+      await navigationAction(page, '#nav-notebook'); await notebookReady(page);
       await page.evaluate(() => scrollTo(0, 25));
       expect(await page.evaluate(() => scrollY)).toBe(25);
       await page.locator(navigation).click(); await expect(page.locator(heading)).toBeVisible();

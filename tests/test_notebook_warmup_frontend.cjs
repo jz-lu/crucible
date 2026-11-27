@@ -133,23 +133,23 @@ const lists=app=>app.requests.filter(row=>row.url.startsWith('/api/notebook/note
   assert.equal(app.q('page-jump').hidden,false);assert.equal(app.q('page-select').querySelectorAll('option').length,3);
   app.root.hidden=false;app.sandbox.window.scrollY=180;app.sandbox.window.innerHeight=900;
   app.root.getBoundingClientRect=()=>({top:-40,height:9000});
-  app.q('timeline-view').click();await flush();assert.equal(app.root.style.minHeight,'940px');
-  app.q('visualization-back').click();await flush();assert.equal(app.root.style.minHeight,'940px','The view switch keeps its own viewport reservation');
+  app.q('timeline-view').click();await flush();assert.equal(app.root.style.minHeight,'');
+  app.q('visualization-back').click();await flush();assert.equal(app.root.style.minHeight,'','A new view starts without old scroll space');
   const beforePaging=app.requests.length;
   app.q('list').getBoundingClientRect=()=>({height:Math.max(app.q('list').querySelectorAll('.nb-entry').length*35,parseFloat(app.q('list').style.minHeight)||0)});app.sandbox.window.scrollY=400;
-  let scrolls=0;app.sandbox.window.scrollTo=()=>{scrolls++;};
+  let scrolls=0;app.sandbox.window.scrollTo=({top})=>{scrolls++;app.sandbox.window.scrollY=top;};
   app.q('page-select').focus();app.q('page-select').value='2';app.q('page-select').dispatchEvent({type:'change'});await flush();
   assert.equal(app.q('list').querySelectorAll('.nb-entry').length,5);assert.match(app.q('list').textContent,/Jump title 50/);
   assert.equal(app.q('page-select').value,'2');assert.equal(app.document.activeElement,app.q('page-select'));
   assert.equal(app.q('more').disabled,true);assert.equal(app.q('prev').disabled,false);
   assert.equal(app.q('list').style.minHeight,'');assert.equal(app.q('list').classList.contains('nb-page-position-held'),false);
   assert.equal(app.root.style.minHeight,'');assert.equal(app.root.classList.contains('nb-view-scroll-held'),false);
-  assert.equal(app.q('list').getBoundingClientRect().height,175);assert.equal(app.sandbox.window.scrollY,400);assert.equal(scrolls,0);
+  assert.equal(app.q('list').getBoundingClientRect().height,175);assert.equal(app.sandbox.window.scrollY,0);assert.equal(scrolls,1);
   app.q('page-select').value='99';app.q('page-select').dispatchEvent({type:'change'});await flush();
   assert.equal(app.q('page-select').value,'2');assert.match(app.q('list').textContent,/Jump title 50/);
   app.q('prev').focus();app.q('prev').click();await flush();assert.match(app.q('list').textContent,/Jump title 25/);
   assert.equal(app.document.activeElement,app.q('prev'));assert.equal(app.requests.length,beforePaging);assert.equal(beforePaging,before+1,'Only Timeline reads its aggregate');
-  assert.equal(app.q('list').getBoundingClientRect().height,875);assert.equal(scrolls,0);
+  assert.equal(app.q('list').getBoundingClientRect().height,875);assert.equal(scrolls,2);
   app.controller.hide();assert.equal(app.q('list').style.minHeight,'');
  });
  await test('filtered complete page counts reset and a refreshed smaller index clamps the selected page',async()=>{

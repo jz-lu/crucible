@@ -188,7 +188,7 @@
     } catch (error) { surface.remove(); throw error; }
   }
 
-  function mount(root, {navigate, api: requestAPI, account, session = () => null, currentReleases = () => [], mapFactory = mountResearchMap, prepareMapCatalogue = () => {}, prepareBounties = async () => {}, canWarm = () => true, curatedNotesAvailable = () => true, noteOrigin = () => null, statementWorkflowAvailable = () => false, reviewOnly = false}) {
+  function mount(root, {navigate, agentHandoff, api: requestAPI, account, session = () => null, currentReleases = () => [], mapFactory = mountResearchMap, prepareMapCatalogue = () => {}, prepareBounties = async () => {}, canWarm = () => true, curatedNotesAvailable = () => true, noteOrigin = () => null, statementWorkflowAvailable = () => false, reviewOnly = false}) {
     if (root.notebookController) return root.notebookController;
     let currentAccount = typeof account === 'function' ? account() : account;
     let accountId = currentAccount?.id == null ? null : String(currentAccount.id);
@@ -405,7 +405,7 @@
     const visualizationBack = mark('visualization-back', button('← Notes', () => navigateView(params.get('view') === 'map' ? '#challenge' : '#notebook'), 'nb-link nb-page-back'));
     visualizationBack.hidden = true;
     const headingActions = el('div', 'nb-heading-actions');
-    headingActions.append(mark('files', button('Agent files', agentFiles)), mark('publish-all', button('Publish all', publishAllDialog, 'nb-button')), mark('new', button('New note', () => editNote(), 'nb-button nb-primary'))); heading.append(headingActions);
+    headingActions.append(mark('files', agentHandoff ? agentHandoff({prompt:notebookAgentPrompt,current:() => active && Boolean(accountId),files:agentFiles}) : button('Work with an agent',agentFiles)), mark('publish-all', button('Publish all', publishAllDialog, 'nb-button')), mark('new', button('New note', () => editNote(), 'nb-button nb-primary'))); heading.append(headingActions);
     const timelineView = mark('timeline-view', button('Timeline', () => navigateView('#notebook?view=timeline'), 'nb-button nb-visualization-button'));
     for (const event of ['pointerenter', 'focus']) timelineView.addEventListener(event, prepareTimeline);
     titleRow.append(pageTitle); heading.prepend(titleRow);
@@ -456,17 +456,9 @@
     function dialogGuard() { const generation = epoch, owner = accountId, opened = dialogEpoch; return () => epoch === generation && owner !== null && identity() === owner && dialogEpoch === opened && (q('dialog').open || suspendedDialog); }
     function clearViewSpace() { root.style.minHeight = ''; root.classList.remove('nb-view-scroll-held'); }
     function navigateView(route) {
-      // Removing a long Notes list can shrink the document below the current
-      // viewport and make the browser clamp its scroll offset. Reserve only
-      // enough empty space for this viewport, never the previous private page.
-      const box = root.getBoundingClientRect?.(), viewport = window.innerHeight;
-      if (active && accountId && identity() === accountId && !root.hidden && window.scrollY > 0 &&
-          box && Number.isFinite(box.top) && Number.isFinite(viewport) && viewport > 0) {
-        root.style.minHeight = Math.ceil(Math.max(0, viewport - box.top)) + 'px';
-        root.classList.add('nb-view-scroll-held');
-      } else clearViewSpace();
-      navigate(route);
+      clearViewSpace(); navigate(route);
     }
+
     function setAccount(value) {
       currentAccount = value;
       const next = value?.id == null ? null : String(value.id);
@@ -581,7 +573,7 @@
           if (current() && !params.has('note') && !params.has('view') && !search.trim() && readCache.get('summary-index') !== before) return loadList();
         }).catch(() => {});
       }
-      if (!reviewOnly && active && params.get('compose') === 'proposal' && !q('dialog').open) editNote(null, true);
+      if (!reviewOnly && active && ['proposal','note'].includes(params.get('compose')) && !q('dialog').open) editNote(null, params.get('compose') === 'proposal');
     }
     function ensureBounties() {
       if (bountyController) return Promise.resolve(bountyController);
@@ -591,7 +583,7 @@
       const task = (async () => {
         await prepareBounties();
         if (!current()) return null;
-        bountyController = window.CrucibleBounties.mount(q('bounties'), {api, navigate:navigateView, current, canWarm, settleScroll:clearViewSpace, reviewOnly});
+        bountyController = window.CrucibleBounties.mount(q('bounties'), {api, navigate:navigateView, current, canWarm, agentHandoff, settleScroll:() => { clearViewSpace(); window.scrollTo?.({top:0,left:0,behavior:'instant'}); }, reviewOnly});
         return bountyController;
       })();
       bountyPreparation = task;
@@ -840,6 +832,7 @@
         !q('library').hidden && listLoaded && q('list').getAttribute('aria-busy') !== 'true';
     }
     function changePage(index) {
+      window.scrollTo?.({top:0,left:0,behavior:'instant'});
       const focused = document.activeElement;
       const ownsFocus = focused?.closest('.nb-pagination') === q('pagination'), current = readGuard();
       // Keep the paging row in place while a page is pending. Once it settles,
@@ -1326,7 +1319,7 @@
       const argument = validStructuredId(params.get('argument')) ? q('full').querySelector('[data-note-argument="' + params.get('argument') + '"]') : null;
       const selected = passage || section || statement || argument;
       (selected || q('full').querySelector('.nb-full-title'))?.focus({preventScroll:true});
-      if (selected) selected.scrollIntoView({block:passage ? 'center' : 'start'});
+      // Preserve the exact passage focus while navigation starts at page top.
     }
     async function loadNote(id, {quiet = false} = {}) {
       captureReviewDraft(); captureReviewDraft = () => {};
@@ -1957,7 +1950,10 @@
         if (!changed) return;
         for (const entry of entries.filter(entry => !entry.removed && entry.fields.length)) {
           const value = entry.value();
-          if (!value.title || !citationTarget(value.url) || !value.scope) throw Object.assign(new Error('Each new citation needs a title, a valid source link, and what it supports.'), {status:422});
+          if (!value.title || !citationTarget(value.url) || !value.scope) throw Object.assign(new Error('Each new citation needs a title, a valid source link, and what it supports.'), {
+            status:422, guideTarget:!value.title ? entry.fields[0] : !citationTarget(value.url) ? entry.fields[1] : entry.fields[2],
+            guideMessage:!value.title ? 'Give this source its title.' : !citationTarget(value.url) ? 'Use a full http(s) source URL or an exact Crucible note link.' : 'Explain exactly what this source supports and any limits.'
+          });
           const target = citationTarget(value.url);
           if (Object.hasOwn(relationLabels, value.relation) && value.relation !== 'cites' && target.internal && !target.pinned) throw Object.assign(new Error('Use Cite this note to copy an exact revision and content hash for a note relationship.'), {status:422});
         }
@@ -2551,6 +2547,7 @@
       });
       form.append(humanWritten.wrap);
       const citations = citationEditor(r?.references);
+      form.guideValidation = () => citations.validate();
       if (sourceReference) citations.loadIfEmpty([sourceReference]);
       form.append(citations.section);
       let specification = r?.extensions?.kem_specification, attachmentChanged = false, reading = false, fileToken = 0;
@@ -2570,7 +2567,7 @@
       }, 'nb-button nb-remove-note') : null;
       const saveLabel = () => note ? 'Save new revision' : selectedType() === 'scheme-proposal' ? 'Save proposal draft' : 'Save private note';
       const cancel = button('Cancel', () => closeDialog(), 'nb-button'), save = el('button', 'nb-button nb-primary', saveLabel());
-      save.type = 'submit';
+      save.type = 'submit'; save.setAttribute('data-guide-action', 'save-note');
       if (remove) actions.append(remove);
       actions.append(cancel, save); form.append(actions); container.append(form);
       const values = () => Object.fromEntries(Object.entries(controls).map(([k,v]) => [k,v.value])); const original = canonical(values()); hasUnsavedDraft = () => selectedType() !== initialType || attachmentChanged || citations.dirty() || readableSections.dirty() || Boolean(statementEditor?.dirty()) || tagPicker.dirty() || canonical(values()) !== original;
@@ -2656,15 +2653,20 @@
       const retainedExamples = kept.filter(note => seeds.get(note.id) === canonical(note)).length;
       return {workspace:{...workspace, notes:kept}, omitted:workspace.notes.length - kept.length, retainedExamples};
     }
+    function notebookAgentPrompt() {
+      const origin = new URL(window.location.href).origin;
+      const setup = 'Client: ' + origin + '/api/agent/client — save as crucible_cli.py and inspect before running. Reuse an existing scoped connection; otherwise run python3 crucible_cli.py --server ' + origin + ' login --notebook --no-browser and let me approve it in my browser. Read the current contract with python3 crucible_cli.py --server ' + origin + ' guide before doing research or writing.';
+      return pipelineInstruction() + '\n\n' + setup + '\n\n' + notebookCliGuidance + '\n\n' + noteWritingGuidance + '\n\nRead this Crucible research notebook. A well-scoped question, negative result or distant theoretical lead is valid; do not invent a KEM connection. Separate source results from proposed future work. Develop a precise claim or question with its conditions and supporting argument, evidence or motivation. Label unproved conjectures explicitly. Add a note or append a revision; preserve every existing note and revision. Use tags freely. ' + importSharingGuidance + ' Do not invent publication, review status or authority.\n\n' + citationGuidance + '\n\nUse references: [{"title":"Source title", "url":"https://… or /#notebook?note=ID&revision=N&sha256=HASH", "scope":"Exact claim supported and section/page; limitations"}]. Copy a note’s identity and hash from the actual saved revision, never guess them. Use references: [] when there are genuinely no sources, and explain why in the note.';
+    }
     function agentFiles() {
       if (!accountId) return;
-      const container = openDialog('Work with an agent'), present = dialogGuard();
+      const container = openDialog(agentHandoff ? 'Files & import' : 'Work with an agent'), present = dialogGuard();
       container.append(el('p', 'nb-hint', 'Agents can work directly through the CLI after you approve a notebook connection once. File export and import are also available here. ' + importSharingGuidance));
       const summary = el('p', 'nb-hint'); summary.setAttribute('role', 'status');
       const exportButton = button('Download my notebook', async () => { exportButton.disabled = true; try { const result = await api('/api/notebook/export'); if (present()) download('crucible-notebook.json', result.workspace || result); } catch (err) { if (present()) summary.textContent = err.message; } finally { if (present()) exportButton.disabled = false; } }, 'nb-button'); container.append(exportButton);
       const contractButton = button('Download agent contract', async () => { contractButton.disabled = true; try { const document = await api('/api/agent/pipeline'); if (document?.format !== 'crucible-agent-pipeline-v1') throw Error('Agent contract unavailable.'); if (present()) download('crucible-pipeline.json', document); } catch (err) { if (present()) summary.textContent = err.message; } finally { if (present()) contractButton.disabled = false; } }, 'nb-button'); container.append(contractButton);
-      const prompt = pipelineInstruction() + '\n\n' + notebookCliGuidance + '\n\n' + noteWritingGuidance + '\n\nRead this Crucible research notebook. A well-scoped question, negative result or distant theoretical lead is valid; do not invent a KEM connection. Separate source results from proposed future work. Develop a precise claim or question with its conditions and supporting argument, evidence or motivation. Label unproved conjectures explicitly. Add a note or append a revision; preserve every existing note and revision. Use tags freely. ' + importSharingGuidance + ' Do not invent publication, review status or authority.\n\n' + citationGuidance + '\n\nUse references: [{"title":"Source title", "url":"https://… or /#notebook?note=ID&revision=N&sha256=HASH", "scope":"Exact claim supported and section/page; limitations"}]. Copy a note’s identity and hash from the actual saved revision, never guess them. Use references: [] when there are genuinely no sources, and explain why in the note.';
-      const promptSection = el('section', 'nb-file-section'); promptSection.append(el('h3', '', 'A starting prompt'), el('pre', 'nb-prompt', prompt), button('Copy prompt', async () => { try { await navigator.clipboard.writeText(prompt); if (present()) summary.textContent = 'Prompt copied.'; } catch (_) { if (present()) summary.textContent = 'Select and copy the prompt.'; } })); container.append(promptSection);
+      const prompt = notebookAgentPrompt();
+      const promptSection = el('section', 'nb-file-section'); promptSection.append(el('h3', '', 'A starting prompt'), el('pre', 'nb-prompt', prompt), button('Copy prompt', async () => { try { await navigator.clipboard.writeText(prompt); if (present()) summary.textContent = 'Prompt copied.'; } catch (_) { if (present()) summary.textContent = 'Select and copy the prompt.'; } })); if (!agentHandoff) container.append(promptSection);
       const importSection = el('section', 'nb-file-section'); importSection.append(el('h3', '', 'Import notes'), el('p', 'nb-hint', 'Only your explicit import uploads notes. Existing browser drafts remain untouched. Unused, unchanged illustrative examples are excluded.'));
       const file = field('Workspace JSON', 'import', '', {type:'file'}); file.input.accept = '.json,application/json'; let pending = null, readToken = 0, busy = false, pendingUncertain = false;
       const apply = button('Import notes', async () => {

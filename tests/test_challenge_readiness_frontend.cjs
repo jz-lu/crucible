@@ -7,12 +7,12 @@ const {createApp, flush} = require('./frontend-dom.cjs');
 const alice = {id: 'alice', handle: 'alice'};
 const admitted = {admitted: true, reason: null};
 const denied = {admitted: false, reason: 'release_not_admitted'};
-const profiles = ['stage-1', 'stage-2'].map((id, index) => ({
+const profiles = ['level-1', 'level-2'].map((id, index) => ({
   id, instance_size: index + 1, parameter_bits: index + 1, stage_number: index + 1,
-  stage_label: 'Stage ' + (index + 1), shared_secret_bytes: 32,
+  stage_label: 'Level ' + (index + 1), shared_secret_bytes: 32,
   encoding: {shared_secret_bytes: 32}, parameters: {}, correctness: {}
 }));
-const route = (profile = 'stage-1', view = 'challenge') =>
+const route = (profile = 'level-1', view = 'challenge') =>
   `#challenge/fixture/2?profile=${profile}&view=${view}`;
 const deferred = () => {
   let resolve, reject;
@@ -32,7 +32,7 @@ async function boot({admission = admitted} = {}) {
   });
   server.session = () => server.envelope({user: server.user, csrf_token: server.csrf,
     access: {mode: 'beta', status: server.user ? 'active' : 'anonymous', allowed: Boolean(server.user)}});
-  server.challenge = (profile = 'stage-1', status = 'open', round = server.roundId) => ({
+  server.challenge = (profile = 'level-1', status = 'open', round = server.roundId) => ({
     id: 'instance-' + profile, scheme_id: 'fixture', scheme_version: '2', profile_id: profile,
     round_id: round, status, issued_at: round * 3600 + 1200, ends_at: (round + 1) * 3600,
     public: {encoding: {shared_secret_bytes: 32}},
@@ -42,7 +42,7 @@ async function boot({admission = admitted} = {}) {
     if (url.pathname === '/api/session') return server.session();
     if (url.pathname === '/api/schemes') return server.envelope({schemes: [{
       id: 'fixture', version: '2', name: 'Fixture KEM', profiles,
-      protocol: {construction: 'Fixture'}, next_profile_id: 'stage-1',
+      protocol: {construction: 'Fixture'}, next_profile_id: 'level-1',
       size_parameter: {meaning: 'Fixture'}, generation_admission: admission
     }]});
     if (url.pathname !== '/api/challenges') return undefined;
@@ -105,7 +105,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     await finishLookup(server);
     assert.equal(posts(app).length, 1);
     assert.equal(server.issues.length, 1);
-    assert.deepEqual(server.issues[0].payload, {profile_id: 'stage-1', scheme_id: 'fixture', scheme_version: '2'});
+    assert.deepEqual(server.issues[0].payload, {profile_id: 'level-1', scheme_id: 'fixture', scheme_version: '2'});
     const request = posts(app)[0];
     assert.equal(request.options.credentials, 'same-origin');
     assert.equal(request.options.cache, 'no-store');
@@ -121,7 +121,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     for (const status of ['open', 'solved', 'incorrect']) {
       const {app, server} = await boot();
       await clickGet(app);
-      await finishLookup(server, 0, {challenge: server.challenge('stage-1', status), round_started: true});
+      await finishLookup(server, 0, {challenge: server.challenge('level-1', status), round_started: true});
       assert.equal(posts(app).length, 0, status);
       assert.equal(app.$('#challenge-active').hidden, false, status);
       assert.equal(pendingIntent(app), null, status);
@@ -161,8 +161,8 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     await test(`queued Get cannot survive a ${change} ownership change`, async () => {
       const {app, server} = await boot();
       await clickGet(app);
-      if (change === 'profile') await app.navigate(route('stage-2'));
-      else if (change === 'view') await app.navigate(route('stage-1', 'protocol'));
+      if (change === 'profile') await app.navigate(route('level-2'));
+      else if (change === 'view') await app.navigate(route('level-1', 'protocol'));
       else if (change === 'workspace') await app.navigate('#about');
       else {
         if (change === 'account') server.user = {id: 'bob', handle: 'bob'};
@@ -193,7 +193,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.$('#challenge-active').hidden, false);
     assert.equal(app.$('#challenge-empty').hidden, true);
     assert.equal(app.$('#challenge-active').getAttribute('aria-busy'), 'true');
-    assert.equal(app.$('#manual-instance-tools').hidden, true);
+    assert.equal(app.$('#manual-instance-tools').hidden, false);
     assert.equal(app.$('#use-agent').disabled, true);
     assert.equal(app.$('#open-submission').disabled, true);
     assert.equal(posts(app).length, 0);

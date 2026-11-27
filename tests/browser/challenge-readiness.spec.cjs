@@ -1,4 +1,4 @@
-const {test, expect, signIn, holdResponse} = require('./helpers.cjs');
+const {test, expect, signIn, holdResponse, navigationAction} = require('./helpers.cjs');
 
 const scheme = 'teaching-dh-kem';
 const version = '4';
@@ -94,7 +94,7 @@ for (const [width, profile] of [[1440, 'dh-30'], [390, 'dh-32']]) {
       // request while the server's current-instance response remains held.
       await page.locator('#issue-button').evaluate(element => {element.click(); element.click();});
       expect(reads).toHaveLength(1); expect(posts).toHaveLength(0);
-      await page.locator('#nav-about').focus();
+      await navigationAction(page, '#nav-about', {focus:true});
       summary.release(); await summary.delivered;
       const issuedResponse = await pendingIssuance;
       expect(issuedResponse.status()).toBe(200);
@@ -142,7 +142,7 @@ for (const [width, profile] of [[1440, 'dh-30'], [390, 'dh-32']]) {
       await expect(page.locator('#issue-button')).toHaveText('Preparing your instance…');
       await expect(page.locator('#issue-button')).toBeDisabled();
       expect(posts).toHaveLength(1);
-      await page.locator('#nav-about').focus();
+      await navigationAction(page, '#nav-about', {focus:true});
       existing.release(); await existing.delivered;
       await expect(page.locator('#challenge-active')).toBeVisible();
       await expect(page.locator('#download-button')).toHaveAttribute('href', '/api/challenges/' + encodeURIComponent(challengeId) + '/download');
@@ -215,7 +215,7 @@ for (const width of [1440, 390]) {
       // The reusable actor may already have started this round in another
       // journey. Leave before releasing its status so this clock-only check
       // never requests a further instance through normal round continuation.
-      await page.locator('#nav-about').click();
+      await navigationAction(page, '#nav-about');
       await expect(page.locator('#about-workspace')).toBeVisible();
       summary.release(); await summary.delivered;
       expect(posts).toHaveLength(0);

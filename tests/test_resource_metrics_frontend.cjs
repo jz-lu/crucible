@@ -40,7 +40,7 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   assert.match(chart.querySelector('details').textContent, /not a confidence interval or a hardware correction/);
   assert.match(chart.querySelector('details').textContent, /5 workers × 20 measured calls each/);
   assert.deepEqual(chart.querySelector('thead').querySelectorAll('th').map(n => n.textContent), ['Configuration', 'Median (µs)', 'Middle 50% (µs)', 'Samples']);
-  assert.deepEqual(chart.querySelector('tbody').querySelector('tr').querySelectorAll('td').map(n => n.textContent), ['Stage 1', '2', '1–3', '100']);
+  assert.deepEqual(chart.querySelector('tbody').querySelector('tr').querySelectorAll('td').map(n => n.textContent), ['Level 1', '2', '1–3', '100']);
   assert.equal(app.$('#overview-title-computation').textContent, 'Computation');
   assert.deepEqual(chart.querySelector('select[aria-label="Operation"]').querySelectorAll('option').map(option => option.value), ['keygen', 'encapsulate', 'decapsulate']);
   assert.equal(chart.querySelector('option[value="rss"]'), null);
@@ -226,7 +226,7 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
     assert.deepEqual(target.querySelectorAll('.chart-recovery-line').map(p => p.dataset.profileId), [profiles[1].id]);
     assert.equal(target.querySelector('.chart-recovery-line').getAttribute('x1'), '465');
     assert.equal(target.querySelector('.chart-recovery-area').getAttribute('width'), '417');
-    assert.match(target.querySelector('desc').textContent, /not a security guarantee or recoveries at lower stages/);
+    assert.match(target.querySelector('desc').textContent, /not a security guarantee or recoveries at lower levels/);
   }
   recoveredScheme.recovered_profile_ids = [profiles[0].id]; recoveredScheme.largest_recovered_profile_id = profiles[0].id;
   await recoveredApp.sandbox.refreshProfiles({background:true});
@@ -238,7 +238,7 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   const namedApp = await createApp({schemes: [namedScheme], hash: '#scheme/resource-fixture/1', responder: url => url.pathname === '/api/protocol/resources' ? structuredClone(report) : undefined});
   const namedChart = namedApp.$('#overview-chart-public');
   assert.deepEqual(namedChart.querySelectorAll('.chart-recovery-line').map(p => p.dataset.profileId), [profiles[1].id]);
-  assert.equal(namedChart.querySelector('.chart-recovery-area'), null, 'named sets do not inherit a shaded stage frontier');
+  assert.equal(namedChart.querySelector('.chart-recovery-area'), null, 'named sets do not inherit a shaded level frontier');
   assert.equal(namedChart.querySelector('.chart-series'), null);
 
   let finishShared;
@@ -292,7 +292,7 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   const cleanRender = () => {
     for (const cardId of ['public', 'cipher', 'computation']) cleanModel.render({scheme, cardId,
       target: cleanApp.$('#overview-chart-' + cardId), profiles, profileId: p => p.id,
-      profileLabel: p => 'Stage ' + p.instance_size, stagePosition: p => p.instance_size,
+      profileLabel: p => 'Level ' + p.instance_size, stagePosition: p => p.instance_size,
       named: false, redraw: cleanRender, api: async () => {throw new Error('Unexpected clean-mode fetch');}, cleanPresentation: true});
   };
   cleanRender();
@@ -314,7 +314,7 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   assert.equal(cleanApp.document.activeElement, cleanChart.querySelector('[data-resource-operation="encapsulate"]'));
   const cleanAttachment = attachments.get('overview-chart-computation'), readout = cleanApp.document.createElement('span');
   cleanAttachment.onReadout(cleanAttachment.points[0], readout);
-  assert.equal(readout.querySelector('.chart-point-stage').textContent, 'Stage 1');
+  assert.equal(readout.querySelector('.chart-point-stage').textContent, 'Level 1');
   assert.equal(readout.querySelector('.chart-point-value').querySelector('strong').textContent, '4');
   assert.equal(readout.querySelector('.chart-point-unit').textContent, 'µs');
   const focusedOperation = cleanApp.document.activeElement; cleanRender();

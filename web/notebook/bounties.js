@@ -27,6 +27,10 @@
     root.setAttribute('role', 'img'); root.setAttribute('aria-label', `Scope ${value} of 5; 1 is open-ended, 5 is concrete`);
     root.append(ends, steps); return root;
   }
+  function statusTag(value) {
+    const tag = el('span','bty-status',statuses[value] || value); tag.dataset.status = value;
+    return tag;
+  }
   function reward(value) {
     return el('span', 'bty-points', Number.isSafeInteger(value) && value >= 0 ? value.toLocaleString('en-US') + ' points' : 'Reward not set');
   }
@@ -36,10 +40,12 @@
     if (!pin.unavailable) link.href = '#notebook?' + new URLSearchParams({note: pin.note_id, revision: String(pin.revision), sha256: pin.content_sha256});
     link.append(el('small', '', 'Revision ' + pin.revision + ' · ' + pin.content_sha256.slice(0, 12))); return link;
   }
-  function mount(host, {api, navigate, current = () => true, canWarm = () => true, settleScroll = () => {}, reviewOnly = false, client: suppliedClient}) {
+  function mount(host, {api, navigate, agentHandoff, current = () => true, canWarm = () => true, settleScroll = () => {}, reviewOnly = false, client: suppliedClient}) {
     const client = suppliedClient || window.CrucibleBountyAPI.createClient(api, current);
     let active = false, destroyed = false, request = 0, state = {}, policy = null, allowance = null, selected = null, signature = '';
     let nextFocus = null, pageTimer = null, action = null, pickerNumber = 0;
+    let highlightedIds = new Set(), highlightedAt = 0, highlightLoad = null;
+    const copyFeedback = new Map();
     const drafts = new Map(), pendingWrites = new Map(), completedWrites = new Map();
     const owns = () => !destroyed && current();
     const present = () => active && owns();
@@ -53,14 +59,14 @@
     const board = el('section'), listHeading = el('div', 'bty-list-heading'), count = el('span', 'bty-count');
     const sortField = field('Sort by', 'bounty-sort', 'concrete', {options: Object.entries(sorts), required:false}); sortField.wrap.classList.add('bty-sort');
     sortField.input.addEventListener('change', () => change({sort: sortField.input.value, page: 1}, 'bounty-sort'));
-    listHeading.append(count, sortField.wrap);
     const entries = el('div', 'bty-grid'), pagination = el('nav', 'bty-pagination'); pagination.setAttribute('aria-label', 'Bounty pages');
-    const secondary = el('nav', 'bty-secondary'); secondary.setAttribute('aria-label', 'Bounty collections');
-    const mine = button('Your activity', () => change({status: 'mine', page: 1}, 'heading'), 'bty-secondary-link');
-    const past = button('Past bounties', () => change({status: 'past', page: 1}, 'heading'), 'bty-secondary-link');
-    const open = button('← Bounties', () => change({status: 'open', page: 1}, 'heading'), 'bty-secondary-link');
-    const agent = button('Copy agent prompt', () => { void copyAgentPrompt(); }, 'bty-secondary-link'); agent.hidden = reviewOnly;
-    secondary.append(mine, agent, past, open); board.append(listHeading, entries, pagination, secondary);
+    const secondary = el('nav', 'bty-secondary'); secondary.setAttribute('aria-label', 'Bounty status');
+    const past = button('Closed', () => change({status:'past',page:1,id:'',compose:false,detail:'brief'}, 'heading'), 'bty-filter');
+    const open = button('Open', () => change({status:'open',page:1,id:'',compose:false,detail:'brief'}, 'heading'), 'bty-filter');
+    const agent = copyPromptButton('bty-secondary-link');
+    const agentHelp = agentHandoff ? agentHandoff({prompt:agentPrompt,current:() => present() && !reviewOnly,key:route}) : el('p','bty-agent-help'); if (!agentHandoff) agentHelp.append(el('span','','Work with an agent'),agent); agentHelp.hidden = reviewOnly;
+    const titleGroup = el('div', 'bty-title-group'); titleRow.append(count); titleGroup.append(titleRow, secondary); heading.replaceChildren(titleGroup, headingActions);
+    secondary.append(open,past); listHeading.append(agentHelp, sortField.wrap); board.append(listHeading, entries, pagination);
     const reader = el('section', 'bty-reader'), composer = el('section', 'bty-composer'); reader.hidden = composer.hidden = true;
     root.append(heading, notice, board, reader, composer);
     function announce(text, error = false) { notice.replaceChildren(); if (text) notice.append(el('p', error ? 'bty-error' : 'nb-notice', text)); }
@@ -71,14 +77,33 @@
       const setup = state.id ? `bounty init --bounty ${state.id} --path bounty-work` : 'bounty init --path bounty-work';
       return `Help me work on Crucible research bounties at ${origin}.\n\nClient: ${origin}/api/agent/client — save as crucible_cli.py and inspect before running. Reuse an existing connection with the needed permissions; otherwise connect with ${client} login --scope bounties:read --scope bounties:write --no-browser and let me approve it in my browser.\n\nRead ${client} guide, then ${client} guide --resource bounties.txt. Start with ${client} ${first}. If local work is useful, use a new directory: ${client} ${setup}. Read its README and exact task terms. Local initialization, reads and private draft saves use no monthly bounty allowance.\n\nKeep completion criteria and the verification plan explicit. Cite exact published note revisions and hashes; distinguish useful partial progress from a claimed solution. Saving a draft does not publish or admit a task. Linking a note does not approve a solution or award points.\n\nAllocate monthly bounty allowance only within my authorized request. Admission requests and boosts need a separately approved bounties:spend scope and an explicit --confirm-allowance amount matching the saved policy. Existing tokens gain no new permissions. Read the current allowance and costs; do not assume them. Never approve reviews through an agent. If a write response is lost, preserve .bounty-request.json and rerun the same command; do not create a replacement request. Return the saved task or contribution receipt and any unresolved questions.`;
     }
-    async function copyAgentPrompt() {
+    function copyPromptButton(cls) {
+      const trigger = button('Copy prompt', () => { void copyAgentPrompt(trigger); }, cls);
+      trigger.classList.add('bty-copy-prompt');
+      trigger.title = 'Paste this into your assistant to get started with Crucible bounties.';
+      trigger.setAttribute('aria-live','polite'); return trigger;
+    }
+    function clearCopyFeedback() {
+      for (const [trigger, feedback] of copyFeedback) { clearTimeout(feedback.timer); trigger.textContent = 'Copy prompt'; trigger.removeAttribute('data-copied'); }
+      copyFeedback.clear();
+    }
+    async function copyAgentPrompt(trigger) {
       if (!present() || reviewOnly) return;
-      const text = agentPrompt(), ownerRoute = route();
+      const text = agentPrompt(), ownerRoute = route(), token = request;
+      clearTimeout(copyFeedback.get(trigger)?.timer);
+      const feedback = {}; copyFeedback.set(trigger,feedback);
+      const currentCopy = () => present() && request === token && route() === ownerRoute && copyFeedback.get(trigger) === feedback;
       try {
         await window.navigator.clipboard.writeText(text);
-        if (present() && route() === ownerRoute) announce('Agent prompt copied.');
+        if (!currentCopy()) return;
+        trigger.textContent = 'Copied'; trigger.setAttribute('data-copied','true');
+        feedback.timer = setTimeout(() => {
+          if (copyFeedback.get(trigger) !== feedback) return;
+          trigger.textContent = 'Copy prompt'; trigger.removeAttribute('data-copied'); copyFeedback.delete(trigger);
+        },1800);
       } catch {
-        if (!present() || route() !== ownerRoute) return;
+        if (!currentCopy()) return;
+        trigger.textContent = 'Copy prompt'; trigger.removeAttribute('data-copied'); copyFeedback.delete(trigger);
         const box = el('textarea', 'bty-agent-prompt'); box.value = text; box.readOnly = true; box.rows = 8;
         box.setAttribute('aria-label', 'Agent prompt'); notice.replaceChildren(box); box.focus(); box.select?.();
       }
@@ -91,6 +116,7 @@
       if (next.id) params.set('bounty', next.id);
       if (next.detail && next.detail !== 'brief') params.set('detail', next.detail);
       if (next.compose) params.set('compose', 'bounty');
+      if (!reviewOnly && next.id && !next.compose && next.fromHome) params.set('from', 'home');
       return (reviewOnly ? '#reviews' : '#bounties') + (params.size ? '?' + params : '');
     }
     function change(patch, focus) {
@@ -107,9 +133,7 @@
       if (!nextFocus || !present()) return;
       const node = nextFocus === 'heading' ? title : root.querySelector('[data-bounty-focus="' + nextFocus + '"]') || root.querySelector('[name="' + nextFocus + '"]');
       const target = node && !node.disabled ? node : title;
-      const actionTransition = nextFocus.startsWith('action-');
       target.focus({preventScroll: true}); nextFocus = null; settleScroll();
-      if (actionTransition) (target.closest('.bty-action-panel') || target).scrollIntoView({block: 'nearest'});
     }
     function updateAllowance() {
       const stamp = JSON.stringify(allowance);
@@ -141,6 +165,30 @@
       target.append(message);
     }
     function listOptions() { return {status: state.status, sort: state.sort, page: state.page, review: reviewOnly}; }
+    function paintHighlights() {
+      for (const card of entries.querySelectorAll('[data-bounty]')) {
+        const badge = card.querySelector('.bty-card-badge'); if (!badge) continue;
+        const highlighted = highlightedIds.has(card.dataset.bounty);
+        card.classList.toggle('is-highlighted',highlighted); badge.classList.toggle('bty-featured-label',highlighted);
+        badge.textContent = highlighted ? '★ Highlighted' : ''; badge.hidden = !highlighted;
+        badge.title = highlighted ? 'One of the three highest-point open bounties, also highlighted on Home.' : '';
+      }
+    }
+    async function loadHighlights() {
+      if (!present() || reviewOnly || state.status !== 'open' || state.id || state.compose) return;
+      if (highlightedAt && Date.now()-highlightedAt < 60000) { paintHighlights(); return; }
+      const token = request;
+      if (highlightLoad?.token === token) return highlightLoad.task;
+      const task = (async () => {
+        try {
+          const result = await client.list({status:'open',sort:'points-high',page:1});
+          if (!present() || request !== token) return;
+          highlightedIds = new Set(result.bounties.slice(0,3).map(item => item.id)); highlightedAt = Date.now(); paintHighlights();
+        } catch (_) { /* A failed optional ranking read cannot invent highlighted tasks. */ }
+      })();
+      highlightLoad = {token,task};
+      try { await task; } finally { if (highlightLoad?.task === task) highlightLoad = null; }
+    }
     function paintList(result) {
       policy = result.policy || policy;
       const nextSignature = JSON.stringify([state.status, state.sort, state.page, result]);
@@ -150,19 +198,19 @@
       signature = nextSignature; entries.replaceChildren(); pagination.replaceChildren();
       const openBoard = state.status === 'open' && !reviewOnly;
       entries.classList.toggle('bty-grid', openBoard); entries.classList.toggle('bty-management-list', !openBoard);
-      count.textContent = reviewOnly ? 'Awaiting review' : state.status === 'mine' ? 'Your activity' : state.status === 'past' ? 'Past bounties' : 'Open tasks';
+      count.textContent = reviewOnly ? 'Awaiting review' : state.status === 'mine' ? 'Your drafts and contributions' : state.status === 'past' ? 'Closed bounties' : ''; count.hidden = !count.textContent;
       if (!result.bounties.length) entries.append(el('p', 'bty-no-results', reviewOnly ? 'No bounty reviews are waiting.' : state.status === 'mine' ? 'Your proposals and contributions will appear here.' : state.status === 'past' ? 'No completed bounties yet.' : 'No open bounties yet.'));
       for (const item of result.bounties) {
-        const card = button('', () => change({id: item.id, detail: 'brief'}, 'reader-title'), openBoard ? 'nb-card bty-question' : 'bty-management-row');
+        const card = button('', () => change({id: item.id, detail: 'brief', fromHome:false}, 'reader-title'), openBoard ? 'nb-card bty-question' : 'bty-management-row');
         card.dataset.bounty = item.id; card.dataset.bountyFocus = item.id;
         const title = el('span', 'bty-question-title', item.title);
         if (openBoard) {
-          const cardHeading = el('span', 'nb-title-copy bty-card-heading'), badge = el('span', 'nb-note-status'); badge.append(el('span', 'nb-visibility', 'Bounty')); cardHeading.append(title, badge);
+          const cardHeading = el('span', 'nb-title-copy bty-card-heading'), badge = el('span', 'nb-note-status'); badge.append(statusTag(item.status),el('span', 'nb-visibility bty-card-badge', '')); cardHeading.append(title, badge);
           const tags = el('span', 'bty-skills'); item.background_tags.forEach(tag => tags.append(el('span', '', tag)));
           const footer = el('span', 'bty-card-foot'); footer.append(spectrum(item.scope), reward(item.reward_points));
           card.append(cardHeading, el('span', 'bty-question-summary', item.summary), tags, footer);
         } else {
-          const text = el('span'); text.append(el('span', 'bty-management-status', statuses[item.status] || item.status), title); card.append(text, reward(item.reward_points));
+          const text = el('span'); text.append(statusTag(item.status), title); card.append(text, reward(item.reward_points));
         }
         entries.append(card);
       }
@@ -173,7 +221,7 @@
         previous.dataset.bountyFocus = 'previous'; next.dataset.bountyFocus = 'next';
         pagination.append(previous, el('span', '', 'Page ' + state.page), next);
       }
-      focusAfter();
+      paintHighlights(); focusAfter();
     }
     async function loadList() {
       const token = request, options = listOptions(), cached = client.cachedList(options);
@@ -445,7 +493,7 @@
       action = kind; signature = ''; nextFocus = 'action-panel'; paintDetail(result);
     }
     function closeAction(task, kind) {
-      action = null; signature = ''; nextFocus = 'action-' + kind; paintDetail({bounty: task});
+      action = null; signature = ''; nextFocus = 'reader-title'; paintDetail({bounty: task});
     }
     function confirmAction(task, kind) {
       const key = kind + ':' + task.id;
@@ -472,6 +520,7 @@
     async function beginAction(kind) {
       if (!present() || !selected) return;
       const id = selected.id, token = request;
+      settleScroll();
       try {
         const [result, wallet] = await Promise.all([client.detail(id, {refresh: true}), client.allowance({refresh: true})]);
         if (!present() || request !== token || state.id !== id) return;
@@ -538,21 +587,36 @@
     function paintDetail(result) {
       const task = result.bounty; selected = task; policy = result.policy || policy; reader.removeAttribute('aria-busy');
       reader.querySelectorAll('.bty-read-error').forEach(node => node.remove());
-      const nextSignature = JSON.stringify([state.detail, task, policy, action]);
+      const nextSignature = JSON.stringify([state.detail, state.fromHome, task, policy, action]);
       if (signature === nextSignature && reader.childElementCount) { focusAfter(); return; }
       // A quiet read must never overwrite an unsaved or uncertain decision.
       if (reader.querySelector('form') && signature && action === null && state.detail !== 'contribute') return;
       signature = nextSignature; reader.replaceChildren();
-      reader.append(button('← ' + (reviewOnly ? 'Bounty reviews' : state.status === 'mine' ? 'Your activity' : state.status === 'past' ? 'Past bounties' : 'Bounties'), () => change({id: '', detail: 'brief'}, task.id), 'nb-link bty-reader-back'));
+      if (reviewOnly) reader.append(button('← Bounty reviews',() => change({id:'',detail:'brief'},task.id),'nb-link bty-reader-back'));
+      else {
+        const trail = el('nav','bty-breadcrumbs'); trail.setAttribute('aria-label','Breadcrumb');
+        if (state.fromHome) {
+          const home = el('a','nb-link','← Home'); home.href = '#home';
+          const separator = el('span','','/'); separator.setAttribute('aria-hidden','true'); trail.append(home,separator);
+        }
+        const all = button('All bounties',() => change({id:'',detail:'brief',compose:false,status:'open',page:1,fromHome:false},'heading'),'nb-link back-link');
+        all.setAttribute('aria-label','All bounties'); const arrow = el('span','action-arrow','←'); arrow.dataset.direction = 'back'; arrow.setAttribute('aria-hidden','true'); all.prepend(arrow);
+        trail.append(all); reader.append(trail);
+      }
       const article = el('article', 'bty-detail'), heading = el('div', 'bty-detail-heading'), title = el(reviewOnly ? 'h2' : 'h1', '', task.title); title.tabIndex = -1; title.dataset.bountyFocus = 'reader-title';
-      heading.append(el('p', 'bty-meta', statuses[task.status] || task.status), title, el('p', 'bty-byline', 'Posted by ' + task.owner.handle + ' · brief revision ' + (task.revision || 1)));
+      heading.append(statusTag(task.status), title, el('p', 'bty-byline', 'Posted by ' + task.owner.handle + ' · brief revision ' + (task.revision || 1)));
       const tabs = el('nav', 'bty-detail-tabs'); tabs.setAttribute('aria-label', 'Bounty information');
       for (const [name, label] of [['brief', 'The task'], ['notes', 'Starting notes'], ['contributions', 'Contributions']]) {
         const tab = button(label, () => change({detail: name}, name), 'nb-link'); tab.dataset.bountyFocus = name;
         tab.setAttribute('aria-pressed', String(state.detail === name || name === 'contributions' && state.detail === 'contribute')); tabs.append(tab);
       }
       const body = el('div', 'bty-detail-body'); article.append(heading, tabs, body); reader.append(article);
-      if (state.detail === 'notes') {
+      if (action && state.detail === 'brief') {
+        const panel = ['withdraw', 'cancel'].includes(action) ? withdrawalForm(task, action === 'cancel') : confirmAction(task, action);
+        const actionHeading = panel.querySelector('h3'); actionHeading.tabIndex = -1; actionHeading.dataset.bountyFocus = 'action-panel';
+        body.append(panel);
+      }
+      else if (state.detail === 'notes') {
         const pins = task.sources || task.terms.source_notes || [];
         pins.forEach(pin => body.append(reference(pin)));
         if (!pins.length) body.append(el('p', 'bty-empty-progress', 'No starting notes are linked.'));
@@ -568,13 +632,10 @@
         if (task.capabilities.submit) actions.append(button('Link a contribution', () => change({detail: 'contribute'}, 'contribution-note'), 'nb-link'));
         if (task.capabilities.cancel) actions.append(actionButton('Cancel bounty', 'cancel', () => showAction({bounty: task}, 'cancel'), 'nb-link'));
         if (task.capabilities.withdraw) actions.append(actionButton('Withdraw proposal', 'withdraw', () => showAction({bounty: task}, 'withdraw'), 'nb-link'));
-        if (!reviewOnly) actions.append(button('Copy agent prompt', () => { void copyAgentPrompt(); }, 'nb-link'));
-        body.append(actions);
-        if (action) {
-          const panel = ['withdraw', 'cancel'].includes(action) ? withdrawalForm(task, action === 'cancel') : confirmAction(task, action);
-          const heading = panel.querySelector('h3'); heading.tabIndex = -1; heading.dataset.bountyFocus = 'action-panel';
-          body.append(panel);
+        if (!reviewOnly) {
+          const agentHelp = agentHandoff ? agentHandoff({prompt:agentPrompt,current:() => present() && !reviewOnly,key:route}) : el('span','bty-agent-help'); if (!agentHandoff) agentHelp.append(el('span','','Work with an agent'),copyPromptButton('nb-link')); actions.append(agentHelp);
         }
+        body.append(actions);
         if (reviewOnly && task.capabilities.review_admission) body.append(admissionReview(task));
         if (task.decisions?.length) {
           const history = el('details', 'bty-decision-history'); history.append(el('summary', '', 'Review history'));
@@ -606,21 +667,23 @@
       if (!owns()) return;
       active = true; request++; clearTimeout(pageTimer); pageTimer = null;
       const next = {status: ['mine', 'past'].includes(params.get('status')) ? params.get('status') : 'open', sort: Object.hasOwn(sorts, params.get('sort')) ? params.get('sort') : 'concrete', page: Math.max(1, Math.min(1000, parseInt(params.get('page'), 10) || 1)), id: params.get('bounty') || '', detail: ['notes', 'contributions', 'contribute'].includes(params.get('detail')) ? params.get('detail') : 'brief', compose: !reviewOnly && params.get('compose') === 'bounty'};
-      if (JSON.stringify(next) !== JSON.stringify(state)) { signature = ''; action = null; }
+      next.fromHome = !reviewOnly && Boolean(next.id) && !next.compose && params.get('from') === 'home';
+      if (JSON.stringify(next) !== JSON.stringify(state)) { signature = ''; action = null; clearCopyFeedback(); }
       state = next;
       const inReader = Boolean(state.id) && !state.compose;
       board.hidden = inReader || state.compose; reader.hidden = !inReader; composer.hidden = !state.compose; heading.hidden = inReader || state.compose;
       title.textContent = reviewOnly ? 'Bounty reviews' : 'Bounties';
-      propose.hidden = reviewOnly; secondary.hidden = reviewOnly; sortField.wrap.hidden = reviewOnly || state.status !== 'open'; sortField.input.value = state.sort;
-      mine.hidden = past.hidden = reviewOnly || state.status !== 'open'; open.hidden = reviewOnly || state.status === 'open';
+      propose.hidden = reviewOnly; secondary.hidden = reviewOnly || inReader || state.compose; sortField.wrap.hidden = reviewOnly || state.status !== 'open'; sortField.input.value = state.sort;
+      past.hidden = open.hidden = reviewOnly; open.setAttribute('aria-pressed',String(state.status === 'open')); past.setAttribute('aria-pressed',String(state.status === 'past'));
       void loadAllowance();
       if (state.compose && !state.id) proposalForm();
       else if (state.id) await loadDetail();
-      else await loadList();
+      else { await loadList(); void loadHighlights(); }
     }
-    function hide() { active = false; request++; clearTimeout(pageTimer); pageTimer = null; }
+    function hide() { active = false; request++; clearTimeout(pageTimer); pageTimer = null; clearCopyFeedback(); }
     function invalidateReads() {
       client.invalidateReads(); signature = '';
+      highlightedIds.clear(); highlightedAt = 0; highlightLoad = null;
       // Invalidation is passive: page retirement and other workspace writes must
       // not launch new reads. The next owned show refreshes the exact route; a
       // valid write receipt retains independent route/session ownership.

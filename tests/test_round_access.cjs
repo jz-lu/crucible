@@ -76,14 +76,14 @@ async function boot({hash = route(20), seed = false, account = user} = {}) {
 let passed = 0;
 async function test(name, run) {await run(); console.log('PASS ' + name); passed++;}
 (async () => {
-  await test('Take on this stage requests only the clicked exact stage in one action and double-clicks do not duplicate it', async () => {
+  await test('Take on this level requests only the clicked exact level in one action and double-clicks do not duplicate it', async () => {
     const {app,server}=await boot({hash:route(22,'leaderboard')});
     const action=app.$('.tier-record-challenge');action.click();action.click();await flush();
     assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-22']);assert.equal('active_round_id' in posts(app)[0],false);
     assert.equal(server.instances.size,1);assert.equal(app.$('#challenge-active').hidden,false);
     await app.navigate(route(22,'leaderboard'));app.$('.tier-record-challenge').click();await flush();assert.equal(posts(app).length,1);
   });
-  await test('Take on this stage reuses existing open and answered instances without a POST', async () => {
+  await test('Take on this level reuses existing open and answered instances without a POST', async () => {
     for(const status of ['open','solved','incorrect']){
       const {app,server}=await boot({hash:route(20,'leaderboard')});const instance=server.seed();instance.status=status;
       if(status!=='open')instance.submission={status:status==='solved'?'correct':'incorrect'};
@@ -123,7 +123,7 @@ async function test(name, run) {await run(); console.log('PASS ' + name); passed
     const {app}=await boot({hash:route(21,'leaderboard',previous)});app.$('.tier-record-challenge').click();await flush();
     assert.equal(posts(app).length,0);assert.equal(app.$('#empty-title').textContent,'Archived release');
   });
-  await test('each new stage needs its own explicit request and revisits reuse existing instances', async () => {
+  await test('each new level needs its own explicit request and revisits reuse existing instances', async () => {
     const {app,server} = await boot();
     assert.equal(app.$('#empty-title').textContent,'Ready?');
     assert.equal(posts(app).length,0);
@@ -132,7 +132,7 @@ async function test(name, run) {await run(); console.log('PASS ' + name); passed
     assert.equal('active_round_id' in posts(app)[0],false);
     assert.equal(app.$('#challenge-active').hidden,false);
     await app.navigate(route(21));
-    assert.equal(posts(app).length,1,'Starting a scheme round does not authorize a different stage');
+    assert.equal(posts(app).length,1,'Starting a scheme round does not authorize a different level');
     assert.equal(app.$('#empty-title').textContent,'Ready?');
     app.$('#issue-button').click(); await flush();
     assert.equal(posts(app).length,2);
@@ -150,7 +150,7 @@ async function test(name, run) {await run(); console.log('PASS ' + name); passed
     assert.equal(posts(app).length,0);
     assert.match(app.location.hash,/tier-20/);
     app.$('#size-slider').dispatchEvent({type:'change'}); await flush();
-    assert.equal(posts(app).length,0,'Choosing a stage is still browsing');
+    assert.equal(posts(app).length,0,'Choosing a level is still browsing');
     app.$('#issue-button').click(); await flush();
     assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-23']);
     await app.navigate(route(21,'protocol'));
@@ -186,11 +186,11 @@ async function test(name, run) {await run(); console.log('PASS ' + name); passed
     assert.equal(posts(app).length,0);
     server.after = async (req,result) => ({...result,round_started:true,round_started_round_id:req.roundId});
     await app.navigate(route(22));
-    assert.equal(posts(app).length,0,'Even a confirmed active round requires an explicit stage action');
+    assert.equal(posts(app).length,0,'Even a confirmed active round requires an explicit level action');
     await app.navigate(route(21,'challenge',previous));
     assert.equal(posts(app).length,0);
   });
-  await test('rapid stage navigation discards late GETs and issues only an explicitly requested final stage', async () => {
+  await test('rapid level navigation discards late GETs and issues only an explicitly requested final level', async () => {
     const {app,server} = await boot({seed:true});
     const gates = new Map([['tier-21',deferred()],['tier-22',deferred()]]);
     server.after = async (req,result) => {
@@ -205,7 +205,7 @@ async function test(name, run) {await run(); console.log('PASS ' + name); passed
     assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-23']);
     assert.match(app.$('#challenge-round').textContent,/tier-23/);
   });
-  await test('navigation during a manual POST never grants a request for the final browsed stage', async () => {
+  await test('navigation during a manual POST never grants a request for the final browsed level', async () => {
     const {app,server} = await boot();
     const gate = deferred();
     server.before = async req => {if(req.method==='POST' && req.profile_id==='tier-20') await gate.promise;};
@@ -214,7 +214,7 @@ async function test(name, run) {await run(); console.log('PASS ' + name); passed
     assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-20']);
     gate.resolve(); await flush();
     assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-20']);
-    assert.equal(app.$('#challenge-active').hidden,true,'The first stage response cannot replace the selected empty stage');
+    assert.equal(app.$('#challenge-active').hidden,true,'The first level response cannot replace the selected empty level');
     app.$('#issue-button').click(); await flush();
     assert.deepEqual(posts(app).map(p=>p.profile_id),['tier-20','tier-22']);
     assert.equal('active_round_id' in posts(app)[1],false);
@@ -262,7 +262,7 @@ async function test(name, run) {await run(); console.log('PASS ' + name); passed
     assert.equal(posts(app).length,1);
     assert.equal(app.$('#challenge-active').hidden,false,'A new authorized read may retrieve the durable instance');
   });
-  await test('leaving Challenge or changing accounts during a POST cannot issue another stage or reveal its result', async () => {
+  await test('leaving Challenge or changing accounts during a POST cannot issue another level or reveal its result', async () => {
     for (const changeAccount of [false,true]) {
       const {app,server} = await boot();
       const gate = deferred();

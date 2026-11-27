@@ -77,7 +77,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     app.$('#access-code').value = '12345678'; app.$('#access-code-form').dispatchEvent({type: 'submit'}); await flush();
     assert.equal(app.location.hash, '#home');
     assert.equal(app.$('#access-workspace').hidden, true);
-    assert.match(app.$('#home-schemes').textContent, /Private scheme/);
+    assert.equal(app.$('#home-tour').hidden, false);
     assert.equal(readState(app).invitationToken, null);
     assert.equal(paths(app).filter(path => path === '/api/schemes').length, 1);
   });

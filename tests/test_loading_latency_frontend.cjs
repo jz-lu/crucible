@@ -2,9 +2,9 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const {createApp, flush} = require('./frontend-dom.cjs');
 const user = {id:'owner', handle:'alice'};
-const profile = {id:'stage-1', instance_size:1, shared_secret_bytes:32, parameters:{}, encoding:{shared_secret_bytes:32}, correctness:{}};
+const profile = {id:'level-1', instance_size:1, shared_secret_bytes:32, parameters:{}, encoding:{shared_secret_bytes:32}, correctness:{}};
 const scheme = {id:'fixture', version:'1', name:'Fixture', profiles:[profile], next_profile_id:profile.id, protocol:{}, profile_metrics:{}};
-const route = '#challenge/fixture/1?profile=stage-1&view=challenge';
+const route = '#challenge/fixture/1?profile=level-1&view=challenge';
 const deferred = () => {let resolve; const promise = new Promise(done => {resolve=done;}); return {promise,resolve};};
 const summary = app => ({id:'instance', profile_id:profile.id, scheme_id:scheme.id, scheme_version:scheme.version,
   round_id:app.envelope({}).round.id, issued_at:app.envelope({}).server_time, ends_at:app.envelope({}).round.ends_at,
@@ -206,7 +206,7 @@ async function test(name, run) {await run(); passed++; console.log('PASS '+name)
     app.sandbox.fetch=async()=>({ok:false,status:403,json:async()=>({detail:'Access denied'})});
     await app.navigate(route);assert.equal(app.$('#challenge-active').hidden,true);
     assert.match(app.$('#challenge-error-text').textContent,/Access denied/);
-    assert.equal(app.sandbox.cachedRead(app.sandbox.challengeReadKey('fixture','1','stage-1')),null);
+    assert.equal(app.sandbox.cachedRead(app.sandbox.challengeReadKey('fixture','1','level-1')),null);
   });
   await test('the next hour never paints an earlier round from memory or generates from its access', async () => {
     let hold=false;const late=deferred();

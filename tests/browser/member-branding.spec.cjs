@@ -1,4 +1,4 @@
-const {test, expect, signIn} = require('./helpers.cjs');
+const {test, expect, signIn, accountAction, navigationAction} = require('./helpers.cjs');
 
 // Permit the configured owned loopback app when a local run uses another port.
 test.beforeEach(async ({page, baseURL}) => {
@@ -47,25 +47,26 @@ for (const width of [1440, 640, 390]) for (const theme of ['light', 'dark']) {
     });
     expect(measurements.overlay).toEqual(measurements.image);
     expect(Number(measurements.fire)).toBe(.5);expect(Number(measurements.key)).toBe(.9);
-    expect(measurements.primary).toBe('#28513f');
-    expect(measurements.pigment).toBe('rgb(40, 81, 63)');
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    expect(measurements.primary).toBe(theme==='dark'?'#a6cbb7':'#28513f');
+    expect(measurements.pigment).toBe(theme==='dark'?'rgb(166, 203, 183)':'rgb(40, 81, 63)');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     await page.screenshot({path:testInfo.outputPath('member-logo-'+width+'-'+theme+'.png'),fullPage:true,animations:'allow'});
     await page.locator('.brand-fire-ghost').evaluate(element => element.getAnimations().forEach(animation => animation.finish()));
     await expect(brand).not.toHaveClass(/brand-ignited/);
-    const box = await wording.boundingBox();
-    await page.mouse.move(box.x + box.width*.45, box.y - 45);
-    await expect(wording).toHaveClass(/is-dotted/);
-    await wording.hover({position:{x:box.width*.45,y:box.height/2}});
-    await expect.poll(() => wording.evaluate(element => Number(element.style.getPropertyValue('--dot-strength')))).toBeGreaterThan(.98);
-    await expect(wording.locator('.scrutiny-letters')).toHaveCSS('mask-image', /radial-gradient/);
+    const glow = page.locator('[data-home-feature="bounties"]'), shimmer = page.locator('[data-home-feature="challenge"]');
+    await glow.hover();await expect(page.locator('#home-entry')).toHaveAttribute('data-preview','bounties');
+    await expect.poll(() => glow.evaluate(element => Number(element.style.getPropertyValue('--phrase-strength')))).toBeGreaterThan(.98);
+    await expect(glow.locator('.home-phrase-glow')).toBeVisible();
+    await shimmer.hover();await expect(page.locator('#home-entry')).toHaveAttribute('data-preview','challenge');
+    await expect.poll(() => shimmer.evaluate(element => Number(element.style.getPropertyValue('--phrase-strength')))).toBeGreaterThan(.98);
+    await expect(shimmer.locator('.home-phrase-dots')).toBeVisible();
     await expect(wording.locator('.scrutiny-letters')).toHaveCSS('color', baselineColor);
-    await expect(wording.locator('.scrutiny-dots')).toHaveCSS('color', baselineColor);
+    await expect(wording).not.toHaveClass(/is-dotted/);
     await page.screenshot({path:testInfo.outputPath('member-dots-'+width+'-'+theme+'.png'),fullPage:true,animations:'allow'});
-    await page.mouse.move(0, 0);await expect(wording).not.toHaveClass(/is-dotted/);
+    await page.mouse.move(0, 0);await expect.poll(() => shimmer.evaluate(element => Number(element.style.getPropertyValue('--phrase-strength')))).toBe(0);
     await page.locator('#brand-animate').click();await expect(brand).toHaveClass(/brand-ignited/);
     await page.mouse.move(0, 0);await expect(brand).not.toHaveClass(/brand-ignited/, {timeout:3000});
-    await page.locator('#nav-challenge').click();await expect(page.locator('#catalogue-workspace')).toBeVisible();
+    await navigationAction(page, '#nav-challenge');await expect(page.locator('#catalogue-workspace')).toBeVisible();
     await page.locator('#brand-animate').click();await expect(brand).toHaveClass(/brand-ignited/);
   });
 }
@@ -80,46 +81,24 @@ test('members with reduced motion see the complete logo and heading without hove
   await expect(page.locator('#home-title .scrutiny-wording')).toHaveCSS('animation-name', 'none');
 });
 
-for (const width of [1440, 390]) test('entering beta glows once without replaying on member routes at ' + width + 'px', async ({page}) => {
+for (const width of [1440, 390]) test('only hovering the symbol ignites the logo at ' + width + 'px', async ({page}) => {
   await page.setViewportSize({width, height:1000});
   await page.addInitScript(() => {
     window.logoStarts = 0;
-    document.addEventListener('animationstart', event => {
-      if (event.animationName === 'flame-visit') window.logoStarts++;
-    });
+    document.addEventListener('animationstart', event => { if (event.animationName === 'flame-visit') window.logoStarts++; });
   });
   await page.emulateMedia({reducedMotion:'no-preference'});await page.goto('/');
-  await expect(page.locator('#access-workspace')).toHaveCSS('opacity','1');
-  await expect.poll(() => page.evaluate(() => window.logoStarts)).toBe(1);
-  await expect(page.locator('#site-brand')).not.toHaveClass(/brand-ignited/);
-  await signIn(page, 'alice', {navigate:false});
-  await expect(page.locator('#home-workspace')).toBeVisible();
-  await expect(page.locator('#site-brand')).toHaveClass(/brand-ignited/);
-  await expect(page.locator('#site-brand')).not.toHaveClass(/brand-typing/);
-  await expect.poll(() => page.evaluate(() => window.logoStarts)).toBe(2);
-  const timing = await page.locator('.brand-fire-ghost').evaluate(element => {
-    const animation = element.getAnimations().find(item => item.animationName === 'flame-visit');
-    const {delay, duration} = animation.effect.getTiming();
-    return {delay, duration};
-  });
-  expect(timing).toEqual({delay:0, duration:2000});
-  await expect(page.locator('#site-brand')).not.toHaveClass(/brand-ignited/, {timeout:3000});
-  await expect(page.locator('.brand-key-sun')).toHaveCSS('opacity','0');
-  await page.locator('#nav-challenge').click();await expect(page.locator('#catalogue-workspace')).toBeVisible();
-  await page.getByRole('banner').getByRole('link', {name:'Crucible home', exact:true}).click();
-  await expect(page.locator('#home-workspace')).toBeVisible();
-  expect(await page.evaluate(() => window.logoStarts)).toBe(2);
-  await expect(page.locator('#site-brand')).not.toHaveClass(/brand-ignited/);
-  await page.reload();
-  await expect(page.locator('#home-workspace')).toBeVisible();
-  await expect.poll(() => page.evaluate(() => window.logoStarts)).toBe(1);
-  await expect(page.locator('#site-brand')).not.toHaveClass(/brand-ignited/, {timeout:3000});
-  expect(await page.evaluate(() => window.logoStarts)).toBe(1);
-  await page.locator('#logout-button').click();await expect(page.locator('#access-workspace')).toBeVisible();
-  await signIn(page, 'alice', {navigate:false});
-  await expect(page.locator('#home-workspace')).toBeVisible();
-  await expect(page.locator('#site-brand')).toHaveClass(/brand-ignited/);
-  await expect.poll(() => page.evaluate(() => window.logoStarts)).toBe(2);
+  await signIn(page, 'alice', {navigate:false});await expect(page.locator('#home-workspace')).toBeVisible();
+  await page.waitForTimeout(650);expect(await page.evaluate(() => window.logoStarts)).toBe(0);
+  const brand = page.locator('#site-brand'), text = brand.locator('.brand-wordmark'), symbol = page.locator('#brand-animate');
+  const color = await text.evaluate(el => getComputedStyle(el).color);
+  await text.hover();await expect(brand).not.toHaveClass(/brand-ignited/);await expect(text).toHaveCSS('text-shadow','none');await expect(text).toHaveCSS('font-style','normal');await expect(text).not.toHaveCSS('color',color);
+  await symbol.hover();await expect(brand).toHaveClass(/brand-ignited/);await expect.poll(() => page.evaluate(() => window.logoStarts)).toBe(1);
+  await expect(page.locator('.brand-key-sun')).toHaveCSS('fill','rgb(255, 120, 47)');
+  await text.hover();await expect(brand).not.toHaveClass(/brand-ignited/);expect(await page.evaluate(() => window.logoStarts)).toBe(1);
+  await navigationAction(page,'#nav-challenge');await text.click();await expect(page).toHaveURL(/#home$/);await expect(brand).not.toHaveClass(/brand-ignited/);
+  await navigationAction(page,'#nav-challenge');await symbol.click();await expect(page).toHaveURL(/#home$/);await expect(brand).toHaveClass(/brand-ignited/);
+  await page.mouse.move(3,900);await page.reload();await expect(page.locator('#home-workspace')).toBeVisible();await page.waitForTimeout(650);expect(await page.evaluate(() => window.logoStarts)).toBe(0);
 });
 
 test('signup placeholders state the existing username and password rules separately', async ({page}) => {

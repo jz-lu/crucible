@@ -183,11 +183,11 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
    const resource=app.$('#overview-chart-public'),security=app.$('#overview-chart-security');
    for(const chart of [resource,security])chart.querySelector('svg').getBoundingClientRect=()=>({left:0,top:0,width:480,height:240});
    resource.querySelector('svg').dispatchEvent({type:'click',clientX:x(3),clientY:100});
-   assert.match(resource.querySelector('.chart-point-readout').textContent,/Stage 3.*96 bytes/);
-   assert.match(security.querySelector('.chart-point-readout').textContent,/Stage 3.*30/);
+   assert.match(resource.querySelector('.chart-point-readout').textContent,/Level 3.*96 bytes/);
+   assert.match(security.querySelector('.chart-point-readout').textContent,/Level 3.*30/);
    assert.equal(security.querySelector('.chart-selection-guide').getAttribute('x1'),String(x(3)));
    resource.querySelector('svg').dispatchEvent({type:'click',clientX:x(2),clientY:100});
-   assert.match(security.querySelector('.chart-point-readout').textContent,/Stage 2.*No estimate/);
+   assert.match(security.querySelector('.chart-point-readout').textContent,/Level 2.*No estimate/);
    assert.equal(security.querySelector('.chart-selection-guide').getAttribute('visibility'),'hidden');
    assert.equal(resource.querySelectorAll('dialog,[aria-haspopup="dialog"]').length,0);
    assert.ok(resource.querySelector('details'));assert.ok(security.querySelector('details'));
@@ -207,7 +207,7 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
    assert.equal(app.window.CrucibleGraphPoints.selected(JSON.stringify(['late-note','1'])),null);
    replacement.dispatchEvent({type:'keydown',key:'Enter'});
    assert.equal(app.window.CrucibleGraphPoints.selected(JSON.stringify(['late-note','1'])),'p3');
-   assert.match(host.querySelector('.chart-point-readout').textContent,/Stage 3/);
+   assert.match(host.querySelector('.chart-point-readout').textContent,/Level 3/);
  });
  await test('late resource data preserves a focused preview as an exact profile becomes measured',async()=>{
    const profiles=[1,2,3].map(n=>({id:'p'+n,instance_size:n,parameters:{n}}));
@@ -225,7 +225,7 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
    assert.equal(app.window.CrucibleGraphPoints.selected(JSON.stringify(['late-resource','1'])),null);
    replacement.dispatchEvent({type:'keydown',key:'Enter'});
    assert.equal(app.window.CrucibleGraphPoints.selected(JSON.stringify(['late-resource','1'])),'p3');
-   assert.match(host.querySelector('.chart-point-readout').textContent,/Stage 3.*96 bytes/);
+   assert.match(host.querySelector('.chart-point-readout').textContent,/Level 3.*96 bytes/);
  });
  await test('every attack retains its specification, with only applicable premises in numeric order',async()=>{
    const app=await fixture();
@@ -239,7 +239,7 @@ let passed=0;async function test(name,run){await run();console.log('PASS '+name)
        {label:'A-3',status:'unproved',stages:[2],source:{...pin,note_section:'other-stage'}}
      ]};
      noteJustifications.set(releaseKey(scheme.id,scheme.version),{value:{graph_models:{attack:model}}});
-     const target=document.createElement('div'),point={id:'p1',label:'Stage 1',position:1,model:{id:'attack'}};
+     const target=document.createElement('div'),point={id:'p1',label:'Level 1',position:1,model:{id:'attack'}};
      renderPointSources(scheme,point,target);
      const labels=[...target.querySelectorAll('a')].map(a=>a.textContent.replace(/↗$/, ''));
      model.assumptions=[];target.replaceChildren();renderPointSources(scheme,point,target);

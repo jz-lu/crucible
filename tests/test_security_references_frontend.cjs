@@ -1,7 +1,7 @@
 // Exact-release evidence may fill missing points, never invent a security curve.
 const assert = require('node:assert/strict');
 const {createApp, flush} = require('./frontend-dom.cjs');
-const profile = n => ({id:'p'+n,profile_id:'p'+n,instance_size:n,name:'Stage '+n,parameters:{n}});
+const profile = n => ({id:'p'+n,profile_id:'p'+n,instance_size:n,name:'Level '+n,parameters:{n}});
 const model = (id='reference-classical') => ({id,label:'Published model '+id,unit:'log2 Core-SVP work',
   scope:'Only the named underlying lattice parameters.',assumptions:['Heuristic sieving with free memory.'],
   limitations:['Not full-KEM security bits or a proven lower bound.'],

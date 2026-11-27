@@ -76,4 +76,28 @@ async function holdResponse(page, predicate) {
     remove: () => page.unroute(matcher)};
 }
 
-module.exports = {test, expect, signIn, notebookReady, useDataSaver, gate, holdResponse};
+// These helpers intentionally leave an expanded guide before navigating. The
+// separate outside-click scenario checks that the first ordinary click only hides it.
+async function hideGuideForNavigation(page) {
+  const guide = page.locator('#participation-guide:not(.is-minimized):visible');
+  if (await guide.count()) await guide.getByRole('button',{name:'Hide guide',exact:true}).click();
+}
+async function accountAction(page, selector) {
+  await hideGuideForNavigation(page);
+  if (!(await page.locator('#account-menu-panel').isVisible())) await page.locator('#account-menu-trigger').click();
+  await page.locator(selector).click();
+}
+async function navigationAction(page, selector, {focus = false} = {}) {
+  await hideGuideForNavigation(page);
+  let control = page.locator(selector);
+  if (!(await control.isVisible())) {
+    const toggle = page.locator('#primary-nav-toggle');
+    if (await toggle.isVisible()) {
+      if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
+      if (selector === '#nav-people') control = page.locator('#nav-menu-people');
+    }
+  }
+  if (focus) await control.focus(); else await control.click();
+}
+
+module.exports = {test, expect, signIn, notebookReady, useDataSaver, gate, holdResponse, accountAction, navigationAction};

@@ -1,10 +1,10 @@
 const {randomUUID} = require('node:crypto');
-const {test, expect, signIn, holdResponse} = require('./helpers.cjs');
+const {test, expect, signIn, holdResponse, accountAction, navigationAction} = require('./helpers.cjs');
 const fields = ['display_name', 'affiliation', 'position', 'website'];
 
 async function owner(page) {
   await signIn(page);
-  await page.locator('#account-handle').click();
+  await accountAction(page, '#account-handle');
   await expect(page.locator('#person-content')).toHaveAttribute('aria-busy', 'false');
   const response = await page.request.get('/api/me/profile');
   expect(response.ok()).toBeTruthy();
@@ -30,10 +30,10 @@ for (const width of [1440, 390]) {
       await expect(page.locator('#account-handle')).toHaveAttribute('aria-current', 'page');
       await expect(page.locator('#nav-people')).not.toHaveAttribute('aria-current', 'page');
       const headerHeight = await page.locator('.site-header').evaluate(node => node.getBoundingClientRect().height);
-      await page.locator('#nav-people').click();
+      await navigationAction(page, '#nav-people');
       await expect(page.locator('#nav-people')).toHaveAttribute('aria-current', 'page');
       await expect(page.locator('#account-handle')).not.toHaveAttribute('aria-current', 'page');
-      await page.locator('#account-handle').click();
+      await accountAction(page, '#account-handle');
       await expect(page.locator('#account-handle')).toHaveAttribute('aria-current', 'page');
       expect(await page.locator('.site-header').evaluate(node => node.getBoundingClientRect().height)).toBe(headerHeight);
       const help = page.locator('.person-score-breakdown > summary');
@@ -61,8 +61,8 @@ for (const width of [1440, 390]) {
       await page.evaluate(() => loadPerson(state.personHandle, {preserve: true}));
       await expect(page.locator('#researcher-position')).toBeFocused();
       await expect(page.locator('#researcher-affiliation')).toHaveValue('Example Institute for Cryptographic Research');
-      await page.locator('#nav-about').click();
-      await page.locator('#account-handle').click();
+      await navigationAction(page, '#nav-about');
+      await accountAction(page, '#account-handle');
       await edit(page);
       await expect(page.locator('#researcher-display-name')).toHaveValue('Alice Example');
       await page.locator('#save-researcher-profile').click();
@@ -81,10 +81,10 @@ for (const width of [1440, 390]) {
       await expect(page.locator('#edit-researcher-profile')).toBeFocused();
       await page.screenshot({path: testInfo.outputPath('researcher-profile-saved.png'), fullPage: true});
       await page.evaluate(() => loadPerson(state.personHandle, {preserve: true}));
-      await page.locator('#nav-about').click();
+      await navigationAction(page, '#nav-about');
       const fresh = await holdResponse(page, url => url.pathname === '/api/people/browser_alice');
       try {
-        await page.locator('#account-handle').click(); await fresh.arrived;
+        await accountAction(page, '#account-handle'); await fresh.arrived;
         await expect(summary).toBeVisible(); await expect(summary).toContainText('Example Institute for Cryptographic Research');
         fresh.release(); await fresh.delivered;
         await expect(page.locator('#person-content')).toHaveAttribute('aria-busy', 'false');

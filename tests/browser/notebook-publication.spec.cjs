@@ -1,4 +1,4 @@
-const {test, expect, signIn} = require('./helpers.cjs');
+const {test, expect, signIn, navigationAction} = require('./helpers.cjs');
 
 for (const [width, actor, reviewReader] of [[1440, 'alice', false], [390, 'queuereviewer', true]]) {
   test(`Author cancels a pending publication and deletes its private content at ${width}px`, async ({page}, testInfo) => {
@@ -130,10 +130,10 @@ for (const [width, actor] of [[1440, 'bulkdesktop'], [390, 'bulkmobile']]) {
     await signIn(page, actor);
     // Map preparation is now explicit. Visit it once so the publication flow
     // still exercises a retained map dialog beside its own notebook dialog.
-    await page.locator('#nav-challenge').click();
+    await navigationAction(page, '#nav-challenge');
     await page.locator('#scheme-map-button').click();
     await expect(page.locator('#landscape svg')).toBeVisible();
-    await page.locator('#nav-notebook').click();
+    await navigationAction(page, '#nav-notebook');
     const dialog = page.locator('#notebook-workspace dialog[data-nb="dialog"]');
     const individual = page.locator('.nb-card-actions').getByRole('button', {name:'Publish', exact:true}).first();
     await individual.click();

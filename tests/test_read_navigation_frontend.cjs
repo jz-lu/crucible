@@ -11,9 +11,9 @@ const defaultData = (url, envelope) => url.pathname==='/api/people' ? envelope(p
 async function boot(hook) { return createApp({schemes:[scheme],user,responder:(url,options,envelope)=>hook?.(url,options,envelope) ?? defaultData(url,envelope)}); }
 let passed=0;async function test(name,run){await run();passed++;console.log('PASS '+name);}
 (async()=>{
- await test('the icon animates in place while the name and footer navigate home',async()=>{
+ await test('the grouped icon, wordmark and footer navigate home',async()=>{
   const app=await boot();await app.navigate('#about');const reads=app.requests.length;
-  app.$('#brand-animate').click();await flush();assert.equal(app.location.hash,'#about');
+  app.$('#brand-animate').click();await flush();assert.equal(app.location.hash,'#home');
   const logos=app.document.querySelectorAll('a.brand, a.brand-wordmark');assert.equal(logos.length,2);
   for(const logo of logos)assert.equal(logo.href,'#home');logos[0].click();await flush();
   assert.equal(app.location.hash,'#home');assert.equal(app.$('#home-workspace').hidden,false);

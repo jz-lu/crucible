@@ -568,7 +568,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.$('#submission-dialog').open, true);
     assert.equal(targetId(app), 'fixture-challenge');
     assert.deepEqual(snapshot(app), fields);
-    assert.match(app.$('#submission-context').textContent, /Stage 20/);
+    assert.match(app.$('#submission-context').textContent, /Level 20/);
     assert.match(app.confirmations[0], /Discard.*switch to another instance/);
     app.$('#submission-dialog').close();
     app.sandbox.window.confirm = () => true;

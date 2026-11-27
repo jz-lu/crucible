@@ -714,7 +714,12 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
                 "profile_id": first.profile_id, "scheme_version": first.scheme_version,
                 "submission_id": first.receipt_id} if first else None
             scheme["recovery_summary"] = release_recovery_summary(scheme["id"], scheme["version"], recovered)
-        document = {"catalogue_revision": registry.catalogue_revision()}
+        from . import scoring
+        document = {"catalogue_revision": registry.catalogue_revision(),
+                    "recovery_scoring": {"policy_id": scoring.POLICY_ID,
+                        "record_advance_points": scoring.FRONTIER_POINTS,
+                        "enrolled_releases": [{"id": identifier, "version": release["version"]}
+                                              for identifier, release in scoring.FAMILY_RELEASES.items()]}}
         if projection == "release":
             document.update(projection="release", scheme=releases[0], current_version=registry.CURRENT[scheme_id])
         elif projection == "navigation":
@@ -724,6 +729,22 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
         else:
             document["schemes"] = catalogue
         return catalogue_response(envelope(**document), request.headers.get("accept-encoding"))
+
+    @app.get("/api/me/points")
+    def own_points(request: Request):
+        # Keep the session bootstrap lightweight. This small member-only read
+        # uses the leaderboard's canonical totals without loading profile data.
+        from . import scoring
+        if "authorization" in request.headers:
+            raise HTTPException(403, "Agent credentials cannot read browser account points.")
+        with db.transaction() as session:
+            user = user_for(request, session)
+            participants, _ = scoring.score_relations(session.get_bind().dialect.name,
+                                                       reviewer_ids=settings.reviewer_ids)
+            row = session.execute(select(participants.c.points, participants.c.is_reviewer)
+                                  .where(participants.c.id == user.id)).one()
+            return envelope(account_points={"user_id": user.id, "points": row.points,
+                "score_status": "reviewer" if row.is_reviewer else "active", "policy_id": scoring.POLICY_ID})
 
     @app.get("/api/challenges")
     def current_challenge(profile_id: str, request: Request, scheme_id: str | None = None,
@@ -1090,6 +1111,10 @@ def create_app(settings: Settings | None = None, *, clock=time.time, initialize=
 
     @app.get("/app.js")
     def javascript(request: Request):
+        return public_assets.response(request)
+
+    @app.get("/orientation.js")
+    def orientation_javascript(request: Request):
         return public_assets.response(request)
 
     @app.get("/graph-points.js")
