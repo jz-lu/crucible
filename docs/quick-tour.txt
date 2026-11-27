@@ -1,0 +1,66 @@
+CRUCIBLE — CONTEXTUAL HELP AND FEATURE MAP
+
+The optional question-mark help retains the shared viewport presentation and
+lifecycle safeguards from the original feature/quick-tour (4f596b8), with a
+page-specific itinerary and a selectable site overview.
+
+Home opens Explore Crucible, a native modal feature map. A prominent Propose a scheme card begins the guided proposal flow. Six other
+concise icon cards
+explain Schemes, Bounties, Notes, My activity, Leaderboard and How points work; disabled
+Bounties is omitted. No route changes until a choice is made. Selecting a card
+opens that feature and its short local tour. Start a guided challenge opens the fixed
+introductory teaching challenge, separately from Challenge of the week.
+
+On other routes, ? explains the current page. Steps share that exact route and
+never reload it just to advance the highlight. Deep scheme and bounty pages
+have their own descriptions. All features opens the same overview in place.
+Scheme overview identifies the graph page; Challenges identifies the challenge
+workspace. The prominent Scheme overview button and animated All schemes back
+link keep those destinations distinct.
+Tour steps can reveal an offscreen control, but never click it, submit data,
+issue an instance or grant permissions. The participation guide separately
+uses the actual native actions and waits for real submission receipts.
+
+Native dialog semantics keep keyboard focus inside help. Back is left, Next
+right, All features between them. Hide, Escape, the backdrop and the first click outside the prompt/target minimize without activating the background; Continue
+guide resumes, and the cross exits. A minimized overview resumes where the user
+is. Another editing modal blocks expansion. Existing participation guides are
+suspended while help is open and restored on close. Explicit new onboarding
+can replace them, and owner/session/document guards reject stale responses.
+
+Targets are resolved through an eight-second bounded observer. Offscreen
+controls are revealed after navigation restores page top. Tall phone cards leave
+room for their entire outline and prompt; deferred reveals retire with the
+step, account or minimized guide. Missing targets
+are normalized to null so animation classes cannot produce a mutation loop.
+Fallback headings work on empty pages. Native row anchors, corner radii and the
+one-to-one SVG viewport are shared with participation guides. Step arrivals draw
+smooth leads and delay arrowheads until the lead arrives. Reduced-motion mode
+shows the finished highlight with no drawing, orbit or connector animation.
+
+Verification includes standalone controller and application tests, browser
+feature selection and same-route checks, and full native desktop/phone geometry
+reviews. Real isolated recovery journeys start at Get started and verify actual
+correct submissions; note, scheme and bounty journeys retain their receipts.
+
+The equal-height How points work card and points-balance hover/focus popup expose the existing
+How points work dialog. Closing it respects any newer focus. Compact navigation
+keeps a single header row and never adds another permanent help tab. Home itself
+never resumes a saved participation prompt. The sticky header includes a persistent icon-only
+appearance toggle; guides and their rounded shaded targets support both themes.
+Prompt content is retained during background reads, which keep native tools in
+place. Disabled actions update without replacing button nodes or restarting the
+arrival animation. Native target geometry is remeasured after controls update.
+
+Header refinements: the compact navigation is icon-only and right-aligned beside
+points. Desktop labels sweep into it when the viewport narrows; reduced motion
+switches immediately. Points help is attached below the balance by a fine stem/notch with a short reveal animation and no
+shadow or hover underline/shading. Its arrow moves. The logo symbol alone
+ignites on hover; the wordmark changes only color, and both return Home.
+
+The points dialog is intentionally brief: four earning rows with amounts and one
+short allowance note. It omits the introduction, detailed settlement rules and
+extra footer. Text is at least 15px; the close control stays visible on phones.
+
+Every minimized guide shows only Continue guide and the exit cross. Overview
+actions and feature choices stay hidden until continuing restores the guide.

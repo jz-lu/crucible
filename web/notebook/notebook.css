@@ -49,7 +49,7 @@
 .nb-graph-column:last-child .nb-graph-node::before{right:auto;left:-20px}
 .nb-graph-center{margin-top:27px;background:var(--light);border-color:var(--primary)}
 .nb-graph-center strong,.nb-graph-title{font-size:14px;line-height:1.5;color:var(--ink)}
-.nb-graph-title{text-decoration:underline;text-underline-offset:3px}
+.nb-graph-title{text-decoration:none;color:var(--primary)}.nb-graph-title:hover{color:var(--primary-hover)}
 .nb-graph-label{font-size:11px;font-weight:600;color:var(--muted)}
 .nb-related .nb-hint{font-size:12px;line-height:1.6;margin:0}
 .nb-related>.nb-link{margin-right:20px}
@@ -395,7 +395,7 @@
 .nb-conclusion-link:hover{color:var(--primary);text-decoration-color:currentColor}
 .nb-roster-entry{padding:15px 0;border-top:1px solid var(--line)}
 .nb-roster-title{font:500 17px/1.45 var(--display);color:var(--ink);text-decoration:none}
-.nb-roster-title:hover{color:var(--primary);text-decoration:underline;text-underline-offset:3px}
+.nb-roster-title:hover{color:var(--primary-hover);text-decoration:none}
 .nb-roster-provenance{font:400 12px/1.55 var(--sans);color:var(--muted);margin:7px 0 12px}
 .nb-roster-actions{display:flex;flex-wrap:wrap;gap:8px 18px;font:500 12px/1.6 var(--sans)}
 .nb-roster-history .nb-roster-entry:first-of-type{margin-top:14px}

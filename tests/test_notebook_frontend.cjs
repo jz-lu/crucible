@@ -1662,6 +1662,8 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   const app=await bootWithReaderTools();const copied=[];app.sandbox.navigator.clipboard={writeText:async value=>copied.push(value)};
   app.q('files').click();byText(app.q('dialog-body'),'Copy prompt').click();await flush();
   assert.match(copied[0],/^Before working, read the Crucible agent contract at http:\/\/127\.0\.0\.1:8000\/api\/agent\/pipeline/);
+  assert.match(copied[0],/Client: http:\/\/127\.0\.0\.1:8000\/api\/agent\/client/);
+  assert.match(copied[0],/login --notebook --no-browser/);
   assert.match(copied[0],/Do not request passwords or tokens/);
   assert.match(copied[0],/New notes and revisions start private.*Publication requires a request for an exact saved revision under the current publication policy/);
   assert.match(copied[0],/Automatic screening can publish a passing revision; scientific proposals still need separate review/);
@@ -1881,16 +1883,16 @@ let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);p
   late.resolve(timeline());await pending;
   assert.equal(app.q('timeline').querySelector('.nb-timeline-card')===card,true);assert.ok(card.querySelector('.nb-timeline-line'));assert.equal(card.getAttribute('aria-busy'),null);
  });
- await test('notebook tab changes reserve only current viewport space and clear it on access or route changes',async()=>{
+ await test('notebook navigation clears old reserved space before opening its destination',async()=>{
   let session='one';const app=await boot({session:()=>session,respond:url=>url==='/api/notebook/timeline'?timeline():undefined});
   app.root.hidden=false;app.window.scrollY=180;app.window.innerHeight=900;
   app.root.getBoundingClientRect=()=>({top:-40,height:9000});
   app.q('timeline-view').click();await flush();
-  assert.equal(app.root.style.minHeight,'940px','Reserve the viewport, not the previous9000px page');
-  assert.equal(app.root.classList.contains('nb-view-scroll-held'),true);
+  assert.equal(app.root.style.minHeight,'');
+  assert.equal(app.root.classList.contains('nb-view-scroll-held'),false);
   assert.doesNotMatch(app.root.textContent,/Cumulative notes currently visible|Each note counts once|Your notes and the research behind the map/);
   session='two';app.setAccount(user);assert.equal(app.root.style.minHeight,'');assert.equal(app.root.classList.contains('nb-view-scroll-held'),false);
-  await app.show();app.q('timeline-view').click();await flush();assert.equal(app.root.style.minHeight,'940px');
+  await app.show();app.q('timeline-view').click();await flush();assert.equal(app.root.style.minHeight,'');
   app.controller.hide();assert.equal(app.root.style.minHeight,'');
   await app.show();app.window.scrollY=0;app.q('timeline-view').click();await flush();assert.equal(app.root.style.minHeight,'');
  });

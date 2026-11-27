@@ -36,7 +36,7 @@ for (const width of [1440, 390]) test(`real awards agree on Leaderboard and prof
   await page.screenshot({path: testInfo.outputPath(`points-breakdown-${width}.png`), fullPage: true});
   await page.reload();
   await expect(points.locator(':scope > dd')).toHaveText('2,403');
-  await page.locator('#nav-people').click();
+  await navigationAction(page, '#nav-people');
   await expect(rows.nth(0).locator('td')).toHaveText(['1', 'solver', '2,403', '1']);
   await page.locator('#refresh-people').click();
   await expect(page.locator('#refresh-people')).toBeEnabled();

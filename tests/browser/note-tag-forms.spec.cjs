@@ -1,4 +1,4 @@
-const {test,expect,signIn,useDataSaver}=require('./helpers.cjs');
+const {test,expect,signIn,useDataSaver, navigationAction} = require('./helpers.cjs');
 
 for(const width of [1440,390])test(`form placeholders and searchable note tags work at ${width}px`,async({page},testInfo)=>{
   await page.setViewportSize({width,height:1000});await useDataSaver(page);
@@ -61,7 +61,7 @@ for(const width of [1440,390])test(`form placeholders and searchable note tags w
   await page.locator('[data-nb="full"]').getByRole('button',{name:'Edit',exact:true}).click();
   await expect(dialog.getByRole('button',{name:'Remove tag comma, subject',exact:true})).toBeVisible();
   await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
-  await page.locator('#nav-challenge').click();await page.locator('#propose-scheme-button').click();
+  await navigationAction(page, '#nav-challenge');await page.locator('#propose-scheme-button').click();
   await page.getByRole('link',{name:'Write a proposal note →',exact:true}).click();
   await expect(dialog).toHaveAttribute('aria-label','New proposal note');
   await expect(dialog.locator('.nb-required-marker:visible')).toHaveCount(5);
@@ -71,7 +71,7 @@ for(const width of [1440,390])test(`form placeholders and searchable note tags w
   await expect(dialog.locator('[name="title"]')).toHaveAttribute('placeholder',/scheme/);
   for(const name of ['title','claim','conditions','body'])await expect(dialog.locator('[name="'+name+'"]')).toHaveAttribute('placeholder',/.+/);
   await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
-  await page.locator('#nav-bounties').click();
+  await navigationAction(page, '#nav-bounties');
   const bounties=page.locator('[data-nb="bounties"]');await bounties.getByRole('button',{name:'Propose a bounty',exact:true}).click();
   await expect(bounties.locator('.bty-form .nb-required-marker')).toHaveCount(5);
   for(const name of ['bounty-title','bounty-summary','bounty-completion','bounty-verification','bounty-tags']){

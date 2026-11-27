@@ -17,7 +17,7 @@ async function test(name, run) {await run();passed++;console.log('PASS '+name);}
     assert.equal(section.open,false);
     assert.match(section.querySelector('summary').textContent,/First to reach2 schemes/);
     const table=section.querySelector('table');
-    assert.equal(table.getAttribute('aria-label'),'Highest first-place stage per scheme');
+    assert.equal(table.getAttribute('aria-label'),'Highest first-place level per scheme');
     assert.deepEqual(table.querySelectorAll('th').map(cell=>cell.textContent),['Scheme','Stage','Reached']);
     assert.equal(table.querySelector('tbody').querySelectorAll('tr').length,2);
     assert.match(section.textContent,/Stage 19/);
@@ -51,7 +51,7 @@ async function test(name, run) {await run();passed++;console.log('PASS '+name);}
     assert.match(app.$('#first-records').textContent,/No first-place records yet/);
     assert.equal(app.$('#first-records').querySelectorAll('button').length,0);
   });
-  await test('first records use the configuration’s current stage label without changing its point weight',async()=>{
+  await test('first records use the configuration’s current level label without changing its point weight',async()=>{
     const remapped={...schemes[0],default_progression:{stage_count:19},profiles:[{id:'tier-20',instance_size:20,stage_number:19,stage_label:'Stage 19'}]};
     const app=await createApp({schemes:[remapped],hash:'#person/alpha',responder:(url,options,envelope)=>url.pathname==='/api/people/alpha'?envelope({person:makePerson([first(20)])}):undefined});
     assert.equal(app.$('#first-records').querySelector('.milestone-result').textContent,'Stage 19');

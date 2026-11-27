@@ -32,27 +32,25 @@ function fixture({saved, dark = false, blocked = false, parsed = true, noMedia =
 }
 let passed = 0;
 function test(name, run) { run(); console.log('PASS ' + name); passed++; }
-test('light is applied before parsing despite saved dark or OS preferences', () => {
-  for (const saved of [undefined, 'dark', 'light', 'bogus']) for (const dark of [true, false]) {
-    const f = fixture({saved, dark, parsed: false});
-    assert.equal(f.root.getAttribute('data-theme'), 'light');
-    assert.equal(f.meta.getAttribute('content'), '#ebede6');
-    f.parse(); f.media.matches = !dark; f.media.emit('change');
-    f.window.emit('storage', {key: 'crucible.theme', newValue: 'dark'});
-    f.evaluate();
-    assert.equal(f.root.getAttribute('data-theme'), 'light');
-    assert.deepEqual(f.writes, []);
+test('saved appearance wins over the system and the toggle persists an explicit choice', () => {
+  for (const saved of [undefined,'dark','light','bogus']) for (const dark of [true,false]) {
+    const f=fixture({saved,dark,parsed:false}), selected=['dark','light'].includes(saved)?saved:dark?'dark':'light';
+    assert.equal(f.root.getAttribute('data-theme'),selected);f.parse();
+    f.button.emit('click');const chosen=selected==='dark'?'light':'dark';
+    assert.equal(f.root.getAttribute('data-theme'),chosen);assert.deepEqual(f.writes,[['crucible.theme',chosen]]);
+    f.media.matches=!dark;f.media.emit('change');assert.equal(f.root.getAttribute('data-theme'),chosen);
+    f.window.emit('storage',{key:'crucible.theme',newValue:'dark'});assert.equal(f.root.getAttribute('data-theme'),'dark');
+    f.evaluate();f.button.emit('click');assert.equal(f.writes.length,2);
   }
 });
-test('denied storage and absent matchMedia do not break light first paint', () => {
-  const f = fixture({blocked: true, noMedia: true});
-  assert.equal(f.root.getAttribute('data-theme'), 'light');
+test('denied storage and absent matchMedia keep the appearance control usable', () => {
+  const f=fixture({blocked:true,noMedia:true});assert.equal(f.root.getAttribute('data-theme'),'light');
+  f.button.emit('click');assert.equal(f.root.getAttribute('data-theme'),'dark');
+  f.button.emit('click');assert.equal(f.root.getAttribute('data-theme'),'light');
 });
-test('the shell declares light mode and has no theme control or partner branding', () => {
-  assert.match(html, /<html lang="en" data-theme="light">/);
-  assert.match(html, /name="color-scheme" content="light"/);
-  assert.doesNotMatch(html, /theme-toggle|resi-logo|resi\.org|>RESI</);
-  assert.doesNotMatch(css, /prefers-color-scheme: dark|:root\[data-theme=dark\]|theme-toggle/);
+test('the shell exposes a light and dark appearance control without partner branding', () => {
+  assert.match(html,/name="color-scheme" content="light dark"/);assert.match(html,/id="theme-toggle"/);
+  assert.doesNotMatch(html,/resi-logo|resi\.org|>RESI</);assert.match(css,/:root\[data-theme=dark\]/);
 });
 function tokens(selector) {
   const rule = css.slice(css.indexOf(selector) + selector.length).split('}')[0];
@@ -65,15 +63,16 @@ function luminance(hex) {
 }
 function ratio(a,b) { const x=luminance(a),y=luminance(b); return (Math.max(x,y)+.05)/(Math.min(x,y)+.05); }
 test('the light palette keeps text and semantic badge contrast at WCAG AA', () => {
-  const light=tokens(':root {');
-  for (const [name,p] of [['light',light]]) {
+  const light=tokens(':root {'),dark={...light,...tokens(':root[data-theme=dark] {')};
+  for (const [name,p] of [['light',light],['dark',dark]]) {
     for (const fg of ['ink','text','muted','primary']) for (const bg of ['paper','surface']) {
       assert.ok(ratio(p[fg],p[bg]) >= 4.5, `${name} ${fg}/${bg} ${ratio(p[fg],p[bg])}`);
     }
     for (const fg of ['success','error','violet','info','amber']) {
       assert.ok(ratio(p[fg],p[fg+'-bg']) >= 4.5, `${name} ${fg} badge`);
     }
-    assert.ok(ratio(p['success-selected'],p['success-on-selected']) >= 4.5, `${name} selected stage`);
+    assert.ok(ratio(p['success-selected'],p['success-on-selected']) >= 4.5, `${name} selected level`);
+    assert.ok(ratio(p['points-ink'],p['points-bg']) >= 4.5, `${name} points badge`);
     assert.ok(ratio(p['recovery-red'],p.surface) >= 3, `${name} recovery graph line`);
   }
 });

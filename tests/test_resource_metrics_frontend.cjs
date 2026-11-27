@@ -238,7 +238,7 @@ const report = {scheme_id: scheme.id, version: scheme.version, state: 'current',
   const namedApp = await createApp({schemes: [namedScheme], hash: '#scheme/resource-fixture/1', responder: url => url.pathname === '/api/protocol/resources' ? structuredClone(report) : undefined});
   const namedChart = namedApp.$('#overview-chart-public');
   assert.deepEqual(namedChart.querySelectorAll('.chart-recovery-line').map(p => p.dataset.profileId), [profiles[1].id]);
-  assert.equal(namedChart.querySelector('.chart-recovery-area'), null, 'named sets do not inherit a shaded stage frontier');
+  assert.equal(namedChart.querySelector('.chart-recovery-area'), null, 'named sets do not inherit a shaded level frontier');
   assert.equal(namedChart.querySelector('.chart-series'), null);
 
   let finishShared;

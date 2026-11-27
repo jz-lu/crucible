@@ -1,4 +1,4 @@
-const {test, expect, signIn, gate} = require('./helpers.cjs');
+const {test, expect, signIn, gate, navigationAction} = require('./helpers.cjs');
 
 // UI-only measurements decorate an authorized fixture response. This never
 // registers or publishes evidence; backend identity/ZIP checks have separate tests.
@@ -86,7 +86,7 @@ for (const width of [1440, 390]) {
     await expect(card).toContainText('browser-fixture');
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await page.screenshot({path:testInfo.outputPath('resource-operation-history.png'),fullPage:true});
-    await page.locator('#nav-challenge').click();
+    await navigationAction(page, '#nav-challenge');
     await page.goto('/#scheme/teaching-dh-kem/4');
     await expect(page.locator('#overview-badge-computation')).toHaveText('Current');
   });

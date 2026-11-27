@@ -1,22 +1,37 @@
-// The website always uses its light palette, including visits with an old
-// saved dark preference. The tab icon still follows browser chrome for contrast.
+// Apply the saved appearance before the main interface is parsed.
 (() => {
   if (window.CrucibleTheme || typeof document === 'undefined') return;
   const root = document.documentElement;
   if (typeof root?.setAttribute !== 'function') return;
-  let media = null;
+  const key = 'crucible.theme', valid = value => value === 'light' || value === 'dark';
+  let media = null, selected = null;
   try { media = window.matchMedia('(prefers-color-scheme: dark)'); } catch {}
+  try { const saved = window.localStorage.getItem(key); if (valid(saved)) selected = saved; } catch {}
+  const bound = new WeakSet();
   function apply() {
-    root.setAttribute('data-theme', 'light');
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#ebede6');
+    const theme = selected || (media?.matches ? 'dark' : 'light');
+    root.setAttribute('data-theme',theme);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content',theme === 'dark' ? '#171a18' : '#ebede6');
+    const button = document.querySelector('#theme-toggle');
+    if (button) {
+      button.setAttribute('aria-pressed',String(theme === 'dark'));
+      button.setAttribute('aria-label','Switch to '+(theme === 'dark' ? 'light' : 'dark')+' mode');
+      button.setAttribute('title',button.getAttribute('aria-label'));
+      if (!bound.has(button)) { button.addEventListener('click',toggle); bound.add(button); }
+    }
     const icon = document.querySelector('#site-icon');
     const iconURL = icon?.getAttribute('data-icon-' + (media?.matches ? 'dark' : 'light'));
-    if (iconURL && icon.getAttribute('href') !== iconURL) icon.setAttribute('href', iconURL);
+    if (iconURL && icon.getAttribute('href') !== iconURL) icon.setAttribute('href',iconURL);
   }
-  window.CrucibleTheme = Object.freeze({apply});
-  apply();
-  if (document.readyState === 'loading') document.addEventListener('readystatechange', apply);
-  media?.addEventListener?.('change', apply);
+  function toggle() {
+    selected = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    try { window.localStorage.setItem(key,selected); } catch {}
+    apply();
+  }
+  window.CrucibleTheme = Object.freeze({apply,toggle}); apply();
+  if (document.readyState === 'loading') document.addEventListener('readystatechange',apply);
+  media?.addEventListener?.('change',apply);
+  window.addEventListener?.('storage',event => { if (event.key === key) { selected = valid(event.newValue) ? event.newValue : null; apply(); } });
 })();
 
 // Public route structure only: no account, scheme description or research data

@@ -220,7 +220,7 @@ async function test(name, run) {await run();console.log('PASS '+name);passed++;}
         vm.runInContext('state.challenge.ends_at = now() - 1', app.sandbox);
         app.sandbox.updateClock();
       }
-      assert.equal(app.$('#use-agent').textContent, 'Inspect with an agent →');
+      assert.equal(app.$('#use-agent').textContent, 'Work with an agent');
       assert.match(app.$('#agent-instructions-text').textContent, /cannot accept a new answer.*existing submission or receipt/);
       assert.match(app.$('#agent-instructions-text').textContent, /get --challenge-id 'terminal-instance'/);
       assert.doesNotMatch(app.$('#agent-instructions-text').textContent, /attack and submission workflow|Deadline:/);

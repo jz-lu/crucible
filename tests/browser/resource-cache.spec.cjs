@@ -1,4 +1,4 @@
-const {test, expect, signIn, gate, holdResponse} = require('./helpers.cjs');
+const {test, expect, signIn, gate, holdResponse, accountAction, navigationAction} = require('./helpers.cjs');
 
 const schemeId = 'teaching-dh-kem';
 const cards = ['public', 'cipher', 'computation'];
@@ -109,7 +109,7 @@ test('idle preparation paints all resource cards immediately and warm navigation
     await page.evaluate(() => api('/api/notebook/notes', {idempotency_key: crypto.randomUUID(),
       content: {title: 'Resource cache browser fixture', claim: 'Synthetic cache check.',
         conditions: 'Disposable local database only.', body: 'Not a research finding.', tags: ['fixture']}}));
-    await page.locator('#nav-about').click();
+    await navigationAction(page, '#nav-about');
     expect(await firstNavigationFrame(page, '4')).toEqual({screen: 'overview', version: '4', points: [2, 2, 2]});
     await chartPointsReady(page, '96');
     expect(fixture.count()).toBe(1);
@@ -171,7 +171,7 @@ test('signout clears resource values and choices, and a late old-account refresh
     const oldAccount = fixture.holdNext();
     await card.getByRole('button', {name: 'Refresh resource measurements', exact: true}).click();
     await oldAccount.arrived.promise;
-    await page.locator('#logout-button').click();
+    await accountAction(page, '#logout-button');
     await expect(page.locator('#access-auth-actions')).toBeVisible();
     await expect(page.locator('#overview-graphs .chart-point')).toHaveCount(0);
     fixture.setPublicBytes(96);

@@ -1,4 +1,4 @@
-const {test, expect, signIn, useDataSaver, holdResponse} = require('./helpers.cjs');
+const {test, expect, signIn, useDataSaver, holdResponse, navigationAction} = require('./helpers.cjs');
 async function geometry(locator) {
   return locator.evaluate(element => {
     const {x,y,width,height} = element.getBoundingClientRect(), style = getComputedStyle(element);
@@ -8,7 +8,7 @@ async function geometry(locator) {
 for (const width of [1440,390]) {
   test(`Leaderboard explains points without spending or moving navigation at ${width}px`, async ({page},testInfo) => {
     await page.setViewportSize({width,height:900}); await useDataSaver(page); await signIn(page);
-    await page.locator('#nav-people').click(); await expect(page.locator('#people-content')).toContainText('browser_alice');
+    await navigationAction(page, '#nav-people'); await expect(page.locator('#people-content')).toContainText('browser_alice');
     await page.evaluate(() => document.fonts.ready);
     const trigger = page.getByRole('button',{name:'How points work',exact:true});
     const title = await page.locator('#people-title').boundingBox(), button = await trigger.boundingBox();
@@ -20,8 +20,8 @@ for (const width of [1440,390]) {
     const dialog = page.getByRole('dialog',{name:'How points work',exact:true});
     await expect(dialog).toBeVisible(); await expect(dialog.getByRole('button',{name:'Close points explanation'})).toBeFocused();
     for (const name of ['Record breakthroughs','Admitted schemes','Research bounties','Research notes','Bounty allowance']) await expect(dialog.getByRole('heading',{name,exact:true})).toHaveCount(1);
-    await expect(dialog).toContainText('2,000 points'); await expect(dialog).toContainText('+100 points per completed active week');
-    await expect(dialog).toContainText('review approval alone earns 0 points');
+    await expect(dialog).toContainText('2,000 points'); await expect(dialog).toContainText('+100 per full active week');
+    await expect(dialog).toContainText('When your new scheme goes live');
     expect(await geometry(page.locator('.header-inner'))).toEqual(nav);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({path:testInfo.outputPath(`points-help-${width}.png`)});

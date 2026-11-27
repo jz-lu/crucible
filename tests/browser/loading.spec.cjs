@@ -1,4 +1,4 @@
-const {test, expect, signIn, holdResponse} = require('./helpers.cjs');
+const {test, expect, signIn, holdResponse, navigationAction} = require('./helpers.cjs');
 
 async function geometry(locator) {
   return locator.evaluate(element => {
@@ -48,7 +48,7 @@ for (const [name, width] of [['desktop', 1440], ['mobile', 390]]) {
       for (const field of ['x', 'y', 'width']) expect(pendingTable[field], `table ${field} after access`).toBeCloseTo(accessTable[field], 0);
       expect(await page.locator('.catalogue-placeholder').first().evaluate(element => getComputedStyle(element).animationName)).toBe('none');
       expect(await page.locator('#kem-catalogue [role="status"]').evaluate(element => getComputedStyle(element).clipPath)).toBe('inset(50%)');
-      await page.locator('#nav-about').focus();
+      await navigationAction(page, '#nav-about', {focus:true});
       await page.screenshot({path: testInfo.outputPath('pending-catalogue.png')});
     } finally {
       session.release(); catalogue.release();

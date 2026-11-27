@@ -237,8 +237,8 @@
     const x = value => high === low ? 255 : 48 + (value - low) * 417 / (high - low);
     const y = value => 190 - value * 147 / maximum;
     const chartLabel = labels[view] + (rss?.includesLauncher ? ' · includes launcher memory' : '');
-    const chart = svg('svg', {viewBox: '0 0 480 240', role: 'img', class: 'overview-svg', 'aria-label': `${chartLabel} by ${named ? 'parameter set' : 'stage'}`});
-    const positions = !points.length ? ' No challenge stages published.' : named ? ' Distinct named parameter sets are not interpolated.' : xs.length ? ` Challenge stages ${low} to ${high}.` : ' No valid stage coordinates published.';
+    const chart = svg('svg', {viewBox: '0 0 480 240', role: 'img', class: 'overview-svg', 'aria-label': `${chartLabel} by ${named ? 'parameter set' : 'level'}`});
+    const positions = !points.length ? ' No challenge stages published.' : named ? ' Distinct named parameter sets are not interpolated.' : xs.length ? ` Challenge stages ${low} to ${high}.` : ' No valid level coordinates published.';
     chart.append(svg('title', {}, chartLabel), svg('desc', {}, `${measured.length} comparable observations. Missing values are gaps.${positions}${timed ? ' Dots show medians. Sample variation is retained in ' + (cleanPresentation ? 'the measurement report.' : 'Values, method & source.') : ''}${rss?.text ? ' ' + rss.text : ''}${recovery.label ? ' ' + recovery.label + '. ' + recovery.meaning : ''}`));
     chart.append(svg('text', {x: 48, y: 19, class: 'chart-axis-title'}, unit));
     if (Number.isFinite(recovery.tier) && x(recovery.tier) > 48) chart.append(svg('rect', {x: 48, y: 43, width: x(recovery.tier) - 48, height: 147, class: 'chart-recovery-area', 'aria-hidden': 'true'}));
@@ -246,7 +246,7 @@
     chart.append(svg('path', {d: 'M48 43V190H465', class: 'chart-axis'}));
     for (const value of [0, maximum]) chart.append(svg('text', {x: 40, y: y(value) + 4, 'text-anchor': 'end', class: 'chart-tick'}, value.toLocaleString('en-US', {maximumSignificantDigits: 4})));
     if (xs.length) for (const value of [...new Set([low, xs[Math.floor((xs.length - 1) / 2)], high])]) chart.append(svg('text', {x: x(value), y: 210, 'text-anchor': 'middle', class: 'chart-tick'}, value));
-    chart.append(svg('text', {x: 250, y: 235, 'text-anchor': 'middle', class: 'chart-axis-title'}, named ? 'Parameter set (see values)' : 'Challenge stage'));
+    chart.append(svg('text', {x: 250, y: 235, 'text-anchor': 'middle', class: 'chart-axis-title'}, named ? 'Parameter set (see values)' : 'Challenge level'));
     let path = '', connected = false;
     for (const p of points) {
       if (p.value === null || !Number.isFinite(p.x)) { connected = false; continue; }
@@ -342,7 +342,7 @@
       tr.append(element('td', p.samples ?? '—')); tbody.append(tr);
     }
     table.append(thead, tbody); const scroll = element('div', undefined, 'overview-values-scroll'); scroll.tabIndex = 0;
-    scroll.setAttribute('aria-label', chartLabel + ' values by ' + (named ? 'parameter set' : 'challenge stage'));
+    scroll.setAttribute('aria-label', chartLabel + ' values by ' + (named ? 'parameter set' : 'challenge level'));
     scroll.append(table); details.append(scroll);
     const source = publication?.source || {};
     if (publication) details.append(element('p', `${reportLabel} implementation: ${binding.implementation.id}. Published ${new Date(publication.received_at * 1000).toLocaleString()}.`, 'overview-chart-note'));

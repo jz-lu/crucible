@@ -4,9 +4,9 @@ const path = require('node:path');
 const vm = require('node:vm');
 const {createApp, flush} = require('./frontend-dom.cjs');
 const user = {id: 'fixture-user', handle: 'alice'};
-const scheme = {id: 'fixture', version: '1', name: 'Fixture scheme', next_profile_id: 'stage-1',
-  profiles: [{id: 'stage-1', instance_size: 1, shared_secret_bytes: 32, parameters: {}, encoding: {shared_secret_bytes: 32}, correctness: {}}],
-  size_parameter: {meaning: 'Fixture'}, protocol: {}, profile_metrics: {'stage-1': {public_key_bytes: 10}}};
+const scheme = {id: 'fixture', version: '1', name: 'Fixture scheme', next_profile_id: 'level-1',
+  profiles: [{id: 'level-1', instance_size: 1, shared_secret_bytes: 32, parameters: {}, encoding: {shared_secret_bytes: 32}, correctness: {}}],
+  size_parameter: {meaning: 'Fixture'}, protocol: {}, profile_metrics: {'level-1': {public_key_bytes: 10}}};
 const deferred = () => { let resolve, reject; const promise = new Promise((r, j) => { resolve = r; reject = j; }); return {promise, resolve, reject}; };
 const paths = app => app.requests.map(request => request.url.pathname);
 const read = (app, source) => vm.runInContext(source, app.sandbox);
@@ -226,7 +226,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     lateLoads.forEach(callback=>callback());await app.sandbox.showNotebook('');
     assert.equal(app.timers.size,0);assert.equal(assets(app).length,0);
     assert.equal(notebook.calls.mount,0);assert.equal(app.$('#access-workspace').hidden,false);
-    assert.deepEqual(paths(app),['/api/session','/api/notebook/notes'], 'Only the already-authorized initial read ran; revocation starts no further note request');
+    assert.deepEqual(paths(app),['/api/session','/api/me/points','/api/notebook/notes'], 'Only the already-authorized initial reads ran; revocation starts no further note request');
   });
   await test('leaving during asset loading cannot mount a hidden notebook', async () => {
     const app = await createApp({schemes: [scheme], user, hash: '#notebook'});
@@ -246,7 +246,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assets(app).forEach(element => element.onload()); await flush();
     assert.equal(notebook.calls.mount, 0);
     assert.equal(app.$('#access-workspace').hidden, false);
-    assert.deepEqual(paths(app), ['/api/session', '/api/notebook/notes'], 'No new request follows revocation');
+    assert.deepEqual(paths(app), ['/api/session', '/api/me/points', '/api/notebook/notes'], 'No new request follows revocation');
   });
   await test('the notebook map never blocks its renderer on full scheme metadata', async () => {
     const notebook = notebookDouble();
@@ -256,12 +256,12 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(notebook.calls.show, 1);
   });
   await test('scheme leaderboard and protocol navigation skip challenge reads; challenge view still reads once', async () => {
-    const app = await createApp({schemes: [scheme], user, hash: '#challenge/fixture/1?profile=stage-1&view=leaderboard'});
+    const app = await createApp({schemes: [scheme], user, hash: '#challenge/fixture/1?profile=level-1&view=leaderboard'});
     assert.equal(paths(app).includes('/api/challenges'), false);
     assert.equal(paths(app).filter(path => path === '/api/leaderboard').length, 1);
-    await app.navigate('#challenge/fixture/1?profile=stage-1&view=protocol');
+    await app.navigate('#challenge/fixture/1?profile=level-1&view=protocol');
     assert.equal(paths(app).includes('/api/challenges'), false);
-    await app.navigate('#challenge/fixture/1?profile=stage-1&view=challenge');
+    await app.navigate('#challenge/fixture/1?profile=level-1&view=challenge');
     assert.equal(paths(app).filter(path => path === '/api/challenges').length, 1);
     assert.equal(app.requests.some(request => request.options.method === 'POST'), false);
   });

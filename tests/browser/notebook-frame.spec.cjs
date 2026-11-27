@@ -1,4 +1,4 @@
-const {test, expect, signIn, holdResponse, useDataSaver} = require('./helpers.cjs');
+const {test, expect, signIn, holdResponse, useDataSaver, navigationAction} = require('./helpers.cjs');
 
 const views = {
   notes: {route: '#notebook', body: '[data-nb="library"]',
@@ -141,7 +141,7 @@ for (const width of [1440, 390]) for (const [view, config] of Object.entries(vie
         expect(await shadowSurface.evaluate(element => element.isConnected && element.hidden)).toBe(true);
         expect(requests.filter(request => request.path === '/map/styles.css')).toHaveLength(1);
       }
-      await page.locator('#nav-about').focus();
+      await navigationAction(page, '#nav-about', {focus:true});
       await page.screenshot({path: testInfo.outputPath('data-pending.png'), fullPage: true});
       data.release(); await data.delivered;
       if (view === 'notes') await expect(workspace.locator('#nb-note-list')).toContainText('Alice browser-only private note');
@@ -187,9 +187,9 @@ for (const width of [1440, 390]) {
     expect(pages).toBeGreaterThan(1); expect(pages).toBeLessThanOrEqual(20);
     // Reenter through the real navigation so the controller consumes the
     // already prepared index; no cache injection or preference override.
-    await page.locator('#nav-about').click();
+    await navigationAction(page, '#nav-about');
     await expect(page.locator('#about-workspace')).toBeVisible();
-    await page.locator('#nav-notebook').click();
+    await navigationAction(page, '#nav-notebook');
     const workspace = page.locator('#notebook-workspace');
     const select = workspace.locator('[data-nb="page-select"]');
     const list = workspace.locator('#nb-note-list');
@@ -203,7 +203,7 @@ for (const width of [1440, 390]) {
     await expect(workspace.locator('[data-nb="timeline"] svg')).toBeVisible();
     await workspace.locator('[data-nb="visualization-back"]').click();
     await expect(list.locator('.nb-entry')).toHaveCount(25);
-    expect(await workspace.evaluate(element=>element.style.minHeight)).not.toBe('');
+    expect(await workspace.evaluate(element=>element.style.minHeight)).toBe('');
     const requests = [];
     page.on('request', request => {
       const url = new URL(request.url());
@@ -232,7 +232,7 @@ for (const width of [1440, 390]) {
     await expect(list.locator('.nb-entry')).toHaveCount(25);
     if (pages === 2) await expect(select).toBeFocused();
     else await expect(previous).toBeFocused();
-    expect(Math.abs(await page.evaluate(() => scrollY) - beforePrevious)).toBeLessThanOrEqual(1);
+    expect(await page.evaluate(() => scrollY)).toBe(0);
     expect(await list.evaluate(element=>element.style.minHeight)).toBe('');
     expect(requests).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -260,7 +260,7 @@ for (const width of [1440, 390]) {
       await expect(list).toHaveAttribute('aria-busy','true');await expect(next).toBeDisabled();
       expect(await first.evaluate(element=>element.isConnected)).toBe(true);
       expect(Math.abs((await list.boundingBox()).height-before.height)).toBeLessThanOrEqual(1);
-      expect(Math.abs(await page.evaluate(()=>scrollY)-scroll)).toBeLessThanOrEqual(1);
+      expect(await page.evaluate(()=>scrollY)).toBe(0);
       expect(await list.evaluate(element=>parseFloat(element.style.minHeight))).toBeGreaterThanOrEqual(before.height);
       pending.release();await pending.delivered;
       await expect(list).not.toHaveAttribute('aria-busy','true');

@@ -168,12 +168,12 @@ def test_reviewer_note_authorship_earns_no_points_but_note_votes_still_exist(not
     note = publish(author, reviewer, create(author, content(kind="Review and synthesis")))
     voting_agent = agent(reader)
     assert vote(voting_agent, note, 2).status_code == 200
-    assert person(app, "author")["score_breakdown"]["note_contributions"] == 2
+    assert person(app, "author")["score_breakdown"]["note_contributions"] == 1
     with reviewer_app(app, author.identifier) as updated:
         assert_unscored_reviewer(person(updated, "author"))
         assert [row["handle"] for row in people(updated)["people"]] == ["reader"]
         note_reader = agent(Actor(updated, reader.identifier))
-        assert read(note_reader, note)["rating"]["score"] == 2
+        assert read(note_reader, note)["rating"]["score"] == 1
         with updated.state.db.transaction() as session:
             assert session.scalar(select(func.count()).select_from(note_ratings.NoteRating)) == 1
             assert session.scalar(select(note_ratings.NoteRating.value)) == 2

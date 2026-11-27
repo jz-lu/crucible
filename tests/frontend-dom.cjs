@@ -77,6 +77,7 @@ class Element extends Events {
 }
 function parseHTML(source) {
   const document = new Element('document', null); document.ownerDocument = document; document.createElement = tag => new Element(tag, document); document.hidden = false;
+  document.getElementById = id => document.querySelector('#'+id);
   document.createElementNS = (namespace, tag) => { const element = document.createElement(tag); element.namespaceURI = namespace; return element; };
   const stack = [document];
   for (const token of source.match(/<!--[\s\S]*?-->|<![^>]*>|<[^>]+>|[^<]+/g)) {
@@ -95,14 +96,14 @@ async function flush() { for (let i = 0; i < 6; i++) await new Promise(resolve =
 async function createApp({schemes, user = null, hash = '#challenge', responder, notebook, bootstrap = false} = {}) {
   const web = path.resolve(__dirname, '../web');
   const document = parseHTML(fs.readFileSync(path.join(web, 'index.html'), 'utf8'));
-  const window = new Events(); window.scrollTo = () => {}; document.defaultView = window;
+  const window = new Events(); window.setTimeout = () => 1; window.clearTimeout = () => {}; window.removeEventListener = function(type,callback) { this.listeners.set(type,(this.listeners.get(type)||[]).filter(item=>item!==callback)); }; window.scrollTo = () => {}; document.defaultView = window;
   let current = hash; const stack = [hash]; let position = 0;
   const applyHash = (value, notify) => { const parsed = String(value).split('#')[1]; current = parsed === undefined ? String(value) : '#' + parsed; if (notify) queueMicrotask(() => window.dispatchEvent({type: 'hashchange'})); };
   const location = {get hash() { return current; }, set hash(value) { if (value === current) return; stack.splice(position + 1); stack.push(value); position++; applyHash(value, true); }, get pathname() { return '/'; }, get search() { return ''; }, get href() { return 'http://127.0.0.1:8000/' + current; }};
   const history = {replaceState: (_, __, url) => { applyHash(url, false); stack[position] = current; }, pushState: (_, __, url) => { applyHash(url, false); stack.splice(position + 1); stack.push(current); position++; }, back: () => { if (position) { applyHash(stack[--position], false); window.dispatchEvent({type: 'popstate'}); window.dispatchEvent({type: 'hashchange'}); } }};
   window.location = location; window.history = history;
   if (notebook) window.CrucibleNotebook = notebook;
-  const requests = []; const epoch = Date.now() / 1000;
+  const requests = []; const epoch = Date.now() / 1000; let authSnapshot = null;
   const envelope = payload => ({server_time: epoch, round: {id: Math.floor(epoch / 3600), starts_at: Math.floor(epoch / 3600) * 3600, ends_at: (Math.floor(epoch / 3600) + 1) * 3600}, ...payload});
   const fetch = async (input, options = {}) => {
     const url = new URL(input, 'http://127.0.0.1:8000'); requests.push({url, options});
@@ -110,6 +111,8 @@ async function createApp({schemes, user = null, hash = '#challenge', responder, 
     if (responder) data = await responder(url, options, envelope);
     if (data === undefined) {
       if (url.pathname === '/api/session') data = envelope({user, csrf_token: 'test-csrf'});
+      else if (user && url.pathname === '/api/people/' + user.handle) data = envelope({person:{handle:user.handle,records:[],first_records:[],score_status:'active'}});
+      else if (url.pathname === '/api/me/points') data = {server_time:authSnapshot?.server_time,round:authSnapshot?.round,account_points:{user_id:authSnapshot?.user?.id || user?.id,points:0,score_status:'active',policy_id:'fixture-policy'}};
       else if (url.pathname === '/api/access/invitations/inspect') data = {status:'available',expires_at:epoch+604800};
       else if (url.pathname === '/api/access/invitations/verify/start') data = {status:'verification_sent',masked_recipient:'a***@example.org',expires_at:epoch+600,resend_after_seconds:60};
       else if (url.pathname === '/api/schemes') data = envelope({schemes});
@@ -122,6 +125,7 @@ async function createApp({schemes, user = null, hash = '#challenge', responder, 
       else if (url.pathname === '/api/protocol/resources') data = {publication: null, resources: null, state: 'not_calculated', historical: [], scheme_id: url.searchParams.get('scheme_id'), version: url.searchParams.get('version')};
       else throw new Error('Unexpected mocked request: ' + url.pathname);
     }
+    if (data && typeof data === 'object' && Object.hasOwn(data,'user') && typeof data.csrf_token === 'string') authSnapshot = data;
     return {ok: true, status: 200, json: async () => data, text: async () => typeof data === 'string' ? data : JSON.stringify(data)};
   };
   const sandbox = {document, window, location, history, fetch, URL, URLSearchParams, AbortController, Blob, TextEncoder, console, navigator: {}, crypto: {randomUUID: () => 'test-uuid'}, setTimeout: () => 1, clearTimeout: () => {}, setInterval: () => 1};

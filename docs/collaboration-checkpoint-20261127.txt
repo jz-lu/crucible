@@ -7,7 +7,7 @@ It also preserves the graph/stage review and a separate scheme-overview draft
 under docs/prototypes/scheme-overview/.
 
 The current branch is for collaboration and validation, not a release approval.
-Migrations0034..0037 are part of this work. Do not point it at the beta database
+Migrations 0034..0037 are part of this work. Do not point it at the beta database
 or deploy it as an ordinary schema-unchanged update. Use a disposable local DB;
 review and rehearse the schema release separately. No private operator files,
 API keys, local login shortcuts or local research databases are included.
@@ -23,3 +23,56 @@ Start with README.md and docs/operations.txt for the application. See
  docs/proposal-implementation.txt for the implementation lifecycle;
  docs/notes-and-stages-review-plan.txt for current UI decisions;
  docs/stage-graph-review-20261127.txt for the first measurement/stage audit.
+
+Integration result
+
+Integration branch: integration/notebook-landing-20261127
+Notebook/workflow checkpoint: 1d719af
+Landing source: Christine's feature/simplify-landing at 1efaa69
+
+Preserved the new landing, account/navigation menu, optional contribution guides,
+weekly challenge selection and member points endpoint. Kept the newer Notes
+reader/editor, numbered section links, publication lifecycle, bounty board and
+boost confirmation. The bounty page's additional restyling and repeated agent
+entry controls from the landing branch were deliberately not substituted for
+those newer interactions. Both source commits remain in the merge ancestry.
+
+The guides now accept Title and Note without the retired required summary/scope
+fields, use the solution-only bounty flow, and describe repeated numerical
+frontier awards. Labels remain Stage. Notebook pagination retains scroll position;
+exact section links still reveal their passage. Home's personal-progress read
+warms the same bounded account-owned profile cache used by profile navigation.
+The landing cards retain quiet placeholders instead of visible loading messages.
+Notebook popups dismiss on a full outside click, preserving unsaved-edit guards.
+The graph draft has clean curves with selected/hover markers only.
+
+Validation on this integration
+
+- All 65 standalone frontend suites were exercised. Four initial failures were
+  old fixture/layout expectations; the affected suites pass after correction.
+  Related home, warmup and navigation suites were rerun after the cache change.
+- The Python selection covered account points, public assets, note numbering,
+  section references and migrations, scoring weights, reviewer exclusion and
+  numerical-frontier awards. Initial run: 108 passed, two stale scoring fixtures
+  failed. The follow-up (including both corrected fixtures) passed all 31 checks.
+- Desktop/mobile Chrome checks passed for the merged landing/orientation,
+  current note reader and outside-click Copy Markdown dismissal. No mutations
+  were made by these preview checks. Two additional checked-in Playwright tests
+  verify the guided minimal note editor on a disposable portable-DH fixture.
+- The separate graph draft passed 96 views over eight schemes, hover/click and
+  keyboard selection, theme persistence and phone/tablet/desktop overflow checks.
+
+Not a production release approval
+
+The full PostgreSQL/native-runtime and full browser journey gates have NOT been
+run on this combined development branch. Several older browser journey specs
+still describe the retired expandable note list, old authoring fields or older
+bounty UI (for example notebook-publication, note-tag-forms and bounties specs).
+Port those assertions to the accepted UI before treating the complete browser
+release gate as green; do not disable them. The focused real-browser checks above
+are narrower evidence. The schema release/rollback rehearsal remains separate.
+No hosted configuration, beta research, accounts or deployment was changed.
+
+Run the app using the existing README/development procedure. The saved scheme
+visualization can be served independently; see docs/prototypes/scheme-overview/
+README.txt. It is a design draft and is not wired into the live overview route.

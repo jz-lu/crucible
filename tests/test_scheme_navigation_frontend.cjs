@@ -94,7 +94,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.match(app.location.hash, /#challenge\/a\/2/);
     assert.equal(app.requests.some(r => r.options.method === 'POST'), false);
   });
-  await test('profile records get human stage labels from navigation without downloading protocols', async () => {
+  await test('profile records get human level labels from navigation without downloading protocols', async () => {
     const record = {scheme_id: 'a', scheme_name: 'Scheme A', scheme_version: '2', profile_id: profile.id, tier: 20,
       place: 1, submission_id: 'receipt', received_at: 100, is_current: true};
     const app = await createApp({hash: '#person/alice', responder: responder((url, options, envelope) => {
@@ -126,7 +126,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.$('#parameter-json'), parameter); assert.equal(app.document.activeElement, input); assert.equal(input.value, '23');
     assert.equal(reads(app, 'release').length, 1);
   });
-  await test('metadata revision changes replace only the selected full release and preserve exact stage mapping', async () => {
+  await test('metadata revision changes replace only the selected full release and preserve exact level mapping', async () => {
     let revision = 'r1';
     const app = await createApp({hash: route(a), responder: responder((url, options, envelope) => {
       if (url.pathname !== '/api/schemes') return undefined;
@@ -201,7 +201,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     pending.resolve(app.envelope(detail(a)));await flush();assert.equal(app.$('#overview-workspace').hidden,false);
     assert.equal(app.requests.some(r=>r.url.pathname==='/api/challenges'),false);
   });
-  await test('stage browsing paints its heading without building hidden protocol or formatting math', async () => {
+  await test('level browsing paints its heading without building hidden protocol or formatting math', async () => {
     const app=await createApp({hash:route(a,'leaderboard'),responder:responder()});
     assert.equal(app.$('#scheme-title').textContent,'Scheme A');
     assert.doesNotMatch(app.$('#protocol-construction').textContent,/Scheme A full construction/);

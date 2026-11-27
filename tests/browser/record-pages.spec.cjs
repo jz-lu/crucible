@@ -1,4 +1,4 @@
-const {test, expect, signIn, useDataSaver, gate, holdResponse} = require('./helpers.cjs');
+const {test, expect, signIn, useDataSaver, gate, holdResponse, accountAction, navigationAction} = require('./helpers.cjs');
 
 const history = page => page.locator('#activity-workspace');
 const historyContent = page => page.locator('#history-content');
@@ -91,7 +91,7 @@ for (const width of [1440, 390]) {
     const pending = await holdResponse(page, url => url.pathname === '/api/people');
     let before;
     try {
-      await page.locator('#nav-people').click(); await pending.arrived;
+      await navigationAction(page, '#nav-people'); await pending.arrived;
       await expect(page.locator('#people-content .people-preview')).toBeVisible();
       await expect(page.locator('#people-content .people-preview')).toHaveAttribute('aria-hidden', 'true');
       await expect(page.locator('#people-content .people-preview a,#people-content .people-preview button')).toHaveCount(0);
@@ -110,10 +110,10 @@ for (const width of [1440, 390]) {
     expect(after.overflow).toBe(false);
 
     const row = await page.locator('#people-content .person-link').filter({hasText:'browser_alice'}).elementHandle();
-    await page.locator('#nav-about').click();
+    await navigationAction(page, '#nav-about');
     const fresh = await holdResponse(page, url => url.pathname === '/api/people');
     try {
-      await page.locator('#nav-people').click(); await fresh.arrived;
+      await navigationAction(page, '#nav-people'); await fresh.arrived;
       expect(await row.evaluate(element => element.isConnected)).toBe(true);
       await page.locator('#people-content .person-link').filter({hasText:'browser_alice'}).focus();
       await noVisibleLoading(page, '#people-workspace');
@@ -150,7 +150,7 @@ for (const width of [1440, 390]) {
     const fixture = await historyFixture(page), pending = fixture.holdNext();
     let before;
     try {
-      await page.locator('#history-button').click(); await pending.arrived;
+      await accountAction(page, '#history-button'); await pending.arrived;
       await expect(page).toHaveURL(/#activity$/);
       await expect(page.locator('#history-content .history-preview')).toBeVisible();
       await noVisibleLoading(page, '#activity-workspace');
@@ -168,9 +168,9 @@ for (const width of [1440, 390]) {
     await page.screenshot({path:testInfo.outputPath('activity-many-' + width + '.png'),fullPage:true});
     await expect(history(page).locator('.activity-tabs button')).toHaveText(['Schemes','Bounties','Notes']);
     await expect(page.locator('#activity-frame')).toBeHidden();
-    fixture.rows=[];await page.locator('#nav-about').click();const empty=fixture.holdNext();
+    fixture.rows=[];await navigationAction(page, '#nav-about');const empty=fixture.holdNext();
     try {
-      await page.locator('#history-button').click();await empty.arrived;
+      await accountAction(page, '#history-button');await empty.arrived;
       await expect(historyContent(page).locator('.activity-item')).toHaveCount(25);
       empty.release();await empty.delivered;
       await expect(historyContent(page)).toContainText('No submissions yet.');
@@ -181,18 +181,18 @@ for (const width of [1440, 390]) {
     await expect(historyContent(page)).toContainText('No submissions yet.');
   });
 
-  test('activity pagination preserves its '+width+'px viewport and cached page while short final pages shrink',async({page},testInfo)=>{
+  test('activity pagination starts at the top of its '+width+'px viewport and cached page while short final pages shrink',async({page},testInfo)=>{
     await page.setViewportSize({width,height:850});await startAtAbout(page);const fixture=await historyFixture(page,52);
-    await page.locator('#history-button').click();await expect(historyContent(page).locator('.activity-item')).toHaveCount(25);
+    await accountAction(page, '#history-button');await expect(historyContent(page).locator('.activity-item')).toHaveCount(25);
     await page.locator('#activity-pagination').scrollIntoViewIfNeeded();
     const before=await page.evaluate(()=>scrollY), initialHeight=await historyContent(page).evaluate(el=>el.getBoundingClientRect().height);
     const pending=fixture.holdNext();
     try {
       await page.locator('#activity-next').click();await pending.arrived;
       await expect(historyContent(page).locator('.history-preview')).toBeVisible();
-      expect(Math.abs(await page.evaluate(()=>scrollY)-before)).toBeLessThanOrEqual(2);
+      expect(await page.evaluate(()=>scrollY)).toBe(0);
       pending.release();await pending.delivered;await expect(historyContent(page).locator('.activity-item')).toHaveCount(25);
-      expect(Math.abs(await page.evaluate(()=>scrollY)-before)).toBeLessThanOrEqual(2);
+      expect(await page.evaluate(()=>scrollY)).toBe(0);
       await expect(page.locator('#activity-page-select')).toHaveValue('1');
     } finally {pending.release();await pending.delivered;}
     const again=fixture.holdNext();
@@ -200,7 +200,7 @@ for (const width of [1440, 390]) {
       await page.locator('#activity-previous').click();await again.arrived;
       await expect(historyContent(page).locator('.activity-item')).toHaveCount(25);
       await expect(historyContent(page).locator('.history-preview')).toHaveCount(0);
-      expect(Math.abs(await page.evaluate(()=>scrollY)-before)).toBeLessThanOrEqual(2);
+      expect(await page.evaluate(()=>scrollY)).toBe(0);
     } finally {again.release();await again.delivered;}
     await expect(page.locator('#refresh-activity')).toBeEnabled();
     await page.locator('#activity-page-select').selectOption('1');await expect(page.locator('#refresh-activity')).toBeEnabled();
@@ -209,7 +209,7 @@ for (const width of [1440, 390]) {
     expect(await historyContent(page).evaluate(el=>el.style.minHeight)).toBe('');
     await expect(page.locator('#activity-next')).toBeDisabled();
     await page.screenshot({path:testInfo.outputPath('activity-final-page-'+width+'.png'),fullPage:true});
-    const reads=fixture.reads;await page.locator('#nav-about').click();await page.locator('#history-button').click();
+    const reads=fixture.reads;await navigationAction(page, '#nav-about');await accountAction(page, '#history-button');
     await expect(page.locator('#activity-page-select')).toHaveValue('2');await expect(historyContent(page).locator('.activity-item')).toHaveCount(2);
     await expect.poll(()=>fixture.reads).toBe(reads+1);
     await expect(page.locator('#refresh-activity')).toBeEnabled();
@@ -229,7 +229,7 @@ for (const width of [1440, 390]) {
       const response=await route.fetch();if(response.status()!==200)return route.fulfill({response});
       await route.fulfill({response,json:{bounties:[{id:'fixture-own',title:'Document the scheme assumptions',status:'pending',owner:session.user,created_at:1700000000},{id:'fixture-contribution',title:'Reproduce the reference analysis',status:'open',owner:{id:'other'},created_at:1700000000}],pagination:{offset:0,limit:25,has_more:false}}});
     });
-    await page.locator('#history-button').click();
+    await accountAction(page, '#history-button');
     await page.locator('#activity-tab-notes').click();
     await expect(page.locator('#activity-notes')).toContainText('Proposed scheme');await expect(page.locator('#activity-notes')).toContainText('Attack');
     await expect(page.locator('#activity-notes .activity-scheme-tag')).toHaveText('Proposed scheme');
@@ -243,14 +243,14 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({width,height:1000});await startAtAbout(page);
     const styles=[];
     for(const [button,selector] of [['#nav-challenge','#catalogue-title'],['#nav-bounties','.bty-title-row h1'],['#nav-notebook','#notebook-workspace .nb-title-row h1'],['#nav-people','#people-title'],['#history-button','#activity-title']]){
-      await page.locator(button).click();const heading=page.locator(selector);await expect(heading).toBeVisible();
+      if(button==='#history-button')await accountAction(page,button);else await page.locator(button).click();const heading=page.locator(selector);await expect(heading).toBeVisible();
       styles.push(await heading.evaluate(element=>{const style=getComputedStyle(element);return {family:style.fontFamily,size:style.fontSize,weight:style.fontWeight,line:style.lineHeight,spacing:style.letterSpacing,height:element.getBoundingClientRect().height};}));
     }
     for(const style of styles.slice(1))expect(style).toEqual(styles[0]);
   });
 }
 
-test('a full note reader returns to the same activity page, expansion and scroll position',async({page})=>{
+test('a full note reader returns to the same activity page and expansion at page top',async({page})=>{
   await page.setViewportSize({width:390,height:850});await startAtAbout(page);
   const sourceData=await(await page.request.get('/api/notebook/notes?scope=mine&summary=true&limit=25')).json();
   const source=sourceData.notes.find(note=>note.owner?.handle==='browser_alice');expect(source).toBeTruthy();
@@ -264,7 +264,7 @@ test('a full note reader returns to the same activity page, expansion and scroll
     await route.fulfill({response,json:{...data,notes,next_after:second?null:'second-page'}});
   });
   try {
-    await page.locator('#history-button').click();await page.locator('#activity-tab-notes').click();
+    await accountAction(page, '#history-button');await page.locator('#activity-tab-notes').click();
     await expect(page.locator('#activity-notes .activity-item')).toHaveCount(25);await page.locator('#activity-next').click();
     await expect(page.locator('#activity-page-select')).toHaveValue('1');
     const row=page.locator('#activity-notes .activity-item').nth(15);await row.locator('.activity-toggle').click();
@@ -273,7 +273,7 @@ test('a full note reader returns to the same activity page, expansion and scroll
     expect(readCounts.filter(path=>path==='/api/notebook/notes/'+source.id).length).toBeGreaterThan(0);
     await page.goBack();await expect(page.locator('#activity-workspace')).toBeVisible();
     await expect(page.locator('#activity-page-select')).toHaveValue('1');await expect(row.locator('.activity-toggle')).toHaveAttribute('aria-expanded','true');
-    await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(before);
+    await expect.poll(()=>page.evaluate(()=>scrollY)).toBe(0);
   } finally {
     // Back paints its cached page immediately, before the fresh read completes.
     // Finish that intercepted read before Playwright disposes its response.
@@ -288,7 +288,7 @@ test('submission details return to activity and late reads cannot restore a depa
     await route.fulfill({response,status:200,json:{submission:{...fixture.rows[0],handle:'browser_alice',elapsed_seconds:1,
       method:{name:'Synthetic detail fixture',pseudocode:'Display-only fixture; no attack executed.'},compute:{}}}});
   });
-  await page.locator('#history-button').click();const entry=historyContent(page).locator('.activity-item').first();await expect(entry).toBeVisible();
+  await accountAction(page, '#history-button');const entry=historyContent(page).locator('.activity-item').first();await expect(entry).toBeVisible();
   await entry.locator('.activity-toggle').click();const row=entry.locator('.activity-detail');
   await row.click();await expect(page.locator('#recovery-title')).toHaveText('Synthetic detail fixture');
   await page.keyboard.press('Escape');await expect(row).toBeFocused();await expect(history(page)).toBeVisible();
@@ -301,9 +301,9 @@ test('submission details return to activity and late reads cannot restore a depa
     await expect(historyContent(page).locator('.activity-preview')).toContainText('Updated synthetic method');await expect(close).toBeFocused();
     await page.keyboard.press('Escape');await expect(row).toBeFocused();
   } finally {refreshed.release();await refreshed.delivered;}
-  await page.locator('#nav-about').click();const pending=fixture.holdNext();
+  await navigationAction(page, '#nav-about');const pending=fixture.holdNext();
   try {
-    await page.locator('#history-button').click();await pending.arrived;await page.locator('#nav-about').click();
+    await accountAction(page, '#history-button');await pending.arrived;await navigationAction(page, '#nav-about');
     const before=await historyContent(page).textContent();fixture.rows=[];
     pending.release();await pending.delivered;await expect(history(page)).toBeHidden();await expect(historyContent(page)).toHaveText(before);
   } finally {pending.release();await pending.delivered;}
@@ -311,13 +311,13 @@ test('submission details return to activity and late reads cannot restore a depa
 });
 
 test('revoked access clears every activity section and retires pending reads',async({page,context})=>{
-  await startAtAbout(page);const fixture=await historyFixture(page,1);await page.locator('#history-button').click();
+  await startAtAbout(page);const fixture=await historyFixture(page,1);await accountAction(page, '#history-button');
   await expect(historyContent(page).locator('.activity-item')).toHaveCount(1);
   const pending=fixture.holdNext();
   try {
     await activityRefresh(page).click();await pending.arrived;
     await context.addCookies([{name:'crucible_session',value:'synthetic-revoked-browser-cookie',url:'http://127.0.0.1:8029',sameSite:'Strict'}]);
-    await page.locator('#nav-people').click();await expect(page.locator('#access-workspace')).toBeVisible();
+    await navigationAction(page, '#nav-people');await expect(page.locator('#access-workspace')).toBeVisible();
     pending.release();await pending.delivered;
     for(const selector of ['#history-content','#activity-bounties','#activity-notes'])await expect(page.locator(selector)).toBeEmpty();
     await expect(history(page)).toBeHidden();await expect(page.locator('#history-button')).toBeHidden();
@@ -354,10 +354,10 @@ test('a legacy-server record reserves its heading without an interim label befor
     await expect(refresh).toBeDisabled();
     header = await page.locator('.tier-record-heading').boundingBox(); control = await refresh.boundingBox();
     expect(header.height).toBeGreaterThan(20);
-    await page.locator('#nav-about').focus();
+    await navigationAction(page, '#nav-about', {focus:true});
   } finally {pending.release(); await pending.delivered; await pending.remove();}
   await expect(title).toHaveText('Unsolved');
-  await expect(page.getByRole('link', {name:'Take on this stage →',exact:true})).toBeVisible();
+  await expect(page.getByRole('link', {name:'Take on this level →',exact:true})).toBeVisible();
   await expect(refresh).toBeEnabled();
   sameRect(await page.locator('.tier-record-heading').boundingBox(), header, 'record header');
   sameRect(await refresh.boundingBox(), control, 'record refresh');

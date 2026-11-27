@@ -1,4 +1,4 @@
-const {test, expect, signIn} = require('./helpers.cjs');
+const {test, expect, signIn, accountAction, navigationAction} = require('./helpers.cjs');
 test.use({actionTimeout: 10000});
 
 // All task mutations below use the rendered form and the real disposable API.
@@ -8,8 +8,8 @@ test('a reviewed bounty spends explicit allowance and awards one independently a
   test.setTimeout(90000);
   const panel = () => page.locator('[data-nb="bounties"]:visible');
   async function as(actor) {
-    if (await page.locator('#logout-button').isVisible()) {
-      await page.locator('#logout-button').click();
+    if (await page.locator('#account-menu').isVisible()) {
+      await accountAction(page, '#logout-button');
       await expect(page.locator('#access-sign-in')).toBeVisible();
     }
     await signIn(page, actor);
@@ -24,7 +24,7 @@ test('a reviewed bounty spends explicit allowance and awards one independently a
     await expect(panel().getByRole('heading', {name:'Synthetic full bounty journey', exact:true})).toBeVisible();
   }
   await as('queueauthor');
-  await page.locator('#nav-bounties').click();
+  await navigationAction(page, '#nav-bounties');
   await expect(page).toHaveURL(/#bounties$/);
   await panel().getByRole('button', {name:'Propose a bounty', exact:true}).click();
   for (const [label,value] of [

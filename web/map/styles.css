@@ -1,4 +1,16 @@
-/* Uses the same font families and light palette as the parent application. */
+@font-face {
+  font-family: 'Cardo'; font-style: normal; font-weight: 400; font-display: optional;
+  src: url('/vendor/resi/cardo-normal-400-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Cardo'; font-style: normal; font-weight: 700; font-display: optional;
+  src: url('/vendor/resi/cardo-normal-700-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 100 700; font-display: optional;
+  src: url('/vendor/resi/plex-sans-normal-100-700-latin.woff2') format('woff2');
+}
+
 :root {
   --paper: #ebede6;
   --surface: #f8f9f4;
@@ -105,3 +117,8 @@
 .detail-actions a:hover{filter:brightness(.95)}
 .map-note{padding:24px}.map-note h2{font:650 29px/1.2 var(--display);color:var(--ink);margin:10px 0 16px}.map-note h3{font-size:14px;color:var(--ink);margin:22px 0 8px}.map-note p{margin:9px 0;font-size:14px}.map-note .note-body h2{font:600 16px/1.4 var(--sans);margin-top:24px}.map-note .note-body pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}.map-note .note-sources{font-size:13px;padding-left:20px}.map-note .note-sources p{font-size:12px;color:var(--muted)}
 .map-note-list{display:grid;gap:8px;margin-top:15px}.map-note-list button{background:var(--white);border:1px solid var(--line);border-radius:6px;padding:12px;text-align:left;color:var(--ink)}
+
+/* Match text-action feedback to the main site; reading links retain underlines. */
+button,summary,.quiet-link { transition:color .18s,border-color .18s,background .18s; }
+button:is(:hover,:focus-visible),summary:is(:hover,:focus-visible),.quiet-link:is(:hover,:focus-visible) { text-decoration:none; color:var(--accent); }
+@media(prefers-reduced-motion:reduce) { button,summary,.quiet-link { transition:none; } }

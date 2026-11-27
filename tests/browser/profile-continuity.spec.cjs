@@ -1,4 +1,4 @@
-const {test, expect, signIn, gate, holdResponse} = require('./helpers.cjs');
+const {test, expect, signIn, gate, holdResponse, accountAction, navigationAction} = require('./helpers.cjs');
 
 async function start(page) {
   await page.goto('/#about');await signIn(page,'alice',{navigate:false});
@@ -96,7 +96,7 @@ for(const {width,actor,label,handle:requestedHandle,reviewer=false} of profiles)
         await expect(page.locator('#agent-connections')).toBeVisible();
       }
       if(reviewer)await expect(page.locator('#profile-review-link')).toBeVisible();
-      await page.locator('#nav-about').focus();
+      await navigationAction(page, '#nav-about', {focus:true});
       await page.screenshot({path:testInfo.outputPath('profile-pending-'+width+'-'+label+'.png')});
       // While the foreground profile is pending, only its required reads run.
       // After it paints, the normal idle queue may prepare other workspaces.
@@ -139,7 +139,7 @@ test('a cached profile revisit keeps admitted content and focused disclosure thr
   await expect(page.locator('#person-content .person-stats')).toBeVisible();
   const summary=page.locator('#personal-records > summary');await summary.click();
   const stats=await page.locator('#person-content .person-stats').elementHandle();
-  await page.locator('#nav-about').click();
+  await navigationAction(page, '#nav-about');
   const arrived=gate(),release=gate(),delivered=gate();
   const matcher=url=>url.pathname==='/api/people/browser_bob';
   await page.route(matcher,async route=>{try{const response=await route.fetch();expect(response.status()).toBe(200);arrived.resolve();await release.promise;await route.fulfill({response,status:503,json:{detail:'Synthetic profile read failed.'}});}finally{delivered.resolve();}});
@@ -172,7 +172,7 @@ test('profile result dialog returns focus to its replacement receipt after a pro
   });
   // Install rendering fixtures before admission can warm the same profile.
   await start(page);
-  await page.locator('#account-handle').click();await page.locator('#personal-records > summary').click();
+  await accountAction(page, '#account-handle');await page.locator('#personal-records > summary').click();
   const button=page.locator('#personal-records [data-submission-id="browser-profile-layout"]');
   const original=await button.elementHandle();await button.click();
   await expect(page.locator('#recovery-title')).toHaveText('Synthetic profile details');

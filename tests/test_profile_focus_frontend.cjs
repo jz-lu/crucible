@@ -6,14 +6,14 @@ const {createApp} = require('./frontend-dom.cjs');
 
 const user = {id: 'owner', handle: 'alpha'};
 const record = (id, scheme = 'fixture') => ({scheme_id: scheme, scheme_name: scheme,
-  scheme_version: '1', profile_id: 'stage-1', tier: 1, place: 1, submission_id: id,
+  scheme_version: '1', profile_id: 'level-1', tier: 1, place: 1, submission_id: id,
   received_at: 100, is_current: true, scoring_eligible: true, score: {total: 10}});
 const profile = () => ({handle: 'alpha', points: 20, accepted_proposal_count: 0,
   score_breakdown: {progress: 20}, records: [record('one'), record('two', 'other')],
   first_records: [record('one'), record('two', 'other')],
   recent_recoveries: [record('one'), record('two', 'other')]});
 const schemes = ['fixture', 'other'].map(id => ({id, version: '1', name: id,
-  profiles: [{id: 'stage-1', instance_size: 1}], next_profile_id: 'stage-1'}));
+  profiles: [{id: 'level-1', instance_size: 1}], next_profile_id: 'level-1'}));
 const deferred = () => {let resolve; const promise = new Promise(done => {resolve = done;}); return {promise, resolve};};
 
 async function boot() {

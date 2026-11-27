@@ -47,12 +47,12 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     const app = await createApp({schemes: [], hash: '#about', bootstrap: true, responder: (url, options, envelope) => {
       if (url.pathname === '/api/session') return session(envelope, status);
     }});
-    assert.deepEqual(paths(app), ['/api/session']);
+    assert.deepEqual(paths(app), ['/api/session','/api/me/points']);
     assert.equal(app.$('#about-workspace').hidden, false);
     assert.deepEqual({...app.window.CrucibleSessionBootstrap}, {consumed: true});
     status = 'revoked';
     await app.sandbox.synchronizeSession();
-    assert.deepEqual(paths(app), ['/api/session', '/api/session']);
+    assert.deepEqual(paths(app), ['/api/session','/api/me/points','/api/session']);
     assert.equal(app.$('#access-workspace').hidden, false);
   });
   await test('app-first initialization marks fallback before a late bootstrap download can duplicate it', async () => {

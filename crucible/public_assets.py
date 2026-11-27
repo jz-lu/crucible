@@ -24,6 +24,7 @@ from starlette.staticfiles import StaticFiles
 # stylesheet receives its own snapshot-bound hash below; user CSS stays blocked.
 FIRST_PAINT_STYLE = (
     'html{--paper:#ebede6;--text:#283c30;background:var(--paper);color-scheme:light}'
+    'html[data-theme=dark]{--paper:#171a18;--text:#ccd4cc;color-scheme:dark}'
     'body{margin:0;background:var(--paper);color:var(--text);'
     "font:14px/1.6 'IBM Plex Sans',Arial,sans-serif;"
     '-webkit-font-smoothing:antialiased}[hidden]{display:none!important}'

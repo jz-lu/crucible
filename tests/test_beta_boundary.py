@@ -46,7 +46,7 @@ def private_app(tmp_path):
     app.state.db.engine.dispose()
 
 @pytest.mark.parametrize('path',[
- '/api/schemes','/api/people','/api/people/participant','/api/leaderboard',
+ '/api/schemes','/api/people','/api/people/participant','/api/leaderboard','/api/me/points',
  '/api/protocol/source','/api/protocol/artifacts','/api/protocol/artifact-source',
  '/api/protocol/spec','/api/protocol/spec-schema','/api/protocol/spec-template',
  '/api/protocol/proposal-guide',

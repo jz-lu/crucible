@@ -122,7 +122,7 @@ async function test(name,run){await run();console.log('PASS '+name);passed++;}
   });
   await test('manual revision route offers the same exact agent context only after owned base loads',async()=>{
     const app=await boot({hash:'#propose?revise=proposal-one'});
-    assert.equal(app.$('#proposal-use-agent').disabled,false);assert.match(app.$('#proposal-use-agent').textContent,/Revise with an agent/);
+    assert.equal(app.$('#proposal-use-agent').disabled,false);assert.match(app.$('#proposal-use-agent').textContent,/Work with an agent/);
     app.$('#proposal-use-agent').click();assert.match(app.$('#proposal-agent-text').textContent,/Expected base: revision 1/);
     assert.match(app.$('#proposal-agent-text').textContent,/proposal revise 'proposal-one'/);
     const pending=deferred();const waiting=await boot({hash:'#propose?revise=proposal-one',hook:url=>url.pathname.endsWith('/proposal-one')?pending.promise:undefined});
@@ -159,7 +159,7 @@ async function test(name,run){await run();console.log('PASS '+name);passed++;}
     app.$('#proposal-file').files=[{size:1,text:async()=> ' '.repeat(49153)}];app.$('#proposal-file').dispatchEvent({type:'change'});await flush();
     assert.equal(checks(app).length,0);assert.match(app.$('#proposal-error').textContent,/48 KiB/);
   });
-  await test('stage-design plans appear in the format-only preview as inert labelled text',async()=>{
+  await test('level-design plans appear in the format-only preview as inert labelled text',async()=>{
     const app=await boot();const value=spec();value.tier_design=tierDesign();await upload(app,value);
     const preview=app.$('#proposal-preview');
     for(const label of ['Default progression','Parameter progression','Resource costs','Common correctness requirement','Endpoint status','Endpoint target','Endpoint evidence','Intermediate steps'])assert.ok(preview.textContent.includes(label));

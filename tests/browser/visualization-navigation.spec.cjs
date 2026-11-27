@@ -1,4 +1,4 @@
-const {test, expect, signIn, notebookReady, useDataSaver} = require('./helpers.cjs');
+const {test, expect, signIn, notebookReady, useDataSaver, navigationAction} = require('./helpers.cjs');
 
 for (const width of [1440, 390]) test(`visualizations open from their parent pages and return at ${width}px`, async ({page}, testInfo) => {
   await page.setViewportSize({width, height: 1000}); await useDataSaver(page);
@@ -20,7 +20,7 @@ for (const width of [1440, 390]) test(`visualizations open from their parent pag
   await expect(notesTitle).toHaveText('Notes'); await expect(notesTitle).toBeFocused();
   await expect(page.locator('[data-nb="search"]')).toHaveValue('Alice');
 
-  await page.locator('#nav-challenge').click();
+  await navigationAction(page, '#nav-challenge');
   const schemesTitle = page.locator('#catalogue-title'), map = page.locator('#scheme-map-button');
   await expect(schemesTitle).toHaveText('Schemes'); await expect(schemesTitle).toBeVisible(); await expect(map).toBeVisible();
   const schemesBox = await schemesTitle.boundingBox(), mapBox = await map.boundingBox();
@@ -45,7 +45,7 @@ for (const width of [1440, 390]) test(`visualizations open from their parent pag
   await page.getByRole('button', {name: '← Schemes', exact: true}).click();
   await expect(page).toHaveURL(/#challenge$/); await expect(schemesTitle).toBeVisible();
   await page.goBack(); await expect(notesTitle).toHaveText('Scheme map');
-  await page.locator('#nav-notebook').click();
+  await navigationAction(page, '#nav-notebook');
   await expect(notesTitle).toHaveText('Notes');
   await expect(page.locator('[data-nb="search"]')).toHaveValue('Alice');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

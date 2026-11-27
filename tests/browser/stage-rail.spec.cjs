@@ -71,7 +71,7 @@ for (const width of [1440, 390]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 
-  test(`a six-position exact rail stops at the recovered stage and refreshes while focused at ${width}px`, async ({page}, testInfo) => {
+  test(`a six-position exact rail stops at the recovered level and refreshes while focused at ${width}px`, async ({page}, testInfo) => {
     await page.setViewportSize({width, height:1000});
     const posts=[]; let recovered=[20,21,22];
     page.on('request',request=>{if(request.method()==='POST')posts.push(new URL(request.url()).pathname);});

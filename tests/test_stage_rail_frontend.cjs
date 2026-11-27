@@ -70,7 +70,7 @@ async function test(name, run) {
     assert.ok(css.includes(`var(--line) ${tick(1,'+')}, var(--line) ${tick(7,'-')}`),'Unsolved gap remains gray');
     const buttons=app.$('#size-options').querySelectorAll('button');
     assert.deepEqual(buttons.filter(button=>button.classList.contains('is-prior')).map(button=>Number(button.textContent)),[2]);
-    assert.doesNotMatch(buttons.find(button=>button.textContent==='3').getAttribute('aria-label'),/recovered|earlier stage/);
+    assert.doesNotMatch(buttons.find(button=>button.textContent==='3').getAttribute('aria-label'),/recovered|earlier level/);
     assert.equal(app.requests.some(request=>request.options.method==='POST'),false);
   });
   await test('isolated endpoint recoveries have bounded ticks and keep the middle unsolved', async()=>{
@@ -127,7 +127,7 @@ async function test(name, run) {
     await app.navigate(route(exact));
     assert.match(track(app),/--recovery-track/);
   });
-  await test('the selected exact recovered stage stays visible through a green thumb, with gaps reset', async()=>{
+  await test('the selected exact recovered level stays visible through a green thumb, with gaps reset', async()=>{
     const value=release(); const app=await fixture(value,2);
     assert.match(track(app),/--recovery-thumb: #278451/);
     await app.navigate(route(value,3));
@@ -168,12 +168,12 @@ async function test(name, run) {
     const {app,update}=await moduleFixture([1,2,3],4);
     const slider=app.$('#size-slider'), buttons=app.$('#size-options').querySelectorAll('button');
     const hash=app.location.hash;
-    assert.ok(track(app).includes(`#278451 ${point(2,6)}`),'Stages 1–3 end exactly at stage 3');
-    assert.ok(!track(app).includes(point(2.5,6)),'No endpoint at stage 3.5');
+    assert.ok(track(app).includes(`#278451 ${point(2,6)}`),'Stages 1–3 end exactly at level 3');
+    assert.ok(!track(app).includes(point(2.5,6)),'No endpoint at level 3.5');
     assert.doesNotMatch(track(app),/--recovery-thumb/);
     slider.focus();
     await update([1,2,3,4]);
-    assert.ok(track(app).includes(`#278451 ${point(3,6)}`),'Fresh stage 4 extends to its exact center immediately');
+    assert.ok(track(app).includes(`#278451 ${point(3,6)}`),'Fresh level 4 extends to its exact center immediately');
     assert.match(track(app),/--recovery-thumb: #278451/);
     assert.equal(slider.value,'3');
     assert.equal(app.$('#size-slider-value').textContent,'4');
@@ -200,14 +200,14 @@ async function test(name, run) {
     assert.equal(app.document.activeElement,input);
     assert.equal(app.$('#size-slider').value,'2');
     assert.match(track(app),/--recovery-thumb: #278451/);
-    assert.ok(track(app).includes(`var(--line) ${tick(0,'+',6)}, var(--line) ${tick(2,'-',6)}`),'Unrecovered stage 2 stays gray');
+    assert.ok(track(app).includes(`var(--line) ${tick(0,'+',6)}, var(--line) ${tick(2,'-',6)}`),'Unrecovered level 2 stays gray');
     app.document.body.focus();
     await update([1,3]);
     assert.equal(input.value,'5','Deferred metadata rendering must not consume the draft');
     assert.equal(app.location.hash,hash);
     assert.equal(vm.runInContext('state.profile.id',app.sandbox),moduleId(3));
   });
-  await test('fresh records style the active slider preview, not a different committed stage', async()=>{
+  await test('fresh records style the active slider preview, not a different committed level', async()=>{
     const {app,update}=await moduleFixture([1],3);
     const slider=app.$('#size-slider'), hash=app.location.hash;
     slider.focus(); slider.value='3'; slider.dispatchEvent({type:'input'});
@@ -215,7 +215,7 @@ async function test(name, run) {
     await update([1,4]);
     assert.match(track(app),/--recovery-thumb: #278451/);
     await update([1,3]);
-    assert.doesNotMatch(track(app),/--recovery-thumb/,'Stage 3 recovery must not color the stage 4 preview thumb');
+    assert.doesNotMatch(track(app),/--recovery-thumb/,'Stage 3 recovery must not color the level 4 preview thumb');
     assert.equal(slider.value,'3');
     assert.equal(app.document.activeElement,slider);
     assert.equal(app.$('#size-slider-value').textContent,'4');
@@ -259,5 +259,5 @@ async function test(name, run) {
       assert.match(rule,/background:\s*var\(--recovery-thumb,\s*var\(--primary\)\)/);
     }
   });
-  console.log(`${passed} stage-rail checks passed`);
+  console.log(`${passed} level-rail checks passed`);
 })().catch(error=>{console.error(error);process.exitCode=1;});

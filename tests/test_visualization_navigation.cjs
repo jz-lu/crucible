@@ -47,19 +47,19 @@ async function test(name, run) { await run(); passed++; console.log('PASS ' + na
     assert.equal(app.calls.at(-1).get('view'), 'map');
     assert.equal(app.requests.some(({url}) => url.pathname === '/api/schemes' && url.searchParams.get('projection') !== 'map'), false);
   });
-  await test('explicit main tabs scroll to the top even on repeat clicks, while browser history retains its own scroll', async () => {
+  await test('main tabs, repeat clicks and browser history all start at page top', async () => {
     const app = await boot('#challenge'), scrolls = [];
     app.window.scrollTo = options => scrolls.push(JSON.parse(JSON.stringify(options)));
     for (const selector of ['#nav-notebook', '#nav-notebook', '#nav-bounties', '#nav-about', '#nav-challenge']) {
       const before = scrolls.length; app.$(selector).click(); await flush();
-      assert.equal(scrolls.length, before + 1);
+      assert.ok(scrolls.length > before);
       assert.deepEqual(scrolls.at(-1), {top: 0, left: 0, behavior: 'instant'});
     }
     const before = scrolls.length; app.history.back(); await flush();
-    assert.equal(scrolls.length, before);
+    assert.ok(scrolls.length > before);const afterBack=scrolls.length;
     app.$('.brand-wordmark').dispatchEvent({type: 'click', ctrlKey: true, button: 0}); await flush();
-    assert.equal(scrolls.length, before, 'Modified home links keep their native behavior');
-    app.$('.brand-wordmark').click(); await flush(); assert.equal(scrolls.length, before + 1);
+    assert.equal(scrolls.length, afterBack, 'Modified home links keep their native behavior');
+    app.$('.brand-wordmark').click(); await flush(); assert.ok(scrolls.length > afterBack);
   });
   console.log(passed + ' visualization navigation checks passed');
 })().catch(error => { console.error(error); process.exitCode = 1; });

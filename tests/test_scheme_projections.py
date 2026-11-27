@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import event
 
-from crucible import registry
+from crucible import registry, scoring
 from crucible.db import Challenge
 from crucible.public_json import PROGRESS_FIELDS, catalogue_progress
 from test_beta_boundary import private_app, connect
@@ -44,6 +44,12 @@ def test_navigation_has_all_authoritative_labels_and_only_compact_metadata(curre
     expected, result = full.json(), compact.json()
     assert result['projection'] == 'navigation'
     assert result['catalogue_revision'] == expected['catalogue_revision']
+    assert result['recovery_scoring'] == expected['recovery_scoring'] == {
+        'policy_id': scoring.POLICY_ID,
+        'record_advance_points': scoring.FRONTIER_POINTS,
+        'enrolled_releases': [{'id': identifier, 'version': release['version']}
+                              for identifier, release in scoring.FAMILY_RELEASES.items()],
+    }
     assert [row['id'] for row in result['schemes']] == list(registry.CURRENT)
     originals, navigation = flattened(expected['schemes']), flattened(result['schemes'])
     assert set(navigation) == set(originals) == set(registry.ADAPTERS)

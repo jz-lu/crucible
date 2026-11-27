@@ -1,4 +1,4 @@
-const {test, expect, holdResponse, signIn, useDataSaver} = require('./helpers.cjs');
+const {test, expect, holdResponse, signIn, useDataSaver, navigationAction} = require('./helpers.cjs');
 const {createHash} = require('node:crypto');
 const {readFileSync} = require('node:fs');
 const {resolve} = require('node:path');
@@ -90,7 +90,7 @@ async function assertInlineMainStyle(page, response, {notebookPrepared = false} 
   expect(await page.locator('head > link[rel="preload"][as="font"]').evaluateAll(links =>
     links.map(link => new URL(link.href).pathname))).toEqual(['/vendor/resi/cardo-normal-400-latin.woff2']);
   expect(await page.evaluate(() => [
-    document.fonts.check('700 36px Cardo'),
+    document.fonts.check('700 36px "Cardo"'),
     document.fonts.check('400 14px "IBM Plex Sans"'),
   ]), 'critical fonts decode with the first styled frame').toEqual([true, true]);
   const styles = await page.locator('head > style').allTextContents();
@@ -110,7 +110,7 @@ async function assertInlineMainStyle(page, response, {notebookPrepared = false} 
     const main = document.querySelector('head > style[data-main-style]');
     return scripts.map(script => ({path: new URL(script.src).pathname,
       beforeStyle: Boolean(script.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING)}));
-  })).toEqual(['/math.js', '/assumptions.js', '/proposal-retractions.js', '/resource-metrics.js', '/graph-points.js', '/app.js']
+  })).toEqual(['/math.js', '/assumptions.js', '/proposal-retractions.js', '/resource-metrics.js', '/graph-points.js', '/orientation.js', '/app.js']
     .map(path => ({path, beforeStyle: true})));
   // Main/critical CSS is inline before admission. Once admitted, optional
   // notebook preparation may add its own stylesheet without affecting first
@@ -153,7 +153,7 @@ test('the public shell is fully styled before access resolves without requesting
     const response = await page.goto('/', {waitUntil: 'domcontentloaded'}); await session.arrived;
     await assertInlineMainStyle(page, response);
     await expect(page.locator('#home-workspace')).toBeHidden();
-    await expect(page.locator('#home-progress')).toBeHidden();
+    await expect(page.locator('#home-walkthrough')).toBeHidden();
     expect(await page.locator('body').evaluate(bodyStyle)).toEqual(expectedBodyStyle);
     expect(await page.locator('.site-header .brand-mark').boundingBox()).toMatchObject({width: 38, height: 54});
     await expect(page.locator('#catalogue-workspace')).toBeHidden();
@@ -233,7 +233,7 @@ function trackProtectedReads(page) {
 test('an admitted About reload paints its real static content before app and session', async ({page}) => {
     const width = 390;
     await page.setViewportSize({width, height:1000}); await page.emulateMedia({reducedMotion:'reduce'}); await useDataSaver(page);
-    await signIn(page); await page.locator('#nav-about').click();
+    await signIn(page); await navigationAction(page, '#nav-about');
     await expect(page.locator('#about-workspace')).toBeVisible();
     expect(await page.evaluate(() => sessionStorage.getItem('crucible.pending-presentation'))).toBe('workspace');
     // Retire the setup document so it cannot consume the new document's holds.
@@ -262,14 +262,14 @@ test('an admitted About reload paints its real static content before app and ses
       await expect(page.locator('#route-loading')).toBeHidden();
       expect(await aboutBounds(page)).toEqual(before);
       expect(await original.evaluate(element => element.isConnected)).toBe(true);
-      expect(reads).toEqual([]);
+      expect(reads).toEqual(['/api/me/points']);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     } finally { await held.close(); }
 });
 
 test('About access failure stays gated, retry respects an expired session and the gate survives reload', async ({page, context}) => {
   await page.emulateMedia({reducedMotion:'reduce'}); await useDataSaver(page);
-  await signIn(page); await page.locator('#nav-about').click(); await expect(page.locator('#about-workspace')).toBeVisible();
+  await signIn(page); await navigationAction(page, '#nav-about'); await expect(page.locator('#about-workspace')).toBeVisible();
   await page.goto('about:blank'); await context.clearCookies();
   const reads = trackProtectedReads(page), app = await holdResponse(page, url => url.pathname === '/app.js');
   await page.route('**/api/session', route => route.abort('connectionrefused'));

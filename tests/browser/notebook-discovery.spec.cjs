@@ -1,4 +1,4 @@
-const {test,expect,signIn,useDataSaver}=require('./helpers.cjs');
+const {test,expect,signIn,useDataSaver, navigationAction} = require('./helpers.cjs');
 
 for (const width of [1440,390]) test(`starter guides and archived citations remain readable at ${width}px`,async({page},testInfo)=>{
   await page.setViewportSize({width,height:1000}); await useDataSaver(page); await signIn(page);
@@ -37,7 +37,7 @@ for (const width of [1440,390]) test(`note votes and publication age fit beside 
     }
     await route.fulfill({response,json:data});
   });
-  await page.locator('.brand').first().click();await page.locator('#nav-notebook').click();
+  await page.locator('.brand').first().click();await navigationAction(page, '#nav-notebook');
   const row=page.locator('.nb-entry').filter({has:page.getByRole('link',{name:new RegExp('A long research note title')})});
   await expect(row.locator('.nb-note-votes')).toHaveText('▲4');
   await expect(row.locator('time')).toHaveText('1 hr ago');

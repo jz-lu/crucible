@@ -27,7 +27,7 @@ const packet = () => ({format: 'crucible-note-justifications-v1', scheme_id: 'as
   },
   graph_models: {'ram-fixture': {metric: 'ram', source: pin('attack-specification'), assumptions: [
     premise('A-88', 'Attack-only independence premise', 'attack-premise', {profile_ids: ['p1']}),
-    premise('A-89', 'Other stage premise', 'other-stage', {profile_ids: ['p3']}),
+    premise('A-89', 'Other level premise', 'other-stage', {profile_ids: ['p3']}),
     premise('A-90', 'An unresolved proof obligation', 'proof-gap', {status: 'incomplete'}),
   ]}},
   attack_comparison: {format: 'crucible-ram-attack-comparison-v1', scheme_id: 'assumption-fixture', version: 'v1',
@@ -133,7 +133,7 @@ process.once('beforeExit', () => {
     }
     assert.equal(rows(group(app, 'correctness')).length, 1);
     await open(app, 'security'); assert.equal(rows(group(app, 'security')).length, 2);
-    assert.doesNotMatch(content(app).textContent, /Attack-only|A-88|Other stage|proof obligation/);
+    assert.doesNotMatch(content(app).textContent, /Attack-only|A-88|Other level|proof obligation/);
   });
   await test('canonical argument leads with source scope and compact premises, with the full claim folded below', async () => {
     const data=argumentPacket(), app=await boot({data});await open(app);

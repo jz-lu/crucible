@@ -99,7 +99,7 @@ async function test(name,run){await run();console.log('PASS '+name);passed++;}
   await test('document retirement and credential rotation prevent recovery and clock side effects',async()=>{
     for(const mode of ['retired','csrf']){
       const app=await fixture(),held=deferred();let calls=0;
-      app.sandbox.fetch=async()=>{calls++;return held.promise};
+      const baseFetch=app.sandbox.fetch;app.sandbox.fetch=async(url,options)=>{if(url==='/api/people'){calls++;return held.promise;}return baseFetch(url,options);};
       const task=app.sandbox.api('/api/people',undefined,{readRecovery:true});
       if(mode==='retired')app.window.dispatchEvent({type:'pagehide'});
       else app.sandbox.setSession({...session(app.envelope),csrf_token:'rotated'});
@@ -107,9 +107,10 @@ async function test(name,run){await run();console.log('PASS '+name);passed++;}
       assert.equal(calls,1);
     }
     const app=await fixture(),held=deferred();
-    app.sandbox.fetch=()=>held.promise;
+    const baseFetch=app.sandbox.fetch;app.sandbox.fetch=(url,options)=>url==='/api/people'?held.promise:baseFetch(url,options);
     const task=app.sandbox.api('/api/people',undefined,{readRecovery:true});
     app.sandbox.setSession({...session(app.envelope),csrf_token:'new-credential'});
+    await flush(); // Let the new credential's independent balance read settle.
     const accepted=value(app,'state.timeOffset');
     held.resolve(response(app.envelope({server_time:app.envelope({}).server_time-600})));await task;
     assert.equal(value(app,'state.timeOffset'),accepted);

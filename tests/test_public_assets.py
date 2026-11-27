@@ -76,6 +76,7 @@ def test_critical_font_bytes_are_embedded_once_with_no_external_dependency(priva
     response = client.get('/')
     css = re.search(r'<style data-main-style>(.*?)</style>', response.text, re.S).group(1)
     provenance = {row['path']: row for row in json.loads((ROOT / 'docs/resi-brand-assets.json').read_text())['assets']}
+    provenance.update({row['path']: row for row in json.loads((ROOT / 'docs/font-assets.json').read_text())['assets']})
     faces = re.findall(r'@font-face\s*\{[^}]*\}', css)
     encoded = [re.search(r"url\('data:font/woff2;base64,([^']+)'\)", face) for face in faces]
     embedded = [base64.b64decode(match.group(1), validate=True) for match in encoded if match]
@@ -105,7 +106,7 @@ def test_critical_font_bytes_are_embedded_once_with_no_external_dependency(priva
 
 def test_embedded_font_edit_invalidates_css_and_shell_together(tmp_path):
     url = '/vendor/resi/cardo-normal-700-latin.woff2'
-    css = ("@font-face {font-family: Cardo; font-display: optional; src: url('" + url + "');}").encode()
+    css = ("@font-face {font-family: 'Cardo'; font-display: optional; src: url('" + url + "');}").encode()
     root = small_public_root(tmp_path, css)
     assets = PublicAssets(root)
     before = assets.snapshot()
@@ -375,14 +376,14 @@ def test_critical_canvas_matches_base_typography_with_one_exact_csp_hash(frozen_
     sans, = re.findall(r'--sans:\s*([^;]+);', css)
     assert 'font:14px/1.6 ' + sans + ';' in critical
     assert 'font: 14px/1.6 var(--sans);' in css
-    # The early canvas stays light before bootstrap, including on a dark OS.
+    # The trusted canvas supplies both appearances before the main stylesheet.
     for selector in (':root',):
         palette = re.search(re.escape(selector) + r'\s*\{([^}]+)\}', css).group(1)
         for token in ('paper', 'text'):
             color = re.search('--' + token + r':\s*([^;]+);', palette).group(1)
             assert '--' + token + ':' + color in critical
     assert 'background:var(--paper)' in critical and 'color:var(--text)' in critical
-    assert 'data-theme=dark' not in critical
+    assert 'html[data-theme=dark]{--paper:#171a18;--text:#ccd4cc;color-scheme:dark}' in critical
     assert 'prefers-color-scheme' not in critical
     assert '[hidden]{display:none!important}' in critical
     assert 'visibility:' not in critical and 'animation:' not in critical

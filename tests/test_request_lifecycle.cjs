@@ -33,7 +33,7 @@ let passed = 0;
 async function test(name, run) { await run(); console.log('PASS ' + name); passed++; }
 
 (async () => {
-  await test('fresh catalogue objects do not disable an existing Take on this stage action', async () => {
+  await test('fresh catalogue objects do not disable an existing Take on this level action', async () => {
     const app = await createApp({schemes: [scheme], hash: route(), responder: (url, options, envelope) =>
       url.pathname === '/api/schemes' ? envelope({schemes: clone([scheme])}) : undefined});
     const action = app.$('.tier-record-challenge');
@@ -60,7 +60,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     await flush(); assert.equal(sessions, 1);
     gate.resolve(); await Promise.all([first, second]);
     assert.equal(details, 0);
-    assert.deepEqual(app.requests.slice(start).map(request => request.url.pathname), ['/api/session', '/api/schemes']);
+    assert.deepEqual(app.requests.slice(start).map(request => request.url.pathname), ['/api/session', '/api/me/points', '/api/schemes']);
     await app.navigate(route(1, 'protocol'));
     assert.equal(details, 1, 'The first visible protocol entry renders its previously deferred details');
     await app.navigate(route(2, 'protocol'));
@@ -291,7 +291,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     await app.sandbox.synchronizeSession();
     assert.equal(app.$('#person-content').firstChild, profile);
     for (const disclosure of disclosures) assert.ok(disclosure.isConnected && disclosure.open);
-    assert.deepEqual(app.requests.slice(start).map(request => request.url.pathname), ['/api/session', '/api/people/alice']);
+    assert.deepEqual(app.requests.slice(start).map(request => request.url.pathname), ['/api/session', '/api/me/points', '/api/people/alice']);
     assert.equal(app.requests.find(request => request.url.pathname === '/api/people/alice').url.searchParams.get('include_milestones'), 'false');
   });
 
@@ -350,7 +350,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     await app.sandbox.synchronizeSession();
     assert.equal(app.$('#people-content').firstChild, content);
     assert.deepEqual(app.$('#people-content').querySelectorAll('.person-link').map(link => link.textContent), ['alice', 'bob']);
-    assert.deepEqual(app.requests.slice(start).map(request => request.url.pathname), ['/api/session']);
+    assert.deepEqual(app.requests.slice(start).map(request => request.url.pathname), ['/api/session', '/api/me/points']);
     app.$('#refresh-people').click(); await flush();
     assert.deepEqual(app.$('#people-content').querySelectorAll('.person-link').map(link => link.textContent), ['alice']);
     for (const request of app.requests.filter(request => request.url.pathname === '/api/people')) {
@@ -372,7 +372,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     assert.equal(app.$('#proposal-review-notes').value, 'Unsent review notes');
     assert.equal(app.$('#proposal-review-evidence').value, 'Unsent evidence');
     assert.equal(app.$('#proposal-preview').firstChild, editor);
-    assert.deepEqual(app.requests.slice(start).map(request => request.url.pathname), ['/api/session']);
+    assert.deepEqual(app.requests.slice(start).map(request => request.url.pathname), ['/api/session', '/api/me/points']);
   });
 
   await test('background sync does not cancel or repeat a pending explicit connection approval', async () => {
@@ -386,7 +386,7 @@ async function test(name, run) { await run(); console.log('PASS ' + name); passe
     app.$('[data-agent-decision="approve"]').click(); await flush();
     const start = app.requests.length;
     await app.sandbox.synchronizeSession();
-    assert.deepEqual(app.requests.slice(start).map(request => request.url.pathname), ['/api/session']);
+    assert.deepEqual(app.requests.slice(start).map(request => request.url.pathname), ['/api/session', '/api/me/points']);
     assert.ok(app.$('[data-agent-decision="approve"]').disabled);
     gate.resolve(app.envelope({connection: {...connection, status: 'approved'}})); await flush();
     assert.match(app.$('#connect-content').textContent, /Connection approved/);

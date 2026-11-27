@@ -60,7 +60,7 @@ async function boot({account=user,respond,stored=null,mapFactory,currentReleases
   await controller.show(initialParams);
   return{...app,root,controller,q,requests,storage,advanceTimers,whenNavigated:()=>navigationTask,setAccount:value=>{current=value;controller.setAccount(value);},show:async(id,rev)=>controller.show(new URLSearchParams(id?{note:id,...(rev?{revision:String(rev)}:{})}:{}))};
 }
-function fill(app,title='New mathematical claim'){for(const [key,value]of Object.entries(content(title)))if(key!=='tags')app.root.querySelector(`[name="${key}"]`).value=value;app.root.querySelector('[name="tags"]').value=JSON.stringify(['algebra']);}
+function fill(app,title='New mathematical claim'){for(const [key,value]of Object.entries(content(title)))if(['title','body'].includes(key))app.root.querySelector(`[name="${key}"]`).value=value;app.root.querySelector('[name="tags"]').value=JSON.stringify(['algebra']);}
 const byText=(root,label)=>root.querySelectorAll('button').find(n=>n.textContent===label);
 let passed=0;async function test(name,fn){await fn();console.log('PASS '+name);passed++;}
 
@@ -133,11 +133,11 @@ const lists=app=>app.requests.filter(row=>row.url.startsWith('/api/notebook/note
   assert.equal(app.q('page-jump').hidden,false);assert.equal(app.q('page-select').querySelectorAll('option').length,3);
   app.root.hidden=false;app.sandbox.window.scrollY=180;app.sandbox.window.innerHeight=900;
   app.root.getBoundingClientRect=()=>({top:-40,height:9000});
-  app.q('timeline-view').click();await flush();assert.equal(app.root.style.minHeight,'940px');
-  app.q('visualization-back').click();await flush();assert.equal(app.root.style.minHeight,'940px','The view switch keeps its own viewport reservation');
+  app.q('timeline-view').click();await flush();assert.equal(app.root.style.minHeight,'');
+  app.q('visualization-back').click();await flush();assert.equal(app.root.style.minHeight,'','A new view starts without old scroll space');
   const beforePaging=app.requests.length;
   app.q('list').getBoundingClientRect=()=>({height:Math.max(app.q('list').querySelectorAll('.nb-entry').length*35,parseFloat(app.q('list').style.minHeight)||0)});app.sandbox.window.scrollY=400;
-  let scrolls=0;app.sandbox.window.scrollTo=()=>{scrolls++;};
+  let scrolls=0;app.sandbox.window.scrollTo=({top})=>{scrolls++;app.sandbox.window.scrollY=top;};
   app.q('page-select').focus();app.q('page-select').value='2';app.q('page-select').dispatchEvent({type:'change'});await flush();
   assert.equal(app.q('list').querySelectorAll('.nb-entry').length,5);assert.match(app.q('list').textContent,/Jump title 50/);
   assert.equal(app.q('page-select').value,'2');assert.equal(app.document.activeElement,app.q('page-select'));

@@ -1,0 +1,53 @@
+CRUCIBLE — CLICK FEEDBACK RULES (2026-11-26)
+
+Navigation and text actions change color on hover/focus. They do not gain an
+underline, glow or lift. This includes header tabs, wordmark, View all, notebook
+and chart navigation, breadcrumbs and How points work. Inline links in reading
+text and source references may retain underlines for legibility.
+
+Buttons and icon controls change fill/border. Clickable rows and cards change
+fill or strengthen their outline. Selected tabs, active filters and keyboard
+focus have separate persistent indicators. Open, closed and Highlighted bounty
+tags share the same pill geometry, type size and padding.
+
+Directional action arrows move 4px in their indicated direction on hover/focus.
+The presentation preserves native controls, labels and handlers. Get started
+also has an occasional idle arrow nudge and a soft beacon. Its entrance follows
+the tagline reveal with a fade only; bounty glow and challenge shimmer then
+introduce the two
+panels. The beacon uses blurred layers with soft edges; reduced motion shows
+everything immediately without animation.
+
+The intro sentence above Get started is also a button. Hover/focus highlights
+Get started; clicking either starts the same challenge guide. The short bounty
+and proposal links below it use the standard text-action color change.
+
+Special effects belong to the symbol, introductory action and discovery areas.
+Only hovering the logo symbol ignites the original ember. The wordmark only
+changes color. Find new cryptography has a cursor-local glow with a small bounty
+panel glow; Test its limits has localized text shimmer and a weekly-card glow.
+Weekly cards keep their background color. Home and Schemes card hover/focus,
+and tagline previews, use a soft glow without an added outline. There are no Home connecting arrows. Light mode uses pale
+teal for the challenge card; dark mode keeps the forest-green treatment.
+
+The points help popup is joined to the balance by a fine stem/notch, with a
+short reveal animation. It has no shadow or hover underline. Only its arrow
+moves. The weekly reward explanation appears on badge hover or keyboard focus.
+
+Expanders use a chevron and open state. The shared Work with an agent entry
+reveals the actual prompt, Copy prompt and a close cross. Successful copying
+changes the native button to Copied briefly. Failure leaves selectable text
+and an honest manual-copy instruction. No success banner is added.
+
+An expanded guide consumes the first click outside its prompt and associated
+controls: it hides without activating the background action. A subsequent click
+can navigate. Guide highlights follow native rounded shapes. Keyboard focus
+remains visible, and reduced-motion preferences remove decorative motion.
+
+Sources: web/styles.css, web/notebook/notebook.css, web/notebook/bounties.css,
+web/map/styles.css, web/app.js and web/orientation.js.
+
+Header and Home text actions use the same primary-hover color. Light-mode Try
+challenge has a clear outlined-to-filled green change on direct button hover or
+card keyboard focus, alongside a
+stronger soft teal card halo. Buttons retain fill/border feedback.

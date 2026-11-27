@@ -1,4 +1,4 @@
-const {test,expect,signIn,holdResponse}=require('./helpers.cjs');
+const {test,expect,signIn,holdResponse, navigationAction} = require('./helpers.cjs');
 const token=letter=>'cri_'+letter.repeat(43);
 const password='Synthetic browser fixture password';
 async function provider(page,code='synthetic-browser-code'){
@@ -28,7 +28,7 @@ for(const width of [1440,390]){
     await page.locator('#auth-handle').fill('browser_alice');await page.locator('#auth-password').fill(password);await page.locator('#auth-submit').click();
    }
    await expect(page.locator('#account-handle')).toHaveText('browser_alice');await expect(page.locator('#auth-dialog')).toBeHidden();
-   expect(new URL(page.url()).hash).toBe('#home');await page.locator('#nav-notebook').click();await expect(page.locator('#nb-note-list')).toContainText('Alice browser-only private note');
+   expect(new URL(page.url()).hash).toBe('#home');await navigationAction(page, '#nav-notebook');await expect(page.locator('#nb-note-list')).toContainText('Alice browser-only private note');
    expect(posts.filter(row=>row.path==='/api/auth/register'||row.path==='/api/auth/github/complete'||row.path==='/api/access/invitations/redeem')).toEqual([]);
    if(method==='github')expect(posts.find(row=>row.path==='/api/auth/github/start').body).not.toHaveProperty('invitation_token');
    expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);

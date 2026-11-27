@@ -1,4 +1,4 @@
-const {test, expect, signIn, holdResponse, gate} = require('./helpers.cjs');
+const {test, expect, signIn, holdResponse, gate, navigationAction} = require('./helpers.cjs');
 const recordRoute = stage => '#challenge/teaching-dh-kem/4?profile=dh-' + stage + '&view=leaderboard';
 
 for (const width of [1440,390]) test('complete recovery snapshot browses stages locally at ' + width + 'px', async ({page}) => {
@@ -34,7 +34,7 @@ for (const width of [1440,390]) test('complete recovery snapshot browses stages 
     await page.locator('#refresh-leaderboard').click();await pending.arrived;
     await expect(page.locator('#leaderboard-title')).toHaveText('Unsolved');
     await expect(page.locator('#refresh-leaderboard')).toBeDisabled();
-    await page.locator('#nav-about').focus();
+    await navigationAction(page, '#nav-about', {focus:true});
     pending.release();await pending.delivered;
     await expect(page.locator('#refresh-leaderboard')).toBeEnabled();
     await expect(page.locator('#nav-about')).toBeFocused();
